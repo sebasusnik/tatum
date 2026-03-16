@@ -1,0 +1,16 @@
+[package]
+name = "synth-core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "synth_core"
+
+[features]
+default = []
+
+[dependencies]
+# zero external dependencies
+
+[dev-dependencies]
+# none needed - WAV writing is manual
