@@ -1,81 +1,9 @@
 use crate::math;
 use crate::primitives::envelope::EnvStage;
 use crate::primitives::fm_operator::{FmOperator, FmWaveform};
-use crate::primitives::lfo::{Lfo, LfoWaveform, LfoSyncMode, LfoTarget, ModulationRouter};
+use crate::primitives::lfo::{LfoWaveform, LfoSyncMode, LfoTarget, ModulationRouter};
+use crate::effects::chorus::Chorus;
 use crate::{Module, MAX_VOICES, SAMPLE_RATE};
-
-/// Simple chorus using a modulated delay line with cubic Hermite interpolation.
-struct SimpleChorus {
-    buffer: [f32; 4096],
-    write_pos: usize,
-    lfo: Lfo,
-    base_delay: f32, // in samples (~25ms)
-    depth: f32,      // in samples (~5ms)
-    mix: f32,
-}
-
-impl SimpleChorus {
-    fn new() -> Self {
-        let mut lfo = Lfo::new(SAMPLE_RATE);
-        lfo.set_rate(1.2);
-        lfo.set_depth(1.0);
-        Self {
-            buffer: [0.0; 4096],
-            write_pos: 0,
-            lfo,
-            base_delay: 1100.0, // ~25ms at 44100
-            depth: 220.0,       // ~5ms at 44100
-            mix: 0.3,
-        }
-    }
-
-    fn read_buffer(&self, offset: usize) -> f32 {
-        let buf_len = self.buffer.len();
-        if self.write_pos >= offset {
-            self.buffer[self.write_pos - offset]
-        } else {
-            self.buffer[buf_len - (offset - self.write_pos)]
-        }
-    }
-
-    fn set_mix(&mut self, mix: f32) {
-        self.mix = mix;
-    }
-
-    fn process(&mut self, input: f32) -> f32 {
-        self.buffer[self.write_pos] = input;
-
-        let lfo_val = self.lfo.next_sample();
-        let delay = self.base_delay + lfo_val * self.depth;
-        let delay_int = delay as usize;
-        let delay_frac = delay - delay_int as f32;
-
-        // Cubic Hermite (Catmull-Rom) interpolation: 4 samples
-        let s0 = self.read_buffer(delay_int + 1);
-        let s1 = self.read_buffer(delay_int);
-        let s2 = self.read_buffer(if delay_int > 0 { delay_int - 1 } else { 0 });
-        let s3 = self.read_buffer(if delay_int > 1 { delay_int - 2 } else { 0 });
-
-        let t = delay_frac;
-        let t2 = t * t;
-        let t3 = t2 * t;
-
-        let delayed = s1
-            + 0.5 * t * (s2 - s0)
-            + t2 * (s0 - 2.5 * s1 + 2.0 * s2 - 0.5 * s3)
-            + t3 * (-0.5 * s0 + 1.5 * s1 - 1.5 * s2 + 0.5 * s3);
-
-        self.write_pos = (self.write_pos + 1) % self.buffer.len();
-
-        input * (1.0 - self.mix) + delayed * self.mix
-    }
-
-    fn reset(&mut self) {
-        self.buffer = [0.0; 4096];
-        self.write_pos = 0;
-        self.lfo.reset();
-    }
-}
 
 /// FM Voice: 4 operators with configurable algorithm.
 struct FmVoice {
@@ -226,11 +154,24 @@ pub enum FmParam {
     LfoWaveform,
     LfoTarget,
     LfoSync,
-    Feedback,
+    Feedback,       // Global feedback (all ops)
     Waveform,
     ChorusMix,
     VibratoRate,
     VibratoDepth,
+    Attack,         // Carrier (op 0) attack
+    Decay,          // Carrier (op 0) decay
+    Sustain,        // Carrier (op 0) sustain
+    Release,        // Carrier (op 0) release
+    // Per-operator ADSR (op 0-3) — IDs 80-95
+    Op0Attack, Op0Decay, Op0Sustain, Op0Release,
+    Op1Attack, Op1Decay, Op1Sustain, Op1Release,
+    Op2Attack, Op2Decay, Op2Sustain, Op2Release,
+    Op3Attack, Op3Decay, Op3Sustain, Op3Release,
+    // Per-operator feedback — IDs 96 would collide with beats, use after ops
+    Op0Feedback, Op1Feedback, Op2Feedback, Op3Feedback,
+    // Per-operator ratio
+    Op0Ratio, Op1Ratio, Op2Ratio, Op3Ratio,
 }
 
 pub struct FmModule {
@@ -242,7 +183,7 @@ pub struct FmModule {
     // LFO
     lfo_router: ModulationRouter,
     // Chorus
-    chorus: SimpleChorus,
+    chorus: Chorus,
     chorus_mix: f32,
     // Pitch bend (set by engine)
     pub pitch_bend_ratio: f32,
@@ -263,7 +204,7 @@ impl FmModule {
             algorithm: 0,
             mod_index: 1.0,
             lfo_router: ModulationRouter::new(SAMPLE_RATE, 5003),
-            chorus: SimpleChorus::new(),
+            chorus: Chorus::new(),
             chorus_mix: 0.0,
             pitch_bend_ratio: 1.0,
             vibrato_phase: 0.0,
@@ -271,6 +212,13 @@ impl FmModule {
             vibrato_depth: 0.0,
             vibrato_delay: 0.3,
             vibrato_onset: 0.0,
+        }
+    }
+
+    /// Set a single operator's ratio across all voices.
+    fn set_ratios_single(&mut self, op_index: usize, ratio: f32) {
+        for voice in &mut self.voices {
+            voice.ops[op_index].set_ratio(ratio);
         }
     }
 
@@ -312,7 +260,7 @@ impl FmModule {
                 }
             }
             FmParam::ModIndex => {
-                self.mod_index = value * 8.0;
+                self.mod_index = 0.1 * math::pow(40.0, value); // 0.1-4.0 exponential
                 for v in &mut self.voices {
                     v.mod_index = self.mod_index;
                 }
@@ -357,9 +305,10 @@ impl FmModule {
                 self.lfo_router.lfo.set_sync_mode(mode);
             }
             FmParam::Feedback => {
+                let clamped = value * 0.7;
                 for v in &mut self.voices {
                     for op in &mut v.ops {
-                        op.set_feedback(value);
+                        op.set_feedback(clamped);
                     }
                 }
             }
@@ -382,6 +331,49 @@ impl FmModule {
             }
             FmParam::VibratoRate => self.vibrato_rate = 0.5 + value * 9.5,
             FmParam::VibratoDepth => self.vibrato_depth = value * 0.5,
+            FmParam::Attack => {
+                // Carrier (op 0) only — modulators keep their own envelopes
+                let a = 0.001 * math::pow(2000.0, value);
+                for v in &mut self.voices { v.ops[0].env.set_attack(a); }
+            }
+            FmParam::Decay => {
+                let d = 0.001 * math::pow(2000.0, value);
+                for v in &mut self.voices { v.ops[0].env.set_decay(d); }
+            }
+            FmParam::Sustain => {
+                for v in &mut self.voices { v.ops[0].env.set_sustain(value); }
+            }
+            FmParam::Release => {
+                let r = 0.001 * math::pow(2000.0, value);
+                for v in &mut self.voices { v.ops[0].env.set_release(r); }
+            }
+            // Per-operator ADSR (logarithmic for A/D/R, raw for S)
+            FmParam::Op0Attack => { let a = 0.001 * math::pow(2000.0, value); for v in &mut self.voices { v.ops[0].env.set_attack(a); } }
+            FmParam::Op0Decay  => { let d = 0.001 * math::pow(2000.0, value); for v in &mut self.voices { v.ops[0].env.set_decay(d); } }
+            FmParam::Op0Sustain => { for v in &mut self.voices { v.ops[0].env.set_sustain(value); } }
+            FmParam::Op0Release => { let r = 0.001 * math::pow(2000.0, value); for v in &mut self.voices { v.ops[0].env.set_release(r); } }
+            FmParam::Op1Attack => { let a = 0.001 * math::pow(2000.0, value); for v in &mut self.voices { v.ops[1].env.set_attack(a); } }
+            FmParam::Op1Decay  => { let d = 0.001 * math::pow(2000.0, value); for v in &mut self.voices { v.ops[1].env.set_decay(d); } }
+            FmParam::Op1Sustain => { for v in &mut self.voices { v.ops[1].env.set_sustain(value); } }
+            FmParam::Op1Release => { let r = 0.001 * math::pow(2000.0, value); for v in &mut self.voices { v.ops[1].env.set_release(r); } }
+            FmParam::Op2Attack => { let a = 0.001 * math::pow(2000.0, value); for v in &mut self.voices { v.ops[2].env.set_attack(a); } }
+            FmParam::Op2Decay  => { let d = 0.001 * math::pow(2000.0, value); for v in &mut self.voices { v.ops[2].env.set_decay(d); } }
+            FmParam::Op2Sustain => { for v in &mut self.voices { v.ops[2].env.set_sustain(value); } }
+            FmParam::Op2Release => { let r = 0.001 * math::pow(2000.0, value); for v in &mut self.voices { v.ops[2].env.set_release(r); } }
+            FmParam::Op3Attack => { let a = 0.001 * math::pow(2000.0, value); for v in &mut self.voices { v.ops[3].env.set_attack(a); } }
+            FmParam::Op3Decay  => { let d = 0.001 * math::pow(2000.0, value); for v in &mut self.voices { v.ops[3].env.set_decay(d); } }
+            FmParam::Op3Sustain => { for v in &mut self.voices { v.ops[3].env.set_sustain(value); } }
+            FmParam::Op3Release => { let r = 0.001 * math::pow(2000.0, value); for v in &mut self.voices { v.ops[3].env.set_release(r); } }
+            // Per-operator feedback
+            FmParam::Op0Feedback => { for v in &mut self.voices { v.ops[0].set_feedback(value); } }
+            FmParam::Op1Feedback => { for v in &mut self.voices { v.ops[1].set_feedback(value); } }
+            FmParam::Op2Feedback => { for v in &mut self.voices { v.ops[2].set_feedback(value); } }
+            FmParam::Op3Feedback => { for v in &mut self.voices { v.ops[3].set_feedback(value); } }
+            // Per-operator ratio (0.0-1.0 → 0.5-16.0 range)
+            FmParam::Op0Ratio => { let r = 0.5 + value * 15.5; self.set_ratios_single(0, r); }
+            FmParam::Op1Ratio => { let r = 0.5 + value * 15.5; self.set_ratios_single(1, r); }
+            FmParam::Op2Ratio => { let r = 0.5 + value * 15.5; self.set_ratios_single(2, r); }
+            FmParam::Op3Ratio => { let r = 0.5 + value * 15.5; self.set_ratios_single(3, r); }
         }
     }
 

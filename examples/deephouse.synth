@@ -1,0 +1,375 @@
+# ╔═══════════════════════════════════════════════╗
+# ║  deephouse.synth — Deep House                 ║
+# ║  122 BPM, F minor, 4/4                        ║
+# ║  Uses: swing, humanize, accent/ghost syntax   ║
+# ╚═══════════════════════════════════════════════╝
+
+tempo 122
+meter 4/4
+scale F minor
+sidechain 0.35
+swing 0.58
+humanize 0.35 timing 0.2
+
+# ────────────────────────────────────────────────
+# MODULE INSTRUMENTS
+# ────────────────────────────────────────────────
+
+# Deep sub bass: warm saw + sub sine, slow filter
+module bass deep_bass {
+    cutoff 0.12
+    cutoff_env 0.45
+    resonance 0.55
+    glide 0.25
+    osc2_pitch 0.25
+    osc1_wave saw
+    osc2_wave sine
+    keytrack 0.4
+    attack 0.005
+    decay 0.35
+    sustain 0.7
+    release 0.15
+}
+
+# Rhodes-style keys: FM warm electric piano
+module fm rhodes {
+    algorithm 0.1428
+    mod_index 0.55
+    feedback 0.15
+    chorus_mix 0.3
+    attack 0.005
+    decay 0.4
+    sustain 0.45
+    release 0.25
+    op0_envelope 0.003 0.35 0.3 0.4
+    op1_envelope 0.001 0.2 0.15 0.3
+}
+
+# Pad: lush detuned with chorus
+module keys lush_pad {
+    voice_mode 0.25
+    cutoff 0.18
+    detune 0.12
+    chorus_mix 0.4
+    attack 0.8
+    decay 0.5
+    sustain 0.75
+    release 1.0
+}
+
+# Drums
+module beats drums {
+    kick_level 1.0
+    kick_click 0.3
+    kick_decay 0.55
+    snare_level 0.85
+    snare_decay 0.35
+    snare_pan 0.05
+    hihat_level 0.75
+    hihat_pan 0.25
+    clap_level 0.8
+    clap_pan -0.1
+}
+
+# Stab: short keys for offbeat chords
+module keys stab {
+    cutoff 0.22
+    attack 0.0
+    decay 0.12
+    sustain 0.15
+    release 0.08
+}
+
+# ────────────────────────────────────────────────
+# PATTERNS
+# ────────────────────────────────────────────────
+
+# Bass: Fm groove — syncopated with ties for legato slides
+pattern bass_main {
+    F1:0.85(edepth=0.50, res=0.60) -  -  F1:0.5(edepth=0.30, res=0.45)
+    -  Eb1:0.7(edepth=0.45, res=0.55) ..  -
+    Ab1:0.75(edepth=0.48, res=0.58) -  F1:0.4(edepth=0.25, res=0.40) -
+    C1:0.6(edepth=0.40, res=0.50) -  -  Eb1:0.55(edepth=0.35, res=0.48)
+}
+
+# Bass: sparse intro
+pattern bass_intro {
+    F1:0.6 - .. -
+    - - - -
+    F1:0.5 - - -
+    - - - -
+}
+
+# Bass: breakdown — held note
+pattern bass_hold {
+    F1:0.55 .. .. ..
+    ..      .. .. ..
+    ..      .. .. ..
+    ..      .. .. ..
+}
+
+# Bass: bridge with movement (Fm → Db → Eb → Fm)
+pattern bass_bridge {
+    F1:0.8(edepth=0.50, res=0.58) - - F1:0.45(edepth=0.30, res=0.42)
+    - Db1:0.7(edepth=0.45, res=0.52) .. -
+    Eb1:0.75(edepth=0.48, res=0.55) - Eb1:0.4(edepth=0.25, res=0.40) -
+    F1:0.65(edepth=0.42, res=0.50) - - C1:0.5(edepth=0.35, res=0.45)
+}
+
+# ── Drums: using accent (X), normal (x), ghost (o) ──
+
+pattern drums_intro {
+    kick:  X - - - x - - - x - - - - - - -
+    hihat: - - o - - - x - - - o - - - x -
+}
+
+pattern drums_main {
+    kick:  X - - - - - - x x - - - - - - -
+    snare: - - - - x - - - - - o - x - - -
+    hihat: o - x - o - x - o - x - o - x -
+    clap:  - - - - - - - - - - - - - - - x
+}
+
+pattern drums_groove {
+    kick:  X - - - - - - x x - - - - - - -
+    snare: - - - - x - o - - - o - X - - -
+    hihat: x o X o x o X o x o X o x o X o
+    clap:  - - - - - - - - - - - x - - - -
+}
+
+pattern drums_build {
+    kick:  X - - x - - x - X - - x x - x -
+    snare: - - - - X - - o - - - - X - - X
+    hihat: x o X o x o X o x o X o X X X X
+    clap:  - - - - - - - - - - - - - - x X
+}
+
+pattern drums_breakdown {
+    kick:  o - - - - - - - - - - - - - - -
+    hihat: - - o - - - x - - - o - - - x -
+}
+
+pattern drums_drop {
+    kick:    X - - - - - x - X - - - - - - x
+    snare:   - - - - X - - o - - o - X - - -
+    hihat:   X o x o X o x o X o x o X o x o
+    clap:    - - - - - - - - - - - - X - x X
+    openhat: - - - - - - - x - - - - - - - x
+}
+
+# Rhodes: Fm7 voicings — dreamy chords
+pattern rhodes_fm7 {
+    F3:0.5  - - -
+    - Ab3:0.45 - -
+    C4:0.55 - - Eb4:0.4
+    - - - -
+}
+
+# Rhodes: Dbmaj7 voicing
+pattern rhodes_db {
+    Db3:0.5 - - -
+    - F3:0.45 - -
+    Ab3:0.55 - - C4:0.4
+    - - - -
+}
+
+# Pad: sustained Fm chord (chord syntax)
+pattern pad_fm {
+    [F3 Ab3 C4]:0.35 .. .. ..
+    ..                .. .. ..
+    ..                .. .. ..
+    ..                .. .. ..
+}
+
+# Pad: Db major chord
+pattern pad_db {
+    [Db3 F3 Ab3]:0.35 .. .. ..
+    ..                 .. .. ..
+    ..                 .. .. ..
+    ..                 .. .. ..
+}
+
+# Stab: offbeat minor stabs
+pattern stab_off {
+    -       -       Ab4:0.55 -
+    -       -       -        -
+    -       -       Ab4:0.45 -
+    -       F4:0.5  -        -
+}
+
+# Empty
+pattern silence {
+    - - - -
+    - - - -
+    - - - -
+    - - - -
+}
+
+# ────────────────────────────────────────────────
+# BUS FX
+# ────────────────────────────────────────────────
+
+bus reverb
+bus delay
+bus drumBus
+
+reverb {
+    in > reverb(0.55) > out
+}
+
+delay {
+    in > delay(1/4, 0.3) > out
+}
+
+drumBus {
+    in > compressor(-8.0, ratio=4.0, attack=8, release=60) > saturate(0.1) > master
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track bass {
+    play bass_main
+    using deep_bass
+    velocity 0.9
+    level 0.55
+    gate 0.9
+    pan 0.0
+    delay_send 0.05
+    reverb_send 0.08
+    out > drive(0.15) > master
+}
+
+track drums {
+    play drums_main
+    using drums
+    velocity 1.0
+    level 0.55
+    pan 0.0
+    out > drumBus
+}
+
+track rhodes {
+    play silence
+    using rhodes
+    velocity 0.7
+    level 0.45
+    gate 0.6
+    pan 0.1
+    delay_send 0.15
+    reverb_send 0.25
+    out > master
+}
+
+track pads {
+    play silence
+    using lush_pad
+    velocity 0.5
+    level 0.4
+    pan 0.0
+    reverb_send 0.35
+    out > master
+}
+
+track stabs {
+    play silence
+    using stab
+    velocity 0.5
+    level 0.35
+    gate 0.2
+    pan -0.3
+    delay_send 0.25
+    reverb_send 0.15
+    out > master
+}
+
+# ────────────────────────────────────────────────
+# MASTER
+# ────────────────────────────────────────────────
+
+master {
+    in > eq(low=3.5, mid=1.5, high=0.8) > compressor(-8.0, ratio=3.5, attack=10, release=100, makeup=2.0) > limiter > out
+}
+
+# ────────────────────────────────────────────────
+# SCENES
+# ────────────────────────────────────────────────
+
+# Intro: stripped back, kick + sparse bass
+scene intro {
+    track drums { play drums_intro using drums velocity 1.0 level 0.5 out > drumBus }
+    track bass  { play bass_intro  using deep_bass velocity 0.7 level 0.45 out > drive(0.15) > master }
+}
+
+# Buildup: add hats + rhodes
+scene buildup {
+    track drums  { play drums_main  using drums     velocity 1.0 level 0.55 out > drumBus }
+    track bass   { play bass_intro  using deep_bass velocity 0.8 level 0.5  out > drive(0.15) > master }
+    track rhodes { play rhodes_fm7  using rhodes    velocity 0.6 level 0.35 delay_send 0.15 reverb_send 0.25 out > master }
+}
+
+# Main groove: full arrangement
+scene main {
+    auto deep_bass cutoff 0.12 > 0.18
+
+    track drums  { play drums_groove using drums     velocity 1.0 level 0.55 out > drumBus }
+    track bass   { play bass_main    using deep_bass velocity 0.9 level 0.55 out > drive(0.15) > master }
+    track rhodes { play rhodes_fm7   using rhodes    velocity 0.7 level 0.45 delay_send 0.15 reverb_send 0.25 out > master }
+    track stabs  { play stab_off     using stab      velocity 0.5 level 0.35 delay_send 0.25 reverb_send 0.15 out > master }
+}
+
+# Breakdown: pads + sparse hats, no kick
+scene breakdown {
+    auto lush_pad cutoff 0.18 > 0.28 > 0.18
+
+    track drums { play drums_breakdown using drums    velocity 0.8 level 0.4 out > drumBus }
+    track bass  { play bass_hold       using deep_bass velocity 0.5 level 0.4 out > master }
+    track pads  { play pad_fm          using lush_pad  velocity 0.5 level 0.45 reverb_send 0.4 out > master }
+}
+
+# Bridge: movement, chord changes
+scene bridge {
+    auto deep_bass cutoff 0.10 > 0.22 > 0.10
+    auto deep_bass cutoff_env 0.35 > 0.60 > 0.35
+
+    track drums  { play drums_main   using drums     velocity 1.0 level 0.55 out > drumBus }
+    track bass   { play bass_bridge  using deep_bass velocity 0.85 level 0.55 out > drive(0.15) > master }
+    track rhodes { play rhodes_db    using rhodes    velocity 0.65 level 0.4 delay_send 0.15 reverb_send 0.3 out > master }
+    track pads   { play pad_db       using lush_pad  velocity 0.4 level 0.35 reverb_send 0.35 out > master }
+}
+
+# Drop: full energy, driving groove
+scene drop {
+    auto deep_bass cutoff 0.14 > 0.24
+
+    track drums  { play drums_drop  using drums     velocity 1.0 level 0.6  out > drumBus }
+    track bass   { play bass_main   using deep_bass velocity 0.95 level 0.6 out > drive(0.2) > master }
+    track rhodes { play rhodes_fm7  using rhodes    velocity 0.75 level 0.45 delay_send 0.1 reverb_send 0.2 out > master }
+    track stabs  { play stab_off    using stab      velocity 0.6  level 0.4  delay_send 0.2 reverb_send 0.1 out > master }
+}
+
+# Outro: fade down
+scene outro {
+    auto deep_bass cutoff_env 0.45 > 0.20
+    auto deep_bass cutoff 0.12 > 0.06
+
+    track drums { play drums_intro using drums     velocity 0.9 level 0.45 out > drumBus }
+    track bass  { play bass_intro  using deep_bass velocity 0.6 level 0.4  out > drive(0.1) > master }
+    track pads  { play pad_fm      using lush_pad  velocity 0.3 level 0.3  reverb_send 0.4 out > master }
+}
+
+# ────────────────────────────────────────────────
+# ARRANGEMENT (34 bars)
+# ────────────────────────────────────────────────
+
+arrange {
+    intro x4
+    buildup x4
+    main x4
+    breakdown x4
+    bridge x4
+    drop x8
+    outro x4
+    intro x2
+}

@@ -27,9 +27,13 @@ pub enum BassParam {
     Osc1Wave,
     Osc2Wave,
     Osc3Wave,
+    Decay,
+    Sustain,
+    Release,
     Keytrack,
     VibratoRate,
     VibratoDepth,
+    VelEnv,
 }
 
 pub struct BassModule {
@@ -48,6 +52,7 @@ pub struct BassModule {
     cutoff_env_amount: f32,
     resonance: f32,
     keytrack: f32,
+    vel_env: f32,  // velocity-to-filter-envelope scaling (0=none, 1=full)
     // State
     velocity: f32,
     // LFO
@@ -91,6 +96,7 @@ impl BassModule {
             cutoff_env_amount: 4000.0,
             resonance: 0.3,
             keytrack: 0.0,
+            vel_env: 0.0,
             velocity: 1.0,
             lfo_router: ModulationRouter::new(SAMPLE_RATE, 5001),
             pitch_bend_ratio: 1.0,
@@ -113,13 +119,21 @@ impl BassModule {
 
     pub fn set_param(&mut self, param: BassParam, value: f32) {
         match param {
-            BassParam::Cutoff => self.cutoff_base = value * 10000.0,
-            BassParam::CutoffEnv => self.cutoff_env_amount = value * 8000.0,
+            BassParam::Cutoff => {
+                // Exponential scaling: 20Hz at 0.0, ~800Hz at 0.5, ~20kHz at 1.0
+                // This gives more resolution in the bass/mid range where it matters
+                self.cutoff_base = 20.0 * math::pow(1000.0, value);
+            }
+            BassParam::CutoffEnv => {
+                // Envelope amount also exponential for more musical sweep
+                self.cutoff_env_amount = 20.0 * math::pow(400.0, value);
+            }
             BassParam::Resonance => self.resonance = value,
             BassParam::Glide => self.glide_rate = 0.0001 + value * 0.05,
-            BassParam::Attack => {
-                self.amp_env.set_adsr(value * 2.0, 0.2, 0.8, 0.15);
-            }
+            BassParam::Attack => self.amp_env.set_attack(0.001 * math::pow(2000.0, value)),
+            BassParam::Decay => self.amp_env.set_decay(0.001 * math::pow(2000.0, value)),
+            BassParam::Sustain => self.amp_env.set_sustain(value),
+            BassParam::Release => self.amp_env.set_release(0.001 * math::pow(2000.0, value)),
             BassParam::LfoRate => {
                 self.lfo_router.lfo.set_rate(0.1 + value * 19.9);
             }
@@ -179,6 +193,7 @@ impl BassModule {
             BassParam::Keytrack => self.keytrack = math::clamp(value, 0.0, 1.0),
             BassParam::VibratoRate => self.vibrato_rate = 0.5 + value * 9.5,
             BassParam::VibratoDepth => self.vibrato_depth = value * 0.5,
+            BassParam::VelEnv => self.vel_env = math::clamp(value, 0.0, 1.0),
         }
     }
 
@@ -212,7 +227,9 @@ impl Module for BassModule {
             }
 
             let env_val = self.filter_env.next_sample();
-            let cutoff = self.cutoff_base + self.cutoff_env_amount * env_val;
+            // Scale filter envelope by velocity when vel_env > 0
+            let env_scale = 1.0 - self.vel_env + self.vel_env * self.velocity;
+            let cutoff = self.cutoff_base + self.cutoff_env_amount * env_val * env_scale;
 
             // LFO modulation
             let lfo_val = self.lfo_router.next_sample();
@@ -263,18 +280,27 @@ impl Module for BassModule {
     }
 
     fn note_on(&mut self, note: u8, velocity: f32) {
+        use crate::primitives::envelope::EnvStage;
         self.velocity = velocity;
         self.target_freq = math::midi_to_freq(note);
-        // If amp envelope is idle, snap frequency (no glide on first note)
-        if self.amp_env.is_idle() {
+
+        let is_legato = !self.amp_env.is_idle()
+            && self.amp_env.stage() != EnvStage::Release;
+
+        if is_legato {
+            // Legato: glide to new note without retriggering amp envelope.
+            // Filter envelope always retriggered for expression (classic acid behavior).
+            self.filter_env.gate_on();
+        } else {
+            // First note or note after release: snap frequency, retrigger both envelopes.
             self.current_freq = self.target_freq;
             for i in 0..3 {
                 self.oscs[i].set_frequency(self.current_freq * semitone_ratio(self.osc_pitch_offsets[i]));
             }
+            self.amp_env.gate_on();
+            self.filter_env.gate_on();
         }
         self.vibrato_onset = 0.0;
-        self.amp_env.gate_on();
-        self.filter_env.gate_on();
     }
 
     fn note_off(&mut self, _note: u8) {

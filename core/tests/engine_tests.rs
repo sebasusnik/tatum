@@ -330,8 +330,6 @@ fn test_engine_full() {
     engine.keys.note_on(64, 0.7);
     engine.fm.note_on(72, 0.3);
 
-    engine.arp.note_on(0, 1.0);
-
     let total = (SAMPLE_RATE * 8.0) as usize;
     let mut samples_l = vec![0.0f32; total];
     let mut samples_r = vec![0.0f32; total];
@@ -536,7 +534,7 @@ fn test_motion_seq_bass_cutoff() {
 
     let cutoffs = [0.1, 0.8, 0.3, 0.9];
     for i in 0..4 {
-        engine.sequencer.steps[i] = Step::new(33, 0.9, 0.7)
+        engine.sequencer.tracks[0].steps[i] = Step::new(33, 0.9, 0.7)
             .with_lock(PARAM_BASS_CUTOFF, cutoffs[i]);
     }
     engine.sequencer.num_steps = 4;
@@ -572,15 +570,15 @@ fn test_slide_acid_bass() {
     engine.bass.set_param(BassParam::Resonance, 0.85);
     engine.bass.set_param(BassParam::Glide, 0.3);
 
-    engine.sequencer.steps[0] = Step::new(33, 1.0, 0.8);
-    engine.sequencer.steps[1] = Step::new(28, 1.0, 0.8).with_slide();
-    engine.sequencer.steps[2] = Step::new(33, 1.0, 0.8);
-    engine.sequencer.steps[3] = Step::new(35, 1.0, 0.8).with_slide();
-    engine.sequencer.steps[4] = Step::new(33, 1.0, 0.8);
-    engine.sequencer.steps[5] = Step::new(28, 1.0, 0.8).with_slide()
+    engine.sequencer.tracks[0].steps[0] = Step::new(33, 1.0, 0.8);
+    engine.sequencer.tracks[0].steps[1] = Step::new(28, 1.0, 0.8).with_slide();
+    engine.sequencer.tracks[0].steps[2] = Step::new(33, 1.0, 0.8);
+    engine.sequencer.tracks[0].steps[3] = Step::new(35, 1.0, 0.8).with_slide();
+    engine.sequencer.tracks[0].steps[4] = Step::new(33, 1.0, 0.8);
+    engine.sequencer.tracks[0].steps[5] = Step::new(28, 1.0, 0.8).with_slide()
         .with_lock(PARAM_BASS_CUTOFF, 0.6);
-    engine.sequencer.steps[6] = Step::empty();
-    engine.sequencer.steps[7] = Step::new(21, 0.8, 0.5);
+    engine.sequencer.tracks[0].steps[6] = Step::empty();
+    engine.sequencer.tracks[0].steps[7] = Step::new(21, 0.8, 0.5);
 
     engine.sequencer.num_steps = 8;
     engine.sequencer.start();

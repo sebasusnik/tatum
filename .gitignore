@@ -2,3 +2,11 @@ target/
 web/node_modules/
 web/dist/
 web/src/wasm-pkg/
+
+# Test WAV output
+core/test_output/*.wav
+test_output/*.wav
+
+# macOS
+.DS_Store
+core/.DS_Store

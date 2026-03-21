@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "wasm"]
+members = ["core", "wasm", "cli"]
 resolver = "2"
 
 [profile.release]

@@ -1,7 +1,7 @@
 use crate::math;
 use crate::rng::Rng;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Waveform {
     Sine,
     Saw,

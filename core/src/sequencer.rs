@@ -3,6 +3,49 @@ use crate::{math, SAMPLE_RATE};
 
 pub const MAX_PATTERNS: usize = 4;
 pub const MAX_CHAIN_LENGTH: usize = 16;
+pub const MAX_TICK_EVENTS: usize = 24;
+
+// -- Drum lanes --
+
+pub const NUM_DRUM_LANES: usize = 6;
+
+/// Default MIDI notes: kick, snare, hihat, clap, tom, crash
+pub const DRUM_LANE_NOTES: [u8; NUM_DRUM_LANES] = [36, 38, 42, 39, 43, 49];
+
+#[derive(Clone, Copy)]
+pub struct DrumLane {
+    pub note: u8,
+    pub on: [bool; 16],
+    pub velocity: [f32; 16],
+}
+
+impl DrumLane {
+    pub fn new(note: u8) -> Self {
+        Self { note, on: [false; 16], velocity: [0.8; 16] }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct DrumTrack {
+    pub lanes: [DrumLane; NUM_DRUM_LANES],
+    pub enabled: bool,
+}
+
+impl DrumTrack {
+    pub fn new() -> Self {
+        Self {
+            lanes: [
+                DrumLane::new(DRUM_LANE_NOTES[0]),
+                DrumLane::new(DRUM_LANE_NOTES[1]),
+                DrumLane::new(DRUM_LANE_NOTES[2]),
+                DrumLane::new(DRUM_LANE_NOTES[3]),
+                DrumLane::new(DRUM_LANE_NOTES[4]),
+                DrumLane::new(DRUM_LANE_NOTES[5]),
+            ],
+            enabled: true,
+        }
+    }
+}
 
 // -- Motion Sequencing: ParamLock types --
 
@@ -91,7 +134,7 @@ pub const PARAM_EQ_LOW: u8 = 193;
 pub const PARAM_EQ_MID: u8 = 194;
 pub const PARAM_EQ_HIGH: u8 = 195;
 
-// Compressor/Sidechain 196..200 (within EQ/Master FX range)
+// Compressor/Sidechain 196..200
 pub const PARAM_COMP_THRESHOLD: u8 = 196;
 pub const PARAM_COMP_RATIO: u8 = 197;
 pub const PARAM_COMP_ATTACK: u8 = 198;
@@ -115,11 +158,13 @@ pub const PARAM_DELAY_FEEDBACK: u8 = 227;
 pub const PARAM_DELAY_FILTER: u8 = 228;
 pub const PARAM_DELAY_SYNC: u8 = 229;
 
+// -- Step (melodic tracks) --
+
 #[derive(Clone, Copy)]
 pub struct Step {
     pub note: Option<u8>,
     pub velocity: f32,
-    pub gate: f32, // fraction of step length 0.0-1.0
+    pub gate: f32,
     pub slide: bool,
     pub lock_slide: bool,
     pub active: bool,
@@ -166,7 +211,7 @@ impl Step {
                 return self;
             }
         }
-        self // all slots full, silently ignore
+        self
     }
 
     pub fn with_lock_slide(mut self) -> Self {
@@ -185,9 +230,38 @@ impl Step {
     }
 }
 
+// -- Melodic track state (bass, keys, fm) --
+
+#[derive(Clone, Copy)]
+pub struct TrackState {
+    pub steps: [Step; 16],
+    current_note: Option<u8>,
+    gate_off_sent: bool,
+    pub enabled: bool,
+}
+
+impl TrackState {
+    pub fn new() -> Self {
+        Self {
+            steps: [Step::empty(); 16],
+            current_note: None,
+            gate_off_sent: true,
+            enabled: true,
+        }
+    }
+
+    fn reset(&mut self) {
+        self.current_note = None;
+        self.gate_off_sent = true;
+    }
+}
+
+// -- Events --
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum SequencerEvent {
     NoteOn {
+        track: u8,
         note: u8,
         velocity: f32,
         slide: bool,
@@ -195,40 +269,52 @@ pub enum SequencerEvent {
         lock_slide: bool,
         step_samples: f32,
     },
-    NoteOff { note: u8 },
+    NoteOff { track: u8, note: u8 },
     Tick {
+        track: u8,
         locks: [Option<ParamLock>; MAX_LOCKS_PER_STEP],
         lock_slide: bool,
         step_samples: f32,
     },
 }
 
+// -- Sequencer --
+
 pub struct Sequencer {
+    // Backward-compat beats track (used by tick() only, song tests)
     pub steps: [Step; 16],
     pub num_steps: usize,
+
+    // Shared clock
     current_step: usize,
     sample_counter: f32,
     samples_per_step: f32,
-    gate_off_sent: bool,
     bpm: f32,
     running: bool,
-    current_note: Option<u8>,
+
+    // Beats track legacy state (for tick())
+    beats_current_note: Option<u8>,
+    beats_gate_off_sent: bool,
+
+    // Melodic tracks: 0=bass, 1=keys, 2=fm
+    pub tracks: [TrackState; 3],
+
+    // Drum track (beats) — used by tick_events()
+    pub drum_track: DrumTrack,
 
     // Pattern storage (patterns 1-3; pattern 0 is `steps`)
     patterns_extra: [[Step; 16]; 3],
 
     // Pattern chaining
     chain: [u8; MAX_CHAIN_LENGTH],
-    chain_length: usize, // 0 = no chaining, use pattern 0
+    chain_length: usize,
     chain_position: usize,
-
-    // Current pattern index (0-3)
     current_pattern: usize,
 
     // Swing: 0.5 = straight, 0.67 = triplet feel
     swing: f32,
 
-    // Velocity humanization: 0.0 = none, 1.0 = max
+    // Velocity humanization
     humanize: f32,
 
     // RNG for probability + humanization
@@ -237,7 +323,6 @@ pub struct Sequencer {
 
 impl Sequencer {
     pub fn new(bpm: f32) -> Self {
-        // 16th notes: 4 steps per beat
         let samples_per_step = SAMPLE_RATE * 60.0 / bpm / 4.0;
         Self {
             steps: [Step::empty(); 16],
@@ -245,10 +330,12 @@ impl Sequencer {
             current_step: 0,
             sample_counter: 0.0,
             samples_per_step,
-            gate_off_sent: true,
             bpm,
             running: false,
-            current_note: None,
+            beats_current_note: None,
+            beats_gate_off_sent: true,
+            tracks: [TrackState::new(), TrackState::new(), TrackState::new()],
+            drum_track: DrumTrack::new(),
             patterns_extra: [[Step::empty(); 16]; 3],
             chain: [0; MAX_CHAIN_LENGTH],
             chain_length: 0,
@@ -268,15 +355,17 @@ impl Sequencer {
     pub fn start(&mut self) {
         self.running = true;
         self.current_step = 0;
-        self.gate_off_sent = true;
-        self.current_note = None;
+        self.beats_current_note = None;
+        self.beats_gate_off_sent = true;
+        for t in self.tracks.iter_mut() {
+            t.reset();
+        }
         self.chain_position = 0;
         if self.chain_length > 0 {
             self.current_pattern = (self.chain[0] as usize).min(MAX_PATTERNS - 1);
         } else {
             self.current_pattern = 0;
         }
-        // Trigger immediately using swing-aware duration
         self.sample_counter = self.effective_step_samples(0);
     }
 
@@ -284,7 +373,7 @@ impl Sequencer {
         self.running = false;
     }
 
-    // -- Pattern accessors --
+    // -- Pattern accessors (beats track only, backward compat) --
 
     pub fn pattern(&self, index: usize) -> &[Step; 16] {
         if index == 0 {
@@ -309,7 +398,6 @@ impl Sequencer {
     // -- Swing timing --
 
     fn effective_step_samples(&self, step_index: usize) -> f32 {
-        // Fast path: no swing
         if math::abs(self.swing - 0.5) < 0.001 {
             return self.samples_per_step;
         }
@@ -321,41 +409,38 @@ impl Sequencer {
         }
     }
 
-    // -- Step advancement with chaining --
-
     fn advance_step(&mut self) {
         self.current_step = (self.current_step + 1) % self.num_steps;
-        // Chain advance on wrap
         if self.current_step == 0 && self.chain_length > 0 {
             self.chain_position = (self.chain_position + 1) % self.chain_length;
             self.current_pattern = (self.chain[self.chain_position] as usize).min(MAX_PATTERNS - 1);
         }
     }
 
-    /// Advance by one sample. Returns an event if one occurs.
+    // -- Legacy tick: beats track only (backward compat for song tests) --
+
     pub fn tick(&mut self) -> Option<SequencerEvent> {
         if !self.running {
             return None;
         }
 
         self.sample_counter += 1.0;
-
         let eff_samples = self.effective_step_samples(self.current_step);
 
-        // Check gate off
-        if !self.gate_off_sent {
+        // Gate off
+        if !self.beats_gate_off_sent {
             let step = self.active_step();
             let gate_off_point = eff_samples * step.gate;
             if self.sample_counter >= gate_off_point {
-                self.gate_off_sent = true;
-                if let Some(note) = self.current_note {
-                    self.current_note = None;
-                    return Some(SequencerEvent::NoteOff { note });
+                self.beats_gate_off_sent = true;
+                if let Some(note) = self.beats_current_note {
+                    self.beats_current_note = None;
+                    return Some(SequencerEvent::NoteOff { track: 3, note });
                 }
             }
         }
 
-        // Check step advance
+        // Step advance
         if self.sample_counter >= eff_samples {
             self.sample_counter = 0.0;
             self.advance_step();
@@ -363,21 +448,17 @@ impl Sequencer {
             let step = *self.active_step();
             let new_step_samples = self.effective_step_samples(self.current_step);
 
-            // Inactive step: emit Tick with locks, no note
             if !step.active {
-                self.gate_off_sent = true;
-                return Some(SequencerEvent::Tick { locks: step.locks, lock_slide: step.lock_slide, step_samples: new_step_samples });
+                self.beats_gate_off_sent = true;
+                return Some(SequencerEvent::Tick { track: 3, locks: step.locks, lock_slide: step.lock_slide, step_samples: new_step_samples });
             }
 
             if let Some(note) = step.note {
-                // Probability check
                 if step.probability < 1.0 && self.rng.next_f32() >= step.probability {
-                    // Skipped by probability — still emit Tick with locks
-                    self.gate_off_sent = true;
-                    return Some(SequencerEvent::Tick { locks: step.locks, lock_slide: step.lock_slide, step_samples: new_step_samples });
+                    self.beats_gate_off_sent = true;
+                    return Some(SequencerEvent::Tick { track: 3, locks: step.locks, lock_slide: step.lock_slide, step_samples: new_step_samples });
                 }
 
-                // Apply velocity humanization
                 let vel = if self.humanize > 0.0 {
                     let offset = self.rng.next_bipolar() * self.humanize * 0.3;
                     math::clamp(step.velocity * (1.0 + offset), 0.0, 1.0)
@@ -385,9 +466,10 @@ impl Sequencer {
                     step.velocity
                 };
 
-                self.gate_off_sent = false;
-                self.current_note = Some(note);
+                self.beats_gate_off_sent = false;
+                self.beats_current_note = Some(note);
                 return Some(SequencerEvent::NoteOn {
+                    track: 3,
                     note,
                     velocity: vel,
                     slide: step.slide,
@@ -396,27 +478,202 @@ impl Sequencer {
                     step_samples: new_step_samples,
                 });
             } else {
-                self.gate_off_sent = true;
-                return Some(SequencerEvent::Tick { locks: step.locks, lock_slide: step.lock_slide, step_samples: new_step_samples });
+                self.beats_gate_off_sent = true;
+                return Some(SequencerEvent::Tick { track: 3, locks: step.locks, lock_slide: step.lock_slide, step_samples: new_step_samples });
             }
         }
 
         None
     }
 
-    pub fn bpm(&self) -> f32 {
-        self.bpm
+    // -- Multi-track tick: all tracks + drum lanes --
+
+    pub fn tick_events(&mut self, buf: &mut [Option<SequencerEvent>; MAX_TICK_EVENTS]) -> usize {
+        if !self.running {
+            return 0;
+        }
+
+        self.sample_counter += 1.0;
+        let eff_samples = self.effective_step_samples(self.current_step);
+        let mut count = 0;
+
+        // Gate-off for melodic tracks (bass=0, keys=1, fm=2)
+        for ti in 0..3 {
+            if !self.tracks[ti].enabled || self.tracks[ti].gate_off_sent {
+                continue;
+            }
+            let step = self.tracks[ti].steps[self.current_step];
+            let gate_off_point = eff_samples * step.gate;
+            if self.sample_counter >= gate_off_point {
+                self.tracks[ti].gate_off_sent = true;
+                if let Some(note) = self.tracks[ti].current_note {
+                    self.tracks[ti].current_note = None;
+                    if count < MAX_TICK_EVENTS {
+                        buf[count] = Some(SequencerEvent::NoteOff { track: ti as u8, note });
+                        count += 1;
+                    }
+                }
+            }
+        }
+        // Gate-off for beats track (from steps)
+        if !self.beats_gate_off_sent {
+            let step = self.active_step();
+            let gate_off_point = eff_samples * step.gate;
+            if self.sample_counter >= gate_off_point {
+                self.beats_gate_off_sent = true;
+                if let Some(note) = self.beats_current_note {
+                    self.beats_current_note = None;
+                    if count < MAX_TICK_EVENTS {
+                        buf[count] = Some(SequencerEvent::NoteOff { track: 3, note });
+                        count += 1;
+                    }
+                }
+            }
+        }
+
+        // Step advance
+        if self.sample_counter >= eff_samples {
+            self.sample_counter = 0.0;
+            self.advance_step();
+
+            let new_step_samples = self.effective_step_samples(self.current_step);
+            let step_idx = self.current_step;
+
+            // Melodic tracks
+            for ti in 0..3 {
+                if !self.tracks[ti].enabled {
+                    continue;
+                }
+                let step = self.tracks[ti].steps[step_idx];
+
+                if !step.active {
+                    self.tracks[ti].gate_off_sent = true;
+                    if count < MAX_TICK_EVENTS {
+                        buf[count] = Some(SequencerEvent::Tick { track: ti as u8, locks: step.locks, lock_slide: step.lock_slide, step_samples: new_step_samples });
+                        count += 1;
+                    }
+                    continue;
+                }
+
+                if let Some(note) = step.note {
+                    if step.probability < 1.0 && self.rng.next_f32() >= step.probability {
+                        self.tracks[ti].gate_off_sent = true;
+                        if count < MAX_TICK_EVENTS {
+                            buf[count] = Some(SequencerEvent::Tick { track: ti as u8, locks: step.locks, lock_slide: step.lock_slide, step_samples: new_step_samples });
+                            count += 1;
+                        }
+                        continue;
+                    }
+
+                    let vel = if self.humanize > 0.0 {
+                        let offset = self.rng.next_bipolar() * self.humanize * 0.3;
+                        math::clamp(step.velocity * (1.0 + offset), 0.0, 1.0)
+                    } else {
+                        step.velocity
+                    };
+
+                    self.tracks[ti].gate_off_sent = false;
+                    self.tracks[ti].current_note = Some(note);
+                    if count < MAX_TICK_EVENTS {
+                        buf[count] = Some(SequencerEvent::NoteOn {
+                            track: ti as u8,
+                            note,
+                            velocity: vel,
+                            slide: step.slide,
+                            locks: step.locks,
+                            lock_slide: step.lock_slide,
+                            step_samples: new_step_samples,
+                        });
+                        count += 1;
+                    }
+                } else {
+                    self.tracks[ti].gate_off_sent = true;
+                    if count < MAX_TICK_EVENTS {
+                        buf[count] = Some(SequencerEvent::Tick { track: ti as u8, locks: step.locks, lock_slide: step.lock_slide, step_samples: new_step_samples });
+                        count += 1;
+                    }
+                }
+            }
+
+            // Beats track — process from `steps` (same logic as tick())
+            {
+                let step = self.pattern(self.current_pattern)[step_idx];
+
+                if !step.active {
+                    self.beats_gate_off_sent = true;
+                    if count < MAX_TICK_EVENTS {
+                        buf[count] = Some(SequencerEvent::Tick { track: 3, locks: step.locks, lock_slide: step.lock_slide, step_samples: new_step_samples });
+                        count += 1;
+                    }
+                } else if let Some(note) = step.note {
+                    if step.probability < 1.0 && self.rng.next_f32() >= step.probability {
+                        self.beats_gate_off_sent = true;
+                        if count < MAX_TICK_EVENTS {
+                            buf[count] = Some(SequencerEvent::Tick { track: 3, locks: step.locks, lock_slide: step.lock_slide, step_samples: new_step_samples });
+                            count += 1;
+                        }
+                    } else {
+                        let vel = if self.humanize > 0.0 {
+                            let offset = self.rng.next_bipolar() * self.humanize * 0.3;
+                            math::clamp(step.velocity * (1.0 + offset), 0.0, 1.0)
+                        } else {
+                            step.velocity
+                        };
+                        self.beats_gate_off_sent = false;
+                        self.beats_current_note = Some(note);
+                        if count < MAX_TICK_EVENTS {
+                            buf[count] = Some(SequencerEvent::NoteOn {
+                                track: 3, note, velocity: vel, slide: step.slide,
+                                locks: step.locks, lock_slide: step.lock_slide,
+                                step_samples: new_step_samples,
+                            });
+                            count += 1;
+                        }
+                    }
+                } else {
+                    self.beats_gate_off_sent = true;
+                }
+            }
+
+            // Drum lanes — additional drum hits (can coexist with steps)
+            if self.drum_track.enabled {
+                for lane in &self.drum_track.lanes {
+                    if lane.on[step_idx] && count < MAX_TICK_EVENTS {
+                        let vel = if self.humanize > 0.0 {
+                            let offset = self.rng.next_bipolar() * self.humanize * 0.3;
+                            math::clamp(lane.velocity[step_idx] * (1.0 + offset), 0.0, 1.0)
+                        } else {
+                            lane.velocity[step_idx]
+                        };
+                        buf[count] = Some(SequencerEvent::NoteOn {
+                            track: 3,
+                            note: lane.note,
+                            velocity: vel,
+                            slide: false,
+                            locks: [None; MAX_LOCKS_PER_STEP],
+                            lock_slide: false,
+                            step_samples: new_step_samples,
+                        });
+                        count += 1;
+                    }
+                }
+            }
+        }
+
+        count
     }
 
-    pub fn current_step(&self) -> usize {
-        self.current_step
-    }
+    pub fn bpm(&self) -> f32 { self.bpm }
+    pub fn current_step(&self) -> usize { self.current_step }
 
     pub fn reset(&mut self) {
         self.current_step = 0;
         self.sample_counter = 0.0;
-        self.gate_off_sent = true;
-        self.current_note = None;
+        self.beats_current_note = None;
+        self.beats_gate_off_sent = true;
+        for t in self.tracks.iter_mut() {
+            t.reset();
+        }
         self.chain_position = 0;
         if self.chain_length > 0 {
             self.current_pattern = (self.chain[0] as usize).min(MAX_PATTERNS - 1);
@@ -425,27 +682,17 @@ impl Sequencer {
         }
     }
 
-    // -- Public API: Swing --
-
     pub fn set_swing(&mut self, swing: f32) {
         self.swing = math::clamp(swing, 0.5, 0.75);
     }
 
-    pub fn swing(&self) -> f32 {
-        self.swing
-    }
-
-    // -- Public API: Humanize --
+    pub fn swing(&self) -> f32 { self.swing }
 
     pub fn set_humanize(&mut self, amount: f32) {
         self.humanize = math::clamp(amount, 0.0, 1.0);
     }
 
-    pub fn humanize(&self) -> f32 {
-        self.humanize
-    }
-
-    // -- Public API: Pattern chaining --
+    pub fn humanize(&self) -> f32 { self.humanize }
 
     pub fn set_chain(&mut self, chain: &[u8], length: usize) {
         let len = length.min(MAX_CHAIN_LENGTH).min(chain.len());
@@ -461,13 +708,8 @@ impl Sequencer {
         self.current_pattern = 0;
     }
 
-    pub fn current_pattern(&self) -> usize {
-        self.current_pattern
-    }
-
-    pub fn chain_position(&self) -> usize {
-        self.chain_position
-    }
+    pub fn current_pattern(&self) -> usize { self.current_pattern }
+    pub fn chain_position(&self) -> usize { self.chain_position }
 }
 
 #[cfg(test)]
@@ -475,7 +717,6 @@ mod tests {
     use super::*;
     use std::vec::Vec;
 
-    /// Helper: run sequencer until it emits the next event (or give up after max_samples)
     fn next_event(seq: &mut Sequencer, max_samples: usize) -> Option<SequencerEvent> {
         for _ in 0..max_samples {
             if let Some(ev) = seq.tick() {
@@ -485,22 +726,15 @@ mod tests {
         None
     }
 
-    /// Helper: count samples between two consecutive step-advance events
     fn measure_step_duration(seq: &mut Sequencer) -> usize {
-        // Skip until we get the first event (step boundary)
         let limit = (SAMPLE_RATE * 2.0) as usize;
         for _ in 0..limit {
-            if seq.tick().is_some() {
-                break;
-            }
+            if seq.tick().is_some() { break; }
         }
-        // Now count samples until the next event
         let mut count = 0;
         for _ in 0..limit {
             count += 1;
-            if seq.tick().is_some() {
-                return count;
-            }
+            if seq.tick().is_some() { return count; }
         }
         0
     }
@@ -509,21 +743,14 @@ mod tests {
     fn test_swing_timing() {
         let mut seq = Sequencer::new(120.0);
         seq.set_swing(0.67);
-        // Fill all steps with notes so every step produces an event
         for i in 0..4 {
-            seq.steps[i] = Step::new(60, 0.8, 0.1); // short gate to avoid NoteOff interference
+            seq.steps[i] = Step::new(60, 0.8, 0.1);
         }
         seq.num_steps = 4;
         seq.start();
 
-        // start() triggers immediate advance to step 1 (odd).
-        // First measured duration: step 1 (odd) → step 2 (even) = pair*(1-swing)
-        // Second measured duration: step 2 (even) → step 3 (odd) = pair*swing
-        let d_odd = measure_step_duration(&mut seq);  // step 1 duration (odd = short)
-        let d_even = measure_step_duration(&mut seq); // step 2 duration (even = long)
-
-        // With swing=0.67, even steps get 67% of pair, odd get 33%
-        // Ratio should be approximately 0.67/0.33 ≈ 2.03
+        let d_odd = measure_step_duration(&mut seq);
+        let d_even = measure_step_duration(&mut seq);
         let ratio = d_even as f32 / d_odd as f32;
         assert!(
             ratio > 1.8 && ratio < 2.3,
@@ -535,31 +762,21 @@ mod tests {
     #[test]
     fn test_active_step_mute() {
         let mut seq = Sequencer::new(120.0);
-        // start() immediately advances to step 1, so:
-        // Step 1: active note, Step 0: inactive note
         seq.steps[1] = Step::new(60, 0.8, 0.5);
         seq.steps[0] = Step::new(64, 0.8, 0.5).inactive();
         seq.num_steps = 2;
         seq.start();
 
         let limit = (SAMPLE_RATE * 2.0) as usize;
-
-        // First event should be NoteOn for step 1 (active)
         let ev1 = next_event(&mut seq, limit).unwrap();
-        assert!(matches!(ev1, SequencerEvent::NoteOn { note: 60, .. }));
+        assert!(matches!(ev1, SequencerEvent::NoteOn { note: 60, track: 3, .. }));
 
-        // Skip past NoteOff, then step 0 (inactive) should emit Tick
         loop {
             if let Some(ev) = next_event(&mut seq, limit) {
                 match ev {
                     SequencerEvent::NoteOff { .. } => continue,
-                    SequencerEvent::Tick { .. } => {
-                        // Step 0 was inactive — should emit Tick, not NoteOn
-                        break;
-                    }
-                    SequencerEvent::NoteOn { .. } => {
-                        panic!("Inactive step should not emit NoteOn");
-                    }
+                    SequencerEvent::Tick { .. } => break,
+                    SequencerEvent::NoteOn { .. } => panic!("Inactive step should not emit NoteOn"),
                 }
             } else {
                 panic!("Expected Tick event for inactive step");
@@ -570,7 +787,6 @@ mod tests {
     #[test]
     fn test_probability_zero_never_plays() {
         let mut seq = Sequencer::new(120.0);
-        // All steps have note but probability=0.0
         for i in 0..4 {
             seq.steps[i] = Step::new(60, 0.8, 0.5).with_probability(0.0);
         }
@@ -592,8 +808,8 @@ mod tests {
     #[test]
     fn test_probability_emits_tick_with_locks() {
         let mut seq = Sequencer::new(120.0);
-        seq.steps[0] = Step::new(60, 0.8, 0.5) // short gate
-            .with_probability(0.0) // never plays
+        seq.steps[0] = Step::new(60, 0.8, 0.5)
+            .with_probability(0.0)
             .with_lock(PARAM_BASS_CUTOFF, 0.9);
         seq.num_steps = 1;
         seq.start();
@@ -615,8 +831,6 @@ mod tests {
     #[test]
     fn test_pattern_chaining() {
         let mut seq = Sequencer::new(120.0);
-        // Pattern 0: note 60 on step 0+1, Pattern 1: note 72 on step 0+1
-        // Use num_steps=2 so chain advances every 2 steps
         seq.steps[0] = Step::new(60, 0.8, 0.1);
         seq.steps[1] = Step::new(60, 0.8, 0.1);
         seq.pattern_mut(1)[0] = Step::new(72, 0.8, 0.1);
@@ -632,20 +846,13 @@ mod tests {
             loop {
                 if let Some(ev) = next_event(&mut seq, limit) {
                     match ev {
-                        SequencerEvent::NoteOn { note, .. } => {
-                            notes.push(note);
-                            break;
-                        }
+                        SequencerEvent::NoteOn { note, .. } => { notes.push(note); break; }
                         _ => continue,
                     }
-                } else {
-                    break;
-                }
+                } else { break; }
             }
         }
 
-        // start() fires step 1 of pattern 0 (note 60), then wraps to step 0 advancing chain
-        // Sequence: pat0-step1(60), pat1-step0(72), pat1-step1(72), pat0-step0(60), ...
         assert!(notes.len() >= 4, "Should have collected at least 4 notes, got {}", notes.len());
         assert_eq!(notes[0], 60, "First note from pattern 0");
         assert_eq!(notes[1], 72, "Second note from pattern 1");
@@ -655,21 +862,16 @@ mod tests {
 
     #[test]
     fn test_default_values_unchanged() {
-        // Verify that default settings produce identical behavior to pre-change code
         let mut seq = Sequencer::new(120.0);
         assert!((seq.swing() - 0.5).abs() < 0.001, "Default swing should be 0.5");
         assert!((seq.humanize() - 0.0).abs() < 0.001, "Default humanize should be 0.0");
 
-        // Fill a pattern: start() advances to step 1 first
         seq.steps[1] = Step::new(60, 0.8, 0.5);
         seq.steps[0] = Step::new(64, 0.9, 0.5);
         seq.num_steps = 2;
         seq.start();
 
         let limit = (SAMPLE_RATE * 2.0) as usize;
-
-        // Default: active=true, probability=1.0 → all notes play
-        // First event is step 1 (note 60)
         let ev1 = next_event(&mut seq, limit).unwrap();
         match ev1 {
             SequencerEvent::NoteOn { note, velocity, .. } => {
@@ -679,9 +881,37 @@ mod tests {
             _ => panic!("Expected NoteOn"),
         }
 
-        // Verify default Step field values
         let step = Step::empty();
         assert!(step.active, "Default step should be active");
         assert!((step.probability - 1.0).abs() < 0.001, "Default probability should be 1.0");
+    }
+
+    #[test]
+    fn test_drum_lanes_multi_hit() {
+        let mut seq = Sequencer::new(120.0);
+        // Enable kick + hihat on step 1 (start() advances to step 1)
+        seq.drum_track.lanes[0].on[1] = true;  // kick
+        seq.drum_track.lanes[0].velocity[1] = 1.0;
+        seq.drum_track.lanes[2].on[1] = true;  // hihat
+        seq.drum_track.lanes[2].velocity[1] = 0.6;
+        seq.num_steps = 2;
+        seq.start();
+
+        let limit = (SAMPLE_RATE * 2.0) as usize;
+        let mut tick_buf = [None; MAX_TICK_EVENTS];
+        let mut notes = Vec::new();
+        for _ in 0..limit {
+            let n = seq.tick_events(&mut tick_buf);
+            for i in 0..n {
+                if let Some(SequencerEvent::NoteOn { track: 3, note, .. }) = tick_buf[i] {
+                    notes.push(note);
+                }
+                tick_buf[i] = None;
+            }
+            if notes.len() >= 2 { break; }
+        }
+        assert_eq!(notes.len(), 2, "Should get 2 drum hits on same step");
+        assert!(notes.contains(&36), "Should have kick (36)");
+        assert!(notes.contains(&42), "Should have hihat (42)");
     }
 }

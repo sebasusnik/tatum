@@ -355,8 +355,8 @@ impl Reverb {
         (input * dry + out_l * wet, input * dry + out_r * wet)
     }
 
-    /// Process stereo input: mono-sums into the reverb tank, preserves dry stereo.
-    pub fn process_stereo_in(&mut self, input_l: f32, input_r: f32) -> (f32, f32) {
+    /// Core stereo processing: advances state and returns raw reverb wet signal.
+    fn process_stereo_in_core(&mut self, input_l: f32, input_r: f32) -> (f32, f32) {
         let mono = (input_l + input_r) * 0.5;
         let pd = self.pre_delay.process(mono);
 
@@ -383,9 +383,21 @@ impl Reverb {
             out_r = ap.process(out_r);
         }
 
+        (out_l, out_r)
+    }
+
+    /// Process stereo input: mono-sums into the reverb tank, preserves dry stereo.
+    pub fn process_stereo_in(&mut self, input_l: f32, input_r: f32) -> (f32, f32) {
+        let (out_l, out_r) = self.process_stereo_in_core(input_l, input_r);
         let dry = 1.0 - self.mix;
         let wet = self.mix;
         (input_l * dry + out_l * wet, input_r * dry + out_r * wet)
+    }
+
+    /// Wet-only stereo reverb for send/return routing.
+    /// Returns only the reverb signal without dry blend.
+    pub fn process_stereo_in_wet(&mut self, input_l: f32, input_r: f32) -> (f32, f32) {
+        self.process_stereo_in_core(input_l, input_r)
     }
 
     /// Backward-compatible mono process: delegates to stereo and sums.

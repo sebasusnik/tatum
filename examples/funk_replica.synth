@@ -1,0 +1,370 @@
+# Funk Envelope Filter — DSL replica of song_funk_envelope_filter.rs
+# 112 BPM, A minor, 32 bars
+# Section map: intro(4) verse1(8) bridge(4) verse2(8) outro(8)
+
+tempo 112
+meter 4/4
+scale A minor
+sidechain 0.4
+swing 0.54
+humanize 0.25 timing 0.15
+
+# ────────────────────────────────────────────────
+# MODULE INSTRUMENTS
+# ────────────────────────────────────────────────
+
+module bass funk_bass {
+    cutoff 0.08
+    cutoff_env 0.7
+    resonance 0.75
+    glide 0.15
+    keytrack 0.5
+    osc2_pitch 0.25
+    osc1_wave saw
+    attack 0.0
+}
+
+module fm clav {
+    algorithm 0.2857
+    mod_index 0.87
+    feedback 0.4
+    op0_envelope 0.001 0.12 0.05 0.08
+}
+
+# Pad: Am7 chord — poly mode, slow attack, warm
+module keys pad {
+    voice_mode 0.0
+    cutoff 0.15
+    detune 0.10
+    chorus_mix 0.2
+    attack 0.5
+    decay 0.3
+    sustain 0.8
+    release 1.0
+}
+
+module beats drums {
+    kick_level 1.0
+    kick_click 0.5
+    kick_decay 0.5
+    snare_level 0.9
+    snare_decay 0.4
+    snare_pan -0.1
+    hihat_level 0.8
+    hihat_pan 0.3
+    clap_level 0.7
+    clap_pan 0.15
+}
+
+module keys arp {
+    cutoff 0.15
+    attack 0.0
+    decay 0.15
+    sustain 0.3
+    release 0.08
+}
+
+# ────────────────────────────────────────────────
+# PATTERNS
+# ────────────────────────────────────────────────
+
+# Bass: syncopated funk with per-step plocks for wah dynamics
+# A1=21, G1=19, C2=24 (matching reference MIDI notes)
+pattern funk_bass {
+    A0:0.9(edepth=0.75, res=0.80, gate=0.7)   -  -  A0:0.55(edepth=0.50, res=0.65, gate=0.5)
+    -  G0:0.7(edepth=0.65, res=0.75, gate=0.6)   -  -
+    A0:0.8(edepth=0.70, res=0.78, gate=0.65)  -  A0:0.4(edepth=0.40, res=0.55, gate=0.4)   -
+    C1:0.5(edepth=0.55, res=0.70, gate=0.5)   -  A0:0.65(edepth=0.60, res=0.72, gate=0.6)  -
+}
+
+# Bass: held note for bridge
+pattern bass_hold {
+    A0:0.7 .. .. ..
+    ..     .. .. ..
+    ..     .. .. ..
+    ..     .. .. ..
+}
+
+# Bass verse2 chord progression: Am Dm G C Am Dm Em Am
+pattern bass_v2_am {
+    A0:0.9(edepth=0.75, res=0.80, gate=0.7)   -  -  A0:0.55(edepth=0.50, res=0.65, gate=0.5)
+    -  G0:0.7(edepth=0.65, res=0.75, gate=0.6)   -  -
+    A0:0.8(edepth=0.70, res=0.78, gate=0.65)  -  A0:0.4(edepth=0.40, res=0.55, gate=0.4)   -
+    C1:0.5(edepth=0.55, res=0.70, gate=0.5)   -  A0:0.65(edepth=0.60, res=0.72, gate=0.6)  -
+}
+
+pattern bass_v2_dm {
+    D0:0.9(edepth=0.75, res=0.80, gate=0.7)   -  -  D0:0.55(edepth=0.50, res=0.65, gate=0.5)
+    -  C0:0.7(edepth=0.65, res=0.75, gate=0.6)   -  -
+    D0:0.8(edepth=0.70, res=0.78, gate=0.65)  -  D0:0.4(edepth=0.40, res=0.55, gate=0.4)   -
+    F0:0.5(edepth=0.55, res=0.70, gate=0.5)   -  D0:0.65(edepth=0.60, res=0.72, gate=0.6)  -
+}
+
+pattern bass_v2_g {
+    G0:0.9(edepth=0.75, res=0.80, gate=0.7)   -  -  G0:0.55(edepth=0.50, res=0.65, gate=0.5)
+    -  F0:0.7(edepth=0.65, res=0.75, gate=0.6)   -  -
+    G0:0.8(edepth=0.70, res=0.78, gate=0.65)  -  G0:0.4(edepth=0.40, res=0.55, gate=0.4)   -
+    Bb0:0.5(edepth=0.55, res=0.70, gate=0.5)  -  G0:0.65(edepth=0.60, res=0.72, gate=0.6)  -
+}
+
+pattern bass_v2_c {
+    C1:0.9(edepth=0.75, res=0.80, gate=0.7)   -  -  C1:0.55(edepth=0.50, res=0.65, gate=0.5)
+    -  Bb0:0.7(edepth=0.65, res=0.75, gate=0.6)  -  -
+    C1:0.8(edepth=0.70, res=0.78, gate=0.65)  -  C1:0.4(edepth=0.40, res=0.55, gate=0.4)   -
+    Eb1:0.5(edepth=0.55, res=0.70, gate=0.5)  -  C1:0.65(edepth=0.60, res=0.72, gate=0.6)  -
+}
+
+pattern bass_v2_em {
+    E0:0.9(edepth=0.75, res=0.80, gate=0.7)   -  -  E0:0.55(edepth=0.50, res=0.65, gate=0.5)
+    -  D0:0.7(edepth=0.65, res=0.75, gate=0.6)   -  -
+    E0:0.8(edepth=0.70, res=0.78, gate=0.65)  -  E0:0.4(edepth=0.40, res=0.55, gate=0.4)   -
+    G0:0.5(edepth=0.55, res=0.70, gate=0.5)   -  E0:0.65(edepth=0.60, res=0.72, gate=0.6)  -
+}
+
+# ── Drums ──
+
+# Intro (variation 0): no ghost snare, closed hat on step 10
+pattern drums_intro {
+    kick:    X  -  -  -  -  -  -  x:0.7  x:0.85 -  -  -  -  -  -  -
+    snare:   -  -  -  -  X  -  -  -       -      -  -  -  x  -  -  -
+    hat:     -  x  x  x  -  x  -  -       -      x  x  x  -  x  -  x
+    openhat: -  -  -  -  -  -  x  -       -      -  -  -  -  -  x  -
+}
+
+# Verse 1 (variation 1): ghost snare on step 10
+pattern drums_verse1 {
+    kick:    X  -  -  -  -  -  -  x:0.7  x:0.85 -  -  -  -  -  -  -
+    snare:   -  -  -  -  X  -  -  -       -      -  o  -  x  -  -  -
+    hat:     -  x  x  x  -  x  -  -       -      x  -  x  -  x  -  x
+    openhat: -  -  -  -  -  -  x  -       -      -  -  -  -  -  x  -
+}
+
+# Bridge: kick on 1+3, hats everywhere else
+pattern drums_bridge {
+    kick:    x:0.75 -  -  -  -  -  -  -  x:0.75 -  -  -  -  -  -  -
+    hat:     -  o  o  o  o  o  o  o  -    o  o  o  o  o  o  o
+}
+
+# Verse 2 (variation 2): ghost snare + clap on step 11
+pattern drums_verse2 {
+    kick:    X  -  -  -  -  -  -  x:0.7  x:0.85 -  -  -  -  -  -  -
+    snare:   -  -  -  -  X  -  -  -       -      -  o  -  x  -  -  -
+    hat:     -  x  x  x  -  x  -  -       -      x  -  -  -  x  -  x
+    openhat: -  -  -  -  -  -  x  -       -      -  -  -  -  -  x  -
+    clap:    -  -  -  -  -  -  -  -       -      -  -  x  -  -  -  -
+}
+
+# Outro stripped: just kick on beat 1
+pattern drums_outro_b {
+    kick:    x:0.5 - - - - - - - - - - - - - - -
+}
+
+# Clav: Am7 stabs (matching reference clav_pattern exactly)
+pattern funk_clav {
+    -       -       C4:0.5  -
+    -       E4:0.55 A3:0.35 -
+    -       G4:0.5  -       E4:0.4
+    -       C4:0.55 -       A3:0.3
+}
+
+# Arp: Am7 arpeggiation
+pattern arp_am {
+    A3:0.8 C4:0.7 E4:0.8 G4:0.7
+    A4:0.8 C5:0.7 E5:0.8 G5:0.7
+    A3:0.8 C4:0.7 E4:0.8 G4:0.7
+    A4:0.8 C5:0.7 E5:0.8 G5:0.7
+}
+
+# Pad: Am7 chord (A3 C4 E4 G4 — matching reference which uses 57,60,64)
+# Reference only uses A3 C4 E4 (3 notes)
+pattern pad_am {
+    [A3 C4 E4]:0.30 .. .. ..
+    ..               .. .. ..
+    ..               .. .. ..
+    ..               .. .. ..
+}
+
+pattern silence {
+    - - - -
+    - - - -
+    - - - -
+    - - - -
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track bass {
+    play funk_bass
+    using funk_bass
+    velocity 1.0
+    level 0.5
+    gate 0.65
+    delay_send 0.1
+    reverb_send 0.1
+    out > master
+}
+
+track drums {
+    play drums_intro
+    using drums
+    velocity 1.0
+    level 0.5
+    out > master
+}
+
+track clavtrack {
+    play silence
+    using clav
+    velocity 1.0
+    level 0.5
+    gate 0.2
+    delay_send 0.08
+    out > master
+}
+
+track pads {
+    play silence
+    using pad
+    velocity 1.0
+    level 0.5
+    reverb_send 0.2
+    delay_send 0.1
+    out > master
+}
+
+track arpsynth {
+    play silence
+    using arp
+    velocity 1.0
+    level 0.0
+    gate 0.15
+    delay_send 0.1
+    reverb_send 0.1
+    out > master
+}
+
+# ────────────────────────────────────────────────
+# MASTER (matching reference: eq, compressor, limiter)
+# ────────────────────────────────────────────────
+
+master {
+    in > eq(low=4.0, mid=2.0, high=1.0) > compressor(-9.0, ratio=5.0, attack=8, release=80, makeup=3.0) > limiter > out
+}
+
+# ────────────────────────────────────────────────
+# SCENES — matching reference section structure exactly
+# ────────────────────────────────────────────────
+
+# INTRO (bars 1-4): drums + bass groove only. No pad, no clav.
+scene intro {
+    track drums { play drums_intro using drums velocity 1.0 level 0.5 out > master }
+    track bass  { play funk_bass   using funk_bass velocity 1.0 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
+}
+
+# VERSE 1 (bars 5-12): drums + bass + clav stabs. Still no pad.
+# Reference: wah base cutoff opens 0.08 → 0.14 over 8 bars.
+scene verse1 {
+    auto funk_bass cutoff 0.08 > 0.14
+
+    track drums     { play drums_verse1 using drums     velocity 1.0 level 0.5 out > master }
+    track bass      { play funk_bass    using funk_bass velocity 1.0 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
+    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.5 gate 0.2 delay_send 0.08 out > master }
+}
+
+# BRIDGE (bars 13-16): breakdown. Kick+hats, held bass, pad ENTERS, filter sweep.
+# Reference: reverb 0.20, delay 0.18, dramatic bass filter sweep.
+# Pad plays Am chord (A3 C4 E4) at vel 0.30.
+scene bridge {
+    auto funk_bass cutoff 0.06 > 0.41 > 0.06
+    auto funk_bass cutoff_env 0.3 > 0.8 > 0.3
+    auto funk_bass resonance 0.5 > 0.8 > 0.5
+    auto pad cutoff 0.15 > 0.25 > 0.15
+
+    track drums { play drums_bridge using drums     velocity 1.0 level 0.5 out > master }
+    track bass  { play bass_hold    using funk_bass velocity 0.7 level 0.5 delay_send 0.18 reverb_send 0.2 out > master }
+    track pads  { play pad_am       using pad       velocity 0.30 level 0.5 reverb_send 0.25 delay_send 0.1 out > master }
+}
+
+# VERSE 2 (bars 17-24): peak funk. Full drums, chord progression bass, clav, arp.
+# Reference: reverb reset to 0.10, delay 0.10. Bass cutoff 0.10→0.20.
+# NO pad in verse 2 (reference releases pad after bridge).
+scene verse2_a {
+    auto funk_bass cutoff 0.10 > 0.15
+
+    track drums     { play drums_verse2 using drums     velocity 1.0 level 0.5 out > master }
+    track bass      { play bass_v2_am   using funk_bass velocity 0.85 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
+    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.5 gate 0.2 delay_send 0.08 out > master }
+    track arpsynth  { play arp_am       using arp       velocity 1.0 level 0.45 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
+}
+
+scene verse2_dm {
+    track drums     { play drums_verse2 using drums     velocity 1.0 level 0.5 out > master }
+    track bass      { play bass_v2_dm   using funk_bass velocity 0.85 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
+    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.5 gate 0.2 delay_send 0.08 out > master }
+    track arpsynth  { play arp_am       using arp       velocity 1.0 level 0.45 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
+}
+
+scene verse2_g {
+    track drums     { play drums_verse2 using drums     velocity 1.0 level 0.5 out > master }
+    track bass      { play bass_v2_g    using funk_bass velocity 0.85 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
+    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.5 gate 0.2 delay_send 0.08 out > master }
+    track arpsynth  { play arp_am       using arp       velocity 1.0 level 0.45 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
+}
+
+scene verse2_c {
+    track drums     { play drums_verse2 using drums     velocity 1.0 level 0.5 out > master }
+    track bass      { play bass_v2_c    using funk_bass velocity 0.85 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
+    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.5 gate 0.2 delay_send 0.08 out > master }
+    track arpsynth  { play arp_am       using arp       velocity 1.0 level 0.45 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
+}
+
+scene verse2_em {
+    track drums     { play drums_verse2 using drums     velocity 1.0 level 0.5 out > master }
+    track bass      { play bass_v2_em   using funk_bass velocity 0.85 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
+    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.5 gate 0.2 delay_send 0.08 out > master }
+    track arpsynth  { play arp_am       using arp       velocity 1.0 level 0.45 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
+}
+
+# OUTRO A (bars 25-30): strip down. Simpler drums, bass wah closes, arp fades.
+scene outro_a {
+    auto funk_bass cutoff_env 0.75 > 0.25
+    auto funk_bass resonance 0.80 > 0.40
+    auto funk_bass cutoff 0.10 > 0.05
+    auto arp level 0.3 > 0.0
+
+    track drums    { play drums_intro using drums     velocity 1.0 level 0.5 out > master }
+    track bass     { play funk_bass   using funk_bass velocity 1.0 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
+    track arpsynth { play arp_am      using arp       velocity 1.0 level 0.3 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
+}
+
+# OUTRO B (bars 31-32): just kick + fading bass.
+scene outro_b {
+    auto funk_bass cutoff_env 0.25 > 0.15
+    auto funk_bass resonance 0.40 > 0.30
+
+    track drums { play drums_outro_b using drums     velocity 1.0 level 0.5 out > master }
+    track bass  { play funk_bass     using funk_bass velocity 0.6 level 0.5 gate 0.65 out > master }
+}
+
+# ────────────────────────────────────────────────
+# ARRANGEMENT (32 bars)
+# intro(4) verse1(8) bridge(4) verse2(8) outro(8)
+# ────────────────────────────────────────────────
+
+arrange {
+    intro x4
+    verse1 x8
+    bridge x4
+    verse2_a x1
+    verse2_dm x1
+    verse2_g x1
+    verse2_c x1
+    verse2_a x1
+    verse2_dm x1
+    verse2_em x1
+    verse2_a x1
+    outro_a x6
+    outro_b x2
+}

@@ -2,80 +2,10 @@ use crate::math;
 use crate::primitives::oscillator::{Oscillator, Waveform};
 use crate::primitives::envelope::{Envelope, EnvStage};
 use crate::primitives::filter::{BiquadFilter, FilterType};
-use crate::primitives::lfo::{Lfo, LfoWaveform, LfoSyncMode, LfoTarget, ModulationRouter};
+use crate::primitives::lfo::{LfoWaveform, LfoSyncMode, LfoTarget, ModulationRouter};
+use crate::effects::chorus::Chorus;
 use crate::harmony::HarmonyContext;
 use crate::{Module, MAX_VOICES, SAMPLE_RATE};
-
-/// Simple chorus using a modulated delay line with cubic Hermite interpolation.
-struct SimpleChorus {
-    buffer: [f32; 4096],
-    write_pos: usize,
-    lfo: Lfo,
-    base_delay: f32, // in samples (~25ms)
-    depth: f32,      // in samples (~5ms)
-    mix: f32,
-}
-
-impl SimpleChorus {
-    fn new() -> Self {
-        let mut lfo = Lfo::new(SAMPLE_RATE);
-        lfo.set_rate(1.2);
-        lfo.set_depth(1.0);
-        Self {
-            buffer: [0.0; 4096],
-            write_pos: 0,
-            lfo,
-            base_delay: 1100.0, // ~25ms at 44100
-            depth: 220.0,       // ~5ms at 44100
-            mix: 0.3,
-        }
-    }
-
-    /// Read from the delay buffer at a fractional position relative to write_pos.
-    fn read_buffer(&self, offset: usize) -> f32 {
-        let buf_len = self.buffer.len();
-        if self.write_pos >= offset {
-            self.buffer[self.write_pos - offset]
-        } else {
-            self.buffer[buf_len - (offset - self.write_pos)]
-        }
-    }
-
-    fn process(&mut self, input: f32) -> f32 {
-        self.buffer[self.write_pos] = input;
-
-        let lfo_val = self.lfo.next_sample();
-        let delay = self.base_delay + lfo_val * self.depth;
-        let delay_int = delay as usize;
-        let delay_frac = delay - delay_int as f32;
-
-        // Cubic Hermite (Catmull-Rom) interpolation: 4 samples
-        let s0 = self.read_buffer(delay_int + 1); // one sample before
-        let s1 = self.read_buffer(delay_int);
-        let s2 = self.read_buffer(if delay_int > 0 { delay_int - 1 } else { 0 });
-        let s3 = self.read_buffer(if delay_int > 1 { delay_int - 2 } else { 0 });
-
-        let t = delay_frac;
-        let t2 = t * t;
-        let t3 = t2 * t;
-
-        // Catmull-Rom spline coefficients
-        let delayed = s1
-            + 0.5 * t * (s2 - s0)
-            + t2 * (s0 - 2.5 * s1 + 2.0 * s2 - 0.5 * s3)
-            + t3 * (-0.5 * s0 + 1.5 * s1 - 1.5 * s2 + 0.5 * s3);
-
-        self.write_pos = (self.write_pos + 1) % self.buffer.len();
-
-        input * (1.0 - self.mix) + delayed * self.mix
-    }
-
-    fn reset(&mut self) {
-        self.buffer = [0.0; 4096];
-        self.write_pos = 0;
-        self.lfo.reset();
-    }
-}
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum VoiceMode {
@@ -202,17 +132,23 @@ pub enum KeysParam {
     VoiceMode,
     VibratoRate,
     VibratoDepth,
+    Attack,
+    Decay,
+    Sustain,
+    Release,
+    Resonance,
 }
 
 pub struct KeysModule {
     pub harmony: Option<HarmonyContext>,
     pub voices: [KeysVoice; MAX_VOICES],
     voice_counter: u32,
-    chorus: SimpleChorus,
+    chorus: Chorus,
     level: f32,
     // LFO
     lfo_router: ModulationRouter,
     cutoff_base: f32,
+    resonance: f32,
     voice_mode: VoiceMode,
     // Pitch bend (set by engine)
     pub pitch_bend_ratio: f32,
@@ -230,10 +166,11 @@ impl KeysModule {
             harmony: Some(HarmonyContext::new(57, crate::harmony::Scale::Minor)),
             voices: core::array::from_fn(|i| KeysVoice::new(i as u32)),
             voice_counter: 0,
-            chorus: SimpleChorus::new(),
+            chorus: Chorus::new(),
             level: 0.5,
             lfo_router: ModulationRouter::new(SAMPLE_RATE, 5002),
             cutoff_base: 3000.0,
+            resonance: 0.2,
             voice_mode: VoiceMode::Poly,
             pitch_bend_ratio: 1.0,
             vibrato_phase: 0.0,
@@ -323,10 +260,11 @@ impl KeysModule {
     pub fn set_param(&mut self, param: KeysParam, value: f32) {
         match param {
             KeysParam::Cutoff => {
-                let freq = 200.0 + value * 10000.0;
+                // Exponential: 200Hz at 0.0, ~2kHz at 0.5, ~20kHz at 1.0
+                let freq = 200.0 * crate::math::pow(100.0, value);
                 self.cutoff_base = freq;
                 for voice in &mut self.voices {
-                    voice.filter.set_params(FilterType::LowPass, freq, 0.2);
+                    voice.filter.set_params(FilterType::LowPass, freq, self.resonance);
                 }
             }
             KeysParam::Detune => {
@@ -387,6 +325,27 @@ impl KeysModule {
             }
             KeysParam::VibratoRate => self.vibrato_rate = 0.5 + value * 9.5,
             KeysParam::VibratoDepth => self.vibrato_depth = value * 0.5,
+            KeysParam::Attack => {
+                let a = 0.001 * crate::math::pow(2000.0, value);
+                for voice in &mut self.voices { voice.env.set_attack(a); }
+            }
+            KeysParam::Decay => {
+                let d = 0.001 * crate::math::pow(2000.0, value);
+                for voice in &mut self.voices { voice.env.set_decay(d); }
+            }
+            KeysParam::Sustain => {
+                for voice in &mut self.voices { voice.env.set_sustain(value); }
+            }
+            KeysParam::Release => {
+                let r = 0.001 * crate::math::pow(2000.0, value);
+                for voice in &mut self.voices { voice.env.set_release(r); }
+            }
+            KeysParam::Resonance => {
+                self.resonance = value;
+                for voice in &mut self.voices {
+                    voice.filter.set_params(FilterType::LowPass, self.cutoff_base, self.resonance);
+                }
+            }
         }
     }
 

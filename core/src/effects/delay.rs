@@ -108,9 +108,8 @@ impl Delay {
         }
     }
 
-    /// Stereo ping-pong delay: R feeds back into L, L feeds back into R.
-    /// Feedback path includes a one-pole lowpass for analog-style darkening.
-    pub fn process_stereo(&mut self, input_l: f32, input_r: f32) -> (f32, f32) {
+    /// Core processing: advances state and returns raw delayed samples.
+    fn process_core(&mut self, input_l: f32, input_r: f32) -> (f32, f32) {
         let buf_len = self.buffer_l.len();
         let read_pos = if self.write_pos >= self.delay_samples {
             self.write_pos - self.delay_samples
@@ -135,9 +134,22 @@ impl Delay {
             self.write_pos = 0;
         }
 
+        (delayed_l, delayed_r)
+    }
+
+    /// Stereo ping-pong delay: R feeds back into L, L feeds back into R.
+    /// Feedback path includes a one-pole lowpass for analog-style darkening.
+    pub fn process_stereo(&mut self, input_l: f32, input_r: f32) -> (f32, f32) {
+        let (delayed_l, delayed_r) = self.process_core(input_l, input_r);
         let dry = 1.0 - self.mix;
         let wet = self.mix;
         (input_l * dry + delayed_l * wet, input_r * dry + delayed_r * wet)
+    }
+
+    /// Wet-only stereo delay for send/return routing.
+    /// Returns only the delayed signal without dry blend.
+    pub fn process_stereo_wet(&mut self, input_l: f32, input_r: f32) -> (f32, f32) {
+        self.process_core(input_l, input_r)
     }
 
     /// Backward-compatible mono process: delegates to stereo and sums.

@@ -56,6 +56,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "synth-cli"
+version = "0.1.0"
+dependencies = [
+ "synth-core",
+]
+
+[[package]]
 name = "synth-core"
 version = "0.1.0"
 

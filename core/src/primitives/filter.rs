@@ -1,6 +1,6 @@
 use crate::math;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum FilterType {
     LowPass,
     HighPass,
@@ -100,6 +100,13 @@ impl BiquadFilter {
     /// Use this for per-sample cutoff modulation after calling set_params once.
     pub fn set_cutoff(&mut self, cutoff: f32) {
         self.cutoff = math::clamp(cutoff, 20.0, self.sample_rate * 0.49);
+        self.recalc();
+    }
+
+    /// Update cutoff and resonance without changing the filter type.
+    pub fn set_resonance(&mut self, cutoff: f32, resonance: f32) {
+        self.cutoff = math::clamp(cutoff, 20.0, self.sample_rate * 0.49);
+        self.resonance = math::clamp(resonance, 0.01, 1.0);
         self.recalc();
     }
 
