@@ -1,0 +1,512 @@
+tempo 170
+meter 4/4
+scale A major
+sidechain 0.30
+swing 0.58
+humanize 0.30 timing 0.18
+
+# ────────────────────────────────────────────────
+# GROOVE — per-lane timing offsets for jungle feel
+# ────────────────────────────────────────────────
+
+groove jungle_breaks {
+    hat swing 0.62 nudge 0.008
+    snare nudge 0.012
+    kick nudge -0.005
+    openhat swing 0.62 nudge 0.008
+}
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# Jungle break kit — deep kick, cracking snare, metallic hats
+module beats breaks {
+    # Kick: deep, tight, punchy — short decay, warm analog drive
+    kick_level 1.0
+    kick_click 0.55
+    kick_decay 0.12
+    kick_pitch 0.42
+    kick_drive 0.40
+
+    # Snare: sharp crack, gritty body, wire sizzle tail
+    snare_level 1.30
+    snare_decay 0.40
+    snare_pitch 0.65
+    snare_drive 0.65
+    snare_snap 0.85
+    snare_pan 0.05
+
+    # Hats: metallic, smooth, organic variation
+    hihat_level 0.48
+    hihat_pitch 0.40
+    hihat_pan 0.25
+    hihat_decay 0.35
+
+    # Clap: tight, present
+    clap_level 0.70
+    clap_pan -0.1
+}
+
+# Reese bass — warm rolling jungle reese with midrange growl
+module bass reese {
+    cutoff 0.52
+    cutoff_env 0.28
+    resonance 0.25
+    glide 0.18
+    keytrack 0.4
+    osc1_wave 0.0
+    osc2_pitch 0.53
+    attack 0.0
+    decay 0.30
+    sustain 0.80
+    release 0.12
+    lfo_rate 0.06
+    lfo_depth 0.08
+    lfo_target 1.0
+}
+
+# Sub — pure deep low end
+module bass sub {
+    cutoff 0.07
+    cutoff_env 0.15
+    resonance 0.20
+    glide 0.10
+    osc1_wave 0.0
+    osc2_pitch 0.5
+    attack 0.0
+    decay 0.20
+    sustain 0.90
+    release 0.05
+}
+
+# FM stab — bright rave-inspired jungle stab
+module fm stab {
+    algorithm 0.5714
+    mod_index 0.55
+    feedback 0.25
+    chorus_mix 0.25
+    op0_envelope 0.001 0.08 0.0 0.06
+}
+
+# FM atmosphere — dreamy, spacious, wide
+module fm atmo {
+    algorithm 0.2857
+    mod_index 0.30
+    feedback 0.10
+    attack 0.8
+    decay 0.5
+    sustain 0.55
+    release 0.8
+    chorus_mix 0.65
+    lfo_rate 0.05
+    lfo_depth 0.04
+    lfo_target 1.0
+}
+
+# Keys pad — dreamy, wide, warm and lush
+module keys dreampad {
+    voice_mode 0.0
+    cutoff 0.25
+    detune 0.07
+    chorus_mix 0.22
+    attack 0.4
+    release 0.6
+}
+
+# FM lead — soulful melodic jungle lead
+module fm psylead {
+    algorithm 0.5714
+    mod_index 0.30
+    feedback 0.20
+    op0_envelope 0.003 0.15 0.20 0.12
+    op1_ratio 0.06
+    chorus_mix 0.20
+    lfo_rate 0.10
+    lfo_depth 0.05
+    lfo_target 0.0
+}
+
+# ────────────────────────────────────────────────
+# PATTERNS
+# ────────────────────────────────────────────────
+
+# ── Breaks ──
+
+pattern brk_intro {
+    kick:  X  -  -  -  -  -  -  -  X  -  -  -  -  -  -  -
+    snare: -  -  -  -  -  -  -  -  -  -  -  -  -  -  o  -
+    hat:   -  o  -  o  -  o  -  o  -  o  -  o  -  o  -  o
+}
+
+pattern brk_amen_a {
+    kick:    X  -  -  x:0.6 -  -  x:0.7 -  X  -  -  x:0.5 -  -  x:0.6 -
+    snare:   -  -  o  -  X  -  g?0.35  o  -  o  g?0.30  -  X  -  o  g?0.40
+    hat:     x  -  x:0.7 x  -  x:0.6 -  x:0.7  x  -  x:0.7 x  -  x:0.6 -  -
+    openhat: -  -  x  -  -  -  x  -  -  -  x  -  -  -  x  -
+}
+
+pattern brk_shuffle {
+    kick:    X  -  -  x:0.5 -  x:0.7 -  -  X  -  -  x:0.5 -  x:0.7 -  -
+    snare:   -  -  o?0.45  -  X  -  g?0.35  o  -  -  o?0.45  -  X  -  g?0.35  o
+    hat:     x  x:0.6 -  x  x:0.6 -  x:0.7 -  x  x:0.6 -  x  x:0.6 -  x:0.7 -
+    openhat: -  -  -  -  -  -  -  x  -  -  -  -  -  -  -  x
+}
+
+pattern brk_amen_b {
+    kick:    X  -  -  x:0.5 -  -  x:0.7 -  X  -  x:0.4 -  -  -  x:0.6 -
+    snare:   -  -  o?0.7  -  X  -  g?0.4  o  -  o?0.7  g?0.4  -  X  -  o  x:0.5
+    hat:     x  -  x:0.7 x  -  x  -  x:0.6 x  -  x:0.7 x  -  x  -  -
+    openhat: -  -  -  -  -  -  x  -  -  -  -  -  -  -  x  -
+}
+
+pattern brk_break {
+    kick:    x:0.5 -  -  -  -  -  -  -  x:0.5 -  -  -  -  -  -  -
+    snare:   -     -  -  -  -  -  o  -  -     -  -  -  -  -  o  -
+    hat:     -     o  o  o  o  o  o  o  -     o  o  o  o  o  o  o
+}
+
+pattern brk_fill {
+    kick:    X  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+    snare:   -  -  x  -  x  -  x*2  x  X  x*2  X  x*2  X  X*2  X*2  X*3
+    hat:     x  x  -  x  -  x  -  -  -  -  -  -  -  -  -  -
+}
+
+pattern brk_outro {
+    kick: X  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+    hat:  -  o  -  o  -  o  -  o  -  o  -  o  -  -  -  -
+}
+
+# ── Reese bass ──
+
+pattern reese_main {
+    A2:0.90 -   -   A2:0.60
+    -   G#2:0.70 ..  -
+    A2:0.85 E2:0.55 -   A2:0.50
+    C#3:0.60 -  G#2:0.65 -
+}
+
+pattern reese_groove {
+    A2:0.85 -   G#2:0.60 -
+    -   A2:0.55 ..  E2:0.50
+    A2:0.80 -   -   G#2:0.60
+    E2:0.65 -   A2:0.70 -
+}
+
+pattern reese_half {
+    A2:0.75 .. .. ..
+    ..      .. .. ..
+    ..      .. .. ..
+    ..      .. .. ..
+}
+
+pattern reese_break {
+    A2:0.50 .. .. ..
+    ..      .. .. ..
+    ..      .. .. ..
+    ..      .. .. ..
+}
+
+# ── Sub ──
+
+pattern sub_main {
+    A1:0.80 .. -   A1:0.50
+    -   G#1:0.60 .. -
+    A1:0.75 .. -   -
+    C#2:0.50 -  A1:0.60 -
+}
+
+pattern sub_hold {
+    A1:0.70 .. .. ..
+    ..      .. .. ..
+    ..      .. .. ..
+    ..      .. .. ..
+}
+
+# ── FM stabs — sparse, echoey hits ──
+
+pattern stab_sparse {
+    -        -  A3:0.6 -
+    -        -  -      -
+    -        -  -      -
+    -        -  -      E3:0.45
+}
+
+pattern stab_call {
+    [A3 C#4 E4]:0.55 -  -  -
+    -                 -  -  -
+    -                 -  -  [D4 F#4 A4]:0.50
+    -                 -  -  -
+}
+
+# ── Soulful FM lead — warm melody fragments ──
+
+pattern psy_melody_a {
+    E4:0.55 -  -  -
+    -       -  C#4:0.45 -
+    -       -  -  -
+    A3:0.5  -  -  -
+}
+
+pattern psy_melody_b {
+    G#4:0.5 -  -  -
+    -       -  -  E4:0.4
+    -       -  -  -
+    D4:0.45 -  -  -
+}
+
+pattern psy_ghost {
+    -  -  E4:0.3 -
+    -  -  -      -
+    -  -  -      -
+    -  G#4:0.25 - -
+}
+
+# ── Keys pad — warm dreamy major chords ──
+
+pattern pad_am7 {
+    [A3 C#4 E4 G#4]:0.45 .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+}
+
+pattern pad_dm9 {
+    [D4 F#4 A4 C#5 E5]:0.40 .. .. ..
+    ..                       .. .. ..
+    ..                       .. .. ..
+    ..                       .. .. ..
+}
+
+pattern pad_em {
+    [E3 G#3 B3 D4]:0.42 .. .. ..
+    ..                   .. .. ..
+    ..                   .. .. ..
+    ..                   .. .. ..
+}
+
+# ── Atmosphere — warm dreamy FM drone ──
+
+pattern atmo_dark {
+    [A2 E3 G#3]:0.30 .. .. ..
+    ..                .. .. ..
+    ..                .. .. ..
+    ..                .. .. ..
+}
+
+pattern atmo_wide {
+    [A3 C#4 E4 G#4]:0.35 .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+}
+
+pattern silence {
+    - - - -
+    - - - -
+    - - - -
+    - - - -
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track drums {
+    play brk_intro
+    using breaks
+    velocity 1.0
+    level 0.82
+    reverb_send 0.06
+    out > saturate(0.15) > eq(low=2.5, mid=1.5, high=1.8) > compressor(-12, ratio=4, attack=1, release=35, makeup=4) > master
+}
+
+track reese {
+    play silence
+    using reese
+    velocity 1.0
+    level 0.44
+    gate 0.85
+    delay_send 0.08
+    out > saturate(0.20) > lowpass(0.52) > master
+}
+
+track sub {
+    play silence
+    using sub
+    velocity 1.0
+    level 0.16
+    sidechain 0.45
+    gate 0.85
+    out > master
+}
+
+track stabs {
+    play silence
+    using stab
+    velocity 1.0
+    level 0.22
+    gate 0.12
+    delay_send 0.28
+    reverb_send 0.40
+    out > chorus(0.20) > master
+}
+
+track psylead {
+    play silence
+    using psylead
+    velocity 1.0
+    level 0.20
+    gate 0.25
+    delay_send 0.32
+    reverb_send 0.45
+    out > chorus(0.15) > master
+}
+
+track pad {
+    play silence
+    using dreampad
+    velocity 1.0
+    level 0.28
+    reverb_send 0.45
+    delay_send 0.12
+    out > chorus(0.15) > master
+}
+
+track atmosphere {
+    play silence
+    using atmo
+    velocity 1.0
+    level 0.18
+    reverb_send 0.50
+    delay_send 0.18
+    out > master
+}
+
+# ────────────────────────────────────────────────
+# MASTER
+# ────────────────────────────────────────────────
+
+master {
+    in > eq(low=3.0, mid=1.2, high=1.6)
+       > compressor(-10, ratio=3, attack=3, release=55, makeup=3.5)
+       > limiter
+       > out
+}
+
+# ────────────────────────────────────────────────
+# SCENES
+# ────────────────────────────────────────────────
+
+# INTRO: sparse kicks + eerie atmosphere + pad fades in
+scene intro {
+    track drums      { play brk_intro  using breaks }
+    track atmosphere { play atmo_dark  using atmo }
+    track pad        { play pad_am7    using dreampad }
+}
+
+# BUILD: amen enters, reese creeps, psy lead hints
+scene build {
+    track drums      { play brk_amen_a  using breaks }
+    track reese      { play reese_half  using reese }
+    track sub        { play sub_hold    using sub }
+    track pad        { play pad_am7     using dreampad }
+    track psylead    { play psy_ghost   using psylead }
+    track atmosphere { play atmo_wide   using atmo }
+}
+
+# FILL: snare roll
+scene fill {
+    track drums { play brk_fill using breaks }
+}
+
+# DROP A: full rolling jungle + stabs + psy melody
+scene drop_a {
+    track drums      { play brk_shuffle   using breaks }
+    track reese      { play reese_main    using reese }
+    track sub        { play sub_main      using sub }
+    track stabs      { play stab_sparse   using stab }
+    track psylead    { play psy_melody_a  using psylead }
+    track pad        { play pad_am7       using dreampad }
+}
+
+# SWITCH: different chord, different melody
+scene drop_a2 {
+    track drums      { play brk_amen_a    using breaks }
+    track reese      { play reese_main    using reese }
+    track sub        { play sub_main      using sub }
+    track stabs      { play stab_call     using stab }
+    track psylead    { play psy_melody_b  using psylead }
+    track pad        { play pad_dm9       using dreampad }
+}
+
+# BREAKDOWN: stripped, psychedelic, spacey
+scene breakdown {
+    auto atmo mod_index 0.3 > 0.5 > 0.3
+
+    track drums      { play brk_break    using breaks }
+    track reese      { play reese_break  using reese }
+    track pad        { play pad_em       using dreampad }
+    track psylead    { play psy_ghost    using psylead }
+    track atmosphere { play atmo_dark    using atmo }
+}
+
+# FILL 2
+scene fill2 {
+    track drums { play brk_fill using breaks }
+}
+
+# DROP B: peak energy, all elements
+scene drop_b {
+    track drums      { play brk_amen_b    using breaks }
+    track reese      { play reese_groove  using reese }
+    track sub        { play sub_main      using sub }
+    track stabs      { play stab_call     using stab }
+    track psylead    { play psy_melody_a  using psylead }
+    track pad        { play pad_am7       using dreampad }
+    track atmosphere { play atmo_wide     using atmo }
+}
+
+# DROP B2: variation
+scene drop_b2 {
+    track drums      { play brk_shuffle   using breaks }
+    track reese      { play reese_groove  using reese }
+    track sub        { play sub_main      using sub }
+    track stabs      { play stab_sparse   using stab }
+    track psylead    { play psy_melody_b  using psylead }
+    track pad        { play pad_dm9       using dreampad }
+}
+
+# OUTRO: fading, atmospheric
+scene outro {
+    track drums      { play brk_amen_a    using breaks }
+    track reese      { play reese_half    using reese }
+    track sub        { play sub_hold      using sub }
+    track pad        { play pad_am7       using dreampad }
+    track atmosphere { play atmo_dark     using atmo }
+}
+
+# TAIL: reverb ghosts
+scene tail {
+    track drums      { play brk_outro  using breaks }
+    track pad        { play pad_em     using dreampad }
+    track atmosphere { play atmo_dark  using atmo }
+}
+
+# ────────────────────────────────────────────────
+# ARRANGEMENT (44 bars)
+# ────────────────────────────────────────────────
+
+arrange {
+    intro x8
+    build x4
+    fill x1
+    drop_a x4
+    drop_a2 x4
+    breakdown x4
+    fill2 x1
+    drop_b x4
+    drop_b2 x4
+    outro x6
+    tail x4
+}

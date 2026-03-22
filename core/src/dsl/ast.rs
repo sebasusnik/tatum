@@ -16,6 +16,7 @@ pub struct Song {
     pub master: Option<MasterDef>,
     pub scenes: Vec<SceneDef>,
     pub arrangement: Vec<ArrangeEntry>,
+    pub grooves: Vec<GrooveDef>,
 }
 
 #[derive(Debug, Clone)]
@@ -43,7 +44,7 @@ impl Default for Globals {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ScaleDef {
     pub root: String,    // "A", "C#", "Bb", etc
     pub kind: String,    // "minor", "major", "dorian", etc
@@ -142,8 +143,14 @@ pub struct ChordStep {
 }
 
 #[derive(Debug, Clone)]
+pub enum NoteRef {
+    Absolute(String),        // "A1", "C#4", "G0"
+    Degree(u8, u8),          // (degree 1-7, octave 0-9)
+}
+
+#[derive(Debug, Clone)]
 pub struct NoteStep {
-    pub note_name: String,   // "A1", "C#4", "G0"
+    pub note: NoteRef,
     pub velocity: Option<f32>,
     pub plock: PLock,
 }
@@ -151,6 +158,8 @@ pub struct NoteStep {
 #[derive(Debug, Clone)]
 pub struct DrumStep {
     pub velocity: f32,       // default 0.8
+    pub probability: f32,    // 0.0-1.0, default 1.0 (always play). Syntax: g?0.4
+    pub roll: u8,            // retrigger count, default 1 (no roll). Syntax: x*3
     pub plock: PLock,
 }
 
@@ -167,6 +176,7 @@ pub struct TrackDef {
     pub routing: Vec<RoutingNode>,        // out > drive(0.2) > master
     pub delay_send: Option<f32>,          // global delay send amount 0.0-1.0
     pub reverb_send: Option<f32>,         // global reverb send amount 0.0-1.0
+    pub sidechain: Option<f32>,           // per-track sidechain amount (overrides global)
 }
 
 /// A node in a routing chain: effect or bus target.
@@ -244,6 +254,21 @@ pub struct SceneDef {
 pub struct Override {
     pub target: String,       // "bass.velocity"
     pub value: f32,
+}
+
+/// Per-lane groove definition: per-drum timing offsets and swing overrides.
+#[derive(Debug, Clone)]
+pub struct GrooveDef {
+    pub name: String,
+    pub lanes: Vec<GrooveLane>,
+}
+
+/// A single lane in a groove block.
+#[derive(Debug, Clone)]
+pub struct GrooveLane {
+    pub drum_name: String,      // "hat", "snare", "kick", etc.
+    pub swing: Option<f32>,     // per-lane swing override (0.5-0.75)
+    pub nudge: Option<f32>,     // timing offset as fraction of step (-0.05 to 0.05)
 }
 
 /// Arrangement entry: scene name + repeat count.

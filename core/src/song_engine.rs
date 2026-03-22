@@ -4,6 +4,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::dsl::compiler::{self, *};
+use crate::dsl::error::{ParseError, CompileError};
 use crate::effects::delay::Delay;
 use crate::effects::reverb::Reverb;
 use crate::graph::node::{NodeKind, NodeSpec, MAX_NODE_INPUTS};
@@ -25,6 +26,16 @@ enum SongInstrument {
 }
 
 impl SongInstrument {
+    fn kind_str(&self) -> &'static str {
+        match self {
+            Self::Graph(_) => "graph",
+            Self::Bass(_) => "bass",
+            Self::Fm(_) => "fm",
+            Self::Keys(_) => "keys",
+            Self::Beats(_) => "beats",
+        }
+    }
+
     fn note_on(&mut self, note: u8, velocity: f32) {
         match self {
             Self::Graph(inst) => inst.note_on(note, velocity),
@@ -248,6 +259,10 @@ fn beats_param_from_name(name: &str) -> Option<BeatsParam> {
         "stutter_drum" => Some(BeatsParam::StutterDrum),
         "tom_pan" => Some(BeatsParam::TomPan),
         "crash_pan" => Some(BeatsParam::CrashPan),
+        "snare_drive" => Some(BeatsParam::SnareDrive),
+        "snare_snap" => Some(BeatsParam::SnareSnap),
+        "kick_drive" => Some(BeatsParam::KickDrive),
+        "hihat_decay" => Some(BeatsParam::HihatDecay),
         _ => None,
     }
 }
@@ -299,6 +314,7 @@ struct TrackPlayback {
     pattern_idx: usize,
     velocity: f32,
     level: f32,              // output level 0.0-1.0
+    pan: f32,                // raw pan value -1.0 to 1.0
     pan_l: f32,              // pre-computed left gain (equal-power)
     pan_r: f32,              // pre-computed right gain (equal-power)
     gate: f32,               // gate length as fraction of step (0.0-1.0)
@@ -307,6 +323,7 @@ struct TrackPlayback {
     to_master: bool,
     delay_send: f32,         // global delay send amount 0.0-1.0
     reverb_send: f32,        // global reverb send amount 0.0-1.0
+    sidechain_amount: f32,   // per-track sidechain override (0.0 = use global)
     // Step sequencer state
     current_step: usize,
     current_notes: [u8; compiler::MAX_CHORD_NOTES],  // active MIDI notes (0 = unused)
@@ -365,6 +382,7 @@ pub struct SongEngine {
 
     // Playback tracks
     tracks: Vec<TrackPlayback>,
+    track_names: Vec<String>,
 
     // Buses
     buses: Vec<SongBus>,
@@ -392,6 +410,10 @@ pub struct SongEngine {
     // Master level (applied before master FX, matching reference Engine's 0.8)
     master_level: f32,
 
+    // Automatic gain compensation for track summing
+    gain_comp_target: f32,   // 1.0 / sqrt(active_tracks), clamped [0.25, 1.0]
+    gain_comp_current: f32,  // smoothed value (exponential approach to target)
+
     // Sidechain compression
     sidechain_amount: f32,
     sc_envelope: f32,
@@ -414,6 +436,9 @@ pub struct SongEngine {
     current_bar: usize,
     global_step: usize,
 
+    // Pending nudge triggers: (samples_remaining, instrument_idx, midi_note, velocity)
+    pending_triggers: Vec<(f32, usize, u8, f32)>,
+
     running: bool,
 }
 
@@ -429,6 +454,56 @@ enum AutoTarget {
     TrackLevel { track_idx: usize },
     ReverbMix,
     DelayMix,
+}
+
+/// Structured error from DSL parsing or compilation, preserving line/col info.
+pub enum DslError {
+    Parse(Vec<ParseError>),
+    Compile(Vec<CompileError>),
+}
+
+impl DslError {
+    /// Serialize to a JSON string for WASM → JS communication.
+    pub fn to_json(&self) -> String {
+        let mut out = String::from(r#"{"ok":false,"errors":["#);
+        match self {
+            DslError::Parse(errs) => {
+                for (i, e) in errs.iter().enumerate() {
+                    if i > 0 { out.push(','); }
+                    out.push_str(&alloc::format!(
+                        r#"{{"line":{},"col":{},"msg":"{}"}}"#,
+                        e.line, e.col, json_escape(&e.message),
+                    ));
+                }
+            }
+            DslError::Compile(errs) => {
+                for (i, e) in errs.iter().enumerate() {
+                    if i > 0 { out.push(','); }
+                    out.push_str(&alloc::format!(
+                        r#"{{"line":0,"col":0,"msg":"{}"}}"#,
+                        json_escape(&e.message),
+                    ));
+                }
+            }
+        }
+        out.push_str("]}");
+        out
+    }
+}
+
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str(r#"\""#),
+            '\\' => out.push_str(r"\\"),
+            '\n' => out.push_str(r"\n"),
+            '\r' => out.push_str(r"\r"),
+            '\t' => out.push_str(r"\t"),
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 impl SongEngine {
@@ -448,6 +523,13 @@ impl SongEngine {
             }
             msg
         })?;
+        Ok(Self::from_compiled(compiled))
+    }
+
+    /// Load from source with structured errors (for WASM bridge).
+    pub fn try_from_source(source: &str) -> Result<Self, DslError> {
+        let ast = crate::dsl::parse(source).map_err(DslError::Parse)?;
+        let compiled = crate::dsl::compiler::compile(&ast).map_err(DslError::Compile)?;
         Ok(Self::from_compiled(compiled))
     }
 
@@ -520,6 +602,7 @@ impl SongEngine {
         let master_fx = FxChain::new(&song.master.fx_chain);
 
         // Build track playback states from the compiled tracks
+        let track_names: Vec<String> = song.tracks.iter().map(|t| t.name.clone()).collect();
         let tracks: Vec<TrackPlayback> = song.tracks
             .iter()
             .map(|t| {
@@ -531,6 +614,7 @@ impl SongEngine {
                     pattern_idx: t.pattern_idx,
                     velocity: t.velocity,
                     level: t.level,
+                    pan: t.pan,
                     pan_l,
                     pan_r,
                     gate: t.gate,
@@ -539,6 +623,7 @@ impl SongEngine {
                     to_master: t.to_master,
                     delay_send: t.delay_send,
                     reverb_send: t.reverb_send,
+                    sidechain_amount: t.sidechain.unwrap_or(0.0),
                     current_step: 0,
                     current_notes: [0; compiler::MAX_CHORD_NOTES],
                     current_notes_count: 0,
@@ -593,6 +678,7 @@ impl SongEngine {
             instrument_names,
             patterns: song.patterns,
             tracks,
+            track_names,
             buses,
             send_delay,
             send_reverb,
@@ -607,6 +693,8 @@ impl SongEngine {
             humanize_timing,
             rng: Rng::new(7919),
             master_level: 0.8,
+            gain_comp_target: 1.0,
+            gain_comp_current: 1.0,
             sidechain_amount,
             sc_envelope: 0.0,
             kick_track_idx,
@@ -621,6 +709,7 @@ impl SongEngine {
             arrangement_bar_count: 0,
             current_bar: 0,
             global_step: 0,
+            pending_triggers: Vec::new(),
             running: false,
         }
     }
@@ -649,7 +738,11 @@ impl SongEngine {
         if !self.arrangement.is_empty() {
             let (scene_idx, _) = self.arrangement[0];
             self.apply_scene(scene_idx);
+        } else {
+            self.recompute_gain_comp();
         }
+        // Snap gain compensation so the first block starts at the correct level
+        self.gain_comp_current = self.gain_comp_target;
 
         for track in self.tracks.iter_mut() {
             track.current_step = 0;
@@ -699,6 +792,15 @@ impl SongEngine {
         }
 
         // Update tracks from scene
+        // Release all currently-playing notes before deactivating tracks.
+        // This prevents stale notes ringing across scene transitions.
+        for ti in 0..self.tracks.len() {
+            if self.tracks[ti].active && self.tracks[ti].current_notes_count > 0 {
+                Self::release_track_notes(&mut self.tracks[ti], &mut self.instruments);
+                self.tracks[ti].gate_samples_remaining = 0.0;
+            }
+        }
+
         // Reset to make scene tracks the active set
         for track in self.tracks.iter_mut() {
             track.active = false;
@@ -718,6 +820,7 @@ impl SongEngine {
                 tp.pan_r = pan_r;
                 tp.delay_send = st.delay_send;
                 tp.reverb_send = st.reverb_send;
+                tp.sidechain_amount = st.sidechain.unwrap_or(0.0);
                 tp.stereo_src = st.instrument_idx < self.instruments.len()
                     && matches!(self.instruments[st.instrument_idx], SongInstrument::Beats(_));
                 tp.active = true;
@@ -732,6 +835,20 @@ impl SongEngine {
             t.active && t.instrument_idx < self.instruments.len()
                 && matches!(self.instruments[t.instrument_idx], SongInstrument::Beats(_))
         });
+
+        self.recompute_gain_comp();
+    }
+
+    /// Recompute automatic gain compensation based on active track count.
+    /// Uses equal-power scaling: 1/sqrt(N), clamped to [0.25, 1.0].
+    fn recompute_gain_comp(&mut self) {
+        let n = self.tracks.iter().filter(|t| t.active).count();
+        self.gain_comp_target = if n <= 1 {
+            1.0
+        } else {
+            let raw = 1.0 / math::sqrt(n as f32);
+            if raw < 0.25 { 0.25 } else { raw }
+        };
     }
 
     /// Resolve an automation target string to an AutoTarget.
@@ -856,6 +973,20 @@ impl SongEngine {
                 }
             }
 
+            // Process pending nudge triggers (delayed drum hits from groove blocks)
+            let mut i = 0;
+            while i < self.pending_triggers.len() {
+                self.pending_triggers[i].0 -= 1.0;
+                if self.pending_triggers[i].0 <= 0.0 {
+                    let (_, inst_idx, midi_note, vel) = self.pending_triggers.swap_remove(i);
+                    if inst_idx < self.instruments.len() {
+                        self.instruments[inst_idx].note_on(midi_note, vel);
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+
             // Gate-off handling (after step advance, so Tie extends before expiry)
             for ti in 0..track_count {
                 if !self.tracks[ti].active { continue; }
@@ -900,8 +1031,11 @@ impl SongEngine {
             }
         }
 
-        // Sidechain ducking: use kick track to duck all other tracks
-        if self.sidechain_amount > 0.0 {
+        // Sidechain ducking: use kick track to duck other tracks
+        // Per-track sidechain_amount overrides the global amount when > 0.
+        let has_any_sidechain = self.sidechain_amount > 0.0
+            || self.tracks.iter().any(|t| t.active && t.sidechain_amount > 0.0);
+        if has_any_sidechain {
             if let Some(kick_idx) = self.kick_track_idx {
                 for s in 0..len {
                     // For Beats tracks, use kick_env instead of raw signal
@@ -915,11 +1049,18 @@ impl SongEngine {
                     } else {
                         0.995 * self.sc_envelope // slow release
                     };
-                    let duck = 1.0 - self.sidechain_amount * self.sc_envelope;
                     for ti in 0..track_count {
                         if ti != kick_idx && self.tracks[ti].active {
-                            track_bufs_l[ti][s] *= duck;
-                            track_bufs_r[ti][s] *= duck;
+                            let amount = if self.tracks[ti].sidechain_amount > 0.0 {
+                                self.tracks[ti].sidechain_amount
+                            } else {
+                                self.sidechain_amount
+                            };
+                            if amount > 0.0 {
+                                let duck = 1.0 - amount * self.sc_envelope;
+                                track_bufs_l[ti][s] *= duck;
+                                track_bufs_r[ti][s] *= duck;
+                            }
                         }
                     }
                 }
@@ -1011,21 +1152,29 @@ impl SongEngine {
             }
         }
 
-        // Apply master level + master FX chain (proper stereo processing)
+        // Apply master level + gain compensation + master FX chain
+        // Smoothing: ~5ms exponential approach to avoid clicks on scene transitions
+        const SMOOTH_COEFF: f32 = 0.9955; // exp(-1/220) at 44.1kHz
         let ml = self.master_level;
         if !self.master_fx.nodes.is_empty() {
             for s in 0..len {
+                self.gain_comp_current = SMOOTH_COEFF * self.gain_comp_current
+                    + (1.0 - SMOOTH_COEFF) * self.gain_comp_target;
+                let g = ml * self.gain_comp_current;
                 let (fl, fr) = self.master_fx.process_stereo(
-                    output_l[s] * ml,
-                    output_r[s] * ml,
+                    output_l[s] * g,
+                    output_r[s] * g,
                 );
                 output_l[s] = fl;
                 output_r[s] = fr;
             }
         } else {
             for s in 0..len {
-                output_l[s] *= ml;
-                output_r[s] *= ml;
+                self.gain_comp_current = SMOOTH_COEFF * self.gain_comp_current
+                    + (1.0 - SMOOTH_COEFF) * self.gain_comp_target;
+                let g = ml * self.gain_comp_current;
+                output_l[s] *= g;
+                output_r[s] *= g;
             }
         }
     }
@@ -1073,10 +1222,39 @@ impl SongEngine {
                 if inst_idx < self.instruments.len() {
                     for lane in &pattern.lanes {
                         if step_idx < lane.steps.len() {
-                            if let CompiledStep::DrumHit { velocity, .. } = lane.steps[step_idx] {
+                            if let CompiledStep::DrumHit { velocity, probability, roll, .. } = lane.steps[step_idx] {
+                                // Probability gate: skip hit if random exceeds probability
+                                if probability < 1.0 {
+                                    let chance = self.rng.next_f32();
+                                    if chance > probability {
+                                        continue; // skip this hit
+                                    }
+                                }
                                 let raw_vel = velocity * self.tracks[ti].velocity;
                                 let vel = Self::humanize_vel(raw_vel, self.humanize_velocity, &mut self.rng);
-                                self.instruments[inst_idx].note_on(lane.midi_note, vel);
+
+                                // Per-lane nudge: delay trigger by nudge * step_samples
+                                let nudge_samples = lane.nudge * self.samples_per_step;
+                                if nudge_samples.abs() > 0.5 && nudge_samples > 0.0 {
+                                    // Positive nudge = delay trigger
+                                    self.pending_triggers.push((nudge_samples, inst_idx, lane.midi_note, vel));
+                                } else {
+                                    // No nudge or negative nudge (trigger immediately, can't go back in time)
+                                    self.instruments[inst_idx].note_on(lane.midi_note, vel);
+                                }
+
+                                // Roll: schedule additional retriggers within this step
+                                if roll > 1 {
+                                    let step_samples = self.effective_step_samples(self.global_step) as u32;
+                                    let interval = step_samples / (roll as u32);
+                                    if let SongInstrument::Beats(ref mut beats) = self.instruments[inst_idx] {
+                                        beats.stutter_drum = Some(lane.midi_note);
+                                        beats.stutter_velocity = vel * 0.9;
+                                        beats.stutter_interval = interval;
+                                        beats.stutter_counter = 0;
+                                        beats.stutter_remaining = (roll - 1) as u32;
+                                    }
+                                }
                             }
                         }
                     }
@@ -1197,7 +1375,7 @@ impl SongEngine {
                                 }
                             }
                         }
-                        CompiledStep::DrumHit { velocity, plock } => {
+                        CompiledStep::DrumHit { velocity, plock, .. } => {
                             Self::release_track_notes(
                                 &mut self.tracks[ti],
                                 &mut self.instruments,
@@ -1326,6 +1504,165 @@ impl SongEngine {
 
     pub fn global_step(&self) -> usize { self.global_step }
     pub fn running(&self) -> bool { self.running }
+    pub fn current_bar(&self) -> usize { self.current_bar }
+
+    /// Start playback from a specific bar (for hot-swap continuity).
+    /// Fast-forwards through the arrangement to land on the right scene.
+    pub fn start_from_bar(&mut self, bar: usize) {
+        self.running = true;
+        self.rng = Rng::new(7919);
+        self.current_step_duration = self.effective_step_samples(0);
+        self.sample_counter = self.current_step_duration;
+        self.reverb_wet_level = 1.0;
+        self.delay_wet_level = 1.0;
+        self.active_automations.clear();
+        self.scene_step = 0;
+        self.scene_total_steps = 0;
+
+        for inst in self.instruments.iter_mut() {
+            inst.set_bpm(self.tempo);
+        }
+
+        // Fast-forward arrangement to the target bar
+        self.arrangement_idx = 0;
+        self.arrangement_bar_count = 0;
+        self.current_bar = 0;
+        self.global_step = 0;
+
+        if !self.arrangement.is_empty() {
+            let mut bars_remaining = bar;
+            while self.arrangement_idx < self.arrangement.len() {
+                let (_, repeat) = self.arrangement[self.arrangement_idx];
+                let scene_bars = repeat as usize;
+                if bars_remaining < scene_bars {
+                    self.arrangement_bar_count = bars_remaining as u32;
+                    break;
+                }
+                bars_remaining -= scene_bars;
+                self.arrangement_idx += 1;
+            }
+            // Clamp to last scene if past the end
+            if self.arrangement_idx >= self.arrangement.len() {
+                self.arrangement_idx = self.arrangement.len() - 1;
+                self.arrangement_bar_count = 0;
+            }
+            let (scene_idx, _) = self.arrangement[self.arrangement_idx];
+            self.apply_scene(scene_idx);
+        } else {
+            self.recompute_gain_comp();
+        }
+
+        self.current_bar = bar;
+        self.global_step = bar * self.steps_per_bar;
+        self.gain_comp_current = self.gain_comp_target;
+
+        for track in self.tracks.iter_mut() {
+            track.current_step = 0;
+            track.current_notes_count = 0;
+            track.gate_samples_remaining = 0.0;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    //  Real-time track control (no recompile)
+    // ═══════════════════════════════════════════════════════
+
+    pub fn track_count(&self) -> usize { self.tracks.len() }
+
+    pub fn track_name(&self, idx: usize) -> &str {
+        if idx < self.track_names.len() { &self.track_names[idx] } else { "" }
+    }
+
+    pub fn track_kind(&self, idx: usize) -> &str {
+        self.tracks.get(idx)
+            .and_then(|t| self.instruments.get(t.instrument_idx))
+            .map_or("unknown", |inst| inst.kind_str())
+    }
+
+    pub fn track_level(&self, idx: usize) -> f32 {
+        self.tracks.get(idx).map_or(0.0, |t| t.level)
+    }
+
+    pub fn track_pan(&self, idx: usize) -> f32 {
+        self.tracks.get(idx).map_or(0.0, |t| t.pan)
+    }
+
+    pub fn set_track_level(&mut self, idx: usize, level: f32) {
+        if let Some(track) = self.tracks.get_mut(idx) {
+            track.level = level.clamp(0.0, 1.0);
+        }
+    }
+
+    pub fn set_track_pan(&mut self, idx: usize, pan: f32) {
+        if let Some(track) = self.tracks.get_mut(idx) {
+            let p = pan.clamp(-1.0, 1.0);
+            track.pan = p;
+            let (l, r) = pan_gains(p);
+            track.pan_l = l;
+            track.pan_r = r;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    //  Phase 2: Runtime mutations (no recompile)
+    // ═══════════════════════════════════════════════════════
+
+    pub fn set_tempo(&mut self, bpm: f32) {
+        let bpm = bpm.clamp(20.0, 999.0);
+        self.tempo = bpm;
+        self.samples_per_step = SAMPLE_RATE * 60.0 / bpm / 4.0;
+        self.current_step_duration = self.effective_step_samples(self.global_step);
+        for inst in self.instruments.iter_mut() {
+            inst.set_bpm(bpm);
+        }
+    }
+
+    pub fn set_track_pattern(&mut self, track_idx: usize, pattern_idx: usize) {
+        if let Some(track) = self.tracks.get_mut(track_idx) {
+            if pattern_idx < self.patterns.len() {
+                track.pattern_idx = pattern_idx;
+                track.current_step = 0;
+            }
+        }
+    }
+
+    pub fn set_track_velocity(&mut self, track_idx: usize, velocity: f32) {
+        if let Some(track) = self.tracks.get_mut(track_idx) {
+            track.velocity = velocity.clamp(0.0, 1.0);
+        }
+    }
+
+    pub fn set_track_gate(&mut self, track_idx: usize, gate: f32) {
+        if let Some(track) = self.tracks.get_mut(track_idx) {
+            track.gate = gate.clamp(0.0, 1.0);
+        }
+    }
+
+    pub fn pattern_count(&self) -> usize { self.patterns.len() }
+
+    pub fn pattern_name(&self, idx: usize) -> &str {
+        self.patterns.get(idx).map_or("", |p| &p.name)
+    }
+
+    pub fn set_module_param(&mut self, inst_idx: usize, name: &str, value: f32) {
+        if let Some(inst) = self.instruments.get_mut(inst_idx) {
+            match inst {
+                SongInstrument::Bass(m) => {
+                    if let Some(p) = bass_param_from_name(name) { m.set_param(p, value); }
+                }
+                SongInstrument::Fm(m) => {
+                    if let Some(p) = fm_param_from_name(name) { m.set_param(p, value); }
+                }
+                SongInstrument::Keys(m) => {
+                    if let Some(p) = keys_param_from_name(name) { m.set_param(p, value); }
+                }
+                SongInstrument::Beats(m) => {
+                    if let Some(p) = beats_param_from_name(name) { m.set_param(p, value); }
+                }
+                SongInstrument::Graph(_) => {} // graph params not easily mutable at runtime
+            }
+        }
+    }
 }
 
 /// Interpolate automation keyframes at a given progress (0.0 - 1.0).

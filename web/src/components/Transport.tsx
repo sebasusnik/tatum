@@ -1,6 +1,6 @@
 import {
   playing, recording, bpm, setRecording,
-  startPlayback, stopPlayback, adjustBpm,
+  startPlayback, stopPlayback, adjustBpm, persistBpm,
 } from "../stores/synth";
 
 export default function Transport() {
@@ -23,7 +23,10 @@ export default function Transport() {
   }
 
   function onBpmPointerUp() {
-    bpmDragging = false;
+    if (bpmDragging) {
+      bpmDragging = false;
+      persistBpm(); // update DSL text with final BPM value
+    }
   }
 
   return (

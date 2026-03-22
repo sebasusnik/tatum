@@ -1,0 +1,466 @@
+# FM Madness — showcasing extreme FM synthesis textures
+# Metallic bells, screaming leads, glitchy percussion, evolving pads
+tempo 130
+meter 4/4
+scale C minor
+sidechain 0.0
+swing 0.52
+humanize 0.15 timing 0.10
+
+# ────────────────────────────────────────────────
+# MODULES — each one is a different FM character
+# ────────────────────────────────────────────────
+
+# Metallic bell — inharmonic ratios, long decay, bright shimmering
+module fm bell {
+    algorithm 0.2857
+    mod_index 0.45
+    feedback 0.15
+    waveform 0.0
+    op0_ratio 0.065
+    op1_ratio 0.194
+    op0_envelope 0.001 0.6 0.0 0.8
+    op1_envelope 0.001 1.0 0.0 0.5
+    chorus_mix 0.30
+    lfo_rate 0.04
+    lfo_depth 0.02
+    lfo_target 2.0
+}
+
+# Screaming lead — high mod index, feedback, aggressive
+module fm scream {
+    algorithm 0.5714
+    mod_index 0.82
+    feedback 0.55
+    waveform 0.5
+    op0_ratio 0.065
+    op1_ratio 0.10
+    op0_envelope 0.005 0.20 0.35 0.15
+    op1_envelope 0.001 0.08 0.60 0.10
+    chorus_mix 0.15
+    vibrato_rate 0.55
+    vibrato_depth 0.12
+    lfo_rate 0.15
+    lfo_depth 0.10
+    lfo_target 2.0
+}
+
+# Glitch percussion — ultra-short envelopes, weird ratios
+module fm glitch {
+    algorithm 0.8571
+    mod_index 0.95
+    feedback 0.40
+    waveform 0.75
+    op0_ratio 0.065
+    op1_ratio 0.42
+    op2_ratio 0.29
+    op3_ratio 0.16
+    op0_envelope 0.0005 0.02 0.0 0.01
+    op1_envelope 0.0005 0.04 0.0 0.02
+    op2_envelope 0.0005 0.015 0.0 0.01
+    op3_envelope 0.001 0.06 0.0 0.03
+    op1_feedback 0.35
+    op3_feedback 0.50
+}
+
+# Evolving pad — slow attack, LFO modulating mod index
+module fm evolve {
+    algorithm 0.4286
+    mod_index 0.38
+    feedback 0.12
+    waveform 0.0
+    op0_envelope 0.8 0.5 0.60 1.2
+    op1_envelope 0.3 0.8 0.45 0.8
+    op2_envelope 0.5 1.0 0.35 1.0
+    op0_ratio 0.065
+    op1_ratio 0.13
+    op2_ratio 0.065
+    chorus_mix 0.55
+    lfo_rate 0.03
+    lfo_depth 0.15
+    lfo_target 2.0
+    lfo_waveform 0.25
+}
+
+# Acid stab — DX bass with bite, short percussive
+module fm acid {
+    algorithm 0.5714
+    mod_index 0.70
+    feedback 0.30
+    waveform 0.0
+    op0_ratio 0.065
+    op1_ratio 0.065
+    op0_envelope 0.001 0.10 0.0 0.05
+    op1_envelope 0.001 0.06 0.0 0.03
+    op1_feedback 0.25
+}
+
+# Dissonant drone — detuned ratios, high feedback, chaotic
+module fm drone {
+    algorithm 1.0
+    mod_index 0.60
+    feedback 0.50
+    waveform 0.0
+    op0_ratio 0.065
+    op1_ratio 0.068
+    op2_ratio 0.19
+    op3_ratio 0.26
+    op0_envelope 1.5 0.5 0.70 2.0
+    op1_envelope 1.2 0.8 0.65 1.5
+    op2_envelope 0.8 0.6 0.50 1.8
+    op3_envelope 1.0 1.0 0.55 2.0
+    op0_feedback 0.30
+    op2_feedback 0.40
+    chorus_mix 0.65
+    lfo_rate 0.02
+    lfo_depth 0.08
+    lfo_target 2.0
+    lfo_waveform 0.5
+}
+
+# Sub kick — FM sine with fast pitch decay
+module fm subkick {
+    algorithm 0.2857
+    mod_index 0.25
+    feedback 0.05
+    waveform 0.0
+    op0_ratio 0.032
+    op1_ratio 0.097
+    op0_envelope 0.001 0.25 0.0 0.08
+    op1_envelope 0.001 0.015 0.0 0.01
+}
+
+# Beats for groove
+module beats kit {
+    kick_level 0.90
+    kick_click 0.50
+    kick_decay 0.15
+    kick_drive 0.35
+
+    snare_level 1.10
+    snare_decay 0.35
+    snare_pitch 0.60
+    snare_drive 0.50
+    snare_snap 0.75
+
+    hihat_level 0.45
+    hihat_pitch 0.42
+    hihat_decay 0.30
+
+    clap_level 0.65
+}
+
+# ────────────────────────────────────────────────
+# PATTERNS
+# ────────────────────────────────────────────────
+
+# ── Bells — sparse, haunting ──
+pattern bell_sparse {
+    C5:0.55  -  -  -
+    -        -  Eb5:0.45  -
+    -        -  -  -
+    G4:0.50  -  -  -
+}
+
+pattern bell_cascade {
+    C6:0.40  -  G5:0.35 -
+    Eb5:0.45 -  -       C5:0.30
+    G5:0.40  -  Bb5:0.35 -
+    -        -  Eb6:0.30 -
+}
+
+# ── Screaming lead — aggressive melody ──
+pattern scream_riff {
+    C4:0.85  -  -  C4:0.70
+    -        Eb4:0.80 ..  -
+    G4:0.90  -  F4:0.75  -
+    Eb4:0.80 -  C4:0.70  -
+}
+
+pattern scream_stab {
+    C5:0.90  -  -  -
+    -        -  -  -
+    Bb4:0.85 -  -  -
+    -        -  -  -
+}
+
+# ── Glitch percussion — chaotic metallic hits ──
+pattern glitch_seq {
+    C6:0.70  -  E7:0.40  -
+    -        G7:0.35  -  C8:0.50
+    E6:0.60  -  -  G6:0.45
+    C7:0.55  E8:0.30  -  G7:0.40
+}
+
+pattern glitch_sparse {
+    -        -  C7:0.50  -
+    -        -  -        -
+    E7:0.40  -  -        -
+    -        -  -        G7:0.35
+}
+
+# ── Evolving pad — long sustained chords ──
+pattern pad_cm {
+    [C3 Eb3 G3 Bb3]:0.45 .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+}
+
+pattern pad_fm {
+    [F3 Ab3 C4 Eb4]:0.40 .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+}
+
+pattern pad_abmaj {
+    [Ab2 C3 Eb3 G3]:0.42 .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+}
+
+# ── Acid stabs — short percussive FM hits ──
+pattern acid_pattern {
+    C3:0.80  -  -  C3:0.55
+    -        -  Eb3:0.70  -
+    C3:0.75  -  -  -
+    G2:0.65  -  Bb2:0.60  -
+}
+
+pattern acid_fast {
+    C3:0.70 Eb3:0.55 C3:0.65 G2:0.50
+    -       C3:0.60  -       Bb2:0.45
+    C3:0.75 -        Eb3:0.60 C3:0.55
+    G2:0.65 -        C3:0.70  -
+}
+
+# ── Drone — dissonant sustained texture ──
+pattern drone_low {
+    [C2 G2]:0.35 .. .. ..
+    ..           .. .. ..
+    ..           .. .. ..
+    ..           .. .. ..
+}
+
+pattern drone_high {
+    [C3 Eb3 Gb3]:0.30 .. .. ..
+    ..                 .. .. ..
+    ..                 .. .. ..
+    ..                 .. .. ..
+}
+
+# ── Sub kick — deep FM bass hits ──
+pattern subkick_four {
+    C1:0.85  -  -  -
+    C1:0.85  -  -  -
+    C1:0.85  -  -  -
+    C1:0.85  -  -  -
+}
+
+# ── Drum patterns ──
+pattern drums_minimal {
+    kick:  X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -
+    hat:   -  x  -  x  -  x  -  x  -  x  -  x  -  x  -  x
+}
+
+pattern drums_full {
+    kick:    X  -  -  x:0.5  -  -  X  -  X  -  -  x:0.5  -  -  X  -
+    snare:   -  -  -  -  X  -  -  -  -  -  -  -  X  -  -  -
+    hat:     x  x:0.6  x  x:0.5  -  x:0.7  x  x:0.6  x  x:0.6  x  x:0.5  -  x:0.7  x  x:0.6
+    openhat: -  -  -  -  -  -  x  -  -  -  -  -  -  -  x  -
+    clap:    -  -  -  -  -  -  -  -  -  -  -  -  X  -  -  -
+}
+
+pattern drums_halftime {
+    kick:  X  -  -  -  -  -  -  -  X  -  -  -  -  -  -  -
+    snare: -  -  -  -  -  -  -  -  -  -  -  -  X  -  -  -
+    hat:   -  x  x  x  x  x  x  x  -  x  x  x  x  x  x  x
+}
+
+pattern silence {
+    - - - -
+    - - - -
+    - - - -
+    - - - -
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track drums {
+    play silence
+    using kit
+    velocity 1.0
+    level 0.65
+    out > compressor(-10, ratio=3, attack=2, release=40, makeup=3) > master
+}
+
+track bells {
+    play silence
+    using bell
+    velocity 1.0
+    level 0.28
+    gate 0.50
+    delay_send 0.35
+    reverb_send 0.50
+    out > chorus(0.20) > master
+}
+
+track scream {
+    play silence
+    using scream
+    velocity 1.0
+    level 0.22
+    gate 0.40
+    delay_send 0.25
+    reverb_send 0.20
+    out > saturate(0.25) > master
+}
+
+track glitch {
+    play silence
+    using glitch
+    velocity 1.0
+    level 0.18
+    gate 0.08
+    delay_send 0.40
+    reverb_send 0.15
+    out > master
+}
+
+track pad {
+    play silence
+    using evolve
+    velocity 1.0
+    level 0.30
+    reverb_send 0.55
+    delay_send 0.15
+    out > chorus(0.25) > master
+}
+
+track acid {
+    play silence
+    using acid
+    velocity 1.0
+    level 0.24
+    gate 0.15
+    delay_send 0.30
+    reverb_send 0.10
+    out > saturate(0.20) > master
+}
+
+track drone {
+    play silence
+    using drone
+    velocity 1.0
+    level 0.15
+    reverb_send 0.60
+    delay_send 0.20
+    out > master
+}
+
+track subkick {
+    play silence
+    using subkick
+    velocity 1.0
+    level 0.16
+    gate 0.30
+    out > master
+}
+
+# ────────────────────────────────────────────────
+# MASTER
+# ────────────────────────────────────────────────
+
+master {
+    in > eq(low=1.5, mid=1.0, high=1.5)
+       > compressor(-5, ratio=2, attack=8, release=80, makeup=2)
+       > limiter
+       > out
+}
+
+# ────────────────────────────────────────────────
+# SCENES
+# ────────────────────────────────────────────────
+
+# INTRO: eerie bells + drone, no drums
+scene intro {
+    track bells  { play bell_sparse  using bell }
+    track drone  { play drone_low    using drone }
+    track pad    { play pad_cm       using evolve }
+}
+
+# BUILD: drums enter, glitch hints, pad evolves
+scene build {
+    track drums  { play drums_minimal using kit }
+    track bells  { play bell_sparse   using bell }
+    track glitch { play glitch_sparse using glitch }
+    track pad    { play pad_cm        using evolve }
+    track drone  { play drone_low     using drone }
+}
+
+# DROP A: full energy — screaming lead + acid + full drums
+scene drop_a {
+    track drums   { play drums_full    using kit }
+    track scream  { play scream_riff   using scream }
+    track acid    { play acid_pattern  using acid }
+    track bells   { play bell_cascade  using bell }
+    track subkick { play subkick_four  using subkick }
+    track pad     { play pad_cm        using evolve }
+}
+
+# DROP A2: variation — different chord, fast acid
+scene drop_a2 {
+    track drums   { play drums_full    using kit }
+    track scream  { play scream_stab   using scream }
+    track acid    { play acid_fast     using acid }
+    track glitch  { play glitch_seq    using glitch }
+    track subkick { play subkick_four  using subkick }
+    track pad     { play pad_fm        using evolve }
+}
+
+# BREAKDOWN: stripped, dissonant, halftime
+scene breakdown {
+    track drums  { play drums_halftime using kit }
+    track drone  { play drone_high     using drone }
+    track bells  { play bell_sparse    using bell }
+    track pad    { play pad_abmaj      using evolve }
+    track glitch { play glitch_sparse  using glitch }
+}
+
+# DROP B: peak chaos — everything
+scene drop_b {
+    track drums   { play drums_full    using kit }
+    track scream  { play scream_riff   using scream }
+    track acid    { play acid_fast     using acid }
+    track bells   { play bell_cascade  using bell }
+    track glitch  { play glitch_seq    using glitch }
+    track subkick { play subkick_four  using subkick }
+    track pad     { play pad_cm        using evolve }
+    track drone   { play drone_low     using drone }
+}
+
+# OUTRO: fading bells + drone
+scene outro {
+    track bells { play bell_sparse using bell }
+    track drone { play drone_low   using drone }
+    track pad   { play pad_abmaj   using evolve }
+}
+
+# ────────────────────────────────────────────────
+# ARRANGEMENT (36 bars)
+# ────────────────────────────────────────────────
+
+arrange {
+    intro x4
+    build x4
+    drop_a x4
+    drop_a2 x4
+    breakdown x4
+    drop_b x4
+    drop_b x4
+    outro x8
+}

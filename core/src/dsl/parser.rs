@@ -5,6 +5,7 @@ use alloc::vec::Vec;
 use alloc::format;
 
 use crate::dsl::ast::*;
+use crate::math;
 use crate::dsl::error::ParseError;
 use crate::dsl::lexer::{Token, Span};
 
@@ -125,6 +126,7 @@ impl Parser {
             master: None,
             scenes: Vec::new(),
             arrangement: Vec::new(),
+            grooves: Vec::new(),
         };
 
         loop {
@@ -145,7 +147,11 @@ impl Parser {
                 Token::Master => { self.advance(); self.parse_master(&mut song); }
                 Token::Arrange => { self.advance(); self.parse_arrange(&mut song.arrangement); }
                 Token::Scene => { self.advance(); self.parse_scene(&mut song.scenes); }
-                // A bare identifier followed by { could be a bus chain (e.g., "reverb { in > ... > out }")
+                // A bare identifier followed by { could be a bus chain or groove block
+                Token::Ident(ref name) if name == "groove" => {
+                    self.advance();
+                    self.parse_groove(&mut song.grooves);
+                }
                 Token::Ident(_) => {
                     self.try_parse_bus_chain_or_error(&mut song);
                 }
@@ -591,7 +597,6 @@ impl Parser {
                             Token::Note(ref n) => {
                                 let n = n.clone();
                                 self.advance();
-                                // Optional per-note velocity: A3:0.4
                                 let vel = if matches!(self.peek(), Token::Colon) {
                                     self.advance();
                                     self.expect_number()
@@ -599,10 +604,29 @@ impl Parser {
                                     None
                                 };
                                 notes.push(NoteStep {
-                                    note_name: n,
+                                    note: NoteRef::Absolute(n),
                                     velocity: vel,
                                     plock: PLock::default(),
                                 });
+                            }
+                            Token::Number(v) => {
+                                let v = v;
+                                self.advance();
+                                let degree = math::floor(v) as u8;
+                                let octave = ((v - math::floor(v)) * 10.0 + 0.5) as u8;
+                                if degree >= 1 && degree <= 7 {
+                                    let vel = if matches!(self.peek(), Token::Colon) {
+                                        self.advance();
+                                        self.expect_number()
+                                    } else {
+                                        None
+                                    };
+                                    notes.push(NoteStep {
+                                        note: NoteRef::Degree(degree, octave),
+                                        velocity: vel,
+                                        plock: PLock::default(),
+                                    });
+                                }
                             }
                             _ => { self.advance(); } // skip unexpected tokens inside chord
                         }
@@ -637,10 +661,35 @@ impl Parser {
                         PLock::default()
                     };
                     current_row.push(Step::Note(NoteStep {
-                        note_name: n,
+                        note: NoteRef::Absolute(n),
                         velocity,
                         plock,
                     }));
+                }
+                // Scale degree: 1.3 = degree 1, octave 3
+                Token::Number(v) => {
+                    let v = v;
+                    self.advance();
+                    let degree = math::floor(v) as u8;
+                    let octave = ((v - math::floor(v)) * 10.0 + 0.5) as u8;
+                    if degree >= 1 && degree <= 7 {
+                        let velocity = if matches!(self.peek(), Token::Colon) {
+                            self.advance();
+                            self.expect_number()
+                        } else {
+                            None
+                        };
+                        let plock = if matches!(self.peek(), Token::LParen) {
+                            self.parse_plock_params()
+                        } else {
+                            PLock::default()
+                        };
+                        current_row.push(Step::Note(NoteStep {
+                            note: NoteRef::Degree(degree, octave),
+                            velocity,
+                            plock,
+                        }));
+                    }
                 }
                 Token::DrumHit | Token::DrumAccent | Token::DrumGhost => {
                     let default_vel = match self.peek() {
@@ -649,18 +698,34 @@ impl Parser {
                         _ => 0.8,  // DrumHit
                     };
                     self.advance();
+                    // Optional probability: g?0.4 or x?0.5
+                    let probability = if matches!(self.peek(), Token::Question) {
+                        self.advance();
+                        self.expect_number().unwrap_or(1.0)
+                    } else {
+                        1.0
+                    };
+                    // Optional velocity override: x:0.6
                     let velocity = if matches!(self.peek(), Token::Colon) {
                         self.advance();
                         self.expect_number().unwrap_or(default_vel)
                     } else {
                         default_vel
                     };
+                    // Optional roll: x*3 (retrigger count within step)
+                    let roll = if matches!(self.peek(), Token::Star) {
+                        self.advance();
+                        let n = self.expect_number().unwrap_or(1.0);
+                        (n as u8).max(1)
+                    } else {
+                        1
+                    };
                     let plock = if matches!(self.peek(), Token::LParen) {
                         self.parse_plock_params()
                     } else {
                         PLock::default()
                     };
-                    current_row.push(Step::DrumHit(DrumStep { velocity, plock }));
+                    current_row.push(Step::DrumHit(DrumStep { velocity, probability, roll, plock }));
                 }
                 Token::Rest => {
                     self.advance();
@@ -748,6 +813,7 @@ impl Parser {
             routing: Vec::new(),
             delay_send: None,
             reverb_send: None,
+            sidechain: None,
         };
 
         loop {
@@ -814,6 +880,12 @@ impl Parser {
                         track.reverb_send = Some(v);
                     }
                 }
+                Token::Ident(ref word) if word == "sidechain" => {
+                    self.advance();
+                    if let Some(v) = self.expect_number() {
+                        track.sidechain = Some(v);
+                    }
+                }
                 _ => { self.advance(); }
             }
         }
@@ -845,6 +917,61 @@ impl Parser {
 
             routing.push(RoutingNode { kind, params });
         }
+    }
+
+    // ── Groove block ──
+    // groove jungle_breaks {
+    //     hat swing 0.62
+    //     snare nudge 0.01
+    //     kick nudge -0.005
+    // }
+
+    fn parse_groove(&mut self, grooves: &mut Vec<GrooveDef>) {
+        let name = self.expect_ident().unwrap_or_else(|| String::from("default"));
+        if !self.expect(&Token::LBrace) { return; }
+
+        let mut lanes = Vec::new();
+        loop {
+            self.skip_newlines();
+            if self.at_block_end() { break; }
+
+            if let Token::Ident(ref drum_name) = self.peek().clone() {
+                let drum_name = drum_name.clone();
+                self.advance();
+
+                let mut swing = None;
+                let mut nudge = None;
+
+                // Parse key-value pairs on this line
+                loop {
+                    match self.peek().clone() {
+                        Token::Ident(ref key) if key == "swing" => {
+                            self.advance();
+                            swing = self.expect_number();
+                        }
+                        Token::Ident(ref key) if key == "nudge" || key == "delay" => {
+                            self.advance();
+                            // Handle negative numbers: if we see a Rest token (-) followed by a number
+                            if matches!(self.peek(), Token::Rest) {
+                                self.advance(); // consume '-'
+                                nudge = self.expect_number().map(|n| -n);
+                            } else {
+                                nudge = self.expect_number();
+                            }
+                        }
+                        Token::Newline | Token::RBrace | Token::Eof => break,
+                        _ => { self.advance(); }
+                    }
+                }
+
+                lanes.push(GrooveLane { drum_name, swing, nudge });
+            } else {
+                self.advance();
+            }
+        }
+
+        self.expect(&Token::RBrace);
+        grooves.push(GrooveDef { name, lanes });
     }
 
     // ── Bus chain ──

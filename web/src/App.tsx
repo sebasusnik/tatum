@@ -1,51 +1,64 @@
-import { onMount, onCleanup, createEffect } from "solid-js";
+import { onMount, onCleanup, createSignal, Show } from "solid-js";
 import Transport from "./components/Transport";
-import ModuleTabs from "./components/ModuleTabs";
-import Screen from "./components/Screen";
-import Encoders from "./components/Encoders";
-import FxBar from "./components/FxBar";
-import Sequencer from "./components/Sequencer";
-import {
-  accentColor, switchModule, nextPage, prevPage,
-  togglePlayback, setRecording,
-} from "./stores/synth";
+import HarmonyBar from "./components/HarmonyBar";
+import Canvas from "./components/Canvas";
+import CodeView from "./components/CodeView";
+import Mixer from "./components/Mixer";
+import { togglePlayback, sendSource, dslErrors, dslSource, setDslSource, syncStoreFromDsl } from "./stores/synth";
+import CHILLWAVE_SOURCE from "../../examples/chillwave_dream.synth?raw";
+
+type ViewMode = "visual" | "code" | "split";
 
 export default function App() {
-  // Set CSS accent color reactively
-  createEffect(() => {
-    document.documentElement.style.setProperty("--accent", accentColor());
-  });
+  const [viewMode, setViewMode] = createSignal<ViewMode>("code");
 
-  // Keyboard shortcuts
   function onKeyDown(e: KeyboardEvent) {
+    if ((e.target as HTMLElement)?.closest?.(".cm-editor")) return;
     if (e.key === " ") { e.preventDefault(); togglePlayback(); }
-    if (e.key === "1") switchModule("bass");
-    if (e.key === "2") switchModule("keys");
-    if (e.key === "3") switchModule("fm");
-    if (e.key === "4") switchModule("beats");
-    if (e.key === "ArrowRight") nextPage();
-    if (e.key === "ArrowLeft") prevPage();
-    if (e.key === "r" || e.key === "R") setRecording((r) => !r);
   }
 
-  onMount(() => document.addEventListener("keydown", onKeyDown));
+  onMount(() => {
+    document.addEventListener("keydown", onKeyDown);
+    // Load default preset and sync store signals (BPM, harmony)
+    setDslSource(CHILLWAVE_SOURCE);
+    syncStoreFromDsl(CHILLWAVE_SOURCE);
+  });
   onCleanup(() => document.removeEventListener("keydown", onKeyDown));
+
+  const handleSource = (source: string) => { sendSource(source); };
 
   return (
     <div class="synth">
-      <Transport />
-      <ModuleTabs />
-      <Screen />
-      <Encoders />
-      <FxBar />
-      <Sequencer />
+      <div class="top-bar">
+        <Transport />
+        <div class="view-toggle">
+          <button classList={{ active: viewMode() === "visual" }} onClick={() => setViewMode("visual")}>Visual</button>
+          <button classList={{ active: viewMode() === "code" }} onClick={() => setViewMode("code")}>Code</button>
+          <button classList={{ active: viewMode() === "split" }} onClick={() => setViewMode("split")}>Split</button>
+        </div>
+        <HarmonyBar />
+      </div>
+
+      <div class="synth-content">
+        <Show when={viewMode() !== "code"}>
+          <Canvas />
+        </Show>
+        <Show when={viewMode() !== "visual"}>
+          <div class="code-and-mixer">
+            <CodeView
+              onSource={handleSource}
+              source={dslSource()}
+              errors={dslErrors()}
+              accentColor="#ff6b35"
+            />
+            <Mixer />
+          </div>
+        </Show>
+      </div>
+
       <div class="hints">
         <span class="hint"><kbd>Space</kbd> Play</span>
-        <span class="hint"><kbd>1</kbd>-<kbd>4</kbd> Module</span>
-        <span class="hint">
-          <kbd>{"\u2190"}</kbd><kbd>{"\u2192"}</kbd> Page
-        </span>
-        <span class="hint"><kbd>R</kbd> Motion Rec</span>
+        <span class="hint"><kbd>Ctrl+Enter</kbd> Evaluate</span>
       </div>
     </div>
   );

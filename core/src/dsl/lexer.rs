@@ -47,6 +47,7 @@ pub enum Token {
     Star,              // *
     Slash,             // /
     Plus,              // +
+    Question,          // ?  (probability modifier for drum hits)
 
     // Delimiters
     LBrace,            // {
@@ -125,6 +126,7 @@ pub fn tokenize(source: &str) -> Vec<Span> {
             '*' => { tokens.push(Span { token: Token::Star, line, col: start_col }); i += 1; col += 1; continue; }
             '/' => { tokens.push(Span { token: Token::Slash, line, col: start_col }); i += 1; col += 1; continue; }
             '+' => { tokens.push(Span { token: Token::Plus, line, col: start_col }); i += 1; col += 1; continue; }
+            '?' => { tokens.push(Span { token: Token::Question, line, col: start_col }); i += 1; col += 1; continue; }
             '{' => { tokens.push(Span { token: Token::LBrace, line, col: start_col }); i += 1; col += 1; continue; }
             '}' => { tokens.push(Span { token: Token::RBrace, line, col: start_col }); i += 1; col += 1; continue; }
             '[' => { tokens.push(Span { token: Token::LBracket, line, col: start_col }); i += 1; col += 1; continue; }
@@ -180,7 +182,7 @@ pub fn tokenize(source: &str) -> Vec<Span> {
                 col += word_len;
                 continue;
             }
-            if word == "o" {
+            if word == "o" || word == "g" {
                 tokens.push(Span { token: Token::DrumGhost, line, col: start_col });
                 col += word_len;
                 continue;
@@ -220,6 +222,7 @@ pub fn tokenize(source: &str) -> Vec<Span> {
                 "swing" => Token::Swing,
                 "humanize" => Token::Humanize,
                 "auto" => Token::Auto,
+                "groove" => Token::Ident(word),  // groove is parsed as ident, handled in parser
                 _ => Token::Ident(word),
             };
 

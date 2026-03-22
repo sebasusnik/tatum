@@ -31,16 +31,12 @@ module fm clav {
     op0_envelope 0.001 0.12 0.05 0.08
 }
 
-# Pad: Am7 chord — poly mode, slow attack, warm
+# Pad: Am7 chord — poly mode, uses default ADSR (0.3s/0.5s/0.7/1.0s) matching reference
 module keys pad {
     voice_mode 0.0
     cutoff 0.15
     detune 0.10
     chorus_mix 0.2
-    attack 0.5
-    decay 0.3
-    sustain 0.8
-    release 1.0
 }
 
 module beats drums {
@@ -175,8 +171,15 @@ pattern arp_am {
     A4:0.8 C5:0.7 E5:0.8 G5:0.7
 }
 
-# Pad: Am7 chord (A3 C4 E4 G4 — matching reference which uses 57,60,64)
-# Reference only uses A3 C4 E4 (3 notes)
+# Pad harmony: Am7 chord matching Engine's on_harmony_change (vel 0.7, 4 notes)
+pattern pad_harmony {
+    [A3 C4 E4 G4]:0.70 .. .. ..
+    ..                  .. .. ..
+    ..                  .. .. ..
+    ..                  .. .. ..
+}
+
+# Pad: Am7 chord (A3 C4 E4 — matching reference bridge explicit note_ons)
 pattern pad_am {
     [A3 C4 E4]:0.30 .. .. ..
     ..               .. .. ..
@@ -257,20 +260,23 @@ master {
 # SCENES — matching reference section structure exactly
 # ────────────────────────────────────────────────
 
-# INTRO (bars 1-4): drums + bass groove only. No pad, no clav.
+# INTRO (bars 1-4): drums + bass groove + pad harmony bed.
+# Reference Engine auto-triggers Am7 chord on keys via set_harmony → on_harmony_change.
 scene intro {
-    track drums { play drums_intro using drums velocity 1.0 level 0.5 out > master }
-    track bass  { play funk_bass   using funk_bass velocity 1.0 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
+    track drums { play drums_intro  using drums     velocity 1.0 level 0.5 out > master }
+    track bass  { play funk_bass    using funk_bass  velocity 1.0 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
+    track pads  { play pad_harmony  using pad        velocity 1.0 level 0.25 reverb_send 0.2 delay_send 0.1 out > master }
 }
 
-# VERSE 1 (bars 5-12): drums + bass + clav stabs. Still no pad.
+# VERSE 1 (bars 5-12): drums + bass + clav stabs + pad harmony bed.
 # Reference: wah base cutoff opens 0.08 → 0.14 over 8 bars.
 scene verse1 {
     auto funk_bass cutoff 0.08 > 0.14
 
     track drums     { play drums_verse1 using drums     velocity 1.0 level 0.5 out > master }
     track bass      { play funk_bass    using funk_bass velocity 1.0 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
-    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.5 gate 0.2 delay_send 0.08 out > master }
+    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.29 gate 0.2 delay_send 0.08 out > master }
+    track pads      { play pad_harmony  using pad       velocity 1.0 level 0.25 reverb_send 0.2 delay_send 0.1 out > master }
 }
 
 # BRIDGE (bars 13-16): breakdown. Kick+hats, held bass, pad ENTERS, filter sweep.
@@ -284,7 +290,7 @@ scene bridge {
 
     track drums { play drums_bridge using drums     velocity 1.0 level 0.5 out > master }
     track bass  { play bass_hold    using funk_bass velocity 0.7 level 0.5 delay_send 0.18 reverb_send 0.2 out > master }
-    track pads  { play pad_am       using pad       velocity 0.30 level 0.5 reverb_send 0.25 delay_send 0.1 out > master }
+    track pads  { play pad_am       using pad       velocity 1.0 level 0.25 reverb_send 0.25 delay_send 0.1 out > master }
 }
 
 # VERSE 2 (bars 17-24): peak funk. Full drums, chord progression bass, clav, arp.
@@ -295,36 +301,36 @@ scene verse2_a {
 
     track drums     { play drums_verse2 using drums     velocity 1.0 level 0.5 out > master }
     track bass      { play bass_v2_am   using funk_bass velocity 0.85 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
-    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.5 gate 0.2 delay_send 0.08 out > master }
-    track arpsynth  { play arp_am       using arp       velocity 1.0 level 0.45 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
+    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.29 gate 0.2 delay_send 0.08 out > master }
+    track arpsynth  { play arp_am       using arp       velocity 1.0 level 0.32 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
 }
 
 scene verse2_dm {
     track drums     { play drums_verse2 using drums     velocity 1.0 level 0.5 out > master }
     track bass      { play bass_v2_dm   using funk_bass velocity 0.85 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
-    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.5 gate 0.2 delay_send 0.08 out > master }
-    track arpsynth  { play arp_am       using arp       velocity 1.0 level 0.45 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
+    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.29 gate 0.2 delay_send 0.08 out > master }
+    track arpsynth  { play arp_am       using arp       velocity 1.0 level 0.32 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
 }
 
 scene verse2_g {
     track drums     { play drums_verse2 using drums     velocity 1.0 level 0.5 out > master }
     track bass      { play bass_v2_g    using funk_bass velocity 0.85 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
-    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.5 gate 0.2 delay_send 0.08 out > master }
-    track arpsynth  { play arp_am       using arp       velocity 1.0 level 0.45 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
+    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.29 gate 0.2 delay_send 0.08 out > master }
+    track arpsynth  { play arp_am       using arp       velocity 1.0 level 0.32 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
 }
 
 scene verse2_c {
     track drums     { play drums_verse2 using drums     velocity 1.0 level 0.5 out > master }
     track bass      { play bass_v2_c    using funk_bass velocity 0.85 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
-    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.5 gate 0.2 delay_send 0.08 out > master }
-    track arpsynth  { play arp_am       using arp       velocity 1.0 level 0.45 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
+    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.29 gate 0.2 delay_send 0.08 out > master }
+    track arpsynth  { play arp_am       using arp       velocity 1.0 level 0.32 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
 }
 
 scene verse2_em {
     track drums     { play drums_verse2 using drums     velocity 1.0 level 0.5 out > master }
     track bass      { play bass_v2_em   using funk_bass velocity 0.85 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
-    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.5 gate 0.2 delay_send 0.08 out > master }
-    track arpsynth  { play arp_am       using arp       velocity 1.0 level 0.45 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
+    track clavtrack { play funk_clav    using clav      velocity 1.0 level 0.29 gate 0.2 delay_send 0.08 out > master }
+    track arpsynth  { play arp_am       using arp       velocity 1.0 level 0.32 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
 }
 
 # OUTRO A (bars 25-30): strip down. Simpler drums, bass wah closes, arp fades.
@@ -336,7 +342,7 @@ scene outro_a {
 
     track drums    { play drums_intro using drums     velocity 1.0 level 0.5 out > master }
     track bass     { play funk_bass   using funk_bass velocity 1.0 level 0.5 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
-    track arpsynth { play arp_am      using arp       velocity 1.0 level 0.3 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
+    track arpsynth { play arp_am      using arp       velocity 1.0 level 0.21 gate 0.15 delay_send 0.1 reverb_send 0.1 out > master }
 }
 
 # OUTRO B (bars 31-32): just kick + fading bass.

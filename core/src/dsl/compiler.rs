@@ -36,7 +36,7 @@ pub struct ChordNote {
 pub enum CompiledStep {
     NoteOn { midi_note: u8, velocity: f32, plock: StepPLock },
     Chord { notes: [ChordNote; MAX_CHORD_NOTES], count: u8, plock: StepPLock },
-    DrumHit { velocity: f32, plock: StepPLock },
+    DrumHit { velocity: f32, probability: f32, roll: u8, plock: StepPLock },
     Rest,
     Tie,
 }
@@ -46,6 +46,8 @@ pub enum CompiledStep {
 pub struct CompiledLane {
     pub midi_note: u8,
     pub steps: Vec<CompiledStep>,
+    pub swing_override: Option<f32>,  // per-lane swing from groove block
+    pub nudge: f32,                   // per-lane timing offset from groove block
 }
 
 /// A compiled pattern: flat array of steps.
@@ -72,6 +74,7 @@ pub struct CompiledTrack {
     pub to_master: bool,
     pub delay_send: f32,    // global delay send amount 0.0-1.0
     pub reverb_send: f32,   // global reverb send amount 0.0-1.0
+    pub sidechain: Option<f32>, // per-track sidechain override (None = use global)
 }
 
 /// A compiled bus.
@@ -138,6 +141,20 @@ pub struct FmPreset {
 }
 
 /// Full compiled song.
+/// Compiled per-lane groove: maps MIDI note to timing adjustments.
+#[derive(Clone, Debug)]
+pub struct CompiledGrooveLane {
+    pub midi_note: u8,
+    pub swing_override: Option<f32>,
+    pub nudge: f32,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct CompiledGroove {
+    pub name: String,
+    pub lanes: Vec<CompiledGrooveLane>,
+}
+
 pub struct CompiledSong {
     pub globals: Globals,
     pub instruments: Vec<CompiledInstrumentKind>,
@@ -148,6 +165,7 @@ pub struct CompiledSong {
     pub master: CompiledMaster,
     pub scenes: Vec<CompiledScene>,
     pub arrangement: Vec<(usize, u32)>, // (scene_idx, repeat_count)
+    pub grooves: Vec<CompiledGroove>,
 }
 
 // ── Compiler ──
@@ -179,10 +197,11 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
         }
     }
 
-    // 2. Compile patterns
+    // 2. Compile patterns (with scale context for degree resolution)
+    let (intervals, root_pc) = scale_context(song);
     let mut patterns = Vec::new();
     for pat_def in &song.patterns {
-        patterns.push(compile_pattern(pat_def));
+        patterns.push(compile_pattern(pat_def, &intervals, root_pc));
     }
 
     // 3. Compile buses
@@ -198,7 +217,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     // 4. Compile tracks
     let mut tracks = Vec::new();
     for track_def in &song.tracks {
-        match compile_track(track_def, &instrument_names, &patterns, &buses) {
+        match compile_track(track_def, &instrument_names, &patterns, &buses, None) {
             Ok(t) => tracks.push(t),
             Err(e) => errors.push(e),
         }
@@ -213,7 +232,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     // 6. Compile scenes
     let mut scenes = Vec::new();
     for scene_def in &song.scenes {
-        match compile_scene(scene_def, &instrument_names, &patterns, &buses) {
+        match compile_scene(scene_def, &instrument_names, &patterns, &buses, &tracks) {
             Ok(s) => scenes.push(s),
             Err(e) => errors.push(e),
         }
@@ -236,6 +255,32 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
         return Err(errors);
     }
 
+    // Compile groove blocks
+    let grooves: Vec<CompiledGroove> = song.grooves.iter().map(|g| {
+        let lanes = g.lanes.iter().map(|l| {
+            CompiledGrooveLane {
+                midi_note: drum_name_to_midi(&l.drum_name),
+                swing_override: l.swing,
+                nudge: l.nudge.unwrap_or(0.0),
+            }
+        }).collect();
+        CompiledGroove { name: g.name.clone(), lanes }
+    }).collect();
+
+    // Apply first groove block to all drum patterns (simple model: one active groove)
+    if let Some(groove) = grooves.first() {
+        for pat in &mut patterns {
+            for lane in &mut pat.lanes {
+                for gl in &groove.lanes {
+                    if gl.midi_note == lane.midi_note {
+                        lane.swing_override = gl.swing_override;
+                        lane.nudge = gl.nudge;
+                    }
+                }
+            }
+        }
+    }
+
     Ok(CompiledSong {
         globals: song.globals.clone(),
         instruments,
@@ -246,6 +291,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
         master,
         scenes,
         arrangement,
+        grooves,
     })
 }
 
@@ -492,9 +538,54 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
     }
 }
 
+// ── Note resolution ──
+
+/// Resolve a NoteRef (absolute or scale degree) to a MIDI note number.
+fn resolve_note(note: &crate::dsl::ast::NoteRef, scale_intervals: &[u8], root_midi: u8) -> u8 {
+    match note {
+        crate::dsl::ast::NoteRef::Absolute(name) => note_name_to_midi(name),
+        crate::dsl::ast::NoteRef::Degree(degree, octave) => {
+            // degree is 1-7, map to 0-indexed
+            let deg_idx = (*degree as usize).saturating_sub(1) % scale_intervals.len();
+            let semitones = scale_intervals[deg_idx];
+            // Root MIDI is in octave 0 context — degree 1 octave 3 means root note in octave 3
+            // root_midi is the root at octave 0 (just the pitch class, 0-11)
+            let midi = ((*octave as i16 + 1) * 12) + root_midi as i16 + semitones as i16;
+            midi.clamp(0, 127) as u8
+        }
+    }
+}
+
+/// Get scale intervals and root pitch class from the song's scale definition.
+fn scale_context(song: &Song) -> ([u8; 7], u8) {
+    if let Some(ref scale_def) = song.globals.scale {
+        let intervals = match scale_def.kind.as_str() {
+            "major" => [0, 2, 4, 5, 7, 9, 11],
+            "minor" => [0, 2, 3, 5, 7, 8, 10],
+            "dorian" => [0, 2, 3, 5, 7, 9, 10],
+            "mixolydian" => [0, 2, 4, 5, 7, 9, 10],
+            "phrygian" => [0, 1, 3, 5, 7, 8, 10],
+            "lydian" => [0, 2, 4, 6, 7, 9, 11],
+            "locrian" => [0, 1, 3, 5, 6, 8, 10],
+            _ => [0, 2, 4, 5, 7, 9, 11], // default major
+        };
+        // Root pitch class (0=C, 2=D, 4=E, 5=F, 7=G, 9=A, 11=B)
+        let root_pc = match scale_def.root.as_str() {
+            "C" => 0, "C#" | "Db" => 1, "D" => 2, "D#" | "Eb" => 3,
+            "E" => 4, "F" => 5, "F#" | "Gb" => 6, "G" => 7,
+            "G#" | "Ab" => 8, "A" => 9, "A#" | "Bb" => 10, "B" => 11,
+            _ => 0,
+        };
+        (intervals, root_pc)
+    } else {
+        // Default: C major
+        ([0, 2, 4, 5, 7, 9, 11], 0)
+    }
+}
+
 // ── Pattern compilation ──
 
-fn compile_pattern(pat: &PatternDef) -> CompiledPattern {
+fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> CompiledPattern {
     // Multi-lane drum pattern
     if !pat.lane_labels.is_empty() {
         let mut lanes = Vec::new();
@@ -514,13 +605,18 @@ fn compile_pattern(pat: &PatternDef) -> CompiledPattern {
                             resonance: ds.plock.resonance,
                             gate: ds.plock.gate,
                         };
-                        CompiledStep::DrumHit { velocity: ds.velocity, plock }
+                        CompiledStep::DrumHit {
+                            velocity: ds.velocity,
+                            probability: ds.probability,
+                            roll: ds.roll,
+                            plock,
+                        }
                     }
                     Step::Rest => CompiledStep::Rest,
                     Step::Tie => CompiledStep::Tie,
                     Step::Chord(_) => CompiledStep::Rest, // chords not supported in drum lanes
                     Step::Note(ns) => {
-                        let midi = note_name_to_midi(&ns.note_name);
+                        let midi = resolve_note(&ns.note, scale_intervals, root_midi);
                         let vel = ns.velocity.unwrap_or(0.8);
                         let plock = StepPLock {
                             cutoff: ns.plock.cutoff,
@@ -532,7 +628,7 @@ fn compile_pattern(pat: &PatternDef) -> CompiledPattern {
                     }
                 }
             }).collect();
-            lanes.push(CompiledLane { midi_note, steps });
+            lanes.push(CompiledLane { midi_note, steps, swing_override: None, nudge: 0.0 });
         }
         let steps_per_row = lanes.first().map(|l| l.steps.len()).unwrap_or(4);
         return CompiledPattern {
@@ -555,7 +651,7 @@ fn compile_pattern(pat: &PatternDef) -> CompiledPattern {
         for step in row {
             match step {
                 Step::Note(ns) => {
-                    let midi = note_name_to_midi(&ns.note_name);
+                    let midi = resolve_note(&ns.note, scale_intervals, root_midi);
                     let vel = ns.velocity.unwrap_or(0.8);
                     let plock = StepPLock {
                         cutoff: ns.plock.cutoff,
@@ -571,7 +667,7 @@ fn compile_pattern(pat: &PatternDef) -> CompiledPattern {
                     let count = cs.notes.len().min(MAX_CHORD_NOTES);
                     for (i, ns) in cs.notes.iter().take(MAX_CHORD_NOTES).enumerate() {
                         chord_notes[i] = ChordNote {
-                            midi_note: note_name_to_midi(&ns.note_name),
+                            midi_note: resolve_note(&ns.note, scale_intervals, root_midi),
                             velocity: ns.velocity.unwrap_or(shared_vel),
                         };
                     }
@@ -590,7 +686,12 @@ fn compile_pattern(pat: &PatternDef) -> CompiledPattern {
                         resonance: ds.plock.resonance,
                         gate: ds.plock.gate,
                     };
-                    steps.push(CompiledStep::DrumHit { velocity: ds.velocity, plock });
+                    steps.push(CompiledStep::DrumHit {
+                        velocity: ds.velocity,
+                        probability: ds.probability,
+                        roll: ds.roll,
+                        plock,
+                    });
                 }
                 Step::Rest => {
                     steps.push(CompiledStep::Rest);
@@ -672,6 +773,7 @@ fn compile_track(
     inst_names: &[String],
     patterns: &[CompiledPattern],
     buses: &[CompiledBus],
+    defaults: Option<&CompiledTrack>,
 ) -> Result<CompiledTrack, CompileError> {
     let instrument_idx = inst_names.iter().position(|n| n == &track.using_instrument)
         .ok_or_else(|| CompileError {
@@ -683,40 +785,47 @@ fn compile_track(
             message: format!("track '{}': unknown pattern '{}'", track.name, track.play),
         })?;
 
-    let velocity = track.velocity.unwrap_or(0.8);
-    let level = track.level.unwrap_or(0.8);
-    let pan = track.pan.unwrap_or(0.0);
-    let gate = track.gate.unwrap_or(0.85);
+    let velocity = track.velocity.unwrap_or_else(|| defaults.map(|d| d.velocity).unwrap_or(0.8));
+    let level = track.level.unwrap_or_else(|| defaults.map(|d| d.level).unwrap_or(0.8));
+    let pan = track.pan.unwrap_or_else(|| defaults.map(|d| d.pan).unwrap_or(0.0));
+    let gate = track.gate.unwrap_or_else(|| defaults.map(|d| d.gate).unwrap_or(0.85));
 
-    // Parse routing chain for insert FX and bus sends
+    // Parse routing chain for insert FX and bus sends.
+    // If scene track has no routing but a global default exists, inherit it.
     let mut insert_fx = Vec::new();
     let mut bus_send = None;
     let mut to_master = true;
 
-    for rnode in &track.routing {
-        // Check if it's a bus reference
-        if let Some(bus_idx) = buses.iter().position(|b| b.name == rnode.kind) {
-            bus_send = Some((bus_idx, 1.0));
-            to_master = false;
-        } else if rnode.kind == "master" {
-            to_master = true;
-        } else {
-            // It's an insert effect
-            let mut noise_seed = 100u32;
-            let mut drift_seed = 9000u32;
-            let node = NodeDef {
-                kind: rnode.kind.clone(),
-                alias: None,
-                params: rnode.params.clone(),
-            };
-            if let Ok(spec) = node_def_to_spec(&node, &mut noise_seed, &mut drift_seed) {
-                insert_fx.push(spec);
+    if track.routing.is_empty() {
+        if let Some(d) = defaults {
+            insert_fx = d.insert_fx.clone();
+            bus_send = d.bus_send;
+            to_master = d.to_master;
+        }
+    } else {
+        for rnode in &track.routing {
+            if let Some(bus_idx) = buses.iter().position(|b| b.name == rnode.kind) {
+                bus_send = Some((bus_idx, 1.0));
+                to_master = false;
+            } else if rnode.kind == "master" {
+                to_master = true;
+            } else {
+                let mut noise_seed = 100u32;
+                let mut drift_seed = 9000u32;
+                let node = NodeDef {
+                    kind: rnode.kind.clone(),
+                    alias: None,
+                    params: rnode.params.clone(),
+                };
+                if let Ok(spec) = node_def_to_spec(&node, &mut noise_seed, &mut drift_seed) {
+                    insert_fx.push(spec);
+                }
             }
         }
     }
 
-    let delay_send = track.delay_send.unwrap_or(0.0);
-    let reverb_send = track.reverb_send.unwrap_or(0.0);
+    let delay_send = track.delay_send.unwrap_or_else(|| defaults.map(|d| d.delay_send).unwrap_or(0.0));
+    let reverb_send = track.reverb_send.unwrap_or_else(|| defaults.map(|d| d.reverb_send).unwrap_or(0.0));
 
     Ok(CompiledTrack {
         name: track.name.clone(),
@@ -731,6 +840,7 @@ fn compile_track(
         to_master,
         delay_send,
         reverb_send,
+        sidechain: track.sidechain,
     })
 }
 
@@ -761,10 +871,13 @@ fn compile_scene(
     inst_names: &[String],
     patterns: &[CompiledPattern],
     buses: &[CompiledBus],
+    global_tracks: &[CompiledTrack],
 ) -> Result<CompiledScene, CompileError> {
     let mut tracks = Vec::new();
     for track_def in &scene.tracks {
-        match compile_track(track_def, inst_names, patterns, buses) {
+        // Look up matching global track by name for default inheritance
+        let defaults = global_tracks.iter().find(|gt| gt.name == track_def.name);
+        match compile_track(track_def, inst_names, patterns, buses, defaults) {
             Ok(t) => tracks.push(t),
             Err(e) => return Err(e),
         }

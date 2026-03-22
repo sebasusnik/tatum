@@ -1,0 +1,511 @@
+# Primus — Les Claypool slap-funk madness
+# Percussive slap bass as lead, angular dissonant FM guitar, busy syncopated drums
+tempo 108
+meter 4/4
+scale E minor
+sidechain 0.0
+swing 0.54
+humanize 0.20 timing 0.12
+
+groove primus_pocket {
+    snare nudge 0.006
+    kick nudge -0.008
+    hat swing 0.56 nudge 0.005
+}
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# Slap bass — aggressive filter envelope, high resonance, percussive attack
+# The Claypool tone: bright slap transient, growly midrange, snappy release
+module bass slap {
+    cutoff 0.10
+    cutoff_env 0.85
+    resonance 0.72
+    glide 0.02
+    keytrack 0.6
+    osc1_wave 0.0
+    osc2_pitch 0.505
+    attack 0.0
+    decay 0.12
+    sustain 0.45
+    release 0.06
+    lfo_rate 0.0
+    lfo_depth 0.0
+}
+
+# Fingerstyle bass — rounder, deeper, for sustained lines
+module bass finger {
+    cutoff 0.18
+    cutoff_env 0.45
+    resonance 0.40
+    glide 0.08
+    keytrack 0.4
+    osc1_wave 0.0
+    osc2_pitch 0.50
+    attack 0.005
+    decay 0.25
+    sustain 0.65
+    release 0.10
+}
+
+# Angular guitar — FM with bite, Larry LaLonde dissonance
+# High mod index, feedback, half-sine waveform for harsh harmonics
+module fm guitar {
+    algorithm 0.5714
+    mod_index 0.72
+    feedback 0.42
+    waveform 0.5
+    op0_ratio 0.065
+    op1_ratio 0.097
+    op0_envelope 0.002 0.15 0.25 0.10
+    op1_envelope 0.001 0.10 0.40 0.08
+    op1_feedback 0.30
+    chorus_mix 0.10
+}
+
+# Clean guitar stab — shorter, cleaner FM for rhythmic accents
+module fm clean {
+    algorithm 0.2857
+    mod_index 0.40
+    feedback 0.15
+    waveform 0.0
+    op0_ratio 0.065
+    op1_ratio 0.13
+    op0_envelope 0.001 0.08 0.0 0.05
+    op1_envelope 0.001 0.05 0.0 0.03
+    chorus_mix 0.18
+}
+
+# Noise texture — weird atonal scraping, Primus interlude vibes
+module fm scrape {
+    algorithm 1.0
+    mod_index 0.90
+    feedback 0.60
+    waveform 0.75
+    op0_ratio 0.42
+    op1_ratio 0.16
+    op2_ratio 0.29
+    op3_ratio 0.10
+    op0_envelope 0.3 0.5 0.30 0.5
+    op1_envelope 0.1 0.3 0.50 0.3
+    op2_envelope 0.2 0.4 0.40 0.4
+    op3_envelope 0.05 0.2 0.35 0.2
+    op0_feedback 0.35
+    op2_feedback 0.45
+    chorus_mix 0.40
+    lfo_rate 0.06
+    lfo_depth 0.12
+    lfo_target 2.0
+    lfo_waveform 0.5
+}
+
+# Sub layer — pure low end underneath the slap
+module bass sub {
+    cutoff 0.05
+    cutoff_env 0.10
+    resonance 0.15
+    osc1_wave 0.0
+    osc2_pitch 0.50
+    attack 0.002
+    decay 0.20
+    sustain 0.80
+    release 0.05
+}
+
+# Drum kit — tight, punchy, busy Herb Alexander style
+module beats kit {
+    kick_level 1.0
+    kick_click 0.60
+    kick_decay 0.10
+    kick_pitch 0.48
+    kick_drive 0.45
+
+    snare_level 1.20
+    snare_decay 0.35
+    snare_pitch 0.62
+    snare_drive 0.55
+    snare_snap 0.80
+    snare_pan 0.05
+
+    hihat_level 0.50
+    hihat_pitch 0.44
+    hihat_pan 0.28
+    hihat_decay 0.25
+
+    clap_level 0.55
+    clap_pan -0.08
+}
+
+# ────────────────────────────────────────────────
+# PATTERNS
+# ────────────────────────────────────────────────
+
+# ── Slap bass — percussive, syncopated, funky ──
+
+# Main slap riff — bouncy E minor funk
+pattern slap_main {
+    E1:0.95  -        -   E1:0.55
+    -        G1:0.80  ..  -
+    A1:0.90  -        E1:0.50  -
+    -        B1:0.75  -   E1:0.65
+}
+
+# Variation — more ghost notes, slides
+pattern slap_groove {
+    E1:0.90  E1:0.35  -   G1:0.70
+    -        A1:0.85  ..  E1:0.40
+    B1:0.80  -        -   A1:0.60
+    G1:0.70  -        E1:0.90  -
+}
+
+# Choppy percussive muted slaps
+pattern slap_chop {
+    E1:0.85  -   E1:0.40 -
+    E1:0.80  -   E1:0.35 -
+    E1:0.85  -   G1:0.45 -
+    A1:0.75  -   E1:0.40 -
+}
+
+# High register slap — popping harmonics
+pattern slap_pop {
+    E2:0.85  -        B1:0.60  -
+    -        G2:0.75  -        E2:0.50
+    A2:0.80  -        -        G2:0.55
+    E2:0.70  -        B1:0.80  -
+}
+
+# Walking line — fingerstyle, more legato
+pattern finger_walk {
+    E1:0.75  ..  G1:0.65  ..
+    A1:0.70  ..  B1:0.60  ..
+    C2:0.70  ..  B1:0.65  ..
+    A1:0.70  ..  G1:0.60  ..
+}
+
+# Sustained low E drone
+pattern bass_drone {
+    E1:0.70 .. .. ..
+    ..      .. .. ..
+    ..      .. .. ..
+    ..      .. .. ..
+}
+
+# Sub pattern — follows slap root notes
+pattern sub_follow {
+    E0:0.75  ..  -  E0:0.50
+    -        G0:0.60  ..  -
+    A0:0.70  ..  E0:0.45  -
+    -        B0:0.55  -  E0:0.60
+}
+
+pattern sub_hold {
+    E0:0.65 .. .. ..
+    ..      .. .. ..
+    ..      .. .. ..
+    ..      .. .. ..
+}
+
+# ── Angular guitar — dissonant, stabby ──
+
+# Main riff — clashing intervals, angular
+pattern guitar_angular {
+    E4:0.70   -  -  Bb4:0.55
+    -         -  B3:0.65  -
+    -         -  -  -
+    C4:0.60   -  -  -
+}
+
+# Rhythmic muted chops
+pattern guitar_chop {
+    [E3 B3]:0.65  -  [E3 B3]:0.40  -
+    -             -  [F3 C4]:0.55  -
+    [E3 B3]:0.60  -  -             -
+    -             -  [E3 Bb3]:0.50  -
+}
+
+# Dissonant sustained chord — LaLonde weirdness
+pattern guitar_dissonant {
+    [E3 Bb3 D4 Ab4]:0.45 .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+}
+
+# Clean stabs — short, rhythmic accents
+pattern clean_stab {
+    [E4 B4]:0.55   -  -  -
+    -              -  -  [G4 D5]:0.45
+    -              -  -  -
+    [E4 B4]:0.50   -  -  -
+}
+
+pattern clean_rhythmic {
+    E4:0.60  -  E4:0.40  -
+    -        -  G4:0.50  -
+    E4:0.55  -  -        -
+    B3:0.50  -  E4:0.55  -
+}
+
+# Noise/scrape texture
+pattern scrape_texture {
+    [E2 Bb2]:0.30 .. .. ..
+    ..            .. .. ..
+    ..            .. .. ..
+    ..            .. .. ..
+}
+
+pattern scrape_swell {
+    [E2 B2 F3]:0.25 .. .. ..
+    ..               .. .. ..
+    ..               .. .. ..
+    ..               .. .. ..
+}
+
+# ── Drums — busy, syncopated, Herb Alexander ──
+
+# Intro — sparse but grooving
+pattern drums_sparse {
+    kick:  X  -  -  -  -  -  x:0.6  -  X  -  -  -  -  -  -  -
+    hat:   x  -  x  -  x  -  x     -  x  -  x  -  x  -  x  -
+    snare: -  -  -  -  X  -  -     -  -  -  -  -  X  -  -  -
+}
+
+# Main groove — syncopated kick, ghost snares, open hats
+pattern drums_groove {
+    kick:    X  -  -  x:0.5  -  -  x:0.7  -  X  -  x:0.4  -  -  -  x:0.6  -
+    snare:   -  -  g?0.30  -  X  -  g?0.35  -  -  g?0.25  -  -  X  -  g?0.30  o
+    hat:     x  x:0.5  x  x:0.6  -  x:0.7  x  x:0.5  x  x:0.5  x  x:0.6  -  x:0.7  x  x:0.5
+    openhat: -  -  -  -  -  -  x  -  -  -  -  -  -  -  x  -
+}
+
+# Busy funk — double kicks, lots of ghost notes
+pattern drums_busy {
+    kick:    X  -  x:0.5  -  -  x:0.6  X  -  X  -  x:0.4  -  -  x:0.7  -  x:0.5
+    snare:   -  g?0.25  -  g?0.30  X  -  g?0.35  o  -  g?0.25  -  g?0.35  X  -  o  g?0.40
+    hat:     x  x:0.6  x:0.5  x  x:0.6  x:0.5  x  x:0.6  x  x:0.6  x:0.5  x  x:0.6  x:0.5  x  x:0.6
+    openhat: -  -  -  -  -  -  -  x  -  -  -  -  -  -  -  x
+    clap:    -  -  -  -  -  -  -  -  -  -  -  -  X  -  -  -
+}
+
+# Half-time heavy
+pattern drums_halftime {
+    kick:  X  -  -  -  -  -  -  -  X  -  -  -  -  -  x:0.6  -
+    snare: -  -  -  -  -  -  -  -  -  -  -  -  X  -  -  -
+    hat:   x  x  x  x  x  x  x  x  x  x  x  x  x  x  x  x
+}
+
+# Fill — snare build
+pattern drums_fill {
+    kick:  X  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+    snare: -  -  x  -  x  -  x*2  x  X  x*2  X  x*2  X  X*2  X*2  X*3
+    hat:   x  x  -  x  -  x  -   -  -  -    -  -    -  -    -    -
+}
+
+# Breakdown — ride cymbal, minimal
+pattern drums_breakdown {
+    kick:    x:0.5  -  -  -  -  -  -  -  x:0.5  -  -  -  -  -  -  -
+    hat:     -      x  x  x  x  x  x  x  -      x  x  x  x  x  x  x
+}
+
+pattern silence {
+    - - - -
+    - - - -
+    - - - -
+    - - - -
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track drums {
+    play silence
+    using kit
+    velocity 1.0
+    level 0.68
+    out > saturate(0.10) > eq(low=1.5, mid=1.5, high=1.6) > compressor(-10, ratio=3, attack=2, release=40, makeup=3) > master
+}
+
+track slap {
+    play silence
+    using slap
+    velocity 1.0
+    level 0.52
+    gate 0.75
+    delay_send 0.05
+    out > saturate(0.30) > eq(low=1.5, mid=2.5, high=2.0) > compressor(-8, ratio=3, attack=1, release=30, makeup=2) > master
+}
+
+track finger {
+    play silence
+    using finger
+    velocity 1.0
+    level 0.38
+    gate 0.90
+    out > saturate(0.12) > lowpass(0.40) > master
+}
+
+track sub {
+    play silence
+    using sub
+    velocity 1.0
+    level 0.14
+    sidechain 0.15
+    gate 0.85
+    out > master
+}
+
+track guitar {
+    play silence
+    using guitar
+    velocity 1.0
+    level 0.22
+    gate 0.35
+    delay_send 0.20
+    reverb_send 0.12
+    out > saturate(0.30) > master
+}
+
+track clean {
+    play silence
+    using clean
+    velocity 1.0
+    level 0.18
+    gate 0.12
+    delay_send 0.30
+    reverb_send 0.25
+    out > chorus(0.15) > master
+}
+
+track scrape {
+    play silence
+    using scrape
+    velocity 1.0
+    level 0.12
+    reverb_send 0.40
+    delay_send 0.20
+    out > master
+}
+
+# ────────────────────────────────────────────────
+# MASTER
+# ────────────────────────────────────────────────
+
+master {
+    in > eq(low=1.8, mid=1.5, high=1.3)
+       > compressor(-5, ratio=2.5, attack=5, release=70, makeup=2)
+       > limiter
+       > out
+}
+
+# ────────────────────────────────────────────────
+# SCENES
+# ────────────────────────────────────────────────
+
+# INTRO: bass solo — just the slap, sparse drums
+scene intro {
+    track slap   { play slap_chop     using slap }
+    track drums  { play drums_sparse  using kit }
+    track sub    { play sub_hold      using sub }
+}
+
+# BUILD: full groove enters, guitar hints
+scene build {
+    track slap    { play slap_main     using slap }
+    track drums   { play drums_groove  using kit }
+    track sub     { play sub_follow    using sub }
+    track guitar  { play guitar_angular using guitar }
+}
+
+# FILL
+scene fill {
+    track drums { play drums_fill using kit }
+    track slap  { play slap_chop  using slap }
+}
+
+# VERSE A: full band — slap lead, angular guitar, busy drums
+scene verse_a {
+    track slap    { play slap_main      using slap }
+    track drums   { play drums_busy     using kit }
+    track sub     { play sub_follow     using sub }
+    track guitar  { play guitar_chop    using guitar }
+    track clean   { play clean_stab     using clean }
+}
+
+# VERSE A2: variation — different bass line, dissonant guitar
+scene verse_a2 {
+    track slap    { play slap_groove    using slap }
+    track drums   { play drums_busy     using kit }
+    track sub     { play sub_follow     using sub }
+    track guitar  { play guitar_angular using guitar }
+    track clean   { play clean_rhythmic using clean }
+}
+
+# BREAKDOWN: halftime, scrape texture, finger bass
+scene breakdown {
+    track finger  { play finger_walk      using finger }
+    track drums   { play drums_breakdown  using kit }
+    track scrape  { play scrape_texture   using scrape }
+    track guitar  { play guitar_dissonant using guitar }
+    track sub     { play sub_hold         using sub }
+}
+
+# INTERLUDE: weird noise, sparse
+scene interlude {
+    track scrape  { play scrape_swell    using scrape }
+    track drums   { play drums_halftime  using kit }
+    track slap    { play bass_drone      using finger }
+}
+
+# FILL 2
+scene fill2 {
+    track drums { play drums_fill  using kit }
+    track slap  { play slap_pop    using slap }
+}
+
+# VERSE B: peak energy — popping bass, all elements
+scene verse_b {
+    track slap    { play slap_pop       using slap }
+    track drums   { play drums_busy     using kit }
+    track sub     { play sub_follow     using sub }
+    track guitar  { play guitar_chop    using guitar }
+    track clean   { play clean_rhythmic using clean }
+    track scrape  { play scrape_texture using scrape }
+}
+
+# VERSE B2: main slap returns, full chaos
+scene verse_b2 {
+    track slap    { play slap_groove    using slap }
+    track drums   { play drums_groove   using kit }
+    track sub     { play sub_follow     using sub }
+    track guitar  { play guitar_angular using guitar }
+    track clean   { play clean_stab     using clean }
+}
+
+# OUTRO: slowing down, bass solo fade
+scene outro {
+    track slap   { play slap_main     using slap }
+    track drums  { play drums_sparse  using kit }
+    track sub    { play sub_hold      using sub }
+    track scrape { play scrape_swell  using scrape }
+}
+
+# ────────────────────────────────────────────────
+# ARRANGEMENT (40 bars)
+# ────────────────────────────────────────────────
+
+arrange {
+    intro x4
+    build x4
+    fill x1
+    verse_a x4
+    verse_a2 x4
+    breakdown x4
+    interlude x2
+    fill2 x1
+    verse_b x4
+    verse_b2 x4
+    outro x8
+}

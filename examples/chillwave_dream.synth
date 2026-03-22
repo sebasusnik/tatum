@@ -1,0 +1,517 @@
+# Chillwave Dream — hazy nostalgia, washed-out warmth
+# Inspired by Washed Out, Toro y Moi, Neon Indian
+tempo 92
+meter 4/4
+scale D major
+sidechain 0.0
+swing 0.52
+humanize 0.15 timing 0.10
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# Warm pad — lush, detuned, dreamy, the signature chillwave wash
+module keys wash {
+    voice_mode 0.0
+    cutoff 0.20
+    resonance 0.15
+    detune 0.09
+    chorus_mix 0.35
+    attack 0.6
+    decay 0.4
+    sustain 0.70
+    release 0.7
+    lfo_rate 0.04
+    lfo_depth 0.06
+    lfo_target 0.0
+    lfo_waveform 0.0
+}
+
+# Bright shimmer pad — higher register, airy
+module keys shimmer {
+    voice_mode 2.0
+    cutoff 0.35
+    resonance 0.10
+    detune 0.06
+    chorus_mix 0.40
+    attack 0.8
+    decay 0.3
+    sustain 0.55
+    release 0.8
+    lfo_rate 0.03
+    lfo_depth 0.04
+    lfo_target 0.0
+}
+
+# Soft bass — round, warm, simple
+module bass warmth {
+    cutoff 0.15
+    cutoff_env 0.20
+    resonance 0.18
+    glide 0.12
+    keytrack 0.3
+    osc1_wave 0.0
+    osc2_pitch 0.50
+    attack 0.01
+    decay 0.25
+    sustain 0.70
+    release 0.10
+    lfo_rate 0.0
+    lfo_depth 0.0
+}
+
+# Sub — deep and pillowy
+module bass pillow {
+    cutoff 0.06
+    cutoff_env 0.08
+    resonance 0.10
+    osc1_wave 0.0
+    osc2_pitch 0.50
+    attack 0.005
+    decay 0.20
+    sustain 0.85
+    release 0.08
+}
+
+# FM bell — glassy, nostalgic, lo-fi bell tones
+module fm glass {
+    algorithm 0.2857
+    mod_index 0.30
+    feedback 0.08
+    waveform 0.0
+    op0_ratio 0.065
+    op1_ratio 0.194
+    op0_envelope 0.002 0.5 0.0 0.6
+    op1_envelope 0.001 0.8 0.0 0.4
+    chorus_mix 0.30
+    lfo_rate 0.03
+    lfo_depth 0.02
+    lfo_target 2.0
+}
+
+# FM melody — warm but present lead, cuts through the wash
+module fm nostalgia {
+    algorithm 0.5714
+    mod_index 0.40
+    feedback 0.12
+    waveform 0.0
+    op0_ratio 0.065
+    op1_ratio 0.065
+    op0_envelope 0.005 0.25 0.40 0.30
+    op1_envelope 0.003 0.18 0.50 0.25
+    chorus_mix 0.20
+    vibrato_rate 0.20
+    vibrato_depth 0.06
+    lfo_rate 0.05
+    lfo_depth 0.03
+    lfo_target 2.0
+}
+
+# Soft drum machine — lo-fi, hazy, gentle
+module beats tape {
+    kick_level 0.80
+    kick_click 0.25
+    kick_decay 0.20
+    kick_pitch 0.45
+    kick_drive 0.15
+
+    snare_level 0.70
+    snare_decay 0.30
+    snare_pitch 0.50
+    snare_drive 0.20
+    snare_snap 0.35
+    snare_pan 0.08
+
+    hihat_level 0.40
+    hihat_pitch 0.38
+    hihat_pan 0.25
+
+    clap_level 0.55
+    clap_pan -0.05
+}
+
+# ────────────────────────────────────────────────
+# PATTERNS
+# ────────────────────────────────────────────────
+
+# ── Drums — minimal, soft, lo-fi ──
+
+pattern beat_intro {
+    hat: - x:0.4 - x:0.3 - x:0.4 - x:0.3 - x:0.4 - x:0.3 - x:0.4 - x:0.3
+}
+
+pattern beat_verse {
+    kick:  X  -  -  -  -  -  x:0.4  -  X  -  -  -  -  -  -  -
+    snare: -  -  -  -  x:0.5  -  -  -  -  -  -  -  x:0.5  -  -  -
+    hat:   x:0.5  x:0.3  x:0.4  x:0.3  -  x:0.4  x:0.3  x:0.4  x:0.5  x:0.3  x:0.4  x:0.3  -  x:0.4  x:0.3  x:0.4
+}
+
+pattern beat_drop {
+    kick:    X  -  -  -  -  -  x:0.5  -  X  -  -  x:0.4  -  -  -  -
+    snare:   -  -  -  -  X  -  -  -  -  -  -  -  X  -  -  -
+    hat:     x:0.5  x:0.3  x:0.4  x:0.3  -  x:0.5  x:0.3  x:0.4  x:0.5  x:0.3  x:0.4  x:0.3  -  x:0.5  x:0.3  x:0.4
+    openhat: -  -  -  -  -  -  -  x:0.3  -  -  -  -  -  -  -  x:0.3
+}
+
+pattern beat_drop2 {
+    kick:    X  -  -  x:0.3  -  -  x:0.5  -  X  -  -  -  -  -  x:0.4  -
+    clap:    -  -  -  -  X  -  -  -  -  -  -  -  X  -  -  -
+    hat:     x:0.5  x:0.3  x:0.4  x:0.3  -  x:0.4  x:0.3  x:0.5  x:0.5  x:0.3  x:0.4  x:0.3  -  x:0.4  x:0.3  x:0.5
+    openhat: -  -  -  -  -  -  -  x:0.3  -  -  -  -  -  -  -  -
+}
+
+pattern beat_break {
+    kick: x:0.4  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+    hat:  -  x:0.3  -  x:0.25  -  x:0.3  -  x:0.25  -  x:0.3  -  x:0.25  -  -  -  -
+}
+
+# ── Wash pad — warm sustained chords (scale degrees) ──
+# In D major: 1=D 2=E 3=F# 4=G 5=A 6=B 7=C#
+
+pattern wash_Imaj7 {
+    [1.3 3.3 5.3 7.3]:0.35 .. .. ..
+    ..                      .. .. ..
+    ..                      .. .. ..
+    ..                      .. .. ..
+}
+
+pattern wash_IVmaj7 {
+    [4.3 6.3 1.4 3.4]:0.32 .. .. ..
+    ..                      .. .. ..
+    ..                      .. .. ..
+    ..                      .. .. ..
+}
+
+pattern wash_vi7 {
+    [6.2 1.3 3.3 5.3]:0.33 .. .. ..
+    ..                      .. .. ..
+    ..                      .. .. ..
+    ..                      .. .. ..
+}
+
+pattern wash_ii9 {
+    [2.3 4.3 6.3 1.4 3.4]:0.30 .. .. ..
+    ..                          .. .. ..
+    ..                          .. .. ..
+    ..                          .. .. ..
+}
+
+# A major chord (5 of D major with chromatic G#) — keep absolute
+pattern wash_Vmaj {
+    [A2 C#3 E3 G#3]:0.32 .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+}
+
+# ── Shimmer — high airy layer ──
+
+pattern shimmer_high {
+    [1.4 3.4 5.4]:0.38 .. .. ..
+    ..                  .. .. ..
+    ..                  .. .. ..
+    ..                  .. .. ..
+}
+
+pattern shimmer_glow {
+    [4.4 6.4 1.5]:0.35 .. .. ..
+    ..                  .. .. ..
+    ..                  .. .. ..
+    ..                  .. .. ..
+}
+
+pattern shimmer_drift {
+    [6.3 1.4 3.4]:0.35  .. .. ..
+    ..                   .. .. ..
+    ..                   .. .. ..
+    ..                   .. .. ..
+}
+
+# ── Bass — simple, warm, round ──
+
+pattern bass_main {
+    1.2:0.70  ..  -  -
+    -         -   ..  -
+    4.2:0.65  ..  -  -
+    -         -   5.2:0.55  -
+}
+
+pattern bass_verse {
+    1.2:0.65  ..  ..  -
+    -         -   -   -
+    4.2:0.60  ..  ..  -
+    5.2:0.55  -   -   -
+}
+
+pattern bass_bridge {
+    6.1:0.65  ..  ..  ..
+    ..        ..  ..  ..
+    2.2:0.60  ..  ..  ..
+    ..        ..  ..  ..
+}
+
+pattern bass_hold {
+    1.2:0.55  ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+}
+
+# ── Sub ──
+
+pattern sub_main {
+    1.1:0.65  ..  -  -
+    -         -   ..  -
+    4.1:0.60  ..  -  -
+    -         -   5.1:0.50  -
+}
+
+pattern sub_hold {
+    1.1:0.55  ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+}
+
+# ── Glass bells — sparse, glimmering ──
+
+pattern glass_sparse {
+    -         -  3.5:0.25  -
+    -         -  -         -
+    -         -  -         -
+    5.5:0.20  -  -         -
+}
+
+pattern glass_melody {
+    1.5:0.28  -  -         -
+    -         -  3.5:0.25  -
+    5.5:0.26  -  -         -
+    -         -  2.5:0.22  -
+}
+
+pattern glass_high {
+    5.5:0.22  -  -         1.6:0.18
+    -         -  -         -
+    3.5:0.22  -  -         -
+    -         -  -         -
+}
+
+# ── Nostalgia melody — dreamy, floating ──
+
+pattern melody_a {
+    3.4:0.75  -  -  -
+    -         -  5.4:0.65  -
+    -         -  -  -
+    1.4:0.70  -  -  -
+}
+
+pattern melody_b {
+    6.4:0.70  -  -  -
+    -         -  -  5.4:0.60
+    -         -  -  -
+    4.4:0.65  -  -  -
+}
+
+pattern melody_ghost {
+    -  -  3.4:0.40  -
+    -  -  -         -
+    -  -  -         -
+    -  5.4:0.35  -  -
+}
+
+pattern silence {
+    - - - -
+    - - - -
+    - - - -
+    - - - -
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track drums {
+    play silence
+    using tape
+    velocity 1.0
+    level 0.52
+    out > saturate(0.08) > compressor(-8, ratio=2.5, attack=5, release=60, makeup=1) > master
+}
+
+track wash {
+    play silence
+    using wash
+    velocity 1.0
+    level 0.20
+    reverb_send 0.35
+    delay_send 0.10
+    out > chorus(0.20) > master
+}
+
+track shimmer {
+    play silence
+    using shimmer
+    velocity 1.0
+    level 0.22
+    reverb_send 0.35
+    delay_send 0.12
+    out > chorus(0.15) > master
+}
+
+track bass {
+    play silence
+    using warmth
+    velocity 1.0
+    level 0.28
+    gate 0.80
+    out > saturate(0.08) > lowpass(0.35) > master
+}
+
+track sub {
+    play silence
+    using pillow
+    velocity 1.0
+    level 0.10
+    gate 0.85
+    out > master
+}
+
+track glass {
+    play silence
+    using glass
+    velocity 1.0
+    level 0.10
+    gate 0.45
+    delay_send 0.30
+    reverb_send 0.50
+    out > chorus(0.18) > master
+}
+
+track melody {
+    play silence
+    using nostalgia
+    velocity 1.0
+    level 0.42
+    gate 0.45
+    delay_send 0.12
+    reverb_send 0.15
+    out > master
+}
+
+# ────────────────────────────────────────────────
+# MASTER
+# ────────────────────────────────────────────────
+
+master {
+    in > eq(low=1.2, mid=1.0, high=1.0)
+       > compressor(-4, ratio=1.8, attack=10, release=90, makeup=1)
+       > limiter
+       > out
+}
+
+# ────────────────────────────────────────────────
+# SCENES
+# ────────────────────────────────────────────────
+
+# INTRO: wash pad fades in with shimmer, glass bells hint
+scene intro {
+    track wash    { play wash_Imaj7    using wash }
+    track shimmer { play shimmer_high  using shimmer }
+    track glass   { play glass_sparse  using glass }
+}
+
+# VERSE 1: soft beat enters, bass creeps in
+scene verse1 {
+    track drums   { play beat_verse    using tape }
+    track wash    { play wash_Imaj7    using wash }
+    track shimmer { play shimmer_high  using shimmer }
+    track bass    { play bass_verse    using warmth }
+    track sub     { play sub_hold      using pillow }
+    track glass   { play glass_sparse  using glass }
+}
+
+# VERSE 2: chord change, melody enters
+scene verse2 {
+    track drums   { play beat_verse    using tape }
+    track wash    { play wash_IVmaj7    using wash }
+    track shimmer { play shimmer_glow  using shimmer }
+    track bass    { play bass_verse    using warmth }
+    track sub     { play sub_hold      using pillow }
+    track glass   { play glass_melody  using glass }
+    track melody  { play melody_ghost  using nostalgia }
+}
+
+# DROP: full chillwave bliss — all elements, open hats
+scene drop_a {
+    track drums   { play beat_drop     using tape }
+    track wash    { play wash_Imaj7    using wash }
+    track shimmer { play shimmer_high  using shimmer }
+    track bass    { play bass_main     using warmth }
+    track sub     { play sub_main      using pillow }
+    track glass   { play glass_melody  using glass }
+    track melody  { play melody_a      using nostalgia }
+}
+
+# DROP variation — different chord, clap instead of snare
+scene drop_b {
+    track drums   { play beat_drop2    using tape }
+    track wash    { play wash_IVmaj7    using wash }
+    track shimmer { play shimmer_glow  using shimmer }
+    track bass    { play bass_main     using warmth }
+    track sub     { play sub_main      using pillow }
+    track glass   { play glass_high    using glass }
+    track melody  { play melody_b      using nostalgia }
+}
+
+# BRIDGE: stripped back, minor feel, reflective
+scene bridge {
+    track drums   { play beat_break    using tape }
+    track wash    { play wash_vi7      using wash }
+    track shimmer { play shimmer_drift using shimmer }
+    track bass    { play bass_bridge   using warmth }
+    track sub     { play sub_hold      using pillow }
+    track melody  { play melody_ghost  using nostalgia }
+}
+
+# SWELL: Em9 tension, builds back
+scene swell {
+    track drums   { play beat_verse    using tape }
+    track wash    { play wash_ii9      using wash }
+    track shimmer { play shimmer_drift using shimmer }
+    track bass    { play bass_bridge   using warmth }
+    track sub     { play sub_hold      using pillow }
+    track glass   { play glass_sparse  using glass }
+}
+
+# OUTRO: wash fades, bells linger
+scene outro {
+    track wash    { play wash_Imaj7    using wash }
+    track shimmer { play shimmer_high  using shimmer }
+    track glass   { play glass_sparse  using glass }
+    track melody  { play melody_ghost  using nostalgia }
+}
+
+# TAIL: just the wash
+scene tail {
+    track wash    { play wash_Vmaj     using wash }
+    track shimmer { play shimmer_high  using shimmer }
+}
+
+# ────────────────────────────────────────────────
+# ARRANGEMENT (48 bars)
+# ────────────────────────────────────────────────
+
+arrange {
+    intro x4
+    verse1 x4
+    verse2 x4
+    drop_a x4
+    drop_b x4
+    bridge x4
+    swell x4
+    drop_a x4
+    drop_b x4
+    outro x8
+    tail x4
+}
