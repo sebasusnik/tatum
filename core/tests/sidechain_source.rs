@@ -114,3 +114,56 @@ fn a_source_with_no_amount_is_a_compile_error() {
     };
     assert!(errs[0].message.contains("has no amount"), "{:?}", errs[0]);
 }
+
+/// The shape of the duck, not just its depth. A release of a few milliseconds
+/// lets the bass snap back inside the kick; a long one makes the pair read as
+/// one instrument. Until this existed the DSL could not say which it wanted.
+#[test]
+fn the_release_time_changes_how_long_the_duck_lasts() {
+    /// A kick on beat 1 and a pad that is already sounding, so the only thing
+    /// shaping the pad's level is the duck.
+    fn probe(shape: &str) -> Vec<f32> {
+        let src = format!(r#"
+tempo 120
+scale C major
+sidechain 0.9 {}
+module beats kit {{ kick_level 1.0 }}
+module keys pad {{ voice_mode unison cutoff 2khz attack 1ms sustain 1.0 release 1s }}
+pattern beat {{ kick: X - - -  - - - -  - - - -  - - - - }}
+pattern hold {{ [1.3 3.3 5.3] ..*15 }}
+track drums {{ play beat using kit level 0.0 out > master }}
+track pad {{ play hold using pad out > master }}
+master {{ in > limiter > out }}
+scene a {{ track drums {{ play beat using kit level 0.0 }} track pad {{ play hold using pad }} }}
+arrange {{ a x1 }}
+"#, shape);
+        let mut engine = SongEngine::from_source(&src).unwrap_or_else(|e| panic!("{}", e));
+        engine.start();
+        let (l, _) = engine.render(1);
+        let sr = synth_core::SAMPLE_RATE as usize;
+        let win = sr / 20; // 50 ms
+        (0..4).map(|i| l[i * win..(i + 1) * win].iter().fold(0.0f32, |m, v| m.max(v.abs()))).collect()
+    }
+
+    let short = probe("");
+    let long = probe("attack=1ms release=1500ms");
+    assert!(
+        long[0] < short[0] * 0.85,
+        "a long release should hold the pad down through the first 50 ms:\n  default {:?}\n  long    {:?}",
+        short, long
+    );
+    // And the two must agree once the kick is long gone, or the release is
+    // doing something other than releasing.
+    assert!((long[3] - short[3]).abs() < 1e-3, "{:?} vs {:?}", short, long);
+}
+
+#[test]
+fn a_sidechain_time_needs_a_time() {
+    let src = song("sidechain 0.5").replace("scale C major", "scale C major\nsidechain 0.4 release=loud");
+    let errs = dsl::parse(&src).expect_err("should not parse");
+    assert!(errs[0].message.contains("sidechain release= takes a time like 80ms"), "{}", errs[0].message);
+
+    let src = song("sidechain 0.5").replace("scale C major", "scale C major\nsidechain 0.4 release=9s");
+    let errs = dsl::parse(&src).expect_err("should not parse");
+    assert!(errs[0].message.contains("outside 0.1ms..2000ms"), "{}", errs[0].message);
+}

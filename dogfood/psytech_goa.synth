@@ -8,7 +8,7 @@ tempo 148
 meter 4/4
 scale E phrygian
 swing 0.5
-sidechain 0.6
+sidechain 0.6 attack=1ms release=70ms
 humanize 0.03 timing 0.006
 # Levels exactly as written: automatic 1/sqrt(active tracks) compensation makes
 # the thin intro as loud as the full drop, which destroys the arrangement shape.
@@ -28,8 +28,8 @@ delay_return  { in > highpass(420, 0.3) > lowpass(7khz, 0.25) > out }
 # length in the beats module, so it is set tight rather than 909-long.
 module beats kit {
     kick_level 1.0
-    kick_decay 0.16
-    kick_pitch 0.24
+    kick_decay 0.30
+    kick_pitch 0.55
     kick_click 0.82
     kick_drive 0.85
     kick_pan 0.0
@@ -635,11 +635,10 @@ scene build1 {
 
 # 2b. Two bars of air with one hit, so the drop lands on something.
 scene gap {
-    auto squelch cutoff 0.634 > 0.28
+    auto murk cutoff 0.246 > 0.1
     track drums { play beat_gap using kit level 0.6631 }
     track sub { play sub_hold using sub level 0.2 }
     track murk { play murk_dark using murk level 0.0715 }
-    track acid { play acid_ghost using squelch level 0.216 }
 }
 
 # 3. First drop: the groove, nothing decorative.
@@ -730,8 +729,8 @@ scene outro {
 arrange {
     open x4
     intro x8
-    build1 x8
     gap x2
+    build1 x8
     drop1 x12
     bridge x6
     breakdown x8

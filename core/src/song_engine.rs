@@ -253,6 +253,20 @@ struct TrackPlayback {
     is_sc_source: bool,
 }
 
+/// Share of a new peak the follower takes in one sample. The 0.005 ms default
+/// reproduces the 0.99 that used to be hardcoded, which is effectively instant.
+fn attack_alpha(ms: f32) -> f32 {
+    let samples = (ms * 0.001 * SAMPLE_RATE).max(0.001);
+    1.0 - math::exp(-1.0 / samples)
+}
+
+/// What the envelope keeps per sample while it falls. The 4.5 ms default
+/// reproduces the 0.995 that used to be hardcoded.
+fn release_coeff(ms: f32) -> f32 {
+    let samples = (ms * 0.001 * SAMPLE_RATE).max(1.0);
+    math::exp(-1.0 / samples)
+}
+
 /// Build a fresh arp processor from compiled settings at the given tempo.
 fn make_arp(cfg: &ArpConfig, tempo: f32) -> ArpProcessor {
     let mut arp = ArpProcessor::new();
@@ -366,6 +380,11 @@ pub struct SongEngine {
     kick_track_idx: Option<usize>,
     /// Song-wide `sidechain ... from=`; `None` falls back to the kick track.
     global_sc_source: Option<String>,
+    /// One-pole coefficients for the source envelope. The release is what makes
+    /// a duck read as a pump: too fast and the bass snaps back inside the kick,
+    /// too slow and it never comes back.
+    sc_attack_coeff: f32,
+    sc_release_coeff: f32,
     /// Resolved once per scene: the audio path must not search by name.
     global_sc_idx: Option<usize>,
 
@@ -738,6 +757,8 @@ impl SongEngine {
             sidechain_amount,
             sc_envelope: 0.0,
             global_sc_source: song.globals.sidechain_source.clone(),
+            sc_attack_coeff: attack_alpha(song.globals.sidechain_attack_ms.unwrap_or(0.005)),
+            sc_release_coeff: release_coeff(song.globals.sidechain_release_ms.unwrap_or(4.5)),
             global_sc_idx: None,
             kick_track_idx,
             reverb_wet_level: 1.0,
@@ -1268,6 +1289,7 @@ impl SongEngine {
         let has_any_sidechain = self.sidechain_amount > 0.0
             || self.reverb_sidechain > 0.0 || self.delay_sidechain > 0.0
             || self.tracks.iter().any(|t| t.active && t.sidechain_amount > 0.0);
+        let (sc_attack, sc_release) = (self.sc_attack_coeff, self.sc_release_coeff);
         if has_any_sidechain {
             for s in 0..len {
                 // Each source keeps its own envelope, so `sidechain from=bass`
@@ -1283,9 +1305,9 @@ impl SongEngine {
                     };
                     let env = self.tracks[si].sc_env;
                     self.tracks[si].sc_env = if level > env {
-                        0.01 * env + 0.99 * level // fast attack
+                        env + (level - env) * sc_attack
                     } else {
-                        0.995 * env // slow release
+                        sc_release * env
                     };
                 }
                 // The sends follow the kick, or the song's named source.

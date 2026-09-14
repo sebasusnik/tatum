@@ -397,6 +397,15 @@ track pad  { sidechain 0.6 out > master }             # the kick
 track wash { sidechain 0.5 from=bass out > master }   # breathes with the bass
 ```
 
+`attack=` and `release=` shape the envelope every source follows, in
+milliseconds. The release is what decides whether a duck reads as a gap or as a
+pump: the default 4.5 ms lets the bass back inside the kick, while 70-150 ms
+makes the two read as one instrument.
+
+```
+sidechain 0.6 attack=1ms release=70ms
+```
+
 The source keeps its own envelope, so different tracks can duck against
 different things in the same song. A `beats` source uses its kick envelope
 rather than its full output, so hats and snares do not pump the mix. A source

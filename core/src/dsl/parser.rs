@@ -282,6 +282,42 @@ impl Parser {
             globals.sidechain = n;
         }
         globals.sidechain_source = self.parse_sidechain_source();
+        // `attack=` and `release=` shape the envelope every source follows.
+        loop {
+            let key = match self.peek().clone() {
+                Token::Ident(ref k) if k == "attack" || k == "release" => k.clone(),
+                _ => break,
+            };
+            let sp = self.span();
+            let (l, c) = (sp.line, sp.col);
+            self.advance();
+            if !self.expect(&Token::Eq) { break; }
+            let ms = match self.peek().clone() {
+                Token::Quantity(v, ref suffix) if suffix == "ms" => { self.advance(); Some(v) }
+                Token::Quantity(v, ref suffix) if suffix == "s" || suffix == "sec" => { self.advance(); Some(v * 1000.0) }
+                Token::Number(v) => { self.advance(); Some(v) }
+                other => {
+                    self.errors.push(ParseError {
+                        line: l, col: c,
+                        message: format!("sidechain {}= takes a time like 80ms, got {}", key, describe_token(&other)),
+                    });
+                    None
+                }
+            };
+            let Some(ms) = ms else { break };
+            if !(0.1..=2000.0).contains(&ms) {
+                self.errors.push(ParseError {
+                    line: l, col: c,
+                    message: format!("sidechain {}= {}ms is outside 0.1ms..2000ms", key, ms),
+                });
+                continue;
+            }
+            if key == "attack" {
+                globals.sidechain_attack_ms = Some(ms);
+            } else {
+                globals.sidechain_release_ms = Some(ms);
+            }
+        }
     }
 
     /// Optional `from=<track or module>` after a sidechain amount.
