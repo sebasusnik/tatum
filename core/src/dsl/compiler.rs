@@ -570,7 +570,7 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
         }
         "lowpass" => {
             let cutoff = float_param_at(&node.params, 0).unwrap_or(1000.0);
-            let res = float_param_at(&node.params, 1).unwrap_or(0.5);
+            let res = float_param_at(&node.params, 1).unwrap_or(0.01);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
             Ok(NodeSpec::Biquad { filter_type: FilterType::LowPass, cutoff, resonance: res,
                 env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,
@@ -578,7 +578,7 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
         }
         "highpass" => {
             let cutoff = float_param_at(&node.params, 0).unwrap_or(1000.0);
-            let res = float_param_at(&node.params, 1).unwrap_or(0.5);
+            let res = float_param_at(&node.params, 1).unwrap_or(0.01);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
             Ok(NodeSpec::Biquad { filter_type: FilterType::HighPass, cutoff, resonance: res,
                 env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,

@@ -130,7 +130,11 @@ const FILTER_ENV: &[Arg] = &[
 ];
 const FILTER_POS: &[Arg] = &[
     arg!("cutoff", 20.0, 20000.0, 1000.0, "Hz"),
-    arg!("resonance", 0.0, 1.0, 0.5, "0 = none, 1 = self-oscillation"),
+    // The curve is Q = 0.5 + resonance * 19.5, so this number climbs fast:
+    // 0.01 is flat, 0.1 is already a 2.5 dB bump, 0.3 is a clear whistle. The
+    // default used to be 0.5, which is a Q of 10 -- a resonant filter for
+    // anyone who just wrote `lowpass(2000)`.
+    arg!("resonance", 0.0, 1.0, 0.01, "0.01 is flat, 0.1 a bump, 0.3 a whistle, 1 self-oscillation (Q = 0.5 + n*19.5)"),
 ];
 const OSC_POS: &[Arg] = &[arg!("freq", 1.0, 20000.0, 440.0, "base frequency in Hz; notes retune it")];
 
