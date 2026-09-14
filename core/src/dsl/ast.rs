@@ -167,6 +167,7 @@ pub struct ChordStep {
 pub enum NoteRef {
     Absolute(String),        // "A1", "C#4", "G0"
     Degree(u8, u8),          // (degree 1-7, octave 0-9)
+    Midi(u8),                // resolved, e.g. from a chord symbol
 }
 
 #[derive(Debug, Clone, PartialEq)]

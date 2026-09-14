@@ -62,12 +62,7 @@ module beats kit {
 }
 
 # Fm9 for two bars, Dbmaj7 for two bars. Held with ties; the loop sustains.
-pattern voicings {
-    [F3 Ab3 C4 Eb4 G4]:0.6 .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..
-    .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..
-    [Db3 F3 Ab3 C4 Eb4]:0.6 .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..
-    .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..
-}
+pattern voicings { Fm9:0.6 ..*31  Dbmaj9:0.6 ..*31 }
 
 pattern rhodes_hits {
     [F3 Ab3 C4 Eb4 G4]:0.45 .. .. .. .. .. .. .. .. .. - - - - - -

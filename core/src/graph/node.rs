@@ -534,6 +534,24 @@ impl NodeKind {
         }
     }
 
+    /// Runtime automation of effect parameters by name (master / bus chains).
+    /// Returns false when this node has no such parameter.
+    pub fn set_named(&mut self, name: &str, value: f32) -> bool {
+        match (self, name) {
+            (NodeKind::TiltEq(eq), "tilt") => { eq.set_tilt(value); true }
+            (NodeKind::ThreeBandEq(eq), "eq_low") => { eq.set_low(value); true }
+            (NodeKind::ThreeBandEq(eq), "eq_mid") => { eq.set_mid(value); true }
+            (NodeKind::ThreeBandEq(eq), "eq_high") => { eq.set_high(value); true }
+            (NodeKind::Saturator(s), "drive") => { s.set_drive(value); true }
+            (NodeKind::Gain(g), "gain") => { *g = value; true }
+            (NodeKind::Limiter(l), "limiter") => { l.set_threshold(value); true }
+            (NodeKind::Compressor(c), "comp_threshold") => { c.set_threshold(value); true }
+            (NodeKind::Biquad(m), "cutoff") => { m.base_cutoff = value; m.filter.set_cutoff(value); true }
+            (NodeKind::Ladder(m), "cutoff") => { m.base_cutoff = value; m.filter.set_cutoff(value); true }
+            _ => false,
+        }
+    }
+
     /// Retune bar-synced modulation to the song tempo.
     pub fn set_bpm(&mut self, bpm: f32) {
         match self {

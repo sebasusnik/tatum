@@ -627,7 +627,9 @@ impl Parser {
                     let saved_pos = self.pos;
                     let label = label.clone();
                     self.advance();
-                    if matches!(self.peek(), Token::Colon) {
+                    // `Fm9:0.6` at row start is a chord with velocity, not a drum lane
+                    let is_chord = crate::dsl::chords::parse(&label).is_some();
+                    if matches!(self.peek(), Token::Colon) && !is_chord {
                         self.advance(); // consume ':'
                         if first_row {
                             labeled_mode = true;
@@ -723,6 +725,13 @@ impl Parser {
                         PLock::default()
                     };
                     current_row.push(Step::Chord(ChordStep { notes, velocity, plock }));
+                }
+                Token::Note(ref n) if note_is_chord_symbol(n) => {
+                    let n = n.clone();
+                    self.advance();
+                    if let Some(step) = self.chord_symbol_step(&n) {
+                        current_row.push(step);
+                    }
                 }
                 Token::Note(ref n) => {
                     let n = n.clone();
@@ -824,8 +833,21 @@ impl Parser {
                     }
                     self.advance();
                 }
+                // Chord symbol: Fm9, Dbmaj7/2, Csus4:0.6
+                Token::Ident(ref word) if crate::dsl::chords::parse(word).is_some() => {
+                    let word = word.clone();
+                    self.advance();
+                    if let Some(step) = self.chord_symbol_step(&word) {
+                        current_row.push(step);
+                    }
+                }
                 _ => {
-                    // Try to consume as ident (could be note-like)
+                    let s = self.span();
+                    let (l, c) = (s.line, s.col);
+                    self.errors.push(ParseError {
+                        line: l, col: c,
+                        message: format!("pattern '{}': unexpected {} (expected a note, degree, chord symbol, `-`, `..` or `~`)", name, describe_token(self.peek())),
+                    });
                     self.advance();
                 }
             }
@@ -833,6 +855,37 @@ impl Parser {
 
         self.expect(&Token::RBrace);
         patterns.push(PatternDef { name, rows, lane_labels });
+    }
+
+    /// After a chord symbol: optional `/octave`, `:velocity`, `(plocks)`.
+    fn chord_symbol_step(&mut self, symbol: &str) -> Option<Step> {
+        let mut octave = 3u8;
+        if matches!(self.peek(), Token::Slash) {
+            self.advance();
+            match self.peek().clone() {
+                Token::Number(n) if (0.0..=8.0).contains(&n) => { self.advance(); octave = n as u8; }
+                _ => {
+                    let s = self.span();
+                    let (l, c) = (s.line, s.col);
+                    self.errors.push(ParseError { line: l, col: c, message: format!("chord {}: expected an octave 0..8 after '/'", symbol) });
+                }
+            }
+        }
+        let velocity = if matches!(self.peek(), Token::Colon) {
+            self.advance();
+            self.expect_number()
+        } else {
+            None
+        };
+        let plock = if matches!(self.peek(), Token::LParen) { self.parse_plock_params() } else { PLock::default() };
+        let midi = crate::dsl::chords::notes(symbol, octave)?;
+        let notes = midi.into_iter().map(|m| NoteStep {
+            note: NoteRef::Midi(m),
+            velocity: None,
+            plock: PLock::default(),
+            slide: false,
+        }).collect();
+        Some(Step::Chord(ChordStep { notes, velocity, plock }))
     }
 
     /// Parse per-step parameter locks: `(cutoff=80, edepth=5000, res=0.8, gate=0.4)`
@@ -1574,6 +1627,16 @@ fn describe_token(t: &Token) -> String {
         Token::Newline => String::from("end of line"),
         Token::Eof => String::from("end of file"),
         other => format!("{:?}", other).to_lowercase(),
+    }
+}
+
+/// `C7`, `Db9`, `F#11`: a note token whose "octave" is 7 or more is read as a
+/// chord symbol (real notes above octave 6 are not used in patterns).
+fn note_is_chord_symbol(token: &str) -> bool {
+    let digits: String = token.chars().skip_while(|c| !c.is_ascii_digit()).collect();
+    match digits.parse::<u32>() {
+        Ok(n) => n >= 7 && crate::dsl::chords::parse(token).is_some(),
+        Err(_) => false,
     }
 }
 
