@@ -433,6 +433,26 @@ impl Parser {
             self.skip_newlines();
             if matches!(self.peek(), Token::RParen | Token::Eof) { break; }
 
+            // Keywords that are also option names (`mix=0.5`, `level=`)
+            let keyword_name = match self.peek() {
+                Token::Mix => Some("mix"),
+                Token::Level => Some("level"),
+                Token::Pan => Some("pan"),
+                Token::Velocity => Some("velocity"),
+                _ => None,
+            };
+            if let Some(kn) = keyword_name {
+                let saved_pos = self.pos;
+                self.advance();
+                if matches!(self.peek(), Token::Eq) {
+                    self.advance();
+                    if let Some(val) = self.parse_expr_value() {
+                        params.push(Param::Named(String::from(kn), val));
+                    }
+                    continue;
+                }
+                self.pos = saved_pos;
+            }
             // Check for named param: name=value
             if let Token::Ident(name) = self.peek().clone() {
                 let saved_pos = self.pos;
@@ -462,6 +482,14 @@ impl Parser {
                 // `o` lexes as a ghost hit; inside arguments it is the vowel word
                 self.advance();
                 params.push(Param::Waveform(String::from("o")));
+            } else if matches!(self.peek(), Token::DrumHit | Token::DrumAccent) {
+                let s = self.span();
+                let (l, c) = (s.line, s.col);
+                self.errors.push(ParseError {
+                    line: l, col: c,
+                    message: String::from("unexpected 'x' in arguments (use name=value, a number, a waveform word or a vowel)"),
+                });
+                self.advance();
             } else if let Token::Number(_) = self.peek() {
                 // Could be a number or a rhythm division (1/4)
                 let n = self.expect_number().unwrap_or(0.0);

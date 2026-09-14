@@ -94,9 +94,14 @@ fn vowel_filter_shapes_and_morphs() {
     assert!(d2 > 1e-4, "morphing a→o must differ from a static a");
     assert!(rms(&ao_l).is_finite() && rms(&ao_l) > 0.0005);
 
+    let bad = BASE.replace("CHAIN", "vowel(q)");
+    let errs = dsl::parse(&bad).unwrap_err();
+    assert!(errs[0].message.contains("unexpected 'q' in arguments"), "{}", errs[0].message);
     let bad = BASE.replace("CHAIN", "vowel(x)");
     let errs = dsl::parse(&bad).unwrap_err();
     assert!(errs[0].message.contains("unexpected 'x' in arguments"), "{}", errs[0].message);
+    // `mix` is a keyword elsewhere but a valid option here
+    assert!(SongEngine::from_source(&BASE.replace("CHAIN", "vowel(a, o, bars=2, mix=0.5)")).is_ok());
     let bad = BASE.replace("CHAIN", "vowel(bars=2)");
     let errs = match compiler::compile(&dsl::parse(&bad).unwrap()) { Err(e) => e, Ok(_) => panic!() };
     assert!(errs[0].message.contains("needs one or two vowels"), "{}", errs[0].message);
