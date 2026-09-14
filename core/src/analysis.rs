@@ -7,12 +7,18 @@
 
 use crate::math;
 
-/// Corner frequencies between the four bands.
-pub const BAND_EDGES_HZ: [f32; 3] = [250.0, 2000.0, 5000.0];
+/// Corner frequencies between the five bands.
+///
+/// The split at 60 Hz exists because a listener made it before the report
+/// could: a mix can be too heavy on speakers and thin on headphones at the same
+/// time, which is 60-250 Hz too loud and under 60 Hz too quiet. One "low"
+/// bucket cannot say that.
+pub const BAND_EDGES_HZ: [f32; 4] = [60.0, 250.0, 2000.0, 5000.0];
 
-/// low (<250 Hz), mid (250 Hz-2 kHz), harsh (2-5 kHz, where the ear is most
-/// sensitive) and air (>5 kHz).
-pub const BAND_NAMES: [&str; 4] = ["low", "mid", "harsh", "air"];
+/// sub (<60 Hz, felt more than heard, and absent on most speakers), low
+/// (60-250 Hz, the weight and also the mud), mid (250 Hz-2 kHz), harsh
+/// (2-5 kHz, where the ear is most sensitive) and air (>5 kHz).
+pub const BAND_NAMES: [&str; 5] = ["sub", "low", "mid", "harsh", "air"];
 
 const POLES: usize = 3;
 
@@ -24,25 +30,25 @@ const CASCADE_FIX: f32 = 1.9615;
 /// Splits a mono signal into four bands and accumulates energy in each.
 #[derive(Clone)]
 pub struct BandMeter {
-    coeffs: [f32; 3],
-    states: [[f32; POLES]; 3],
-    energy: [f64; 4],
+    coeffs: [f32; 4],
+    states: [[f32; POLES]; 4],
+    energy: [f64; 5],
 }
 
 impl BandMeter {
     pub fn new(sample_rate: f32) -> Self {
         let coeff = |hz: f32| math::exp(-2.0 * math::PI * hz * CASCADE_FIX / sample_rate);
         Self {
-            coeffs: [coeff(BAND_EDGES_HZ[0]), coeff(BAND_EDGES_HZ[1]), coeff(BAND_EDGES_HZ[2])],
-            states: [[0.0; POLES]; 3],
-            energy: [0.0; 4],
+            coeffs: [coeff(BAND_EDGES_HZ[0]), coeff(BAND_EDGES_HZ[1]), coeff(BAND_EDGES_HZ[2]), coeff(BAND_EDGES_HZ[3])],
+            states: [[0.0; POLES]; 4],
+            energy: [0.0; 5],
         }
     }
 
     /// Feed one mono sample.
     pub fn push(&mut self, x: f32) {
-        let mut below = [0.0f32; 3];
-        for edge in 0..3 {
+        let mut below = [0.0f32; 4];
+        for edge in 0..4 {
             let c = self.coeffs[edge];
             let mut v = x;
             for s in self.states[edge].iter_mut() {
@@ -51,7 +57,13 @@ impl BandMeter {
             }
             below[edge] = v;
         }
-        let bands = [below[0], below[1] - below[0], below[2] - below[1], x - below[2]];
+        let bands = [
+            below[0],
+            below[1] - below[0],
+            below[2] - below[1],
+            below[3] - below[2],
+            x - below[3],
+        ];
         for (acc, b) in self.energy.iter_mut().zip(bands) {
             *acc += (b * b) as f64;
         }
@@ -62,18 +74,18 @@ impl BandMeter {
         self.push((l + r) * 0.5);
     }
 
-    pub fn energy(&self) -> [f64; 4] {
+    pub fn energy(&self) -> [f64; 5] {
         self.energy
     }
 
     /// Share of total energy per band, in percent, rounded to one decimal.
     /// All zeros when nothing has been fed in.
-    pub fn percentages(&self) -> [f32; 4] {
+    pub fn percentages(&self) -> [f32; 5] {
         let total: f64 = self.energy.iter().sum();
         if total <= 0.0 {
-            return [0.0; 4];
+            return [0.0; 5];
         }
-        let mut out = [0.0f32; 4];
+        let mut out = [0.0f32; 5];
         for (o, e) in out.iter_mut().zip(self.energy) {
             *o = math::floor((e / total * 1000.0) as f32 + 0.5) / 10.0;
         }
@@ -87,7 +99,7 @@ impl BandMeter {
             return None;
         }
         let mut best = 0;
-        for i in 1..4 {
+        for i in 1..5 {
             if self.energy[i] > self.energy[best] {
                 best = i;
             }
@@ -96,8 +108,8 @@ impl BandMeter {
     }
 
     pub fn reset(&mut self) {
-        self.states = [[0.0; POLES]; 3];
-        self.energy = [0.0; 4];
+        self.states = [[0.0; POLES]; 4];
+        self.energy = [0.0; 5];
     }
 }
 
@@ -180,7 +192,7 @@ mod tests {
     #[test]
     fn each_band_catches_its_own_tone() {
         const SR: f32 = 44100.0;
-        for (hz, idx) in [(80.0, 0usize), (1000.0, 1), (3000.0, 2), (9000.0, 3)] {
+        for (hz, idx) in [(35.0, 0usize), (120.0, 1), (1000.0, 2), (3000.0, 3), (9000.0, 4)] {
             let m = tone(hz, 1.0, SR);
             let pct = m.percentages();
             assert_eq!(
@@ -197,7 +209,7 @@ mod tests {
     #[test]
     fn silence_reports_nothing_rather_than_guessing() {
         let m = BandMeter::new(44100.0);
-        assert_eq!(m.percentages(), [0.0; 4]);
+        assert_eq!(m.percentages(), [0.0; 5]);
         assert_eq!(m.dominant(), None);
     }
 

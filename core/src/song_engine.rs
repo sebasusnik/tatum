@@ -1051,8 +1051,8 @@ impl SongEngine {
     }
 
     /// Share of this track's energy in each of `analysis::BAND_NAMES`, in percent.
-    pub fn track_bands(&self, idx: usize) -> [f32; 4] {
-        self.tracks.get(idx).map_or([0.0; 4], |t| t.band.percentages())
+    pub fn track_bands(&self, idx: usize) -> [f32; 5] {
+        self.tracks.get(idx).map_or([0.0; 5], |t| t.band.percentages())
     }
 
     /// Index into `analysis::BAND_NAMES` of the band this track mostly occupies.

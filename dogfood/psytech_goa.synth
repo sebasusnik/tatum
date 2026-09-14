@@ -29,7 +29,7 @@ delay_return  { in > highpass(420, 0.3) > lowpass(7khz, 0.25) > out }
 module beats kit {
     kick_level 1.0
     kick_decay 0.30
-    kick_pitch 0.55
+    kick_pitch 0.47
     kick_click 0.82
     kick_drive 0.85
     kick_pan 0.0
@@ -485,7 +485,7 @@ track bass {
     sidechain 0.82
     out > highpass(44hz, 0.2)
         > saturate(1.1)
-        > eq(low=1.5, mid=-0.5, high=-2.5)
+        > eq(low=-2.0, mid=-0.5, high=-2.5)
         > lowpass(2600, 0.2)
         > compressor(-12, ratio=3, attack=1, release=20, makeup=1.5db)
         > master
@@ -495,7 +495,7 @@ track sub {
     play sub_roll
     using sub
     velocity 1.0
-    level 0.3408
+    level 0.4771
     gate 0.55
     sidechain 0.85
     out > lowpass(190hz, 0.1) > saturate(0.4) > master
@@ -629,7 +629,7 @@ scene build1 {
     auto murk cutoff 0.246 > 0.327
     track drums { play beat_build using kit level 0.7118 }
     track bass { play bass_stut using roll level 0.3808 }
-    track sub { play sub_roll using sub level 0.2372 }
+    track sub { play sub_roll using sub level 0.3321 }
     track acid { play acid_a using squelch level 0.288 pan 0.12 }
     track murk { play murk_dark using murk level 0.04128 pan -0.45 }
     track clank { play clank_a using clank level 0.09 pan -0.6 }
@@ -640,7 +640,7 @@ scene build1 {
 scene gap {
     auto murk cutoff 0.246 > 0.1
     track drums { play beat_gap using kit level 0.6631 }
-    track sub { play sub_hold using sub level 0.2 }
+    track sub { play sub_hold using sub level 0.28 }
     track murk { play murk_dark using murk level 0.04128 pan -0.45 }
 }
 
@@ -650,7 +650,7 @@ scene drop1 {
     auto murk cutoff 0.327 > 0.161
     track drums { play beat_drop using kit level 0.7463 }
     track bass { play bass_v1 using roll level 0.5504 }
-    track sub { play sub_drop using sub level 0.3165 }
+    track sub { play sub_drop using sub level 0.4431 }
     track acid { play acid_b using squelch level 0.6134 pan 0.12 }
     track clank { play clank_b using clank level 0.1836 pan -0.6 }
     track zap { play zap_b using zap level 0.1386 pan 0.55 }
@@ -664,7 +664,7 @@ scene bridge {
     auto squelch cutoff 0.434 > 0.593
     track drums { play beat_main using kit level 0.6545 }
     track bass { play bass_v2 using roll level 0.5556 }
-    track sub { play sub_roll using sub level 0.3408 }
+    track sub { play sub_roll using sub level 0.4771 }
     track murk { play murk_lift using murk level 0.04128 pan -0.45 }
     track acid { play acid_b using squelch level 0.5317 pan 0.12 }
     track clank { play clank_b using clank level 0.216 pan -0.6 }
@@ -692,7 +692,7 @@ scene build2 {
     auto murk cutoff 0.37 > 0.272
     track drums { play beat_build using kit level 0.7118 }
     track bass { play bass_stut using roll level 0.5923 }
-    track sub { play sub_roll using sub level 0.351 }
+    track sub { play sub_roll using sub level 0.4914 }
     track acid { play acid_b using squelch level 0.5725 pan 0.12 }
     track clank { play clank_b using clank level 0.1836 pan -0.6 }
     track murk { play murk_dark using murk level 0.04128 pan -0.45 }
@@ -705,7 +705,7 @@ scene drop2 {
     auto murk cutoff 0.272 > 0.151
     track drums { play beat_drop using kit level 0.93 }
     track bass { play bass_v3 using roll level 0.6901 }
-    track sub { play sub_drop using sub level 0.3957 }
+    track sub { play sub_drop using sub level 0.554 }
     track acid { play acid_c using squelch level 0.7193 pan 0.12 }
     track clank { play clank_c using clank level 0.216 pan -0.6 }
     track zap { play zap_c using zap level 0.1598 pan 0.55 }

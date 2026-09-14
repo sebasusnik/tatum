@@ -430,7 +430,7 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
             "crest": round1(analysis::crest(p, rr)),
             "band": engine.track_dominant_band(i).map(|b| BAND_NAMES[b]),
             "width_pct": round1(engine.track_width(i) * 200.0),
-            "band_pct": { "low": bands[0], "mid": bands[1], "harsh": bands[2], "air": bands[3] },
+            "band_pct": { "sub": bands[0], "low": bands[1], "mid": bands[2], "harsh": bands[3], "air": bands[4] },
         }));
     }
     // Buses carry level too, and a track can meter fine on its own while the
@@ -482,13 +482,13 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         let (rms, peak) = stats(&l[a..b], &r[a..b]);
         let at_ceiling = peak >= LIMITER_CEILING - 0.005;
         if at_ceiling { at_ceiling_sections.push(name.clone()); }
-        let [lo, mid, harsh, air] = balance(&l[a..b], &r[a..b]);
+        let [sub, lo, mid, harsh, air] = balance(&l[a..b], &r[a..b]);
         report.push(json!({
             "scene": name, "bars": count,
             "rms": round3(rms), "peak": round3(peak),
             "db": round1(20.0 * rms.max(1e-6).log10()),
             "crest": round1(peak / rms.max(1e-6)),
-            "balance_pct": { "low": lo, "mid": mid, "harsh": harsh, "air": air },
+            "balance_pct": { "sub": sub, "low": lo, "mid": mid, "harsh": harsh, "air": air },
             "at_limiter_ceiling": at_ceiling
         }));
         bar_cursor += count;
@@ -533,7 +533,9 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
             w["scene"].as_str().unwrap_or(""), w["balance_pct"]["harsh"]
         ));
     }
-    if let Some(w) = report.iter().find(|s| s["balance_pct"]["low"].as_f64().unwrap_or(100.0) <= 15.0) {
+    if let Some(w) = report.iter().find(|s| {
+        s["balance_pct"]["low"].as_f64().unwrap_or(100.0) + s["balance_pct"]["sub"].as_f64().unwrap_or(0.0) <= 15.0
+    }) {
         hints.push(format!(
             "scene '{}' has only {}% of its energy below 250 Hz: it will sound thin. Heavy distortion trades a fundamental for harmonics, so a distorted bass usually needs a clean sub layer under it.",
             w["scene"].as_str().unwrap_or(""), w["balance_pct"]["low"]
@@ -623,6 +625,19 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         ));
     }
 
+    // Heavy on speakers and thin on headphones at the same time is 60-250 Hz
+    // too loud against under 60 Hz too quiet. One "low" bucket could not say it.
+    if let Some(w) = report.iter().find(|s| {
+        let sub = s["balance_pct"]["sub"].as_f64().unwrap_or(0.0);
+        let low = s["balance_pct"]["low"].as_f64().unwrap_or(0.0);
+        low > 35.0 && sub < low / 4.0
+    }) {
+        hints.push(format!(
+            "scene '{}' has {}% of its energy in 60-250 Hz against {}% below 60: that is the range speakers exaggerate and headphones do not, so it will sound like mud on speakers and thin on headphones at once. Move the weight down with a sub layer, or take 60-250 Hz out of whatever is filling it.",
+            w["scene"].as_str().unwrap_or(""), w["balance_pct"]["low"], w["balance_pct"]["sub"]
+        ));
+    }
+
     let hint = if hints.is_empty() { Value::Null } else { json!(hints.join(" | ")) };
 
     Ok(serde_json::to_string_pretty(&json!({
@@ -655,7 +670,7 @@ fn stats(l: &[f32], r: &[f32]) -> (f32, f32) {
 }
 
 /// Band split of a stereo slice, in percent, via the engine's calibrated meter.
-fn balance(l: &[f32], r: &[f32]) -> [f32; 4] {
+fn balance(l: &[f32], r: &[f32]) -> [f32; 5] {
     let mut m = analysis::BandMeter::new(SAMPLE_RATE);
     for (a, b) in l.iter().zip(r) {
         m.push_stereo(*a, *b);
