@@ -187,11 +187,12 @@ track bassdrone {
     play drone_em8
     using drone
     velocity 0.9
-    level 0.5
+    level 0.24
     gate 1.0
     reverb_send 0.3
     sidechain 0.8
-    out > saturate(2.2)
+    out > highpass(95, 0.2)   # the kick owns 50-95 Hz; the clean subwall keeps below
+        > saturate(2.2)
         > lowpass(1600, 0.3, lfo_bars=12, lfo_depth=500)
         > saturate(1.0)
         > lowpass(2400, 0.2)   # speaker cab: kills the fizz the last stage adds
@@ -202,7 +203,7 @@ track subwall {
     play sub_em8
     using subwall
     velocity 0.95
-    level 0.32
+    level 0.17
     gate 1.0
     sidechain 0.75
     out > lowpass(150, 0.1) > saturate(0.5) > master
@@ -212,7 +213,7 @@ track organ {
     play organ_em8
     using doomorgan
     velocity 0.85
-    level 0.34
+    level 0.2
     gate 1.0
     reverb_send 0.42
     delay_send 0.15
@@ -228,7 +229,7 @@ track drums {
     play beat_enter
     using kit
     velocity 1.0
-    level 0.85
+    level 0.84
     reverb_send 0.06
     out > compressor(-14, ratio=4, attack=3, release=70, makeup=1.5)
         > saturate(0.55)
@@ -268,7 +269,7 @@ track stab {
 master {
     in > tilt(-0.08)
        > eq(low=1.0, mid=-1.5, high=1.0)
-       > compressor(-10, ratio=3.0, attack=15, release=110, makeup=1.05)
+       > compressor(-10, ratio=3.0, attack=15, release=110, makeup=1.12)
        > limiter
        > out
 }
@@ -281,25 +282,25 @@ master {
 # (synth_check warning); levels are set low on purpose since this must be
 # the quietest section in the render.
 scene intro {
-    track bassdrone { play drone_em8 using drone level 0.4 reverb_send 0.3 sidechain 0.8 }
-    track subwall   { play sub_em8 using subwall level 0.27 sidechain 0.75 }
-    track organ     { play organ_em8 using doomorgan level 0.34 reverb_send 0.42 sidechain 0.8 }
+    track bassdrone { play drone_em8 using drone level 0.24 reverb_send 0.3 sidechain 0.8 }
+    track subwall   { play sub_em8 using subwall level 0.17 sidechain 0.75 }
+    track organ     { play organ_em8 using doomorgan level 0.2 reverb_send 0.42 sidechain 0.8 }
 }
 
 # 2. Kick enters, drone holds.
 scene kick_enter {
-    track bassdrone { play drone_em8 using drone level 0.4 reverb_send 0.3 sidechain 0.8 }
-    track subwall   { play sub_em8 using subwall level 0.27 sidechain 0.75 }
-    track organ     { play organ_em8 using doomorgan level 0.34 reverb_send 0.42 sidechain 0.8 }
-    track drums     { play beat_enter using kit level 0.5 reverb_send 0.06 }
+    track bassdrone { play drone_em8 using drone level 0.24 reverb_send 0.3 sidechain 0.8 }
+    track subwall   { play sub_em8 using subwall level 0.17 sidechain 0.75 }
+    track organ     { play organ_em8 using doomorgan level 0.2 reverb_send 0.42 sidechain 0.8 }
+    track drums     { play beat_enter using kit level 0.68 reverb_send 0.06 }
 }
 
 # 3. Groove with bass — drone moves to Cm, claps and ghost hats enter.
 scene groove {
-    track bassdrone { play drone_cm8 using drone level 0.4 reverb_send 0.3 sidechain 0.8 }
-    track subwall   { play sub_cm8 using subwall level 0.27 sidechain 0.75 }
-    track organ     { play organ_cm8 using doomorgan level 0.34 reverb_send 0.42 sidechain 0.8 }
-    track drums     { play beat_groove using kit level 0.78 reverb_send 0.06 }
+    track bassdrone { play drone_cm8 using drone level 0.24 reverb_send 0.3 sidechain 0.8 }
+    track subwall   { play sub_cm8 using subwall level 0.17 sidechain 0.75 }
+    track organ     { play organ_cm8 using doomorgan level 0.2 reverb_send 0.42 sidechain 0.8 }
+    track drums     { play beat_groove using kit level 0.84 reverb_send 0.06 }
     track bassline  { play bass_pulse_groove using pulse level 1.05 gate 0.4 sidechain 0.65 }
 }
 
@@ -312,9 +313,9 @@ scene breakdown {
     auto drone cutoff 0.40 > 0.50
     auto doomorgan cutoff 0.46 > 0.54
 
-    track bassdrone { play drone_em8 using drone level 0.4 reverb_send 0.3 sidechain 0.8 }
-    track subwall   { play sub_em8 using subwall level 0.27 sidechain 0.75 }
-    track organ     { play organ_em8 using doomorgan level 0.34 reverb_send 0.42 sidechain 0.8 }
+    track bassdrone { play drone_em8 using drone level 0.24 reverb_send 0.3 sidechain 0.8 }
+    track subwall   { play sub_em8 using subwall level 0.17 sidechain 0.75 }
+    track organ     { play organ_em8 using doomorgan level 0.2 reverb_send 0.42 sidechain 0.8 }
 }
 
 # 5. The drop — everything, master brightens.
@@ -323,11 +324,11 @@ scene drop {
     auto doomorgan cutoff 0.54 > 0.46
     auto master tilt -0.12 > 0.02
 
-    track bassdrone { play drone_edrop12 using drone level 0.4 reverb_send 0.26 sidechain 0.8 }
-    track subwall   { play sub_edrop12 using subwall level 0.27 sidechain 0.75 }
-    track organ     { play organ_edrop12 using doomorgan level 0.34 reverb_send 0.38 sidechain 0.8 }
+    track bassdrone { play drone_edrop12 using drone level 0.24 reverb_send 0.26 sidechain 0.8 }
+    track subwall   { play sub_edrop12 using subwall level 0.17 sidechain 0.75 }
+    track organ     { play organ_edrop12 using doomorgan level 0.2 reverb_send 0.38 sidechain 0.8 }
     track drums     { play beat_drop using kit level 0.95 reverb_send 0.06 }
-    track bassline  { play bass_pulse_drop using pulse level 1.25 gate 0.4 sidechain 0.7 }
+    track bassline  { play bass_pulse_drop using pulse level 1.2 gate 0.4 sidechain 0.7 }
     track stab      { play stab_answer using stab level 0.75 gate 0.25 pan 0.15 delay_send 0.2 reverb_send 0.25 sidechain 0.5 }
 }
 
@@ -337,13 +338,13 @@ scene drop {
 scene outro {
     auto drone cutoff 0.42 > 0.1
     auto doomorgan cutoff 0.46 > 0.14
-    auto subwall level 0.27 > 0.02
-    auto bassdrone level 0.4 > 0.03
-    auto organ level 0.34 > 0.02
+    auto subwall level 0.17 > 0.02
+    auto bassdrone level 0.24 > 0.03
+    auto organ level 0.2 > 0.02
 
-    track bassdrone { play drone_em4 using drone level 0.4 reverb_send 0.3 sidechain 0.8 }
-    track subwall   { play sub_em4 using subwall level 0.27 sidechain 0.75 }
-    track organ     { play organ_em4 using doomorgan level 0.34 reverb_send 0.42 sidechain 0.8 }
+    track bassdrone { play drone_em4 using drone level 0.24 reverb_send 0.3 sidechain 0.8 }
+    track subwall   { play sub_em4 using subwall level 0.17 sidechain 0.75 }
+    track organ     { play organ_em4 using doomorgan level 0.2 reverb_send 0.42 sidechain 0.8 }
 }
 
 # ────────────────────────────────────────────────
