@@ -260,6 +260,8 @@ pub struct Reverb {
     room_size: f32,
     damping: f32,
     mix: f32,
+    /// Freeverb-style freeze: the tank recirculates forever and ignores new input.
+    frozen: bool,
 }
 
 impl Reverb {
@@ -287,6 +289,7 @@ impl Reverb {
             room_size: 0.6,
             damping: 0.5,
             mix: 0.2,
+            frozen: false,
         };
         rev.update_params();
         rev
@@ -310,9 +313,23 @@ impl Reverb {
         self.pre_delay.set_delay_ms(ms);
     }
 
+    /// Hold the current tail indefinitely (no decay, no new input).
+    pub fn set_freeze(&mut self, frozen: bool) {
+        if self.frozen != frozen {
+            self.frozen = frozen;
+            self.update_params();
+        }
+    }
+
+    pub fn is_frozen(&self) -> bool { self.frozen }
+
     fn update_params(&mut self) {
-        let feedback = self.room_size * 0.28 + 0.7;
-        let damp = self.damping * 0.4 + 0.1;
+        // size 0..1 → feedback 0.7..0.995: the top of the range is a very long hall.
+        let (feedback, damp) = if self.frozen {
+            (1.0, 0.0)
+        } else {
+            (self.room_size * 0.295 + 0.7, self.damping * 0.4 + 0.1)
+        };
         for comb in &mut self.combs_l {
             comb.set_feedback(feedback);
             comb.set_damp(damp);
@@ -357,7 +374,7 @@ impl Reverb {
 
     /// Core stereo processing: advances state and returns raw reverb wet signal.
     fn process_stereo_in_core(&mut self, input_l: f32, input_r: f32) -> (f32, f32) {
-        let mono = (input_l + input_r) * 0.5;
+        let mono = if self.frozen { 0.0 } else { (input_l + input_r) * 0.5 };
         let pd = self.pre_delay.process(mono);
 
         // Early reflections (mono)

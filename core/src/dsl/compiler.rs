@@ -108,6 +108,8 @@ pub struct CompiledScene {
     pub tracks: Vec<CompiledTrack>,
     pub reverb_mix: Option<f32>,
     pub delay_mix: Option<f32>,
+    /// `reverb_freeze = 1` holds the global reverb tail for the scene.
+    pub reverb_freeze: Option<bool>,
     pub automations: Vec<CompiledAutomation>,
 }
 
@@ -1024,12 +1026,14 @@ fn compile_scene(
     // Extract effect overrides from scene overrides
     let mut reverb_mix = None;
     let mut delay_mix = None;
+    let mut reverb_freeze = None;
     for ovr in &scene.overrides {
         match ovr.target.as_str() {
             "reverb_mix" => reverb_mix = Some(ovr.value),
             "delay_mix" => delay_mix = Some(ovr.value),
+            "reverb_freeze" => reverb_freeze = Some(ovr.value >= 0.5),
             other => return Err(CompileError::new(format!(
-                "scene '{}': unknown override '{}' (expected reverb_mix or delay_mix)", scene.name, other
+                "scene '{}': unknown override '{}' (expected reverb_mix, delay_mix or reverb_freeze)", scene.name, other
             ))),
         }
     }
@@ -1048,6 +1052,7 @@ fn compile_scene(
         tracks,
         reverb_mix,
         delay_mix,
+        reverb_freeze,
         automations,
     })
 }
@@ -1233,7 +1238,7 @@ fn validate_automations(song: &Song) -> Vec<CompileError> {
     for scene in &song.scenes {
         for auto in &scene.automations {
             let target = auto.target.as_str();
-            if target == "reverb_mix" || target == "delay_mix" {
+            if target == "reverb_mix" || target == "delay_mix" || target == "reverb_freeze" {
                 continue;
             }
             let (name, param) = match target.find('.') {

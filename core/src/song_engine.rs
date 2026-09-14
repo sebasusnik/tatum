@@ -372,6 +372,7 @@ enum AutoTarget {
     TrackLevel { track_idx: usize },
     ReverbMix,
     DelayMix,
+    ReverbFreeze,
 }
 
 /// Structured error from DSL parsing or compilation, preserving line/col info.
@@ -721,6 +722,8 @@ impl SongEngine {
         if let Some(dmix) = scene.delay_mix {
             self.delay_wet_level = dmix;
         }
+        // Freeze is per scene: it holds only where asked for.
+        self.send_reverb.set_freeze(scene.reverb_freeze.unwrap_or(false));
 
         // Automation lanes are set up after the scene's tracks are activated
         // (targets resolve against the new layout, not the previous scene's).
@@ -807,6 +810,7 @@ impl SongEngine {
     fn resolve_auto_target(&self, target: &str) -> Option<AutoTarget> {
         match target {
             "reverb_mix" => Some(AutoTarget::ReverbMix),
+            "reverb_freeze" => Some(AutoTarget::ReverbFreeze),
             "delay_mix" => Some(AutoTarget::DelayMix),
             _ => {
                 // Check for "instrument.param" or "track.level"
@@ -1116,17 +1120,15 @@ impl SongEngine {
         // Process global send effects (wet-only returns, scaled by wet levels)
         let dwet = self.delay_wet_level;
         let rwet = self.reverb_wet_level;
+        // Always tick the sends: their tails must ring out (and freeze must
+        // hold) after every track has gone silent.
         for s in 0..len {
-            if delay_in_l[s] != 0.0 || delay_in_r[s] != 0.0 {
-                let (dl, dr) = self.send_delay.process_stereo_wet(delay_in_l[s], delay_in_r[s]);
-                output_l[s] += dl * dwet;
-                output_r[s] += dr * dwet;
-            }
-            if reverb_in_l[s] != 0.0 || reverb_in_r[s] != 0.0 {
-                let (rl, rr) = self.send_reverb.process_stereo_in_wet(reverb_in_l[s], reverb_in_r[s]);
-                output_l[s] += rl * rwet;
-                output_r[s] += rr * rwet;
-            }
+            let (dl, dr) = self.send_delay.process_stereo_wet(delay_in_l[s], delay_in_r[s]);
+            output_l[s] += dl * dwet;
+            output_r[s] += dr * dwet;
+            let (rl, rr) = self.send_reverb.process_stereo_in_wet(reverb_in_l[s], reverb_in_r[s]);
+            output_l[s] += rl * rwet;
+            output_r[s] += rr * rwet;
         }
 
         // Apply master level + gain compensation + master FX chain
@@ -1177,6 +1179,7 @@ impl SongEngine {
                         }
                     }
                     AutoTarget::ReverbMix => self.reverb_wet_level = value,
+                    AutoTarget::ReverbFreeze => self.send_reverb.set_freeze(value >= 0.5),
                     AutoTarget::DelayMix => self.delay_wet_level = value,
                 }
             }

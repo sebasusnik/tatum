@@ -25,7 +25,7 @@ sidechain 0.4
 delay sync=dotted_eighth feedback=0.45 filter=0.5   # sync: free | quarter | dotted_eighth |
                                                     #       eighth | sixteenth (default) | triplet_eighth
                                                     # time=0.3 (seconds) applies when sync=free
-reverb size=0.7 damp=0.4 predelay=20                # predelay in ms
+reverb size=0.7 damp=0.4 predelay=20                # predelay in ms; size 1.0 is a very long hall
 ```
 
 ## Modules
@@ -184,9 +184,11 @@ scene drop {
     tempo 128                            # optional per-scene tempo
     reverb_mix = 0.3                     # wet level of the global sends for this scene
     delay_mix = 0.2
+    reverb_freeze = 1                    # hold the reverb tail: no decay, no new input, for this scene
     auto acid cutoff 0.2 > 0.6 > 0.2     # linear (2 values) or triangle (3 values)
     auto drums level 1.0 > 0.0           # level fade: resolves a track name first, else an instrument name
     auto reverb_mix 0.1 > 0.5
+    auto reverb_freeze 0 > 1             # freezes once the lane crosses 0.5
     auto master tilt 0.4 > -0.2          # master chain sweeps: tilt, eq_low, eq_mid, eq_high, drive,
     auto master cutoff 20000 > 400       #   gain, cutoff, limiter, comp_threshold (the node must be in the chain)
     track drums { play beat using kit }
@@ -259,6 +261,14 @@ module keys cloud { voice_mode unison detune 0.45 chorus_mix 0.6 attack 1.0 rele
                     cutoff 0.28 resonance 0.35 lfo_target cutoff lfo_sync bars_8 lfo_depth 0.08 }
 track pad { play voicings using cloud level 0.15 reverb_send 0.4 sidechain 0.5
             out > highpass(300, 0.4) > lowpass(3200, 0.3, lfo_bars=16, lfo_depth=1200) > autopan(0.3, bars=8) > master }
+```
+
+**The resampled cloud, without resampling.** Play the voicings into a big reverb for a
+scene, then freeze it: the next scene keeps the tail as a texture with nothing feeding it.
+
+```
+scene bloom  { track pad { play voicings using cloud } }
+scene frozen { reverb_freeze = 1  track drums { play brk using kit } }   # pad silent, cloud sustains
 ```
 
 **A breakbeat kit.** Accents on the downbeats, ghosts between, probability on the extra
