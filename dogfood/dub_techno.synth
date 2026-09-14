@@ -46,7 +46,7 @@ reverb_return {
 # The chord. Detuned unison, chorus, filtered down to a mumble.
 # Short decay: what you hear is almost entirely the sends.
 module keys chord {
-    voice_mode unison
+    voice_mode poly
     detune 22%
     chorus_mix 55%
     cutoff 820hz
@@ -292,7 +292,7 @@ track sub {
 track stab {
     play stab_full
     using chord
-    level 0.29
+    level 0.2914
     gate 0.16
     velocity 0.75
     pan -0.12
@@ -322,7 +322,7 @@ track bed {
 track ghostchord {
     play stab_ghost
     using chord
-    level 0.31
+    level 0.3115
     gate 0.2
     velocity 0.7
     delay_send 0.3
@@ -396,7 +396,7 @@ scene deep {
     auto chord cutoff 0.370 > 0.423 > 0.327    # 1.1kHz -> 1.4kHz -> 900Hz
     track beat { play beat_main using kit level 0.84 }
     track sub  { play sub_f     using sub  level 0.62 }
-    track stab { play stab_full using chord level 0.29 }
+    track stab { play stab_full using chord level 0.2914 }
     track bed  { play hiss_hold using hiss }
 }
 
@@ -408,7 +408,7 @@ scene dub {
     auto chord cutoff 0.338 > 0.398            # 950Hz -> 1.25kHz
     track beat { play beat_dub  using kit level 0.81 }
     track sub  { play sub_dub   using sub  level 0.62 }
-    track stab { play stab_dub  using chord level 0.30 }
+    track stab { play stab_dub  using chord level 0.3016 }
     track bed  { play hiss_hold using hiss }
 }
 
@@ -433,7 +433,7 @@ scene return {
     auto chord cutoff 0.389 > 0.272            # 1.2kHz -> 700Hz
     track beat { play beat_main using kit level 0.84 }
     track sub  { play sub_f     using sub  level 0.62 }
-    track stab { play stab_full using chord level 0.29 }
+    track stab { play stab_full using chord level 0.2914 }
     track bed  { play hiss_hold using hiss }
 }
 
@@ -447,7 +447,7 @@ scene fade {
     auto chord cutoff 0.272 > 0.150            # 700Hz -> 400Hz
     track beat { play beat_out  using kit  level 0.63 }
     track sub  { play sub_out   using sub  level 0.53 }
-    track stab { play stab_out  using chord level 0.21 }
+    track stab { play stab_out  using chord level 0.2111 }
     track bed  { play hiss_out  using hiss }
 }
 

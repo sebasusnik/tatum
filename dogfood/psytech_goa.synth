@@ -148,7 +148,7 @@ module fm zap {
 # The dark layer. Not a pad: a detuned, low-passed cluster with an 8-bar filter
 # LFO and slow vibrato, so it drifts rather than sits.
 module keys murk {
-    voice_mode unison
+    voice_mode poly
     detune 0.42
     chorus_mix 0.18
     cutoff 430hz
@@ -548,7 +548,7 @@ track murk {
     play murk_dark
     using murk
     velocity 0.9
-    level 0.0715
+    level 0.04128
     gate 1.0
     # Breathes with the bass, not the kick: the kick already owns the low end,
     # and following the roll makes the layer feel like part of the groove.
@@ -607,7 +607,7 @@ scene open {
     auto murk cutoff 0.04 > 0.16
     auto drums level 0.18 > 0.46
     track drums { play beat_open using kit level 0.492 }
-    track murk { play murk_dark using murk level 0.0715 }
+    track murk { play murk_dark using murk level 0.04128 }
 }
 
 # 1. Drums and atmosphere. No bass yet, so the roll lands as an event.
@@ -615,7 +615,7 @@ scene intro {
     auto drums level 0.3 > 0.537
     auto murk cutoff 0.088 > 0.246
     track drums { play beat_intro using kit level 0.5741 }
-    track murk { play murk_dark using murk level 0.0715 }
+    track murk { play murk_dark using murk level 0.04128 }
     track zap { play zap_a using zap level 0.1173 }
 }
 
@@ -628,7 +628,7 @@ scene build1 {
     track bass { play bass_stut using roll level 0.3808 }
     track sub { play sub_roll using sub level 0.2372 }
     track acid { play acid_a using squelch level 0.288 }
-    track murk { play murk_dark using murk level 0.0715 }
+    track murk { play murk_dark using murk level 0.04128 }
     track clank { play clank_a using clank level 0.09 }
     track riser { play riser_up using hiss level 0.09 }
 }
@@ -638,7 +638,7 @@ scene gap {
     auto murk cutoff 0.246 > 0.1
     track drums { play beat_gap using kit level 0.6631 }
     track sub { play sub_hold using sub level 0.2 }
-    track murk { play murk_dark using murk level 0.0715 }
+    track murk { play murk_dark using murk level 0.04128 }
 }
 
 # 3. First drop: the groove, nothing decorative.
@@ -651,7 +651,7 @@ scene drop1 {
     track acid { play acid_b using squelch level 0.6134 }
     track clank { play clank_b using clank level 0.1836 }
     track zap { play zap_b using zap level 0.1386 }
-    track murk { play murk_dark using murk level 0.0715 }
+    track murk { play murk_dark using murk level 0.04128 }
 }
 
 # 4. Bridge: the ghost stabs enter, routed into the capture bus. Bars 28-30
@@ -662,7 +662,7 @@ scene bridge {
     track drums { play beat_main using kit level 0.6545 }
     track bass { play bass_v2 using roll level 0.5556 }
     track sub { play sub_roll using sub level 0.3408 }
-    track murk { play murk_lift using murk level 0.0715 }
+    track murk { play murk_lift using murk level 0.04128 }
     track acid { play acid_b using squelch level 0.5317 }
     track clank { play clank_b using clank level 0.216 }
     track ghost { play ghost_stab using smear level 0.128 }
@@ -675,7 +675,7 @@ scene breakdown {
     auto squelch cutoff 0.593 > 0.36 > 0.534
     auto murk cutoff 0.161 > 0.37
     track drums { play beat_break using kit level 0.666 }
-    track murk { play murk_lift using murk level 0.0715 }
+    track murk { play murk_lift using murk level 0.04128 }
     track ghost { play ghost_hold using smear level 0.128 }
     track acid { play acid_ghost using squelch level 0.5638 }
     track clank { play clank_break using clank level 0.162 }
@@ -692,7 +692,7 @@ scene build2 {
     track sub { play sub_roll using sub level 0.351 }
     track acid { play acid_b using squelch level 0.5725 }
     track clank { play clank_b using clank level 0.1836 }
-    track murk { play murk_dark using murk level 0.0715 }
+    track murk { play murk_dark using murk level 0.04128 }
     track riser { play riser_up using hiss level 0.09 }
 }
 
@@ -706,7 +706,7 @@ scene drop2 {
     track acid { play acid_c using squelch level 0.7193 }
     track clank { play clank_c using clank level 0.216 }
     track zap { play zap_c using zap level 0.1598 }
-    track murk { play murk_dark using murk level 0.0715 }
+    track murk { play murk_dark using murk level 0.04128 }
 }
 
 # 8. Outro: the kick thins to half time, the acid dies into its own filter.
@@ -717,7 +717,7 @@ scene outro {
     auto murk cutoff 0.151 > 0.04
     track drums { play beat_out using kit level 0.5971 }
     track acid { play acid_ghost using squelch level 0.5725 }
-    track murk { play murk_dark using murk level 0.0715 }
+    track murk { play murk_dark using murk level 0.04128 }
     track zap { play zap_a using zap level 0.1062 }
     track ghost { play ghost_hold using smear level 0.128 }
 }

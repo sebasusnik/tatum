@@ -128,7 +128,7 @@ module keys void {
 
 # Shimmer — subtle sparkle, no chorus
 module keys shimmer {
-    voice_mode ringmod
+    voice_mode poly
     cutoff 0.12
     resonance 0.15
     detune 0.10
@@ -785,7 +785,7 @@ track shimmer {
     play silence
     using shimmer
     velocity 1.0
-    level 0.08
+    level 0.04619
     pan 0.28
     reverb_send 0.35
     delay_send 0.12

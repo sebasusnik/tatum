@@ -56,7 +56,7 @@ module fm stab_fm {
 }
 
 module keys warm_pad {
-    voice_mode unison
+    voice_mode poly
     cutoff 0.2
     resonance 0.15
     detune 0.2
@@ -263,7 +263,7 @@ track pad {
     play silence
     using warm_pad
     velocity 0.5
-    level 0.4
+    level 0.2309
     pan 0.05
     reverb_send 0.3
     out > master
@@ -305,7 +305,7 @@ scene groove {
     track drums { play drums_groove using drums    velocity 1.0 level 0.55 }
     track bass  { play bass_groove  using sub_bass  velocity 0.85 level 0.55 }
     track stab  { play stab_chords  using stab_fm   velocity 0.55 level 0.4 delay_send 0.2 reverb_send 0.15 }
-    track pad   { play pad_fm       using warm_pad  velocity 0.5 level 0.4 reverb_send 0.3 }
+    track pad { play pad_fm       using warm_pad  velocity 0.5 level 0.2309 reverb_send 0.3 }
 }
 
 # Build (4 bars): rising energy, slow pad filter sweep
@@ -315,7 +315,7 @@ scene build {
     track drums { play drums_build using drums    velocity 1.0 level 0.6 }
     track bass  { play bass_build  using sub_bass  velocity 0.9 level 0.58 }
     track stab  { play stab_chords using stab_fm   velocity 0.6 level 0.42 delay_send 0.2 reverb_send 0.15 }
-    track pad   { play pad_fm      using warm_pad  velocity 0.55 level 0.45 reverb_send 0.32 }
+    track pad { play pad_fm      using warm_pad  velocity 0.55 level 0.2598 reverb_send 0.32 }
 }
 
 # Drop (8 bars): loudest — full drums, bass, stab, pad + filtered arp lead
@@ -325,7 +325,7 @@ scene drop {
     track drums { play drums_drop    using drums    velocity 1.0 level 0.65 }
     track bass  { play bass_drop     using sub_bass  velocity 0.95 level 0.62 }
     track stab  { play stab_drop     using stab_fm   velocity 0.65 level 0.45 delay_send 0.18 reverb_send 0.12 }
-    track pad   { play pad_fm        using warm_pad  velocity 0.5 level 0.4 reverb_send 0.3 }
+    track pad { play pad_fm        using warm_pad  velocity 0.5 level 0.2309 reverb_send 0.3 }
     track lead  { play arp_lead_pat  using arp_lead  velocity 0.65 level 0.4 gate 0.7 delay_send 0.15 reverb_send 0.2 arp up rate=16 gate=0.6 octaves=2 }
 }
 
@@ -335,7 +335,7 @@ scene breakdown {
 
     track drums { play drums_breakdown using drums    velocity 0.75 level 0.35 }
     track bass  { play bass_breakdown  using sub_bass  velocity 0.5 level 0.4 }
-    track pad   { play pad_fm          using warm_pad  velocity 0.55 level 0.48 reverb_send 0.42 }
+    track pad { play pad_fm          using warm_pad  velocity 0.55 level 0.2771 reverb_send 0.42 }
 }
 
 # Outro (4 bars): fade down — quietest along with intro
@@ -344,7 +344,7 @@ scene outro {
 
     track drums { play drums_outro using drums    velocity 0.8 level 0.35 }
     track bass  { play bass_outro  using sub_bass  velocity 0.55 level 0.35 }
-    track pad   { play pad_fm      using warm_pad  velocity 0.3 level 0.28 reverb_send 0.4 }
+    track pad { play pad_fm      using warm_pad  velocity 0.3 level 0.1617 reverb_send 0.4 }
 }
 
 # ────────────────────────────────────────────────

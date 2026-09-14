@@ -80,7 +80,7 @@ module fm siren {
 }
 
 module keys darkpad {
-    voice_mode ringmod
+    voice_mode poly
     cutoff 0.2
     resonance 0.35
     detune 0.3
@@ -231,7 +231,7 @@ track pad {
     play silence
     using darkpad
     velocity 0.9
-    level 0.32
+    level 0.1848
     reverb_send 0.4
     out > saturate(0.05) > master
 }
@@ -259,7 +259,7 @@ scene intro {
     track bass  { play silence using acid }
     track stab  { play silence using stab }
     track siren { play silence using siren }
-    track pad   { play pad_intro using darkpad }
+    track pad { play pad_intro using darkpad }
 }
 
 scene beat {
@@ -269,7 +269,7 @@ scene beat {
     track bass  { play acid_groove using acid }
     track stab  { play stab_hits using stab }
     track siren { play silence using siren }
-    track pad   { play silence using darkpad }
+    track pad { play silence using darkpad }
 }
 
 scene break {
@@ -279,7 +279,7 @@ scene break {
     track bass  { play silence using acid }
     track stab  { play silence using stab }
     track siren { play silence using siren }
-    track pad   { play pad_break using darkpad }
+    track pad { play pad_break using darkpad }
 }
 
 scene fill {
@@ -289,7 +289,7 @@ scene fill {
     track bass  { play silence using acid }
     track stab  { play silence using stab }
     track siren { play silence using siren }
-    track pad   { play pad_break using darkpad }
+    track pad { play pad_break using darkpad }
 }
 
 scene drop {
@@ -300,7 +300,7 @@ scene drop {
     track bass  { play acid_drop using acid }
     track stab  { play stab_hits using stab }
     track siren { play siren_main using siren }
-    track pad   { play silence using darkpad }
+    track pad { play silence using darkpad }
 }
 
 scene outro {
@@ -311,7 +311,7 @@ scene outro {
     track bass  { play silence using acid }
     track stab  { play silence using stab }
     track siren { play silence using siren }
-    track pad   { play pad_intro using darkpad }
+    track pad { play pad_intro using darkpad }
 }
 
 # ────────────────────────────────────────────────

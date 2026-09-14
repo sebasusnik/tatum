@@ -28,7 +28,7 @@ module fm pluck {
 }
 
 module keys wash {
-    voice_mode unison
+    voice_mode poly
     cutoff 0.35
     resonance 0.4
     detune 0.3
@@ -82,7 +82,7 @@ master {
 }
 
 scene intro {
-    track wash  { play wash_pad using wash }
+    track wash { play wash_pad using wash }
     track pluck { play chord_hold using pluck arp up rate=8 gate=0.7 octaves=1 }
 }
 
@@ -91,7 +91,7 @@ scene groove {
     track drums { play beat using kit }
     track acid  { play acid_line using acid }
     track pluck { play chord_hold using pluck }
-    track wash  { play wash_pad using wash }
+    track wash { play wash_pad using wash }
 }
 
 scene peak {
@@ -99,7 +99,7 @@ scene peak {
     track drums { play beat using kit }
     track acid  { play acid_line using acid }
     track pluck { play chord_hold using pluck arp updown rate=32 gate=0.4 octaves=3 }
-    track wash  { play wash_pad using wash }
+    track wash { play wash_pad using wash }
 }
 
 arrange { intro x2  groove x4  peak x4  groove x2 }

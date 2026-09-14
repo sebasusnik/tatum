@@ -69,7 +69,7 @@ module bass sub {
 
 # The cloud: unison jazz voicings, two-second attack, nothing transient.
 module keys cloud {
-    voice_mode unison
+    voice_mode poly
     detune 0.42
     chorus_mix 0.55
     cutoff 0.2457           # 620 Hz
@@ -412,7 +412,7 @@ track pad {
     play silence
     using cloud
     velocity 0.95
-    level 0.26
+    level 0.1061
     reverb_send 0.48
     delay_send 0.14
     sidechain 0.40
@@ -512,7 +512,7 @@ scene lift {
     delay_mix = 0.25
     auto cloud cutoff 0.24 > 0.32
     track drums  { play brk_air    using brk  level 0.62 }
-    track pad    { play voice_intro using cloud velocity 0.9 }
+    track pad { play voice_intro using cloud velocity 0.9 }
     track air    { play air_low    using air }
     track sub    { play sub_hold   using sub  velocity 0.85 }
     track rhodes { play rhodes_a   using rhodes velocity 0.7 }
@@ -526,7 +526,7 @@ scene build {
     auto brk kick_level 0.75 > 0.95
     auto master tilt -0.12 > 0.0
     track drums  { play brk_build using brk level 0.64 }
-    track pad    { play voice_a   using cloud }
+    track pad { play voice_a   using cloud }
     track air    { play air_low   using air }
     track sub    { play sub_a     using sub velocity 0.80 }
     track rhodes { play rhodes_a  using rhodes }
@@ -539,7 +539,7 @@ scene drop_a {
     auto cloud cutoff 0.40 > 0.50 > 0.42
     track drums  { play brk_main using brk level 0.80 }
     track sub    { play sub_a    using sub }
-    track pad    { play voice_a  using cloud }
+    track pad { play voice_a  using cloud }
     track rhodes { play rhodes_a using rhodes }
     track glass  { play glass_a  using glass }
     track air    { play air_high using air }
@@ -553,7 +553,7 @@ scene drop_b {
     auto lead mod_index 0.26 > 0.36
     track drums  { play brk_var   using brk level 0.80 }
     track sub    { play sub_b     using sub }
-    track pad    { play voice_b   using cloud }
+    track pad { play voice_b   using cloud }
     track rhodes { play rhodes_b  using rhodes }
     track lead   { play lead_a    using lead }
     track ghost  { play ghost_hold using rhodes velocity 0.55 }
@@ -567,7 +567,7 @@ scene breakdown {
     auto reverb_freeze 0 > 1
     auto cloud cutoff 0.30 > 0.46
     auto master tilt -0.30 > 0.0
-    track pad   { play voice_break using cloud sidechain 0.0 velocity 0.72 }
+    track pad { play voice_break using cloud sidechain 0.0 velocity 0.72 }
     track air   { play air_high    using air   sidechain 0.0 velocity 0.62 }
     track ghost { play ghost_hold  using rhodes velocity 0.66 }
     track lead  { play lead_b      using lead  sidechain 0.0 velocity 0.55 }
@@ -581,7 +581,7 @@ scene drop_c {
     auto glass mod_index 0.36 > 0.46
     track drums  { play brk_peak using brk level 1.0 }
     track sub    { play sub_a    using sub }
-    track pad    { play voice_a  using cloud }
+    track pad { play voice_a  using cloud }
     track rhodes { play rhodes_a using rhodes velocity 1.0 }
     track glass  { play glass_b  using glass velocity 0.95 }
     track lead   { play lead_b   using lead velocity 0.95 }
@@ -597,7 +597,7 @@ scene outro {
     auto master tilt 0.0 > -0.30
     track drums  { play brk_thin  using brk }
     track sub    { play sub_hold  using sub velocity 0.8 }
-    track pad    { play voice_a   using cloud }
+    track pad { play voice_a   using cloud }
     track air    { play air_low   using air }
     track rhodes { play rhodes_a  using rhodes velocity 0.7 }
 }

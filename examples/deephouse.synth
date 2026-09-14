@@ -47,7 +47,7 @@ module fm rhodes {
 
 # Pad: lush detuned with chorus
 module keys lush_pad {
-    voice_mode unison
+    voice_mode poly
     cutoff 0.18
     detune 0.12
     chorus_mix 0.4
@@ -258,7 +258,7 @@ track pads {
     play silence
     using lush_pad
     velocity 0.5
-    level 0.4
+    level 0.2309
     pan 0.0
     reverb_send 0.35
     out > master
@@ -317,7 +317,7 @@ scene breakdown {
 
     track drums { play drums_breakdown using drums    velocity 0.8 level 0.4 }
     track bass  { play bass_hold       using deep_bass velocity 0.5 level 0.4 }
-    track pads  { play pad_fm          using lush_pad  velocity 0.5 level 0.45 reverb_send 0.4 }
+    track pads { play pad_fm          using lush_pad  velocity 0.5 level 0.2598 reverb_send 0.4 }
 }
 
 # Bridge: movement, chord changes
@@ -328,7 +328,7 @@ scene bridge {
     track drums  { play drums_main   using drums     velocity 1.0 level 0.55 }
     track bass   { play bass_bridge  using deep_bass velocity 0.85 level 0.55 }
     track rhodes { play rhodes_db    using rhodes    velocity 0.65 level 0.4 delay_send 0.15 reverb_send 0.3 }
-    track pads   { play pad_db       using lush_pad  velocity 0.4 level 0.35 reverb_send 0.35 }
+    track pads { play pad_db       using lush_pad  velocity 0.4 level 0.2021 reverb_send 0.35 }
 }
 
 # Drop: full energy, driving groove
@@ -348,7 +348,7 @@ scene outro {
 
     track drums { play drums_intro using drums     velocity 0.9 level 0.45 }
     track bass  { play bass_intro  using deep_bass velocity 0.6 level 0.4 }
-    track pads  { play pad_fm      using lush_pad  velocity 0.3 level 0.3  reverb_send 0.4 }
+    track pads { play pad_fm      using lush_pad  velocity 0.3 level 0.1732  reverb_send 0.4 }
 }
 
 # ────────────────────────────────────────────────
