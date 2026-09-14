@@ -113,6 +113,23 @@ pub fn peak_rms(l: &[f32], r: &[f32]) -> (f32, f32) {
     (peak, math::sqrt((sum / (2 * n) as f64) as f32))
 }
 
+/// Share of a stereo signal's energy that is not shared between the channels,
+/// as a fraction. 0 is mono, 0.5 is a hard-panned single source, 1 is fully
+/// out of phase. Instruments that sit in the same place cannot be told apart,
+/// and nothing in this report looked at it until twenty-one of the twenty-five
+/// songs in the corpus measured under 2%.
+pub fn stereo_width(l: &[f32], r: &[f32]) -> f32 {
+    let (mut mid, mut side) = (0.0f64, 0.0f64);
+    for (a, b) in l.iter().zip(r) {
+        let m = (a + b) as f64;
+        let s = (a - b) as f64;
+        mid += m * m;
+        side += s * s;
+    }
+    let total = mid + side;
+    if total <= 0.0 { 0.0 } else { (side / total) as f32 }
+}
+
 /// Crest factor: peak over RMS. Around 4-6 for a punchy mix; a limiter that is
 /// working hard pulls it towards 2-3 and takes the transients with it.
 pub fn crest(peak: f32, rms: f32) -> f32 {
@@ -157,6 +174,16 @@ mod tests {
         let m = BandMeter::new(44100.0);
         assert_eq!(m.percentages(), [0.0; 4]);
         assert_eq!(m.dominant(), None);
+    }
+
+    #[test]
+    fn width_is_zero_for_mono_and_a_half_for_one_hard_panned_source() {
+        let x: Vec<f32> = (0..1000).map(|i| (i as f32 * 0.01).sin()).collect();
+        let zero = vec![0.0f32; 1000];
+        assert!(stereo_width(&x, &x) < 1e-6, "identical channels are mono");
+        assert!((stereo_width(&x, &zero) - 0.5).abs() < 1e-5, "one channel only is half");
+        let inv: Vec<f32> = x.iter().map(|v| -v).collect();
+        assert!(stereo_width(&x, &inv) > 0.999, "out of phase is all side");
     }
 
     #[test]

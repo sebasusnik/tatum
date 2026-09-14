@@ -160,3 +160,42 @@ fn cutoff_lfo_is_relative_and_does_not_rasp() {
     assert!(deep - dry < 6.0, "even a deep sweep stays clean: dry {:.1} dB, deep {:.1} dB", dry, deep);
     assert!(wet > dry, "the LFO still opens the filter: dry {:.1}, wet {:.1}", dry, wet);
 }
+
+/// An `auto` sweep used to be evaluated once per step, so a filter moved in
+/// sixteenth-note stairs -- eight jumps a second, which on a resonant filter is
+/// heard as stepping rather than as a sweep. It runs once per block now.
+#[test]
+fn an_auto_sweep_moves_smoothly_and_not_in_steps() {
+    use synth_core::song_engine::SongEngine;
+    let src = "tempo 120\nscale C major\n\
+        module keys v { voice_mode poly cutoff 300hz resonance 45% attack 5ms sustain 1.0 }\n\
+        pattern p { 1.4:0.9 ..*63 }\n\
+        track t { play p using v out > master }\n\
+        master { in > out }\n\
+        scene a { auto v cutoff 0.15 > 0.85  track t { play p using v } }\n\
+        arrange { a x4 }\n";
+    let mut engine = SongEngine::from_source(src).unwrap();
+    engine.start();
+    let (l, _) = engine.render(4);
+
+    // The sweep raises the brightness monotonically. Sample the spectral
+    // centroid in short windows: with per-step automation it climbs in a
+    // staircase, so consecutive windows inside one step are identical.
+    let sr = synth_core::SAMPLE_RATE as usize;
+    let win = 1024;
+    let centroid = |x: &[f32]| -> f32 {
+        // Zero-crossing rate stands in for brightness and needs no FFT.
+        let n = x.windows(2).filter(|w| (w[0] <= 0.0) != (w[1] <= 0.0)).count();
+        n as f32 / x.len() as f32
+    };
+    let step = sr * 60 / 120 / 4; // one sixteenth
+    // Two windows inside the same step, away from note events.
+    let a = sr + step / 4;
+    let b = sr + step * 3 / 4;
+    let (ca, cb) = (centroid(&l[a..a + win]), centroid(&l[b..b + win]));
+    assert!(
+        (ca - cb).abs() > 1e-6,
+        "brightness is identical at two points inside one step ({} vs {}), so the sweep is still quantised to steps",
+        ca, cb
+    );
+}

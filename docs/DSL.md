@@ -417,6 +417,30 @@ rather than its full output, so hats and snares do not pump the mix. A source
 that names nothing, or that names the track itself, is a compile error, as is a
 `from=` with no amount.
 
+## Separation: why a mix turns into one sound
+
+Balance is not the only reason instruments blur together. Three things decide
+whether you can pick a part out of a mix, and the report measures all three:
+
+**Where it is.** Two instruments in the same place in the stereo field cannot be
+told apart however well they are balanced. `pan -0.4` and `pan 0.35` on the parts
+that share a frequency band is the cheapest separation there is; `autopan(0.4,
+bars=8)` and `chorus_mix` give width that moves. The kick, the sub and the lead
+stay centred — everything else should not. `stereo_width_pct` in the render
+report is 0 for a mono mix and around 50 for one hard-panned source; under 12 the
+report says so, and `mono_mix` warns at check time.
+
+**What band it occupies.** `band` and `band_pct` per track say where each one
+lives. Two tracks whose dominant band is the same and whose levels are within
+6 dB are masking each other; carve one with `eq(mid=-3)` or move them apart.
+
+**When it plays.** A part that sounds on every sixteenth alongside everything
+else has nowhere to be heard. Space is an arrangement decision, not a mix one.
+
+Saturation works against all three: every `saturate()` fills the gaps between
+instruments with harmonics, so a chain with three of them is gluing where you
+want separation.
+
 ## Design warnings
 
 `synth check` and `synth_check` run a set of lints over a song that already
@@ -428,6 +452,8 @@ never moves" instead of only "this parses". Each one came from a real session.
 | `static_pad` | a `keys`/`fm` track holds notes for 8+ steps with no LFO, vibrato, arp or `auto` | sustained sounds that do not move stop being heard as sound and start being heard as a drone of level |
 | `level_used_as_fader` | a sustained track's `level` moves more than 3 dB between scenes | a continuous bed is not a fader; riding it is audible as the bed changing volume under everything else |
 | `dry_mix` | nothing uses `reverb_send`, `delay_send` or a bus | everything sits at the same depth |
+| `mono_mix` | fewer than a third of the tonal tracks are panned off centre | instruments in the same place cannot be told apart |
+| `chord_into_mono_voice` | a chord plays through a `keys` module whose `voice_mode` is not `poly` | unison, octave and fifth stack their voices on one note, so only the last note sounds |
 | `no_sidechain` | drums and tonal tracks with no ducking anywhere | the kick has to fight through the mix |
 | `sidechain_without_kick` | a scene ducks tracks but has no beats track | those tracks play unducked, so a breakdown can end up louder than the drop |
 | `single_scene` | more than 8 bars in one scene | no arrangement shape |

@@ -242,6 +242,10 @@ struct TrackPlayback {
     meter_peak: f32,
     meter_sum_sq: f64,
     meter_samples: u64,
+    /// Mid and side energy, so the report can say where in the stereo field a
+    /// track sits. Two instruments in the same place cannot be told apart.
+    meter_mid_sq: f64,
+    meter_side_sq: f64,
     /// Band split of this track alone. Two tracks sitting in the same band is
     /// masking, and it used to take reasoning to notice.
     band: BandMeter,
@@ -663,6 +667,8 @@ impl SongEngine {
                     meter_peak: 0.0,
                     meter_sum_sq: 0.0,
                     meter_samples: 0,
+                    meter_mid_sq: 0.0,
+                    meter_side_sq: 0.0,
                     band: BandMeter::new(SAMPLE_RATE),
                     sc_source: None,
                     sc_env: 0.0,
@@ -1015,6 +1021,8 @@ impl SongEngine {
             t.meter_peak = 0.0;
             t.meter_sum_sq = 0.0;
             t.meter_samples = 0;
+            t.meter_mid_sq = 0.0;
+            t.meter_side_sq = 0.0;
             t.band.reset();
         }
         for b in self.buses.iter_mut() {
@@ -1031,6 +1039,15 @@ impl SongEngine {
     /// sections per track per sample, which a live audio thread should not pay.
     pub fn set_band_metering(&mut self, on: bool) {
         self.band_metering = on;
+    }
+
+    /// Where this track sits in the stereo field: 0 is dead centre, 0.5 is hard
+    /// to one side.
+    pub fn track_width(&self, idx: usize) -> f32 {
+        self.tracks.get(idx).map_or(0.0, |t| {
+            let total = t.meter_mid_sq + t.meter_side_sq;
+            if total <= 0.0 { 0.0 } else { (t.meter_side_sq / total) as f32 }
+        })
     }
 
     /// Share of this track's energy in each of `analysis::BAND_NAMES`, in percent.
@@ -1343,6 +1360,8 @@ impl SongEngine {
         // Mix tracks into master + bus sends + global sends with level and panning
         // NOTE: velocity is already baked into the instrument output (via voice.velocity
         // which = step_vel * track_vel, set in note_on). Only apply track level here.
+        self.apply_automation();
+
         let band_metering = self.band_metering;
         for ti in 0..track_count {
             if !self.tracks[ti].active { continue; }
@@ -1362,6 +1381,9 @@ impl SongEngine {
                 t.meter_peak = t.meter_peak.max(sample_l.abs()).max(sample_r.abs());
                 t.meter_sum_sq += (sample_l * sample_l + sample_r * sample_r) as f64;
                 t.meter_samples += 2;
+                let (mid, side) = ((sample_l + sample_r) as f64, (sample_l - sample_r) as f64);
+                t.meter_mid_sq += mid * mid;
+                t.meter_side_sq += side * side;
                 if band_metering {
                     t.band.push_stereo(sample_l, sample_r);
                 }
@@ -1488,35 +1510,46 @@ impl SongEngine {
         }
     }
 
-    fn advance_step(&mut self) {
-        // Process automation before note events
-        if self.scene_total_steps > 0 && !self.active_automations.is_empty() {
-            let progress = self.scene_step as f32 / self.scene_total_steps as f32;
-            let lanes = core::mem::take(&mut self.active_automations);
-            for auto_lane in &lanes {
-                let keyframes = &self.scenes[auto_lane.scene_idx].automations[auto_lane.auto_idx].keyframes;
-                let value = interpolate_automation(keyframes, progress);
-                match &auto_lane.target {
-                    AutoTarget::InstrumentParam { instrument_idx, param_name } => {
-                        if *instrument_idx < self.instruments.len() {
-                            self.instruments[*instrument_idx].set_param_by_name(param_name.as_str(), value);
-                        }
-                    }
-                    AutoTarget::MasterParam { param_name } => {
-                        self.master_fx.set_param(param_name.as_str(), value);
-                    }
-                    AutoTarget::TrackLevel { track_idx } => {
-                        if *track_idx < self.tracks.len() {
-                            self.tracks[*track_idx].level = value;
-                        }
-                    }
-                    AutoTarget::ReverbMix => self.reverb_wet_level = value,
-                    AutoTarget::ReverbFreeze => self.send_reverb.set_freeze(value >= 0.5),
-                    AutoTarget::DelayMix => self.delay_wet_level = value,
-                }
-            }
-            self.active_automations = lanes;
+    /// Automation, evaluated once per block. It used to run in `advance_step`,
+    /// which meant a sweep moved in sixteenth-note stairs: eight jumps a second
+    /// on a resonant filter, which is heard as steps rather than a sweep.
+    fn apply_automation(&mut self) {
+        if self.scene_total_steps == 0 || self.active_automations.is_empty() {
+            return;
         }
+        let within_step = if self.current_step_duration > 0.0 {
+            (self.sample_counter / self.current_step_duration).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let progress = ((self.scene_step as f32 + within_step) / self.scene_total_steps as f32).clamp(0.0, 1.0);
+        let lanes = core::mem::take(&mut self.active_automations);
+        for auto_lane in &lanes {
+            let keyframes = &self.scenes[auto_lane.scene_idx].automations[auto_lane.auto_idx].keyframes;
+            let value = interpolate_automation(keyframes, progress);
+            match &auto_lane.target {
+                AutoTarget::InstrumentParam { instrument_idx, param_name } => {
+                    if *instrument_idx < self.instruments.len() {
+                        self.instruments[*instrument_idx].set_param_by_name(param_name.as_str(), value);
+                    }
+                }
+                AutoTarget::MasterParam { param_name } => {
+                    self.master_fx.set_param(param_name.as_str(), value);
+                }
+                AutoTarget::TrackLevel { track_idx } => {
+                    if *track_idx < self.tracks.len() {
+                        self.tracks[*track_idx].level = value;
+                    }
+                }
+                AutoTarget::ReverbMix => self.reverb_wet_level = value,
+                AutoTarget::ReverbFreeze => self.send_reverb.set_freeze(value >= 0.5),
+                AutoTarget::DelayMix => self.delay_wet_level = value,
+            }
+        }
+        self.active_automations = lanes;
+    }
+
+    fn advance_step(&mut self) {
         self.scene_step += 1;
 
         let track_count = self.tracks.len();

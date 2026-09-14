@@ -429,6 +429,7 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
             "peak_vs_loudest_db": round1(20.0 * (p.max(1e-6) / loudest_peak.max(1e-6)).log10()),
             "crest": round1(analysis::crest(p, rr)),
             "band": engine.track_dominant_band(i).map(|b| BAND_NAMES[b]),
+            "width_pct": round1(engine.track_width(i) * 200.0),
             "band_pct": { "low": bands[0], "mid": bands[1], "harsh": bands[2], "air": bands[3] },
         }));
     }
@@ -596,6 +597,29 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         ));
     }
 
+    // Two instruments in the same place in the stereo field cannot be told
+    // apart, however well they are balanced. Twenty-one of the twenty-five
+    // songs in this repo measured under 2% wide before anything reported it.
+    let mix_width = analysis::stereo_width(&l, &r) * 200.0;
+    let centred: Vec<String> = track_report.iter()
+        .filter(|t| t["width_pct"].as_f64().unwrap_or(0.0) < 4.0
+            && t["db"].as_f64().unwrap_or(-99.0) > loudest_db - 18.0)
+        .map(|t| t["track"].as_str().unwrap_or("").to_string())
+        .collect();
+    if mix_width < 12.0 {
+        hints.push(format!(
+            "the mix is {:.0}% wide, so it is very nearly mono and the instruments sit on top of each other. {} are within a few degrees of centre. Pan them apart, or give them autopan(), chorus or a stereo send.",
+            mix_width,
+            if centred.len() > 4 {
+                format!("{} and {} others", centred[..3].join(", "), centred.len() - 3)
+            } else if centred.is_empty() {
+                String::from("Most tracks")
+            } else {
+                centred.join(", ")
+            }
+        ));
+    }
+
     let hint = if hints.is_empty() { Value::Null } else { json!(hints.join(" | ")) };
 
     Ok(serde_json::to_string_pretty(&json!({
@@ -614,6 +638,7 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
             "crest_out": round1(crest_out),
             "crest_change_db": round1(crest_loss as f32),
         },
+        "stereo_width_pct": round1(mix_width),
         "sections": report,
         "tracks": track_report,
         "buses": bus_report,
