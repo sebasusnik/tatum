@@ -44,7 +44,7 @@ function MelodicVis(props: { pattern: ParsedPattern | null; color: string }) {
             }>
               <div classList={{ "pat-poly": true, now: isNow() }} style={{ "--c": props.color }}>
                 <For each={Array.from({ length: step.noteCount })}>
-                  {(_, ni) => (
+                  {() => (
                     <div
                       class="pat-note"
                       style={{

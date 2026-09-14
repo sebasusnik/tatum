@@ -1,4 +1,4 @@
-import { createMemo, createSignal, createEffect } from "solid-js";
+import { createSignal, createEffect } from "solid-js";
 import type { ParsedPattern } from "../stores/synth";
 import { currentStep, playing } from "../stores/synth";
 

@@ -8,16 +8,6 @@
  * No Rust changes needed — this is pure frontend pattern generation.
  */
 
-// Scale degree intervals (semitones from root) for each mode
-// These define which notes are "in the scale"
-const SCALE_INTERVALS: Record<string, number[]> = {
-  major:            [0, 2, 4, 5, 7, 9, 11],
-  minor:            [0, 2, 3, 5, 7, 8, 10],
-  dorian:           [0, 2, 3, 5, 7, 9, 10],
-  mixolydian:       [0, 2, 4, 5, 7, 9, 10],
-  pentatonic_minor: [0, 3, 5, 7, 10, 0, 0], // 5-note, pad last two
-};
-
 /** Voicing types — how many notes to stack */
 export type VoicingType = "triad" | "seventh" | "ninth" | "eleventh" | "thirteenth";
 

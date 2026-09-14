@@ -768,6 +768,47 @@ body {
   margin-left: auto;
 }
 
+.cm-error-line {
+  background: #ff444414;
+  box-shadow: inset 3px 0 0 #ff4444;
+}
+
+.code-error-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+  max-height: 120px;
+  overflow-y: auto;
+  background: #141418;
+  border-top: 1px solid #222;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+  font-size: 11px;
+  color: #ff8a8a;
+}
+
+.code-error-list li {
+  display: flex;
+  gap: 10px;
+  padding: 3px 14px;
+}
+
+.code-error-list li.jumpable {
+  cursor: pointer;
+}
+
+.code-error-list li.jumpable:hover {
+  background: #ff444418;
+}
+
+.code-error-line {
+  color: #ff4444;
+  min-width: 36px;
+}
+
+.code-error-msg {
+  color: #d0a0a0;
+}
+
 .code-editor {
   flex: 1;
   min-height: 300px;

@@ -115,18 +115,10 @@ export type ModuleId = "bass" | "keys" | "fm" | "beats" | "arp";
 export type MelodicId = "bass" | "keys" | "fm";
 type PageModuleId = "bass" | "keys" | "fm" | "beats";
 
-const PAGE_MODULES: PageModuleId[] = ["bass", "keys", "fm", "beats"];
-const ALL_MODULES: ModuleId[] = ["bass", "keys", "fm", "beats", "arp"];
-const MELODIC_MODULES: MelodicId[] = ["bass", "keys", "fm"];
-const TRACK_MAP: Record<MelodicId, number> = { bass: 0, keys: 1, fm: 2 };
-const DRUM_LANE_NAMES = [
-  "kick",
-  "snare",
-  "hihat",
-  "clap",
-  "tom",
-  "crash",
-] as const;
+/** "arp" has no knob pages; everything that indexes `modules` narrows to this. */
+function pageModule(id: ModuleId): PageModuleId | null {
+  return id === "arp" ? null : id;
+}
 
 // ── Module configs (knob UI) ─────────────────────────
 
@@ -424,7 +416,7 @@ export const [drumLanes, setDrumLanes] = createStore(DEFAULT_DRUM_LANES);
 export const currentModule = selectedModule;
 export const setCurrentModule = setSelectedModule;
 
-export const mod = () => modules[selectedModule()];
+export const mod = () => modules[pageModule(selectedModule()) ?? "bass"];
 export const page = () => mod().pages[currentPage()];
 export const accentColor = () => mod().color;
 export const pageCount = () => mod().pages.length;
@@ -977,7 +969,8 @@ export function prevPage(): void {
 // ── Actions: Params ──────────────────────────────────
 
 export function setParamValue(knobIdx: number, value: number): void {
-  const m = selectedModule();
+  const m = pageModule(selectedModule());
+  if (!m) return;
   const p = currentPage();
   const clamped = Math.round(Math.min(100, Math.max(0, value)));
   setModules(m, "pages", p, "values", knobIdx, clamped);
@@ -1039,8 +1032,10 @@ export function setSidechainValue(value: number): void {
 
 /** Set a param on any module directly (for railway layout where all modules are visible). */
 export function setModuleParam(modId: ModuleId, pageIdx: number, knobIdx: number, value: number): void {
+  const m = pageModule(modId);
+  if (!m) return;
   const clamped = Math.round(Math.min(100, Math.max(0, value)));
-  setModules(modId, "pages", pageIdx, "values", knobIdx, clamped);
+  setModules(m, "pages", pageIdx, "values", knobIdx, clamped);
 }
 
 // ── Actions: Melodic step toggle ─────────────────────

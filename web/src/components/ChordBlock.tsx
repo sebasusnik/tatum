@@ -4,7 +4,7 @@ import ActivityLed from "./ActivityLed";
 import PatternVis from "./PatternVis";
 import {
   getPatternForTrack, getModuleNameForTrack,
-  dslSource, updateDslTextOnly, sendSource,
+  dslSource, sendSource,
 } from "../stores/synth";
 import {
   DEGREE_LABELS, getChordDisplayName,

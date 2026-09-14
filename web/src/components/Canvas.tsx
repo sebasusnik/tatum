@@ -10,9 +10,10 @@ import MasterStrip from "./MasterStrip";
 import FxBlock from "./FxBlock";
 import FxPalette from "./FxPalette";
 import {
-  useGraph, setFxNodePosition,
+  useGraph,
+  setFxNodePosition,
   edgeInsertInfo,
-  type GraphNode as GNode, type GraphEdge,
+  type GraphNode as GNode,
 } from "../stores/graph";
 import {
   tracksFx, masterFx,

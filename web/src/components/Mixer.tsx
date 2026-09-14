@@ -18,7 +18,7 @@ export default function Mixer() {
               <input
                 type="range"
                 class="mixer-fader"
-                orient="vertical"
+                ref={(el) => el.setAttribute("orient", "vertical")}
                 min="0"
                 max="100"
                 value={Math.round(track.level * 100)}
