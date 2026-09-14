@@ -237,6 +237,10 @@ struct TrackPlayback {
     // Arpeggiator: the pattern supplies held notes, the arp schedules them per sample
     arp: Option<ArpProcessor>,
     arp_cfg: Option<ArpConfig>,
+    // Metering: post-level, post-pan, pre-master. For mix reports.
+    meter_peak: f32,
+    meter_sum_sq: f64,
+    meter_samples: u64,
 }
 
 /// Build a fresh arp processor from compiled settings at the given tempo.
@@ -332,6 +336,7 @@ pub struct SongEngine {
     master_level: f32,
 
     // Automatic gain compensation for track summing
+    gain_comp_amount: f32,   // 0 = off, 1 = full 1/sqrt(active_tracks)
     gain_comp_target: f32,   // 1.0 / sqrt(active_tracks), clamped [0.25, 1.0]
     gain_comp_current: f32,  // smoothed value (exponential approach to target)
 
@@ -559,6 +564,9 @@ impl SongEngine {
                     stereo_src,
                     arp: t.arp.map(|c| make_arp(&c, tempo)),
                     arp_cfg: t.arp,
+                    meter_peak: 0.0,
+                    meter_sum_sq: 0.0,
+                    meter_samples: 0,
                 }
             })
             .collect();
@@ -642,6 +650,7 @@ impl SongEngine {
             humanize_timing,
             rng: Rng::new(7919),
             master_level: 0.8,
+            gain_comp_amount: song.globals.gain_comp.unwrap_or(1.0),
             gain_comp_target: 1.0,
             gain_comp_current: 1.0,
             sidechain_amount,
@@ -812,13 +821,35 @@ impl SongEngine {
     /// Uses equal-power scaling: 1/sqrt(N), clamped to [0.25, 1.0].
     fn recompute_gain_comp(&mut self) {
         let n = self.tracks.iter().filter(|t| t.active).count();
-        self.gain_comp_target = if n <= 1 {
-            1.0
-        } else {
-            let raw = 1.0 / math::sqrt(n as f32);
-            if raw < 0.25 { 0.25 } else { raw }
-        };
+        let raw = if n <= 1 { 1.0 } else { (1.0 / math::sqrt(n as f32)).max(0.25) };
+        // `gain_comp 0` disables it: every scene is mixed exactly as written.
+        self.gain_comp_target = 1.0 + (raw - 1.0) * self.gain_comp_amount;
     }
+
+    // ── Metering (for mix reports) ──
+
+    /// Peak of a track after its level and pan, before the master chain.
+    pub fn track_peak(&self, idx: usize) -> f32 {
+        self.tracks.get(idx).map_or(0.0, |t| t.meter_peak)
+    }
+
+    /// RMS of a track after its level and pan, before the master chain.
+    pub fn track_rms(&self, idx: usize) -> f32 {
+        self.tracks.get(idx).map_or(0.0, |t| {
+            if t.meter_samples == 0 { 0.0 } else { math::sqrt((t.meter_sum_sq / t.meter_samples as f64) as f32) }
+        })
+    }
+
+    pub fn reset_meters(&mut self) {
+        for t in self.tracks.iter_mut() {
+            t.meter_peak = 0.0;
+            t.meter_sum_sq = 0.0;
+            t.meter_samples = 0;
+        }
+    }
+
+    /// Automatic gain compensation applied right now (1.0 = none).
+    pub fn gain_compensation(&self) -> f32 { self.gain_comp_current }
 
     /// Resolve an automation target string to an AutoTarget.
     fn resolve_auto_target(&self, target: &str) -> Option<AutoTarget> {
@@ -1095,6 +1126,10 @@ impl SongEngine {
                     track_bufs_l[ti][s] * gain * pan_l,
                     track_bufs_r[ti][s] * gain * pan_r,
                 );
+                let t = &mut self.tracks[ti];
+                t.meter_peak = t.meter_peak.max(sample_l.abs()).max(sample_r.abs());
+                t.meter_sum_sq += (sample_l * sample_l + sample_r * sample_r) as f64;
+                t.meter_samples += 2;
 
                 // Bus send (mono sum to bus)
                 if let Some((bus_idx, amount)) = self.tracks[ti].bus_send {

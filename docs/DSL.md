@@ -20,6 +20,9 @@ scale A minor          # major | minor | dorian | phrygian | lydian | mixolydian
 swing 0.56             # 0.5 straight .. 0.75 hard shuffle
 humanize 0.05 timing 0.02
 sidechain 0.4
+gain_comp 1            # 1 = level is compensated for how many tracks a scene has
+                       # (1/sqrt(n), so a 2-track breakdown is ~4 dB louder than a
+                       # 5-track drop at the same levels). 0 = off, mix exactly as written.
 
 # Global send effects, fed by each track's delay_send / reverb_send
 delay sync=dotted_eighth feedback=0.45 filter=0.5   # sync: free | quarter | dotted_eighth |
@@ -119,6 +122,26 @@ Track options:
 | `out > ... > master` or `> <bus>` | | `> master` | insert chain and destination |
 
 A scene track can set any of these, including adding an `arp` to a track that has none.
+
+A routing chain may wrap across lines as long as each continuation line starts with `>`:
+
+```
+track pad { play chords using cloud level 0.3 reverb_send 0.5
+            out > highpass(300, 0.3)
+                > lowpass(3000, 0.3, lfo_bars=16, lfo_depth=1200)
+                > autopan(0.4, bars=8) > master }
+```
+
+### Levels
+
+`synth render` and `synth_render` print a per-track report (peak, RMS, dB below the
+loudest track) plus the low/mid/high balance of each section. Read it before trusting a
+mix: a track more than 30 dB down is inaudible, a section above 80% midrange sounds boxy,
+and a section at the limiter ceiling has had its dynamics flattened.
+
+Modules do not all sum to the same level at the same track `level`: `fm` is quietest, so
+it has its own `level` parameter (default 1.0; `level 2.0` brings one voice near keys).
+Use `gain()` in a chain to trim a bus or a return.
 
 ### Arpeggiator
 

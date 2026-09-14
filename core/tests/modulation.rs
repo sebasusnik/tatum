@@ -64,8 +64,11 @@ fn module_lfo_can_sync_to_bars() {
     let src = "tempo 120\nscale A minor\nmodule keys pad { lfo_target cutoff lfo_depth 0.2 lfo_sync bars_2 }\npattern p { 1.3 .. .. .. }\ntrack t { play p using pad out > master }\nscene a { track t { play p using pad } }\narrange { a x1 }\n";
     let ast = dsl::parse(src).unwrap();
     let pad = ast.module_defs.iter().find(|m| m.name == "pad").unwrap();
+    // Don't hardcode the encoding: adding an option to the table shifts it.
+    // core/tests/mix.rs asserts the whole table round-trips.
     let sync = pad.params.iter().find(|p| p.name == "lfo_sync").unwrap();
-    assert!((sync.value - 0.7).abs() < 1e-6, "bars_2 is index 7 of 11 → 0.7, got {}", sync.value);
+    let spec = synth_core::params::lookup(synth_core::params::ModuleKind::Keys, "lfo_sync").unwrap();
+    assert_eq!(spec.choice_name(sync.value), Some("bars_2"), "encoded value must decode back to bars_2");
     assert!(compiler::compile(&ast).is_ok());
     let mut e = SongEngine::from_source(src).unwrap();
     let (l, _) = e.render(1);

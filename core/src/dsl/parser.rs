@@ -1435,7 +1435,19 @@ impl Parser {
             self.skip_newlines();
             if self.at_block_end() { break; }
 
-            if let Token::Ident(ref key) = self.peek().clone() {
+            // Some parameter names are also keywords elsewhere in the language
+            // (`level`, `pan`, `velocity`, `mix`, `sidechain`, `swing`). Treat
+            // them as plain names inside a module block.
+            let keyword_param = match self.peek() {
+                Token::Level => Some("level"),
+                Token::Pan => Some("pan"),
+                Token::Velocity => Some("velocity"),
+                Token::Mix => Some("mix"),
+                Token::Sidechain => Some("sidechain"),
+                Token::Swing => Some("swing"),
+                _ => None,
+            };
+            if let Some(ref key) = self.peek().clone().into_ident_or(keyword_param) {
                 let key = key.clone();
                 let line = self.span().line;
                 self.advance();
@@ -1499,7 +1511,13 @@ impl Parser {
                     params.push(ModuleParam { name: key, value: val, line });
                 }
             } else {
-                self.advance();
+                let sp = self.span();
+                let (l, c) = (sp.line, sp.col);
+                self.errors.push(ParseError {
+                    line: l, col: c,
+                    message: format!("module '{}': unexpected {} (expected `name value`)", name, describe_token(self.peek())),
+                });
+                self.recover_to_line_end();
             }
         }
 
@@ -1647,6 +1665,17 @@ fn is_dsp_keyword(word: &str) -> bool {
         "compressor" | "limiter" |
         "tilt" | "eq"
     )
+}
+
+impl Token {
+    /// The token as a parameter name: identifiers as themselves, and the
+    /// listed keywords as their word.
+    fn into_ident_or(self, keyword: Option<&str>) -> Option<String> {
+        match self {
+            Token::Ident(s) => Some(s),
+            _ => keyword.map(String::from),
+        }
+    }
 }
 
 /// Human-readable token for error messages.

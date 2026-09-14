@@ -175,7 +175,7 @@ fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "synth_render",
-            "description": "Compile and render .synth source to a 16-bit stereo WAV file. Returns the file path plus a loudness report: overall peak and RMS, clipped sample count, and per arrangement section its scene name, bars, RMS, peak and dB. Use the report to check that builds rise, drops hit hardest and nothing clips. For quick level checks pass bars (e.g. 8) to render only the start; a full render is a few seconds per minute of audio.",
+            "description": "Compile and render .synth source to a 16-bit stereo WAV file. Returns the file path plus a mix report: overall peak, RMS and clipped samples; per arrangement section the RMS, peak, dB, crest factor and low/mid/high energy balance; per track its peak, RMS and dB below the loudest track; and hints about limiting, buried or silent tracks and boxy midrange. Use it to check that builds rise, drops hit hardest, nothing clips, and every track is audible. For quick level checks pass bars (e.g. 8) to render only the start.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -340,7 +340,24 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let steps_per_bar = song.globals.meter.0 as usize * 4;
 
     let mut engine = SongEngine::from_compiled(song);
+    engine.reset_meters();
     let (l, r) = engine.render(bars);
+    // Per-track levels: post level and pan, before the master chain.
+    let mut track_report = Vec::new();
+    let mut loudest = 0.0f32;
+    for i in 0..engine.track_count() {
+        loudest = loudest.max(engine.track_rms(i));
+    }
+    for i in 0..engine.track_count() {
+        let (p, rr) = (engine.track_peak(i), engine.track_rms(i));
+        track_report.push(json!({
+            "track": engine.track_name(i),
+            "peak": round3(p),
+            "rms": round3(rr),
+            "db": round1(20.0 * rr.max(1e-6).log10()),
+            "vs_loudest_db": round1(20.0 * (rr.max(1e-6) / loudest.max(1e-6)).log10()),
+        }));
+    }
     let bad = l.iter().chain(r.iter()).filter(|v| !v.is_finite()).count();
     if bad > 0 {
         return Err(format!(
@@ -378,19 +395,52 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         let (rms, peak) = stats(&l[a..b], &r[a..b]);
         let at_ceiling = peak >= LIMITER_CEILING - 0.005;
         if at_ceiling { at_ceiling_sections.push(name.clone()); }
-        report.push(json!({ "scene": name, "bars": count, "rms": round3(rms), "peak": round3(peak), "db": round1(20.0 * rms.max(1e-6).log10()), "at_limiter_ceiling": at_ceiling }));
+        let (lo, mid, hi) = balance(&l[a..b], &r[a..b]);
+        report.push(json!({
+            "scene": name, "bars": count,
+            "rms": round3(rms), "peak": round3(peak),
+            "db": round1(20.0 * rms.max(1e-6).log10()),
+            "crest": round1(peak / rms.max(1e-6)),
+            "balance_pct": { "low": lo, "mid": mid, "high": hi },
+            "at_limiter_ceiling": at_ceiling
+        }));
         bar_cursor += count;
     }
     let (rms, peak) = stats(&l, &r);
     let clipped = l.iter().chain(r.iter()).filter(|s| s.abs() >= 0.999).count();
-    let hint = if at_ceiling_sections.is_empty() {
-        Value::Null
-    } else {
-        json!(format!(
+    let mut hints: Vec<String> = Vec::new();
+    if !at_ceiling_sections.is_empty() {
+        hints.push(format!(
             "peak sits at the master limiter ceiling ({}) in: {}. The limiter is flattening dynamics there; lower track levels or the compressor makeup, or raise the sections that should be quieter instead.",
             LIMITER_CEILING, at_ceiling_sections.join(", ")
-        ))
-    };
+        ));
+    }
+    // Tracks buried more than 30 dB under the loudest are effectively inaudible;
+    // a chain that silently reroutes or a missing make-up gain looks like this.
+    let buried: Vec<String> = track_report.iter()
+        .filter(|t| t["vs_loudest_db"].as_f64().unwrap_or(0.0) < -30.0 && t["rms"].as_f64().unwrap_or(0.0) > 0.0)
+        .map(|t| t["track"].as_str().unwrap_or("").to_string())
+        .collect();
+    if !buried.is_empty() {
+        hints.push(format!(
+            "more than 30 dB below the loudest track, so effectively inaudible: {}. Raise their level, add gain() in their chain, or check that the chain reaches master.",
+            buried.join(", ")
+        ));
+    }
+    let silent: Vec<String> = track_report.iter()
+        .filter(|t| t["rms"].as_f64().unwrap_or(1.0) <= 0.0)
+        .map(|t| t["track"].as_str().unwrap_or("").to_string())
+        .collect();
+    if !silent.is_empty() {
+        hints.push(format!("silent for the whole render: {}. They play in no scene, or their pattern is all rests.", silent.join(", ")));
+    }
+    if let Some(worst) = report.iter().find(|s| s["balance_pct"]["mid"].as_f64().unwrap_or(0.0) >= 80.0) {
+        hints.push(format!(
+            "scene '{}' is {}% midrange: it will sound boxy and small. Give the bass room below 200 Hz and let something live above 2 kHz (hats, air, an open filter).",
+            worst["scene"].as_str().unwrap_or(""), worst["balance_pct"]["mid"]
+        ));
+    }
+    let hint = if hints.is_empty() { Value::Null } else { json!(hints.join(" | ")) };
 
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
@@ -400,9 +450,32 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         "peak": round3(peak),
         "rms": round3(rms),
         "clipped_samples": clipped,
+        "gain_compensation": round3(engine.gain_compensation()),
         "sections": report,
+        "tracks": track_report,
         "hint": hint
     })).unwrap())
+}
+
+/// Energy split into low (<200 Hz), mid (200 Hz..2 kHz) and high (>2 kHz),
+/// as a percentage of the total. One-pole filters: cheap and good enough to
+/// tell "all mids" from "no low end".
+fn balance(l: &[f32], r: &[f32]) -> (f64, f64, f64) {
+    let lo_c = (-2.0 * core::f32::consts::PI * 200.0 / SAMPLE_RATE).exp();
+    let hi_c = (-2.0 * core::f32::consts::PI * 2000.0 / SAMPLE_RATE).exp();
+    let (mut lp1, mut lp2) = (0.0f32, 0.0f32);
+    let (mut lo, mut mid, mut hi) = (0.0f64, 0.0f64, 0.0f64);
+    for (a, b) in l.iter().zip(r) {
+        let x = (a + b) * 0.5;
+        lp1 = x * (1.0 - lo_c) + lp1 * lo_c;
+        lp2 = x * (1.0 - hi_c) + lp2 * hi_c;
+        lo += (lp1 * lp1) as f64;
+        mid += ((lp2 - lp1) * (lp2 - lp1)) as f64;
+        hi += ((x - lp2) * (x - lp2)) as f64;
+    }
+    let total = lo + mid + hi;
+    if total <= 0.0 { return (0.0, 0.0, 0.0); }
+    ((lo / total * 100.0).round(), (mid / total * 100.0).round(), (hi / total * 100.0).round())
 }
 
 fn stats(l: &[f32], r: &[f32]) -> (f32, f32) {

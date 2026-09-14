@@ -163,7 +163,7 @@ impl BassModule {
                 self.lfo_router.set_target(target);
             }
             BassParam::LfoSync => {
-                let idx = (value * 10.0) as u8;
+                let idx = (value * 11.0) as u8;
                 let mode = match idx {
                     0 => LfoSyncMode::FreeHz,
                     1 => LfoSyncMode::Quarter,
@@ -175,6 +175,7 @@ impl BassModule {
                     7 => LfoSyncMode::Bars2,
                     8 => LfoSyncMode::Bars4,
                     9 => LfoSyncMode::Bars8,
+                    10 => LfoSyncMode::Bars12,
                     _ => LfoSyncMode::Bars16,
                 };
                 self.lfo_router.lfo.set_sync_mode(mode);

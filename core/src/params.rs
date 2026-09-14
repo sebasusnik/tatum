@@ -158,7 +158,7 @@ pub fn choice_value(idx: usize, count: usize) -> f32 {
 // ── Shared choice tables ──
 
 pub const LFO_WAVEFORMS: &[&str] = &["sine", "triangle", "saw", "square", "sample_hold"];
-pub const LFO_SYNC: &[&str] = &["free", "quarter", "eighth", "sixteenth", "dotted_eighth", "triplet_eighth", "bar", "bars_2", "bars_4", "bars_8", "bars_16"];
+pub const LFO_SYNC: &[&str] = &["free", "quarter", "eighth", "sixteenth", "dotted_eighth", "triplet_eighth", "bar", "bars_2", "bars_4", "bars_8", "bars_12", "bars_16"];
 pub const OSC_WAVES: &[&str] = &["saw", "square"];
 pub const FM_ALGORITHMS: &[&str] = &[
     "serial3_plus_carrier",   // 0: Op3 -> Op2 -> Op1 -> Out (+ Op4 -> Out)
@@ -214,6 +214,7 @@ pub const BASS_PARAMS: &[ParamSpec] = &[
 // ── FM ──
 
 pub const FM_PARAMS: &[ParamSpec] = &[
+    spec!("level", ParamId::Fm(FmParam::Level), Range::Gain { max: 4.0 }, 1.0, "Module output gain. FM sums quieter than the other modules: try 2.0 to sit near keys at the same track level"),
     spec!("algorithm", ParamId::Fm(FmParam::Algorithm), Range::Choice(FM_ALGORITHMS), 0.0, "Operator routing"),
     spec!("mod_index", ParamId::Fm(FmParam::ModIndex), Range::Unit, 0.5, "Modulation index, exponential 0.1..4.0 (0.5 ≈ 0.63, 0.75 ≈ 1.6)"),
     spec!("feedback", ParamId::Fm(FmParam::Feedback), Range::Unit, 0.0, "Global operator feedback (scaled to 0..0.7)"),

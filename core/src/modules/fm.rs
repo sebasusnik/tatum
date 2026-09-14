@@ -173,6 +173,7 @@ pub enum FmParam {
     Op0Feedback, Op1Feedback, Op2Feedback, Op3Feedback,
     // Per-operator ratio
     Op0Ratio, Op1Ratio, Op2Ratio, Op3Ratio,
+    Level,
 }
 
 pub struct FmModule {
@@ -181,6 +182,10 @@ pub struct FmModule {
     voice_counter: u32,
     algorithm: u8,
     mod_index: f32,
+    /// Output gain. FM voices sum lower than the other modules; `level 2.0`
+    /// puts a single voice in the same range as keys. Default 1.0 keeps
+    /// existing songs unchanged.
+    level: f32,
     // LFO
     lfo_router: ModulationRouter,
     // Chorus
@@ -204,6 +209,7 @@ impl FmModule {
             voice_counter: 0,
             algorithm: 0,
             mod_index: 1.0,
+            level: 1.0,
             lfo_router: ModulationRouter::new(SAMPLE_RATE, 5003),
             chorus: Chorus::new(),
             chorus_mix: 0.0,
@@ -294,7 +300,7 @@ impl FmModule {
                 self.lfo_router.set_target(target);
             }
             FmParam::LfoSync => {
-                let idx = (value * 10.0) as u8;
+                let idx = (value * 11.0) as u8;
                 let mode = match idx {
                     0 => LfoSyncMode::FreeHz,
                     1 => LfoSyncMode::Quarter,
@@ -306,6 +312,7 @@ impl FmModule {
                     7 => LfoSyncMode::Bars2,
                     8 => LfoSyncMode::Bars4,
                     9 => LfoSyncMode::Bars8,
+                    10 => LfoSyncMode::Bars12,
                     _ => LfoSyncMode::Bars16,
                 };
                 self.lfo_router.lfo.set_sync_mode(mode);
@@ -331,6 +338,7 @@ impl FmModule {
                     }
                 }
             }
+            FmParam::Level => self.level = value,
             FmParam::ChorusMix => {
                 self.chorus_mix = value;
                 self.chorus.set_mix(value);
@@ -484,7 +492,7 @@ impl Module for FmModule {
                 1.0
             };
 
-            sum *= amp_mod;
+            sum *= amp_mod * self.level;
 
             // Apply chorus post-process
             if self.chorus_mix > 0.001 {
