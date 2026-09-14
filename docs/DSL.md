@@ -44,7 +44,9 @@ module bass acid {
     osc1_wave saw            # saw | square
     lfo_target cutoff        # cutoff | pitch | amplitude
     lfo_sync bars_4          # free | quarter | eighth | sixteenth | dotted_eighth | triplet_eighth |
-                             # bar | bars_2 | bars_4 | bars_8 | bars_16 (slow, tempo-synced cycles)
+                             # bar | bars_2 | bars_4 | bars_8 | bars_12 | bars_16 (slow, tempo-synced)
+    lfo_depth 0.15           # on cutoff the sweep is relative: 1.0 is ±4 octaves,
+                             # so 0.1-0.2 is a wobble and 0.5 is a full filter sweep
 }
 
 module fm bell {

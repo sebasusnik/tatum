@@ -407,7 +407,9 @@ impl KeysModule {
             // Cutoff modulation: apply every 4 samples to reduce overhead
             if self.lfo_router.target == LfoTarget::Cutoff && self.lfo_router.enabled {
                 if sample_counter % 4 == 0 {
-                    let mod_cutoff = self.cutoff_base + lfo_val * 5000.0;
+                    // Relative (octaves), like the bass: see LFO_CUTOFF_OCTAVES.
+                    let mod_cutoff = self.cutoff_base
+                        * crate::math::pow2(lfo_val * crate::modules::bass::LFO_CUTOFF_OCTAVES);
                     for voice in &mut self.voices {
                         voice.filter.set_cutoff(mod_cutoff);
                     }
