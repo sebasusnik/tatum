@@ -1,0 +1,619 @@
+# Liquid DnB — "Glass Water"
+# Calibre / LTJ Bukem / High Contrast: two-step break, clean sub, jazz voicings, air.
+tempo 174
+meter 4/4
+scale F minor
+swing 0.54
+humanize 0.12 timing 0.06
+sidechain 0.22
+
+# Global sends. The reverb tail is an instrument here, not a garnish.
+reverb size=0.86 damp=0.32 predelay=35 sidechain=0.45
+delay sync=dotted_eighth feedback=0.42 filter=0.55
+
+# Movement lives on the returns so the tail itself breathes.
+reverb_return { in > highpass(260, 0.06) > lowpass(3400, 0.12, lfo_bars=16, lfo_depth=1500) > autopan(0.35, bars=8) > out }
+delay_return  { in > highpass(420, 0.06) > lowpass(4500, 0.08) > out }
+
+groove liquid {
+    hat   swing 0.57 nudge 0.006
+    snare nudge 0.009
+    kick  nudge -0.004
+}
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# The break: round kick, cracking-but-not-gated snare, dry small hats.
+module beats brk {
+    kick_level 0.92
+    kick_decay 0.30
+    kick_pitch 0.2333       # 0.85x pitch
+    kick_click 0.32
+    kick_drive 0.18
+    kick_pan 0.0
+
+    snare_level 0.85
+    snare_decay 0.44
+    snare_pitch 0.3467      # 1.02x pitch
+    snare_drive 0.22
+    snare_snap 0.58
+    snare_pan -0.07
+
+    hihat_level 0.40
+    hihat_decay 0.26
+    hihat_pitch 0.4333      # 1.15x pitch
+    hihat_pan 0.24
+
+    clap_level 0.42
+    clap_pan 0.14
+}
+
+# Sub: a filtered saw that is effectively a sine. No drive anywhere near it.
+module bass sub {
+    osc1_wave saw
+    osc2_pitch 0.5          # unison
+    osc3_pitch 0.5
+    cutoff 0.2468           # 110 Hz: the note passes, the harmonics do not
+    cutoff_env 0.0          # no filter movement at all
+    resonance 0.04
+    glide 0.05
+    keytrack 0.0
+    attack 0.2117           # 5 ms
+    decay 0.7883            # 400 ms
+    sustain 0.94
+    release 0.6501          # 140 ms
+    vel_env 0.0
+}
+
+# The cloud: unison jazz voicings, two-second attack, nothing transient.
+module keys cloud {
+    voice_mode unison
+    detune 0.42
+    chorus_mix 0.55
+    cutoff 0.2457           # 620 Hz
+    resonance 0.16
+    attack 0.9328           # 1.2 s, no transient
+    decay 0.8949            # 900 ms
+    sustain 0.86
+    release 0.9861          # 1.8 s
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync bars_16
+    lfo_depth 0.11
+    vibrato_rate 0.0421     # 0.9 Hz
+    vibrato_depth 0.04
+}
+
+# Rhodes: FM electric piano for the syncopated chord hits.
+module fm rhodes {
+    algorithm dual_pairs
+    level 2.0
+    mod_index 0.34
+    feedback 0.08
+    waveform sine
+    op0_ratio 0.032258      # 1x
+    op1_ratio 0.096774      # 2x
+    op2_ratio 0.032258      # 1x
+    op3_ratio 0.225806      # 4x
+    op0_attack 0.2117       # 5 ms
+    op0_decay 0.9213        # 1.1 s
+    op0_sustain 0.24
+    op0_release 0.8794      # 800 ms
+    op1_attack 0.1445       # 3 ms
+    op1_decay 0.8176        # 500 ms
+    op1_sustain 0.08
+    op1_release 0.7883      # 400 ms
+    chorus_mix 0.35
+    vibrato_rate 0.0316     # 0.8 Hz
+    vibrato_depth 0.03
+    lfo_target mod_index
+    lfo_sync bars_8
+    lfo_depth 0.14
+}
+
+# Air: the high drone that makes the record sound wide.
+module fm air {
+    algorithm dual_pairs
+    level 2.0
+    mod_index 0.22
+    feedback 0.05
+    waveform sine
+    op0_ratio 0.032258      # 1x
+    op1_ratio 0.16129       # 3x
+    op0_attack 0.9706       # 1.6 s
+    op0_decay 0.9622        # 1.5 s
+    op0_sustain 0.72
+    op0_release 1.0         # 2 s
+    op1_attack 0.9328       # 1.2 s
+    op1_decay 0.9328        # 1.2 s
+    op1_sustain 0.55
+    op1_release 0.9706      # 1.6 s
+    chorus_mix 0.60
+    lfo_target mod_index
+    lfo_sync bars_16
+    lfo_depth 0.22
+    vibrato_rate 0.0105     # 0.6 Hz
+    vibrato_depth 0.05
+}
+
+# Glass: the arpeggiated sparkle over the drops.
+module fm glass {
+    algorithm two_op
+    level 2.0
+    mod_index 0.40
+    feedback 0.10
+    waveform sine
+    op0_ratio 0.032258      # 1x
+    op1_ratio 0.419355      # 7x
+    op0_attack 0.0912       # 2 ms
+    op0_decay 0.7316        # 260 ms
+    op0_sustain 0.0
+    op0_release 0.7211      # 240 ms
+    op1_attack 0.0          # 1 ms
+    op1_decay 0.6501        # 140 ms
+    op1_sustain 0.0
+    op1_release 0.6299      # 120 ms
+    chorus_mix 0.25
+    lfo_target mod_index
+    lfo_sync bars_8
+    lfo_depth 0.16
+}
+
+# Lead: soulful single-note line, only in the back half.
+module fm lead {
+    algorithm additive
+    level 2.0
+    mod_index 0.30
+    feedback 0.12
+    waveform sine
+    op0_ratio 0.032258      # 1x
+    op1_ratio 0.096774      # 2x
+    op0_attack 0.5008       # 45 ms
+    op0_decay 0.8416        # 600 ms
+    op0_sustain 0.46
+    op0_release 0.8619      # 700 ms
+    op1_attack 0.4475       # 30 ms
+    op1_decay 0.7883        # 400 ms
+    op1_sustain 0.30
+    op1_release 0.8176      # 500 ms
+    chorus_mix 0.25
+    vibrato_rate 0.4211     # 4.5 Hz
+    vibrato_depth 0.08
+    lfo_target mod_index
+    lfo_sync bars_4
+    lfo_depth 0.12
+}
+
+# ────────────────────────────────────────────────
+# PATTERNS — the break
+# ────────────────────────────────────────────────
+
+# Two bars, never the same twice: kick on 1 and the "and" of 3, snare on 2 and 4,
+# ghosts filling the sixteenths.
+pattern brk_main {
+    kick:    X  -  -  -   -  -  -  -   -  -  X  -   -  -  -  -      X  -  -  -   -  -  o  -   -  -  X  -   -  -  x:0.5  -
+    snare:   -  -  o  -   X  -  -  o   -  o  -  -   X  -  -  o      -  -  o  -   X  -  o  -   -  -  -  o   X  -  o  -
+    hat:     x  -  o  x   -  o  x  -   x  o  -  x   -  x  o  -      x  -  o  x   -  o  x  -   x  o  -  x   -  x  o  x
+    openhat: -  -  -  -   -  -  -  x:0.35   -  -  -  -   -  -  -  -      -  -  -  -   -  -  -  -   -  -  -  x:0.35   -  -  -  -
+}
+
+pattern brk_var {
+    kick:    X  -  -  o   -  -  -  -   -  -  X  -   -  -  -  -      X  -  -  -   -  -  -  -   -  -  X  -   o  -  -  -
+    snare:   -  -  -  o   X  -  o  -   -  o  -  -   X  -  o  o      -  o  -  -   X  -  -  o   -  -  o  -   X  -  o  -
+    hat:     x  o  -  x   o  -  x  o   -  x  o  -   x  o  -  x      x  o  -  x   o  -  x  o   -  x  o  -   x  o  x  -
+    openhat: -  -  -  -   -  -  -  -   -  -  -  -   -  -  -  x:0.3      -  -  -  -   -  -  -  x:0.3   -  -  -  -   -  -  -  -
+}
+
+# Four bars: the break assembling itself, last bar rolls into the drop.
+pattern brk_build {
+    kick:    X  -  -  -   -  -  -  -   -  -  -  -   -  -  -  -      X  -  -  -   -  -  -  -   -  -  X  -   -  -  -  -      X  -  -  -   -  -  -  -   -  -  X  -   -  -  -  -      X  -  -  -   -  -  -  -   -  -  -  -   -  -  -  -
+    snare:   -  -  -  -   X  -  -  -   -  -  -  -   X  -  -  -      -  -  -  -   X  -  -  o   -  -  -  -   X  -  -  o      -  -  o  -   X  -  -  o   -  o  -  -   X  -  -  o      -  -  o  -   X  -  o  -   x  -  x  x*2   X  x*2  X*2  X*2
+    hat:     -  o  -  -   o  -  -  o   -  -  o  -   -  o  -  -      x  -  o  -   -  o  x  -   x  -  o  -   -  x  o  -      x  -  o  x   -  o  x  -   x  o  -  x   -  x  o  -      x  -  o  x   -  o  x  -   x  -  -  -   -  -  -  -
+    openhat: -  -  -  -   -  -  -  -   -  -  -  -   -  -  -  -      -  -  -  -   -  -  -  -   -  -  -  -   -  -  -  x:0.3      -  -  -  -   -  -  -  x:0.3   -  -  -  -   -  -  -  -      -  -  -  -   -  -  -  -   -  -  -  -   -  -  -  -
+}
+
+# Just texture: shakers under the intro lift, no kick at all.
+# Four bars for the last drop: the busiest the break ever gets, then it lands
+# back on the main two bars so sixteen bars never read as one loop.
+pattern brk_peak {
+    kick:    X  -  -  o   -  -  -  -   -  -  X  -   -  -  o  -      X  -  -  -   -  -  o  -   -  -  X  -   -  o  x:0.5  -      X  -  -  -   -  -  -  -   -  -  X  -   -  -  -  -      X  -  -  -   -  -  o  -   -  -  X  -   -  -  x:0.5  -
+    snare:   -  o  o  -   X  -  o  o   -  o  -  o   X  -  o  o      -  o  o  -   X  -  o  -   -  o  o  o   X  -  o  x:0.5      -  -  o  -   X  -  -  o   -  o  -  -   X  -  -  o      -  -  o  -   X  -  o  -   -  -  o  o   X  -  o  x*2
+    hat:     x  o  x  o   x  o  x  o   x  o  x  o   x  o  x  o      x  o  x  o   x  o  x  o   x  o  x  o   x  o  x  x      x  -  o  x   -  o  x  -   x  o  -  x   -  x  o  -      x  -  o  x   -  o  x  -   x  o  -  x   -  x  o  x
+    openhat: -  -  -  -   -  -  -  x:0.35   -  -  -  -   -  -  -  -      -  -  -  -   -  -  -  -   -  -  -  x:0.35   -  -  -  -      -  -  -  -   -  -  -  x:0.35   -  -  -  -   -  -  -  -      -  -  -  -   -  -  -  -   -  -  -  x:0.35   -  -  -  -
+}
+
+pattern brk_air {
+    hat:     -  o  -  -   o  -  -  o   -  -  o  -   -  o  -  -      -  o  -  o   -  -  o  -   -  o  -  -   o  -  -  o
+    openhat: -  -  -  -   -  -  -  -   -  -  -  -   -  -  -  x:0.25      -  -  -  -   -  -  -  -   -  -  -  -   -  -  -  -
+}
+
+pattern brk_thin {
+    kick:    X  -  -  -   -  -  -  -   -  -  X  -   -  -  -  -      X  -  -  -   -  -  -  -   -  -  -  -   -  -  -  -
+    snare:   -  -  -  -   X  -  -  o   -  -  -  -   X  -  -  -      -  -  o  -   X  -  -  -   -  -  -  -   X  -  -  o
+    hat:     x  -  o  -   -  o  x  -   x  -  o  -   -  x  o  -      x  -  o  -   -  o  x  -   x  -  -  -   -  -  -  -
+}
+
+# ────────────────────────────────────────────────
+# PATTERNS — harmony
+# ────────────────────────────────────────────────
+# F minor. Fm9 / Dbmaj9 / Bbm11 / Eb11 — every one of them diatonic,
+# every one of them an extension, nothing that resolves too hard.
+
+pattern voice_intro {
+    Fm9:0.52     ..*63
+    Dbmaj9:0.52  ..*63
+}
+
+pattern voice_a {
+    Fm9:0.55     ..*31
+    Dbmaj9:0.55  ..*31
+    Bbm11:0.50   ..*31
+    Eb11:0.50    ..*31
+}
+
+pattern voice_b {
+    Abmaj9:0.52  ..*31
+    Eb11:0.50    ..*31
+    Fm9:0.55     ..*31
+    Dbmaj9:0.52  ..*31
+}
+
+pattern voice_break {
+    Bbm11:0.50   ..*63
+    Abmaj9:0.50  ..*63
+}
+
+# Rhodes: the chords again, syncopated, landing off the kick.
+pattern rhodes_a {
+    -  -  Fm9/4:0.45  ..   -  -  -  -    -  -  -  Fm9/4:0.40   ..  -  -  -
+    -  -  -  -   Fm9/4:0.42  ..  -  -    -  -  Fm9/4:0.36  ..   -  -  -  -
+    -  -  Dbmaj9/4:0.45  ..   -  -  -  -    -  -  -  Dbmaj9/4:0.40   ..  -  -  -
+    -  -  -  -   Dbmaj9/4:0.42  ..  -  -    -  -  Dbmaj9/4:0.36  ..   -  -  -  -
+    -  -  Bbm11/3:0.42  ..   -  -  -  -    -  -  -  Bbm11/3:0.38   ..  -  -  -
+    -  -  -  -   Bbm11/3:0.40  ..  -  -    -  -  Bbm11/3:0.34  ..   -  -  -  -
+    -  -  Eb11/3:0.42  ..   -  -  -  -    -  -  -  Eb11/3:0.38   ..  -  -  -
+    -  -  -  -   Eb11/3:0.40  ..  -  -    -  -  Eb11/3:0.34  ..   -  -  -  -
+}
+
+pattern rhodes_b {
+    -  -  -  Abmaj9/4:0.44   ..  -  -  -    -  -  Abmaj9/4:0.38  ..   -  -  -  -
+    -  -  Abmaj9/4:0.40  ..   -  -  -  -    -  -  -  -   Abmaj9/4:0.34  ..  -  -
+    -  -  -  Eb11/3:0.42   ..  -  -  -    -  -  Eb11/3:0.38  ..   -  -  -  -
+    -  -  Eb11/3:0.40  ..   -  -  -  -    -  -  -  -   Eb11/3:0.34  ..  -  -
+    -  -  -  Fm9/4:0.46   ..  -  -  -    -  -  Fm9/4:0.40  ..   -  -  -  -
+    -  -  Fm9/4:0.42  ..   -  -  -  -    -  -  -  -   Fm9/4:0.36  ..  -  -
+    -  -  -  Dbmaj9/4:0.44   ..  -  -  -    -  -  Dbmaj9/4:0.38  ..   -  -  -  -
+    -  -  Dbmaj9/4:0.40  ..   -  -  -  -    -  -  -  -   Dbmaj9/4:0.34  ..  -  -
+}
+
+# Fed into the tape bus so the echo chamber has something to chew on.
+pattern ghost_hold {
+    Bbm11/4:0.50  ..*31
+    Abmaj9/4:0.50 ..*31
+}
+
+# Arpeggiated sparkle — one held chord per two bars, the arp does the work.
+pattern glass_a {
+    Fm9/5:0.34     ..*31
+    Dbmaj9/5:0.34  ..*31
+    Bbm11/4:0.30   ..*31
+    Eb11/4:0.30    ..*31
+}
+
+pattern glass_b {
+    Abmaj9/5:0.32  ..*31
+    Eb11/4:0.30    ..*31
+    Fm9/5:0.34     ..*31
+    Dbmaj9/5:0.32  ..*31
+}
+
+# Air: wide held dyads, four bars each.
+pattern air_low {
+    [F5 C6 Ab6]:0.30   ..*63
+    [Db5 Ab5 F6]:0.30  ..*63
+}
+
+pattern air_high {
+    [Ab5 Eb6 C7]:0.28  ..*63
+    [F5 C6 Ab6]:0.28   ..*63
+}
+
+# ────────────────────────────────────────────────
+# PATTERNS — sub and lead
+# ────────────────────────────────────────────────
+# F, Db, Bb, Eb kept inside one octave so the weight never moves.
+
+pattern sub_a {
+    F1:0.95   ..*9   F1:0.80   ..*5
+    F1:0.90   ..*9   F1:0.78   ..*5
+    Db2:0.95  ..*9   Db2:0.80  ..*5
+    Db2:0.90  ..*9   Db2:0.78  ..*5
+    Bb1:0.95  ..*9   Bb1:0.80  ..*5
+    Bb1:0.90  ..*9   Bb1:0.78  ..*5
+    Eb2:0.95  ..*9   Eb2:0.80  ..*5
+    Eb2:0.90  ..*9   Eb2:0.78  ..*5
+}
+
+pattern sub_b {
+    Ab1:0.95  ..*9   Ab1:0.80  ..*5
+    Ab1:0.90  ..*9   Ab1:0.78  ..*5
+    Eb2:0.95  ..*9   Eb2:0.80  ..*5
+    Eb2:0.90  ..*9   Eb2:0.78  ..*5
+    F1:0.95   ..*9   F1:0.80   ..*5
+    F1:0.90   ..*9   F1:0.78   ..*5
+    Db2:0.95  ..*9   Db2:0.80  ..*5
+    Db2:0.90  ..*9   Db2:0.78  ..*5
+}
+
+pattern sub_hold {
+    F1:0.80   ..*31
+    F1:0.80   ..*31
+    Db2:0.80  ..*31
+    Db2:0.80  ..*31
+}
+
+# Lead motif, four bars, built from F Ab C Eb so it sits over all four chords.
+pattern lead_a {
+    -   -   -   -     -   -   C5:0.55  ..     ..  ..  -   -     Ab4:0.50  ..  ..  ..
+    ..  ..  -   -     -   -   -   -     F4:0.46  ..  ..  ..     ..  -   -   -
+    -   -   -   -     -   -   Eb5:0.52  ..     ..  ..  -   -     C5:0.46  ..  ..  ..
+    ..  ..  ..  ..    -   -   -   -     Ab4:0.42  ..  ..  ..     ..  ..  -   -
+}
+
+pattern lead_b {
+    -   -   Ab5:0.50  ..     ..  -   -   -     -   -   F5:0.46  ..     ..  ..  -   -
+    Eb5:0.48  ..  ..  ..     ..  ..  -   -     -   -   -   -     C5:0.44  ..  ..  ..
+    -   -   Ab4:0.46  ..     ..  -   -   -     Eb5:0.44  ..  ..  ..     ..  -   -   -
+    -   -   -   -     F4:0.42  ..  ..  ..     ..  ..  ..  ..     ..  ..  -   -
+}
+
+pattern silence {
+    -  -  -  -   -  -  -  -   -  -  -  -   -  -  -  -
+}
+
+# ────────────────────────────────────────────────
+# BUSES
+# ────────────────────────────────────────────────
+
+bus drums
+drums { in > eq(low=2.0, mid=-1.0, high=2.0) > compressor(-14, ratio=3, attack=12, release=90, makeup=1.26) > saturate(0.25) > master }
+
+# The echo chamber the ghost chords fall into: quarter-note repeats, darkened,
+# swinging across the stereo field. It is what carries the breakdown.
+bus tape
+tape { in > delay(1/4, 0.48) > lowpass(1800, 0.10) > autopan(0.5, bars=4) > master }
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track drums {
+    play silence
+    using brk
+    velocity 1.0
+    level 0.86
+    reverb_send 0.08
+    out > drums
+}
+
+track sub {
+    play silence
+    using sub
+    velocity 1.0
+    level 0.30
+    gate 0.95
+    sidechain 0.18
+    out > lowpass(190, 0.05) > master
+}
+
+track pad {
+    play silence
+    using cloud
+    velocity 0.95
+    level 0.26
+    reverb_send 0.48
+    delay_send 0.14
+    sidechain 0.40
+    out > highpass(240, 0.05) > lowpass(2100, 0.12, lfo_bars=16, lfo_depth=1100) > phaser(0.32, bars=8, stages=8, feedback=0.3) > autopan(0.30, bars=8) > master
+}
+
+track rhodes {
+    play silence
+    using rhodes
+    velocity 0.9
+    level 0.26
+    gate 0.70
+    pan -0.18
+    reverb_send 0.42
+    delay_send 0.26
+    sidechain 0.30
+    out > highpass(320, 0.05) > chorus(0.30) > master
+}
+
+track ghost {
+    play silence
+    using rhodes
+    velocity 0.85
+    level 0.17
+    reverb_send 0.40
+    sidechain 0.0
+    out > highpass(220, 0.05) > chorus(0.35) > tape
+}
+
+track glass {
+    play silence
+    using glass
+    velocity 0.8
+    level 0.16
+    gate 0.40
+    pan 0.26
+    reverb_send 0.52
+    delay_send 0.34
+    sidechain 0.35
+    arp up rate=16 gate=0.35 octaves=2
+    out > highpass(700, 0.05) > master
+}
+
+track lead {
+    play silence
+    using lead
+    velocity 0.85
+    level 0.22
+    gate 0.80
+    pan 0.12
+    reverb_send 0.40
+    delay_send 0.30
+    sidechain 0.30
+    out > highpass(300, 0.05) > master
+}
+
+track air {
+    play silence
+    using air
+    velocity 0.8
+    level 0.15
+    reverb_send 0.55
+    delay_send 0.16
+    sidechain 0.35
+    out > highpass(900, 0.05) > autopan(0.45, bars=16) > master
+}
+
+# ────────────────────────────────────────────────
+# MASTER — glue only. A break has to keep its crest factor.
+# ────────────────────────────────────────────────
+
+master {
+    in > eq(low=1.5, mid=-0.5, high=1.5)
+       > tilt(0.0)
+       > compressor(-16, ratio=1.8, attack=30, release=170, makeup=2.35)
+       > limiter(0.95)
+       > out
+}
+
+# ────────────────────────────────────────────────
+# SCENES
+# ────────────────────────────────────────────────
+
+# INTRO — chords and atmosphere, nothing else. Also reused as the tail.
+scene intro {
+    reverb_mix = 0.55
+    delay_mix = 0.25
+    auto cloud cutoff 0.10 > 0.24
+    auto master tilt -0.25 > -0.05
+    track pad { play voice_intro using cloud sidechain 0.0 velocity 0.85 }
+    track air { play air_low    using air   sidechain 0.0 velocity 0.7 }
+}
+
+# LIFT — shakers and the sub arrive; still no kick.
+scene lift {
+    reverb_mix = 0.50
+    delay_mix = 0.25
+    auto cloud cutoff 0.24 > 0.32
+    track drums  { play brk_air    using brk  level 0.62 }
+    track pad    { play voice_intro using cloud velocity 0.9 }
+    track air    { play air_low    using air }
+    track sub    { play sub_hold   using sub  velocity 0.85 }
+    track rhodes { play rhodes_a   using rhodes velocity 0.7 }
+}
+
+# BUILD — the break assembles, the filter opens, the reverb pulls back.
+scene build {
+    reverb_mix = 0.45
+    delay_mix = 0.22
+    auto cloud cutoff 0.32 > 0.44
+    auto brk kick_level 0.75 > 0.95
+    auto master tilt -0.12 > 0.0
+    track drums  { play brk_build using brk level 0.64 }
+    track pad    { play voice_a   using cloud }
+    track air    { play air_low   using air }
+    track sub    { play sub_a     using sub velocity 0.80 }
+    track rhodes { play rhodes_a  using rhodes }
+}
+
+# DROP A — the break enters whole.
+scene drop_a {
+    reverb_mix = 0.36
+    delay_mix = 0.20
+    auto cloud cutoff 0.40 > 0.50 > 0.42
+    track drums  { play brk_main using brk level 0.80 }
+    track sub    { play sub_a    using sub }
+    track pad    { play voice_a  using cloud }
+    track rhodes { play rhodes_a using rhodes }
+    track glass  { play glass_a  using glass }
+    track air    { play air_high using air }
+}
+
+# DROP B — chords move to Ab, break varies, ghost starts feeding the echo chamber.
+scene drop_b {
+    reverb_mix = 0.38
+    delay_mix = 0.24
+    auto cloud cutoff 0.42 > 0.36
+    auto lead mod_index 0.26 > 0.36
+    track drums  { play brk_var   using brk level 0.80 }
+    track sub    { play sub_b     using sub }
+    track pad    { play voice_b   using cloud }
+    track rhodes { play rhodes_b  using rhodes }
+    track lead   { play lead_a    using lead }
+    track ghost  { play ghost_hold using rhodes velocity 0.55 }
+    track air    { play air_low   using air }
+}
+
+# BREAKDOWN — no drums, reverb frozen, the echo chamber carries the chords.
+scene breakdown {
+    reverb_mix = 0.52
+    delay_mix = 0.28
+    auto reverb_freeze 0 > 1
+    auto cloud cutoff 0.30 > 0.46
+    auto master tilt -0.30 > 0.0
+    track pad   { play voice_break using cloud sidechain 0.0 velocity 0.72 }
+    track air   { play air_high    using air   sidechain 0.0 velocity 0.62 }
+    track ghost { play ghost_hold  using rhodes velocity 0.66 }
+    track lead  { play lead_b      using lead  sidechain 0.0 velocity 0.55 }
+}
+
+# DROP C — everything, the fullest the record gets.
+scene drop_c {
+    reverb_mix = 0.34
+    delay_mix = 0.20
+    auto cloud cutoff 0.44 > 0.56 > 0.46
+    auto glass mod_index 0.36 > 0.46
+    track drums  { play brk_peak using brk level 1.0 }
+    track sub    { play sub_a    using sub }
+    track pad    { play voice_a  using cloud }
+    track rhodes { play rhodes_a using rhodes velocity 1.0 }
+    track glass  { play glass_b  using glass velocity 0.95 }
+    track lead   { play lead_b   using lead velocity 0.95 }
+    track air    { play air_high using air }
+}
+
+# OUTRO — the break thins out, the tail takes over.
+scene outro {
+    reverb_mix = 0.50
+    delay_mix = 0.26
+    auto drums level 0.80 > 0.0
+    auto cloud cutoff 0.42 > 0.20
+    auto master tilt 0.0 > -0.30
+    track drums  { play brk_thin  using brk }
+    track sub    { play sub_hold  using sub velocity 0.8 }
+    track pad    { play voice_a   using cloud }
+    track air    { play air_low   using air }
+    track rhodes { play rhodes_a  using rhodes velocity 0.7 }
+}
+
+# ────────────────────────────────────────────────
+# ARRANGEMENT — 84 bars
+# ────────────────────────────────────────────────
+
+arrange {
+    intro x8
+    lift x8
+    build x8
+    drop_a x16
+    drop_b x8
+    breakdown x8
+    drop_c x16
+    outro x8
+    intro x4
+}

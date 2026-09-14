@@ -206,6 +206,18 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
             out.push(lint("unused_pattern", format!("pattern '{}' is never played", p.name), "Remove it or play it from a track or scene."));
         }
     }
+    // A declared bus nothing routes into processes silence. Easy to write when
+    // a track means to use `reverb_send` and the author also declares a bus
+    // called `reverb`, which is how two of the examples ended up with one.
+    for b in &song.buses {
+        if !all_tracks.iter().any(|t| t.routing.iter().any(|r| r.kind == b.name)) {
+            out.push(lint(
+                "unused_bus",
+                format!("bus '{}' has no track routed into it", b.name),
+                "Route a track with `out > <bus>`, or remove it. `reverb_send` and `delay_send` feed the global sends, not a bus of that name.",
+            ));
+        }
+    }
 
     out
 }

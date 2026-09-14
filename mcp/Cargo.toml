@@ -3,6 +3,7 @@ name = "synth-mcp"
 version = "0.1.0"
 edition = "2021"
 description = "MCP server exposing the synth-core DSL: docs, parameter registry, check and render"
+build = "build.rs"
 
 [[bin]]
 name = "synth-mcp"

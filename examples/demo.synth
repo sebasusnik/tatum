@@ -10,8 +10,6 @@ scale A minor
 sidechain 0.3
 
 # ── Buses ──
-bus reverb
-bus delay
 bus drumBus
 
 # ────────────────────────────────────────────────
@@ -238,13 +236,7 @@ pattern stab_off {
 # BUS FX CHAINS
 # ────────────────────────────────────────────────
 
-reverb {
-  in > reverb(0.5) > out
-}
 
-delay {
-  in > delay(1/4, 0.35) > out
-}
 
 drumBus {
   in > compressor(-6.0, ratio=4.0, attack=10, release=80) > saturate(0.15) > master
@@ -338,8 +330,8 @@ master {
 
 # Intro: kick + sparse bass
 scene intro {
-  track kick { play kick_4x4 using kick level 0.85 }
-  track bass { play bass_intro using bass level 0.5 velocity 0.7 }
+  track kick { play kick_4x4 using kick level 0.426 }
+  track bass { play bass_intro using bass level 0.2506 velocity 0.7 }
 }
 
 # Buildup: add hats + open hat

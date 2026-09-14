@@ -14,7 +14,7 @@ scale C minor
 
 module keys pad {
     cutoff 0.6
-    resonance 0.3
+    resonance 8%
     chorus_mix 0.4
     attack 0.01
     decay 0.2
@@ -32,13 +32,13 @@ pattern cm7_hold {
 
 track keys {
     play cm7_hold using pad
-    level 0.6
+    level 0.85
     arp updown rate=16 gate=0.5 octaves=2
     delay_send 0.25  reverb_send 0.30
     out > master
 }
 
-master { in > limiter > out }
+master { in > eq(low=1.5, mid=-1.0, high=0.5) > compressor(-10, ratio=2, makeup=4db) > limiter > out }
 
 scene main {
     track keys { play cm7_hold using pad }

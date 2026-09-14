@@ -1,0 +1,467 @@
+# ╔════════════════════════════════════════════════════════╗
+# ║  dub_techno.synth — "Tiefenschall"                     ║
+# ║  122 BPM, F minor, 4/4                                 ║
+# ║  Basic Channel / Deepchord / Rhythm & Sound            ║
+# ║  One minor chord on the offbeat; the echoes are the    ║
+# ║  melody. 8 scenes, 112 bars.                           ║
+# ╚════════════════════════════════════════════════════════╝
+
+tempo 122
+meter 4/4
+scale F minor
+swing 0.52
+humanize 0.12 timing 0.05
+gain_comp 0
+sidechain 0.45 attack=1ms release=150ms
+
+# ── The sends are the instrument ──────────────────────────
+# Dotted eighth at 122 = ~369 ms: the repeats land against the
+# offbeat stab instead of on top of it. filter=0.72 is a dark
+# one-pole in the feedback path, so every repeat loses top end.
+delay sync=dotted_eighth feedback=0.74 filter=0.72 sidechain=0.35
+reverb size=0.88 damp=0.62 predelay=38 sidechain=0.5
+
+# Shape the repeats on the way back: out of the sub, under the
+# air, drifting across the stereo field over 8 bars.
+delay_return {
+    in > highpass(210hz, 0.2)
+       > lowpass(1.6khz, 0.24, lfo_bars=8, lfo_depth=700)
+       > autopan(0.5, bars=8)
+       > out
+}
+
+# The tail: darker still, and it breathes with the kick via
+# reverb sidechain= above.
+reverb_return {
+    in > highpass(260hz, 0.15)
+       > lowpass(1.9khz, 0.22, lfo_bars=8, lfo_depth=900)
+       > autopan(0.32, bars=8)
+       > out
+}
+
+# ════════════════════════════════════════════════════════
+# MODULES
+# ════════════════════════════════════════════════════════
+
+# The chord. Detuned unison, chorus, filtered down to a mumble.
+# Short decay: what you hear is almost entirely the sends.
+module keys chord {
+    voice_mode unison
+    detune 22%
+    chorus_mix 55%
+    cutoff 820hz
+    resonance 26%
+    attack 14ms
+    decay 210ms
+    sustain 6%
+    release 260ms
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync bars_8
+    lfo_depth 14%
+    vibrato_rate 0.6hz
+    vibrato_depth 3%
+}
+
+# Sub: almost a sine. Cutoff below the second harmonic.
+module bass sub {
+    cutoff 165hz
+    cutoff_env 90hz
+    resonance 8%
+    glide 24%
+    osc1_wave saw
+    osc2_wave saw
+    osc2_pitch -12st
+    keytrack 18%
+    attack 10ms
+    decay 450ms
+    sustain 72%
+    release 320ms
+}
+
+# Deep kick, soft hat, and a rim that is a very short, high snare.
+module beats kit {
+    kick_level 100%
+    kick_decay 66%
+    kick_pitch 0.58x
+    kick_click 5%
+    kick_drive 34%
+    kick_pan 0%
+    snare_level -13db
+    snare_decay 5%
+    snare_pitch 1.75x
+    snare_drive 10%
+    snare_snap 58%
+    snare_pan -38%
+    hihat_level 24%
+    hihat_decay 16%
+    hihat_pitch 1.4x
+    hihat_pan 42%
+}
+
+# ── The noise bed. Bandpassed white noise with a two-second
+#    attack, so it swells rather than starts.
+instrument hiss {
+    gain 0.9
+    noise() as n
+    n > bandpass(760, 0.22) as bp
+    bp > adsr(2.5, 1.0, 0.8, 3.0) as amp
+    amp > out
+}
+
+# ════════════════════════════════════════════════════════
+# PATTERNS
+# ════════════════════════════════════════════════════════
+
+# ── The chord, on the offbeat. Fm9 = F Ab C Eb G.
+pattern stab_full {
+    -  -  Fm9:0.72  -    -  -  Fm9:0.55  -    -  -  Fm9:0.66  -    -  -  Fm9:0.5   -
+}
+
+# Sparser: the "and" of 1 and the "and" of 3 only.
+pattern stab_half {
+    -  -  Fm9:0.68  -    -  -  -  -    -  -  Fm9:0.52  -    -  -  -  -
+}
+
+# Four bars: three of Fm9, then Dbmaj9 — the only chord change
+# in the record.
+pattern stab_dub {
+    -  -  Fm9:0.7   -    -  -  Fm9:0.5   -    -  -  Fm9:0.64  -    -  -  Fm9:0.46  -
+    -  -  Fm9:0.7   -    -  -  Fm9:0.5   -    -  -  Fm9:0.64  -    -  -  -  -
+    -  -  Fm9:0.68  -    -  -  Fm9:0.5   -    -  -  Fm9:0.62  -    -  -  Fm9:0.44  -
+    -  -  Dbmaj9:0.66 -  -  -  Dbmaj9:0.5 -   -  -  Dbmaj9:0.6 -   -  -  -  -
+}
+
+# One stab per bar, for the echoes to eat.
+pattern stab_ghost {
+    -  -  Fm9:0.6   -    -  -  -  -    -  -  -  -    -  -  -  -
+}
+
+# The last chord of the record, thinning out over eight bars.
+pattern stab_out {
+    -  -  Fm9:0.58  -*13
+    -  -  Fm9:0.46  -*13
+    -*16
+    -  -  Fm9:0.42  -*13
+    -*16
+    -  -  Fm9:0.32  -*13
+    -*16
+    -  -  Fm9:0.22  -*13
+    -*16
+    -*16
+    -*16
+    -*16
+    -*16
+    -*16
+    -*16
+    -*16
+}
+
+# ── Sub ──
+pattern sub_f {
+    F1:0.8  ..*7   -*8
+}
+
+pattern sub_dub {
+    F1:0.8  ..*7   -*8
+    F1:0.8  ..*7   -*8
+    F1:0.8  ..*7   -*8
+    Db1:0.75 ..*7  -*8
+}
+
+pattern sub_long {
+    F1:0.7  ..*15
+}
+
+pattern sub_out {
+    F1:0.7  ..*15
+    ..*16
+    F1:0.65 ..*15
+    ..*16
+    F1:0.55 ..*15
+    ..*16
+    -*16
+    -*16
+    -*16
+    -*16
+    -*16
+    -*16
+    -*16
+    -*16
+    -*16
+    -*16
+}
+
+# ── Drums ──
+pattern beat_kick {
+    kick: X - - -  x - - -  X - - -  x - - -
+}
+
+pattern beat_sparse {
+    kick: X - - -  x - - -  X - - -  x - - -
+    hat:  -  -  -  -   -  -  o  -   -  -  -  -   -  -  o  -
+}
+
+pattern beat_main {
+    kick:  X - - -  x - - -  X - - -  x - - -    X - - -  x - - -  X - - -  x - - -
+    hat:   - - o -  - - x -  - - o -  - - x -    - - o -  - - x -  - - o -  - - x:0.5 -
+    snare: - - - -  - - - -  - - - -  - - - -    - - - -  - - o -  - - - -  - - - -
+}
+
+pattern beat_dub {
+    kick:  X - - -  x - - -  X - - -  x - - -    X - - -  x - - -  X - - -  x - - -
+    hat:   - - o -  - - x -  - - o -  - - x -    - - x -  - - o -  - - x -  - - o -
+    snare: - - - -  - - o -  - - - -  - - - -    - - - -  - - - -  - - - -  - - o:0.3 -
+}
+
+pattern beat_thin {
+    kick: X - - -  - - - -  x - - -  - - - -
+    hat:  - - - -  - - o -  - - - -  - - o -
+}
+
+# Sixteen bars. Everything stops inside the pattern by bar 8, which
+# leaves the delay and the reverb eight empty bars to ring out in
+# instead of being cut off by the end of the arrangement.
+# One long line on purpose. A drum lane does NOT concatenate across
+# rows the way a melodic pattern does — every row after the first is
+# dropped, silently — and `-*16` in a lane is read as a roll, not as
+# sixteen rests. Both compile clean and both put a kick on every
+# downbeat of the tail.
+pattern beat_out {
+    kick: X - - - - - - - - - - - - - - -  x - - - - - - - - - - - - - - -  o - - - - - - - - - - - - - - -  - - - - - - - - - - - - - - - -  x - - - - - - - - - - - - - - -  - - - - - - - - - - - - - - - -  - - - - - - - - - - - - - - - -  - - - - - - - - - - - - - - - -  - - - - - - - - - - - - - - - -  - - - - - - - - - - - - - - - -  - - - - - - - - - - - - - - - -  - - - - - - - - - - - - - - - -  - - - - - - - - - - - - - - - -  - - - - - - - - - - - - - - - -  - - - - - - - - - - - - - - - -  - - - - - - - - - - - - - - - -
+}
+
+
+# ── The noise bed: one held note, never retriggered ──
+pattern hiss_hold {
+    C3:0.7  ..*15
+}
+
+pattern hiss_out {
+    C3:0.7  ..*15
+    ..*16
+    ..*16
+    ..*16
+    ..*16
+    ..*16
+    ..*16
+    ..*16
+    -*16
+    -*16
+    -*16
+    -*16
+    -*16
+    -*16
+    -*16
+    -*16
+}
+
+# ════════════════════════════════════════════════════════
+# BUSES
+# ════════════════════════════════════════════════════════
+
+bus drumbus
+
+drumbus {
+    in > compressor(-16, ratio=2.4, attack=20, release=200, makeup=1.5db)
+       > saturate(0.3)
+       > lowpass(6khz, 0.1)
+       > master
+}
+
+# ════════════════════════════════════════════════════════
+# TRACKS
+# ════════════════════════════════════════════════════════
+
+track beat {
+    play beat_main
+    using kit
+    level 0.92
+    out > drumbus
+}
+
+track sub {
+    play sub_f
+    using sub
+    level 0.67
+    gate 0.92
+    sidechain 0.55
+    out > lowpass(200hz, 0.12) > saturate(0.18) > master
+}
+
+track stab {
+    play stab_full
+    using chord
+    level 0.29
+    gate 0.16
+    velocity 0.75
+    pan -0.12
+    delay_send 0.85
+    reverb_send 0.60
+    sidechain 0.5
+    out > highpass(230hz, 0.2)
+        > lowpass(1.5khz, 0.28, lfo_bars=8, lfo_depth=600)
+        > compressor(-14, ratio=2.0, attack=15, release=200, makeup=3db)
+        > saturate(0.2)
+        > master
+}
+
+track bed {
+    play hiss_hold
+    using hiss
+    level 0.36
+    reverb_send 0.3
+    delay_send 0.06
+    sidechain 0.35
+    out > highpass(300hz, 0.12)
+        > lowpass(2.2khz, 0.2, lfo_bars=8, lfo_depth=1400)
+        > autopan(0.5, bars=8)
+        > master
+}
+
+track ghostchord {
+    play stab_ghost
+    using chord
+    level 0.31
+    gate 0.2
+    velocity 0.7
+    delay_send 0.3
+    # `capture` lives on the track, not on a bus: a bus chain runs for the
+    # whole song, so a capture there keeps looping its window under every
+    # later scene. An insert chain only runs while its track is active, so
+    # this records the first four bars of `echoes` and plays them back
+    # halved and backwards for the four bars after that, then stops.
+    out > capture(4, speed=0.5, reverse=1)
+        > lowpass(1.1khz, 0.22)
+        > gain(0.85)
+        > master
+}
+
+# ════════════════════════════════════════════════════════
+# MASTER
+# ════════════════════════════════════════════════════════
+
+master {
+    in > tilt(-0.16)
+       > lowpass(16khz, 0.05)
+       > eq(low=1.8, mid=-1.0, high=-2.5)
+       > compressor(-8, ratio=1.6, attack=30, release=280, makeup=1db)
+       > limiter(0.95)
+       > out
+}
+
+# ════════════════════════════════════════════════════════
+# SCENES
+# ════════════════════════════════════════════════════════
+
+# 1. drift (8) — filtered noise and one chord already three echoes
+#    deep. No drums; nothing ducks.
+scene drift {
+    reverb_mix = 0.55
+    delay_mix = 0.30
+    auto master cutoff 2500 > 9000
+    auto stab level 0.07 > 0.24
+    track stab { play stab_ghost using chord sidechain 0.0 velocity 0.55 }
+    track bed  { play hiss_hold using hiss  sidechain 0.0 }
+}
+
+# 2. pulse (16) — kick and sub arrive. Still nothing to hum.
+scene pulse {
+    reverb_mix = 0.5
+    delay_mix = 0.32
+    auto master cutoff 9000 > 14000
+    track beat { play beat_kick using kit level 0.77 }
+    track sub  { play sub_long using sub level 0.56 }
+    track bed  { play hiss_hold using hiss }
+}
+
+# 3. enter (16) — the chord, far away, opening over sixteen bars.
+scene enter {
+    reverb_mix = 0.55
+    delay_mix = 0.45
+    # keys cutoff is exponential 200Hz..20kHz; `auto` will not take unit
+    # literals, so these are the float equivalents of 480Hz -> 1.1kHz.
+    auto chord cutoff 0.190 > 0.370
+    auto stab level 0.09 > 0.29
+    track beat { play beat_sparse using kit level 0.81 }
+    track sub  { play sub_f      using sub  level 0.59 }
+    track stab { play stab_half  using chord }
+    track bed  { play hiss_hold  using hiss }
+}
+
+# 4. deep (16) — full chord on every offbeat, hat and rim in.
+scene deep {
+    reverb_mix = 0.56
+    delay_mix = 0.58
+    auto chord cutoff 0.370 > 0.423 > 0.327    # 1.1kHz -> 1.4kHz -> 900Hz
+    track beat { play beat_main using kit level 0.84 }
+    track sub  { play sub_f     using sub  level 0.62 }
+    track stab { play stab_full using chord level 0.29 }
+    track bed  { play hiss_hold using hiss }
+}
+
+# 5. dub (16) — the one chord change, the delay pushed up.
+scene dub {
+    reverb_mix = 0.62
+    delay_mix = 0.74
+    auto master tilt -0.16 > -0.34
+    auto chord cutoff 0.338 > 0.398            # 950Hz -> 1.25kHz
+    track beat { play beat_dub  using kit level 0.81 }
+    track sub  { play sub_dub   using sub  level 0.62 }
+    track stab { play stab_dub  using chord level 0.30 }
+    track bed  { play hiss_hold using hiss }
+}
+
+# 6. echoes (8) — reverb frozen, the chord goes to the capture
+#    bus and comes back halved and backwards. Drums thin out.
+scene echoes {
+    reverb_freeze = 1
+    reverb_mix = 0.6
+    delay_mix = 0.7
+    auto master tilt -0.34 > -0.2
+    track beat       { play beat_thin  using kit level 0.70 }
+    track sub        { play sub_long   using sub level 0.56 }
+    track ghostchord { play stab_ghost using chord }
+    track bed        { play hiss_hold  using hiss }
+}
+
+# 7. return (16) — the chord back, darker than it left.
+scene return {
+    reverb_mix = 0.58
+    delay_mix = 0.62
+    auto master tilt -0.2 > -0.3
+    auto chord cutoff 0.389 > 0.272            # 1.2kHz -> 700Hz
+    track beat { play beat_main using kit level 0.84 }
+    track sub  { play sub_f     using sub  level 0.62 }
+    track stab { play stab_full using chord level 0.29 }
+    track bed  { play hiss_hold using hiss }
+}
+
+# 8. fade (16) — eight bars of thinning out, then eight bars in which
+#    nothing plays and the delay and the reverb have the record to
+#    themselves. The master filter closes across the whole scene.
+scene fade {
+    reverb_mix = 0.66
+    delay_mix = 0.58
+    auto master cutoff 12000 > 900
+    auto chord cutoff 0.272 > 0.150            # 700Hz -> 400Hz
+    track beat { play beat_out  using kit  level 0.63 }
+    track sub  { play sub_out   using sub  level 0.53 }
+    track stab { play stab_out  using chord level 0.21 }
+    track bed  { play hiss_out  using hiss }
+}
+
+# ════════════════════════════════════════════════════════
+# ARRANGEMENT — 112 bars, ~3:40
+# ════════════════════════════════════════════════════════
+
+arrange {
+    drift  x8
+    pulse  x16
+    enter  x16
+    deep   x16
+    dub    x16
+    echoes x8
+    return x16
+    fade   x16
+}

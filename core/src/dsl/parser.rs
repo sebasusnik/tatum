@@ -956,7 +956,15 @@ impl Parser {
                     for _ in 0..n { current_row.push(Step::Tie); }
                 }
                 Token::Newline => {
-                    if !current_row.is_empty() {
+                    // A drum lane may be written across several lines. Ending
+                    // the row at the first newline turned the continuation into
+                    // an unlabelled row, which the compiler then dropped: the
+                    // pattern compiled clean and played half of what was written.
+                    let lane_continues = labeled_mode
+                        && !current_row.is_empty()
+                        && !self.next_line_starts_a_lane()
+                        && !matches!(self.peek_past_newlines(), Token::RBrace | Token::Eof);
+                    if !current_row.is_empty() && !lane_continues {
                         rows.push(current_row);
                         current_row = Vec::new();
                     }
@@ -983,6 +991,16 @@ impl Parser {
         }
 
         self.expect(&Token::RBrace);
+        if !lane_labels.is_empty() && lane_labels.len() != rows.len() {
+            let s = self.span();
+            self.errors.push(ParseError {
+                line: s.line, col: s.col,
+                message: format!(
+                    "pattern '{}': {} lane labels but {} rows. Every row of a drum pattern needs its own `lane:` label.",
+                    name, lane_labels.len(), rows.len()
+                ),
+            });
+        }
         patterns.push(PatternDef { name, rows, lane_labels });
     }
 
@@ -1237,6 +1255,20 @@ impl Parser {
     }
 
     /// The next token, looking past newlines (without consuming them).
+    /// In a drum pattern, does a new lane start after the newlines ahead?
+    /// `hat:` begins one; anything else is the current lane continuing onto
+    /// another line.
+    fn next_line_starts_a_lane(&self) -> bool {
+        let mut i = self.pos;
+        while i < self.tokens.len() && matches!(self.tokens[i].token, Token::Newline) {
+            i += 1;
+        }
+        if i + 1 >= self.tokens.len() {
+            return false;
+        }
+        matches!(self.tokens[i].token, Token::Ident(_)) && matches!(self.tokens[i + 1].token, Token::Colon)
+    }
+
     fn peek_past_newlines(&self) -> &Token {
         let mut i = self.pos;
         while i < self.tokens.len() && matches!(self.tokens[i].token, Token::Newline) {

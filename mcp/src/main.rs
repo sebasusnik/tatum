@@ -23,6 +23,48 @@ use synth_core::song_engine::{DslError, SongEngine};
 use synth_core::SAMPLE_RATE;
 
 const DSL_DOC: &str = include_str!("../../docs/DSL.md");
+
+/// The server compiles the docs, the parser and the registries in. A client
+/// that connected before the last build keeps talking to all of them, and
+/// nothing in the protocol says so: two agents spent most of a session writing
+/// what `synth_docs` told them to write and being told it was a syntax error.
+/// Every response carries this, and `staleness()` compares it against the
+/// source on disk.
+const BUILD_STAMP: &str = concat!(env!("CARGO_PKG_VERSION"), " built ", env!("SYNTH_BUILD_TIME"));
+
+/// A warning when the sources are newer than this binary, so the mismatch is
+/// visible in the one place the client is already reading.
+fn staleness() -> Option<String> {
+    let built: u64 = env!("SYNTH_BUILD_EPOCH").parse().ok()?;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent()?;
+    let mut newest = 0u64;
+    let mut newest_name = String::new();
+    for rel in ["core/src", "mcp/src", "docs"] {
+        let mut stack = vec![root.join(rel)];
+        while let Some(dir) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+            for e in entries.flatten() {
+                let path = e.path();
+                if path.is_dir() { stack.push(path); continue; }
+                let Ok(meta) = e.metadata() else { continue };
+                let Ok(modified) = meta.modified() else { continue };
+                let Ok(secs) = modified.duration_since(std::time::UNIX_EPOCH) else { continue };
+                if secs.as_secs() > newest {
+                    newest = secs.as_secs();
+                    newest_name = path.strip_prefix(root).unwrap_or(&path).display().to_string();
+                }
+            }
+        }
+    }
+    if newest > built + 5 {
+        Some(format!(
+            "this server was built before {} was last changed, so its parser, its docs and its parameter registry are all out of date. Restart the MCP connection (or rebuild with `cargo build --release -p synth-mcp`) before trusting anything below.",
+            newest_name
+        ))
+    } else {
+        None
+    }
+}
 const PROTOCOL_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18"];
 const MAX_RENDER_BARS: u32 = 512;
 /// Default threshold of the `limiter` node; a section peaking here is being limited.
@@ -133,8 +175,11 @@ fn initialize(params: &Value) -> Value {
             "tools": { "listChanged": false },
             "resources": { "subscribe": false, "listChanged": false }
         },
-        "serverInfo": { "name": "synth-mcp", "version": env!("CARGO_PKG_VERSION") },
-        "instructions": INSTRUCTIONS
+        "serverInfo": { "name": "synth-mcp", "version": env!("CARGO_PKG_VERSION"), "build": BUILD_STAMP },
+        "instructions": match staleness() {
+            Some(w) => format!("STALE SERVER: {}\n\n{}", w, INSTRUCTIONS),
+            None => INSTRUCTIONS.to_string(),
+        }
     })
 }
 
@@ -199,7 +244,10 @@ fn call_tool(ctx: &Ctx, params: &Value) -> Result<Value, (i64, String)> {
     let name = params.get("name").and_then(Value::as_str).unwrap_or("");
     let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
     let outcome = match name {
-        "synth_docs" => Ok(DSL_DOC.to_string()),
+        "synth_docs" => Ok(match staleness() {
+            Some(w) => format!("> **STALE SERVER.** {}\n\n{}", w, DSL_DOC),
+            None => DSL_DOC.to_string(),
+        }),
         "synth_params" => tool_params(&args),
         "synth_examples" => tool_examples(ctx, &args),
         "synth_check" => tool_check(&args),
@@ -317,9 +365,17 @@ fn tool_check(args: &Value) -> Result<String, String> {
                 .into_iter()
                 .map(|l| json!({ "code": l.code, "message": l.message, "hint": l.hint }))
                 .collect();
-            Ok(serde_json::to_string_pretty(&json!({ "ok": true, "summary": summary(&song), "warnings": warnings })).unwrap())
+            Ok(serde_json::to_string_pretty(&json!({
+                "ok": true,
+                "stale_server": staleness(),
+                "summary": summary(&song),
+                "warnings": warnings
+            })).unwrap())
         }
-        Err(err_json) => Err(pretty(&err_json)),
+        Err(err_json) => Err(match staleness() {
+            Some(w) => format!("STALE SERVER: {}\n\n{}", w, pretty(&err_json)),
+            None => pretty(&err_json),
+        }),
     }
 }
 
@@ -483,25 +539,33 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     // Two tracks whose energy sits in the same band, at similar level, mask each
     // other. It took a lot of listening to work out that the kick was fighting
     // the drone; the numbers were there the whole time.
-    let mut masking: Vec<String> = Vec::new();
+    let loudest_db = track_report.iter()
+        .filter_map(|t| t["db"].as_f64())
+        .fold(f64::MIN, f64::max);
+    let mut masking: Vec<(f64, String)> = Vec::new();
     for i in 0..track_report.len() {
         for j in (i + 1)..track_report.len() {
             let (a, b) = (&track_report[i], &track_report[j]);
-            let same_band = a["band"] == b["band"] && !a["band"].is_null();
-            let close = (a["db"].as_f64().unwrap_or(-99.0) - b["db"].as_f64().unwrap_or(-99.0)).abs() <= 6.0;
-            if same_band && close {
-                masking.push(format!(
-                    "{} and {} both live in {} within 6 dB of each other",
-                    a["track"].as_str().unwrap_or(""), b["track"].as_str().unwrap_or(""),
-                    a["band"].as_str().unwrap_or("")
-                ));
-            }
+            if a["band"] != b["band"] || a["band"].is_null() { continue; }
+            let (da, db_) = (a["db"].as_f64().unwrap_or(-99.0), b["db"].as_f64().unwrap_or(-99.0));
+            // Two quiet tracks sharing a band mask nothing anyone can hear.
+            if da < loudest_db - 12.0 || db_ < loudest_db - 12.0 { continue; }
+            let apart = (da - db_).abs();
+            if apart > 6.0 { continue; }
+            masking.push((apart, format!(
+                "{} and {} are {:.0} dB apart in {}",
+                a["track"].as_str().unwrap_or(""), b["track"].as_str().unwrap_or(""),
+                apart, a["band"].as_str().unwrap_or("")
+            )));
         }
     }
+    masking.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap_or(std::cmp::Ordering::Equal));
     if !masking.is_empty() {
+        let worst: Vec<String> = masking.iter().take(3).map(|(_, m)| m.clone()).collect();
+        let more = if masking.len() > 3 { format!(" (and {} more pairs)", masking.len() - 3) } else { String::new() };
         hints.push(format!(
-            "masking: {}. Carve one of each pair out of the other's band with eq() or a filter, or move them apart in level.",
-            masking.join("; ")
+            "masking: {}{}. Carve one of each pair out of the other's band with eq() or a filter, or move them apart in level.",
+            worst.join("; "), more
         ));
     }
 
