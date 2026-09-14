@@ -38,7 +38,7 @@ delay_return  { in > highpass(400, 0.2) > out }
 # and not a piano: the *modulator* envelopes also have slow attacks, so the tine
 # brightness swells in over a second and settles back, instead of striking.
 module fm tines {
-    level 2.0            # explicit: fm defaults to 1.0
+    level 1.4            # explicit: fm defaults to 1.0
     algorithm dual_pairs
     waveform sine
     mod_index 0.30             # low: no clang, and nothing for the reverb to turn into grit
@@ -82,7 +82,7 @@ module keys air {
 # The only layer that reaches the master dry: a tighter two_op version of the same
 # piano, so the chord changes read. Its LFO walks the mod index, so the timbre drifts.
 module fm tines_body {
-    level 2.0            # explicit: fm defaults to 1.0
+    level 1.4            # explicit: fm defaults to 1.0
     algorithm two_op
     waveform sine
     mod_index 0.36
