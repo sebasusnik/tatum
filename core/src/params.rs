@@ -214,7 +214,7 @@ pub const BASS_PARAMS: &[ParamSpec] = &[
 // ── FM ──
 
 pub const FM_PARAMS: &[ParamSpec] = &[
-    spec!("algorithm", ParamId::Fm(FmParam::Algorithm), Range::Choice(FM_ALGORITHMS), 0.0, "Operator routing (index/7 when numeric)"),
+    spec!("algorithm", ParamId::Fm(FmParam::Algorithm), Range::Choice(FM_ALGORITHMS), 0.0, "Operator routing"),
     spec!("mod_index", ParamId::Fm(FmParam::ModIndex), Range::Unit, 0.5, "Modulation index, exponential 0.1..4.0"),
     spec!("feedback", ParamId::Fm(FmParam::Feedback), Range::Unit, 0.0, "Global operator feedback (scaled to 0..0.7)"),
     spec!("waveform", ParamId::Fm(FmParam::Waveform), Range::Choice(FM_WAVEFORMS), 0.0, "Operator waveform"),

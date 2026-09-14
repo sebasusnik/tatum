@@ -153,6 +153,13 @@ impl Parser {
                     self.advance();
                     self.parse_groove(&mut song.grooves);
                 }
+                // `delay key=value ...` / `reverb key=value ...` configure the global sends.
+                // `reverb {` is still a bus chain, so only take this path on `ident =`.
+                Token::Ident(ref name) if (name == "delay" || name == "reverb") && self.next_is_key_value() => {
+                    let which = name.clone();
+                    self.advance();
+                    self.parse_send_fx_globals(&which, &mut song.globals);
+                }
                 Token::Ident(_) => {
                     self.try_parse_bus_chain_or_error(&mut song);
                 }
@@ -1033,6 +1040,58 @@ impl Parser {
 
     // ── Bus chain ──
 
+    /// True when the tokens after the current one look like `ident =`.
+    fn next_is_key_value(&self) -> bool {
+        let n = self.tokens.len();
+        let i = self.pos + 1;
+        i + 1 < n
+            && matches!(self.tokens[i].token, Token::Ident(_))
+            && matches!(self.tokens[i + 1].token, Token::Eq)
+    }
+
+    /// Top-level `delay sync=dotted_eighth feedback=0.45 filter=0.5 time=0.3`
+    /// or `reverb size=0.7 damp=0.4 predelay=20`.
+    fn parse_send_fx_globals(&mut self, which: &str, globals: &mut Globals) {
+        loop {
+            let key = match self.peek().clone() {
+                Token::Ident(ref k) => k.clone(),
+                _ => break,
+            };
+            let s = self.span();
+            let (line, col) = (s.line, s.col);
+            self.advance();
+            if !self.expect(&Token::Eq) { break; }
+            // Value: number, or an identifier for `sync`
+            let ident_value = match self.peek().clone() {
+                Token::Ident(ref v) => { let v = v.clone(); self.advance(); Some(v) }
+                _ => None,
+            };
+            let num_value = if ident_value.is_none() { self.expect_number() } else { None };
+            let mut bad = None;
+            match (which, key.as_str()) {
+                ("delay", "sync") => match ident_value {
+                    Some(v) if ["free", "quarter", "dotted_eighth", "eighth", "sixteenth", "triplet_eighth"].contains(&v.as_str()) => {
+                        globals.send_delay.sync = Some(v);
+                    }
+                    _ => bad = Some(String::from("delay sync: expected free | quarter | dotted_eighth | eighth | sixteenth | triplet_eighth")),
+                },
+                ("delay", "time") => globals.send_delay.time = num_value,
+                ("delay", "feedback") => globals.send_delay.feedback = num_value,
+                ("delay", "filter") => globals.send_delay.filter = num_value,
+                ("reverb", "size") => globals.send_reverb.size = num_value,
+                ("reverb", "damp") => globals.send_reverb.damp = num_value,
+                ("reverb", "predelay") => globals.send_reverb.predelay = num_value,
+                _ => bad = Some(format!(
+                    "{}: unknown option '{}' (delay: sync, time, feedback, filter; reverb: size, damp, predelay)",
+                    which, key
+                )),
+            }
+            if let Some(message) = bad {
+                self.errors.push(ParseError { line, col, message });
+            }
+        }
+    }
+
     fn try_parse_bus_chain_or_error(&mut self, song: &mut Song) {
         // Identifier at top level followed by { — bus chain or scene
         let saved_pos = self.pos;
@@ -1171,12 +1230,19 @@ impl Parser {
                 // Override: reverb_mix = 0.2 or delay_mix = 0.18
                 Token::Ident(ref target) => {
                     let target = target.clone();
+                    let s = self.span();
+                    let (line, col) = (s.line, s.col);
                     self.advance();
                     if matches!(self.peek(), Token::Eq) {
                         self.advance();
                         if let Some(val) = self.expect_number() {
                             scene.overrides.push(Override { target, value: val });
                         }
+                    } else {
+                        self.errors.push(ParseError {
+                            line, col,
+                            message: format!("scene '{}': unexpected '{}' (expected track, auto, tempo, or <override> = value)", scene.name, target),
+                        });
                     }
                 }
                 _ => { self.advance(); }

@@ -945,6 +945,12 @@ fn compile_scene(
     for track_def in &scene.tracks {
         // Look up matching global track by name for default inheritance
         let defaults = global_tracks.iter().find(|gt| gt.name == track_def.name);
+        if defaults.is_none() {
+            return Err(CompileError::new(format!(
+                "scene '{}': track '{}' is not declared at top level; scenes can only reconfigure existing tracks",
+                scene.name, track_def.name
+            )));
+        }
         match compile_track(track_def, inst_names, patterns, buses, defaults) {
             Ok(t) => tracks.push(t),
             Err(e) => return Err(e),
@@ -958,7 +964,9 @@ fn compile_scene(
         match ovr.target.as_str() {
             "reverb_mix" => reverb_mix = Some(ovr.value),
             "delay_mix" => delay_mix = Some(ovr.value),
-            _ => {} // Other overrides not handled yet
+            other => return Err(CompileError::new(format!(
+                "scene '{}': unknown override '{}' (expected reverb_mix or delay_mix)", scene.name, other
+            ))),
         }
     }
 

@@ -20,6 +20,12 @@ scale A minor          # major | minor | dorian | mixolydian | pentatonic_minor
 swing 0.56             # 0.5 straight .. 0.75 hard shuffle
 humanize 0.05 timing 0.02
 sidechain 0.4
+
+# Global send effects, fed by each track's delay_send / reverb_send
+delay sync=dotted_eighth feedback=0.45 filter=0.5   # sync: free | quarter | dotted_eighth |
+                                                    #       eighth | sixteenth (default) | triplet_eighth
+                                                    # time=0.3 (seconds) applies when sync=free
+reverb size=0.7 damp=0.4 predelay=20                # predelay in ms
 ```
 
 ## Modules
@@ -51,7 +57,10 @@ A typo produces `line 12: module 'acid' (bass): unknown parameter 'cutof'. Did y
 ## Patterns
 
 Sixteen steps per bar by default. Melodic steps are scale degrees (`1.2` = degree 1,
-octave 2) or absolute notes (`A2`), with optional `:velocity`.
+octave 2) or absolute notes (`A2`), with optional `:velocity`. Rows concatenate, so a
+pattern can span several bars (32 steps = 2 bars). Each track loops its own pattern.
+A note or chord followed by ties that loops back onto the same note keeps sustaining
+instead of retriggering, which is how pads are written: one chord, fifteen ties.
 
 ```
 pattern riff { 1.2:0.9  -  ~5.2:0.8  ..  [1.3 3.3 5.3]:0.6  ..  ..  .. }
@@ -97,7 +106,7 @@ track lead {
 - **mode**: `up`, `down`, `updown`, or `off` (a scene track can turn off an inherited arp).
 - **rate**: notes per bar, one of `4`, `8`, `16` (default), `32`. Follows tempo changes.
 - **gate**: fraction of each arp step the note is held, `0.1`..`1.0` (default `0.6`).
-- **octaves**: `1`..`4`, the held notes are repeated in higher octaves.
+- **octaves**: `1`..`4`, the held notes are repeated in higher octaves (default `1`).
 
 The pattern supplies what is held: a single note or a chord, extended with `..` ties.
 The arp cycles through those notes and stops at the next rest or when the track gate
@@ -107,7 +116,12 @@ expires. Scene tracks inherit the arp from the global track definition.
 
 ```
 scene drop {
+    tempo 128                            # optional per-scene tempo
+    reverb_mix = 0.3                     # wet level of the global sends for this scene
+    delay_mix = 0.2
     auto acid cutoff 0.2 > 0.6 > 0.2     # linear (2 values) or triangle (3 values)
+    auto drums level 1.0 > 0.0           # track (or instrument) level fade
+    auto reverb_mix 0.1 > 0.5
     track drums { play beat using kit }
     track acid  { play riff using acid }
 }
@@ -115,7 +129,10 @@ scene drop {
 arrange { intro x4  drop x8  outro x2 }
 ```
 
-`auto` targets are validated: the module and parameter must exist.
+A scene reconfigures existing tracks by name, in any order; a track not declared at
+top level is a compile error, and so is an unknown override. Tracks the scene does not
+mention are silent for its duration. `auto` runs over the scene's whole length in the
+arrangement and its targets are validated: the module and parameter must exist.
 
 ## Livecoding semantics
 

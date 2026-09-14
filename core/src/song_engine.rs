@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 
 use crate::dsl::compiler::{self, *};
 use crate::dsl::error::{ParseError, CompileError};
-use crate::effects::delay::Delay;
+use crate::effects::delay::{Delay, DelaySync};
 use crate::effects::reverb::Reverb;
 use crate::graph::node::{NodeKind, NodeSpec, MAX_NODE_INPUTS};
 use crate::graph::voice::Instrument;
@@ -565,16 +565,32 @@ impl SongEngine {
         });
 
         // Global send effects — match reference Engine defaults
+        // Defaults: 16th-note delay, small tight room. Overridable with the
+        // top-level `delay ...` / `reverb ...` lines.
         let mut send_delay = Delay::new(SAMPLE_RATE, 2.0);
-        // Tempo-sync delay to 16th note (matching DelaySync::Sixteenth)
-        let sixteenth_time = 60.0 / tempo / 4.0;
-        send_delay.set_time(sixteenth_time, SAMPLE_RATE);
-        send_delay.set_feedback(0.25);
-        send_delay.set_filter(0.6);
+        let d = &song.globals.send_delay;
+        let sync = match d.sync.as_deref() {
+            Some("free") => DelaySync::Free,
+            Some("quarter") => DelaySync::Quarter,
+            Some("dotted_eighth") => DelaySync::DottedEighth,
+            Some("eighth") => DelaySync::Eighth,
+            Some("triplet_eighth") => DelaySync::TripletEighth,
+            _ => DelaySync::Sixteenth,
+        };
+        if let (DelaySync::Free, Some(t)) = (sync, d.time) {
+            send_delay.set_time(t.clamp(0.001, 2.0), SAMPLE_RATE);
+        }
+        send_delay.set_sync(sync, tempo, SAMPLE_RATE);
+        send_delay.set_feedback(d.feedback.unwrap_or(0.25));
+        send_delay.set_filter(d.filter.unwrap_or(0.6));
 
         let mut send_reverb = Reverb::new(SAMPLE_RATE);
-        send_reverb.set_room_size(0.3);  // small room, tight
-        send_reverb.set_damping(0.6);
+        let r = &song.globals.send_reverb;
+        send_reverb.set_room_size(r.size.unwrap_or(0.3));
+        send_reverb.set_damping(r.damp.unwrap_or(0.6));
+        if let Some(pd) = r.predelay {
+            send_reverb.set_pre_delay(pd);
+        }
 
         // Parse swing/humanize from globals
         let swing = song.globals.swing.unwrap_or(0.5);
@@ -672,6 +688,7 @@ impl SongEngine {
             for inst in self.instruments.iter_mut() {
                 inst.set_bpm(t);
             }
+            self.send_delay.set_bpm(t, SAMPLE_RATE);
         }
         let tempo = self.tempo;
 
@@ -683,21 +700,13 @@ impl SongEngine {
             self.delay_wet_level = dmix;
         }
 
-        // Setup automation lanes
+        // Automation lanes are set up after the scene's tracks are activated
+        // (targets resolve against the new layout, not the previous scene's).
         self.active_automations.clear();
         self.scene_step = 0;
-        // Calculate total steps for this scene from arrangement
         if self.arrangement_idx < self.arrangement.len() {
             let (_, repeat) = self.arrangement[self.arrangement_idx];
             self.scene_total_steps = repeat as usize * self.steps_per_bar;
-        }
-        for auto_def in &scene.automations {
-            if let Some(target) = self.resolve_auto_target(&auto_def.target) {
-                self.active_automations.push(ActiveAutomation {
-                    target,
-                    keyframes: auto_def.keyframes.clone(),
-                });
-            }
         }
 
         // Update tracks from scene
@@ -715,9 +724,10 @@ impl SongEngine {
             track.active = false;
         }
 
-        // Activate scene tracks (reusing existing TrackPlayback slots)
-        for (i, st) in scene.tracks.iter().enumerate() {
-            if i < self.tracks.len() {
+        // Activate scene tracks: each scene track reconfigures the top-level
+        // track slot with the same name (never by position).
+        for st in scene.tracks.iter() {
+            if let Some(i) = self.track_names.iter().position(|n| n == &st.name) {
                 let tp = &mut self.tracks[i];
                 tp.instrument_idx = st.instrument_idx;
                 tp.pattern_idx = st.pattern_idx;
@@ -748,6 +758,15 @@ impl SongEngine {
         });
 
         self.recompute_gain_comp();
+
+        let scene = &self.scenes[scene_idx];
+        let mut lanes = Vec::new();
+        for auto_def in &scene.automations {
+            if let Some(target) = self.resolve_auto_target(&auto_def.target) {
+                lanes.push(ActiveAutomation { target, keyframes: auto_def.keyframes.clone() });
+            }
+        }
+        self.active_automations = lanes;
     }
 
     /// Recompute automatic gain compensation based on active track count.
@@ -774,12 +793,10 @@ impl SongEngine {
                     let param = &target[dot_pos + 1..];
 
                     if param == "level" {
-                        // Look for track by name
-                        let track_idx = self.tracks.iter()
-                            .enumerate()
-                            .position(|(_, _)| false) // tracks don't have names at runtime
+                        // `<track> level` by track name, else by the instrument a track uses
+                        let track_idx = self.track_names.iter()
+                            .position(|n| n == name)
                             .or_else(|| {
-                                // Try matching by instrument name
                                 self.instrument_names.iter()
                                     .position(|n| n == name)
                                     .and_then(|inst_idx| {
@@ -1720,6 +1737,12 @@ impl SongEngine {
                 arp.set_bpm(bpm * cfg.rate_mult);
             }
         }
+        self.send_delay.set_bpm(bpm, SAMPLE_RATE);
+    }
+
+    /// Pattern index a track is currently playing (for tests and UI).
+    pub fn track_pattern(&self, idx: usize) -> usize {
+        self.tracks.get(idx).map_or(0, |t| t.pattern_idx)
     }
 
     pub fn set_track_pattern(&mut self, track_idx: usize, pattern_idx: usize) {
