@@ -17,7 +17,7 @@ gain_comp 0
 # Hi-tech ambience is short and dark: a long tail smears the 16ths.
 reverb size=0.42 damp=0.65 predelay=12 sidechain=0.6
 reverb_return { in > highpass(340, 0.25) > lowpass(3200, 0.3, lfo_bars=12, lfo_depth=900) > autopan(0.35, bars=8) > out }
-delay sync=triplet_eighth feedback=0.42 filter=0.5
+delay sync=sixteenth feedback=0.3 filter=0.55
 delay_return  { in > highpass(420, 0.3) > lowpass(7khz, 0.25) > out }
 
 # ────────────────────────────────────────────────
@@ -549,9 +549,9 @@ track murk {
     delay_send 0.12
     out > highpass(110hz, 0.35)
         > eq(low=1.5, mid=-4.0, high=0.5)
-        > lowpass(3200, 0.3, lfo_bars=16, lfo_depth=900)
-        > phaser(0.35, bars=12)
-        > autopan(0.35, bars=10)
+        > lowpass(3200, 0.3, lfo_bars=8, lfo_depth=900)
+        > phaser(0.3, bars=8)
+        > autopan(0.3, bars=8)
         > master
 }
 
