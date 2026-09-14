@@ -412,7 +412,7 @@ track filth {
     velocity 1.0
     level 0.55
     gate 0.60
-    out > saturate(0.65) > lowpass(0.40) > master
+    out > saturate(0.65) > lowpass(1260) > master
 }
 
 track sub {

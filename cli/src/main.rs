@@ -28,7 +28,7 @@ fn print_usage() {
 USAGE:
     synth render <song.synth> [-o output.wav] [--bars N]
     synth check <song.synth>
-    synth params [bass|fm|keys|beats] [--json]
+    synth params [bass|fm|keys|beats|fx] [--json]
 
 COMMANDS:
     render    Parse, compile, and render a .synth file to WAV
@@ -42,6 +42,10 @@ fn cmd_params(args: &[String]) {
     use synth_core::params::{self, ModuleKind};
 
     let json = args.iter().any(|a| a == "--json");
+    if args.iter().any(|a| a == "fx" || a == "nodes") {
+        if json { print!("{}", synth_core::nodes::json()); } else { print!("{}", synth_core::nodes::markdown()); }
+        return;
+    }
     let kinds: Vec<ModuleKind> = match args.iter().find(|a| !a.starts_with("--")) {
         Some(name) => match ModuleKind::from_str(name) {
             Some(k) => vec![k],
@@ -56,6 +60,9 @@ fn cmd_params(args: &[String]) {
         print!("{}", params::json(&kinds));
     } else {
         print!("{}", params::markdown(&kinds));
+        if args.iter().all(|a| a.starts_with("--")) {
+            print!("{}", synth_core::nodes::markdown());
+        }
     }
 }
 

@@ -159,6 +159,9 @@ master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2
 | `delay(1/8, feedback)` | note division, 0..1 | tempo-synced delay inside a chain |
 | `reverb(size)` | 0..1 | plate reverb inside a chain |
 
+Exact ranges and defaults for every node are in [PARAMS.md](PARAMS.md) under "effects and
+nodes" (`synth params fx`). Filter cutoffs are in Hz, not 0..1.
+
 Two ways to get ambience, usable together:
 
 - **Global sends**: every track has `delay_send` / `reverb_send` into the shared delay and

@@ -718,7 +718,7 @@ track sub {
     level 0.32
     sidechain 0.60
     gate 0.90
-    out > lowpass(0.12) > master
+    out > lowpass(350) > master
 }
 
 # Alien — dry, gritty, hard panned
@@ -765,7 +765,7 @@ track void {
     velocity 1.0
     level 0.14
     reverb_send 0.30
-    out > lowpass(0.15) > master
+    out > lowpass(400) > master
 }
 
 # Air — noise sweep, keep it present but filtered
@@ -777,7 +777,7 @@ track air {
     pan 0.10
     reverb_send 0.20
     delay_send 0.08
-    out > lowpass(0.65) > master
+    out > lowpass(3990) > master
 }
 
 # Shimmer — subtle high end sparkle, wide

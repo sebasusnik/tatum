@@ -328,7 +328,7 @@ track reese {
     level 0.44
     gate 0.85
     delay_send 0.08
-    out > saturate(0.20) > lowpass(0.52) > master
+    out > saturate(0.20) > lowpass(2190) > master
 }
 
 track sub {

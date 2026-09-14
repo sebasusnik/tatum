@@ -344,7 +344,7 @@ track finger {
     velocity 1.0
     level 0.38
     gate 0.90
-    out > saturate(0.12) > lowpass(0.40) > master
+    out > saturate(0.12) > lowpass(1260) > master
 }
 
 track sub {

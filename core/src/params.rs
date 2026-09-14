@@ -342,7 +342,7 @@ pub fn kinds_with_param(name: &str) -> Vec<ModuleKind> {
     ModuleKind::ALL.iter().copied().filter(|k| lookup(*k, name).is_some()).collect()
 }
 
-fn levenshtein(a: &str, b: &str) -> usize {
+pub(crate) fn levenshtein(a: &str, b: &str) -> usize {
     let a: Vec<char> = a.chars().collect();
     let b: Vec<char> = b.chars().collect();
     let mut prev: Vec<usize> = (0..=b.len()).collect();

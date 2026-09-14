@@ -449,7 +449,12 @@ impl Parser {
                         self.advance();
                         params.push(Param::Waveform(name));
                     } else {
-                        // Unknown identifier in params
+                        let s = self.span();
+                        let (l, c) = (s.line, s.col);
+                        self.errors.push(ParseError {
+                            line: l, col: c,
+                            message: format!("unexpected '{}' in arguments (use name=value, a number, or a waveform word)", name),
+                        });
                         self.advance();
                     }
                 }
