@@ -33,7 +33,7 @@ module bass deep_bass {
 
 # Rhodes-style keys: FM warm electric piano
 module fm rhodes {
-    algorithm 0.1428
+    algorithm serial3_plus_carrier
     mod_index 0.55
     feedback 0.15
     chorus_mix 0.3
@@ -47,7 +47,7 @@ module fm rhodes {
 
 # Pad: lush detuned with chorus
 module keys lush_pad {
-    voice_mode 0.25
+    voice_mode unison
     cutoff 0.18
     detune 0.12
     chorus_mix 0.4

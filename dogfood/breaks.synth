@@ -1,0 +1,321 @@
+# Breaks — chopped breakbeat / big-beat, dogfood exercise
+tempo 138
+meter 4/4
+scale E minor
+swing 0.58
+humanize 0.04 timing 0.02
+sidechain 0.3
+
+delay sync=dotted_eighth feedback=0.4 filter=0.5
+reverb size=0.6 damp=0.45 predelay=18
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+module beats brk {
+    kick_level 1.0
+    kick_decay 0.4
+    kick_pitch 0.3
+    kick_click 0.45
+    kick_drive 0.25
+    kick_pan 0.0
+
+    snare_level 0.85
+    snare_decay 0.35
+    snare_pitch 0.4
+    snare_drive 0.35
+    snare_snap 0.55
+    snare_pan -0.1
+
+    hihat_level 0.65
+    hihat_decay 0.2
+    hihat_pitch 0.45
+    hihat_pan 0.3
+
+    clap_level 0.5
+    clap_pan 0.15
+}
+
+module bass acid {
+    cutoff 0.18
+    cutoff_env 0.75
+    resonance 0.8
+    glide 0.1
+    osc1_wave saw
+    osc2_pitch 0.5
+    attack 0.0
+    decay 0.28
+    sustain 0.35
+    release 0.15
+    keytrack 0.3
+}
+
+module fm stab {
+    algorithm two_op
+    mod_index 0.85
+    feedback 0.3
+    waveform sine
+    op0_ratio 0.1
+    op1_ratio 0.18
+    op0_envelope 0.001 0.06 0.0 0.05
+    op1_envelope 0.001 0.03 0.0 0.02
+    chorus_mix 0.0
+}
+
+module fm siren {
+    algorithm two_op
+    mod_index 0.4
+    feedback 0.1
+    waveform sine
+    op0_ratio 0.06
+    op1_ratio 0.09
+    op0_envelope 0.3 0.4 0.6 0.6
+    op1_envelope 0.2 0.3 0.5 0.4
+    lfo_rate 0.5
+    lfo_depth 0.5
+    lfo_target pitch
+    lfo_sync free
+    chorus_mix 0.1
+}
+
+module keys darkpad {
+    voice_mode ringmod
+    cutoff 0.2
+    resonance 0.35
+    detune 0.3
+    chorus_mix 0.15
+    level 0.6
+    attack 0.6
+    decay 0.5
+    sustain 0.6
+    release 0.7
+    lfo_rate 0.1
+    lfo_depth 0.15
+    lfo_target cutoff
+}
+
+# ────────────────────────────────────────────────
+# PATTERNS
+# ────────────────────────────────────────────────
+
+pattern silence {
+    - - - -  - - - -  - - - -  - - - -
+}
+
+pattern beat_intro {
+    kick: X  -  -  -  -  -  -  -  o  -  -  -  -  -  -  -
+    hat:  -  -  x  -  -  -  x  -  -  -  x  -  -  -  x  -
+}
+
+pattern beat_main {
+    kick:    X  -  o  -  -  -  X  -  o?0.6  -  -  x:0.6  X  -  o  -
+    snare:   -  -  -  -  X  -  -  o  -  -  -  -  X  -  -  o?0.5
+    hat:     x  x  X  x  x  x  x  x  x  x  X  x  x  x  x  x
+    openhat: -  -  x  -  -  -  x  -  -  -  x  -  -  -  x  -
+}
+
+pattern beat_break {
+    kick:  X  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+    snare: -  -  -  -  -  -  -  o  -  -  -  -  -  -  -  -
+    hat:   -  -  x?0.4  -  -  -  x?0.4  -  -  -  x?0.4  -  -  -  x?0.4  -
+}
+
+pattern fill {
+    kick:  X  -  -  -  -  -  -  -  X  -  -  -  -  -  -  -
+    snare: -  -  -  -  -  -  -  -  x:0.4*2  x:0.5*2  x:0.6*2  x:0.7*2  X*2  X*2  X*2  X*2
+    hat:   x  x  x  x  x  x  x  x  x  x  x  x  x  x  x  x
+}
+
+pattern beat_drop {
+    kick:    X  -  x:0.6  -  X  -  o  -  X  -  x:0.7  -  X  -  x:0.6  -
+    snare:   -  -  -  -  X  -  -  o  -  -  -  o  X  -  -  o
+    hat:     x  x  X  x  x  x  x  x  x  x  X  x  x  x  x  x
+    openhat: -  -  x  -  -  -  x  -  -  -  x  -  -  -  x  -
+    clap:    -  -  -  -  X  -  -  -  -  -  -  -  X  -  -  -
+}
+
+pattern beat_outro {
+    kick: X  -  -  -  -  -  -  -  o  -  -  -  -  -  -  -
+    hat:  -  -  x?0.3  -  -  -  -  -  -  -  x?0.3  -  -  -  -  -
+}
+
+pattern acid_groove {
+    1.1:0.9  ~1.1:0.6  -  3.1:0.7
+    -  ~4.1:0.6  1.1:0.8  -
+    5.1:0.85  ~5.1:0.5  -  1.1:0.6
+    -  ~3.1:0.55  4.1:0.7  -
+}
+
+pattern acid_drop {
+    1.1:0.95  ~1.1:0.7  1.1:0.5  3.1:0.8
+    ~3.1:0.6  1.1:0.55  4.1:0.85  ~4.1:0.6
+    5.1:0.9  ~5.1:0.65  1.2:0.6  5.1:0.5
+    ~5.1:0.55  4.1:0.75  3.1:0.6  1.1:0.65
+}
+
+pattern stab_hits {
+    -  [1.3 5.3]:0.7  -  -
+    -  [1.3 5.3]:0.65  -  -
+    -  [1.3 5.3]:0.7  -  -
+    -  [1.3 5.3]:0.6  -  -
+}
+
+pattern siren_main {
+    1.4:0.7  ..  ..  ..
+    ..  ..  ..  ..
+    5.4:0.65  ..  ..  ..
+    ..  ..  ..  ..
+}
+
+pattern pad_intro {
+    [1.1 3.1 5.1]:0.3  ..  ..  ..
+    ..  ..  ..  ..
+    ..  ..  ..  ..
+    ..  ..  ..  ..
+}
+
+pattern pad_break {
+    [1.1 3.1 5.1]:0.55  ..  ..  ..
+    ..  ..  ..  ..
+    ..  ..  ..  ..
+    ..  ..  ..  ..
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track drums {
+    play silence
+    using brk
+    velocity 1.0
+    level 0.78
+    out > saturate(0.15) > compressor(-12, ratio=3, attack=1, release=18, makeup=1.6) > master
+}
+
+track bass {
+    play silence
+    using acid
+    velocity 0.95
+    level 0.58
+    gate 0.55
+    delay_send 0.05
+    out > saturate(0.45) > master
+}
+
+track stab {
+    play silence
+    using stab
+    velocity 0.9
+    level 0.38
+    gate 0.08
+    pan 0.15
+    delay_send 0.2
+    out > saturate(0.22) > master
+}
+
+track siren {
+    play silence
+    using siren
+    velocity 0.9
+    level 0.4
+    pan -0.1
+    gate 0.6
+    delay_send 0.2
+    reverb_send 0.15
+    out > saturate(0.15) > master
+}
+
+track pad {
+    play silence
+    using darkpad
+    velocity 0.9
+    level 0.32
+    reverb_send 0.4
+    out > saturate(0.05) > master
+}
+
+# ────────────────────────────────────────────────
+# MASTER
+# ────────────────────────────────────────────────
+
+master {
+    in > eq(low=1.4, mid=1.15, high=1.0)
+       > saturate(0.15)
+       > compressor(-12, ratio=3.0, attack=1, release=20, makeup=1.7)
+       > limiter
+       > out
+}
+
+# ────────────────────────────────────────────────
+# SCENES
+# ────────────────────────────────────────────────
+
+scene intro {
+    reverb_mix = 0.5
+    delay_mix = 0.3
+    track drums { play beat_intro using brk }
+    track bass  { play silence using acid }
+    track stab  { play silence using stab }
+    track siren { play silence using siren }
+    track pad   { play pad_intro using darkpad }
+}
+
+scene beat {
+    reverb_mix = 0.25
+    delay_mix = 0.2
+    track drums { play beat_main using brk }
+    track bass  { play acid_groove using acid }
+    track stab  { play stab_hits using stab }
+    track siren { play silence using siren }
+    track pad   { play silence using darkpad }
+}
+
+scene break {
+    reverb_mix = 0.55
+    delay_mix = 0.35
+    track drums { play beat_break using brk }
+    track bass  { play silence using acid }
+    track stab  { play silence using stab }
+    track siren { play silence using siren }
+    track pad   { play pad_break using darkpad }
+}
+
+scene fill {
+    reverb_mix = 0.4
+    delay_mix = 0.3
+    track drums { play fill using brk }
+    track bass  { play silence using acid }
+    track stab  { play silence using stab }
+    track siren { play silence using siren }
+    track pad   { play pad_break using darkpad }
+}
+
+scene drop {
+    reverb_mix = 0.2
+    delay_mix = 0.22
+    auto acid resonance 0.35 > 0.9 > 0.35
+    track drums { play beat_drop using brk }
+    track bass  { play acid_drop using acid }
+    track stab  { play stab_hits using stab }
+    track siren { play siren_main using siren }
+    track pad   { play silence using darkpad }
+}
+
+scene outro {
+    reverb_mix = 0.6
+    delay_mix = 0.4
+    auto drums level 0.8 > 0.0
+    track drums { play beat_outro using brk }
+    track bass  { play silence using acid }
+    track stab  { play silence using stab }
+    track siren { play silence using siren }
+    track pad   { play pad_intro using darkpad }
+}
+
+# ────────────────────────────────────────────────
+# ARRANGEMENT (28 bars: intro4 + beat8 + break(3+1 fill) + drop8 + outro4)
+# ────────────────────────────────────────────────
+
+arrange { intro x4  beat x8  break x3  fill x1  drop x8  outro x4 }

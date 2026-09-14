@@ -18,6 +18,12 @@ pub enum LfoSyncMode {
     Sixteenth,
     DottedEighth,
     TripletEighth,
+    /// One cycle per bar (4/4), and multi-bar cycles for slow movement.
+    Bar,
+    Bars2,
+    Bars4,
+    Bars8,
+    Bars16,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -104,6 +110,11 @@ impl Lfo {
             LfoSyncMode::Sixteenth => self.bpm / 60.0 * 4.0,
             LfoSyncMode::DottedEighth => self.bpm / 60.0 * 4.0 / 3.0,
             LfoSyncMode::TripletEighth => self.bpm / 60.0 * 3.0,
+            LfoSyncMode::Bar => self.bpm / 60.0 / 4.0,
+            LfoSyncMode::Bars2 => self.bpm / 60.0 / 8.0,
+            LfoSyncMode::Bars4 => self.bpm / 60.0 / 16.0,
+            LfoSyncMode::Bars8 => self.bpm / 60.0 / 32.0,
+            LfoSyncMode::Bars16 => self.bpm / 60.0 / 64.0,
         };
         self.phase_inc = freq / self.sample_rate;
     }

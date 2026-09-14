@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "synth": {
+      "command": "cargo",
+      "args": ["run", "-q", "--release", "-p", "synth-mcp"]
+    }
+  }
+}

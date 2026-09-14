@@ -158,7 +158,7 @@ pub fn choice_value(idx: usize, count: usize) -> f32 {
 // ── Shared choice tables ──
 
 pub const LFO_WAVEFORMS: &[&str] = &["sine", "triangle", "saw", "square", "sample_hold"];
-pub const LFO_SYNC: &[&str] = &["free", "quarter", "eighth", "sixteenth", "dotted_eighth", "triplet_eighth"];
+pub const LFO_SYNC: &[&str] = &["free", "quarter", "eighth", "sixteenth", "dotted_eighth", "triplet_eighth", "bar", "bars_2", "bars_4", "bars_8", "bars_16"];
 pub const OSC_WAVES: &[&str] = &["saw", "square"];
 pub const FM_ALGORITHMS: &[&str] = &[
     "serial3_plus_carrier",   // 0: Op3 -> Op2 -> Op1 -> Out (+ Op4 -> Out)
@@ -176,7 +176,7 @@ pub const FILTER_LFO_TARGETS: &[&str] = &["cutoff", "pitch", "amplitude"];
 pub const VOICE_MODES: &[&str] = &["poly", "unison", "octave", "fifth", "ringmod"];
 pub const STUTTER_DRUMS: &[&str] = &["kick", "snare", "hihat", "clap", "tom"];
 
-const ENV_TIME_DOC: &str = "Exponential 1ms..2s";
+const ENV_TIME_DOC: &str = "Knob 0..1, not seconds. Maps exponentially to 1ms..2s: 0.25 ≈ 7ms, 0.5 ≈ 45ms, 0.75 ≈ 300ms, 1.0 = 2s";
 
 macro_rules! spec {
     ($name:expr, $id:expr, $range:expr, $default:expr, $doc:expr) => {
@@ -187,7 +187,7 @@ macro_rules! spec {
 // ── Bass ──
 
 pub const BASS_PARAMS: &[ParamSpec] = &[
-    spec!("cutoff", ParamId::Bass(BassParam::Cutoff), Range::Unit, 0.43, "Ladder filter cutoff, exponential 20Hz..20kHz (0.5 ≈ 630Hz)"),
+    spec!("cutoff", ParamId::Bass(BassParam::Cutoff), Range::Unit, 0.43, "Ladder filter cutoff, exponential 20Hz..20kHz (0.25 ≈ 110Hz, 0.5 ≈ 630Hz, 0.75 ≈ 3.5kHz)"),
     spec!("cutoff_env", ParamId::Bass(BassParam::CutoffEnv), Range::Unit, 0.88, "Filter envelope depth, exponential 20Hz..8kHz sweep"),
     spec!("resonance", ParamId::Bass(BassParam::Resonance), Range::Unit, 0.3, "Ladder resonance, self-oscillates near 1.0"),
     spec!("glide", ParamId::Bass(BassParam::Glide), Range::Unit, 0.06, "Portamento rate between notes (0 = instant)"),
@@ -199,7 +199,7 @@ pub const BASS_PARAMS: &[ParamSpec] = &[
     spec!("lfo_depth", ParamId::Bass(BassParam::LfoDepth), Range::Unit, 0.0, "LFO depth; 0 disables the LFO"),
     spec!("lfo_waveform", ParamId::Bass(BassParam::LfoWaveform), Range::Choice(LFO_WAVEFORMS), 0.0, "LFO shape"),
     spec!("lfo_target", ParamId::Bass(BassParam::LfoTarget), Range::Choice(FILTER_LFO_TARGETS), 0.0, "What the LFO modulates"),
-    spec!("lfo_sync", ParamId::Bass(BassParam::LfoSync), Range::Choice(LFO_SYNC), 0.0, "Free Hz or tempo-synced subdivision"),
+    spec!("lfo_sync", ParamId::Bass(BassParam::LfoSync), Range::Choice(LFO_SYNC), 0.0, "Free Hz, a tempo-synced subdivision, or a slow cycle over 1..16 bars"),
     spec!("osc2_pitch", ParamId::Bass(BassParam::Osc2Pitch), Range::Unit, 0.5, "Osc 2 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24 (steps of 1/48)"),
     spec!("osc3_pitch", ParamId::Bass(BassParam::Osc3Pitch), Range::Unit, 0.5, "Osc 3 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24 (steps of 1/48)"),
     spec!("osc1_wave", ParamId::Bass(BassParam::Osc1Wave), Range::Choice(OSC_WAVES), 0.0, "Osc 1 waveform"),
@@ -215,7 +215,7 @@ pub const BASS_PARAMS: &[ParamSpec] = &[
 
 pub const FM_PARAMS: &[ParamSpec] = &[
     spec!("algorithm", ParamId::Fm(FmParam::Algorithm), Range::Choice(FM_ALGORITHMS), 0.0, "Operator routing"),
-    spec!("mod_index", ParamId::Fm(FmParam::ModIndex), Range::Unit, 0.5, "Modulation index, exponential 0.1..4.0"),
+    spec!("mod_index", ParamId::Fm(FmParam::ModIndex), Range::Unit, 0.5, "Modulation index, exponential 0.1..4.0 (0.5 ≈ 0.63, 0.75 ≈ 1.6)"),
     spec!("feedback", ParamId::Fm(FmParam::Feedback), Range::Unit, 0.0, "Global operator feedback (scaled to 0..0.7)"),
     spec!("waveform", ParamId::Fm(FmParam::Waveform), Range::Choice(FM_WAVEFORMS), 0.0, "Operator waveform"),
     spec!("chorus_mix", ParamId::Fm(FmParam::ChorusMix), Range::Unit, 0.0, "Dedicated chorus wet mix"),
@@ -250,16 +250,16 @@ pub const FM_PARAMS: &[ParamSpec] = &[
     spec!("op1_feedback", ParamId::Fm(FmParam::Op1Feedback), Range::Unit, 0.0, "Self-modulation of operator 1"),
     spec!("op2_feedback", ParamId::Fm(FmParam::Op2Feedback), Range::Unit, 0.0, "Self-modulation of operator 2"),
     spec!("op3_feedback", ParamId::Fm(FmParam::Op3Feedback), Range::Unit, 0.0, "Self-modulation of operator 3"),
-    spec!("op0_ratio", ParamId::Fm(FmParam::Op0Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5)"),
-    spec!("op1_ratio", ParamId::Fm(FmParam::Op1Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5)"),
-    spec!("op2_ratio", ParamId::Fm(FmParam::Op2Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5)"),
-    spec!("op3_ratio", ParamId::Fm(FmParam::Op3Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5)"),
+    spec!("op0_ratio", ParamId::Fm(FmParam::Op0Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
+    spec!("op1_ratio", ParamId::Fm(FmParam::Op1Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
+    spec!("op2_ratio", ParamId::Fm(FmParam::Op2Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
+    spec!("op3_ratio", ParamId::Fm(FmParam::Op3Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
 ];
 
 // ── Keys ──
 
 pub const KEYS_PARAMS: &[ParamSpec] = &[
-    spec!("cutoff", ParamId::Keys(KeysParam::Cutoff), Range::Unit, 0.59, "Biquad lowpass cutoff, exponential 200Hz..20kHz"),
+    spec!("cutoff", ParamId::Keys(KeysParam::Cutoff), Range::Unit, 0.59, "Biquad lowpass cutoff, exponential 200Hz..20kHz (0.5 ≈ 2kHz)"),
     spec!("resonance", ParamId::Keys(KeysParam::Resonance), Range::Unit, 0.2, "Filter resonance"),
     spec!("detune", ParamId::Keys(KeysParam::Detune), Range::Unit, 0.25, "Osc detune, up to 2%"),
     spec!("chorus_mix", ParamId::Keys(KeysParam::ChorusMix), Range::Unit, 0.0, "Chorus wet mix"),
@@ -342,7 +342,7 @@ pub fn kinds_with_param(name: &str) -> Vec<ModuleKind> {
     ModuleKind::ALL.iter().copied().filter(|k| lookup(*k, name).is_some()).collect()
 }
 
-fn levenshtein(a: &str, b: &str) -> usize {
+pub(crate) fn levenshtein(a: &str, b: &str) -> usize {
     let a: Vec<char> = a.chars().collect();
     let b: Vec<char> = b.chars().collect();
     let mut prev: Vec<usize> = (0..=b.len()).collect();
@@ -405,4 +405,127 @@ mod tests {
         assert_eq!(suggest(ModuleKind::Bass, "kick_level"), None);
         assert_eq!(kinds_with_param("kick_level"), alloc::vec![ModuleKind::Beats]);
     }
+}
+
+// ── Track options (not module params, but the same "only valid names" promise) ──
+
+/// One `track { }` option.
+#[derive(Debug, Clone, Copy)]
+pub struct TrackOption {
+    pub name: &'static str,
+    pub range: &'static str,
+    pub default: &'static str,
+    pub doc: &'static str,
+}
+
+pub const TRACK_OPTIONS: &[TrackOption] = &[
+    TrackOption { name: "play", range: "pattern name", default: "required", doc: "Pattern the track loops" },
+    TrackOption { name: "using", range: "module or instrument name", default: "required", doc: "Instrument that plays it" },
+    TrackOption { name: "level", range: "0.0..1.0", default: "0.8", doc: "Output level after the instrument" },
+    TrackOption { name: "pan", range: "-1.0..1.0", default: "0.0", doc: "Stereo position" },
+    TrackOption { name: "velocity", range: "0.0..1.0", default: "0.8", doc: "Scales every note's velocity" },
+    TrackOption { name: "gate", range: "0.0..1.0", default: "0.85", doc: "Note length as a fraction of the step" },
+    TrackOption { name: "delay_send", range: "0.0..1.0", default: "0.0", doc: "Amount into the global delay" },
+    TrackOption { name: "reverb_send", range: "0.0..1.0", default: "0.0", doc: "Amount into the global reverb" },
+    TrackOption { name: "sidechain", range: "0.0..1.0", default: "global `sidechain`", doc: "How much the kick ducks this track; only acts in scenes that have a beats track" },
+    TrackOption { name: "arp", range: "up | down | updown | off, rate=4|8|16|32, gate=0.1..1, octaves=1..4", default: "none", doc: "Arpeggiate the held notes; a scene can add, change or turn it off" },
+    TrackOption { name: "out", range: "`> node(...) > ... > master` or `> <bus>`", default: "`> master`", doc: "Insert chain and destination; see effects and nodes" },
+];
+
+/// Markdown table of track options.
+pub fn track_markdown() -> String {
+    let mut out = String::from("## track options\n\n");
+    out.push_str("Inside `track name { ... }` at top level or in a scene. A scene track overrides\n");
+    out.push_str("the top-level track with the same name; unset options are inherited.\n\n");
+    out.push_str("| option | range | default | description |\n|--------|-------|---------|-------------|\n");
+    for t in TRACK_OPTIONS {
+        out.push_str(&alloc::format!("| `{}` | {} | {} | {} |\n", t.name, t.range, t.default, t.doc));
+    }
+    out.push('\n');
+    out
+}
+
+/// JSON list of track options.
+pub fn track_json() -> String {
+    let mut out = String::from("[\n");
+    for (i, t) in TRACK_OPTIONS.iter().enumerate() {
+        out.push_str(&alloc::format!(
+            "  {{\"name\": \"{}\", \"range\": \"{}\", \"default\": \"{}\", \"doc\": \"{}\"}}{}\n",
+            t.name, json_escape(t.range), json_escape(t.default), json_escape(t.doc),
+            if i + 1 < TRACK_OPTIONS.len() { "," } else { "" }
+        ));
+    }
+    out.push_str("]\n");
+    out
+}
+
+// ── Reference generation (shared by the CLI and the MCP server) ──
+
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// Markdown reference for the given module kinds.
+pub fn markdown(kinds: &[ModuleKind]) -> String {
+    let mut out = String::new();
+    out.push_str("# Module parameters\n\n");
+    out.push_str("Values are floats in the listed range. `choice` params take an option name\n");
+    out.push_str("(`waveform half_sine`); a numeric value encodes as index / (options - 1).\n");
+    out.push_str("FM modules also accept `op<N>_envelope <attack> <decay> <sustain> <release>` as a\n");
+    out.push_str("shorthand for the four per-operator envelope params.\n");
+    out.push_str("Generated by `synth params`; do not edit by hand.\n\n");
+    for kind in kinds {
+        out.push_str(&alloc::format!("## {}\n\n", kind.as_str()));
+        out.push_str("| name | range | default | description |\n");
+        out.push_str("|------|-------|---------|-------------|\n");
+        for s in specs(*kind) {
+            let (range, default) = match s.range {
+                Range::Choice(names) => (
+                    alloc::format!("choice: {}", names.join(", ")),
+                    alloc::format!("`{}`", s.choice_name(s.default).unwrap_or("")),
+                ),
+                _ => (s.range.describe(), alloc::format!("{}", s.default)),
+            };
+            out.push_str(&alloc::format!("| `{}` | {} | {} | {} |\n", s.name, range, default, s.doc));
+        }
+        out.push('\n');
+    }
+    out
+}
+
+/// JSON reference for the given module kinds: `{ "bass": [ {name, type, min, max, ...} ] }`.
+pub fn json(kinds: &[ModuleKind]) -> String {
+    let mut out = String::from("{\n");
+    for (ki, kind) in kinds.iter().enumerate() {
+        out.push_str(&alloc::format!("  \"{}\": [\n", kind.as_str()));
+        let list = specs(*kind);
+        for (i, s) in list.iter().enumerate() {
+            let (ty, extra) = match s.range {
+                Range::Unit => ("unit", String::new()),
+                Range::Bipolar => ("bipolar", String::new()),
+                Range::Gain { max } => ("gain", alloc::format!(", \"max\": {}", max)),
+                Range::Choice(names) => {
+                    let items: Vec<String> = names.iter().map(|n| alloc::format!("\"{}\"", n)).collect();
+                    ("choice", alloc::format!(", \"choices\": [{}]", items.join(", ")))
+                }
+            };
+            out.push_str(&alloc::format!(
+                "    {{\"name\": \"{}\", \"type\": \"{}\", \"min\": {}, \"max\": {}{}, \"default\": {}, \"doc\": \"{}\"}}{}\n",
+                s.name, ty, s.range.min(), s.range.max(), extra, s.default, json_escape(s.doc),
+                if i + 1 < list.len() { "," } else { "" }
+            ));
+        }
+        out.push_str(&alloc::format!("  ]{}\n", if ki + 1 < kinds.len() { "," } else { "" }));
+    }
+    out.push_str("}\n");
+    out
 }

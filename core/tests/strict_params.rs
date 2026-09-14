@@ -146,3 +146,64 @@ fn swing_and_humanize_apply_live() {
     engine.set_humanize(0.2, 0.05);
     assert_eq!(engine.humanize(), (0.2, 0.05));
 }
+
+#[test]
+fn short_names_that_look_like_drum_hits_are_valid_identifiers() {
+    let src = BASE.replace("module bass acid {", "module bass x {")
+        .replace("using acid", "using x")
+        .replace("auto acid cutoff", "auto x cutoff");
+    assert!(compile_errors(&src).is_empty(), "{:?}", compile_errors(&src));
+    let src = BASE.replace("track pad  {", "track o  {");
+    assert!(compile_errors(&src).is_empty(), "{:?}", compile_errors(&src));
+}
+
+#[test]
+fn one_top_level_mistake_yields_one_error() {
+    let src = "tempo 120\nmodul bass acid { cutoff 0.3 resonance 0.5 }\nscale A minor\n";
+    let errs = dsl::parse(src).unwrap_err();
+    assert_eq!(errs.len(), 1, "{:?}", errs);
+    assert_eq!(errs[0].line, 2);
+    assert!(errs[0].message.contains("unexpected 'modul'"), "{}", errs[0].message);
+}
+
+#[test]
+fn unknown_drum_lane_is_an_error() {
+    let src = BASE.replace("pattern p { 1.1:0.9 - - - }", "pattern p { kik: X - - - }")
+        .replace("using bell", "using bell");
+    let errs = compile_errors(&src);
+    assert!(errs.iter().any(|e| e.contains("unknown drum lane 'kik'")), "{:?}", errs);
+}
+
+#[test]
+fn effect_arguments_are_validated() {
+    let bad = BASE.replace("track acid { play p using acid out > master }", "track acid { play p using acid out > saturat(0.3) > master }");
+    let errs = compile_errors(&bad);
+    assert!(errs[0].contains("unknown node 'saturat'") && errs[0].contains("Did you mean 'saturate'"), "{:?}", errs);
+
+    let bad = BASE.replace("track acid { play p using acid out > master }", "track acid { play p using acid out > compressor(-8, ration=4) > master }");
+    let errs = compile_errors(&bad);
+    assert!(errs[0].contains("unknown option 'ration'") && errs[0].contains("ratio, attack, release, makeup"), "{:?}", errs);
+
+    let bad = BASE.replace("track acid { play p using acid out > master }", "track acid { play p using acid out > lowpass(0.4) > master }");
+    let errs = compile_errors(&bad);
+    assert!(errs[0].contains("cutoff = 0.4 is out of range (20..20000)"), "{:?}", errs);
+
+    let bad = BASE.replace("arrange { a x1 }", "master { in > eq(low=2, hi=1) > out }\narrange { a x1 }");
+    let errs = compile_errors(&bad);
+    assert!(errs[0].contains("master: eq: unknown option 'hi'"), "{:?}", errs);
+
+    let bad = BASE.replace("track acid { play p using acid out > master }", "track acid { play p using acid out > saturate(warm) > master }");
+    let errs = dsl::parse(&bad).unwrap_err();
+    assert!(errs[0].message.contains("unexpected 'warm' in arguments"), "{}", errs[0].message);
+}
+
+#[test]
+fn tie_and_rest_repeat_shorthand() {
+    let src = BASE.replace("pattern p { 1.1:0.9 - - - }", "pattern p { 1.1:0.9 ..*7 -*4 [1.3 3.3]:0.5 ..*3 }");
+    let ast = dsl::parse(&src).expect("parse");
+    let p = ast.patterns.iter().find(|p| p.name == "p").unwrap();
+    assert_eq!(p.rows[0].len(), 1 + 7 + 4 + 1 + 3);
+    let bad = BASE.replace("pattern p { 1.1:0.9 - - - }", "pattern p { 1.1:0.9 ..*0 }");
+    let errs = dsl::parse(&bad).unwrap_err();
+    assert!(errs[0].message.contains("expected a count 1..256"), "{}", errs[0].message);
+}

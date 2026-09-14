@@ -4,6 +4,7 @@ pub mod lexer;
 pub mod parser;
 pub mod compiler;
 pub mod diff;
+pub mod lint;
 
 use ast::Song;
 use error::ParseResult;

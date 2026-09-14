@@ -13,3 +13,6 @@ core/.DS_Store
 
 # Rendered example audio
 examples/*.wav
+
+# Dogfood renders
+dogfood/*.wav

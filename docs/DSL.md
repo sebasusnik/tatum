@@ -16,7 +16,7 @@ synth params --json             # machine-readable registry (for tools and agent
 ```
 tempo 124
 meter 4/4
-scale A minor          # major | minor | dorian | mixolydian | pentatonic_minor
+scale A minor          # major | minor | dorian | phrygian | lydian | mixolydian | locrian
 swing 0.56             # 0.5 straight .. 0.75 hard shuffle
 humanize 0.05 timing 0.02
 sidechain 0.4
@@ -39,6 +39,8 @@ module bass acid {
     resonance 0.8
     osc1_wave saw            # saw | square
     lfo_target cutoff        # cutoff | pitch | amplitude
+    lfo_sync bars_4          # free | quarter | eighth | sixteenth | dotted_eighth | triplet_eighth |
+                             # bar | bars_2 | bars_4 | bars_8 | bars_16 (slow, tempo-synced cycles)
 }
 
 module fm bell {
@@ -69,7 +71,7 @@ pattern riff { 1.2:0.9  -  ~5.2:0.8  ..  [1.3 3.3 5.3]:0.6  ..  ..  .. }
 | token | meaning |
 |-------|---------|
 | `-` | rest |
-| `..` | tie: hold the previous step |
+| `..` | tie: hold the previous step; `..*15` writes fifteen ties, `-*8` eight rests |
 | `~note` | slide: glide into this note without retriggering the envelope (303 style). The previous note is held until the slide. Bass modules glide at their `glide` rate; other instruments fall back to a normal retrigger. |
 | `[a b c]` | chord |
 | `1.2:0.8(cutoff=0.4, edepth=0.3, res=0.6, gate=0.5)` | per-step parameter lock (bass filter and gate) |
@@ -84,7 +86,9 @@ pattern beat {
 }
 ```
 
-`X` accent, `x` normal, `o` ghost, `x:0.6` explicit velocity, `x?0.5` probability, `x*2` roll.
+`X` accent (velocity 1.0), `x` normal (0.8), `o` ghost (0.35), `x:0.6` explicit velocity, `x?0.5` probability, `x*2` roll.
+A lane line can be longer than one bar (32 steps = two bars); keep every lane the same length.
+Lane names: `kick`, `snare`, `clap`, `hat`, `openhat`, `tom`, `tom2`, `tom3`, `crash` (aliases `bd`, `sd`, `cp`, `hh`, `oh`, `lt`, `mt`, `ht`, `cr`). An unknown lane is a compile error.
 
 ## Tracks
 
@@ -99,6 +103,21 @@ track lead {
 }
 ```
 
+Track options:
+
+| option | range | default | meaning |
+|--------|-------|---------|---------|
+| `level` | 0..1 | 0.8 | output level after the instrument |
+| `pan` | -1..1 | 0 | stereo position |
+| `velocity` | 0..1 | 0.8 | scales every note's velocity |
+| `gate` | 0..1 | 0.85 | note length as a fraction of the step |
+| `delay_send` / `reverb_send` | 0..1 | 0 | amount into the global sends |
+| `sidechain` | 0..1 | global `sidechain` | how much the kick ducks this track |
+| `arp ...` | see below | none | arpeggiator |
+| `out > ... > master` or `> <bus>` | | `> master` | insert chain and destination |
+
+A scene track can set any of these, including adding an `arp` to a track that has none.
+
 ### Arpeggiator
 
 `arp <mode> [rate=N] [gate=F] [octaves=N]`
@@ -112,6 +131,51 @@ The pattern supplies what is held: a single note or a chord, extended with `..` 
 The arp cycles through those notes and stops at the next rest or when the track gate
 expires. Scene tracks inherit the arp from the global track definition.
 
+## Effects and routing
+
+Every track ends with a routing chain: `out > <fx>(...) > ... > master` or `> <bus>`.
+Buses are declared with `bus <name>` and get their own chain; the master chain is
+`master { in > ... > out }`. Effects take positional arguments and `key=value` options.
+
+```
+bus drums                                   # declare
+drums { in > compressor(-8, ratio=4, attack=8, release=60) > saturate(0.1) > master }
+
+track kick  { play beat using kit out > drums }                 # route into the bus
+track bass  { play riff using acid out > saturate(0.4) > master } # inline inserts
+master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2, release=40, makeup=3) > limiter > out }
+```
+
+| effect | arguments | notes |
+|--------|-----------|-------|
+| `saturate(drive)` / `drive(drive)` | drive gain, 1.0 = mild | tanh soft clip |
+| `gain(amount)` | linear multiplier | |
+| `lowpass(cutoff_hz, resonance)` / `highpass` / `bandpass` | Hz, 0..1 | options: envelope `ea= ed= es= er= edepth=` (seconds, level, Hz); LFO `lfo_bars=` or `lfo_hz=` with `lfo_depth=` in Hz, e.g. `lowpass(800, 0.6, lfo_bars=2, lfo_depth=600)` |
+| `ladder(cutoff_hz, resonance)` | Hz, 0..1 | Moog-style 4-pole, same envelope and LFO options |
+| `autopan(depth, bars=)` | 0..1, bars | slow stereo movement, `autopan(0.6, bars=4)`; `hz=` for a free rate |
+| `phaser(mix, bars=, stages=, feedback=, depth=)` | 0..1, bars, 2..12, 0..0.9, 0..1 | swept allpass phaser, the liquid pad effect: `phaser(0.5, bars=4)` |
+| `vowel(a, o, bars=, mix=)` | vowels a e i o u, bars, 0..1 | formant filter; one vowel holds, two morph: `vowel(a, o, bars=2)` |
+| `chorus(mix)` | 0..1 | |
+| `bitcrush(bits, rate)` | bits, sample-rate reduction 0..1 | |
+| `compressor(threshold_db, ratio=, attack=, release=, makeup=)` | dB, ratio, ms, ms, gain | |
+| `limiter(threshold)` | 0..1, default 0.95 | lookahead peak limiter; a section whose peak sits at the threshold is being flattened, so lower what feeds it |
+| `eq(low=, mid=, high=)` | dB per band (200Hz, 1kHz, 8kHz) | |
+| `tilt(amount)` | -1..1, negative = darker | one-knob tilt EQ |
+| `delay(1/8, feedback)` | note division, 0..1 | tempo-synced delay inside a chain |
+| `reverb(size)` | 0..1 | plate reverb inside a chain |
+
+Exact ranges and defaults for every node are in [PARAMS.md](PARAMS.md) under "effects and
+nodes" (`synth params fx`). Filter cutoffs are in Hz, not 0..1.
+
+Two ways to get ambience, usable together:
+
+- **Global sends**: every track has `delay_send` / `reverb_send` into the shared delay and
+  reverb configured by the top-level `delay ...` / `reverb ...` lines; scenes can scale the
+  wet level with `delay_mix = ` / `reverb_mix = ` or automate `auto reverb_mix`.
+- **Buses**: a `bus` with its own chain (`reverb { in > reverb(0.55) > out }`) that tracks
+  route into with `out > reverb`. Use a bus when different tracks need different
+  ambience, or to compress a group (`drums` above).
+
 ## Scenes and arrangement
 
 ```
@@ -120,7 +184,7 @@ scene drop {
     reverb_mix = 0.3                     # wet level of the global sends for this scene
     delay_mix = 0.2
     auto acid cutoff 0.2 > 0.6 > 0.2     # linear (2 values) or triangle (3 values)
-    auto drums level 1.0 > 0.0           # track (or instrument) level fade
+    auto drums level 1.0 > 0.0           # level fade: resolves a track name first, else an instrument name
     auto reverb_mix 0.1 > 0.5
     track drums { play beat using kit }
     track acid  { play riff using acid }
@@ -142,3 +206,77 @@ When the source is re-evaluated while playing:
 - Deleting a parameter line restores the registry default instantly.
 - Any other edit (pattern notes, scenes, routing, arp, new modules) is a structural change:
   the new song is compiled and swapped in at the next bar boundary with a short crossfade.
+
+## Recipes
+
+Things a producer does that a first draft usually forgets. `synth_check` warns about the
+first three.
+
+**A pad that moves.** Slow LFO on the filter with some resonance, detuned unison, chorus,
+a hint of vibrato, a slow phaser, sends, and sidechain so it breathes with the kick. For a
+"talking" pad swap the phaser for `vowel(a, o, bars=2, mix=0.6)`:
+
+```
+module keys pad {
+    voice_mode unison  detune 0.3  chorus_mix 0.5
+    cutoff 0.3  resonance 0.5
+    lfo_target cutoff  lfo_waveform triangle  lfo_sync bars_2  lfo_depth 0.12
+    vibrato_rate 0.35  vibrato_depth 0.06
+    attack 0.9  release 1.0
+}
+track pad { play chords using pad level 0.3 reverb_send 0.4 delay_send 0.15 sidechain 0.45
+            out > highpass(250, 0.4) > phaser(0.4, bars=4) > autopan(0.4, bars=4) > master }
+```
+
+**A 303 line.** Low cutoff, high resonance and envelope amount, glide, and `~` slides on
+the notes that should bend; sweep the cutoff per scene:
+
+```
+module bass acid { cutoff 0.2 cutoff_env 0.85 resonance 0.8 glide 0.15 osc1_wave saw }
+pattern line { 1.2:0.95 ~1.2:0.7 - 1.2:0.9 ~5.2:0.85 - ~7.1:0.8 - }
+scene build { auto acid cutoff 0.15 > 0.5 ... }
+```
+
+**An FM stab.** Two operators, short envelopes, a bit of feedback, off-beat pattern with
+rests, saturation in the chain and a delay send:
+
+```
+module fm stab { algorithm two_op mod_index 0.55 feedback 0.15 op0_envelope 0.001 0.14 0.1 0.1 op1_envelope 0.001 0.1 0.05 0.08 }
+track stab { play offbeats using stab level 0.4 delay_send 0.3 out > saturate(0.4) > master }
+```
+
+**A liquid cloud (deep house, liquid DnB).** Jazz voicings (m9, maj7, add9) held with
+ties, a two-second attack so there is no transient, a big wet reverb, high-pass so it
+stays out of the sub, LFOs that take 8 to 16 bars per cycle, and a slow autopan:
+
+```
+reverb size=1.0 damp=0.25 predelay=40
+pattern voicings {
+    [F3 Ab3 C4 Eb4 G4]:0.6 .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..    # one bar, held
+    .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..                        # second bar, still held
+    [Db3 F3 Ab3 C4 Eb4]:0.6 .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..
+    .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..
+}
+module keys cloud { voice_mode unison detune 0.45 chorus_mix 0.6 attack 1.0 release 1.0
+                    cutoff 0.28 resonance 0.35 lfo_target cutoff lfo_sync bars_8 lfo_depth 0.08 }
+track pad { play voicings using cloud level 0.15 reverb_send 0.4 sidechain 0.5
+            out > highpass(300, 0.4) > lowpass(3200, 0.3, lfo_bars=16, lfo_depth=1200) > autopan(0.3, bars=8) > master }
+```
+
+**A breakbeat kit.** Accents on the downbeats, ghosts between, probability on the extra
+hits, a roll into the drop, and a compressor on a drum bus:
+
+```
+pattern brk {
+    kick:  X - - -  - - x -  - - X -  - - - -
+    snare: - - - -  X - o -  - - - o  X - - x*2
+    hat:   x - x?0.6 -  x - x -  x - x -  x - x x
+}
+bus drums
+drums { in > compressor(-8, ratio=4, attack=8, release=60) > saturate(0.2) > master }
+track beat { play brk using kit out > drums }
+```
+
+**Loudness shape.** Intro quietest, drop loudest, nothing at the limiter ceiling. Use the
+per-section report from `synth_render`; if a section sits at 0.95, lower what feeds it
+rather than pushing the others up.

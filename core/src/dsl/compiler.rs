@@ -226,16 +226,22 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     let (intervals, root_pc) = scale_context(song);
     let mut patterns = Vec::new();
     for pat_def in &song.patterns {
-        patterns.push(compile_pattern(pat_def, &intervals, root_pc));
+        match compile_pattern(pat_def, &intervals, root_pc) {
+            Ok(p) => patterns.push(p),
+            Err(e) => errors.push(e),
+        }
     }
 
     // 3. Compile buses
     let mut buses = Vec::new();
     for bus_def in &song.buses {
-        let chain = song.bus_chains.iter()
-            .find(|bc| bc.bus_name == bus_def.name)
-            .map(|bc| compile_fx_chain(&bc.chain))
-            .unwrap_or_default();
+        let chain = match song.bus_chains.iter().find(|bc| bc.bus_name == bus_def.name) {
+            Some(bc) => match compile_fx_chain(&format!("bus '{}'", bus_def.name), &bc.chain) {
+                Ok(c) => c,
+                Err(e) => { errors.push(e); Vec::new() }
+            },
+            None => Vec::new(),
+        };
         buses.push(CompiledBus { name: bus_def.name.clone(), fx_chain: chain });
     }
 
@@ -250,7 +256,10 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
 
     // 5. Compile master
     let master = match &song.master {
-        Some(m) => CompiledMaster { fx_chain: compile_fx_chain(&m.chain) },
+        Some(m) => match compile_fx_chain("master", &m.chain) {
+            Ok(c) => CompiledMaster { fx_chain: c },
+            Err(e) => { errors.push(e); CompiledMaster { fx_chain: Vec::new() } }
+        },
         None => CompiledMaster { fx_chain: Vec::new() },
     };
 
@@ -406,6 +415,10 @@ fn compile_instrument(inst: &InstrumentDef) -> Result<GraphTemplate, CompileErro
 }
 
 fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u32) -> Result<NodeSpec, CompileError> {
+    let problems = crate::nodes::validate(&node.kind, &node.params);
+    if !problems.is_empty() {
+        return Err(CompileError::new(problems.join("; ")));
+    }
     match node.kind.as_str() {
         "osc" => {
             let waveform = node.params.iter()
@@ -484,28 +497,32 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
             let res = float_param_at(&node.params, 1).unwrap_or(0.5);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
             Ok(NodeSpec::Biquad { filter_type: FilterType::LowPass, cutoff, resonance: res,
-                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth })
+                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,
+                lfo: filter_lfo_params(&node.params) })
         }
         "highpass" => {
             let cutoff = float_param_at(&node.params, 0).unwrap_or(1000.0);
             let res = float_param_at(&node.params, 1).unwrap_or(0.5);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
             Ok(NodeSpec::Biquad { filter_type: FilterType::HighPass, cutoff, resonance: res,
-                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth })
+                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,
+                lfo: filter_lfo_params(&node.params) })
         }
         "bandpass" => {
             let cutoff = float_param_at(&node.params, 0).unwrap_or(1000.0);
             let res = float_param_at(&node.params, 1).unwrap_or(0.5);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
             Ok(NodeSpec::Biquad { filter_type: FilterType::BandPass, cutoff, resonance: res,
-                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth })
+                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,
+                lfo: filter_lfo_params(&node.params) })
         }
         "ladder" => {
             let cutoff = float_param_at(&node.params, 0).unwrap_or(1000.0);
             let res = float_param_at(&node.params, 1).unwrap_or(0.5);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
             Ok(NodeSpec::Ladder { cutoff, resonance: res,
-                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth })
+                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,
+                lfo: filter_lfo_params(&node.params) })
         }
         "mix" => Ok(NodeSpec::Mix),
         "gain" => {
@@ -556,6 +573,42 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
         "reverb" => {
             let room_size = float_param_at(&node.params, 0).unwrap_or(0.5);
             Ok(NodeSpec::Reverb { room_size })
+        }
+        "phaser" => {
+            let mix = float_param_at(&node.params, 0).unwrap_or(0.5);
+            let bars = named_param(&node.params, "bars").unwrap_or(0.0);
+            let hz = named_param(&node.params, "hz").unwrap_or(if bars > 0.0 { 0.0 } else { 0.3 });
+            let stages = named_param(&node.params, "stages").unwrap_or(6.0) as u8;
+            let feedback = named_param(&node.params, "feedback").unwrap_or(0.4);
+            let depth = named_param(&node.params, "depth").unwrap_or(1.0);
+            Ok(NodeSpec::Phaser { mix, hz, bars, stages, feedback, depth })
+        }
+        "vowel" => {
+            let words: Vec<&str> = node.params.iter()
+                .filter_map(|p| if let Param::Waveform(w) = p { Some(w.as_str()) } else { None })
+                .collect();
+            let mut idx = Vec::new();
+            for w in &words {
+                match crate::effects::formant::vowel_index(w) {
+                    Some(i) => idx.push(i),
+                    None => return Err(CompileError::new(format!("vowel: '{}' is not a vowel (a, e, i, o, u)", w))),
+                }
+            }
+            if idx.is_empty() {
+                return Err(CompileError::new(String::from("vowel: needs one or two vowels, e.g. vowel(a, o, bars=2)")));
+            }
+            let from = idx[0];
+            let to = *idx.get(1).unwrap_or(&from);
+            let bars = named_param(&node.params, "bars").unwrap_or(0.0);
+            let hz = named_param(&node.params, "hz").unwrap_or(if bars > 0.0 { 0.0 } else { 0.25 });
+            let mix = named_param(&node.params, "mix").unwrap_or(1.0);
+            Ok(NodeSpec::Vowel { from, to, hz, bars, mix })
+        }
+        "autopan" => {
+            let depth = float_param_at(&node.params, 0).unwrap_or(0.5);
+            let bars = named_param(&node.params, "bars").unwrap_or(0.0);
+            let hz = named_param(&node.params, "hz").unwrap_or(if bars > 0.0 { 0.0 } else { 0.25 });
+            Ok(NodeSpec::AutoPan { hz, bars, depth })
         }
         other => Err(CompileError { line: 0,
             message: format!("unknown node type '{}'", other),
@@ -610,7 +663,7 @@ fn scale_context(song: &Song) -> ([u8; 7], u8) {
 
 // ── Pattern compilation ──
 
-fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> CompiledPattern {
+fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> Result<CompiledPattern, CompileError> {
     // Multi-lane drum pattern
     if !pat.lane_labels.is_empty() {
         let mut lanes = Vec::new();
@@ -621,6 +674,12 @@ fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> C
                 continue;
             };
             let midi_note = drum_name_to_midi(label);
+            if midi_note == 0 {
+                return Err(CompileError::new(format!(
+                    "pattern '{}': unknown drum lane '{}' (kick, snare, clap, hat, openhat, tom, tom2, tom3, crash)",
+                    pat.name, label
+                )));
+            }
             let steps: Vec<CompiledStep> = row.iter().map(|step| {
                 match step {
                     Step::DrumHit(ds) => {
@@ -656,12 +715,12 @@ fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> C
             lanes.push(CompiledLane { midi_note, steps, swing_override: None, nudge: 0.0 });
         }
         let steps_per_row = lanes.first().map(|l| l.steps.len()).unwrap_or(4);
-        return CompiledPattern {
+        return Ok(CompiledPattern {
             name: pat.name.clone(),
             steps: Vec::new(),
             steps_per_row,
             lanes,
-        };
+        });
     }
 
     // Sequential pattern (existing behavior)
@@ -728,12 +787,12 @@ fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> C
         }
     }
 
-    CompiledPattern {
+    Ok(CompiledPattern {
         name: pat.name.clone(),
         steps,
         steps_per_row: if max_row_len > 0 { max_row_len } else { 4 },
         lanes: Vec::new(),
-    }
+    })
 }
 
 /// Map drum lane label to MIDI note number.
@@ -748,7 +807,7 @@ fn drum_name_to_midi(name: &str) -> u8 {
         "tom3" | "ht" => 47,
         "openhat" | "oh" => 46,
         "crash" | "cr" => 49,
-        _ => 36, // fallback to kick
+        _ => 0, // unknown: caller reports an error
     }
 }
 
@@ -842,8 +901,11 @@ fn compile_track(
                     alias: None,
                     params: rnode.params.clone(),
                 };
-                if let Ok(spec) = node_def_to_spec(&node, &mut noise_seed, &mut drift_seed) {
-                    insert_fx.push(spec);
+                match node_def_to_spec(&node, &mut noise_seed, &mut drift_seed) {
+                    Ok(spec) => insert_fx.push(spec),
+                    Err(e) => return Err(CompileError::new(format!(
+                        "track '{}': {} (or declare `bus {}` if it is a bus)", track.name, e.message, rnode.kind
+                    ))),
                 }
             }
         }
@@ -870,7 +932,7 @@ fn compile_track(
         to_master,
         delay_send,
         reverb_send,
-        sidechain: track.sidechain,
+        sidechain: track.sidechain.or_else(|| defaults.and_then(|d| d.sidechain)),
         arp,
     })
 }
@@ -914,7 +976,7 @@ fn compile_arp(track_name: &str, def: &ArpDef) -> Result<Option<ArpConfig>, Comp
 
 // ── Bus/Master FX chain compilation ──
 
-fn compile_fx_chain(chain: &[ChainNode]) -> Vec<NodeSpec> {
+fn compile_fx_chain(owner: &str, chain: &[ChainNode]) -> Result<Vec<NodeSpec>, CompileError> {
     let mut specs = Vec::new();
     let mut noise_seed = 200u32;
     let mut drift_seed = 8000u32;
@@ -925,11 +987,12 @@ fn compile_fx_chain(chain: &[ChainNode]) -> Vec<NodeSpec> {
             alias: None,
             params: node.params.clone(),
         };
-        if let Ok(spec) = node_def_to_spec(&node_def, &mut noise_seed, &mut drift_seed) {
-            specs.push(spec);
+        match node_def_to_spec(&node_def, &mut noise_seed, &mut drift_seed) {
+            Ok(spec) => specs.push(spec),
+            Err(e) => return Err(CompileError::new(format!("{}: {}", owner, e.message))),
         }
     }
-    specs
+    Ok(specs)
 }
 
 // ── Scene compilation ──
@@ -1047,6 +1110,14 @@ fn rhythm_div_param(params: &[Param]) -> Option<f32> {
         }
     }
     None
+}
+
+/// Filter LFO options: lfo_hz / lfo_bars (cycle length) and lfo_depth (Hz).
+fn filter_lfo_params(params: &[Param]) -> crate::graph::node::FilterLfo {
+    let bars = named_param(params, "lfo_bars").unwrap_or(0.0);
+    let hz = named_param(params, "lfo_hz").unwrap_or(0.0);
+    let depth = named_param(params, "lfo_depth").unwrap_or(0.0);
+    crate::graph::node::FilterLfo { hz, bars, depth }
 }
 
 /// Extract filter envelope named params: ea, ed, es, er, edepth.

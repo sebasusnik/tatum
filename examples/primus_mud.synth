@@ -25,7 +25,7 @@ module bass slap {
     resonance 0.72
     glide 0.02
     keytrack 0.6
-    osc1_wave 0.0
+    osc1_wave saw
     osc2_pitch 0.505
     attack 0.0
     decay 0.12
@@ -42,7 +42,7 @@ module bass finger {
     resonance 0.40
     glide 0.08
     keytrack 0.4
-    osc1_wave 0.0
+    osc1_wave saw
     osc2_pitch 0.50
     attack 0.005
     decay 0.25
@@ -53,10 +53,10 @@ module bass finger {
 # Angular guitar — FM with bite, Larry LaLonde dissonance
 # High mod index, feedback, half-sine waveform for harsh harmonics
 module fm guitar {
-    algorithm 0.5714
+    algorithm additive
     mod_index 0.72
     feedback 0.42
-    waveform 0.5
+    waveform half_sine
     op0_ratio 0.065
     op1_ratio 0.097
     op0_envelope 0.002 0.15 0.25 0.10
@@ -67,10 +67,10 @@ module fm guitar {
 
 # Clean guitar stab — shorter, cleaner FM for rhythmic accents
 module fm clean {
-    algorithm 0.2857
+    algorithm dual_pairs
     mod_index 0.40
     feedback 0.15
-    waveform 0.0
+    waveform sine
     op0_ratio 0.065
     op1_ratio 0.13
     op0_envelope 0.001 0.08 0.0 0.05
@@ -80,10 +80,10 @@ module fm clean {
 
 # Noise texture — weird atonal scraping, Primus interlude vibes
 module fm scrape {
-    algorithm 1.0
+    algorithm pair_plus_two
     mod_index 0.90
     feedback 0.60
-    waveform 0.75
+    waveform abs_sine
     op0_ratio 0.42
     op1_ratio 0.16
     op2_ratio 0.29
@@ -98,7 +98,7 @@ module fm scrape {
     lfo_rate 0.06
     lfo_depth 0.12
     lfo_target mod_index
-    lfo_waveform 0.5
+    lfo_waveform saw
 }
 
 # Sub layer — pure low end underneath the slap
@@ -106,7 +106,7 @@ module bass sub {
     cutoff 0.05
     cutoff_env 0.10
     resonance 0.15
-    osc1_wave 0.0
+    osc1_wave saw
     osc2_pitch 0.50
     attack 0.002
     decay 0.20
@@ -344,7 +344,7 @@ track finger {
     velocity 1.0
     level 0.38
     gate 0.90
-    out > saturate(0.12) > lowpass(0.40) > master
+    out > saturate(0.12) > lowpass(1260) > master
 }
 
 track sub {

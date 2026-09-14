@@ -198,6 +198,12 @@ impl FxChain {
             node.reset();
         }
     }
+
+    fn set_bpm(&mut self, bpm: f32) {
+        for node in self.nodes.iter_mut() {
+            node.set_bpm(bpm);
+        }
+    }
 }
 
 /// Per-track playback state.
@@ -597,7 +603,7 @@ impl SongEngine {
         let humanize_velocity = song.globals.humanize.unwrap_or(0.0);
         let humanize_timing = song.globals.humanize_timing.unwrap_or(0.0);
 
-        Self {
+        let mut engine = Self {
             instruments,
             instrument_names,
             patterns: song.patterns,
@@ -635,7 +641,16 @@ impl SongEngine {
             global_step: 0,
             pending_triggers: Vec::new(),
             running: false,
-        }
+        };
+        engine.retune_fx(tempo);
+        engine
+    }
+
+    /// Bar-synced modulation inside chains follows the tempo.
+    fn retune_fx(&mut self, bpm: f32) {
+        for t in self.tracks.iter_mut() { t.insert_fx.set_bpm(bpm); }
+        for b in self.buses.iter_mut() { b.fx_chain.set_bpm(bpm); }
+        self.master_fx.set_bpm(bpm);
     }
 
     pub fn start(&mut self) {
@@ -678,10 +693,9 @@ impl SongEngine {
     /// Apply a scene's track configuration.
     fn apply_scene(&mut self, scene_idx: usize) {
         if scene_idx >= self.scenes.len() { return; }
-        let scene = &self.scenes[scene_idx];
 
         // Update tempo if scene overrides it
-        if let Some(t) = scene.tempo {
+        if let Some(t) = self.scenes[scene_idx].tempo {
             self.tempo = t;
             self.samples_per_step = SAMPLE_RATE * 60.0 / t / 4.0;
             // Update BPM on module instruments
@@ -689,8 +703,10 @@ impl SongEngine {
                 inst.set_bpm(t);
             }
             self.send_delay.set_bpm(t, SAMPLE_RATE);
+            self.retune_fx(t);
         }
         let tempo = self.tempo;
+        let scene = &self.scenes[scene_idx];
 
         // Apply effect overrides
         if let Some(rmix) = scene.reverb_mix {
@@ -1043,17 +1059,13 @@ impl SongEngine {
             let pan_r = self.tracks[ti].pan_r;
             let d_send = self.tracks[ti].delay_send;
             let r_send = self.tracks[ti].reverb_send;
-            let is_stereo_src = self.tracks[ti].stereo_src;
-
             for s in 0..len {
-                let (sample_l, sample_r) = if is_stereo_src {
-                    // Stereo source (Beats): already internally panned, apply gain + track pan
-                    (track_bufs_l[ti][s] * gain * pan_l, track_bufs_r[ti][s] * gain * pan_r)
-                } else {
-                    // Mono source: apply gain + panning
-                    let sample = track_bufs_l[ti][s] * gain;
-                    (sample * pan_l, sample * pan_r)
-                };
+                // Both channels always: mono sources were copied to R before the
+                // insert chain, and stereo inserts (autopan, chorus) rely on R.
+                let (sample_l, sample_r) = (
+                    track_bufs_l[ti][s] * gain * pan_l,
+                    track_bufs_r[ti][s] * gain * pan_r,
+                );
 
                 // Bus send (mono sum to bus)
                 if let Some((bus_idx, amount)) = self.tracks[ti].bus_send {
@@ -1738,6 +1750,7 @@ impl SongEngine {
             }
         }
         self.send_delay.set_bpm(bpm, SAMPLE_RATE);
+        self.retune_fx(bpm);
     }
 
     /// Pattern index a track is currently playing (for tests and UI).

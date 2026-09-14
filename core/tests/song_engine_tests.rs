@@ -83,7 +83,7 @@ delay {
 }
 
 drumBus {
-  in > compressor(0.5) > saturate(0.2) > master
+  in > compressor(-6) > saturate(0.2) > master
 }
 
 # ── Tracks ──
@@ -115,7 +115,7 @@ track pads {
 
 # ── Master ──
 master {
-  in > eq(low=0.1, mid=-0.1) > compressor(0.3) > limiter > out
+  in > eq(low=0.1, mid=-0.1) > compressor(-8) > limiter > out
 }
 
 # ── Scenes ──

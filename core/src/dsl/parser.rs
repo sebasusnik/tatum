@@ -82,11 +82,21 @@ impl Parser {
                 self.advance();
                 Some(name)
             }
+            // `x`, `X` and `o` lex as drum hits but are fine as names outside patterns.
+            Token::DrumHit | Token::DrumAccent | Token::DrumGhost => {
+                let name = match self.peek() {
+                    Token::DrumHit => String::from("x"),
+                    Token::DrumAccent => String::from("X"),
+                    _ => String::from("o"),
+                };
+                self.advance();
+                Some(name)
+            }
             _ => {
                 let s = self.span();
                 self.errors.push(ParseError {
                     line: s.line, col: s.col,
-                    message: format!("expected identifier, got {:?}", self.peek()),
+                    message: format!("expected identifier, got {}", describe_token(self.peek())),
                 });
                 None
             }
@@ -106,6 +116,21 @@ impl Parser {
                 message: format!("expected number, got {:?}", self.peek()),
             });
             None
+        }
+    }
+
+    /// Optional `*N` after a tie or rest: `..*15` is fifteen ties.
+    fn repeat_count(&mut self) -> usize {
+        if !matches!(self.peek(), Token::Star) { return 1; }
+        self.advance();
+        match self.peek().clone() {
+            Token::Number(n) if n >= 1.0 && n <= 256.0 => { self.advance(); n as usize }
+            _ => {
+                let s = self.span();
+                let (l, c) = (s.line, s.col);
+                self.errors.push(ParseError { line: l, col: c, message: String::from("expected a count 1..256 after '*'") });
+                1
+            }
         }
     }
 
@@ -167,9 +192,9 @@ impl Parser {
                     let s = self.span().clone();
                     self.errors.push(ParseError {
                         line: s.line, col: s.col,
-                        message: format!("unexpected token at top level: {:?}", s.token),
+                        message: format!("unexpected {} at top level", describe_token(&s.token)),
                     });
-                    self.advance();
+                    self.recover_to_line_end();
                 }
             }
         }
@@ -423,6 +448,26 @@ impl Parser {
             self.skip_newlines();
             if matches!(self.peek(), Token::RParen | Token::Eof) { break; }
 
+            // Keywords that are also option names (`mix=0.5`, `level=`)
+            let keyword_name = match self.peek() {
+                Token::Mix => Some("mix"),
+                Token::Level => Some("level"),
+                Token::Pan => Some("pan"),
+                Token::Velocity => Some("velocity"),
+                _ => None,
+            };
+            if let Some(kn) = keyword_name {
+                let saved_pos = self.pos;
+                self.advance();
+                if matches!(self.peek(), Token::Eq) {
+                    self.advance();
+                    if let Some(val) = self.parse_expr_value() {
+                        params.push(Param::Named(String::from(kn), val));
+                    }
+                    continue;
+                }
+                self.pos = saved_pos;
+            }
             // Check for named param: name=value
             if let Token::Ident(name) = self.peek().clone() {
                 let saved_pos = self.pos;
@@ -435,14 +480,31 @@ impl Parser {
                 } else {
                     // Not named — restore and parse as positional
                     self.pos = saved_pos;
-                    if is_waveform(&name) {
+                    if is_waveform(&name) || is_vowel(&name) {
                         self.advance();
                         params.push(Param::Waveform(name));
                     } else {
-                        // Unknown identifier in params
+                        let s = self.span();
+                        let (l, c) = (s.line, s.col);
+                        self.errors.push(ParseError {
+                            line: l, col: c,
+                            message: format!("unexpected '{}' in arguments (use name=value, a number, or a waveform word)", name),
+                        });
                         self.advance();
                     }
                 }
+            } else if matches!(self.peek(), Token::DrumGhost) {
+                // `o` lexes as a ghost hit; inside arguments it is the vowel word
+                self.advance();
+                params.push(Param::Waveform(String::from("o")));
+            } else if matches!(self.peek(), Token::DrumHit | Token::DrumAccent) {
+                let s = self.span();
+                let (l, c) = (s.line, s.col);
+                self.errors.push(ParseError {
+                    line: l, col: c,
+                    message: String::from("unexpected 'x' in arguments (use name=value, a number, a waveform word or a vowel)"),
+                });
+                self.advance();
             } else if let Token::Number(_) = self.peek() {
                 // Could be a number or a rhythm division (1/4)
                 let n = self.expect_number().unwrap_or(0.0);
@@ -747,11 +809,13 @@ impl Parser {
                 }
                 Token::Rest => {
                     self.advance();
-                    current_row.push(Step::Rest);
+                    let n = self.repeat_count();
+                    for _ in 0..n { current_row.push(Step::Rest); }
                 }
                 Token::Tie => {
                     self.advance();
-                    current_row.push(Step::Tie);
+                    let n = self.repeat_count();
+                    for _ in 0..n { current_row.push(Step::Tie); }
                 }
                 Token::Newline => {
                     if !current_row.is_empty() {
@@ -1109,9 +1173,17 @@ impl Parser {
         let s = self.span().clone();
         self.errors.push(ParseError {
             line: s.line, col: s.col,
-            message: format!("unexpected token at top level: {:?}", s.token),
+            message: format!("unexpected {} at top level (expected tempo, scale, module, pattern, track, scene, arrange, ...)", describe_token(&s.token)),
         });
-        self.advance();
+        self.recover_to_line_end();
+    }
+
+    /// After a top-level error, skip the rest of the line so one mistake
+    /// produces one diagnostic instead of one per token.
+    fn recover_to_line_end(&mut self) {
+        while !matches!(self.peek(), Token::Newline | Token::Eof) {
+            self.pos += 1;
+        }
     }
 
     fn parse_bus_chain_body(&mut self, bus_name: String, chains: &mut Vec<BusChainDef>) {
@@ -1486,6 +1558,28 @@ fn is_dsp_keyword(word: &str) -> bool {
         "compressor" | "limiter" |
         "tilt" | "eq"
     )
+}
+
+/// Human-readable token for error messages.
+fn describe_token(t: &Token) -> String {
+    match t {
+        Token::Ident(s) => format!("'{}'", s),
+        Token::Number(n) => format!("number {}", n),
+        Token::Note(n) => format!("note {}", n),
+        Token::DrumHit => String::from("'x'"),
+        Token::DrumAccent => String::from("'X'"),
+        Token::DrumGhost => String::from("'o'"),
+        Token::LBrace => String::from("'{'"),
+        Token::RBrace => String::from("'}'"),
+        Token::Newline => String::from("end of line"),
+        Token::Eof => String::from("end of file"),
+        other => format!("{:?}", other).to_lowercase(),
+    }
+}
+
+/// Vowel words accepted by the `vowel` node.
+fn is_vowel(word: &str) -> bool {
+    matches!(word, "a" | "e" | "i" | "o" | "u")
 }
 
 /// Check if a word is a waveform name.

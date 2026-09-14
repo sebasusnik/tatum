@@ -55,7 +55,7 @@ module bass reese {
     resonance 0.25
     glide 0.18
     keytrack 0.4
-    osc1_wave 0.0
+    osc1_wave saw
     osc2_pitch 0.53
     attack 0.0
     decay 0.30
@@ -63,7 +63,7 @@ module bass reese {
     release 0.12
     lfo_rate 0.06
     lfo_depth 0.08
-    lfo_target 1.0
+    lfo_target amplitude
 }
 
 # Sub — pure deep low end
@@ -72,7 +72,7 @@ module bass sub {
     cutoff_env 0.15
     resonance 0.20
     glide 0.10
-    osc1_wave 0.0
+    osc1_wave saw
     osc2_pitch 0.5
     attack 0.0
     decay 0.20
@@ -82,7 +82,7 @@ module bass sub {
 
 # FM stab — bright rave-inspired jungle stab
 module fm stab {
-    algorithm 0.5714
+    algorithm additive
     mod_index 0.55
     feedback 0.25
     chorus_mix 0.25
@@ -91,7 +91,7 @@ module fm stab {
 
 # FM atmosphere — dreamy, spacious, wide
 module fm atmo {
-    algorithm 0.2857
+    algorithm dual_pairs
     mod_index 0.30
     feedback 0.10
     attack 0.8
@@ -101,12 +101,12 @@ module fm atmo {
     chorus_mix 0.65
     lfo_rate 0.05
     lfo_depth 0.04
-    lfo_target 1.0
+    lfo_target mod_index
 }
 
 # Keys pad — dreamy, wide, warm and lush
 module keys dreampad {
-    voice_mode 0.0
+    voice_mode poly
     cutoff 0.25
     detune 0.07
     chorus_mix 0.22
@@ -116,7 +116,7 @@ module keys dreampad {
 
 # FM lead — soulful melodic jungle lead
 module fm psylead {
-    algorithm 0.5714
+    algorithm additive
     mod_index 0.30
     feedback 0.20
     op0_envelope 0.003 0.15 0.20 0.12
@@ -124,7 +124,7 @@ module fm psylead {
     chorus_mix 0.20
     lfo_rate 0.10
     lfo_depth 0.05
-    lfo_target 0.0
+    lfo_target pitch
 }
 
 # ────────────────────────────────────────────────
@@ -328,7 +328,7 @@ track reese {
     level 0.44
     gate 0.85
     delay_send 0.08
-    out > saturate(0.20) > lowpass(0.52) > master
+    out > saturate(0.20) > lowpass(2190) > master
 }
 
 track sub {

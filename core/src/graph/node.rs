@@ -5,6 +5,8 @@ use crate::primitives::lfo::Lfo;
 use crate::primitives::noise::NoiseGen;
 use crate::effects::saturator::Saturator;
 use crate::effects::chorus::Chorus;
+use crate::effects::phaser::Phaser;
+use crate::effects::formant::Formant;
 use crate::effects::bitcrusher::Bitcrusher;
 use crate::effects::compressor::Compressor;
 use crate::effects::limiter::Limiter;
@@ -33,12 +35,20 @@ pub enum NodeSpec {
         filter_type: FilterType, cutoff: f32, resonance: f32,
         env_attack: f32, env_decay: f32, env_sustain: f32, env_release: f32,
         env_depth: f32,
+        lfo: FilterLfo,
     },
     Ladder {
         cutoff: f32, resonance: f32,
         env_attack: f32, env_decay: f32, env_sustain: f32, env_release: f32,
         env_depth: f32,
+        lfo: FilterLfo,
     },
+    /// Stereo auto-panner: slow LFO moves the signal between L and R.
+    AutoPan { hz: f32, bars: f32, depth: f32 },
+    /// Swept allpass phaser.
+    Phaser { mix: f32, hz: f32, bars: f32, stages: u8, feedback: f32, depth: f32 },
+    /// Vowel formant filter morphing between two vowels.
+    Vowel { from: u8, to: u8, hz: f32, bars: f32, mix: f32 },
     Mix,
     Gain { amount: f32 },
     Vca,
@@ -56,6 +66,23 @@ pub enum NodeSpec {
     Output,
 }
 
+/// LFO settings on a filter node. `bars` > 0 syncs one cycle to that many
+/// bars (needs the chain's tempo); otherwise `hz` is used. `depth` in Hz.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FilterLfo {
+    pub hz: f32,
+    pub bars: f32,
+    pub depth: f32,
+}
+
+fn make_lfo(hz: f32) -> Lfo {
+    let mut lfo = Lfo::new(SAMPLE_RATE);
+    lfo.set_rate(if hz > 0.0 { hz } else { 0.25 });
+    lfo.set_depth(1.0);
+    lfo.set_waveform(crate::primitives::lfo::LfoWaveform::Sine);
+    lfo
+}
+
 impl NodeSpec {
     /// Convenience: ladder with no filter envelope (backward compat).
     pub fn ladder(cutoff: f32, resonance: f32) -> Self {
@@ -63,6 +90,7 @@ impl NodeSpec {
             cutoff, resonance,
             env_attack: 0.005, env_decay: 0.2, env_sustain: 0.0, env_release: 0.1,
             env_depth: 0.0,
+            lfo: FilterLfo::default(),
         }
     }
 
@@ -72,6 +100,7 @@ impl NodeSpec {
             filter_type, cutoff, resonance,
             env_attack: 0.005, env_decay: 0.2, env_sustain: 0.0, env_release: 0.1,
             env_depth: 0.0,
+            lfo: FilterLfo::default(),
         }
     }
 
@@ -108,23 +137,34 @@ impl NodeSpec {
                 NodeKind::Env(env)
             }
             NodeSpec::Biquad { filter_type, cutoff, resonance,
-                               env_attack, env_decay, env_sustain, env_release, env_depth } => {
+                               env_attack, env_decay, env_sustain, env_release, env_depth, lfo } => {
                 let mut f = BiquadFilter::new(SAMPLE_RATE);
                 f.set_params(filter_type, cutoff, resonance);
                 let mut env = Envelope::new(SAMPLE_RATE);
                 env.set_adsr(env_attack, env_decay, env_sustain, env_release);
                 NodeKind::Biquad(ModBiquad {
                     filter: f, env, base_cutoff: cutoff, env_depth, velocity: 1.0,
+                    lfo: make_lfo(lfo.hz), lfo_depth: lfo.depth, lfo_bars: lfo.bars, lfo_tick: 0,
                 })
             }
+            NodeSpec::AutoPan { hz, bars, depth } => {
+                NodeKind::AutoPan { lfo: make_lfo(hz), bars, depth }
+            }
+            NodeSpec::Phaser { mix, hz, bars, stages, feedback, depth } => {
+                NodeKind::Phaser(Phaser::new(mix, hz, bars, stages as usize, feedback, depth))
+            }
+            NodeSpec::Vowel { from, to, hz, bars, mix } => {
+                NodeKind::Vowel(Formant::new(from, to, hz, bars, mix))
+            }
             NodeSpec::Ladder { cutoff, resonance,
-                               env_attack, env_decay, env_sustain, env_release, env_depth } => {
+                               env_attack, env_decay, env_sustain, env_release, env_depth, lfo } => {
                 let mut f = LadderFilter::new(SAMPLE_RATE);
                 f.set_params(cutoff, resonance);
                 let mut env = Envelope::new(SAMPLE_RATE);
                 env.set_adsr(env_attack, env_decay, env_sustain, env_release);
                 NodeKind::Ladder(ModLadder {
                     filter: f, env, base_cutoff: cutoff, env_depth, velocity: 1.0,
+                    lfo: make_lfo(lfo.hz), lfo_depth: lfo.depth, lfo_bars: lfo.bars, lfo_tick: 0,
                 })
             }
             NodeSpec::Mix => NodeKind::Mix,
@@ -217,6 +257,10 @@ pub struct ModLadder {
     pub base_cutoff: f32,
     pub env_depth: f32,
     pub velocity: f32,
+    pub lfo: Lfo,
+    pub lfo_depth: f32,
+    pub lfo_bars: f32,
+    pub lfo_tick: u32,
 }
 
 impl ModLadder {
@@ -234,12 +278,32 @@ impl ModLadder {
 
     #[inline]
     pub fn process(&mut self, input: f32) -> f32 {
-        if self.env_depth > 0.0 {
-            let env_val = self.env.next_sample();
-            let cutoff = self.base_cutoff + env_val * self.env_depth;
+        let has_env = self.env_depth > 0.0;
+        let has_lfo = self.lfo_depth > 0.0;
+        if has_env || has_lfo {
+            let mut cutoff = self.base_cutoff;
+            if has_env {
+                cutoff += self.env.next_sample() * self.env_depth;
+            }
+            if has_lfo {
+                // Cheap: advance the LFO every sample, retune the filter every 8.
+                let v = self.lfo.next_sample();
+                self.lfo_tick = self.lfo_tick.wrapping_add(1);
+                if self.lfo_tick % 8 != 0 && !has_env {
+                    return self.filter.process(input);
+                }
+                cutoff += v * self.lfo_depth;
+            }
             self.filter.set_cutoff(cutoff);
         }
         self.filter.process(input)
+    }
+
+    /// Retune a bar-synced LFO to the song tempo (4/4).
+    pub fn set_bpm(&mut self, bpm: f32) {
+        if self.lfo_bars > 0.0 {
+            self.lfo.set_rate(bpm / 60.0 / 4.0 / self.lfo_bars);
+        }
     }
 
     pub fn reset(&mut self) {
@@ -255,6 +319,10 @@ pub struct ModBiquad {
     pub base_cutoff: f32,
     pub env_depth: f32,
     pub velocity: f32,
+    pub lfo: Lfo,
+    pub lfo_depth: f32,
+    pub lfo_bars: f32,
+    pub lfo_tick: u32,
 }
 
 impl ModBiquad {
@@ -272,12 +340,32 @@ impl ModBiquad {
 
     #[inline]
     pub fn process(&mut self, input: f32) -> f32 {
-        if self.env_depth > 0.0 {
-            let env_val = self.env.next_sample();
-            let cutoff = self.base_cutoff + env_val * self.env_depth;
+        let has_env = self.env_depth > 0.0;
+        let has_lfo = self.lfo_depth > 0.0;
+        if has_env || has_lfo {
+            let mut cutoff = self.base_cutoff;
+            if has_env {
+                cutoff += self.env.next_sample() * self.env_depth;
+            }
+            if has_lfo {
+                // Cheap: advance the LFO every sample, retune the filter every 8.
+                let v = self.lfo.next_sample();
+                self.lfo_tick = self.lfo_tick.wrapping_add(1);
+                if self.lfo_tick % 8 != 0 && !has_env {
+                    return self.filter.process(input);
+                }
+                cutoff += v * self.lfo_depth;
+            }
             self.filter.set_cutoff(cutoff);
         }
         self.filter.process(input)
+    }
+
+    /// Retune a bar-synced LFO to the song tempo (4/4).
+    pub fn set_bpm(&mut self, bpm: f32) {
+        if self.lfo_bars > 0.0 {
+            self.lfo.set_rate(bpm / 60.0 / 4.0 / self.lfo_bars);
+        }
     }
 
     pub fn reset(&mut self) {
@@ -336,6 +424,9 @@ pub enum NodeKind {
     Vca,
 
     // ── Effects ──
+    AutoPan { lfo: Lfo, bars: f32, depth: f32 },
+    Phaser(Phaser),
+    Vowel(Formant),
     Saturator(Saturator),
     Chorus(Chorus),
     Bitcrusher(Bitcrusher),
@@ -362,6 +453,9 @@ impl NodeKind {
             NodeKind::Env(env) => env.next_sample(),
             NodeKind::Biquad(m) => m.process(inputs[0]),
             NodeKind::Ladder(m) => m.process(inputs[0]),
+            NodeKind::AutoPan { lfo, .. } => { let _ = lfo.next_sample(); inputs[0] }
+            NodeKind::Phaser(p) => p.process(inputs[0]),
+            NodeKind::Vowel(v) => v.process(inputs[0]),
 
             NodeKind::Mix => {
                 let n = input_count as usize;
@@ -416,6 +510,18 @@ impl NodeKind {
             NodeKind::Bitcrusher(bc) => bc.process_stereo(l, r),
             NodeKind::Saturator(sat) => (sat.process(l), sat.process(r)),
             NodeKind::Gain(g) => (l * *g, r * *g),
+            NodeKind::Phaser(p) => p.process_stereo(l, r),
+            NodeKind::Vowel(v) => v.process_stereo(l, r),
+            NodeKind::AutoPan { lfo, depth, .. } => {
+                // Equal-power pan driven by the LFO: p in -1..1
+                let p = lfo.next_sample() * *depth;
+                let angle = (p + 1.0) * 0.25 * crate::math::PI; // 0..pi/2
+                let gl = crate::math::cos(angle) * 1.4142;
+                let gr = crate::math::sin(angle) * 1.4142;
+                let mono = (l + r) * 0.5;
+                // Keep the source stereo image, scaled by the pan law
+                (l * gl * 0.5 + mono * gl * 0.5, r * gr * 0.5 + mono * gr * 0.5)
+            }
             // Dual-mono fallback for everything else
             _ => {
                 let mut inp = [0.0f32; MAX_NODE_INPUTS];
@@ -425,6 +531,20 @@ impl NodeKind {
                 let or = self.process(&inp, 1);
                 (ol, or)
             }
+        }
+    }
+
+    /// Retune bar-synced modulation to the song tempo.
+    pub fn set_bpm(&mut self, bpm: f32) {
+        match self {
+            NodeKind::Biquad(m) => m.set_bpm(bpm),
+            NodeKind::Ladder(m) => m.set_bpm(bpm),
+            NodeKind::AutoPan { lfo, bars, .. } => {
+                if *bars > 0.0 { lfo.set_rate(bpm / 60.0 / 4.0 / *bars); }
+            }
+            NodeKind::Phaser(p) => p.set_bpm(bpm),
+            NodeKind::Vowel(v) => v.set_bpm(bpm),
+            _ => {}
         }
     }
 
@@ -473,6 +593,9 @@ impl NodeKind {
             NodeKind::PitchOsc(po) => po.reset(),
             NodeKind::Noise(_) => {}
             NodeKind::Lfo(lfo) => lfo.reset(),
+            NodeKind::AutoPan { lfo, .. } => lfo.reset(),
+            NodeKind::Phaser(p) => p.reset(),
+            NodeKind::Vowel(v) => v.reset(),
             NodeKind::Env(env) => env.reset(),
             NodeKind::Biquad(m) => m.reset(),
             NodeKind::Ladder(m) => m.reset(),
