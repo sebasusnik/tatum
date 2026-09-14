@@ -727,7 +727,11 @@ impl SongEngine {
             kick_track_idx,
             reverb_wet_level: 1.0,
             delay_wet_level: 1.0,
-            active_automations: Vec::new(),
+            // Sized for the busiest scene so the first scene change, which
+            // happens on the audio thread, does not grow it.
+            active_automations: Vec::with_capacity(
+                song.scenes.iter().map(|s| s.automations.len()).max().unwrap_or(0)
+            ),
             scene_step: 0,
             scene_total_steps: 0,
             scenes: song.scenes,
