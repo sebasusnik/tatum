@@ -1,0 +1,349 @@
+# Synthwave Chill — DSL replica of core/tests/song_synthwave_chill.rs
+# 85 BPM, E minor, 28 bars (~79 s)
+# Section map: intro(4) verse(8) chorus(8) outro(2+3+3)
+#
+# Reference engine used direct note_on/note_off + per-block set_param sweeps.
+# Those became patterns with ties and `auto` lanes inside scenes.
+
+tempo 85
+meter 4/4
+scale E minor
+sidechain 0.3
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# Lush pad — thick unison, chorus, slow vibrato shimmer, very dark filter.
+# engine.keys: VoiceMode 0.25 (unison), Cutoff 0.10, Detune 0.25,
+#              ChorusMix 0.5, VibratoRate 0.15, VibratoDepth 0.12
+module keys pad {
+    voice_mode unison
+    cutoff 0.10
+    detune 0.25
+    chorus_mix 0.5
+    vibrato_rate 0.15
+    vibrato_depth 0.12
+}
+
+# Arp voice — engine.keys2 driven by the ArpProcessor on track 4.
+module keys arp {
+    cutoff 0.15
+    attack 0.0
+    decay 0.15
+    sustain 0.3
+    release 0.08
+}
+
+# Smooth sub-heavy bass — square osc1 for the warm retro tone, long glide.
+# osc2_pitch 0.25 == (-12 + 24) / 48 == one octave down.
+module bass sub {
+    cutoff 0.12
+    cutoff_env 0.2
+    resonance 0.25
+    glide 0.3
+    osc2_pitch 0.25
+    osc1_wave square
+}
+
+# Glassy FM bell — algorithm 1/7 == dual_pairs, purer bell, long tail.
+module fm bell {
+    algorithm dual_pairs
+    mod_index 0.06
+    feedback 0.05
+    chorus_mix 0.3
+    op0_envelope 0.01 0.4 0.15 0.5
+}
+
+module beats kit {
+    level 1.0
+}
+
+# ────────────────────────────────────────────────
+# PATTERNS
+# ────────────────────────────────────────────────
+
+pattern silence {
+    -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+}
+
+# ── Drums ──
+
+# Verse: half-time feel. kick 1/9, snare 5/13, open hat 7/15, 8th hats.
+pattern beat_verse {
+    kick:    x:0.8  -       -  -       -  -       -  -       x:0.8  -       -  -       -  -       -  -
+    snare:   -      -       -  -       x:0.6  -   -  -       -      -       -  -       x:0.6  -   -  -
+    openhat: -      -       -  -       -  -       x:0.35 -   -      -       -  -       -  -       x:0.35 -
+    hat:     -      x:0.25  -  x:0.25  -  x:0.25  -  x:0.25  -      x:0.25  -  x:0.25  -  x:0.25  -  x:0.25
+}
+
+# Chorus: louder kick/snare, open hats on the 8ths, hats on every off-16th.
+pattern beat_chorus {
+    kick:    x:0.9  -      -       -  -      -      -       -  x:0.9  -      -       -  -      -      -       -
+    snare:   -      -      -       -  x:0.7  -      -       -  -      -      -       -  x:0.7  -      -       -
+    openhat: -      -      x:0.4   -  -      -      x:0.4   -  -      -      x:0.4   -  -      -      x:0.4   -
+    hat:     -      x:0.3  -       x:0.3  -  x:0.3  -       x:0.3  -  x:0.3  -       x:0.3  -  x:0.3  -       x:0.3
+}
+
+# Outro: soft kick only.
+pattern beat_outro {
+    kick: x:0.5  -  -  -  -  -  -  -  x:0.5  -  -  -  -  -  -  -
+}
+
+# ── Pad ──
+# Em triad E3 G3 B3 (MIDI 52 55 59), held. A looping single-bar chord +
+# ties sustains across the loop (no retrigger), matching the engine's
+# single note_on held for the whole section.
+pattern pad_em {
+    [E3 G3 B3]:0.4  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+}
+
+# Intro pad — the reference stacked the harmony-triggered Em7 (vel 0.7) on top
+# of the explicit E3/G3/B3 note_ons, so the intro pad is fuller and louder.
+pattern pad_em7_intro {
+    [E3 G3 B3 D4]:0.7  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+}
+
+# Outro pad — same triad, lower velocity (engine re-triggers at 0.35).
+pattern pad_em_soft {
+    [E3 G3 B3]:0.35  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+}
+
+# Chorus pad voicings, 2 bars each: Em, Dm, C, Bm (8 bars = 128 steps).
+pattern pad_chorus {
+    [E3 G3 B3]:0.4    ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    [D3 F3 A3]:0.4    ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    [C3 E3 G3]:0.4    ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    [B2 D3 F#3]:0.4   ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+}
+
+# ── Arp ──
+# Em7 (E3 G3 B3 D4) — the chord the ArpProcessor rebuilt from the harmony
+# context. `octaves=2` re-expands it to the same 8 notes.
+pattern arp_em7 {
+    [E3 G3 B3 D4]:1.0  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+}
+
+# Same Em7, held without the arpeggiator: the reference's set_harmony() also
+# note_on'd this chord on keys2 at velocity 0.7, so it rings under the intro.
+pattern arp_em7_hold {
+    [E3 G3 B3 D4]:0.7  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+}
+
+# ── Bass ──
+# Verse: root moves every 2 bars — E1 D1 C1 B0 (MIDI 28 26 24 23).
+pattern bass_verse {
+    E1:0.75  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    D1:0.75  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    C1:0.75  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    B0:0.75  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+}
+
+# Chorus: same roots, hotter velocity.
+pattern bass_chorus {
+    E1:0.80  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    D1:0.80  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    C1:0.80  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    B0:0.80  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+}
+
+# Outro: back to the root, softer.
+pattern bass_outro {
+    E1:0.65  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+}
+
+# ── FM bells (chorus only) ──
+# Half-note rhythm; melody E4 G4 B4 D5 E5 B4 G4 E4 cycled twice over 8 bars.
+pattern bell_chorus {
+    E4:0.4  ..  ..  ..  ..  ..  ..  ..  G4:0.4  ..  ..  ..  ..  ..  ..  ..
+    B4:0.4  ..  ..  ..  ..  ..  ..  ..  D5:0.4  ..  ..  ..  ..  ..  ..  ..
+    E5:0.4  ..  ..  ..  ..  ..  ..  ..  B4:0.4  ..  ..  ..  ..  ..  ..  ..
+    G4:0.4  ..  ..  ..  ..  ..  ..  ..  E4:0.4  ..  ..  ..  ..  ..  ..  ..
+    E4:0.4  ..  ..  ..  ..  ..  ..  ..  G4:0.4  ..  ..  ..  ..  ..  ..  ..
+    B4:0.4  ..  ..  ..  ..  ..  ..  ..  D5:0.4  ..  ..  ..  ..  ..  ..  ..
+    E5:0.4  ..  ..  ..  ..  ..  ..  ..  B4:0.4  ..  ..  ..  ..  ..  ..  ..
+    G4:0.4  ..  ..  ..  ..  ..  ..  ..  E4:0.4  ..  ..  ..  ..  ..  ..  ..
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# Track order is identical in every scene so that `auto <module> level`
+# lanes keep resolving to the same slot across scene changes (SongEngine
+# resolves automation targets before it activates the scene's tracks).
+#
+# Levels are the reference Engine's track levels (bass 0.55, keys 0.35,
+# fm 0.40, beats 0.70) multiplied by 2.8 to undo SongEngine's automatic
+# 1/sqrt(active_tracks) gain compensation, which the old Engine did not have.
+#
+# The reference configured a dotted-8th delay and a big reverb but left every
+# track's send at 0.0, so it actually rendered dry. The sends below restore
+# the intended wash using the DSL's fixed global send bus.
+# ────────────────────────────────────────────────
+
+track drums {
+    play silence
+    using kit
+    level 1.96
+    reverb_send 0.08
+    out > master
+}
+
+track pads {
+    play silence
+    using pad
+    level 0.98
+    reverb_send 0.22
+    delay_send 0.12
+    out > master
+}
+
+track arpsynth {
+    play silence
+    using arp
+    level 0.98
+    gate 0.6
+    reverb_send 0.18
+    delay_send 0.15
+    out > master
+}
+
+track bassline {
+    play silence
+    using sub
+    level 1.54
+    reverb_send 0.04
+    out > master
+}
+
+track bells {
+    play silence
+    using bell
+    level 1.12
+    pan 0.1
+    reverb_send 0.25
+    delay_send 0.20
+    out > master
+}
+
+# ────────────────────────────────────────────────
+# MASTER
+# Engine master chain order: TiltEq, ThreeBandEq, Compressor, Limiter.
+# tilt 0.15, eq low +3 / mid 0 / high -1, compressor + limiter at defaults.
+# ────────────────────────────────────────────────
+
+master {
+    in > tilt(0.15)
+       > eq(low=3.0, mid=0.0, high=-1.0)
+       > compressor(-3.0, ratio=3.0, attack=20, release=100, makeup=1.0)
+       > limiter
+       > out
+}
+
+# ────────────────────────────────────────────────
+# SCENES
+# ────────────────────────────────────────────────
+
+# INTRO (bars 1-4) — lush pad only, no drums.
+# Reference: keys cutoff 0.10 → 0.13 across the section.
+scene intro {
+    auto pad cutoff 0.10 > 0.13
+
+    track drums    { play silence using kit  level 1.96 reverb_send 0.08 out > master }
+    track pads     { play pad_em7_intro using pad level 0.98 reverb_send 0.22 delay_send 0.12 out > master }
+    track arpsynth { play arp_em7_hold using arp level 0.98 gate 0.6 reverb_send 0.18 delay_send 0.15 out > master }
+    track bassline { play silence using sub  level 1.54 reverb_send 0.04 out > master }
+    track bells    { play silence using bell level 1.12 pan 0.1 reverb_send 0.25 delay_send 0.20 out > master }
+}
+
+# VERSE (bars 5-12) — soft half-time drums, bass walks E D C B, arp opens.
+# Reference: bass cutoff 0.15 → 0.25, keys cutoff 0.13 → 0.18,
+#            tilt 0.15 → 0.10 (master tilt is static in the DSL).
+scene verse {
+    auto sub cutoff 0.15 > 0.25
+    auto pad cutoff 0.13 > 0.18
+
+    track drums    { play beat_verse using kit  level 1.96 reverb_send 0.08 out > master }
+    track pads     { play pad_em     using pad  level 0.98 reverb_send 0.22 delay_send 0.12 out > master }
+    track arpsynth { play arp_em7    using arp  level 0.98 gate 0.6 reverb_send 0.18 delay_send 0.15 arp updown rate=16 gate=0.6 octaves=2 out > master }
+    track bassline { play bass_verse using sub  level 1.54 reverb_send 0.04 out > master }
+    track bells    { play silence    using bell level 1.12 pan 0.1 reverb_send 0.25 delay_send 0.20 out > master }
+}
+
+# CHORUS (bars 13-20) — full energy, FM bell melody, pad follows the changes.
+# Reference: keys cutoff jumps to 0.20, bass cutoff to 0.25, arp level 0.5,
+#            vibrato depth 0.12 → 0.20, eq high -1.0 → +0.5 (static here).
+scene chorus {
+    auto pad vibrato_depth 0.12 > 0.20
+
+    track drums    { play beat_chorus using kit  level 1.96 reverb_send 0.08 out > master }
+    track pads     { play pad_chorus  using pad  level 0.98 reverb_send 0.22 delay_send 0.12 out > master }
+    track arpsynth { play arp_em7     using arp  level 1.4 gate 0.6 reverb_send 0.18 delay_send 0.15 arp updown rate=16 gate=0.6 octaves=2 out > master }
+    track bassline { play bass_chorus using sub  level 1.54 reverb_send 0.04 out > master }
+    track bells    { play bell_chorus using bell level 1.12 pan 0.1 reverb_send 0.25 delay_send 0.20 out > master }
+}
+
+# OUTRO A (bars 21-22) — strip to pad + bass + soft kick, arp fading.
+scene outro_a {
+    auto sub cutoff 0.250 > 0.2125
+    auto pad cutoff 0.200 > 0.170
+    auto arp level 0.56 > 0.28
+
+    track drums    { play beat_outro   using kit  level 1.96 reverb_send 0.08 out > master }
+    track pads     { play pad_em_soft  using pad  level 0.98 reverb_send 0.26 delay_send 0.14 out > master }
+    track arpsynth { play arp_em7      using arp  level 0.56 gate 0.6 reverb_send 0.18 delay_send 0.15 arp updown rate=16 gate=0.6 octaves=2 out > master }
+    track bassline { play bass_outro   using sub  level 1.54 reverb_send 0.04 out > master }
+    track bells    { play silence      using bell level 1.12 pan 0.1 reverb_send 0.25 delay_send 0.20 out > master }
+}
+
+# OUTRO B (bars 23-25) — drums gone, arp fades to nothing.
+scene outro_b {
+    auto sub cutoff 0.2125 > 0.15625
+    auto pad cutoff 0.170  > 0.125
+    auto arp level 0.28 > 0.0
+
+    track drums    { play silence      using kit  level 1.96 reverb_send 0.08 out > master }
+    track pads     { play pad_em_soft  using pad  level 0.98 reverb_send 0.26 delay_send 0.14 out > master }
+    track arpsynth { play arp_em7      using arp  level 0.28 gate 0.6 reverb_send 0.18 delay_send 0.15 arp updown rate=16 gate=0.6 octaves=2 out > master }
+    track bassline { play bass_outro   using sub  level 1.54 reverb_send 0.04 out > master }
+    track bells    { play silence      using bell level 1.12 pan 0.1 reverb_send 0.25 delay_send 0.20 out > master }
+}
+
+# OUTRO C (bars 26-28) — the reference's master fade over the last 3 bars,
+# expressed as per-track level ramps to zero.
+scene outro_c {
+    auto sub cutoff 0.15625 > 0.10
+    auto pad cutoff 0.125   > 0.08
+    auto pad level 0.98 > 0.0
+    auto sub level 1.54 > 0.0
+
+    track drums    { play silence      using kit  level 1.96 reverb_send 0.08 out > master }
+    track pads     { play pad_em_soft  using pad  level 0.98 reverb_send 0.26 delay_send 0.14 out > master }
+    track arpsynth { play silence      using arp  level 0.0 gate 0.6 reverb_send 0.18 delay_send 0.15 out > master }
+    track bassline { play bass_outro   using sub  level 1.54 reverb_send 0.04 out > master }
+    track bells    { play silence      using bell level 1.12 pan 0.1 reverb_send 0.25 delay_send 0.20 out > master }
+}
+
+# ────────────────────────────────────────────────
+# ARRANGEMENT (28 bars)
+# ────────────────────────────────────────────────
+
+arrange {
+    intro x4
+    verse x8
+    chorus x8
+    outro_a x2
+    outro_b x3
+    outro_c x3
+}

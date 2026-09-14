@@ -1,0 +1,360 @@
+# Techno Robot — DSL replica of core/tests/song_techno_robot.rs
+# Sven Vaeth "Robot" (1994) inspired dark hard trance.
+# 140 BPM, C# minor, 29 bars.
+# Section map: intro(4) build(8) climax(4) breakdown(4) drop(4) outro(5)
+
+tempo 140
+meter 4/4
+scale C# minor
+sidechain 0.7
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# Rolling sustained C#2 drone. Filter opens/closes across the arrangement.
+module bass rollbass {
+    cutoff 0.15
+    cutoff_env 0.6
+    resonance 0.5
+    glide 0.15
+    osc2_pitch 0.75
+    osc1_wave saw
+}
+
+# THE ARP voice — short plucky Keys, cycles the C#m7 chord at 16ths.
+module keys arpvoice {
+    cutoff 0.15
+    attack 0.0
+    decay 0.15
+    sustain 0.3
+    release 0.08
+}
+
+# Metallic robotic percussive zaps — serial FM chain, ultra short envelopes.
+module fm metal {
+    algorithm serial4
+    mod_index 0.34
+    feedback 0.25
+    op0_envelope 0.001 0.08 0.0 0.05
+    op1_envelope 0.001 0.06 0.0 0.03
+}
+
+# Dark breakdown pad.
+# NOTE: the reference sets VoiceMode = 0.2, which the module decodes as
+# (0.2 * 4) as u8 == 0 == Poly (the source comment claims Unison). Poly is
+# what actually renders, so that is what we replicate.
+module keys darkpad {
+    voice_mode poly
+    cutoff 0.08
+    detune 0.2
+    chorus_mix 0.3
+}
+
+# TR-909 style kit — reference never touches BeatsModule, so all defaults.
+module beats nine09 {
+    kick_level 1.0
+}
+
+# ────────────────────────────────────────────────
+# PATTERNS
+# ────────────────────────────────────────────────
+
+# Intro / build: 4-on-the-floor kick, 16th closed hats, off-beat opens.
+pattern beat_main {
+    kick:    X  -       -       -        X  -       -       -         X  -       -       -        X  -       -       -
+    hat:     -  x:0.3   -       x:0.3    -  x:0.3   -       x:0.3     -  x:0.3   -       x:0.3    -  x:0.3   -       x:0.3
+    openhat: -  -       x:0.4   -        -  -       x:0.35  -         -  -       x:0.4   -        -  -       x:0.35  -
+}
+
+# Climax: rides (open hats) + claps replace the kicks on beats 2 and 4.
+pattern beat_climax {
+    kick:    X  -       -       -        -  -       -       -         X  -       -       -        -  -       -       -
+    clap:    -  -       -       -        x:0.8 -    -       -         -  -       -       -        x:0.75 -   -       -
+    hat:     -  x:0.45  -       x:0.35   -  x:0.45  -       x:0.35    -  x:0.45  -       x:0.35   -  x:0.45  -       x:0.35
+    openhat: -  -       x:0.55  -        -  -       x:0.55  -         -  -       x:0.55  -        -  -       x:0.55  -
+}
+
+# Drop: dense 16th hats, claps on 2 and 4.
+pattern beat_drop {
+    kick:    X  -       -       -        -  -       -       -         X  -       -       -        -  -       -       -
+    clap:    -  -       -       -        x:0.85 -   -       -         -  -       -       -        x:0.8  -   -       -
+    hat:     -  x:0.4   -       x:0.4    -  x:0.4   -       x:0.4     -  x:0.4   -       x:0.4    -  x:0.4   -       x:0.4
+    openhat: -  -       x:0.55  -        -  -       x:0.55  -         -  -       x:0.55  -        -  -       x:0.55  -
+}
+
+# Outro tail: only the kick is left.
+pattern beat_kick_only {
+    kick: x:0.9 - - -  x:0.9 - - -  x:0.9 - - -  x:0.9 - - -
+}
+
+# Breakdown: the kick drops out entirely.
+pattern beat_silent {
+    kick: - - - -  - - - -  - - - -  - - - -
+}
+
+# Bass: one sustained C#2 for the whole track (ties keep it from retriggering).
+pattern bass_hold {
+    C#2:0.85 .. .. ..
+    ..       .. .. ..
+    ..       .. .. ..
+    ..       .. .. ..
+}
+
+# Arp source material: C#m7 held for the bar; the arp walks it at 16ths
+# over two octaves (49 52 56 59 / 61 64 68 71), exactly like the reference
+# ArpProcessor::rebuild_notes_from_harmony with octave_range = 2.
+pattern arp_chord {
+    [1.3 3.3 5.3 7.3]:1.0 .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+    ..                    .. .. ..
+}
+
+# Breakdown pad: C#m triad (C#3 E3 G#3).
+pattern pad_chord {
+    [1.3 3.3 5.3]:0.4 .. .. ..
+    ..                .. .. ..
+    ..                .. .. ..
+    ..                .. .. ..
+}
+
+# Metallic zap on beat 3, once every two bars (32-step pattern).
+pattern fm_build {
+    -  -  -  -  -  -  -  -  C#4:0.5  -  -  -  -  -  -  -
+    -  -  -  -  -  -  -  -  -        -  -  -  -  -  -  -
+}
+
+# Climax: zap every bar on beat 2.5 (step 10).
+pattern fm_climax {
+    -  -  -  -  -  -  -  -  -  -  C#4:0.6  -  -  -  -  -
+}
+
+# Drop: zap every bar on beat 3 (step 8).
+pattern fm_drop {
+    -  -  -  -  -  -  -  -  C#4:0.6  -  -  -  -  -  -  -
+}
+
+pattern silence {
+    - - - -  - - - -  - - - -  - - - -
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# Levels are the reference TrackSlot levels (beats 0.7, bass 0.55, arp 0.5,
+# fm 0.4, keys 0.35) scaled by sqrt(5) to undo the SongEngine
+# 1/sqrt(active_tracks) gain compensation — every scene keeps all five
+# tracks active so the compensation is a constant 0.4472 — then by a further
+# 1.12 to make up for the reference ducking its own kick (SongEngine never
+# sidechains the kick track into itself) and for its harder limiting.
+# ────────────────────────────────────────────────
+
+track drums {
+    play beat_main
+    using nine09
+    velocity 1.0
+    level 1.753
+    out > master
+}
+
+track bass {
+    play bass_hold
+    using rollbass
+    velocity 1.0
+    level 1.378
+    gate 0.9
+    delay_send 0.05
+    out > master
+}
+
+track arp {
+    play silence
+    using arpvoice
+    velocity 1.0
+    level 1.252
+    gate 1.0
+    delay_send 0.12
+    reverb_send 0.10
+    arp up rate=16 gate=0.6 octaves=2
+    out > master
+}
+
+track zaps {
+    play silence
+    using metal
+    velocity 1.0
+    level 1.001
+    pan 0.1
+    gate 0.15
+    delay_send 0.15
+    reverb_send 0.10
+    out > master
+}
+
+track pad {
+    play silence
+    using darkpad
+    velocity 1.0
+    level 0.877
+    reverb_send 0.18
+    delay_send 0.10
+    out > master
+}
+
+# ────────────────────────────────────────────────
+# MASTER
+# Reference master chain is TiltEq -> ThreeBandEq -> Compressor -> Limiter.
+# The reference sweeps tilt (0.40 .. 0.15) and eq high (-4 .. -1 dB) per
+# section; the DSL master chain is static, so these are frozen at the
+# arrangement average.
+# ────────────────────────────────────────────────
+
+master {
+    in > tilt(0.20)
+       > eq(low=5.0, mid=1.0, high=-1.8)
+       > compressor(-3.0, ratio=3.0, attack=20, release=100, makeup=1.0)
+       > limiter
+       > out
+}
+
+# ────────────────────────────────────────────────
+# SCENES
+# ────────────────────────────────────────────────
+
+# 1. INTRO (bars 1-4) — heavy kick + hats + the bass drone. Nothing else.
+scene intro {
+    delay_mix = 0.20
+    reverb_mix = 0.18
+
+    track drums { play beat_main using nine09 level 1.753 out > master }
+    track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 out > master }
+    track arp   { play silence   using arpvoice level 1.252 out > master }
+    track zaps  { play silence   using metal    level 1.001 pan 0.1 out > master }
+    track pad   { play silence   using darkpad  level 0.877 out > master }
+}
+
+# 2. BUILD-UP (bars 5-12) — the arp enters, bass filter opens 0.15 -> 0.25,
+#    metallic zap every two bars.
+scene build {
+    auto rollbass cutoff 0.15 > 0.25
+
+    track drums { play beat_main using nine09 level 1.753 out > master }
+    track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 out > master }
+    track arp   { play arp_chord using arpvoice level 1.252 gate 1.0 delay_send 0.12 reverb_send 0.10
+                  arp up rate=16 gate=0.6 octaves=2 out > master }
+    track zaps  { play fm_build  using metal level 1.001 pan 0.1 gate 0.15 delay_send 0.15 reverb_send 0.10 out > master }
+    track pad   { play silence   using darkpad level 0.877 out > master }
+}
+
+# 3. CLIMAX (bars 13-16) — rides + claps, bass filter wide open, harder pump.
+scene climax {
+    track drums { play beat_climax using nine09 level 1.753 out > master }
+    track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 sidechain 0.8 out > master }
+    track arp   { play arp_chord using arpvoice level 1.252 gate 1.0 delay_send 0.12 reverb_send 0.10 sidechain 0.8
+                  arp up rate=16 gate=0.6 octaves=2 out > master }
+    track zaps  { play fm_climax using metal level 1.001 pan 0.1 gate 0.15 delay_send 0.15 reverb_send 0.10 sidechain 0.8 out > master }
+    track pad   { play silence   using darkpad level 0.877 sidechain 0.8 out > master }
+}
+
+# 4. BREAKDOWN (bars 17-20) — kick gone, pad enters, more delay + reverb.
+#    Bass filter closes 0.30 -> 0.15, pad filter opens 0.08 -> 0.13.
+scene breakdown {
+    delay_mix = 0.30
+    reverb_mix = 0.30
+
+    auto rollbass cutoff 0.30 > 0.15
+    auto darkpad cutoff 0.08 > 0.13
+
+    track drums { play beat_silent using nine09 level 1.753 out > master }
+    track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.08 reverb_send 0.08 out > master }
+    track arp   { play arp_chord using arpvoice level 1.252 gate 1.0 delay_send 0.20 reverb_send 0.18
+                  arp up rate=16 gate=0.6 octaves=2 out > master }
+    track zaps  { play silence using metal level 1.001 pan 0.1 out > master }
+    track pad   { play pad_chord using darkpad level 0.877 reverb_send 0.18 delay_send 0.10 out > master }
+}
+
+# 5. THE DROP (bars 21-24) — drums slam back, everything wide open.
+scene drop {
+    delay_mix = 0.20
+    reverb_mix = 0.18
+
+    track drums { play beat_drop using nine09 level 1.753 out > master }
+    track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 sidechain 0.8 out > master }
+    track arp   { play arp_chord using arpvoice level 1.252 gate 1.0 delay_send 0.12 reverb_send 0.10 sidechain 0.8
+                  arp up rate=16 gate=0.6 octaves=2 out > master }
+    track zaps  { play fm_drop using metal level 1.001 pan 0.1 gate 0.15 delay_send 0.15 reverb_send 0.10 sidechain 0.8 out > master }
+    track pad   { play silence using darkpad level 0.877 sidechain 0.8 out > master }
+}
+
+# 6. OUTRO (bars 25-29) — elements muted one by one, then a fade.
+#    Reference: bass cutoff 0.30 -> 0.08 across the whole 5 bars,
+#    arp killed at the top of outro bar 2, hats killed at outro bar 3,
+#    master fade over the last 2 bars.
+
+# bar 25 — full drop groove still running
+scene outro_a {
+    auto rollbass cutoff 0.300 > 0.256
+
+    track drums { play beat_drop using nine09 level 1.753 out > master }
+    track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 sidechain 0.8 out > master }
+    track arp   { play arp_chord using arpvoice level 1.252 gate 1.0 delay_send 0.12 reverb_send 0.10 sidechain 0.8
+                  arp up rate=16 gate=0.6 octaves=2 out > master }
+    track zaps  { play silence using metal level 1.001 pan 0.1 out > master }
+    track pad   { play silence using darkpad level 0.877 sidechain 0.8 out > master }
+}
+
+# bar 26 — arp muted
+scene outro_b {
+    auto rollbass cutoff 0.256 > 0.212
+
+    track drums { play beat_drop using nine09 level 1.753 out > master }
+    track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 sidechain 0.8 out > master }
+    track arp   { play silence using arpvoice level 0.0 arp off out > master }
+    track zaps  { play silence using metal level 1.001 pan 0.1 out > master }
+    track pad   { play silence using darkpad level 0.877 sidechain 0.8 out > master }
+}
+
+# bar 27 — hats gone, kick only
+scene outro_c {
+    auto rollbass cutoff 0.212 > 0.168
+
+    track drums { play beat_kick_only using nine09 level 1.753 out > master }
+    track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 sidechain 0.8 out > master }
+    track arp   { play silence using arpvoice level 0.0 arp off out > master }
+    track zaps  { play silence using metal level 1.001 pan 0.1 out > master }
+    track pad   { play silence using darkpad level 0.877 sidechain 0.8 out > master }
+}
+
+# bars 28-29 — the fade out (the reference scales the master buffer 1 -> 0)
+scene outro_d {
+    auto rollbass cutoff 0.168 > 0.080
+    # NOTE: `auto <track> level` is accepted by the compiler but SongEngine's
+    # resolve_auto_target only matches level lanes by INSTRUMENT name, so the
+    # lanes below name the instruments, not the tracks.
+    auto nine09 level 1.753 > 0.0
+    auto rollbass level 1.378 > 0.0
+    auto metal level 1.001 > 0.0
+    auto darkpad level 0.877 > 0.0
+
+    track drums { play beat_kick_only using nine09 level 1.753 out > master }
+    track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 sidechain 0.8 out > master }
+    track arp   { play silence using arpvoice level 0.0 arp off out > master }
+    track zaps  { play silence using metal level 1.001 pan 0.1 out > master }
+    track pad   { play silence using darkpad level 0.877 sidechain 0.8 out > master }
+}
+
+# ────────────────────────────────────────────────
+# ARRANGEMENT — 29 bars
+# ────────────────────────────────────────────────
+
+arrange {
+    intro x4
+    build x8
+    climax x4
+    breakdown x4
+    drop x4
+    outro_a x1
+    outro_b x1
+    outro_c x1
+    outro_d x2
+}
