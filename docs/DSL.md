@@ -25,7 +25,7 @@ sidechain 0.4
 delay sync=dotted_eighth feedback=0.45 filter=0.5   # sync: free | quarter | dotted_eighth |
                                                     #       eighth | sixteenth (default) | triplet_eighth
                                                     # time=0.3 (seconds) applies when sync=free
-reverb size=0.7 damp=0.4 predelay=20 sidechain=0.5  # predelay in ms; size 1.0 is a very long hall;
+reverb size=0.7 damp=0.4 predelay=20 sidechain=0.5  # predelay in ms; size 1.0 is a ~15 s hall;
                                                     # sidechain= ducks the return against the kick (delay too)
 ```
 

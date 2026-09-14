@@ -324,11 +324,12 @@ impl Reverb {
     pub fn is_frozen(&self) -> bool { self.frozen }
 
     fn update_params(&mut self) {
-        // size 0..1 → feedback 0.7..0.995: the top of the range is a very long hall.
+        // size 0..1 → feedback 0.7..0.985. At 0.985 the tail is ~15 s; beyond
+        // that the combs ring and pile up into a roar under sustained input.
         let (feedback, damp) = if self.frozen {
             (1.0, 0.0)
         } else {
-            (self.room_size * 0.295 + 0.7, self.damping * 0.4 + 0.1)
+            (self.room_size * 0.285 + 0.7, self.damping * 0.4 + 0.1)
         };
         for comb in &mut self.combs_l {
             comb.set_feedback(feedback);
