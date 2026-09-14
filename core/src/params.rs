@@ -176,7 +176,7 @@ pub const FILTER_LFO_TARGETS: &[&str] = &["cutoff", "pitch", "amplitude"];
 pub const VOICE_MODES: &[&str] = &["poly", "unison", "octave", "fifth", "ringmod"];
 pub const STUTTER_DRUMS: &[&str] = &["kick", "snare", "hihat", "clap", "tom"];
 
-const ENV_TIME_DOC: &str = "Exponential 1ms..2s (0.25 ≈ 7ms, 0.5 ≈ 45ms, 0.75 ≈ 300ms, 1.0 = 2s)";
+const ENV_TIME_DOC: &str = "Knob 0..1, not seconds. Maps exponentially to 1ms..2s: 0.25 ≈ 7ms, 0.5 ≈ 45ms, 0.75 ≈ 300ms, 1.0 = 2s";
 
 macro_rules! spec {
     ($name:expr, $id:expr, $range:expr, $default:expr, $doc:expr) => {

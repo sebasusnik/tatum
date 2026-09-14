@@ -84,7 +84,7 @@ pattern beat {
 }
 ```
 
-`X` accent, `x` normal, `o` ghost, `x:0.6` explicit velocity, `x?0.5` probability, `x*2` roll.
+`X` accent (velocity 1.0), `x` normal (0.8), `o` ghost (0.35), `x:0.6` explicit velocity, `x?0.5` probability, `x*2` roll.
 A lane line can be longer than one bar (32 steps = two bars); keep every lane the same length.
 Lane names: `kick`, `snare`, `clap`, `hat`, `openhat`, `tom`, `tom2`, `tom3`, `crash` (aliases `bd`, `sd`, `cp`, `hh`, `oh`, `lt`, `mt`, `ht`, `cr`). An unknown lane is a compile error.
 
@@ -100,6 +100,21 @@ track lead {
     out > saturate(0.3) > master
 }
 ```
+
+Track options:
+
+| option | range | default | meaning |
+|--------|-------|---------|---------|
+| `level` | 0..1 | 0.8 | output level after the instrument |
+| `pan` | -1..1 | 0 | stereo position |
+| `velocity` | 0..1 | 0.8 | scales every note's velocity |
+| `gate` | 0..1 | 0.85 | note length as a fraction of the step |
+| `delay_send` / `reverb_send` | 0..1 | 0 | amount into the global sends |
+| `sidechain` | 0..1 | global `sidechain` | how much the kick ducks this track |
+| `arp ...` | see below | none | arpeggiator |
+| `out > ... > master` or `> <bus>` | | `> master` | insert chain and destination |
+
+A scene track can set any of these, including adding an `arp` to a track that has none.
 
 ### Arpeggiator
 
@@ -227,7 +242,12 @@ stays out of the sub, and the slowest LFO available:
 
 ```
 reverb size=1.0 damp=0.25 predelay=40
-pattern voicings { [F3 Ab3 C4 Eb4 G4]:0.6 .. .. .. (x31)  [Db3 F3 Ab3 C4 Eb4]:0.6 .. .. .. (x31) }
+pattern voicings {
+    [F3 Ab3 C4 Eb4 G4]:0.6 .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..    # one bar, held
+    .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..                        # second bar, still held
+    [Db3 F3 Ab3 C4 Eb4]:0.6 .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..
+    .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..
+}
 module keys cloud { voice_mode unison detune 0.45 chorus_mix 0.6 attack 1.0 release 1.0
                     cutoff 0.28 resonance 0.35 lfo_target cutoff lfo_sync free lfo_rate 0.0 lfo_depth 0.08 }
 track pad { play voicings using cloud level 0.15 reverb_send 0.4 sidechain 0.5
