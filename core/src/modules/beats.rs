@@ -285,6 +285,10 @@ struct HiHat {
     decay_rate: f32,
     filter: BiquadFilter,
     bp_filter: BiquadFilter,
+    /// Six square oscillators through a 7.5 kHz highpass leaves only their
+    /// top harmonics, which ran to Nyquist: 60% of the hat's energy sat above
+    /// 10 kHz with its peak at 15 kHz. This puts a ceiling on it.
+    tone: BiquadFilter,
     active: bool,
     level: f32,
     pitch: f32,
@@ -297,6 +301,8 @@ impl HiHat {
         filter.set_params(FilterType::HighPass, 7500.0, 0.15);
         let mut bp_filter = BiquadFilter::new(SAMPLE_RATE);
         bp_filter.set_params(FilterType::BandPass, 9000.0, 0.25);
+        let mut tone = BiquadFilter::new(SAMPLE_RATE);
+        tone.set_params(FilterType::LowPass, 10000.0, 0.02);
         let base_freqs = [280.0, 350.0, 420.0, 495.0, 618.0, 725.0];
         Self {
             phases: [0.0; 6],
@@ -306,6 +312,7 @@ impl HiHat {
             decay_rate: 0.9975,
             filter,
             bp_filter,
+            tone,
             active: false,
             level: 1.0,
             pitch: 1.0,
@@ -323,6 +330,7 @@ impl HiHat {
         }
         self.filter.set_params(FilterType::HighPass, 7500.0 * self.pitch, 0.15);
         self.bp_filter.set_params(FilterType::BandPass, 9000.0 * self.pitch, 0.25);
+        self.tone.set_params(FilterType::LowPass, 10000.0 * self.pitch, 0.02);
         self.active = true;
     }
 
@@ -345,7 +353,7 @@ impl HiHat {
         let input = sum * self.amp;
         let hp = self.filter.process(input);
         let bp = self.bp_filter.process(input);
-        let filtered = hp * 0.7 + bp * 0.3;
+        let filtered = self.tone.process(hp * 0.7 + bp * 0.3);
 
         self.amp *= self.decay_rate;
         if self.amp < 0.001 {

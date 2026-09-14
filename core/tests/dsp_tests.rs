@@ -1374,15 +1374,6 @@ fn test_bass_keytrack_brighter() {
         samples
     }
 
-    fn zero_crossings(buf: &[f32]) -> u32 {
-        let mut count = 0u32;
-        for i in 1..buf.len() {
-            if (buf[i] > 0.0) != (buf[i - 1] > 0.0) {
-                count += 1;
-            }
-        }
-        count
-    }
 
     let low_note = 33;
     let high_note = 57;
@@ -1611,6 +1602,18 @@ fn test_compressor_transparent_below_threshold() {
     );
 }
 
+/// Upward and downward zero crossings in a buffer. Coarse: useful for telling
+/// a low note from a high one, not for measuring modulation.
+fn zero_crossings(buf: &[f32]) -> u32 {
+    let mut n = 0;
+    for i in 1..buf.len() {
+        if (buf[i - 1] <= 0.0) != (buf[i] <= 0.0) {
+            n += 1;
+        }
+    }
+    n
+}
+
 #[test]
 fn test_vibrato_delayed_onset() {
     fn zero_crossings(buf: &[f32]) -> u32 {
@@ -1639,38 +1642,40 @@ fn test_vibrato_delayed_onset() {
         pos += bl;
     }
 
-    let window = (SAMPLE_RATE * 0.05) as usize;
-    let early_end = (SAMPLE_RATE * 0.25) as usize;
-    let late_start = (SAMPLE_RATE * 0.4) as usize;
-    let late_end = (SAMPLE_RATE * 0.9) as usize;
+    // Counting zero crossings in 50 ms windows gives about eleven per window,
+    // so its variance is one or two crossings either way -- it was measuring
+    // noise, and passed by luck. The interval between successive upward
+    // crossings of the fundamental is the pitch itself, sample by sample.
+    let mut low = 0.0f32;
+    let c = synth_core::math::exp(-2.0 * synth_core::math::PI * 300.0 / SAMPLE_RATE);
+    let filtered: Vec<f32> = samples.iter().map(|v| { low = v * (1.0 - c) + low * c; low }).collect();
 
-    let mut early_zcrs = Vec::new();
-    let mut i = (SAMPLE_RATE * 0.05) as usize;
-    while i + window <= early_end {
-        early_zcrs.push(zero_crossings(&samples[i..i + window]));
-        i += window;
+    /// Spread of the period, as a fraction of its mean, over a span.
+    fn period_spread(x: &[f32]) -> f32 {
+        let mut crossings = Vec::new();
+        for i in 1..x.len() {
+            if x[i - 1] <= 0.0 && x[i] > 0.0 {
+                // Linear interpolation, so the measurement is not quantised to
+                // the sample grid -- which is the whole problem with counting.
+                let frac = -x[i - 1] / (x[i] - x[i - 1]);
+                crossings.push(i as f32 - 1.0 + frac);
+            }
+        }
+        if crossings.len() < 4 { return 0.0; }
+        let periods: Vec<f32> = crossings.windows(2).map(|w| w[1] - w[0]).collect();
+        let mean = periods.iter().sum::<f32>() / periods.len() as f32;
+        if mean <= 0.0 { return 0.0; }
+        let var = periods.iter().map(|p| (p - mean) * (p - mean)).sum::<f32>() / periods.len() as f32;
+        synth_core::math::sqrt(var) / mean
     }
 
-    let mut late_zcrs = Vec::new();
-    i = late_start;
-    while i + window <= late_end {
-        late_zcrs.push(zero_crossings(&samples[i..i + window]));
-        i += window;
-    }
-
-    fn variance(vals: &[u32]) -> f32 {
-        if vals.is_empty() { return 0.0; }
-        let mean = vals.iter().sum::<u32>() as f32 / vals.len() as f32;
-        vals.iter().map(|&v| { let d = v as f32 - mean; d * d }).sum::<f32>() / vals.len() as f32
-    }
-
-    let early_var = variance(&early_zcrs);
-    let late_var = variance(&late_zcrs);
+    let early = period_spread(&filtered[(SAMPLE_RATE * 0.05) as usize..(SAMPLE_RATE * 0.25) as usize]);
+    let late = period_spread(&filtered[(SAMPLE_RATE * 0.4) as usize..(SAMPLE_RATE * 0.9) as usize]);
 
     assert!(
-        late_var > early_var,
-        "Late vibrato should have more ZCR variance (pitch variation): early_var={:.1}, late_var={:.1}",
-        early_var, late_var
+        late > early * 1.5,
+        "the vibrato onset delay should leave the early span steady and the late span moving: early {:.4}, late {:.4}",
+        early, late
     );
 }
 
