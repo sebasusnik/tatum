@@ -130,20 +130,20 @@ module fm stab {
 # 0..6, so "E5" means the note E5, not the power-chord quality "5", and a
 # trailing "/octave" on it is a parse error ("unexpected slash"). Used
 # Esus4 for the drop instead: still a big, open, harder-edged voicing.
-pattern drone_em8    { Em/2:0.7     ..*127 }
-pattern drone_cm8    { Cm/2:0.7     ..*127 }
-pattern drone_edrop12 { Esus4/2:0.75 ..*191 }
-pattern drone_em4    { Em/2:0.55    ..*63 }
+pattern drone_em8    { E5/1:0.75   ..*127 }
+pattern drone_cm8    { C5/1:0.75   ..*127 }
+pattern drone_edrop12 { G5/1:0.78   ..*191 }
+pattern drone_em4    { E5/1:0.6    ..*63 }
 
 pattern sub_em8      { E1:0.9  ..*127 }
 pattern sub_cm8      { C1:0.9  ..*127 }
-pattern sub_edrop12  { E1:0.95 ..*191 }
+pattern sub_edrop12  { G0:0.95 ..*191 }
 pattern sub_em4      { E1:0.7  ..*63 }
 
-pattern organ_em8    { Em/3:0.5      ..*127 }
-pattern organ_cm8    { Cm/3:0.5      ..*127 }
-pattern organ_edrop12 { Esus4/3:0.55  ..*191 }
-pattern organ_em4    { Em/3:0.35     ..*63 }
+pattern organ_em8    { Em/2:0.5      ..*127 }
+pattern organ_cm8    { Cm/2:0.5      ..*127 }
+pattern organ_edrop12 { G/2:0.55       ..*191 }
+pattern organ_em4    { Em/2:0.35     ..*63 }
 
 # Drums
 pattern beat_enter {
@@ -263,7 +263,7 @@ track stab {
 master {
     in > tilt(-0.08)
        > eq(low=1.0, mid=-1.5, high=1.0)
-       > compressor(-10, ratio=3.0, attack=15, release=110, makeup=1.3)
+       > compressor(-10, ratio=3.0, attack=15, release=110, makeup=1.15)
        > limiter
        > out
 }
@@ -276,26 +276,26 @@ master {
 # (synth_check warning); levels are set low on purpose since this must be
 # the quietest section in the render.
 scene intro {
-    track bassdrone { play drone_em8 using drone level 0.44 reverb_send 0.3 sidechain 0.55 }
-    track subwall   { play sub_em8 using subwall level 0.30 sidechain 0.5 }
-    track organ     { play organ_em8 using doomorgan level 0.3 reverb_send 0.42 sidechain 0.6 }
+    track bassdrone { play drone_em8 using drone level 0.4 reverb_send 0.3 sidechain 0.55 }
+    track subwall   { play sub_em8 using subwall level 0.27 sidechain 0.5 }
+    track organ     { play organ_em8 using doomorgan level 0.34 reverb_send 0.42 sidechain 0.6 }
 }
 
 # 2. Kick enters, drone holds.
 scene kick_enter {
-    track bassdrone { play drone_em8 using drone level 0.46 reverb_send 0.3 sidechain 0.55 }
-    track subwall   { play sub_em8 using subwall level 0.32 sidechain 0.5 }
-    track organ     { play organ_em8 using doomorgan level 0.3 reverb_send 0.42 sidechain 0.6 }
-    track drums     { play beat_enter using kit level 0.62 reverb_send 0.06 }
+    track bassdrone { play drone_em8 using drone level 0.4 reverb_send 0.3 sidechain 0.55 }
+    track subwall   { play sub_em8 using subwall level 0.27 sidechain 0.5 }
+    track organ     { play organ_em8 using doomorgan level 0.34 reverb_send 0.42 sidechain 0.6 }
+    track drums     { play beat_enter using kit level 0.5 reverb_send 0.06 }
 }
 
 # 3. Groove with bass — drone moves to Cm, claps and ghost hats enter.
 scene groove {
-    track bassdrone { play drone_cm8 using drone level 0.52 reverb_send 0.3 sidechain 0.55 }
-    track subwall   { play sub_cm8 using subwall level 0.30 sidechain 0.55 }
+    track bassdrone { play drone_cm8 using drone level 0.4 reverb_send 0.3 sidechain 0.55 }
+    track subwall   { play sub_cm8 using subwall level 0.27 sidechain 0.55 }
     track organ     { play organ_cm8 using doomorgan level 0.34 reverb_send 0.42 sidechain 0.6 }
-    track drums     { play beat_groove using kit level 0.7 reverb_send 0.06 }
-    track bassline  { play bass_pulse_groove using pulse level 0.9 gate 0.4 sidechain 0.65 }
+    track drums     { play beat_groove using kit level 0.78 reverb_send 0.06 }
+    track bassline  { play bass_pulse_groove using pulse level 1.1 gate 0.4 sidechain 0.65 }
 }
 
 # 4. Breakdown — kick and bassline drop out, drone rises, reverb freezes.
@@ -308,8 +308,8 @@ scene breakdown {
     auto doomorgan cutoff 0.46 > 0.54
 
     track bassdrone { play drone_em8 using drone level 0.4 reverb_send 0.3 sidechain 0.55 }
-    track subwall   { play sub_em8 using subwall level 0.32 sidechain 0.5 }
-    track organ     { play organ_em8 using doomorgan level 0.26 reverb_send 0.42 sidechain 0.6 }
+    track subwall   { play sub_em8 using subwall level 0.27 sidechain 0.5 }
+    track organ     { play organ_em8 using doomorgan level 0.34 reverb_send 0.42 sidechain 0.6 }
 }
 
 # 5. The drop — everything, master brightens.
@@ -318,12 +318,12 @@ scene drop {
     auto doomorgan cutoff 0.54 > 0.46
     auto master tilt -0.12 > 0.02
 
-    track bassdrone { play drone_edrop12 using drone level 0.6 reverb_send 0.26 sidechain 0.6 }
-    track subwall   { play sub_edrop12 using subwall level 0.42 sidechain 0.6 }
-    track organ     { play organ_edrop12 using doomorgan level 0.42 reverb_send 0.38 sidechain 0.65 }
-    track drums     { play beat_drop using kit level 0.64 reverb_send 0.06 }
-    track bassline  { play bass_pulse_drop using pulse level 0.88 gate 0.4 sidechain 0.7 }
-    track stab      { play stab_answer using stab level 0.58 gate 0.25 pan 0.15 delay_send 0.2 reverb_send 0.25 sidechain 0.5 }
+    track bassdrone { play drone_edrop12 using drone level 0.4 reverb_send 0.26 sidechain 0.6 }
+    track subwall   { play sub_edrop12 using subwall level 0.27 sidechain 0.6 }
+    track organ     { play organ_edrop12 using doomorgan level 0.34 reverb_send 0.38 sidechain 0.65 }
+    track drums     { play beat_drop using kit level 0.95 reverb_send 0.06 }
+    track bassline  { play bass_pulse_drop using pulse level 1.3 gate 0.4 sidechain 0.7 }
+    track stab      { play stab_answer using stab level 0.75 gate 0.25 pan 0.15 delay_send 0.2 reverb_send 0.25 sidechain 0.5 }
 }
 
 # 6. Outro — drone alone, dying. No drums here, so sidechain is inert
@@ -332,13 +332,13 @@ scene drop {
 scene outro {
     auto drone cutoff 0.42 > 0.1
     auto doomorgan cutoff 0.46 > 0.14
-    auto subwall level 0.23 > 0.02
-    auto bassdrone level 0.34 > 0.03
-    auto organ level 0.22 > 0.02
+    auto subwall level 0.27 > 0.02
+    auto bassdrone level 0.4 > 0.03
+    auto organ level 0.34 > 0.02
 
-    track bassdrone { play drone_em4 using drone level 0.34 reverb_send 0.3 sidechain 0.55 }
-    track subwall   { play sub_em4 using subwall level 0.23 sidechain 0.5 }
-    track organ     { play organ_em4 using doomorgan level 0.22 reverb_send 0.42 sidechain 0.6 }
+    track bassdrone { play drone_em4 using drone level 0.4 reverb_send 0.3 sidechain 0.55 }
+    track subwall   { play sub_em4 using subwall level 0.27 sidechain 0.5 }
+    track organ     { play organ_em4 using doomorgan level 0.34 reverb_send 0.42 sidechain 0.6 }
 }
 
 # ────────────────────────────────────────────────
