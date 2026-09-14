@@ -30,8 +30,14 @@ module fm pluck {
 module keys wash {
     voice_mode unison
     cutoff 0.35
+    resonance 0.4
     detune 0.3
     chorus_mix 0.4
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync free
+    lfo_rate 0.01
+    lfo_depth 0.1
     attack 0.6
     release 0.9
 }

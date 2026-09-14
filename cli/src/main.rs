@@ -107,6 +107,13 @@ fn cmd_check(args: &[String]) {
                 );
             }
             eprintln!("  tempo: {} BPM", compiled.globals.tempo);
+            let lints = synth_core::dsl::lint::lint_song(&ast);
+            if !lints.is_empty() {
+                eprintln!("design warnings:");
+                for l in &lints {
+                    eprintln!("  [{}] {}\n      {}", l.code, l.message, l.hint);
+                }
+            }
         }
         Err(errs) => {
             eprintln!("compile errors:");

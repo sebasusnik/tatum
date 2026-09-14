@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
-use synth_core::dsl::{self, compiler};
+use synth_core::dsl::{self, compiler, lint};
 use synth_core::params::{self, ModuleKind};
 use synth_core::song_engine::{DslError, SongEngine};
 use synth_core::SAMPLE_RATE;
@@ -29,11 +29,13 @@ const LIMITER_CEILING: f32 = 0.95;
 
 const INSTRUCTIONS: &str = "\
 synth-core writes music as `.synth` files: modules (instruments), patterns, tracks, \
-scenes and an arrangement. Workflow: read `synth_docs` once, look at one example from \
-`synth_examples` for the target genre, write the file, run `synth_check` and fix every \
-error it reports (they carry line numbers and suggestions), then `synth_render` and read \
-the per-section loudness report to judge the arrangement. Parameter names and ranges come \
-from `synth_params`; never invent a parameter.";
+scenes and an arrangement. Workflow: read `synth_docs` once (it ends with sound-design \
+recipes), look at one example from `synth_examples` for the target genre, write the file, \
+run `synth_check` and fix every error it reports (they carry line numbers and suggestions), \
+act on its design warnings, then `synth_render` and read the per-section loudness report to \
+judge the arrangement. Parameter names and ranges come from `synth_params`; never invent a \
+parameter. Nothing that sustains should stay static: pads and leads get an LFO on the \
+filter, vibrato, an `auto` sweep or an arp, plus sends and sidechain against the kick.";
 
 fn main() {
     let ctx = Ctx::from_env();
@@ -163,7 +165,7 @@ fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "synth_check",
-            "description": "Parse and compile .synth source without rendering. Returns ok=true with a summary (tempo, bars, duration, counts) or ok=false with every error, each carrying a line number and often a suggestion. Fix all errors before rendering.",
+            "description": "Parse and compile .synth source without rendering. Returns ok=true with a summary (tempo, bars, duration, counts) plus design warnings (static_pad, dry_mix, no_sidechain, single_scene, no_limiter, unused_*) with a hint each, or ok=false with every error, each carrying a line number and often a suggestion. Fix all errors before rendering; treat warnings as things a producer would fix.",
             "inputSchema": {
                 "type": "object",
                 "properties": { "source": { "type": "string", "description": "Full .synth source text" } },
@@ -291,7 +293,15 @@ fn summary(song: &compiler::CompiledSong) -> Value {
 fn tool_check(args: &Value) -> Result<String, String> {
     let source = args.get("source").and_then(Value::as_str).ok_or("missing 'source'")?;
     match compile_source(source) {
-        Ok(song) => Ok(serde_json::to_string_pretty(&json!({ "ok": true, "summary": summary(&song) })).unwrap()),
+        Ok(song) => {
+            let warnings: Vec<Value> = dsl::parse(source)
+                .map(|ast| lint::lint_song(&ast))
+                .unwrap_or_default()
+                .into_iter()
+                .map(|l| json!({ "code": l.code, "message": l.message, "hint": l.hint }))
+                .collect();
+            Ok(serde_json::to_string_pretty(&json!({ "ok": true, "summary": summary(&song), "warnings": warnings })).unwrap())
+        }
         Err(err_json) => Err(pretty(&err_json)),
     }
 }

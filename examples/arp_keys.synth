@@ -38,6 +38,8 @@ track keys {
     out > master
 }
 
+master { in > limiter > out }
+
 scene main {
     track keys { play cm7_hold using pad }
 }

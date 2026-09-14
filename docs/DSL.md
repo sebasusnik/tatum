@@ -183,3 +183,71 @@ When the source is re-evaluated while playing:
 - Deleting a parameter line restores the registry default instantly.
 - Any other edit (pattern notes, scenes, routing, arp, new modules) is a structural change:
   the new song is compiled and swapped in at the next bar boundary with a short crossfade.
+
+## Recipes
+
+Things a producer does that a first draft usually forgets. `synth_check` warns about the
+first three.
+
+**A pad that moves.** Slow LFO on the filter with some resonance, detuned unison, chorus,
+a hint of vibrato, sends, and sidechain so it breathes with the kick:
+
+```
+module keys pad {
+    voice_mode unison  detune 0.3  chorus_mix 0.5
+    cutoff 0.3  resonance 0.5
+    lfo_target cutoff  lfo_waveform triangle  lfo_sync free  lfo_rate 0.0075  lfo_depth 0.12
+    vibrato_rate 0.35  vibrato_depth 0.06
+    attack 0.9  release 1.0
+}
+track pad { play chords using pad level 0.3 reverb_send 0.4 delay_send 0.15 sidechain 0.45
+            out > highpass(250, 0.4) > master }
+```
+
+**A 303 line.** Low cutoff, high resonance and envelope amount, glide, and `~` slides on
+the notes that should bend; sweep the cutoff per scene:
+
+```
+module bass acid { cutoff 0.2 cutoff_env 0.85 resonance 0.8 glide 0.15 osc1_wave saw }
+pattern line { 1.2:0.95 ~1.2:0.7 - 1.2:0.9 ~5.2:0.85 - ~7.1:0.8 - }
+scene build { auto acid cutoff 0.15 > 0.5 ... }
+```
+
+**An FM stab.** Two operators, short envelopes, a bit of feedback, off-beat pattern with
+rests, saturation in the chain and a delay send:
+
+```
+module fm stab { algorithm two_op mod_index 0.55 feedback 0.15 op0_envelope 0.001 0.14 0.1 0.1 op1_envelope 0.001 0.1 0.05 0.08 }
+track stab { play offbeats using stab level 0.4 delay_send 0.3 out > saturate(0.4) > master }
+```
+
+**A liquid cloud (deep house, liquid DnB).** Jazz voicings (m9, maj7, add9) held with
+ties, a two-second attack so there is no transient, a big wet reverb, high-pass so it
+stays out of the sub, and the slowest LFO available:
+
+```
+reverb size=1.0 damp=0.25 predelay=40
+pattern voicings { [F3 Ab3 C4 Eb4 G4]:0.6 .. .. .. (x31)  [Db3 F3 Ab3 C4 Eb4]:0.6 .. .. .. (x31) }
+module keys cloud { voice_mode unison detune 0.45 chorus_mix 0.6 attack 1.0 release 1.0
+                    cutoff 0.28 resonance 0.35 lfo_target cutoff lfo_sync free lfo_rate 0.0 lfo_depth 0.08 }
+track pad { play voicings using cloud level 0.15 reverb_send 0.4 sidechain 0.5
+            out > highpass(300, 0.4) > lowpass(3200, 0.3) > master }
+```
+
+**A breakbeat kit.** Accents on the downbeats, ghosts between, probability on the extra
+hits, a roll into the drop, and a compressor on a drum bus:
+
+```
+pattern brk {
+    kick:  X - - -  - - x -  - - X -  - - - -
+    snare: - - - -  X - o -  - - - o  X - - x*2
+    hat:   x - x?0.6 -  x - x -  x - x -  x - x x
+}
+bus drums
+drums { in > compressor(-8, ratio=4, attack=8, release=60) > saturate(0.2) > master }
+track beat { play brk using kit out > drums }
+```
+
+**Loudness shape.** Intro quietest, drop loudest, nothing at the limiter ceiling. Use the
+per-section report from `synth_render`; if a section sits at 0.95, lower what feeds it
+rather than pushing the others up.

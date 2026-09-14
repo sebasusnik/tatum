@@ -879,7 +879,7 @@ fn compile_track(
         to_master,
         delay_send,
         reverb_send,
-        sidechain: track.sidechain,
+        sidechain: track.sidechain.or_else(|| defaults.and_then(|d| d.sidechain)),
         arp,
     })
 }
