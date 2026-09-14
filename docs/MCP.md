@@ -11,7 +11,25 @@ songs with the compiler in the loop. Transport is stdio; nothing is sent anywher
 | `synth_params` | `module?`, `format?` (markdown or json) | the parameter registry, the only source of valid names |
 | `synth_examples` | `name?` | the example list, or one example's source |
 | `synth_check` | `source` | `ok` plus a summary, or every error with line, column and suggestion |
-| `synth_render` | `source`, `output?`, `bars?` | the WAV path plus peak, RMS, clipped samples and a per-section loudness report |
+| `synth_render` | `source`, `output?`, `bars?` | the WAV path plus the mix report below |
+
+### The mix report
+
+`synth_render` returns more than a loudness number, because balancing a track is
+where the time actually goes:
+
+- `sections`: per scene, RMS, peak, crest factor, the four-band split
+  (low / mid / harsh 2-5 kHz / air) and whether it sits on the limiter ceiling.
+- `tracks`: per track, peak **and** RMS with their own dB-below-loudest columns.
+  They rank differently — a sparse bass reads far under a continuous pad on RMS
+  while peaking above it — plus `crest` and the band the track mostly occupies.
+- `buses`: the same after each bus chain, so a track that meters fine but
+  arrives quiet at master is visible.
+- `master`: crest factor entering and leaving the master chain. A large drop
+  means the limiter is eating the transients rather than the mix getting louder.
+- `hint`: plain-language warnings — tracks buried or silent, boxy midrange,
+  fatiguing 2-5 kHz, thin low end, two tracks masking each other in the same
+  band, and crest lost to limiting.
 
 Resources mirror the same content: `synth://docs/dsl`, `synth://docs/params`,
 `synth://examples/<name>`.

@@ -266,6 +266,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
             name if !song.buses.iter().any(|b| b.name == name) => errors.push(CompileError::new(format!(
                 "chain '{}' has no `bus {}` declaration (or use reverb_return / delay_return for the global sends)", name, name
             ))),
+            // Names that do match a declared bus were already compiled in step 3.
             _ => {}
         }
     }

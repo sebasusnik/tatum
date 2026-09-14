@@ -917,7 +917,17 @@ impl Parser {
                             "edepth" => plock.env_depth = Some(val),
                             "res" => plock.resonance = Some(val),
                             "gate" => plock.gate = Some(val),
-                            _ => {} // unknown p-lock param, ignore
+                            other => {
+                                let sp = self.tokens[saved_pos].clone();
+                                self.errors.push(ParseError {
+                                    line: sp.line,
+                                    col: sp.col,
+                                    message: format!(
+                                        "unknown step parameter '{}'. A step lock takes cutoff, edepth, res or gate",
+                                        other
+                                    ),
+                                });
+                            }
                         }
                     }
                 } else {

@@ -196,6 +196,7 @@ fn cmd_render(args: &[String]) {
 
     eprintln!("rendering {} bars at {} BPM...", render_bars, engine.tempo());
 
+    engine.set_band_metering(true);
     engine.reset_meters();
     let (out_l, out_r) = engine.render(render_bars);
 
@@ -204,16 +205,45 @@ fn cmd_render(args: &[String]) {
         process::exit(1);
     }
     // Mix report: per-track levels, so a buried or silent track is visible.
+    // Peak and RMS both: they rank tracks differently, and reading only RMS
+    // hides a sparse bass under a continuous pad.
     let loudest = (0..engine.track_count()).fold(0.0f32, |a, i| a.max(engine.track_rms(i)));
+    let loudest_peak = (0..engine.track_count()).fold(0.0f32, |a, i| a.max(engine.track_peak(i)));
     if engine.track_count() > 0 && loudest > 0.0 {
         eprintln!("mix (post level/pan, pre master):");
+        eprintln!("  {:<12} {:>6} {:>8} {:>8} {:>8} {:>6}  {}",
+            "track", "peak", "rms", "rms dB", "peak dB", "crest", "band");
         for i in 0..engine.track_count() {
             let rms = engine.track_rms(i);
+            let peak = engine.track_peak(i);
             let rel = 20.0 * (rms.max(1e-6) / loudest).log10();
+            let rel_peak = 20.0 * (peak.max(1e-6) / loudest_peak.max(1e-6)).log10();
             let flag = if rms <= 0.0 { "  SILENT" } else if rel < -30.0 { "  buried" } else { "" };
-            eprintln!("  {:<12} peak {:.3}  rms {:.4}  {:+.1} dB vs loudest{}",
-                engine.track_name(i), engine.track_peak(i), rms, rel, flag);
+            let band = engine.track_dominant_band(i).map_or("-", |b| synth_core::analysis::BAND_NAMES[b]);
+            eprintln!("  {:<12} {:>6.3} {:>8.4} {:>+8.1} {:>+8.1} {:>6.1}  {}{}",
+                engine.track_name(i), peak, rms, rel, rel_peak,
+                synth_core::analysis::crest(peak, rms), band, flag);
         }
+        for i in 0..engine.bus_count() {
+            let (p, rms) = (engine.bus_peak(i), engine.bus_rms(i));
+            eprintln!("  bus {:<8} {:>6.3} {:>8.4} {:>8} {:>8} {:>6.1}",
+                engine.bus_name(i), p, rms, "", "", synth_core::analysis::crest(p, rms));
+        }
+    }
+    // What the master chain costs in dynamics: raising the master gain looks
+    // free on the peak meter because the limiter catches it, and the punch
+    // leaves with the transients.
+    let (in_peak, in_rms) = engine.master_input_peak_rms();
+    let (out_peak, out_rms) = synth_core::analysis::peak_rms(&out_l, &out_r);
+    let (crest_in, crest_out) = (
+        synth_core::analysis::crest(in_peak, in_rms),
+        synth_core::analysis::crest(out_peak, out_rms),
+    );
+    if crest_in > 0.0 {
+        let change = 20.0 * (crest_out / crest_in).log10();
+        eprintln!("master: crest {:.1} in -> {:.1} out ({:+.1} dB){}",
+            crest_in, crest_out, change,
+            if change < -1.5 { "  the limiter is eating transients" } else { "" });
     }
     eprintln!("writing {} ({} samples, {:.1}s)...",
         output_path,

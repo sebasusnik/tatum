@@ -16,6 +16,7 @@ use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
+use synth_core::analysis::{self, BAND_NAMES};
 use synth_core::dsl::{self, compiler, lint};
 use synth_core::params::{self, ModuleKind};
 use synth_core::song_engine::{DslError, SongEngine};
@@ -340,24 +341,47 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let steps_per_bar = song.globals.meter.0 as usize * 4;
 
     let mut engine = SongEngine::from_compiled(song);
+    engine.set_band_metering(true);
     engine.reset_meters();
     let (l, r) = engine.render(bars);
-    // Per-track levels: post level and pan, before the master chain.
+    // Per-track levels: post level and pan, before the master chain. Peak and
+    // RMS both, because they rank differently: a sparse bass reads far below a
+    // continuous drone on RMS while peaking higher, and trusting RMS alone once
+    // sent me chasing the wrong track for three revisions.
     let mut track_report = Vec::new();
-    let mut loudest = 0.0f32;
+    let mut loudest_rms = 0.0f32;
+    let mut loudest_peak = 0.0f32;
     for i in 0..engine.track_count() {
-        loudest = loudest.max(engine.track_rms(i));
+        loudest_rms = loudest_rms.max(engine.track_rms(i));
+        loudest_peak = loudest_peak.max(engine.track_peak(i));
     }
     for i in 0..engine.track_count() {
         let (p, rr) = (engine.track_peak(i), engine.track_rms(i));
+        let bands = engine.track_bands(i);
         track_report.push(json!({
             "track": engine.track_name(i),
             "peak": round3(p),
             "rms": round3(rr),
             "db": round1(20.0 * rr.max(1e-6).log10()),
-            "vs_loudest_db": round1(20.0 * (rr.max(1e-6) / loudest.max(1e-6)).log10()),
+            "vs_loudest_db": round1(20.0 * (rr.max(1e-6) / loudest_rms.max(1e-6)).log10()),
+            "peak_vs_loudest_db": round1(20.0 * (p.max(1e-6) / loudest_peak.max(1e-6)).log10()),
+            "crest": round1(analysis::crest(p, rr)),
+            "band": engine.track_dominant_band(i).map(|b| BAND_NAMES[b]),
+            "band_pct": { "low": bands[0], "mid": bands[1], "harsh": bands[2], "air": bands[3] },
         }));
     }
+    // Buses carry level too, and a track can meter fine on its own while the
+    // bus chain it feeds swallows it before master.
+    let bus_report: Vec<Value> = (0..engine.bus_count()).map(|i| {
+        let (p, rr) = (engine.bus_peak(i), engine.bus_rms(i));
+        json!({
+            "bus": engine.bus_name(i),
+            "peak": round3(p),
+            "rms": round3(rr),
+            "db": round1(20.0 * rr.max(1e-6).log10()),
+            "crest": round1(analysis::crest(p, rr)),
+        })
+    }).collect();
     let bad = l.iter().chain(r.iter()).filter(|v| !v.is_finite()).count();
     if bad > 0 {
         return Err(format!(
@@ -395,7 +419,7 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         let (rms, peak) = stats(&l[a..b], &r[a..b]);
         let at_ceiling = peak >= LIMITER_CEILING - 0.005;
         if at_ceiling { at_ceiling_sections.push(name.clone()); }
-        let (lo, mid, harsh, air) = balance(&l[a..b], &r[a..b]);
+        let [lo, mid, harsh, air] = balance(&l[a..b], &r[a..b]);
         report.push(json!({
             "scene": name, "bars": count,
             "rms": round3(rms), "peak": round3(peak),
@@ -452,6 +476,56 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
             w["scene"].as_str().unwrap_or(""), w["balance_pct"]["low"]
         ));
     }
+    // Two tracks whose energy sits in the same band, at similar level, mask each
+    // other. It took a lot of listening to work out that the kick was fighting
+    // the drone; the numbers were there the whole time.
+    let mut masking: Vec<String> = Vec::new();
+    for i in 0..track_report.len() {
+        for j in (i + 1)..track_report.len() {
+            let (a, b) = (&track_report[i], &track_report[j]);
+            let same_band = a["band"] == b["band"] && !a["band"].is_null();
+            let close = (a["db"].as_f64().unwrap_or(-99.0) - b["db"].as_f64().unwrap_or(-99.0)).abs() <= 6.0;
+            if same_band && close {
+                masking.push(format!(
+                    "{} and {} both live in {} within 6 dB of each other",
+                    a["track"].as_str().unwrap_or(""), b["track"].as_str().unwrap_or(""),
+                    a["band"].as_str().unwrap_or("")
+                ));
+            }
+        }
+    }
+    if !masking.is_empty() {
+        hints.push(format!(
+            "masking: {}. Carve one of each pair out of the other's band with eq() or a filter, or move them apart in level.",
+            masking.join("; ")
+        ));
+    }
+
+    // What the master chain does to the dynamics. Raising the master gain used
+    // to look like a free win: the peak barely moved because the limiter caught
+    // it, and the punch quietly went with it.
+    let (in_peak, in_rms) = engine.master_input_peak_rms();
+    let crest_in = analysis::crest(in_peak, in_rms);
+    let crest_out = analysis::crest(peak, rms);
+    let crest_loss = if crest_in > 0.0 { 20.0 * (crest_out / crest_in).log10() } else { 0.0 };
+    if crest_loss < -1.5 {
+        hints.push(format!(
+            "the master chain removed {:.1} dB of crest factor ({:.1} in, {:.1} out): the limiter is eating the transients. Lower the track levels or the master gain instead of pushing into it.",
+            -crest_loss, crest_in, crest_out
+        ));
+    }
+
+    let buried_buses: Vec<String> = bus_report.iter()
+        .filter(|b| b["rms"].as_f64().unwrap_or(1.0) <= 0.0)
+        .map(|b| b["bus"].as_str().unwrap_or("").to_string())
+        .collect();
+    if !buried_buses.is_empty() {
+        hints.push(format!(
+            "no signal reached these buses: {}. Check that a track routes into them.",
+            buried_buses.join(", ")
+        ));
+    }
+
     let hint = if hints.is_empty() { Value::Null } else { json!(hints.join(" | ")) };
 
     Ok(serde_json::to_string_pretty(&json!({
@@ -463,60 +537,32 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         "rms": round3(rms),
         "clipped_samples": clipped,
         "gain_compensation": round3(engine.gain_compensation()),
+        "master": {
+            "peak_in": round3(in_peak),
+            "rms_in": round3(in_rms),
+            "crest_in": round1(crest_in),
+            "crest_out": round1(crest_out),
+            "crest_change_db": round1(crest_loss as f32),
+        },
         "sections": report,
         "tracks": track_report,
+        "buses": bus_report,
         "hint": hint
     })).unwrap())
 }
 
-/// Energy split into low (<250 Hz), mid (250 Hz..2 kHz), harsh (2..5 kHz,
-/// where the ear is most sensitive) and air (>5 kHz), as percentages.
-///
-/// Uses three cascaded one-pole sections per edge. A single pole rolls off so
-/// gently that midrange leaks into the "high" bucket and a dark mix reads as
-/// bright, which is worse than no number at all.
-fn balance(l: &[f32], r: &[f32]) -> (f64, f64, f64, f64) {
-    const POLES: usize = 3;
-    // Cascading N one-poles drags the overall -3 dB point down; scale each
-    // section up by 1/sqrt(2^(1/N) - 1) so the stated edge is the real one.
-    const CASCADE_FIX: f32 = 1.9615;
-    let coeff = |hz: f32| (-2.0 * core::f32::consts::PI * hz * CASCADE_FIX / SAMPLE_RATE).exp();
-    let (c_lo, c_mid, c_hi) = (coeff(250.0), coeff(2000.0), coeff(5000.0));
-    let (mut s_lo, mut s_mid, mut s_hi) = ([0.0f32; POLES], [0.0f32; POLES], [0.0f32; POLES]);
-    let cascade = |x: f32, state: &mut [f32; POLES], c: f32| {
-        let mut v = x;
-        for s in state.iter_mut() {
-            *s = v * (1.0 - c) + *s * c;
-            v = *s;
-        }
-        v
-    };
-    let (mut lo, mut mid, mut harsh, mut air) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
-    for (a, b) in l.iter().zip(r) {
-        let x = (a + b) * 0.5;
-        let v_lo = cascade(x, &mut s_lo, c_lo);
-        let v_mid = cascade(x, &mut s_mid, c_mid);
-        let v_hi = cascade(x, &mut s_hi, c_hi);
-        lo += (v_lo * v_lo) as f64;
-        mid += ((v_mid - v_lo) * (v_mid - v_lo)) as f64;
-        harsh += ((v_hi - v_mid) * (v_hi - v_mid)) as f64;
-        air += ((x - v_hi) * (x - v_hi)) as f64;
-    }
-    let total = lo + mid + harsh + air;
-    if total <= 0.0 { return (0.0, 0.0, 0.0, 0.0); }
-    let pct = |v: f64| (v / total * 1000.0).round() / 10.0;
-    (pct(lo), pct(mid), pct(harsh), pct(air))
+fn stats(l: &[f32], r: &[f32]) -> (f32, f32) {
+    let (peak, rms) = analysis::peak_rms(l, r);
+    (rms, peak)
 }
 
-fn stats(l: &[f32], r: &[f32]) -> (f32, f32) {
-    let n = l.len().max(1);
-    let mut sum = 0.0f64;
-    let mut peak = 0.0f32;
+/// Band split of a stereo slice, in percent, via the engine's calibrated meter.
+fn balance(l: &[f32], r: &[f32]) -> [f32; 4] {
+    let mut m = analysis::BandMeter::new(SAMPLE_RATE);
     for (a, b) in l.iter().zip(r) {
-        sum += (a * a + b * b) as f64;
-        peak = peak.max(a.abs()).max(b.abs());
+        m.push_stereo(*a, *b);
     }
-    ((sum / (2 * n) as f64).sqrt() as f32, peak)
+    m.percentages()
 }
 
 fn round3(v: f32) -> f64 { ((v as f64) * 1000.0).round() / 1000.0 }
@@ -654,42 +700,5 @@ mod tests {
         assert_eq!(slug_from_source("# Acid Arp — a showcase\ntempo 1"), "acid_arp");
         assert_eq!(slug_from_source("tempo 120"), "tempo_120");
         assert_eq!(slug_from_source(""), "song");
-    }
-}
-
-#[cfg(test)]
-mod band_tests {
-    use super::*;
-
-    fn tone(hz: f32, secs: f32) -> Vec<f32> {
-        (0..(SAMPLE_RATE * secs) as usize)
-            .map(|i| (i as f32 / SAMPLE_RATE * hz * core::f32::consts::TAU).sin() * 0.5)
-            .collect()
-    }
-
-    /// A pure tone must land in the band its frequency belongs to. Without the
-    /// cascade correction a 1 kHz tone leaked most of its energy into "air".
-    #[test]
-    fn each_band_catches_its_own_tone() {
-        let cases = [
-            (80.0, 0usize, "low"),
-            (1000.0, 1, "mid"),
-            (3000.0, 2, "harsh"),
-            (9000.0, 3, "air"),
-        ];
-        for (hz, idx, name) in cases {
-            let x = tone(hz, 1.0);
-            let (lo, mid, harsh, air) = balance(&x, &x);
-            let pct = [lo, mid, harsh, air];
-            // The bands overlap (one-pole cascades are gentle and 2-5 kHz is
-            // barely more than an octave wide), so the bar is that the right
-            // band dominates, not that it takes everything.
-            let winner = pct.iter().cloned().fold(f64::MIN, f64::max);
-            assert!(
-                (pct[idx] - winner).abs() < 1e-9 && pct[idx] > 50.0,
-                "a {} Hz tone should read mostly '{}', got low {} mid {} harsh {} air {}",
-                hz, name, lo, mid, harsh, air
-            );
-        }
     }
 }

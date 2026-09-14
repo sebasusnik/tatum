@@ -3,6 +3,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::analysis::BandMeter;
 use crate::dsl::compiler::{self, *};
 use crate::dsl::error::{ParseError, CompileError};
 use crate::effects::delay::{Delay, DelaySync};
@@ -241,6 +242,9 @@ struct TrackPlayback {
     meter_peak: f32,
     meter_sum_sq: f64,
     meter_samples: u64,
+    /// Band split of this track alone. Two tracks sitting in the same band is
+    /// masking, and it used to take reasoning to notice.
+    band: BandMeter,
 }
 
 /// Build a fresh arp processor from compiled settings at the given tempo.
@@ -256,15 +260,25 @@ fn make_arp(cfg: &ArpConfig, tempo: f32) -> ArpProcessor {
 
 /// Named bus with FX chain.
 struct SongBus {
+    name: String,
     fx_chain: FxChain,
     buffer: [f32; BLOCK_SIZE],
+    // Metered after the bus chain: a track can read fine on its own meter and
+    // still arrive at master 12 dB down because of what the bus does to it.
+    meter_peak: f32,
+    meter_sum_sq: f64,
+    meter_samples: u64,
 }
 
 impl SongBus {
-    fn new(specs: &[NodeSpec]) -> Self {
+    fn new(name: String, specs: &[NodeSpec]) -> Self {
         Self {
+            name,
             fx_chain: FxChain::new(specs),
             buffer: [0.0; BLOCK_SIZE],
+            meter_peak: 0.0,
+            meter_sum_sq: 0.0,
+            meter_samples: 0,
         }
     }
 
@@ -365,6 +379,13 @@ pub struct SongEngine {
     // Pending nudge triggers: (samples_remaining, instrument_idx, midi_note, velocity)
     // Capacity is reserved up front; see `push_trigger` for what happens when it fills.
     pending_triggers: Vec<(f32, usize, u8, f32)>,
+
+    // Band metering costs nine one-poles per track per sample, so it is off
+    // unless a render report asks for it.
+    band_metering: bool,
+    master_in_peak: f32,
+    master_in_sum_sq: f64,
+    master_in_samples: u64,
 
     // Per-track render buffers, allocated once. The audio path takes them with
     // `mem::take` and puts them back, so a block never touches the allocator.
@@ -569,7 +590,7 @@ impl SongEngine {
         // Build buses
         let buses: Vec<SongBus> = song.buses
             .iter()
-            .map(|b| SongBus::new(&b.fx_chain))
+            .map(|b| SongBus::new(b.name.clone(), &b.fx_chain))
             .collect();
 
         // Build master FX chain
@@ -613,6 +634,7 @@ impl SongEngine {
                     meter_peak: 0.0,
                     meter_sum_sq: 0.0,
                     meter_samples: 0,
+                    band: BandMeter::new(SAMPLE_RATE),
                 }
             })
             .collect();
@@ -714,6 +736,10 @@ impl SongEngine {
             arrangement_bar_count: 0,
             current_bar: 0,
             global_step: 0,
+            band_metering: false,
+            master_in_peak: 0.0,
+            master_in_sum_sq: 0.0,
+            master_in_samples: 0,
             pending_triggers: Vec::with_capacity(MAX_PENDING_TRIGGERS),
             track_bufs_l: vec![[0.0f32; BLOCK_SIZE]; track_buf_count],
             track_bufs_r: vec![[0.0f32; BLOCK_SIZE]; track_buf_count],
@@ -898,7 +924,60 @@ impl SongEngine {
             t.meter_peak = 0.0;
             t.meter_sum_sq = 0.0;
             t.meter_samples = 0;
+            t.band.reset();
         }
+        for b in self.buses.iter_mut() {
+            b.meter_peak = 0.0;
+            b.meter_sum_sq = 0.0;
+            b.meter_samples = 0;
+        }
+        self.master_in_peak = 0.0;
+        self.master_in_sum_sq = 0.0;
+        self.master_in_samples = 0;
+    }
+
+    /// Turn on per-track band analysis. Off by default: it costs nine one-pole
+    /// sections per track per sample, which a live audio thread should not pay.
+    pub fn set_band_metering(&mut self, on: bool) {
+        self.band_metering = on;
+    }
+
+    /// Share of this track's energy in each of `analysis::BAND_NAMES`, in percent.
+    pub fn track_bands(&self, idx: usize) -> [f32; 4] {
+        self.tracks.get(idx).map_or([0.0; 4], |t| t.band.percentages())
+    }
+
+    /// Index into `analysis::BAND_NAMES` of the band this track mostly occupies.
+    pub fn track_dominant_band(&self, idx: usize) -> Option<usize> {
+        self.tracks.get(idx).and_then(|t| t.band.dominant())
+    }
+
+    pub fn bus_count(&self) -> usize { self.buses.len() }
+
+    pub fn bus_name(&self, idx: usize) -> &str {
+        self.buses.get(idx).map_or("", |b| b.name.as_str())
+    }
+
+    /// Peak of a bus after its own chain, before it reaches master.
+    pub fn bus_peak(&self, idx: usize) -> f32 {
+        self.buses.get(idx).map_or(0.0, |b| b.meter_peak)
+    }
+
+    pub fn bus_rms(&self, idx: usize) -> f32 {
+        self.buses.get(idx).map_or(0.0, |b| {
+            if b.meter_samples == 0 { 0.0 } else { math::sqrt((b.meter_sum_sq / b.meter_samples as f64) as f32) }
+        })
+    }
+
+    /// Peak and RMS entering the master chain, so the caller can compare the
+    /// crest factor before and after and see what the limiter took.
+    pub fn master_input_peak_rms(&self) -> (f32, f32) {
+        let rms = if self.master_in_samples == 0 {
+            0.0
+        } else {
+            math::sqrt((self.master_in_sum_sq / self.master_in_samples as f64) as f32)
+        };
+        (self.master_in_peak, rms)
     }
 
     /// Automatic gain compensation applied right now (1.0 = none).
@@ -1165,6 +1244,7 @@ impl SongEngine {
         // Mix tracks into master + bus sends + global sends with level and panning
         // NOTE: velocity is already baked into the instrument output (via voice.velocity
         // which = step_vel * track_vel, set in note_on). Only apply track level here.
+        let band_metering = self.band_metering;
         for ti in 0..track_count {
             if !self.tracks[ti].active { continue; }
             let gain = self.tracks[ti].level;
@@ -1183,6 +1263,9 @@ impl SongEngine {
                 t.meter_peak = t.meter_peak.max(sample_l.abs()).max(sample_r.abs());
                 t.meter_sum_sq += (sample_l * sample_l + sample_r * sample_r) as f64;
                 t.meter_samples += 2;
+                if band_metering {
+                    t.band.push_stereo(sample_l, sample_r);
+                }
 
                 // Bus send (mono sum to bus)
                 if let Some((bus_idx, amount)) = self.tracks[ti].bus_send {
@@ -1214,9 +1297,12 @@ impl SongEngine {
             for s in 0..len {
                 if bus.buffer[s] != 0.0 {
                     let processed = bus.fx_chain.process(bus.buffer[s]);
+                    bus.meter_peak = bus.meter_peak.max(math::abs(processed));
+                    bus.meter_sum_sq += (processed * processed) as f64;
                     output_l[s] += processed;
                     output_r[s] += processed;
                 }
+                bus.meter_samples += 1;
             }
         }
 
@@ -1260,10 +1346,11 @@ impl SongEngine {
                 self.gain_comp_current = SMOOTH_COEFF * self.gain_comp_current
                     + (1.0 - SMOOTH_COEFF) * self.gain_comp_target;
                 let g = ml * self.gain_comp_current;
-                let (fl, fr) = self.master_fx.process_stereo(
-                    output_l[s] * g,
-                    output_r[s] * g,
-                );
+                let (in_l, in_r) = (output_l[s] * g, output_r[s] * g);
+                self.master_in_peak = self.master_in_peak.max(math::abs(in_l)).max(math::abs(in_r));
+                self.master_in_sum_sq += (in_l * in_l + in_r * in_r) as f64;
+                self.master_in_samples += 2;
+                let (fl, fr) = self.master_fx.process_stereo(in_l, in_r);
                 output_l[s] = fl;
                 output_r[s] = fr;
             }
@@ -1274,6 +1361,9 @@ impl SongEngine {
                 let g = ml * self.gain_comp_current;
                 output_l[s] *= g;
                 output_r[s] *= g;
+                self.master_in_peak = self.master_in_peak.max(math::abs(output_l[s])).max(math::abs(output_r[s]));
+                self.master_in_sum_sq += (output_l[s] * output_l[s] + output_r[s] * output_r[s]) as f64;
+                self.master_in_samples += 2;
             }
         }
 
