@@ -593,7 +593,7 @@ track riser {
 master {
     in > tilt(-0.02)
        > eq(low=-0.5, mid=-0.8, high=2.6)
-       > compressor(-9, ratio=2.5, attack=8, release=60, makeup=0db)
+       > compressor(-9, ratio=2.5, attack=8, release=60, makeup=1db)
        > limiter(0.95)
        > out
 }
