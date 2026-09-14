@@ -67,3 +67,35 @@ fn sidechain_without_kick_in_a_scene() {
     let l = lints(&SONG.replace("module keys pad { cutoff 0.3 }", "module keys pad { cutoff 0.3 lfo_target cutoff lfo_depth 0.2 }"));
     assert_eq!(l, vec!["sidechain_without_kick"], "{:?}", l);
 }
+
+#[test]
+fn riding_the_level_of_a_sustained_bed_is_flagged() {
+    // This is the mistake that produced "the drone jumps in level between
+    // sections": a continuous pad moved between 0.34 and 0.60 to hit a
+    // loudness target per scene, which reads as someone touching the fader.
+    let src = SONG
+        .replace("scene a { track pad { play hold using pad }",
+                 "scene a { track pad { play hold using pad level 0.34 }")
+        .replace("scene b { track pad { play hold using pad } }",
+                 "scene b { track pad { play hold using pad level 0.60 } }");
+    let l: Vec<_> = lints(&src);
+    assert!(l.contains(&"level_used_as_fader"), "{:?}", l);
+
+    // Within 3 dB it is arrangement, not fader riding.
+    let src = SONG
+        .replace("scene a { track pad { play hold using pad }",
+                 "scene a { track pad { play hold using pad level 0.50 }")
+        .replace("scene b { track pad { play hold using pad } }",
+                 "scene b { track pad { play hold using pad level 0.60 } }");
+    assert!(!lints(&src).contains(&"level_used_as_fader"), "{:?}", lints(&src));
+
+    // A staccato part may legitimately be a fader.
+    let src = SONG
+        .replace("pattern hold { [1.3 3.3 5.3] .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. }",
+                 "pattern hold { [1.3 3.3 5.3] - - - [1.3 3.3 5.3] - - - [1.3 3.3 5.3] - - - [1.3 3.3 5.3] - - - }")
+        .replace("scene a { track pad { play hold using pad }",
+                 "scene a { track pad { play hold using pad level 0.20 }")
+        .replace("scene b { track pad { play hold using pad } }",
+                 "scene b { track pad { play hold using pad level 0.80 } }");
+    assert!(!lints(&src).contains(&"level_used_as_fader"), "{:?}", lints(&src));
+}

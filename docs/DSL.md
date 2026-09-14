@@ -328,3 +328,20 @@ rather than pushing the others up. Two things that make section loudness non-obv
 the engine scales the mix by 1/sqrt(active tracks) in each scene (so fewer tracks are
 each louder), and sidechain only ducks in scenes that have a beats track (a breakdown
 without drums plays its pads at full level). Set levels per scene, not just per track.
+
+## Design warnings
+
+`synth check` and `synth_check` run a set of lints over a song that already
+compiles. They never block a render; they exist so the author gets "this pad
+never moves" instead of only "this parses". Each one came from a real session.
+
+| code | fires when | why it matters |
+| --- | --- | --- |
+| `static_pad` | a `keys`/`fm` track holds notes for 8+ steps with no LFO, vibrato, arp or `auto` | sustained sounds that do not move stop being heard as sound and start being heard as a drone of level |
+| `level_used_as_fader` | a sustained track's `level` moves more than 3 dB between scenes | a continuous bed is not a fader; riding it is audible as the bed changing volume under everything else |
+| `dry_mix` | nothing uses `reverb_send`, `delay_send` or a bus | everything sits at the same depth |
+| `no_sidechain` | drums and tonal tracks with no ducking anywhere | the kick has to fight through the mix |
+| `sidechain_without_kick` | a scene ducks tracks but has no beats track | those tracks play unducked, so a breakdown can end up louder than the drop |
+| `single_scene` | more than 8 bars in one scene | no arrangement shape |
+| `no_limiter` | the master chain has no `limiter` | peaks clip instead of being caught |
+| `unused_module` / `unused_pattern` | defined but never played | usually a typo in a `using` or `play` name |

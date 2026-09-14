@@ -160,6 +160,41 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
         ));
     }
 
+    // ── level_used_as_fader: a sustained element ridden up and down per scene ──
+    //
+    // A continuous drone or pad is a bed, not a fader. Moving its level between
+    // scenes to hit a loudness target is audible as the bed changing volume
+    // under everything else, which is exactly the complaint this came from.
+    for track in &song.tracks {
+        let Some(m) = song.module_defs.iter().find(|m| m.name == track.using_instrument) else { continue };
+        if m.module_type == "beats" { continue; }
+        let mut levels: Vec<(String, f32)> = Vec::new();
+        for scene in &song.scenes {
+            let Some(st) = scene.tracks.iter().find(|t| t.name == track.name) else { continue };
+            // Only sustained material: a staccato part may well be a fader.
+            if longest_hold(song, &st.play) < 8 { continue; }
+            let level = st.level.or(track.level).unwrap_or(0.8);
+            levels.push((scene.name.clone(), level));
+        }
+        if levels.len() < 2 { continue; }
+        let lo = levels.iter().fold(f32::MAX, |a, (_, v)| a.min(*v));
+        let hi = levels.iter().fold(0.0f32, |a, (_, v)| a.max(*v));
+        if lo <= 0.0 { continue; }
+        // 3 dB is where a level move stops reading as arrangement and starts
+        // reading as someone touching the fader.
+        let spread_db = 20.0 * crate::math::log10(hi / lo);
+        if spread_db > 3.0 {
+            out.push(lint(
+                "level_used_as_fader",
+                format!(
+                    "track '{}' holds long notes and its level moves {:.1} dB across scenes ({:.2} to {:.2})",
+                    track.name, spread_db, lo, hi
+                ),
+                "A sustained bed should keep one level. Change what plays over it instead, or move it with a filter or a send so the change reads as texture rather than volume.",
+            ));
+        }
+    }
+
     // ── unused definitions ──
     for m in &song.module_defs {
         if !all_tracks.iter().any(|t| t.using_instrument == m.name) {

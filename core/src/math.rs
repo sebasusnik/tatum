@@ -190,6 +190,12 @@ pub fn ln(x: f32) -> f32 {
     ln_m + (e as f32) * LN2
 }
 
+/// Base-10 logarithm.
+#[inline]
+pub fn log10(x: f32) -> f32 {
+    ln(x) * core::f32::consts::LOG10_E
+}
+
 /// Power function: x^y = exp(y * ln(x))
 pub fn pow(x: f32, y: f32) -> f32 {
     if x <= 0.0 {
