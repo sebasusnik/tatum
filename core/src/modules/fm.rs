@@ -343,22 +343,22 @@ impl FmModule {
                 self.chorus_mix = value;
                 self.chorus.set_mix(value);
             }
-            FmParam::VibratoRate => self.vibrato_rate = 0.5 + value * 9.5,
+            FmParam::VibratoRate => self.vibrato_rate = crate::params::VIBRATO_RATE.to_real(value),
             FmParam::VibratoDepth => self.vibrato_depth = value * 0.5,
             FmParam::Attack => {
                 // Carrier (op 0) only — modulators keep their own envelopes
-                let a = 0.001 * math::pow(2000.0, value);
+                let a = crate::params::ENV_TIME.to_real(value) * 0.001;
                 for v in &mut self.voices { v.ops[0].env.set_attack(a); }
             }
             FmParam::Decay => {
-                let d = 0.001 * math::pow(2000.0, value);
+                let d = crate::params::ENV_TIME.to_real(value) * 0.001;
                 for v in &mut self.voices { v.ops[0].env.set_decay(d); }
             }
             FmParam::Sustain => {
                 for v in &mut self.voices { v.ops[0].env.set_sustain(value); }
             }
             FmParam::Release => {
-                let r = 0.001 * math::pow(2000.0, value);
+                let r = crate::params::ENV_TIME.to_real(value) * 0.001;
                 for v in &mut self.voices { v.ops[0].env.set_release(r); }
             }
             // Per-operator ADSR (logarithmic for A/D/R, raw for S)

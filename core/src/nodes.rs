@@ -44,6 +44,58 @@ pub struct Arg {
     pub doc: &'static str,
 }
 
+impl Arg {
+    /// Resolve a number written with a unit against this argument. Node
+    /// arguments are already in real units, so a suffix is a scale plus a check
+    /// that the author meant the unit the argument actually uses.
+    ///
+    /// `makeup` is why this exists: it is a linear gain, and all fourteen uses
+    /// in the corpus wrote it as if it were dB. `makeup=6db` now says so.
+    pub fn value_from_quantity(&self, value: f32, suffix: &str) -> Result<f32, String> {
+        let doc = self.doc;
+        let is_hz = doc.starts_with("Hz");
+        let is_ms = doc.starts_with("ms");
+        let is_db = doc.starts_with("dB");
+        let is_linear_gain = doc.starts_with("linear gain");
+        let resolved = match suffix {
+            "hz" if is_hz => Some(value),
+            "khz" if is_hz => Some(value * 1000.0),
+            "ms" if is_ms => Some(value),
+            "s" | "sec" if is_ms => Some(value * 1000.0),
+            "db" if is_db => Some(value),
+            "db" if is_linear_gain => Some(crate::math::pow(10.0, value / 20.0)),
+            _ => None,
+        };
+        match resolved {
+            Some(v) => Ok(v),
+            None => {
+                let accepts = if is_hz {
+                    "hz or khz"
+                } else if is_ms {
+                    "ms or s"
+                } else if is_db || is_linear_gain {
+                    "db"
+                } else {
+                    "no unit"
+                };
+                Err(format!(
+                    "'{}' takes {} ({}), not '{}'",
+                    self.name, accepts, self.doc, suffix
+                ))
+            }
+        }
+    }
+}
+
+/// Look up one argument of a node by name, or by position among the positionals.
+pub fn arg_at(kind: &str, name: Option<&str>, index: usize) -> Option<&'static Arg> {
+    let def = lookup(kind)?;
+    match name {
+        Some(n) => def.named.iter().chain(def.positional.iter()).find(|a| a.name == n),
+        None => def.positional.get(index),
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct NodeDefSpec {
     pub name: &'static str,

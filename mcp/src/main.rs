@@ -35,8 +35,12 @@ recipes), look at one example from `synth_examples` for the target genre, write 
 run `synth_check` and fix every error it reports (they carry line numbers and suggestions), \
 act on its design warnings, then `synth_render` and read the per-section loudness report to \
 judge the arrangement. Parameter names and ranges come from `synth_params`; never invent a \
-parameter. Nothing that sustains should stay static: pads and leads get an LFO on the \
-filter, vibrato, an `auto` sweep or an arp, plus sends and sidechain against the kick.";
+parameter. Write values in their units where `synth_params` lists one — `cutoff 800hz`, \
+`attack 20ms`, `osc2_pitch -12st`, `resonance 80%`, `makeup=6db` — rather than normalized \
+floats; a wrong unit is an error, a wrong float is not. A compressor's `makeup` is a linear \
+gain, so `makeup=4` is +12 dB: say `makeup=6db` if you mean decibels. Nothing that sustains \
+should stay static: pads and leads get an LFO on the filter, vibrato, an `auto` sweep or an \
+arp, plus sends and sidechain against the kick.";
 
 fn main() {
     let ctx = Ctx::from_env();

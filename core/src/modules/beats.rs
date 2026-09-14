@@ -659,9 +659,9 @@ impl BeatsModule {
             BeatsParam::SnareLevel => self.snare.level = value.max(0.0),
             BeatsParam::HihatLevel => self.hihat.level = math::clamp(value, 0.0, 1.0),
             BeatsParam::ClapLevel => self.clap.level = math::clamp(value, 0.0, 1.0),
-            BeatsParam::KickPitch => self.kick.pitch = 0.5 + value * 1.5,
-            BeatsParam::SnarePitch => self.snare.pitch = 0.5 + value * 1.5,
-            BeatsParam::HihatPitch => self.hihat.pitch = 0.5 + value * 1.5,
+            BeatsParam::KickPitch => self.kick.pitch = crate::params::DRUM_PITCH.to_real(value),
+            BeatsParam::SnarePitch => self.snare.pitch = crate::params::DRUM_PITCH.to_real(value),
+            BeatsParam::HihatPitch => self.hihat.pitch = crate::params::DRUM_PITCH.to_real(value),
             BeatsParam::StutterRate => self.set_stutter_rate(value),
             BeatsParam::StutterDrum => {
                 // 0.0 = kick(36), 0.25 = snare(38), 0.5 = hihat(42), 0.75 = clap(39), 1.0 = tom(45)

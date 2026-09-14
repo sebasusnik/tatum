@@ -103,6 +103,144 @@ impl Range {
     }
 }
 
+/// The real-world quantity a parameter's knob maps to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unit {
+    Hz,
+    /// Milliseconds.
+    Ms,
+    Semitones,
+    /// A plain multiplier (2.0 = double the note's frequency).
+    Ratio,
+}
+
+impl Unit {
+    pub fn suffix(self) -> &'static str {
+        match self {
+            Unit::Hz => "hz",
+            Unit::Ms => "ms",
+            Unit::Semitones => "st",
+            Unit::Ratio => "x",
+        }
+    }
+
+    /// A written suffix, and the factor that brings it to this unit's canonical
+    /// form (`khz` is 1000 Hz, `s` is 1000 ms).
+    pub fn from_suffix(s: &str) -> Option<(Unit, f32)> {
+        match s {
+            "hz" => Some((Unit::Hz, 1.0)),
+            "khz" => Some((Unit::Hz, 1000.0)),
+            "ms" => Some((Unit::Ms, 1.0)),
+            "s" | "sec" => Some((Unit::Ms, 1000.0)),
+            "st" => Some((Unit::Semitones, 1.0)),
+            "x" => Some((Unit::Ratio, 1.0)),
+            _ => None,
+        }
+    }
+}
+
+/// How a normalized 0..1 knob maps to a real quantity.
+///
+/// The module's `set_param` uses the same constant, so there is one definition
+/// of each mapping rather than one in the module and one in the docs. Thirty-five
+/// registry defaults were fiction for exactly that reason.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Curve {
+    /// No natural unit: the number is the value (resonance, depths, mixes).
+    None,
+    /// `real = scale * base^knob`
+    Exp { scale: f32, base: f32, unit: Unit },
+    /// `real = min + knob * (max - min)`
+    Lin { min: f32, max: f32, unit: Unit },
+}
+
+impl Curve {
+    pub const fn exp(scale: f32, base: f32, unit: Unit) -> Self {
+        Curve::Exp { scale, base, unit }
+    }
+
+    pub const fn lin(min: f32, max: f32, unit: Unit) -> Self {
+        Curve::Lin { min, max, unit }
+    }
+
+    pub fn unit(&self) -> Option<Unit> {
+        match self {
+            Curve::None => None,
+            Curve::Exp { unit, .. } | Curve::Lin { unit, .. } => Some(*unit),
+        }
+    }
+
+    /// Knob position to real quantity. This is what the modules call.
+    pub fn to_real(&self, knob: f32) -> f32 {
+        match self {
+            Curve::None => knob,
+            Curve::Exp { scale, base, .. } => scale * crate::math::pow(*base, knob),
+            Curve::Lin { min, max, .. } => min + knob * (max - min),
+        }
+    }
+
+    /// Real quantity back to knob position, for `cutoff 800hz` in a song.
+    pub fn to_knob(&self, real: f32) -> f32 {
+        match self {
+            Curve::None => real,
+            Curve::Exp { scale, base, .. } => {
+                if real <= 0.0 || *scale <= 0.0 || *base <= 1.0 {
+                    0.0
+                } else {
+                    crate::math::ln(real / scale) / crate::math::ln(*base)
+                }
+            }
+            Curve::Lin { min, max, .. } => {
+                if (max - min).abs() < 1e-12 { 0.0 } else { (real - min) / (max - min) }
+            }
+        }
+    }
+
+    /// The span this curve covers, for docs and error messages.
+    pub fn describe(&self) -> String {
+        match self {
+            Curve::None => String::new(),
+            Curve::Exp { unit, .. } | Curve::Lin { unit, .. } => {
+                let (lo, hi) = (self.to_real(0.0), self.to_real(1.0));
+                alloc::format!("{}..{}", write_amount(lo, *unit), write_amount(hi, *unit))
+            }
+        }
+    }
+}
+
+/// A quantity as someone would write it: `20hz`, `20khz`, `2s`, `-24st`.
+/// Rounded to three significant figures, because the engine's `pow` is accurate
+/// to 0.07% and a range that reads `19987.07hz` is noise, not precision.
+pub fn write_amount(v: f32, unit: Unit) -> String {
+    let (v, suffix) = match unit {
+        Unit::Hz if crate::math::abs(v) >= 1000.0 => (v / 1000.0, "khz"),
+        Unit::Ms if crate::math::abs(v) >= 1000.0 => (v / 1000.0, "s"),
+        _ => (v, unit.suffix()),
+    };
+    let magnitude = crate::math::abs(v);
+    let text = if magnitude >= 100.0 {
+        alloc::format!("{}", crate::math::floor(v + 0.5) as i32)
+    } else if magnitude >= 10.0 {
+        round_to(v, 10.0)
+    } else {
+        round_to(v, 100.0)
+    };
+    alloc::format!("{}{}", text, suffix)
+}
+
+/// Round to a fixed number of decimals and drop trailing zeros.
+fn round_to(v: f32, scale: f32) -> String {
+    let rounded = crate::math::floor(v * scale + if v < 0.0 { -0.5 } else { 0.5 }) / scale;
+    let whole = crate::math::floor(rounded + if rounded < 0.0 { -0.5 } else { 0.5 });
+    if crate::math::abs(rounded - whole) < 1e-4 {
+        alloc::format!("{}", whole as i32)
+    } else if scale >= 100.0 {
+        alloc::format!("{:.2}", rounded)
+    } else {
+        alloc::format!("{:.1}", rounded)
+    }
+}
+
 /// Full description of one named parameter.
 #[derive(Debug, Clone, Copy)]
 pub struct ParamSpec {
@@ -110,6 +248,8 @@ pub struct ParamSpec {
     pub id: ParamId,
     pub range: Range,
     pub default: f32,
+    /// The real quantity the knob maps to, shared with the module that reads it.
+    pub curve: Curve,
     /// What the normalized value maps to inside the module (units, curve).
     pub doc: &'static str,
 }
@@ -135,6 +275,54 @@ impl ParamSpec {
             }
             _ => None,
         }
+    }
+
+    /// Resolve a number written with a unit (`800hz`, `20ms`, `6db`, `80%`)
+    /// into the normalized value the module wants. The error says what this
+    /// parameter does accept, because a wrong unit is the kind of mistake that
+    /// otherwise lands inside the valid range and goes unnoticed.
+    pub fn value_from_quantity(&self, value: f32, suffix: &str) -> Result<f32, String> {
+        match suffix {
+            "%" => match self.range {
+                Range::Unit | Range::Bipolar => Ok(value / 100.0),
+                _ => Err(self.unit_help(suffix)),
+            },
+            "db" => match self.range {
+                Range::Gain { .. } => Ok(crate::math::pow(10.0, value / 20.0)),
+                _ => Err(self.unit_help(suffix)),
+            },
+            _ => {
+                let Some((unit, factor)) = Unit::from_suffix(suffix) else {
+                    return Err(self.unit_help(suffix));
+                };
+                if self.curve.unit() != Some(unit) {
+                    return Err(self.unit_help(suffix));
+                }
+                let real = value * factor;
+                let knob = self.curve.to_knob(real);
+                if !self.range.contains(knob) {
+                    return Err(alloc::format!(
+                        "'{}' = {}{} is outside {}",
+                        self.name, value, suffix, self.curve.describe()
+                    ));
+                }
+                Ok(knob)
+            }
+        }
+    }
+
+    fn unit_help(&self, suffix: &str) -> String {
+        let mut accepted = Vec::new();
+        if let Some(unit) = self.curve.unit() {
+            accepted.push(alloc::format!("{} ({})", unit.suffix(), self.curve.describe()));
+        }
+        match self.range {
+            Range::Unit | Range::Bipolar => accepted.push(String::from("a percentage like 80%")),
+            Range::Gain { .. } => accepted.push(String::from("decibels like 6db")),
+            Range::Choice(_) => {}
+        }
+        accepted.push(alloc::format!("a plain number ({})", self.range.describe()));
+        alloc::format!("'{}' has no unit '{}'. It takes {}", self.name, suffix, accepted.join(", or "))
     }
 
     /// Check a numeric value against the range. Returns a message on failure.
@@ -180,33 +368,58 @@ const ENV_TIME_DOC: &str = "Knob 0..1, not seconds. Maps exponentially to 1ms..2
 
 macro_rules! spec {
     ($name:expr, $id:expr, $range:expr, $default:expr, $doc:expr) => {
-        ParamSpec { name: $name, id: $id, range: $range, default: $default, doc: $doc }
+        ParamSpec { name: $name, id: $id, range: $range, default: $default, curve: Curve::None, doc: $doc }
+    };
+    ($name:expr, $id:expr, $range:expr, $default:expr, $curve:expr, $doc:expr) => {
+        ParamSpec { name: $name, id: $id, range: $range, default: $default, curve: $curve, doc: $doc }
     };
 }
+
+// ── Curves: one definition each, referenced by both the registry and the module ──
+
+/// Envelope stage time, 1 ms to 2 s. In milliseconds, so the modules divide by
+/// 1000 for the seconds their envelopes take.
+pub const ENV_TIME: Curve = Curve::exp(1.0, 2000.0, Unit::Ms);
+/// Ladder filter cutoff on `bass`.
+pub const BASS_CUTOFF: Curve = Curve::exp(20.0, 1000.0, Unit::Hz);
+/// Filter envelope depth on `bass`, added to the cutoff in Hz.
+pub const BASS_CUTOFF_ENV: Curve = Curve::exp(20.0, 400.0, Unit::Hz);
+/// Biquad cutoff on `keys`.
+pub const KEYS_CUTOFF: Curve = Curve::exp(200.0, 100.0, Unit::Hz);
+/// Free-running LFO rate.
+pub const LFO_RATE: Curve = Curve::lin(0.1, 20.0, Unit::Hz);
+/// Vibrato rate.
+pub const VIBRATO_RATE: Curve = Curve::lin(0.5, 10.0, Unit::Hz);
+/// FM operator frequency ratio.
+pub const OP_RATIO: Curve = Curve::lin(0.5, 16.0, Unit::Ratio);
+/// Oscillator 2 and 3 offset on `bass`.
+pub const OSC_PITCH: Curve = Curve::lin(-24.0, 24.0, Unit::Semitones);
+/// Drum pitch multiplier.
+pub const DRUM_PITCH: Curve = Curve::lin(0.5, 2.0, Unit::Ratio);
 
 // ── Bass ──
 
 pub const BASS_PARAMS: &[ParamSpec] = &[
-    spec!("cutoff", ParamId::Bass(BassParam::Cutoff), Range::Unit, 0.433677, "Ladder filter cutoff, exponential 20Hz..20kHz (0.25 ≈ 110Hz, 0.5 ≈ 630Hz, 0.75 ≈ 3.5kHz)"),
-    spec!("cutoff_env", ParamId::Bass(BassParam::CutoffEnv), Range::Unit, 0.884311, "Filter envelope depth, exponential 20Hz..8kHz sweep"),
+    spec!("cutoff", ParamId::Bass(BassParam::Cutoff), Range::Unit, 0.433677, BASS_CUTOFF, "Ladder filter cutoff, exponential 20Hz..20kHz (0.25 ≈ 110Hz, 0.5 ≈ 630Hz, 0.75 ≈ 3.5kHz)"),
+    spec!("cutoff_env", ParamId::Bass(BassParam::CutoffEnv), Range::Unit, 0.884311, BASS_CUTOFF_ENV, "Filter envelope depth, exponential 20Hz..8kHz sweep"),
     spec!("resonance", ParamId::Bass(BassParam::Resonance), Range::Unit, 0.3, "Ladder resonance, self-oscillates near 1.0"),
     spec!("glide", ParamId::Bass(BassParam::Glide), Range::Unit, 0.058, "Portamento rate between notes (0 = instant)"),
-    spec!("attack", ParamId::Bass(BassParam::Attack), Range::Unit, 0.211743, ENV_TIME_DOC),
-    spec!("decay", ParamId::Bass(BassParam::Decay), Range::Unit, 0.697064, ENV_TIME_DOC),
+    spec!("attack", ParamId::Bass(BassParam::Attack), Range::Unit, 0.211743, ENV_TIME, ENV_TIME_DOC),
+    spec!("decay", ParamId::Bass(BassParam::Decay), Range::Unit, 0.697064, ENV_TIME, ENV_TIME_DOC),
     spec!("sustain", ParamId::Bass(BassParam::Sustain), Range::Unit, 0.8, "Amp envelope sustain level"),
-    spec!("release", ParamId::Bass(BassParam::Release), Range::Unit, 0.659216, ENV_TIME_DOC),
-    spec!("lfo_rate", ParamId::Bass(BassParam::LfoRate), Range::Unit, 0.0, "LFO rate 0.1..20Hz when lfo_sync is free"),
+    spec!("release", ParamId::Bass(BassParam::Release), Range::Unit, 0.659216, ENV_TIME, ENV_TIME_DOC),
+    spec!("lfo_rate", ParamId::Bass(BassParam::LfoRate), Range::Unit, 0.0, LFO_RATE, "LFO rate 0.1..20Hz when lfo_sync is free"),
     spec!("lfo_depth", ParamId::Bass(BassParam::LfoDepth), Range::Unit, 0.0, "LFO depth; 0 disables the LFO. On cutoff it is relative: 1.0 sweeps ±4 octaves, so 0.1 is a gentle wobble"),
     spec!("lfo_waveform", ParamId::Bass(BassParam::LfoWaveform), Range::Choice(LFO_WAVEFORMS), 0.0, "LFO shape"),
     spec!("lfo_target", ParamId::Bass(BassParam::LfoTarget), Range::Choice(FILTER_LFO_TARGETS), 0.0, "What the LFO modulates"),
     spec!("lfo_sync", ParamId::Bass(BassParam::LfoSync), Range::Choice(LFO_SYNC), 0.0, "Free Hz, a tempo-synced subdivision, or a slow cycle over 1..16 bars"),
-    spec!("osc2_pitch", ParamId::Bass(BassParam::Osc2Pitch), Range::Unit, 0.5, "Osc 2 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24 (steps of 1/48)"),
-    spec!("osc3_pitch", ParamId::Bass(BassParam::Osc3Pitch), Range::Unit, 0.5, "Osc 3 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24 (steps of 1/48)"),
+    spec!("osc2_pitch", ParamId::Bass(BassParam::Osc2Pitch), Range::Unit, 0.5, OSC_PITCH, "Osc 2 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24 (steps of 1/48)"),
+    spec!("osc3_pitch", ParamId::Bass(BassParam::Osc3Pitch), Range::Unit, 0.5, OSC_PITCH, "Osc 3 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24 (steps of 1/48)"),
     spec!("osc1_wave", ParamId::Bass(BassParam::Osc1Wave), Range::Choice(OSC_WAVES), 0.0, "Osc 1 waveform"),
     spec!("osc2_wave", ParamId::Bass(BassParam::Osc2Wave), Range::Choice(OSC_WAVES), 0.0, "Osc 2 waveform"),
     spec!("osc3_wave", ParamId::Bass(BassParam::Osc3Wave), Range::Choice(OSC_WAVES), 0.0, "Osc 3 waveform"),
     spec!("keytrack", ParamId::Bass(BassParam::Keytrack), Range::Unit, 0.0, "Filter cutoff follows note pitch"),
-    spec!("vibrato_rate", ParamId::Bass(BassParam::VibratoRate), Range::Unit, 0.0, "Vibrato rate 0.5..10Hz"),
+    spec!("vibrato_rate", ParamId::Bass(BassParam::VibratoRate), Range::Unit, 0.0, VIBRATO_RATE, "Vibrato rate 0.5..10Hz"),
     spec!("vibrato_depth", ParamId::Bass(BassParam::VibratoDepth), Range::Unit, 0.0, "Vibrato depth, up to half a semitone"),
     spec!("vel_env", ParamId::Bass(BassParam::VelEnv), Range::Unit, 0.0, "Velocity scales filter envelope depth"),
 ];
@@ -220,62 +433,62 @@ pub const FM_PARAMS: &[ParamSpec] = &[
     spec!("feedback", ParamId::Fm(FmParam::Feedback), Range::Unit, 0.0, "Global operator feedback (scaled to 0..0.7)"),
     spec!("waveform", ParamId::Fm(FmParam::Waveform), Range::Choice(FM_WAVEFORMS), 0.0, "Operator waveform"),
     spec!("chorus_mix", ParamId::Fm(FmParam::ChorusMix), Range::Unit, 0.0, "Dedicated chorus wet mix"),
-    spec!("attack", ParamId::Fm(FmParam::Attack), Range::Unit, 0.302936, "Carrier (op0) attack, exponential 1ms..2s"),
-    spec!("decay", ParamId::Fm(FmParam::Decay), Range::Unit, 0.605872, "Carrier (op0) decay, exponential 1ms..2s"),
+    spec!("attack", ParamId::Fm(FmParam::Attack), Range::Unit, 0.302936, ENV_TIME, "Carrier (op0) attack, exponential 1ms..2s"),
+    spec!("decay", ParamId::Fm(FmParam::Decay), Range::Unit, 0.605872, ENV_TIME, "Carrier (op0) decay, exponential 1ms..2s"),
     spec!("sustain", ParamId::Fm(FmParam::Sustain), Range::Unit, 0.7, "Carrier (op0) sustain level"),
-    spec!("release", ParamId::Fm(FmParam::Release), Range::Unit, 0.750409, "Carrier (op0) release, exponential 1ms..2s"),
-    spec!("lfo_rate", ParamId::Fm(FmParam::LfoRate), Range::Unit, 0.0, "LFO rate 0.1..20Hz when lfo_sync is free"),
+    spec!("release", ParamId::Fm(FmParam::Release), Range::Unit, 0.750409, ENV_TIME, "Carrier (op0) release, exponential 1ms..2s"),
+    spec!("lfo_rate", ParamId::Fm(FmParam::LfoRate), Range::Unit, 0.0, LFO_RATE, "LFO rate 0.1..20Hz when lfo_sync is free"),
     spec!("lfo_depth", ParamId::Fm(FmParam::LfoDepth), Range::Unit, 0.0, "LFO depth; 0 disables the LFO"),
     spec!("lfo_waveform", ParamId::Fm(FmParam::LfoWaveform), Range::Choice(LFO_WAVEFORMS), 0.0, "LFO shape"),
     spec!("lfo_target", ParamId::Fm(FmParam::LfoTarget), Range::Choice(FM_LFO_TARGETS), 0.0, "What the LFO modulates"),
     spec!("lfo_sync", ParamId::Fm(FmParam::LfoSync), Range::Choice(LFO_SYNC), 0.0, "Free Hz or tempo-synced subdivision"),
-    spec!("vibrato_rate", ParamId::Fm(FmParam::VibratoRate), Range::Unit, 0.0, "Vibrato rate 0.5..10Hz"),
+    spec!("vibrato_rate", ParamId::Fm(FmParam::VibratoRate), Range::Unit, 0.0, VIBRATO_RATE, "Vibrato rate 0.5..10Hz"),
     spec!("vibrato_depth", ParamId::Fm(FmParam::VibratoDepth), Range::Unit, 0.0, "Vibrato depth, up to half a semitone"),
-    spec!("op0_attack", ParamId::Fm(FmParam::Op0Attack), Range::Unit, 0.302936, ENV_TIME_DOC),
-    spec!("op0_decay", ParamId::Fm(FmParam::Op0Decay), Range::Unit, 0.605872, ENV_TIME_DOC),
+    spec!("op0_attack", ParamId::Fm(FmParam::Op0Attack), Range::Unit, 0.302936, ENV_TIME, ENV_TIME_DOC),
+    spec!("op0_decay", ParamId::Fm(FmParam::Op0Decay), Range::Unit, 0.605872, ENV_TIME, ENV_TIME_DOC),
     spec!("op0_sustain", ParamId::Fm(FmParam::Op0Sustain), Range::Unit, 0.7, "Operator sustain level"),
-    spec!("op0_release", ParamId::Fm(FmParam::Op0Release), Range::Unit, 0.750409, ENV_TIME_DOC),
-    spec!("op1_attack", ParamId::Fm(FmParam::Op1Attack), Range::Unit, 0.302936, ENV_TIME_DOC),
-    spec!("op1_decay", ParamId::Fm(FmParam::Op1Decay), Range::Unit, 0.605872, ENV_TIME_DOC),
+    spec!("op0_release", ParamId::Fm(FmParam::Op0Release), Range::Unit, 0.750409, ENV_TIME, ENV_TIME_DOC),
+    spec!("op1_attack", ParamId::Fm(FmParam::Op1Attack), Range::Unit, 0.302936, ENV_TIME, ENV_TIME_DOC),
+    spec!("op1_decay", ParamId::Fm(FmParam::Op1Decay), Range::Unit, 0.605872, ENV_TIME, ENV_TIME_DOC),
     spec!("op1_sustain", ParamId::Fm(FmParam::Op1Sustain), Range::Unit, 0.7, "Operator sustain level"),
-    spec!("op1_release", ParamId::Fm(FmParam::Op1Release), Range::Unit, 0.750409, ENV_TIME_DOC),
-    spec!("op2_attack", ParamId::Fm(FmParam::Op2Attack), Range::Unit, 0.302936, ENV_TIME_DOC),
-    spec!("op2_decay", ParamId::Fm(FmParam::Op2Decay), Range::Unit, 0.605872, ENV_TIME_DOC),
+    spec!("op1_release", ParamId::Fm(FmParam::Op1Release), Range::Unit, 0.750409, ENV_TIME, ENV_TIME_DOC),
+    spec!("op2_attack", ParamId::Fm(FmParam::Op2Attack), Range::Unit, 0.302936, ENV_TIME, ENV_TIME_DOC),
+    spec!("op2_decay", ParamId::Fm(FmParam::Op2Decay), Range::Unit, 0.605872, ENV_TIME, ENV_TIME_DOC),
     spec!("op2_sustain", ParamId::Fm(FmParam::Op2Sustain), Range::Unit, 0.7, "Operator sustain level"),
-    spec!("op2_release", ParamId::Fm(FmParam::Op2Release), Range::Unit, 0.750409, ENV_TIME_DOC),
-    spec!("op3_attack", ParamId::Fm(FmParam::Op3Attack), Range::Unit, 0.302936, ENV_TIME_DOC),
-    spec!("op3_decay", ParamId::Fm(FmParam::Op3Decay), Range::Unit, 0.605872, ENV_TIME_DOC),
+    spec!("op2_release", ParamId::Fm(FmParam::Op2Release), Range::Unit, 0.750409, ENV_TIME, ENV_TIME_DOC),
+    spec!("op3_attack", ParamId::Fm(FmParam::Op3Attack), Range::Unit, 0.302936, ENV_TIME, ENV_TIME_DOC),
+    spec!("op3_decay", ParamId::Fm(FmParam::Op3Decay), Range::Unit, 0.605872, ENV_TIME, ENV_TIME_DOC),
     spec!("op3_sustain", ParamId::Fm(FmParam::Op3Sustain), Range::Unit, 0.7, "Operator sustain level"),
-    spec!("op3_release", ParamId::Fm(FmParam::Op3Release), Range::Unit, 0.750409, ENV_TIME_DOC),
+    spec!("op3_release", ParamId::Fm(FmParam::Op3Release), Range::Unit, 0.750409, ENV_TIME, ENV_TIME_DOC),
     spec!("op0_feedback", ParamId::Fm(FmParam::Op0Feedback), Range::Unit, 0.0, "Self-modulation of operator 0"),
     spec!("op1_feedback", ParamId::Fm(FmParam::Op1Feedback), Range::Unit, 0.0, "Self-modulation of operator 1"),
     spec!("op2_feedback", ParamId::Fm(FmParam::Op2Feedback), Range::Unit, 0.0, "Self-modulation of operator 2"),
     spec!("op3_feedback", ParamId::Fm(FmParam::Op3Feedback), Range::Unit, 0.0, "Self-modulation of operator 3"),
-    spec!("op0_ratio", ParamId::Fm(FmParam::Op0Ratio), Range::Unit, 0.032258, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
-    spec!("op1_ratio", ParamId::Fm(FmParam::Op1Ratio), Range::Unit, 0.032258, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
-    spec!("op2_ratio", ParamId::Fm(FmParam::Op2Ratio), Range::Unit, 0.032258, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
-    spec!("op3_ratio", ParamId::Fm(FmParam::Op3Ratio), Range::Unit, 0.032258, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
+    spec!("op0_ratio", ParamId::Fm(FmParam::Op0Ratio), Range::Unit, 0.032258, OP_RATIO, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
+    spec!("op1_ratio", ParamId::Fm(FmParam::Op1Ratio), Range::Unit, 0.032258, OP_RATIO, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
+    spec!("op2_ratio", ParamId::Fm(FmParam::Op2Ratio), Range::Unit, 0.032258, OP_RATIO, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
+    spec!("op3_ratio", ParamId::Fm(FmParam::Op3Ratio), Range::Unit, 0.032258, OP_RATIO, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
 ];
 
 // ── Keys ──
 
 pub const KEYS_PARAMS: &[ParamSpec] = &[
-    spec!("cutoff", ParamId::Keys(KeysParam::Cutoff), Range::Unit, 0.588152, "Biquad lowpass cutoff, exponential 200Hz..20kHz (0.5 ≈ 2kHz)"),
+    spec!("cutoff", ParamId::Keys(KeysParam::Cutoff), Range::Unit, 0.588152, KEYS_CUTOFF, "Biquad lowpass cutoff, exponential 200Hz..20kHz (0.5 ≈ 2kHz)"),
     spec!("resonance", ParamId::Keys(KeysParam::Resonance), Range::Unit, 0.2, "Filter resonance"),
     spec!("detune", ParamId::Keys(KeysParam::Detune), Range::Unit, 0.15, "Osc detune, up to 2%"),
     spec!("chorus_mix", ParamId::Keys(KeysParam::ChorusMix), Range::Unit, 0.3, "Chorus wet mix"),
     spec!("level", ParamId::Keys(KeysParam::Level), Range::Gain { max: 2.0 }, 0.5, "Module output gain"),
     spec!("voice_mode", ParamId::Keys(KeysParam::VoiceMode), Range::Choice(VOICE_MODES), 0.0, "Volca Keys style voice allocation"),
-    spec!("attack", ParamId::Keys(KeysParam::Attack), Range::Unit, 0.750409, ENV_TIME_DOC),
-    spec!("decay", ParamId::Keys(KeysParam::Decay), Range::Unit, 0.817615, ENV_TIME_DOC),
+    spec!("attack", ParamId::Keys(KeysParam::Attack), Range::Unit, 0.750409, ENV_TIME, ENV_TIME_DOC),
+    spec!("decay", ParamId::Keys(KeysParam::Decay), Range::Unit, 0.817615, ENV_TIME, ENV_TIME_DOC),
     spec!("sustain", ParamId::Keys(KeysParam::Sustain), Range::Unit, 0.7, "Amp envelope sustain level"),
-    spec!("release", ParamId::Keys(KeysParam::Release), Range::Unit, 0.908807, ENV_TIME_DOC),
-    spec!("lfo_rate", ParamId::Keys(KeysParam::LfoRate), Range::Unit, 0.0, "LFO rate 0.1..20Hz when lfo_sync is free"),
+    spec!("release", ParamId::Keys(KeysParam::Release), Range::Unit, 0.908807, ENV_TIME, ENV_TIME_DOC),
+    spec!("lfo_rate", ParamId::Keys(KeysParam::LfoRate), Range::Unit, 0.0, LFO_RATE, "LFO rate 0.1..20Hz when lfo_sync is free"),
     spec!("lfo_depth", ParamId::Keys(KeysParam::LfoDepth), Range::Unit, 0.0, "LFO depth; 0 disables the LFO. On cutoff it is relative: 1.0 sweeps ±4 octaves, so 0.1 is a gentle wobble"),
     spec!("lfo_waveform", ParamId::Keys(KeysParam::LfoWaveform), Range::Choice(LFO_WAVEFORMS), 0.0, "LFO shape"),
     spec!("lfo_target", ParamId::Keys(KeysParam::LfoTarget), Range::Choice(FILTER_LFO_TARGETS), 0.0, "What the LFO modulates"),
     spec!("lfo_sync", ParamId::Keys(KeysParam::LfoSync), Range::Choice(LFO_SYNC), 0.0, "Free Hz or tempo-synced subdivision"),
-    spec!("vibrato_rate", ParamId::Keys(KeysParam::VibratoRate), Range::Unit, 0.0, "Vibrato rate 0.5..10Hz"),
+    spec!("vibrato_rate", ParamId::Keys(KeysParam::VibratoRate), Range::Unit, 0.0, VIBRATO_RATE, "Vibrato rate 0.5..10Hz"),
     spec!("vibrato_depth", ParamId::Keys(KeysParam::VibratoDepth), Range::Unit, 0.0, "Vibrato depth, up to half a semitone"),
 ];
 
@@ -285,19 +498,19 @@ pub const BEATS_PARAMS: &[ParamSpec] = &[
     spec!("level", ParamId::Beats(BeatsParam::Level), Range::Gain { max: 2.0 }, 1.0, "Module output gain"),
     spec!("kick_level", ParamId::Beats(BeatsParam::KickLevel), Range::Unit, 1.0, "Kick level"),
     spec!("kick_decay", ParamId::Beats(BeatsParam::KickDecay), Range::Unit, 0.222222, "Kick amp decay, tight..long"),
-    spec!("kick_pitch", ParamId::Beats(BeatsParam::KickPitch), Range::Unit, 0.333333, "Kick pitch multiplier 0.5..2.0"),
+    spec!("kick_pitch", ParamId::Beats(BeatsParam::KickPitch), Range::Unit, 0.333333, DRUM_PITCH, "Kick pitch multiplier 0.5..2.0"),
     spec!("kick_click", ParamId::Beats(BeatsParam::KickClick), Range::Unit, 0.7, "Noise transient at kick onset"),
     spec!("kick_drive", ParamId::Beats(BeatsParam::KickDrive), Range::Unit, 0.454545, "Kick saturation, warm..heavy"),
     spec!("kick_pan", ParamId::Beats(BeatsParam::KickPan), Range::Bipolar, 0.0, "Kick stereo position"),
     spec!("snare_level", ParamId::Beats(BeatsParam::SnareLevel), Range::Gain { max: 2.0 }, 1.0, "Snare level"),
     spec!("snare_decay", ParamId::Beats(BeatsParam::SnareDecay), Range::Unit, 0.0, "Snare decay, tight..long"),
-    spec!("snare_pitch", ParamId::Beats(BeatsParam::SnarePitch), Range::Unit, 0.333333, "Snare pitch multiplier 0.5..2.0"),
+    spec!("snare_pitch", ParamId::Beats(BeatsParam::SnarePitch), Range::Unit, 0.333333, DRUM_PITCH, "Snare pitch multiplier 0.5..2.0"),
     spec!("snare_drive", ParamId::Beats(BeatsParam::SnareDrive), Range::Unit, 0.3125, "Snare saturation, clean..gritty"),
     spec!("snare_snap", ParamId::Beats(BeatsParam::SnareSnap), Range::Unit, 0.4, "Snare noise crack intensity"),
     spec!("snare_pan", ParamId::Beats(BeatsParam::SnarePan), Range::Bipolar, -0.1, "Snare stereo position"),
     spec!("hihat_level", ParamId::Beats(BeatsParam::HihatLevel), Range::Unit, 1.0, "Hi-hat level"),
     spec!("hihat_decay", ParamId::Beats(BeatsParam::HihatDecay), Range::Unit, 0.625, "Closed hat decay, tight..ringy"),
-    spec!("hihat_pitch", ParamId::Beats(BeatsParam::HihatPitch), Range::Unit, 0.333333, "Hat pitch multiplier 0.5..2.0"),
+    spec!("hihat_pitch", ParamId::Beats(BeatsParam::HihatPitch), Range::Unit, 0.333333, DRUM_PITCH, "Hat pitch multiplier 0.5..2.0"),
     spec!("hihat_pan", ParamId::Beats(BeatsParam::HihatPan), Range::Bipolar, 0.3, "Hat stereo position"),
     spec!("clap_level", ParamId::Beats(BeatsParam::ClapLevel), Range::Unit, 1.0, "Clap level"),
     spec!("clap_pan", ParamId::Beats(BeatsParam::ClapPan), Range::Bipolar, 0.15, "Clap stereo position"),
@@ -479,15 +692,19 @@ fn json_escape(s: &str) -> String {
 pub fn markdown(kinds: &[ModuleKind]) -> String {
     let mut out = String::new();
     out.push_str("# Module parameters\n\n");
-    out.push_str("Values are floats in the listed range. `choice` params take an option name\n");
+    out.push_str("Values are floats in the listed range. Parameters with a unit column can be\n");
+    out.push_str("written that way instead, which is the readable form: `cutoff 800hz`,\n");
+    out.push_str("`attack 20ms`, `release 1.5s`, `osc2_pitch -12st`. Any 0..1 parameter also\n");
+    out.push_str("takes a percentage (`resonance 80%`) and any gain takes decibels (`level 6db`).\n");
+    out.push_str("`choice` params take an option name\n");
     out.push_str("(`waveform half_sine`); a numeric value encodes as index / (options - 1).\n");
     out.push_str("FM modules also accept `op<N>_envelope <attack> <decay> <sustain> <release>` as a\n");
     out.push_str("shorthand for the four per-operator envelope params.\n");
     out.push_str("Generated by `synth params`; do not edit by hand.\n\n");
     for kind in kinds {
         out.push_str(&alloc::format!("## {}\n\n", kind.as_str()));
-        out.push_str("| name | range | default | description |\n");
-        out.push_str("|------|-------|---------|-------------|\n");
+        out.push_str("| name | range | in units | default | description |\n");
+        out.push_str("|------|-------|----------|---------|-------------|\n");
         for s in specs(*kind) {
             let (range, default) = match s.range {
                 Range::Choice(names) => (
@@ -496,7 +713,19 @@ pub fn markdown(kinds: &[ModuleKind]) -> String {
                 ),
                 _ => (s.range.describe(), alloc::format!("{}", s.default)),
             };
-            out.push_str(&alloc::format!("| `{}` | {} | {} | {} |\n", s.name, range, default, s.doc));
+            let units = match s.curve.unit() {
+                Some(unit) => alloc::format!(
+                    "{} (default {})",
+                    s.curve.describe(),
+                    write_amount(s.curve.to_real(s.default), unit)
+                ),
+                None => match s.range {
+                    Range::Unit | Range::Bipolar => String::from("%"),
+                    Range::Gain { .. } => String::from("db"),
+                    Range::Choice(_) => String::from("—"),
+                },
+            };
+            out.push_str(&alloc::format!("| `{}` | {} | {} | {} | {} |\n", s.name, range, units, default, s.doc));
         }
         out.push('\n');
     }
@@ -519,9 +748,17 @@ pub fn json(kinds: &[ModuleKind]) -> String {
                     ("choice", alloc::format!(", \"choices\": [{}]", items.join(", ")))
                 }
             };
+            let unit = match s.curve.unit() {
+                Some(unit) => alloc::format!(
+                    ", \"unit\": \"{}\", \"unit_range\": \"{}\", \"unit_default\": \"{}\"",
+                    unit.suffix(), s.curve.describe(),
+                    write_amount(s.curve.to_real(s.default), unit)
+                ),
+                None => String::new(),
+            };
             out.push_str(&alloc::format!(
-                "    {{\"name\": \"{}\", \"type\": \"{}\", \"min\": {}, \"max\": {}{}, \"default\": {}, \"doc\": \"{}\"}}{}\n",
-                s.name, ty, s.range.min(), s.range.max(), extra, s.default, json_escape(s.doc),
+                "    {{\"name\": \"{}\", \"type\": \"{}\", \"min\": {}, \"max\": {}{}, \"default\": {}{}, \"doc\": \"{}\"}}{}\n",
+                s.name, ty, s.range.min(), s.range.max(), extra, s.default, unit, json_escape(s.doc),
                 if i + 1 < list.len() { "," } else { "" }
             ));
         }

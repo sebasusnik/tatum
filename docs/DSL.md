@@ -34,13 +34,41 @@ reverb size=0.7 damp=0.4 predelay=20 sidechain=0.5  # predelay in ms; size 1.0 i
 
 ## Modules
 
-Built-in instruments. Values are floats in the range listed in PARAMS.md.
-Choice parameters accept the option name.
+Built-in instruments. Choice parameters accept the option name.
+
+Values can be written two ways. The plain form is a float in the range listed in
+PARAMS.md. The readable form is the real quantity with its unit, which is what
+you should write:
+
+| suffix | means | applies to |
+| --- | --- | --- |
+| `hz`, `khz` | frequency | `cutoff`, `cutoff_env`, `lfo_rate`, `vibrato_rate` |
+| `ms`, `s` | time | `attack`, `decay`, `release`, and the per-operator versions |
+| `st` | semitones | `osc2_pitch`, `osc3_pitch` |
+| `x` | multiplier | `op0_ratio`..`op3_ratio`, `kick_pitch`, `snare_pitch`, `hihat_pitch` |
+| `%` | percent | any 0..1 parameter |
+| `db` | decibels | any gain (`level`, and `makeup` on a compressor) |
+
+`cutoff 800hz` and `cutoff 0.4337` are the same thing. A unit that does not apply
+is an error naming what the parameter does take, so `cutoff 20ms` does not quietly
+become 20. The `in units` column of PARAMS.md gives each parameter's span and its
+default in units.
+
+Write what you mean, in units, and let the float form be the output of a tool.
+Units are as precise as you write them; a resonant filter can hear the difference
+between `91.4hz` and `91.37hz`, so keep a digit more than feels necessary when you
+are matching an existing sound.
+
+The one to remember: a compressor's `makeup` is a **linear gain**, so `makeup=4`
+is +12 dB, not +4. Every example in this repo got that wrong until it was
+measured. Write `makeup=6db`.
 
 ```
 module bass acid {
-    cutoff 0.25
-    resonance 0.8
+    cutoff 800hz
+    attack 20ms
+    release 1.5s
+    resonance 80%
     osc1_wave saw            # saw | square
     lfo_target cutoff        # cutoff | pitch | amplitude
     lfo_sync bars_4          # free | quarter | eighth | sixteenth | dotted_eighth | triplet_eighth |

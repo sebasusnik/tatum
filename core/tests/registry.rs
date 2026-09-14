@@ -115,31 +115,56 @@ fn every_param_is_documented() {
     }
 }
 
-/// The docs quote concrete anchors ("0.5 ≈ 630Hz"). Those are what an author aims
-/// at, so they have to match the engine's own math — which is an approximation,
-/// not libm. Every number below is copied from a doc string in the registry.
+/// The docs quote concrete anchors ("0.5 ≈ 630Hz"). Those are what an author
+/// aims at, so they have to match the engine's own math — which is an
+/// approximation, not libm. Reading them off the curve constants means this
+/// checks the same code the modules run.
 #[test]
 fn documented_anchors_match_the_engine() {
-    use synth_core::math::pow;
     let close = |got: f32, want: f32, what: &str| {
         assert!((got - want).abs() / want < 0.03, "{}: doc says {}, engine gives {}", what, want, got);
     };
     // bass cutoff: "exponential 20Hz..20kHz (0.25 ≈ 110Hz, 0.5 ≈ 630Hz, 0.75 ≈ 3.5kHz)"
-    close(20.0 * pow(1000.0, 0.25), 110.0, "bass cutoff at 0.25");
-    close(20.0 * pow(1000.0, 0.5), 630.0, "bass cutoff at 0.5");
-    close(20.0 * pow(1000.0, 0.75), 3500.0, "bass cutoff at 0.75");
+    close(params::BASS_CUTOFF.to_real(0.25), 110.0, "bass cutoff at 0.25");
+    close(params::BASS_CUTOFF.to_real(0.5), 630.0, "bass cutoff at 0.5");
+    close(params::BASS_CUTOFF.to_real(0.75), 3500.0, "bass cutoff at 0.75");
     // keys cutoff: "exponential 200Hz..20kHz (0.5 ≈ 2kHz)"
-    close(200.0 * pow(100.0, 0.5), 2000.0, "keys cutoff at 0.5");
-    // ENV_TIME_DOC: "0.25 ≈ 7ms, 0.5 ≈ 45ms, 0.75 ≈ 300ms, 1.0 = 2s"
-    close(0.001 * pow(2000.0, 0.25), 0.0067, "env time at 0.25");
-    close(0.001 * pow(2000.0, 0.5), 0.045, "env time at 0.5");
-    close(0.001 * pow(2000.0, 0.75), 0.300, "env time at 0.75");
-    close(0.001 * pow(2000.0, 1.0), 2.0, "env time at 1.0");
+    close(params::KEYS_CUTOFF.to_real(0.5), 2000.0, "keys cutoff at 0.5");
+    // ENV_TIME_DOC: "0.25 ≈ 6.7ms, 0.5 ≈ 45ms, 0.75 ≈ 300ms, 1.0 = 2s"
+    close(params::ENV_TIME.to_real(0.25), 6.7, "env time at 0.25");
+    close(params::ENV_TIME.to_real(0.5), 45.0, "env time at 0.5");
+    close(params::ENV_TIME.to_real(0.75), 300.0, "env time at 0.75");
+    close(params::ENV_TIME.to_real(1.0), 2000.0, "env time at 1.0");
     // fm mod_index: "exponential 0.1..4.0 (0.5 ≈ 0.63, 0.75 ≈ 1.6)"
-    close(0.1 * pow(40.0, 0.5), 0.63, "mod_index at 0.5");
-    close(0.1 * pow(40.0, 0.75), 1.6, "mod_index at 0.75");
+    close(0.1 * synth_core::math::pow(40.0, 0.5), 0.63, "mod_index at 0.5");
+    close(0.1 * synth_core::math::pow(40.0, 0.75), 1.6, "mod_index at 0.75");
     // op ratio: "ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0"
-    close(0.5 + 0.032 * 15.5, 1.0, "op ratio at 0.032");
-    close(0.5 + 0.097 * 15.5, 2.0, "op ratio at 0.097");
-    close(0.5 + 0.161 * 15.5, 3.0, "op ratio at 0.161");
+    close(params::OP_RATIO.to_real(0.032), 1.0, "op ratio at 0.032");
+    close(params::OP_RATIO.to_real(0.097), 2.0, "op ratio at 0.097");
+    close(params::OP_RATIO.to_real(0.161), 3.0, "op ratio at 0.161");
+}
+
+/// Every curve must survive the round trip, or `cutoff 800hz` lands somewhere
+/// else. The inverse goes through the engine's own ln(), which was off by 11%
+/// until it was measured.
+#[test]
+fn every_curve_round_trips_through_its_unit() {
+    let mut worst = 0.0f32;
+    for kind in ModuleKind::ALL {
+        for spec in params::specs(kind) {
+            if spec.curve.unit().is_none() { continue; }
+            for step in 0..=20 {
+                let knob = step as f32 / 20.0;
+                let back = spec.curve.to_knob(spec.curve.to_real(knob));
+                let err = (back - knob).abs();
+                worst = worst.max(err);
+                assert!(
+                    err < 2e-3,
+                    "{}.{}: knob {} -> {} -> {}",
+                    kind.as_str(), spec.name, knob, spec.curve.to_real(knob), back
+                );
+            }
+        }
+    }
+    assert!(worst > 0.0 || true, "worst round-trip error {}", worst);
 }

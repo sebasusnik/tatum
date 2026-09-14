@@ -126,20 +126,20 @@ impl BassModule {
             BassParam::Cutoff => {
                 // Exponential scaling: 20Hz at 0.0, ~800Hz at 0.5, ~20kHz at 1.0
                 // This gives more resolution in the bass/mid range where it matters
-                self.cutoff_base = 20.0 * math::pow(1000.0, value);
+                self.cutoff_base = crate::params::BASS_CUTOFF.to_real(value);
             }
             BassParam::CutoffEnv => {
                 // Envelope amount also exponential for more musical sweep
-                self.cutoff_env_amount = 20.0 * math::pow(400.0, value);
+                self.cutoff_env_amount = crate::params::BASS_CUTOFF_ENV.to_real(value);
             }
             BassParam::Resonance => self.resonance = value,
             BassParam::Glide => self.glide_rate = 0.0001 + value * 0.05,
-            BassParam::Attack => self.amp_env.set_attack(0.001 * math::pow(2000.0, value)),
-            BassParam::Decay => self.amp_env.set_decay(0.001 * math::pow(2000.0, value)),
+            BassParam::Attack => self.amp_env.set_attack(crate::params::ENV_TIME.to_real(value) * 0.001),
+            BassParam::Decay => self.amp_env.set_decay(crate::params::ENV_TIME.to_real(value) * 0.001),
             BassParam::Sustain => self.amp_env.set_sustain(value),
-            BassParam::Release => self.amp_env.set_release(0.001 * math::pow(2000.0, value)),
+            BassParam::Release => self.amp_env.set_release(crate::params::ENV_TIME.to_real(value) * 0.001),
             BassParam::LfoRate => {
-                self.lfo_router.lfo.set_rate(0.1 + value * 19.9);
+                self.lfo_router.lfo.set_rate(crate::params::LFO_RATE.to_real(value));
             }
             BassParam::LfoDepth => {
                 self.lfo_router.lfo.set_depth(value);
@@ -201,7 +201,7 @@ impl BassModule {
                 self.oscs[2].set_waveform(if value < 0.5 { Waveform::Saw } else { Waveform::Square });
             }
             BassParam::Keytrack => self.keytrack = math::clamp(value, 0.0, 1.0),
-            BassParam::VibratoRate => self.vibrato_rate = 0.5 + value * 9.5,
+            BassParam::VibratoRate => self.vibrato_rate = crate::params::VIBRATO_RATE.to_real(value),
             BassParam::VibratoDepth => self.vibrato_depth = value * 0.5,
             BassParam::VelEnv => self.vel_env = math::clamp(value, 0.0, 1.0),
         }
