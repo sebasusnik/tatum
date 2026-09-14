@@ -195,6 +195,37 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
         }
     }
 
+    // ── chord_into_mono_voice: a chord played by a voice mode that cannot hold it ──
+    //
+    // `unison` stacks all eight voices on one note, which is what the hardware
+    // it copies does, so a five-note chord arrives as five note-ons and only the
+    // last survives. Both the docs and the MCP instructions used to recommend
+    // unison for pads, and an agent spent two thirds of a session wondering why
+    // its harmony was thin. Rendering two different chords through it gives
+    // bit-identical output.
+    for track in &all_tracks {
+        let Some(m) = song.module_defs.iter().find(|m| m.name == track.using_instrument) else { continue };
+        if m.module_type != "keys" { continue; }
+        let mode = param(m, "voice_mode").unwrap_or(0.0);
+        // poly is index 0 of VOICE_MODES; every other mode collapses voices.
+        if mode < 0.01 { continue; }
+        let Some(pat) = song.patterns.iter().find(|p| p.name == track.play) else { continue };
+        let widest = pat.rows.iter().flatten()
+            .filter_map(|s| match s { Step::Chord(c) => Some(c.notes.len()), _ => None })
+            .max()
+            .unwrap_or(0);
+        if widest > 1 {
+            out.push(lint(
+                "chord_into_mono_voice",
+                format!(
+                    "track '{}' plays a {}-note chord through module '{}', whose voice_mode is not poly",
+                    track.name, widest, m.name
+                ),
+                "unison, octave, fifth and ringmod all stack their voices on one note, so only the last note of a chord sounds. Use `voice_mode poly` for chords, or play one note.",
+            ));
+        }
+    }
+
     // ── unused definitions ──
     for m in &song.module_defs {
         if !all_tracks.iter().any(|t| t.using_instrument == m.name) {

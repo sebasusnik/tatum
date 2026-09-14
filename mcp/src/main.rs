@@ -82,7 +82,9 @@ parameter. Write values in their units where `synth_params` lists one — `cutof
 floats; a wrong unit is an error, a wrong float is not. A compressor's `makeup` is a linear \
 gain, so `makeup=4` is +12 dB: say `makeup=6db` if you mean decibels. Nothing that sustains \
 should stay static: pads and leads get an LFO on the filter, vibrato, an `auto` sweep or an \
-arp, plus sends and sidechain against the kick.";
+arp, plus sends and sidechain against the kick. On `keys`, only `voice_mode poly` holds a chord: \
+unison, octave and fifth stack their voices on one note, so a chord sent to them plays its last \
+note alone.";
 
 fn main() {
     let ctx = Ctx::from_env();

@@ -84,7 +84,12 @@ module fm bell {
     op0_envelope 0.001 0.2 0.0 0.3    # attack decay sustain release for operator 0
 }
 
-module keys pad { voice_mode unison }      # poly | unison | octave | fifth | ringmod
+module keys pad { voice_mode poly }        # poly | unison | octave | fifth | ringmod
+
+# Only `poly` holds a chord. unison stacks all eight voices on one note, octave
+# on two and fifth on two, copying the hardware they come from -- so a chord
+# sent to any of them plays its last note alone, and `chord_into_mono_voice`
+# will say so. Use poly for chords and unison for a thick single-note lead.
 module beats kit { kick_level 1.0 stutter_drum snare }
 ```
 
@@ -279,13 +284,13 @@ When the source is re-evaluated while playing:
 Things a producer does that a first draft usually forgets. `synth_check` warns about the
 first three.
 
-**A pad that moves.** Slow LFO on the filter with some resonance, detuned unison, chorus,
+**A pad that moves.** Slow LFO on the filter with some resonance, chorus,
 a hint of vibrato, a slow phaser, sends, and sidechain so it breathes with the kick. For a
 "talking" pad swap the phaser for `vowel(a, o, bars=2, mix=0.6)`:
 
 ```
 module keys pad {
-    voice_mode unison  detune 0.3  chorus_mix 0.5
+    voice_mode poly  detune 0.3  chorus_mix 0.5
     cutoff 0.3  resonance 0.5
     lfo_target cutoff  lfo_waveform triangle  lfo_sync bars_2  lfo_depth 0.12
     vibrato_rate 0.35  vibrato_depth 0.06
@@ -319,7 +324,7 @@ stays out of the sub, LFOs that take 8 to 16 bars per cycle, and a slow autopan:
 ```
 reverb size=1.0 damp=0.25 predelay=40
 pattern voicings { Fm9:0.6 ..*31  Dbmaj7:0.6 ..*31 }      # two bars each, held
-module keys cloud { voice_mode unison detune 0.45 chorus_mix 0.6 attack 1.0 release 1.0
+module keys cloud { voice_mode poly detune 0.45 chorus_mix 0.6 attack 1.0 release 1.0
                     cutoff 0.28 resonance 0.35 lfo_target cutoff lfo_sync bars_8 lfo_depth 0.08 }
 track pad { play voicings using cloud level 0.15 reverb_send 0.4 sidechain 0.5
             out > highpass(300, 0.4) > lowpass(3200, 0.3, lfo_bars=16, lfo_depth=1200) > autopan(0.3, bars=8) > master }

@@ -1112,7 +1112,22 @@ fn compile_scene(
             )));
         }
         match compile_track(track_def, inst_names, patterns, buses, defaults, samples_per_bar) {
-            Ok(t) => tracks.push(t),
+            Ok(t) => {
+                // A scene track's own `out > ...` parses and compiles and is
+                // then never applied: insert chains are built once per track
+                // and the engine does not rebuild them on a scene change.
+                // Restating the same chain is harmless; changing it is not, and
+                // it used to change nothing in silence.
+                if let Some(d) = defaults {
+                    if !track_def.routing.is_empty() && t.insert_fx != d.insert_fx {
+                        return Err(CompileError::new(format!(
+                            "scene '{}': track '{}' cannot change its `out > ...` chain. Insert chains are fixed per track for the whole song; move the chain to the top-level `track {}` block, or add a second track with the other chain and swap which one plays.",
+                            scene.name, track_def.name, track_def.name
+                        )));
+                    }
+                }
+                tracks.push(t)
+            }
             Err(e) => return Err(e),
         }
     }

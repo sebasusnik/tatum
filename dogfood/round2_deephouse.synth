@@ -326,55 +326,55 @@ master {
 # ────────────────────────────────────────────────
 
 scene intro {
-    track drums { play drums_intro using kit velocity 0.9 level 0.45 out > drumBus }
-    track bass  { play bass_intro  using sub  velocity 0.7 level 0.4 gate 0.9 sidechain 0.4 out > drive(0.1) > master }
-    track pad   { play pad_verse   using cloud velocity 0.3 level 0.18 reverb_send 0.45 sidechain 0.4 out > highpass(280,0.4) > lowpass(3000,0.3) > master }
+    track drums { play drums_intro using kit velocity 0.9 level 0.45 }
+    track bass  { play bass_intro  using sub  velocity 0.7 level 0.4 gate 0.9 sidechain 0.4 }
+    track pad   { play pad_verse   using cloud velocity 0.3 level 0.18 reverb_send 0.45 sidechain 0.4 }
 }
 
 scene groove {
     auto sub cutoff 0.16 > 0.2
 
-    track drums { play drums_groove using kit velocity 1.0 level 0.55 out > drumBus }
-    track bass  { play bass_groove using sub velocity 0.9 level 0.55 gate 0.9 sidechain 0.5 delay_send 0.05 reverb_send 0.1 out > drive(0.15) > master }
-    track stab  { play stab_off using stab velocity 0.55 level 0.32 gate 0.25 delay_send 0.3 reverb_send 0.15 out > saturate(0.35) > master }
-    track pad   { play pad_verse using cloud velocity 0.4 level 0.24 reverb_send 0.4 delay_send 0.12 sidechain 0.4 out > highpass(280,0.4) > lowpass(3200,0.3) > master }
+    track drums { play drums_groove using kit velocity 1.0 level 0.55 }
+    track bass  { play bass_groove using sub velocity 0.9 level 0.55 gate 0.9 sidechain 0.5 delay_send 0.05 reverb_send 0.1 }
+    track stab  { play stab_off using stab velocity 0.55 level 0.32 gate 0.25 delay_send 0.3 reverb_send 0.15 }
+    track pad   { play pad_verse using cloud velocity 0.4 level 0.24 reverb_send 0.4 delay_send 0.12 sidechain 0.4 }
 }
 
 scene build {
     auto sub cutoff 0.18 > 0.26
     auto cloud cutoff 0.26 > 0.4
 
-    track drums { play drums_build using kit velocity 1.0 level 0.58 out > drumBus }
-    track bass  { play bass_build using sub velocity 0.9 level 0.58 gate 0.85 sidechain 0.5 out > drive(0.18) > master }
-    track stab  { play stab_off using stab velocity 0.6 level 0.35 gate 0.25 delay_send 0.3 reverb_send 0.12 out > saturate(0.4) > master }
-    track pad   { play pad_verse using cloud velocity 0.45 level 0.26 reverb_send 0.35 delay_send 0.1 sidechain 0.45 out > highpass(280,0.4) > lowpass(4000,0.3) > master }
+    track drums { play drums_build using kit velocity 1.0 level 0.58 }
+    track bass  { play bass_build using sub velocity 0.9 level 0.58 gate 0.85 sidechain 0.5 }
+    track stab  { play stab_off using stab velocity 0.6 level 0.35 gate 0.25 delay_send 0.3 reverb_send 0.12 }
+    track pad   { play pad_verse using cloud velocity 0.45 level 0.26 reverb_send 0.35 delay_send 0.1 sidechain 0.45 }
 }
 
 scene drop {
     auto sub cutoff 0.2 > 0.28
 
-    track drums { play drums_drop using kit velocity 1.0 level 0.68 out > drumBus }
-    track bass  { play bass_drop using sub velocity 0.95 level 0.65 gate 0.9 sidechain 0.55 out > drive(0.22) > master }
-    track stab  { play stab_drop using stab velocity 0.65 level 0.42 gate 0.25 delay_send 0.25 reverb_send 0.12 out > saturate(0.45) > master }
-    track pad   { play pad_drop using cloud velocity 0.5 level 0.32 reverb_send 0.35 delay_send 0.1 sidechain 0.5 out > highpass(300,0.4) > lowpass(4500,0.3) > master }
-    track arp   { play arp_chord using arp_lead velocity 0.6 level 0.32 gate 0.6 pan 0.15 delay_send 0.25 reverb_send 0.2 arp up rate=16 gate=0.6 octaves=2 out > saturate(0.2) > master }
+    track drums { play drums_drop using kit velocity 1.0 level 0.68 }
+    track bass  { play bass_drop using sub velocity 0.95 level 0.65 gate 0.9 sidechain 0.55 }
+    track stab  { play stab_drop using stab velocity 0.65 level 0.42 gate 0.25 delay_send 0.25 reverb_send 0.12 }
+    track pad   { play pad_drop using cloud velocity 0.5 level 0.32 reverb_send 0.35 delay_send 0.1 sidechain 0.5 }
+    track arp   { play arp_chord using arp_lead velocity 0.6 level 0.32 gate 0.6 pan 0.15 delay_send 0.25 reverb_send 0.2 arp up rate=16 gate=0.6 octaves=2 }
 }
 
 scene breakdown {
     auto cloud cutoff 0.3 > 0.45 > 0.3
 
-    track drums { play drums_breakdown using kit velocity 0.8 level 0.4 out > drumBus }
-    track bass  { play bass_breakdown using sub velocity 0.5 level 0.3 gate 0.9 sidechain 0.3 out > master }
-    track pad   { play pad_breakdown using cloud velocity 0.4 level 0.24 reverb_send 0.5 delay_send 0.15 sidechain 0.3 out > highpass(260,0.4) > lowpass(3500,0.3) > master }
+    track drums { play drums_breakdown using kit velocity 0.8 level 0.4 }
+    track bass  { play bass_breakdown using sub velocity 0.5 level 0.3 gate 0.9 sidechain 0.3 }
+    track pad   { play pad_breakdown using cloud velocity 0.4 level 0.24 reverb_send 0.5 delay_send 0.15 sidechain 0.3 }
 }
 
 scene outro {
     auto sub cutoff_env 0.4 > 0.2
     auto cloud cutoff 0.3 > 0.15
 
-    track drums { play drums_outro using kit velocity 0.85 level 0.4 out > drumBus }
-    track bass  { play bass_outro using sub velocity 0.6 level 0.35 gate 0.9 sidechain 0.35 out > drive(0.1) > master }
-    track pad   { play pad_outro using cloud velocity 0.35 level 0.2 reverb_send 0.45 delay_send 0.1 sidechain 0.35 out > highpass(280,0.4) > lowpass(2800,0.3) > master }
+    track drums { play drums_outro using kit velocity 0.85 level 0.4 }
+    track bass  { play bass_outro using sub velocity 0.6 level 0.35 gate 0.9 sidechain 0.35 }
+    track pad   { play pad_outro using cloud velocity 0.35 level 0.2 reverb_send 0.45 delay_send 0.1 sidechain 0.35 }
 }
 
 # ────────────────────────────────────────────────

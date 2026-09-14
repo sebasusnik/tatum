@@ -23,7 +23,7 @@ pub const MAX_NODE_INPUTS: usize = 8;
 
 /// Describes how to create a node. Stored in GraphTemplate.
 /// Small, Copy-able, no heap allocations.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum NodeSpec {
     Osc { waveform: Waveform, freq: f32, drift_seed: u32, fixed: bool, pitch_semitones: f32 },
     /// Oscillator with built-in pitch envelope (exponential sweep from start→end).

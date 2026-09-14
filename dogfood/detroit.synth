@@ -116,6 +116,23 @@ module keys stab {
     release 31ms
 }
 
+# The breakdown's bottom half. Dark, slow, no detune — it is a fundamental,
+# not a texture.
+module keys under {
+    voice_mode poly
+    detune 6%
+    cutoff 0.10                # ~320 Hz; swept in the breakdown
+    resonance 0.05
+    attack 205ms
+    decay 238ms
+    sustain 85%
+    release 437ms
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync bars_8
+    lfo_depth 8%
+}
+
 # Melodic bass, not an acid line: low resonance, a sub an octave down, just
 # enough glide to smear the step between two notes a fourth apart.
 module bass walker {
@@ -227,14 +244,15 @@ pattern ch_b_hi {
     Ebm9/4:0.38  ..*31
 }
 
-# Breakdown voicing: cycle A with the root dropped an octave. With the bass
-# gone there is nothing under 250 Hz, and Fm9/3 starts at F3 (175 Hz), so the
-# breakdown reads thin. Same five notes, root at octave 2.
-pattern ch_a_lo {
-    [F2 Ab3 C4 Eb4 G4]:0.62   ..*31
-    [Bb2 Db4 F4 Ab4 C5]:0.60  ..*31
-    [Eb2 G3 Bb3 Db4 F4]:0.58  ..*31
-    [Ab2 C4 Eb4 G4 Bb4]:0.62  ..*31
+# Breakdown low register. With the bass gone there is nothing under 250 Hz and
+# Fm9/3 starts at F3 (175 Hz), so the breakdown reads thin. This is the root and
+# the fifth an octave down, played by its own low-passed voice — the chords'
+# own bottom half rather than a bassline.
+pattern ch_low {
+    [F2 C3]:0.55   ..*31
+    [Bb2 F3]:0.55  ..*31
+    [Eb2 Bb2]:0.52 ..*31
+    [Ab2 Eb3]:0.55 ..*31
 }
 
 # One chord, eight bars of it, for the outro.
@@ -339,7 +357,7 @@ track chords {
     play ch_a
     using warmth
     velocity 0.80
-    level 0.22
+    level 0.25
     gate 1.0
     sidechain 0.42
     delay_send 0.14
@@ -393,6 +411,17 @@ track chime {
     out > highpass(500hz, 0.05) > master
 }
 
+track under {
+    play ch_low
+    using under
+    velocity 0.70
+    level 0.16
+    gate 1.0
+    sidechain 0.30
+    reverb_send 0.12
+    out > highpass(45hz, 0.05) > lowpass(320hz, 0.05) > master
+}
+
 # ────────────────────────────────────────────────
 # MASTER
 # ────────────────────────────────────────────────
@@ -429,7 +458,7 @@ scene pulse {
 
     track drums  { play dr_main using nine level 0.79 }
     track bass   { play bs_a    using walker level 0.66 }
-    track chords { play ch_a    using warmth level 0.22 reverb_send 0.34 }
+    track chords { play ch_a    using warmth level 0.25 reverb_send 0.34 }
 }
 
 # 3. LIFT (16) — cycle A wide open, shimmer layer above it. The filter
@@ -443,7 +472,7 @@ scene lift {
 
     track drums  { play dr_main  using nine level 0.85 }
     track bass   { play bs_a     using walker level 0.70 }
-    track chords { play ch_a     using warmth level 0.22 }
+    track chords { play ch_a     using warmth level 0.25 }
     track shine  { play ch_a_hi  using shimmer level 0.23 }
 }
 
@@ -459,31 +488,27 @@ scene bridge {
 
     track drums  { play dr_full  using nine level 0.87 }
     track bass   { play bs_b     using walker level 0.73 }
-    track chords { play ch_b     using warmth level 0.22 }
+    track chords { play ch_b     using warmth level 0.25 }
     track shine  { play ch_b_hi  using shimmer level 0.23 }
 }
 
 # 5. BREAKDOWN (16) — drums and bass gone. The chords carry it alone, the
 #    bell answers them, the room opens up and the filter breathes twice.
-#    With the bass out there is nothing under 250 Hz, so the chords get a
-#    scene-only chain: the high-pass drops to 95 Hz and the low shelf comes
-#    up, which puts the Fm9 root back in the room.
+#    `under` supplies the chord's own bottom half: without it the section is
+#    80% midrange and reads boxy. (A scene track's `out > ...` chain override
+#    parses but is ignored by the engine, so this has to be its own track.)
 scene breakdown {
     reverb_mix = 0.52
     delay_mix  = 0.30
     auto warmth cutoff 0.18 > 0.52 > 0.28
-    auto shimmer cutoff 0.34 > 0.58 > 0.40
+    auto shimmer cutoff 0.36 > 0.68 > 0.46
+    auto under cutoff 0.06 > 0.16 > 0.09
     auto reverb_mix 0.38 > 0.58
     auto master tilt -0.12 > 0.06
 
-    track chords { play ch_a_lo using warmth level 0.29 velocity 0.88 sidechain 0.0
-                   reverb_send 0.44 delay_send 0.20
-                   out > highpass(95hz, 0.05)
-                       > lowpass(2.6khz, 0.05, lfo_bars=12, lfo_depth=700)
-                       > eq(low=3.0, mid=-1.0, high=0.8)
-                       > autopan(0.22, bars=8)
-                       > master }
-    track shine  { play ch_a_hi using shimmer level 0.28 velocity 0.80 sidechain 0.0 reverb_send 0.54 delay_send 0.28 }
+    track chords { play ch_a    using warmth  level 0.35 velocity 0.88 sidechain 0.0 reverb_send 0.44 delay_send 0.20 }
+    track shine  { play ch_a_hi using shimmer level 0.31 velocity 0.80 sidechain 0.0 reverb_send 0.54 delay_send 0.28 }
+    track under  { play ch_low  using under   level 0.16 velocity 0.72 sidechain 0.0 }
     track chime  { play bl_a    using bell    level 1.00 velocity 0.72 sidechain 0.0 reverb_send 0.46 delay_send 0.40 }
 }
 
@@ -496,7 +521,7 @@ scene rebuild {
     auto shimmer cutoff 0.40 > 0.50
 
     track drums  { play dr_thin using nine level 0.80 }
-    track chords { play ch_a    using warmth  level 0.22 }
+    track chords { play ch_a    using warmth  level 0.25 }
     track shine  { play ch_a_hi using shimmer level 0.23 }
     track chime  { play bl_a    using bell    level 0.85 }
 }
@@ -512,7 +537,7 @@ scene peak {
 
     track drums  { play dr_full  using nine    level 0.90 }
     track bass   { play bs_a     using walker  level 0.76 }
-    track chords { play ch_a     using warmth  level 0.22 }
+    track chords { play ch_a     using warmth  level 0.25 }
     track shine  { play ch_a_hi  using shimmer level 0.23 }
     track stabs  { play st_a     using stab    level 0.26 }
     track chime  { play bl_a     using bell    level 0.85 }
@@ -526,11 +551,11 @@ scene outro {
     auto warmth cutoff 0.36 > 0.16
     auto master tilt 0.0 > -0.35
     auto nine level 0.80 > 0.0
-    auto warmth level 0.22 > 0.0
+    auto warmth level 0.25 > 0.0
     auto shimmer level 0.23 > 0.0
 
     track drums  { play dr_thin using nine    level 0.80 }
-    track chords { play ch_hold using warmth  level 0.22 reverb_send 0.40 }
+    track chords { play ch_hold using warmth  level 0.25 reverb_send 0.40 }
     track shine  { play ch_hold using shimmer level 0.23 reverb_send 0.46 }
 }
 
