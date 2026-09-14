@@ -197,11 +197,20 @@ pub struct CompiledSong {
 pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     let mut errors = Vec::new();
 
+    // A `capture` window is sized in samples at compile time so the buffer can
+    // be allocated when the chain is built. Use the slowest tempo the song ever
+    // reaches, since a scene can override it and a slower bar is a longer one.
+    let slowest_tempo = song.scenes.iter()
+        .filter_map(|s| s.tempo)
+        .fold(song.globals.tempo, f32::min)
+        .max(20.0);
+    let samples_per_bar = crate::SAMPLE_RATE * 60.0 / slowest_tempo * song.globals.meter.0 as f32;
+
     // 1. Compile graph instruments
     let mut instruments: Vec<CompiledInstrumentKind> = Vec::new();
     let mut instrument_names = Vec::new();
     for inst_def in &song.instruments {
-        match compile_instrument(inst_def) {
+        match compile_instrument(inst_def, samples_per_bar) {
             Ok(template) => {
                 instruments.push(CompiledInstrumentKind::Graph(template));
                 instrument_names.push(inst_def.name.clone());
@@ -244,7 +253,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     let mut buses = Vec::new();
     for bus_def in &song.buses {
         let chain = match song.bus_chains.iter().find(|bc| bc.bus_name == bus_def.name) {
-            Some(bc) => match compile_fx_chain(&format!("bus '{}'", bus_def.name), &bc.chain) {
+            Some(bc) => match compile_fx_chain(&format!("bus '{}'", bus_def.name), &bc.chain, samples_per_bar) {
                 Ok(c) => c,
                 Err(e) => { errors.push(e); Vec::new() }
             },
@@ -258,11 +267,11 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     let mut delay_return = Vec::new();
     for bc in &song.bus_chains {
         match bc.bus_name.as_str() {
-            "reverb_return" => match compile_fx_chain("reverb_return", &bc.chain) {
+            "reverb_return" => match compile_fx_chain("reverb_return", &bc.chain, samples_per_bar) {
                 Ok(c) => reverb_return = c,
                 Err(e) => errors.push(e),
             },
-            "delay_return" => match compile_fx_chain("delay_return", &bc.chain) {
+            "delay_return" => match compile_fx_chain("delay_return", &bc.chain, samples_per_bar) {
                 Ok(c) => delay_return = c,
                 Err(e) => errors.push(e),
             },
@@ -277,7 +286,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     // 4. Compile tracks
     let mut tracks = Vec::new();
     for track_def in &song.tracks {
-        match compile_track(track_def, &instrument_names, &patterns, &buses, None) {
+        match compile_track(track_def, &instrument_names, &patterns, &buses, None, samples_per_bar) {
             Ok(t) => tracks.push(t),
             Err(e) => errors.push(e),
         }
@@ -321,7 +330,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
 
     // 5. Compile master
     let master = match &song.master {
-        Some(m) => match compile_fx_chain("master", &m.chain) {
+        Some(m) => match compile_fx_chain("master", &m.chain, samples_per_bar) {
             Ok(c) => CompiledMaster { fx_chain: c },
             Err(e) => { errors.push(e); CompiledMaster { fx_chain: Vec::new() } }
         },
@@ -331,7 +340,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     // 6. Compile scenes
     let mut scenes = Vec::new();
     for scene_def in &song.scenes {
-        match compile_scene(scene_def, &instrument_names, &patterns, &buses, &tracks) {
+        match compile_scene(scene_def, &instrument_names, &patterns, &buses, &tracks, samples_per_bar) {
             Ok(s) => scenes.push(s),
             Err(e) => errors.push(e),
         }
@@ -398,7 +407,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
 
 // ── Instrument compilation ──
 
-fn compile_instrument(inst: &InstrumentDef) -> Result<GraphTemplate, CompileError> {
+fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> Result<GraphTemplate, CompileError> {
     let mut builder = GraphBuilder::new();
     let mut name_to_idx: Vec<(String, u8)> = Vec::new();
     let mut noise_seed = 42u32;
@@ -434,7 +443,7 @@ fn compile_instrument(inst: &InstrumentDef) -> Result<GraphTemplate, CompileErro
 
     // Create explicit nodes
     for node_def in &inst.nodes {
-        let spec = node_def_to_spec(node_def, &mut noise_seed, &mut osc_drift_seed)?;
+        let spec = node_def_to_spec(node_def, &mut noise_seed, &mut osc_drift_seed, samples_per_bar)?;
 
         if matches!(spec, NodeSpec::Env { .. }) {
             // Envelope+VCA pattern: an envelope in a signal chain means
@@ -481,7 +490,7 @@ fn compile_instrument(inst: &InstrumentDef) -> Result<GraphTemplate, CompileErro
     Ok(template)
 }
 
-fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u32) -> Result<NodeSpec, CompileError> {
+fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u32, samples_per_bar: f32) -> Result<NodeSpec, CompileError> {
     let problems = crate::nodes::validate(&node.kind, &node.params);
     if !problems.is_empty() {
         return Err(CompileError::new(problems.join("; ")));
@@ -670,6 +679,22 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
             let hz = named_param(&node.params, "hz").unwrap_or(if bars > 0.0 { 0.0 } else { 0.25 });
             let mix = named_param(&node.params, "mix").unwrap_or(1.0);
             Ok(NodeSpec::Vowel { from, to, hz, bars, mix })
+        }
+        "capture" => {
+            let bars = float_param_at(&node.params, 0)
+                .or_else(|| named_param(&node.params, "bars"))
+                .unwrap_or(2.0);
+            let start = named_param(&node.params, "start").unwrap_or(0.0);
+            let speed = named_param(&node.params, "speed").unwrap_or(1.0);
+            let reverse = named_param(&node.params, "reverse").unwrap_or(0.0) >= 0.5;
+            let mix = named_param(&node.params, "mix").unwrap_or(1.0);
+            Ok(NodeSpec::Capture {
+                samples: (bars * samples_per_bar) as u32,
+                start_samples: (start * samples_per_bar) as u32,
+                speed,
+                reverse,
+                mix,
+            })
         }
         "autopan" => {
             let depth = float_param_at(&node.params, 0).unwrap_or(0.5);
@@ -926,6 +951,7 @@ fn compile_track(
     patterns: &[CompiledPattern],
     buses: &[CompiledBus],
     defaults: Option<&CompiledTrack>,
+    samples_per_bar: f32,
 ) -> Result<CompiledTrack, CompileError> {
     let instrument_idx = inst_names.iter().position(|n| n == &track.using_instrument)
         .ok_or_else(|| CompileError { line: 0,
@@ -969,7 +995,7 @@ fn compile_track(
                     alias: None,
                     params: rnode.params.clone(),
                 };
-                match node_def_to_spec(&node, &mut noise_seed, &mut drift_seed) {
+                match node_def_to_spec(&node, &mut noise_seed, &mut drift_seed, samples_per_bar) {
                     Ok(spec) => insert_fx.push(spec),
                     Err(e) => return Err(CompileError::new(format!(
                         "track '{}': {} (or declare `bus {}` if it is a bus)", track.name, e.message, rnode.kind
@@ -1046,7 +1072,7 @@ fn compile_arp(track_name: &str, def: &ArpDef) -> Result<Option<ArpConfig>, Comp
 
 // ── Bus/Master FX chain compilation ──
 
-fn compile_fx_chain(owner: &str, chain: &[ChainNode]) -> Result<Vec<NodeSpec>, CompileError> {
+fn compile_fx_chain(owner: &str, chain: &[ChainNode], samples_per_bar: f32) -> Result<Vec<NodeSpec>, CompileError> {
     let mut specs = Vec::new();
     let mut noise_seed = 200u32;
     let mut drift_seed = 8000u32;
@@ -1057,7 +1083,7 @@ fn compile_fx_chain(owner: &str, chain: &[ChainNode]) -> Result<Vec<NodeSpec>, C
             alias: None,
             params: node.params.clone(),
         };
-        match node_def_to_spec(&node_def, &mut noise_seed, &mut drift_seed) {
+        match node_def_to_spec(&node_def, &mut noise_seed, &mut drift_seed, samples_per_bar) {
             Ok(spec) => specs.push(spec),
             Err(e) => return Err(CompileError::new(format!("{}: {}", owner, e.message))),
         }
@@ -1073,6 +1099,7 @@ fn compile_scene(
     patterns: &[CompiledPattern],
     buses: &[CompiledBus],
     global_tracks: &[CompiledTrack],
+    samples_per_bar: f32,
 ) -> Result<CompiledScene, CompileError> {
     let mut tracks = Vec::new();
     for track_def in &scene.tracks {
@@ -1084,7 +1111,7 @@ fn compile_scene(
                 scene.name, track_def.name
             )));
         }
-        match compile_track(track_def, inst_names, patterns, buses, defaults) {
+        match compile_track(track_def, inst_names, patterns, buses, defaults, samples_per_bar) {
             Ok(t) => tracks.push(t),
             Err(e) => return Err(e),
         }

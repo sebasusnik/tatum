@@ -357,6 +357,35 @@ the engine scales the mix by 1/sqrt(active tracks) in each scene (so fewer track
 each louder), and sidechain only ducks in scenes that have a beats track (a breakdown
 without drums plays its pads at full level). Set levels per scene, not just per track.
 
+## Capture
+
+`capture` records a window of whatever passes through its chain and then loops
+it back, optionally stretched or reversed. It is the one effect that holds a
+musical phrase rather than a few hundred milliseconds of tail.
+
+```
+bus ghost
+ghost { in > capture(2, speed=0.5, reverse=1) > lowpass(1.8khz) > master }
+track pad { play chord using pad out > ghost }
+```
+
+| argument | default | what it does |
+| --- | --- | --- |
+| `bars` (positional) | 2 | length of the window |
+| `start` | 0 | which bar the recording begins on |
+| `speed` | 1 | playback rate; 0.5 is half speed and an octave down |
+| `reverse` | 0 | 1 plays the window backwards |
+| `mix` | 1 | wet against the live signal |
+
+Until the window is full the signal passes through untouched, so the first
+`bars` bars sound exactly as they would without it. After that the recording
+plays and, at `mix 1`, replaces the input.
+
+Put it on a bus fed by the tracks you want to capture. On a track's own insert
+chain it captures that track alone, which is the freeze gesture rather than the
+resample one. The buffer is sized at compile time from the song's slowest tempo
+and allocated when the chain is built, so nothing is allocated while audio runs.
+
 ## Sidechain
 
 `sidechain <amount>` ducks a track against the kick. `from=` picks a different

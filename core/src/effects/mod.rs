@@ -1,3 +1,4 @@
+pub mod capture;
 pub mod bitcrusher;
 pub mod chorus;
 pub mod compressor;

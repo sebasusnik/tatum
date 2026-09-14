@@ -37,8 +37,9 @@ static A: Counting = Counting;
 use synth_core::song_engine::SongEngine;
 use synth_core::BLOCK_SIZE;
 
-/// Drums with a nudge, an arpeggiated chord track, a bus, both sends and three
-/// scenes with automation: every path that used to allocate per block.
+/// Drums with a nudge, an arpeggiated chord track, two buses, a capture window,
+/// both sends and three scenes with automation: every path that used to
+/// allocate per block, plus the one node that owns a large buffer.
 const SONG: &str = r#"
 tempo 128
 scale A minor
@@ -58,8 +59,11 @@ pattern hold  { [1.3 3.3 5.3] .. .. .. .. .. .. .. }
 bus drums
 drums { in > compressor(-8, ratio=4) > master }
 
+bus ghost
+ghost { in > capture(1, speed=0.5, reverse=1) > master }
+
 track beat { play beat using kit out > drums }
-track bass { play line using low delay_send 0.2 out > master }
+track bass { play line using low delay_send 0.2 out > ghost }
 track pad  { play hold using pad arp up rate=16 octaves=2 reverb_send 0.4 out > master }
 
 master { in > eq(low=2) > gain(0.8) > limiter > out }
