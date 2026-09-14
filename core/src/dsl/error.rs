@@ -19,11 +19,27 @@ impl fmt::Display for ParseError {
 #[derive(Debug, Clone)]
 pub struct CompileError {
     pub message: String,
+    /// Source line (1-based) when known, 0 otherwise.
+    pub line: usize,
+}
+
+impl CompileError {
+    pub fn new(message: String) -> Self {
+        Self { message, line: 0 }
+    }
+
+    pub fn at(line: usize, message: String) -> Self {
+        Self { message, line }
+    }
 }
 
 impl fmt::Display for CompileError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.message)
+        if self.line > 0 {
+            write!(f, "line {}: {}", self.line, self.message)
+        } else {
+            write!(f, "{}", self.message)
+        }
     }
 }
 

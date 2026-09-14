@@ -219,6 +219,8 @@ pub struct ModuleDef {
 pub struct ModuleParam {
     pub name: String,
     pub value: f32,
+    /// Source line, for compile errors.
+    pub line: usize,
 }
 
 /// Per-operator envelope for FM modules.

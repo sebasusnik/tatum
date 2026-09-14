@@ -24,7 +24,7 @@ module fm bell {
     chorus_mix 0.30
     lfo_rate 0.04
     lfo_depth 0.02
-    lfo_target 2.0
+    lfo_target mod_index
 }
 
 # Screaming lead — high mod index, feedback, aggressive
@@ -42,7 +42,7 @@ module fm scream {
     vibrato_depth 0.12
     lfo_rate 0.15
     lfo_depth 0.10
-    lfo_target 2.0
+    lfo_target mod_index
 }
 
 # Glitch percussion — ultra-short envelopes, weird ratios
@@ -78,7 +78,7 @@ module fm evolve {
     chorus_mix 0.55
     lfo_rate 0.03
     lfo_depth 0.15
-    lfo_target 2.0
+    lfo_target mod_index
     lfo_waveform 0.25
 }
 
@@ -114,7 +114,7 @@ module fm drone {
     chorus_mix 0.65
     lfo_rate 0.02
     lfo_depth 0.08
-    lfo_target 2.0
+    lfo_target mod_index
     lfo_waveform 0.5
 }
 

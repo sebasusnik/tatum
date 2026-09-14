@@ -10,9 +10,10 @@ use crate::effects::reverb::Reverb;
 use crate::graph::node::{NodeKind, NodeSpec, MAX_NODE_INPUTS};
 use crate::graph::voice::Instrument;
 use crate::modules::bass::{BassModule, BassParam};
-use crate::modules::beats::{BeatsModule, BeatsParam};
-use crate::modules::fm::{FmModule, FmParam};
-use crate::modules::keys::{KeysModule, KeysParam};
+use crate::modules::beats::BeatsModule;
+use crate::modules::fm::FmModule;
+use crate::modules::keys::KeysModule;
+use crate::params::{self, ParamId, ModuleKind};
 use crate::rng::Rng;
 use crate::{math, Module, BLOCK_SIZE, SAMPLE_RATE};
 
@@ -114,156 +115,37 @@ impl SongInstrument {
     }
 
     /// Set a parameter by name (for automation).
-    fn set_param_by_name(&mut self, name: &str, value: f32) {
+    fn set_param_by_name(&mut self, name: &str, value: f32) -> bool {
+        let kind = match self.module_kind() {
+            Some(k) => k,
+            None => return false, // graph instruments have no named params
+        };
+        match params::lookup(kind, name) {
+            Some(spec) => { apply_param(self, spec.id, value); true }
+            None => false,
+        }
+    }
+
+    /// Registry kind for built-in modules; None for graph instruments.
+    fn module_kind(&self) -> Option<ModuleKind> {
         match self {
-            Self::Graph(_) => {} // Graph instruments don't support named params
-            Self::Bass(m) => {
-                if let Some(p) = bass_param_from_name(name) {
-                    m.set_param(p, value);
-                }
-            }
-            Self::Fm(m) => {
-                if let Some(p) = fm_param_from_name(name) {
-                    m.set_param(p, value);
-                }
-            }
-            Self::Keys(m) => {
-                if let Some(p) = keys_param_from_name(name) {
-                    m.set_param(p, value);
-                }
-            }
-            Self::Beats(m) => {
-                if let Some(p) = beats_param_from_name(name) {
-                    m.set_param(p, value);
-                }
-            }
+            Self::Graph(_) => None,
+            Self::Bass(_) => Some(ModuleKind::Bass),
+            Self::Fm(_) => Some(ModuleKind::Fm),
+            Self::Keys(_) => Some(ModuleKind::Keys),
+            Self::Beats(_) => Some(ModuleKind::Beats),
         }
     }
 }
 
-fn bass_param_from_name(name: &str) -> Option<BassParam> {
-    match name {
-        "cutoff" => Some(BassParam::Cutoff),
-        "cutoff_env" => Some(BassParam::CutoffEnv),
-        "resonance" => Some(BassParam::Resonance),
-        "glide" => Some(BassParam::Glide),
-        "attack" => Some(BassParam::Attack),
-        "decay" => Some(BassParam::Decay),
-        "sustain" => Some(BassParam::Sustain),
-        "release" => Some(BassParam::Release),
-        "lfo_rate" => Some(BassParam::LfoRate),
-        "lfo_depth" => Some(BassParam::LfoDepth),
-        "lfo_waveform" => Some(BassParam::LfoWaveform),
-        "lfo_target" => Some(BassParam::LfoTarget),
-        "lfo_sync" => Some(BassParam::LfoSync),
-        "osc2_pitch" => Some(BassParam::Osc2Pitch),
-        "osc3_pitch" => Some(BassParam::Osc3Pitch),
-        "osc1_wave" => Some(BassParam::Osc1Wave),
-        "osc2_wave" => Some(BassParam::Osc2Wave),
-        "osc3_wave" => Some(BassParam::Osc3Wave),
-        "keytrack" => Some(BassParam::Keytrack),
-        "vibrato_rate" => Some(BassParam::VibratoRate),
-        "vibrato_depth" => Some(BassParam::VibratoDepth),
-        "vel_env" => Some(BassParam::VelEnv),
-        _ => None,
-    }
-}
-
-fn fm_param_from_name(name: &str) -> Option<FmParam> {
-    match name {
-        "algorithm" => Some(FmParam::Algorithm),
-        "mod_index" => Some(FmParam::ModIndex),
-        "feedback" => Some(FmParam::Feedback),
-        "waveform" => Some(FmParam::Waveform),
-        "chorus_mix" => Some(FmParam::ChorusMix),
-        "attack" => Some(FmParam::Attack),
-        "decay" => Some(FmParam::Decay),
-        "sustain" => Some(FmParam::Sustain),
-        "release" => Some(FmParam::Release),
-        "lfo_rate" => Some(FmParam::LfoRate),
-        "lfo_depth" => Some(FmParam::LfoDepth),
-        "lfo_waveform" => Some(FmParam::LfoWaveform),
-        "lfo_target" => Some(FmParam::LfoTarget),
-        "lfo_sync" => Some(FmParam::LfoSync),
-        "vibrato_rate" => Some(FmParam::VibratoRate),
-        "vibrato_depth" => Some(FmParam::VibratoDepth),
-        "op0_attack" => Some(FmParam::Op0Attack),
-        "op0_decay" => Some(FmParam::Op0Decay),
-        "op0_sustain" => Some(FmParam::Op0Sustain),
-        "op0_release" => Some(FmParam::Op0Release),
-        "op1_attack" => Some(FmParam::Op1Attack),
-        "op1_decay" => Some(FmParam::Op1Decay),
-        "op1_sustain" => Some(FmParam::Op1Sustain),
-        "op1_release" => Some(FmParam::Op1Release),
-        "op2_attack" => Some(FmParam::Op2Attack),
-        "op2_decay" => Some(FmParam::Op2Decay),
-        "op2_sustain" => Some(FmParam::Op2Sustain),
-        "op2_release" => Some(FmParam::Op2Release),
-        "op3_attack" => Some(FmParam::Op3Attack),
-        "op3_decay" => Some(FmParam::Op3Decay),
-        "op3_sustain" => Some(FmParam::Op3Sustain),
-        "op3_release" => Some(FmParam::Op3Release),
-        "op0_feedback" => Some(FmParam::Op0Feedback),
-        "op1_feedback" => Some(FmParam::Op1Feedback),
-        "op2_feedback" => Some(FmParam::Op2Feedback),
-        "op3_feedback" => Some(FmParam::Op3Feedback),
-        "op0_ratio" => Some(FmParam::Op0Ratio),
-        "op1_ratio" => Some(FmParam::Op1Ratio),
-        "op2_ratio" => Some(FmParam::Op2Ratio),
-        "op3_ratio" => Some(FmParam::Op3Ratio),
-        _ => None,
-    }
-}
-
-fn keys_param_from_name(name: &str) -> Option<KeysParam> {
-    match name {
-        "cutoff" => Some(KeysParam::Cutoff),
-        "resonance" => Some(KeysParam::Resonance),
-        "detune" => Some(KeysParam::Detune),
-        "chorus_mix" => Some(KeysParam::ChorusMix),
-        "level" => Some(KeysParam::Level),
-        "voice_mode" => Some(KeysParam::VoiceMode),
-        "attack" => Some(KeysParam::Attack),
-        "decay" => Some(KeysParam::Decay),
-        "sustain" => Some(KeysParam::Sustain),
-        "release" => Some(KeysParam::Release),
-        "lfo_rate" => Some(KeysParam::LfoRate),
-        "lfo_depth" => Some(KeysParam::LfoDepth),
-        "lfo_waveform" => Some(KeysParam::LfoWaveform),
-        "lfo_target" => Some(KeysParam::LfoTarget),
-        "lfo_sync" => Some(KeysParam::LfoSync),
-        "vibrato_rate" => Some(KeysParam::VibratoRate),
-        "vibrato_depth" => Some(KeysParam::VibratoDepth),
-        _ => None,
-    }
-}
-
-fn beats_param_from_name(name: &str) -> Option<BeatsParam> {
-    match name {
-        "level" => Some(BeatsParam::Level),
-        "kick_decay" => Some(BeatsParam::KickDecay),
-        "snare_decay" => Some(BeatsParam::SnareDecay),
-        "kick_pan" => Some(BeatsParam::KickPan),
-        "snare_pan" => Some(BeatsParam::SnarePan),
-        "hihat_pan" => Some(BeatsParam::HihatPan),
-        "clap_pan" => Some(BeatsParam::ClapPan),
-        "kick_click" => Some(BeatsParam::KickClick),
-        "kick_level" => Some(BeatsParam::KickLevel),
-        "snare_level" => Some(BeatsParam::SnareLevel),
-        "hihat_level" => Some(BeatsParam::HihatLevel),
-        "clap_level" => Some(BeatsParam::ClapLevel),
-        "kick_pitch" => Some(BeatsParam::KickPitch),
-        "snare_pitch" => Some(BeatsParam::SnarePitch),
-        "hihat_pitch" => Some(BeatsParam::HihatPitch),
-        "stutter_rate" => Some(BeatsParam::StutterRate),
-        "stutter_drum" => Some(BeatsParam::StutterDrum),
-        "tom_pan" => Some(BeatsParam::TomPan),
-        "crash_pan" => Some(BeatsParam::CrashPan),
-        "snare_drive" => Some(BeatsParam::SnareDrive),
-        "snare_snap" => Some(BeatsParam::SnareSnap),
-        "kick_drive" => Some(BeatsParam::KickDrive),
-        "hihat_decay" => Some(BeatsParam::HihatDecay),
-        _ => None,
+/// Apply a registry-typed parameter to the right module.
+fn apply_param(inst: &mut SongInstrument, id: ParamId, value: f32) {
+    match (inst, id) {
+        (SongInstrument::Bass(m), ParamId::Bass(p)) => m.set_param(p, value),
+        (SongInstrument::Fm(m), ParamId::Fm(p)) => m.set_param(p, value),
+        (SongInstrument::Keys(m), ParamId::Keys(p)) => m.set_param(p, value),
+        (SongInstrument::Beats(m), ParamId::Beats(p)) => m.set_param(p, value),
+        _ => {}
     }
 }
 
@@ -480,8 +362,8 @@ impl DslError {
                 for (i, e) in errs.iter().enumerate() {
                     if i > 0 { out.push(','); }
                     out.push_str(&alloc::format!(
-                        r#"{{"line":0,"col":0,"msg":"{}"}}"#,
-                        json_escape(&e.message),
+                        r#"{{"line":{},"col":0,"msg":"{}"}}"#,
+                        e.line, json_escape(&e.message),
                     ));
                 }
             }
@@ -547,8 +429,8 @@ impl SongEngine {
                     CompiledInstrumentKind::Bass(preset) => {
                         let mut m = BassModule::new();
                         for (name, value) in &preset.params {
-                            if let Some(p) = bass_param_from_name(name) {
-                                m.set_param(p, *value);
+                            if let Some(spec) = params::lookup(ModuleKind::Bass, name) {
+                                if let ParamId::Bass(p) = spec.id { m.set_param(p, *value); }
                             }
                         }
                         m.set_bpm(tempo);
@@ -557,8 +439,8 @@ impl SongEngine {
                     CompiledInstrumentKind::Fm(preset) => {
                         let mut m = FmModule::new();
                         for (name, value) in &preset.params {
-                            if let Some(p) = fm_param_from_name(name) {
-                                m.set_param(p, *value);
+                            if let Some(spec) = params::lookup(ModuleKind::Fm, name) {
+                                if let ParamId::Fm(p) = spec.id { m.set_param(p, *value); }
                             }
                         }
                         // Apply per-operator envelopes if specified
@@ -571,8 +453,8 @@ impl SongEngine {
                     CompiledInstrumentKind::Keys(preset) => {
                         let mut m = KeysModule::new();
                         for (name, value) in &preset.params {
-                            if let Some(p) = keys_param_from_name(name) {
-                                m.set_param(p, *value);
+                            if let Some(spec) = params::lookup(ModuleKind::Keys, name) {
+                                if let ParamId::Keys(p) = spec.id { m.set_param(p, *value); }
                             }
                         }
                         m.set_bpm(tempo);
@@ -581,8 +463,8 @@ impl SongEngine {
                     CompiledInstrumentKind::Beats(preset) => {
                         let mut m = BeatsModule::new();
                         for (name, value) in &preset.params {
-                            if let Some(p) = beats_param_from_name(name) {
-                                m.set_param(p, *value);
+                            if let Some(spec) = params::lookup(ModuleKind::Beats, name) {
+                                if let ParamId::Beats(p) = spec.id { m.set_param(p, *value); }
                             }
                         }
                         m.set_bpm(tempo);
@@ -1644,25 +1526,38 @@ impl SongEngine {
         self.patterns.get(idx).map_or("", |p| &p.name)
     }
 
-    pub fn set_module_param(&mut self, inst_idx: usize, name: &str, value: f32) {
-        if let Some(inst) = self.instruments.get_mut(inst_idx) {
-            match inst {
-                SongInstrument::Bass(m) => {
-                    if let Some(p) = bass_param_from_name(name) { m.set_param(p, value); }
-                }
-                SongInstrument::Fm(m) => {
-                    if let Some(p) = fm_param_from_name(name) { m.set_param(p, value); }
-                }
-                SongInstrument::Keys(m) => {
-                    if let Some(p) = keys_param_from_name(name) { m.set_param(p, value); }
-                }
-                SongInstrument::Beats(m) => {
-                    if let Some(p) = beats_param_from_name(name) { m.set_param(p, value); }
-                }
-                SongInstrument::Graph(_) => {} // graph params not easily mutable at runtime
-            }
+    /// Set a named module parameter at runtime. Returns false if the
+    /// instrument does not exist or the name is not in the registry.
+    pub fn set_module_param(&mut self, inst_idx: usize, name: &str, value: f32) -> bool {
+        match self.instruments.get_mut(inst_idx) {
+            Some(inst) => inst.set_param_by_name(name, value),
+            None => false,
         }
     }
+
+    pub fn instrument_count(&self) -> usize { self.instruments.len() }
+
+    pub fn instrument_name(&self, idx: usize) -> &str {
+        self.instrument_names.get(idx).map_or("", |n| n.as_str())
+    }
+
+    pub fn instrument_index(&self, name: &str) -> Option<usize> {
+        self.instrument_names.iter().position(|n| n == name)
+    }
+
+    /// Swing 0.5 (straight) ..= 0.75 (hard shuffle). Takes effect on the next step.
+    pub fn set_swing(&mut self, swing: f32) {
+        self.swing = swing.clamp(0.5, 0.75);
+    }
+
+    pub fn set_humanize(&mut self, velocity: f32, timing: f32) {
+        self.humanize_velocity = velocity.clamp(0.0, 1.0);
+        self.humanize_timing = timing.clamp(0.0, 1.0);
+    }
+
+    pub fn swing(&self) -> f32 { self.swing }
+
+    pub fn humanize(&self) -> (f32, f32) { (self.humanize_velocity, self.humanize_timing) }
 }
 
 /// Interpolate automation keyframes at a given progress (0.0 - 1.0).

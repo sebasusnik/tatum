@@ -19,6 +19,7 @@ pub mod command;
 pub mod graph;
 pub mod dsl;
 pub mod song_engine;
+pub mod params;
 
 #[cfg(test)]
 pub mod test_utils;

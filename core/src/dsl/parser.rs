@@ -7,6 +7,7 @@ use alloc::format;
 use crate::dsl::ast::*;
 use crate::math;
 use crate::dsl::error::ParseError;
+use crate::params::{self, ModuleKind};
 use crate::dsl::lexer::{Token, Span};
 
 /// Recursive descent parser for .synth files.
@@ -1153,6 +1154,7 @@ impl Parser {
 
             if let Token::Ident(ref key) = self.peek().clone() {
                 let key = key.clone();
+                let line = self.span().line;
                 self.advance();
 
                 // Check for op_envelope shorthand: op0_envelope 0.001 0.12 0.05 0.08
@@ -1179,32 +1181,39 @@ impl Parser {
                     false
                 };
 
-                // Handle waveform names as special param values
-                if let Token::Ident(ref wf) = self.peek().clone() {
-                    if is_waveform(wf) || is_voice_mode(wf) {
-                        let wf = wf.clone();
-                        self.advance();
-                        let value = match wf.as_str() {
-                            "sine" => 0.0,
-                            "saw" => 0.25,
-                            "square" => 0.5,
-                            "triangle" => 0.75,
-                            // Voice modes
-                            "poly" => 0.0,
-                            "unison" => 0.25,
-                            "octave" => 0.5,
-                            "fifth" => 0.75,
-                            "ringmod" => 1.0,
-                            _ => 0.0,
-                        };
-                        params.push(ModuleParam { name: key, value });
-                        continue;
+                // Symbolic values for choice params: `waveform half_sine`, `voice_mode unison`
+                if let Token::Ident(ref word) = self.peek().clone() {
+                    let word = word.clone();
+                    let spec = ModuleKind::from_str(&module_type)
+                        .and_then(|k| params::lookup(k, &key));
+                    match spec {
+                        Some(spec) => match spec.value_from_name(&word) {
+                            Some(value) => {
+                                self.advance();
+                                params.push(ModuleParam { name: key, value, line });
+                            }
+                            None => {
+                                let s = self.span();
+                                let (l, c) = (s.line, s.col);
+                                self.errors.push(ParseError {
+                                    line: l, col: c,
+                                    message: format!("'{}' has no option '{}' (choices: {})", key, word, spec.range.describe()),
+                                });
+                                self.advance();
+                            }
+                        },
+                        // Unknown param: let the compiler report it with a suggestion.
+                        None => {
+                            self.advance();
+                            params.push(ModuleParam { name: key, value: 0.0, line });
+                        }
                     }
+                    continue;
                 }
 
                 if let Some(val) = self.expect_number() {
                     let val = if negative { -val } else { val };
-                    params.push(ModuleParam { name: key, value: val });
+                    params.push(ModuleParam { name: key, value: val, line });
                 }
             } else {
                 self.advance();
@@ -1362,7 +1371,3 @@ fn is_waveform(word: &str) -> bool {
     matches!(word, "sine" | "saw" | "square" | "triangle" | "pulse")
 }
 
-/// Check if a word is a voice mode name.
-fn is_voice_mode(word: &str) -> bool {
-    matches!(word, "poly" | "unison" | "octave" | "fifth" | "ringmod")
-}

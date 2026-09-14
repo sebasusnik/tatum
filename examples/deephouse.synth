@@ -23,7 +23,7 @@ module bass deep_bass {
     glide 0.25
     osc2_pitch 0.25
     osc1_wave saw
-    osc2_wave sine
+    osc2_wave saw
     keytrack 0.4
     attack 0.005
     decay 0.35

@@ -5,6 +5,7 @@ use alloc::format;
 
 use crate::dsl::ast::*;
 use crate::dsl::error::{CompileError, CompileResult};
+use crate::params::{self, ModuleKind};
 use crate::graph::{GraphBuilder, GraphTemplate};
 use crate::graph::node::NodeSpec;
 use crate::primitives::oscillator::Waveform;
@@ -193,9 +194,18 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
                 instruments.push(kind);
                 instrument_names.push(mod_def.name.clone());
             }
-            Err(e) => errors.push(e),
+            Err(errs) => {
+                errors.extend(errs);
+                // Keep the name registered so tracks and scenes that reference
+                // this module do not produce a cascade of "unknown instrument" errors.
+                instruments.push(CompiledInstrumentKind::Bass(ModulePreset::default()));
+                instrument_names.push(mod_def.name.clone());
+            }
         }
     }
+
+    // 1c. Validate automation targets against the registry
+    errors.extend(validate_automations(song));
 
     // 2. Compile patterns (with scale context for degree resolution)
     let (intervals, root_pc) = scale_context(song);
@@ -245,7 +255,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
         if let Some(idx) = scene_names.iter().position(|&n| n == entry.scene_name) {
             arrangement.push((idx, entry.repeat));
         } else {
-            errors.push(CompileError {
+            errors.push(CompileError { line: 0,
                 message: format!("unknown scene '{}' in arrangement", entry.scene_name),
             });
         }
@@ -365,11 +375,11 @@ fn compile_instrument(inst: &InstrumentDef) -> Result<GraphTemplate, CompileErro
     // Second pass: create connections
     for conn in &inst.connections {
         let from_idx = find_node(&name_to_idx, &conn.from)
-            .ok_or_else(|| CompileError {
+            .ok_or_else(|| CompileError { line: 0,
                 message: format!("instrument '{}': unknown node '{}'", inst.name, conn.from),
             })?;
         let to_idx = find_node(&name_to_idx, &conn.to)
-            .ok_or_else(|| CompileError {
+            .ok_or_else(|| CompileError { line: 0,
                 message: format!("instrument '{}': unknown node '{}'", inst.name, conn.to),
             })?;
         builder.connect(from_idx, to_idx);
@@ -532,7 +542,7 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
             let room_size = float_param_at(&node.params, 0).unwrap_or(0.5);
             Ok(NodeSpec::Reverb { room_size })
         }
-        other => Err(CompileError {
+        other => Err(CompileError { line: 0,
             message: format!("unknown node type '{}'", other),
         }),
     }
@@ -776,12 +786,12 @@ fn compile_track(
     defaults: Option<&CompiledTrack>,
 ) -> Result<CompiledTrack, CompileError> {
     let instrument_idx = inst_names.iter().position(|n| n == &track.using_instrument)
-        .ok_or_else(|| CompileError {
+        .ok_or_else(|| CompileError { line: 0,
             message: format!("track '{}': unknown instrument '{}'", track.name, track.using_instrument),
         })?;
 
     let pattern_idx = patterns.iter().position(|p| p.name == track.play)
-        .ok_or_else(|| CompileError {
+        .ok_or_else(|| CompileError { line: 0,
             message: format!("track '{}': unknown pattern '{}'", track.name, track.play),
         })?;
 
@@ -986,47 +996,127 @@ fn filter_env_params(params: &[Param]) -> (f32, f32, f32, f32, f32) {
 
 // ── Module compilation ──
 
-fn compile_module_def(mod_def: &ModuleDef) -> Result<CompiledInstrumentKind, CompileError> {
-    match mod_def.module_type.as_str() {
-        "bass" => {
-            let mut preset = ModulePreset::default();
-            for p in &mod_def.params {
-                preset.params.push((p.name.clone(), p.value));
-            }
-            Ok(CompiledInstrumentKind::Bass(preset))
+fn compile_module_def(mod_def: &ModuleDef) -> Result<CompiledInstrumentKind, Vec<CompileError>> {
+    let kind = match ModuleKind::from_str(&mod_def.module_type) {
+        Some(k) => k,
+        None => return Err(vec![CompileError::new(format!(
+            "module '{}': unknown module type '{}' (expected bass, fm, keys, or beats)",
+            mod_def.name, mod_def.module_type
+        ))]),
+    };
+
+    let mut errors = Vec::new();
+    let mut valid: Vec<(String, f32)> = Vec::new();
+    for p in &mod_def.params {
+        match params::lookup(kind, &p.name) {
+            Some(spec) => match spec.validate(p.value) {
+                Ok(()) => valid.push((p.name.clone(), p.value)),
+                Err(msg) => errors.push(CompileError::at(p.line, format!("module '{}': {}", mod_def.name, msg))),
+            },
+            None => errors.push(CompileError::at(p.line, unknown_param_message(kind, &mod_def.name, &p.name))),
         }
-        "fm" => {
+    }
+    for env in &mod_def.op_envelopes {
+        if kind != ModuleKind::Fm {
+            errors.push(CompileError::new(format!(
+                "module '{}': op{}_envelope is only valid on fm modules", mod_def.name, env.op_index
+            )));
+        } else if env.op_index > 3 {
+            errors.push(CompileError::new(format!(
+                "module '{}': op{}_envelope — operators are op0..op3", mod_def.name, env.op_index
+            )));
+        }
+    }
+    if !errors.is_empty() {
+        return Err(errors);
+    }
+
+    Ok(match kind {
+        ModuleKind::Bass => {
+            let mut preset = ModulePreset::default();
+            preset.params = valid;
+            CompiledInstrumentKind::Bass(preset)
+        }
+        ModuleKind::Keys => {
+            let mut preset = ModulePreset::default();
+            preset.params = valid;
+            CompiledInstrumentKind::Keys(preset)
+        }
+        ModuleKind::Beats => {
+            let mut preset = ModulePreset::default();
+            preset.params = valid;
+            CompiledInstrumentKind::Beats(preset)
+        }
+        ModuleKind::Fm => {
             let mut preset = FmPreset::default();
-            for p in &mod_def.params {
-                // Check for op envelope shorthand: op0_envelope, op1_envelope, etc.
-                if p.name.starts_with("op") && p.name.ends_with("_envelope") {
-                    // These are handled via the op_envelopes Vec in the AST
-                    continue;
-                }
-                preset.params.push((p.name.clone(), p.value));
-            }
-            // Copy operator envelopes from AST
+            preset.params = valid;
             for env in &mod_def.op_envelopes {
                 preset.op_envelopes.push((env.op_index, (env.a, env.d, env.s, env.r)));
             }
-            Ok(CompiledInstrumentKind::Fm(preset))
+            CompiledInstrumentKind::Fm(preset)
         }
-        "keys" => {
-            let mut preset = ModulePreset::default();
-            for p in &mod_def.params {
-                preset.params.push((p.name.clone(), p.value));
-            }
-            Ok(CompiledInstrumentKind::Keys(preset))
-        }
-        "beats" => {
-            let mut preset = ModulePreset::default();
-            for p in &mod_def.params {
-                preset.params.push((p.name.clone(), p.value));
-            }
-            Ok(CompiledInstrumentKind::Beats(preset))
-        }
-        other => Err(CompileError {
-            message: format!("unknown module type '{}' (expected bass, fm, keys, or beats)", other),
-        }),
+    })
+}
+
+/// Explain an unknown parameter name: typo suggestion or wrong module type.
+fn unknown_param_message(kind: ModuleKind, module_name: &str, param: &str) -> String {
+    let base = format!("module '{}' ({}): unknown parameter '{}'", module_name, kind.as_str(), param);
+    if let Some(sugg) = params::suggest(kind, param) {
+        return format!("{}. Did you mean '{}'?", base, sugg);
     }
+    let others = params::kinds_with_param(param);
+    if !others.is_empty() {
+        let names: Vec<&str> = others.iter().map(|k| k.as_str()).collect();
+        return format!("{}. It exists on: {}", base, names.join(", "));
+    }
+    format!("{}. Run `synth params {}` for the list", base, kind.as_str())
+}
+
+/// Validate `auto <target> ...` lanes against tracks, instruments and the param registry.
+fn validate_automations(song: &Song) -> Vec<CompileError> {
+    let mut errors = Vec::new();
+    for scene in &song.scenes {
+        for auto in &scene.automations {
+            let target = auto.target.as_str();
+            if target == "reverb_mix" || target == "delay_mix" {
+                continue;
+            }
+            let (name, param) = match target.find('.') {
+                Some(i) => (&target[..i], &target[i + 1..]),
+                None => {
+                    errors.push(CompileError::new(format!(
+                        "scene '{}': automation target '{}' must be reverb_mix, delay_mix, <track> level or <module> <param>",
+                        scene.name, target
+                    )));
+                    continue;
+                }
+            };
+            let is_track = scene.tracks.iter().chain(song.tracks.iter()).any(|t| t.name == name);
+            let module = song.module_defs.iter().find(|m| m.name == name);
+            let is_graph = song.instruments.iter().any(|i| i.name == name);
+            if param == "level" && (is_track || module.is_some() || is_graph) {
+                continue;
+            }
+            match module {
+                Some(m) => {
+                    if let Some(kind) = ModuleKind::from_str(&m.module_type) {
+                        if params::lookup(kind, param).is_none() {
+                            errors.push(CompileError::new(format!(
+                                "scene '{}': automation — {}", scene.name, unknown_param_message(kind, name, param)
+                            )));
+                        }
+                    }
+                }
+                None if is_graph => errors.push(CompileError::new(format!(
+                    "scene '{}': automation target '{}' — graph instruments have no named params (only level)",
+                    scene.name, target
+                ))),
+                None => errors.push(CompileError::new(format!(
+                    "scene '{}': automation target '{}' — no module or track named '{}'",
+                    scene.name, target, name
+                ))),
+            }
+        }
+    }
+    errors
 }
