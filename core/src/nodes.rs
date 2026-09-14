@@ -72,6 +72,9 @@ const FILTER_ENV: &[Arg] = &[
     arg!("es", 0.0, 1.0, 0.0, "envelope sustain level"),
     arg!("er", 0.0, 10.0, 0.1, "envelope release, seconds"),
     arg!("edepth", -20000.0, 20000.0, 0.0, "envelope depth in Hz added to the cutoff"),
+    arg!("lfo_bars", 0.0, 64.0, 0.0, "LFO cycle length in bars (tempo-synced); 0 = use lfo_hz"),
+    arg!("lfo_hz", 0.0, 20.0, 0.0, "free LFO rate in Hz"),
+    arg!("lfo_depth", 0.0, 20000.0, 0.0, "LFO sweep in Hz around the cutoff; 0 = off"),
 ];
 const FILTER_POS: &[Arg] = &[
     arg!("cutoff", 20.0, 20000.0, 1000.0, "Hz"),
@@ -138,6 +141,10 @@ pub const NODES: &[NodeDefSpec] = &[
     NodeDefSpec { name: "delay", aliases: &[], category: Category::Effect,
         positional: &[arg!("feedback", 0.0, 0.95, 0.3, "repeat level")], named: &[],
         waveform: false, rhythm: true, in_chains: true, doc: "Tempo-synced delay inside a chain: `delay(1/8, 0.4)`. Division defaults to 1/4." },
+    NodeDefSpec { name: "autopan", aliases: &[], category: Category::Effect,
+        positional: &[arg!("depth", 0.0, 1.0, 0.5, "0 = still, 1 = full left/right")],
+        named: &[arg!("bars", 0.0, 64.0, 0.0, "cycle length in bars (tempo-synced)"), arg!("hz", 0.0, 20.0, 0.25, "free rate in Hz when bars is 0")],
+        waveform: false, rhythm: false, in_chains: true, doc: "Slow stereo movement: `autopan(0.6, bars=4)`." },
     NodeDefSpec { name: "reverb", aliases: &[], category: Category::Effect,
         positional: &[arg!("size", 0.0, 1.0, 0.5, "room size / decay")], named: &[],
         waveform: false, rhythm: false, in_chains: true, doc: "Plate reverb, wet only; use it on a bus." },

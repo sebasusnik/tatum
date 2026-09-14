@@ -39,6 +39,8 @@ module bass acid {
     resonance 0.8
     osc1_wave saw            # saw | square
     lfo_target cutoff        # cutoff | pitch | amplitude
+    lfo_sync bars_4          # free | quarter | eighth | sixteenth | dotted_eighth | triplet_eighth |
+                             # bar | bars_2 | bars_4 | bars_8 | bars_16 (slow, tempo-synced cycles)
 }
 
 module fm bell {
@@ -148,8 +150,9 @@ master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2
 |--------|-----------|-------|
 | `saturate(drive)` / `drive(drive)` | drive gain, 1.0 = mild | tanh soft clip |
 | `gain(amount)` | linear multiplier | |
-| `lowpass(cutoff_hz, resonance)` / `highpass` / `bandpass` | Hz, 0..1 | optional envelope: `ea= ed= es= er= edepth=` (seconds, level, Hz) |
-| `ladder(cutoff_hz, resonance)` | Hz, 0..1 | Moog-style 4-pole, same envelope options |
+| `lowpass(cutoff_hz, resonance)` / `highpass` / `bandpass` | Hz, 0..1 | options: envelope `ea= ed= es= er= edepth=` (seconds, level, Hz); LFO `lfo_bars=` or `lfo_hz=` with `lfo_depth=` in Hz, e.g. `lowpass(800, 0.6, lfo_bars=2, lfo_depth=600)` |
+| `ladder(cutoff_hz, resonance)` | Hz, 0..1 | Moog-style 4-pole, same envelope and LFO options |
+| `autopan(depth, bars=)` | 0..1, bars | slow stereo movement, `autopan(0.6, bars=4)`; `hz=` for a free rate |
 | `chorus(mix)` | 0..1 | |
 | `bitcrush(bits, rate)` | bits, sample-rate reduction 0..1 | |
 | `compressor(threshold_db, ratio=, attack=, release=, makeup=)` | dB, ratio, ms, ms, gain | |
@@ -214,12 +217,12 @@ a hint of vibrato, sends, and sidechain so it breathes with the kick:
 module keys pad {
     voice_mode unison  detune 0.3  chorus_mix 0.5
     cutoff 0.3  resonance 0.5
-    lfo_target cutoff  lfo_waveform triangle  lfo_sync free  lfo_rate 0.0075  lfo_depth 0.12
+    lfo_target cutoff  lfo_waveform triangle  lfo_sync bars_2  lfo_depth 0.12
     vibrato_rate 0.35  vibrato_depth 0.06
     attack 0.9  release 1.0
 }
 track pad { play chords using pad level 0.3 reverb_send 0.4 delay_send 0.15 sidechain 0.45
-            out > highpass(250, 0.4) > master }
+            out > highpass(250, 0.4) > autopan(0.4, bars=4) > master }
 ```
 
 **A 303 line.** Low cutoff, high resonance and envelope amount, glide, and `~` slides on
@@ -241,7 +244,7 @@ track stab { play offbeats using stab level 0.4 delay_send 0.3 out > saturate(0.
 
 **A liquid cloud (deep house, liquid DnB).** Jazz voicings (m9, maj7, add9) held with
 ties, a two-second attack so there is no transient, a big wet reverb, high-pass so it
-stays out of the sub, and the slowest LFO available:
+stays out of the sub, LFOs that take 8 to 16 bars per cycle, and a slow autopan:
 
 ```
 reverb size=1.0 damp=0.25 predelay=40
@@ -252,9 +255,9 @@ pattern voicings {
     .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..
 }
 module keys cloud { voice_mode unison detune 0.45 chorus_mix 0.6 attack 1.0 release 1.0
-                    cutoff 0.28 resonance 0.35 lfo_target cutoff lfo_sync free lfo_rate 0.0 lfo_depth 0.08 }
+                    cutoff 0.28 resonance 0.35 lfo_target cutoff lfo_sync bars_8 lfo_depth 0.08 }
 track pad { play voicings using cloud level 0.15 reverb_send 0.4 sidechain 0.5
-            out > highpass(300, 0.4) > lowpass(3200, 0.3) > master }
+            out > highpass(300, 0.4) > lowpass(3200, 0.3, lfo_bars=16, lfo_depth=1200) > autopan(0.3, bars=8) > master }
 ```
 
 **A breakbeat kit.** Accents on the downbeats, ghosts between, probability on the extra

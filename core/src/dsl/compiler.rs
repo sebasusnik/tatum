@@ -497,28 +497,32 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
             let res = float_param_at(&node.params, 1).unwrap_or(0.5);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
             Ok(NodeSpec::Biquad { filter_type: FilterType::LowPass, cutoff, resonance: res,
-                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth })
+                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,
+                lfo: filter_lfo_params(&node.params) })
         }
         "highpass" => {
             let cutoff = float_param_at(&node.params, 0).unwrap_or(1000.0);
             let res = float_param_at(&node.params, 1).unwrap_or(0.5);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
             Ok(NodeSpec::Biquad { filter_type: FilterType::HighPass, cutoff, resonance: res,
-                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth })
+                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,
+                lfo: filter_lfo_params(&node.params) })
         }
         "bandpass" => {
             let cutoff = float_param_at(&node.params, 0).unwrap_or(1000.0);
             let res = float_param_at(&node.params, 1).unwrap_or(0.5);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
             Ok(NodeSpec::Biquad { filter_type: FilterType::BandPass, cutoff, resonance: res,
-                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth })
+                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,
+                lfo: filter_lfo_params(&node.params) })
         }
         "ladder" => {
             let cutoff = float_param_at(&node.params, 0).unwrap_or(1000.0);
             let res = float_param_at(&node.params, 1).unwrap_or(0.5);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
             Ok(NodeSpec::Ladder { cutoff, resonance: res,
-                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth })
+                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,
+                lfo: filter_lfo_params(&node.params) })
         }
         "mix" => Ok(NodeSpec::Mix),
         "gain" => {
@@ -569,6 +573,12 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
         "reverb" => {
             let room_size = float_param_at(&node.params, 0).unwrap_or(0.5);
             Ok(NodeSpec::Reverb { room_size })
+        }
+        "autopan" => {
+            let depth = float_param_at(&node.params, 0).unwrap_or(0.5);
+            let bars = named_param(&node.params, "bars").unwrap_or(0.0);
+            let hz = named_param(&node.params, "hz").unwrap_or(if bars > 0.0 { 0.0 } else { 0.25 });
+            Ok(NodeSpec::AutoPan { hz, bars, depth })
         }
         other => Err(CompileError { line: 0,
             message: format!("unknown node type '{}'", other),
@@ -1070,6 +1080,14 @@ fn rhythm_div_param(params: &[Param]) -> Option<f32> {
         }
     }
     None
+}
+
+/// Filter LFO options: lfo_hz / lfo_bars (cycle length) and lfo_depth (Hz).
+fn filter_lfo_params(params: &[Param]) -> crate::graph::node::FilterLfo {
+    let bars = named_param(params, "lfo_bars").unwrap_or(0.0);
+    let hz = named_param(params, "lfo_hz").unwrap_or(0.0);
+    let depth = named_param(params, "lfo_depth").unwrap_or(0.0);
+    crate::graph::node::FilterLfo { hz, bars, depth }
 }
 
 /// Extract filter envelope named params: ea, ed, es, er, edepth.

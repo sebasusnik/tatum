@@ -15,8 +15,7 @@ module keys cloud {
     chorus_mix 0.6
     lfo_target cutoff
     lfo_waveform triangle
-    lfo_sync free
-    lfo_rate 0.0          # slowest available: 0.1 Hz, ~10 s
+    lfo_sync bars_8       # one cycle every 8 bars
     lfo_depth 0.08
     attack 1.0            # 2 s: no transient, the chord blooms
     decay 0.8
@@ -91,7 +90,7 @@ pattern amen_ish {
 }
 
 track pad    { play voicings using cloud level 0.15 reverb_send 0.4 delay_send 0.1 sidechain 0.5
-               out > highpass(300, 0.4) > lowpass(3200, 0.3) > master }
+               out > highpass(300, 0.4) > lowpass(3200, 0.3, lfo_bars=16, lfo_depth=1200) > autopan(0.3, bars=8) > master }
 track rhodes { play rhodes_hits using rhodes level 0.15 reverb_send 0.6 delay_send 0.25
                out > highpass(220, 0.3) > master }
 track sub    { play sub_line using sub level 0.4 out > master }

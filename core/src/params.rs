@@ -158,7 +158,7 @@ pub fn choice_value(idx: usize, count: usize) -> f32 {
 // ── Shared choice tables ──
 
 pub const LFO_WAVEFORMS: &[&str] = &["sine", "triangle", "saw", "square", "sample_hold"];
-pub const LFO_SYNC: &[&str] = &["free", "quarter", "eighth", "sixteenth", "dotted_eighth", "triplet_eighth"];
+pub const LFO_SYNC: &[&str] = &["free", "quarter", "eighth", "sixteenth", "dotted_eighth", "triplet_eighth", "bar", "bars_2", "bars_4", "bars_8", "bars_16"];
 pub const OSC_WAVES: &[&str] = &["saw", "square"];
 pub const FM_ALGORITHMS: &[&str] = &[
     "serial3_plus_carrier",   // 0: Op3 -> Op2 -> Op1 -> Out (+ Op4 -> Out)
@@ -199,7 +199,7 @@ pub const BASS_PARAMS: &[ParamSpec] = &[
     spec!("lfo_depth", ParamId::Bass(BassParam::LfoDepth), Range::Unit, 0.0, "LFO depth; 0 disables the LFO"),
     spec!("lfo_waveform", ParamId::Bass(BassParam::LfoWaveform), Range::Choice(LFO_WAVEFORMS), 0.0, "LFO shape"),
     spec!("lfo_target", ParamId::Bass(BassParam::LfoTarget), Range::Choice(FILTER_LFO_TARGETS), 0.0, "What the LFO modulates"),
-    spec!("lfo_sync", ParamId::Bass(BassParam::LfoSync), Range::Choice(LFO_SYNC), 0.0, "Free Hz or tempo-synced subdivision"),
+    spec!("lfo_sync", ParamId::Bass(BassParam::LfoSync), Range::Choice(LFO_SYNC), 0.0, "Free Hz, a tempo-synced subdivision, or a slow cycle over 1..16 bars"),
     spec!("osc2_pitch", ParamId::Bass(BassParam::Osc2Pitch), Range::Unit, 0.5, "Osc 2 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24 (steps of 1/48)"),
     spec!("osc3_pitch", ParamId::Bass(BassParam::Osc3Pitch), Range::Unit, 0.5, "Osc 3 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24 (steps of 1/48)"),
     spec!("osc1_wave", ParamId::Bass(BassParam::Osc1Wave), Range::Choice(OSC_WAVES), 0.0, "Osc 1 waveform"),
