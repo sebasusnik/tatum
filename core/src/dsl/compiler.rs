@@ -6,6 +6,7 @@ use alloc::format;
 use crate::dsl::ast::*;
 use crate::dsl::error::{CompileError, CompileResult};
 use crate::params::{self, ModuleKind};
+use crate::math;
 use crate::graph::{GraphBuilder, GraphTemplate};
 use crate::graph::node::NodeSpec;
 use crate::primitives::oscillator::Waveform;
@@ -35,7 +36,7 @@ pub struct ChordNote {
 /// A compiled step: either a note event, chord, or silence.
 #[derive(Clone, Copy, Debug)]
 pub enum CompiledStep {
-    NoteOn { midi_note: u8, velocity: f32, plock: StepPLock },
+    NoteOn { midi_note: u8, velocity: f32, plock: StepPLock, slide: bool },
     Chord { notes: [ChordNote; MAX_CHORD_NOTES], count: u8, plock: StepPLock },
     DrumHit { velocity: f32, probability: f32, roll: u8, plock: StepPLock },
     Rest,
@@ -76,6 +77,20 @@ pub struct CompiledTrack {
     pub delay_send: f32,    // global delay send amount 0.0-1.0
     pub reverb_send: f32,   // global reverb send amount 0.0-1.0
     pub sidechain: Option<f32>, // per-track sidechain override (None = use global)
+    pub arp: Option<ArpConfig>, // arpeggiator driven by the pattern's held notes
+}
+
+/// Compiled arpeggiator settings.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ArpConfig {
+    /// Normalized pattern for `ArpProcessor::set_pattern`: 0 = up, 0.5 = down, 1 = updown.
+    pub pattern: f32,
+    /// Multiplier on the song's 16th-note clock (rate 16 = 1.0, rate 8 = 0.5, rate 32 = 2.0).
+    pub rate_mult: f32,
+    /// Gate fraction of each arp step.
+    pub gate: f32,
+    /// Octave range 1..=4.
+    pub octaves: u8,
 }
 
 /// A compiled bus.
@@ -634,7 +649,7 @@ fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> C
                             resonance: ns.plock.resonance,
                             gate: ns.plock.gate,
                         };
-                        CompiledStep::NoteOn { midi_note: midi, velocity: vel, plock }
+                        CompiledStep::NoteOn { midi_note: midi, velocity: vel, plock, slide: ns.slide }
                     }
                 }
             }).collect();
@@ -669,7 +684,7 @@ fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> C
                         resonance: ns.plock.resonance,
                         gate: ns.plock.gate,
                     };
-                    steps.push(CompiledStep::NoteOn { midi_note: midi, velocity: vel, plock });
+                    steps.push(CompiledStep::NoteOn { midi_note: midi, velocity: vel, plock, slide: ns.slide });
                 }
                 Step::Chord(cs) => {
                     let mut chord_notes = [ChordNote::default(); MAX_CHORD_NOTES];
@@ -837,6 +852,11 @@ fn compile_track(
     let delay_send = track.delay_send.unwrap_or_else(|| defaults.map(|d| d.delay_send).unwrap_or(0.0));
     let reverb_send = track.reverb_send.unwrap_or_else(|| defaults.map(|d| d.reverb_send).unwrap_or(0.0));
 
+    let arp = match &track.arp {
+        Some(def) => compile_arp(&track.name, def)?,
+        None => defaults.and_then(|d| d.arp),
+    };
+
     Ok(CompiledTrack {
         name: track.name.clone(),
         instrument_idx,
@@ -851,7 +871,45 @@ fn compile_track(
         delay_send,
         reverb_send,
         sidechain: track.sidechain,
+        arp,
     })
+}
+
+/// Validate and compile an `arp` clause. `arp off` yields `None`.
+fn compile_arp(track_name: &str, def: &ArpDef) -> Result<Option<ArpConfig>, CompileError> {
+    let pattern = match def.mode.as_str() {
+        "off" => return Ok(None),
+        "up" => 0.0,
+        "down" => 0.5,
+        "updown" => 1.0,
+        other => return Err(CompileError::new(format!(
+            "track '{}': arp mode '{}' — expected up, down, updown or off", track_name, other
+        ))),
+    };
+    let rate = def.rate.unwrap_or(16.0);
+    if ![4.0, 8.0, 16.0, 32.0].contains(&rate) {
+        return Err(CompileError::new(format!(
+            "track '{}': arp rate {} — expected 4, 8, 16 or 32 (notes per bar)", track_name, rate
+        )));
+    }
+    let gate = def.gate.unwrap_or(0.6);
+    if !(0.1..=1.0).contains(&gate) {
+        return Err(CompileError::new(format!(
+            "track '{}': arp gate {} — expected 0.1..1.0", track_name, gate
+        )));
+    }
+    let octaves = def.octaves.unwrap_or(1.0);
+    if octaves < 1.0 || octaves > 4.0 || octaves != math::floor(octaves) {
+        return Err(CompileError::new(format!(
+            "track '{}': arp octaves {} — expected 1, 2, 3 or 4", track_name, octaves
+        )));
+    }
+    Ok(Some(ArpConfig {
+        pattern,
+        rate_mult: rate / 16.0,
+        gate,
+        octaves: octaves as u8,
+    }))
 }
 
 // ── Bus/Master FX chain compilation ──

@@ -1,0 +1,99 @@
+# Acid Arp — a small showcase of `~` slides and the track arpeggiator.
+# 303-style bass slides between steps; an FM pluck arpeggiates a held chord.
+tempo 126
+scale A minor
+swing 0.54
+sidechain 0.35
+
+module bass acid {
+    cutoff 0.22
+    cutoff_env 0.85
+    resonance 0.82
+    glide 0.18
+    osc1_wave saw
+    osc2_pitch 0.5
+    attack 0.0
+    decay 0.35
+    sustain 0.2
+    release 0.1
+}
+
+module fm pluck {
+    algorithm two_op
+    waveform sine
+    mod_index 0.55
+    op1_ratio 0.097
+    op0_envelope 0.001 0.18 0.0 0.12
+    op1_envelope 0.001 0.08 0.0 0.05
+}
+
+module keys wash {
+    voice_mode unison
+    cutoff 0.35
+    detune 0.3
+    chorus_mix 0.4
+    attack 0.6
+    release 0.9
+}
+
+module beats kit {
+    kick_level 1.0
+    kick_click 0.4
+    hihat_level 0.7
+    hihat_decay 0.3
+}
+
+pattern beat {
+    kick:  X - - -  X - - -  X - - -  X - - -
+    hat:   - - x -  - - x -  - - x -  - - x:0.6 -
+    clap:  - - - -  X - - -  - - - -  X - - -
+}
+
+# `~` glides into the note without retriggering the envelope.
+pattern acid_line {
+    1.2:0.95  ~1.2:0.7  -  1.2:0.9   ~5.2:0.85  -  ~7.1:0.8  -
+    1.2:0.95  -         -  ~3.2:0.8  ~1.2:0.75  -  5.1:0.9   ~1.2:0.6
+}
+
+# The arp plays through whatever the pattern holds. Ties keep the chord alive.
+pattern chord_hold {
+    [1.3 3.3 5.3 7.3]:0.7  ..  ..  ..  ..  ..  ..  ..
+    [6.2 1.3 3.3 5.3]:0.7  ..  ..  ..  ..  ..  ..  ..
+}
+
+pattern wash_pad {
+    [1.3 5.3 1.4]:0.5  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+}
+
+track drums { play beat using kit level 0.8 out > master }
+track acid  { play acid_line using acid level 0.6 gate 0.7 delay_send 0.15 out > saturate(0.4) > master }
+track pluck { play chord_hold using pluck level 0.45 delay_send 0.3 reverb_send 0.2
+              arp up rate=16 gate=0.5 octaves=2 out > master }
+track wash  { play wash_pad using wash level 0.25 reverb_send 0.5 out > master }
+
+master {
+    in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2, release=40, makeup=3) > limiter > out
+}
+
+scene intro {
+    track wash  { play wash_pad using wash }
+    track pluck { play chord_hold using pluck arp up rate=8 gate=0.7 octaves=1 }
+}
+
+scene groove {
+    auto acid cutoff 0.15 > 0.45
+    track drums { play beat using kit }
+    track acid  { play acid_line using acid }
+    track pluck { play chord_hold using pluck }
+    track wash  { play wash_pad using wash }
+}
+
+scene peak {
+    auto acid cutoff 0.45 > 0.7 > 0.35
+    track drums { play beat using kit }
+    track acid  { play acid_line using acid }
+    track pluck { play chord_hold using pluck arp updown rate=32 gate=0.4 octaves=3 }
+    track wash  { play wash_pad using wash }
+}
+
+arrange { intro x2  groove x4  peak x4  groove x2 }

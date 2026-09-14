@@ -52,7 +52,7 @@ fn dump_funk_dsl_compiled() {
             let col = si % pat.steps_per_row;
             if col == 0 && si > 0 { println!(); }
             match step {
-                CompiledStep::NoteOn { midi_note, velocity, plock } => {
+                CompiledStep::NoteOn { midi_note, velocity, plock, .. } => {
                     print!("    [{:2}] NoteOn(midi={:3}, vel={:.2}", si, midi_note, velocity);
                     if plock.cutoff.is_some() || plock.env_depth.is_some() || plock.resonance.is_some() || plock.gate.is_some() {
                         print!(" plock[");

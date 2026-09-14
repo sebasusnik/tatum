@@ -114,9 +114,11 @@ fn apply_change(engine: &mut SongEngine, change: &DslChange) {
             }
         }
         DslChange::SwingChanged(swing) => engine.set_swing(*swing),
-        DslChange::HumanizeChanged(velocity) => {
-            let (_, timing) = engine.humanize();
-            engine.set_humanize(*velocity, timing);
+        DslChange::HumanizeChanged { velocity, timing } => engine.set_humanize(*velocity, *timing),
+        DslChange::TrackGateChanged { track_name, gate } => {
+            if let Some(idx) = find_track(engine, track_name) {
+                engine.set_track_gate(idx, *gate);
+            }
         }
         DslChange::StructuralChange => {}
     }

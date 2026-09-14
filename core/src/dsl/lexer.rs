@@ -39,6 +39,7 @@ pub enum Token {
     DrumAccent,        // X  (accent velocity 1.0)
     DrumGhost,         // o  (ghost note velocity 0.35)
     Rest,              // -
+    Tilde,             // ~  (slide into this note)
     Tie,               // ..
 
     // Operators
@@ -136,6 +137,7 @@ pub fn tokenize(source: &str) -> Vec<Span> {
             ',' => { tokens.push(Span { token: Token::Comma, line, col: start_col }); i += 1; col += 1; continue; }
             ':' => { tokens.push(Span { token: Token::Colon, line, col: start_col }); i += 1; col += 1; continue; }
             '-' => { tokens.push(Span { token: Token::Rest, line, col: start_col }); i += 1; col += 1; continue; }
+            '~' => { tokens.push(Span { token: Token::Tilde, line, col: start_col }); i += 1; col += 1; continue; }
             _ => {}
         }
 

@@ -14,6 +14,7 @@ use crate::modules::beats::BeatsModule;
 use crate::modules::fm::FmModule;
 use crate::modules::keys::KeysModule;
 use crate::params::{self, ParamId, ModuleKind};
+use crate::primitives::arp_processor::{ArpProcessor, ArpEvent};
 use crate::rng::Rng;
 use crate::{math, Module, BLOCK_SIZE, SAMPLE_RATE};
 
@@ -44,6 +45,15 @@ impl SongInstrument {
             Self::Fm(m) => m.note_on(note, velocity),
             Self::Keys(m) => m.note_on(note, velocity),
             Self::Beats(m) => m.note_on(note, velocity),
+        }
+    }
+
+    /// Glide to a new note without retriggering envelopes. Returns false when
+    /// the instrument has no portamento, so the caller falls back to note_on.
+    fn slide_to(&mut self, note: u8, velocity: f32) -> bool {
+        match self {
+            Self::Bass(m) => { m.slide_to(note, velocity); true }
+            _ => false,
         }
     }
 
@@ -213,6 +223,20 @@ struct TrackPlayback {
     gate_samples_remaining: f32,
     active: bool,
     stereo_src: bool,        // true if instrument produces native stereo (BeatsModule)
+    // Arpeggiator: the pattern supplies held notes, the arp schedules them per sample
+    arp: Option<ArpProcessor>,
+    arp_cfg: Option<ArpConfig>,
+}
+
+/// Build a fresh arp processor from compiled settings at the given tempo.
+fn make_arp(cfg: &ArpConfig, tempo: f32) -> ArpProcessor {
+    let mut arp = ArpProcessor::new();
+    arp.set_bpm(tempo * cfg.rate_mult);
+    arp.set_gate(cfg.gate);
+    arp.set_pattern(cfg.pattern);
+    // set_octave_range maps 0..1 → 1..4; nudge past float error so 3 stays 3.
+    arp.set_octave_range((cfg.octaves.saturating_sub(1)) as f32 / 3.0 + 0.01);
+    arp
 }
 
 /// Named bus with FX chain.
@@ -512,6 +536,8 @@ impl SongEngine {
                     gate_samples_remaining: 0.0,
                     active: true,
                     stereo_src,
+                    arp: t.arp.map(|c| make_arp(&c, tempo)),
+                    arp_cfg: t.arp,
                 }
             })
             .collect();
@@ -647,6 +673,7 @@ impl SongEngine {
                 inst.set_bpm(t);
             }
         }
+        let tempo = self.tempo;
 
         // Apply effect overrides
         if let Some(rmix) = scene.reverb_mix {
@@ -709,6 +736,8 @@ impl SongEngine {
                 tp.current_step = 0;
                 tp.current_notes_count = 0;
                 tp.gate_samples_remaining = 0.0;
+                tp.arp_cfg = st.arp;
+                tp.arp = st.arp.map(|c| make_arp(&c, tempo));
             }
         }
 
@@ -794,6 +823,15 @@ impl SongEngine {
     /// Release all active notes on a track.
     #[inline]
     fn release_track_notes(track: &mut TrackPlayback, instruments: &mut Vec<SongInstrument>) {
+        if let Some(arp) = track.arp.as_mut() {
+            if let Some(ArpEvent::NoteOff(n)) = arp.stop() {
+                if track.instrument_idx < instruments.len() {
+                    instruments[track.instrument_idx].note_off(n);
+                }
+            }
+            track.current_notes_count = 0;
+            return;
+        }
         let count = track.current_notes_count as usize;
         if count > 0 {
             let inst_idx = track.instrument_idx;
@@ -876,6 +914,10 @@ impl SongEngine {
                     self.tracks[ti].gate_samples_remaining -= 1.0;
                     if self.tracks[ti].gate_samples_remaining <= 0.0 {
                         let inst_idx = self.tracks[ti].instrument_idx;
+                        if self.tracks[ti].arp.is_some() {
+                            Self::release_track_notes(&mut self.tracks[ti], &mut self.instruments);
+                            continue;
+                        }
                         let count = self.tracks[ti].current_notes_count as usize;
                         if count > 0 && inst_idx < self.instruments.len() {
                             for ni in 0..count {
@@ -883,6 +925,20 @@ impl SongEngine {
                             }
                             self.tracks[ti].current_notes_count = 0;
                         }
+                    }
+                }
+            }
+
+            // Arpeggiators: one tick per sample, events go straight to the instrument
+            for ti in 0..track_count {
+                if !self.tracks[ti].active { continue; }
+                let inst_idx = self.tracks[ti].instrument_idx;
+                if inst_idx >= self.instruments.len() { continue; }
+                if let Some(arp) = self.tracks[ti].arp.as_mut() {
+                    match arp.tick() {
+                        Some(ArpEvent::NoteOn(n, v)) => self.instruments[inst_idx].note_on(n, v),
+                        Some(ArpEvent::NoteOff(n)) => self.instruments[inst_idx].note_off(n),
+                        None => {}
                     }
                 }
             }
@@ -1154,7 +1210,21 @@ impl SongEngine {
 
             let gate = self.tracks[ti].gate;
 
-            // Debug: track pad step processing
+            // Arp tracks: the step only updates the held notes; the arp plays them.
+            if self.tracks[ti].arp.is_some() && !matches!(step, CompiledStep::Tie) {
+                let next_step_idx = (step_idx + 1) % pattern.steps.len();
+                let next_is_tie = matches!(pattern.steps[next_step_idx], CompiledStep::Tie);
+                let humanize = self.humanize_velocity;
+                let step_dur = self.current_step_duration;
+                let sps = self.samples_per_step;
+                Self::advance_arp_track(
+                    &mut self.tracks[ti], &mut self.instruments, &mut self.rng,
+                    humanize, sps, step_dur, step, next_is_tie,
+                );
+                self.tracks[ti].current_step += 1;
+                continue;
+            }
+
             match step {
                 CompiledStep::Tie => {
                     // Keep previous note alive — extend gate for another step.
@@ -1189,16 +1259,44 @@ impl SongEngine {
                     // survives until the Tie can extend it.
                     let next_step_idx = (step_idx + 1) % pattern.steps.len();
                     let next_is_tie = matches!(pattern.steps[next_step_idx], CompiledStep::Tie);
+                    // A `~note` next step needs this note still gated to glide from.
+                    let next_slides = matches!(pattern.steps[next_step_idx], CompiledStep::NoteOn { slide: true, .. });
 
                     match step {
-                        CompiledStep::NoteOn { midi_note, velocity, plock } => {
+                        CompiledStep::NoteOn { midi_note, velocity, plock, slide } => {
                             // If the same single note is already playing (pattern loop),
                             // just extend gate — don't re-trigger (avoids click/re-attack).
                             let same_note = self.tracks[ti].current_notes_count == 1
                                 && self.tracks[ti].current_notes[0] == midi_note;
+                            let held = self.tracks[ti].current_notes_count > 0;
                             if same_note && next_is_tie {
                                 // Sustain continuation — treat as tie
                                 self.tracks[ti].gate_samples_remaining = self.samples_per_step * 2.0;
+                            } else if slide && held {
+                                // Slide: glide pitch without retriggering (303-style)
+                                let inst_idx = self.tracks[ti].instrument_idx;
+                                let raw_vel = velocity * self.tracks[ti].velocity;
+                                let vel = Self::humanize_vel(raw_vel, self.humanize_velocity, &mut self.rng);
+                                let handled = inst_idx < self.instruments.len() && {
+                                    self.instruments[inst_idx].stage_plock(plock.cutoff, plock.env_depth, plock.resonance);
+                                    self.instruments[inst_idx].slide_to(midi_note, vel)
+                                };
+                                if !handled {
+                                    Self::release_track_notes(&mut self.tracks[ti], &mut self.instruments);
+                                    if inst_idx < self.instruments.len() {
+                                        self.instruments[inst_idx].note_on(midi_note, vel);
+                                    }
+                                }
+                                self.tracks[ti].current_notes[0] = midi_note;
+                                self.tracks[ti].current_notes_count = 1;
+                                if next_is_tie {
+                                    self.tracks[ti].gate_samples_remaining = self.samples_per_step * 2.0;
+                                } else if next_slides {
+                                    self.tracks[ti].gate_samples_remaining = self.samples_per_step * 1.5;
+                                } else {
+                                    let step_gate = plock.gate.unwrap_or(gate);
+                                    self.tracks[ti].gate_samples_remaining = self.current_step_duration * step_gate;
+                                }
                             } else {
                                 // Release previous notes
                                 Self::release_track_notes(
@@ -1216,6 +1314,8 @@ impl SongEngine {
                                 self.tracks[ti].current_notes_count = 1;
                                 if next_is_tie {
                                     self.tracks[ti].gate_samples_remaining = self.samples_per_step * 2.0;
+                                } else if next_slides {
+                                    self.tracks[ti].gate_samples_remaining = self.samples_per_step * 1.5;
                                 } else {
                                     let step_gate = plock.gate.unwrap_or(gate);
                                     self.tracks[ti].gate_samples_remaining = self.current_step_duration * step_gate;
@@ -1251,6 +1351,8 @@ impl SongEngine {
                                 }
                                 if next_is_tie {
                                     self.tracks[ti].gate_samples_remaining = self.samples_per_step * 2.0;
+                                } else if next_slides {
+                                    self.tracks[ti].gate_samples_remaining = self.samples_per_step * 1.5;
                                 } else {
                                     let step_gate = plock.gate.unwrap_or(gate);
                                     self.tracks[ti].gate_samples_remaining = self.current_step_duration * step_gate;
@@ -1301,6 +1403,102 @@ impl SongEngine {
         }
     }
 
+    /// Step handler for arp tracks: update the held notes, (re)start the arp,
+    /// and set the track gate that will eventually stop it.
+    fn advance_arp_track(
+        track: &mut TrackPlayback,
+        instruments: &mut Vec<SongInstrument>,
+        rng: &mut Rng,
+        humanize_velocity: f32,
+        samples_per_step: f32,
+        step_duration: f32,
+        step: CompiledStep,
+        next_is_tie: bool,
+    ) {
+        let inst_idx = track.instrument_idx;
+        let mut notes = [0u8; compiler::MAX_CHORD_NOTES];
+        let (count, step_vel, step_gate): (usize, f32, Option<f32>) = match step {
+            CompiledStep::NoteOn { midi_note, velocity, plock, .. } => {
+                notes[0] = midi_note;
+                if inst_idx < instruments.len() {
+                    instruments[inst_idx].stage_plock(plock.cutoff, plock.env_depth, plock.resonance);
+                }
+                (1, velocity, plock.gate)
+            }
+            CompiledStep::Chord { notes: cn, count: c, plock } => {
+                let count = (c as usize).min(compiler::MAX_CHORD_NOTES);
+                for i in 0..count {
+                    notes[i] = cn[i].midi_note;
+                }
+                if inst_idx < instruments.len() {
+                    instruments[inst_idx].stage_plock(plock.cutoff, plock.env_depth, plock.resonance);
+                }
+                (count, cn[0].velocity, plock.gate)
+            }
+            CompiledStep::DrumHit { velocity, plock, .. } => {
+                notes[0] = 36;
+                (1, velocity, plock.gate)
+            }
+            CompiledStep::Rest => {
+                Self::release_track_notes(track, instruments);
+                return;
+            }
+            CompiledStep::Tie => return,
+        };
+
+        let same = count == track.current_notes_count as usize
+            && (0..count).all(|i| track.current_notes[i] == notes[i]);
+        for i in 0..count {
+            track.current_notes[i] = notes[i];
+        }
+        track.current_notes_count = count as u8;
+
+        let vel = Self::humanize_vel(step_vel * track.velocity, humanize_velocity, rng);
+
+        // Sorted ascending and expanded across octaves so "up" really goes up.
+        let mut sorted: Vec<u8> = notes[..count].to_vec();
+        sorted.sort_unstable();
+        let octaves = track.arp_cfg.map_or(1, |c| c.octaves).max(1);
+        let mut list: Vec<u8> = Vec::new();
+        for o in 0..octaves {
+            for &n in &sorted {
+                let v = n as u16 + 12 * o as u16;
+                if v <= 127 && list.len() < 16 {
+                    list.push(v as u8);
+                }
+            }
+        }
+
+        let mut pending_off = None;
+        if let Some(arp) = track.arp.as_mut() {
+            arp.set_notes(&list);
+            arp.set_velocity(vel);
+            if !same || !arp.is_active() {
+                // New material: close the open arp note and restart from the first note.
+                if let Some(ArpEvent::NoteOff(n)) = arp.stop() {
+                    pending_off = Some(n);
+                }
+                arp.start(vel);
+            }
+        }
+        if let Some(n) = pending_off {
+            if inst_idx < instruments.len() {
+                instruments[inst_idx].note_off(n);
+            }
+        }
+
+        track.gate_samples_remaining = if next_is_tie {
+            samples_per_step * 2.0
+        } else {
+            step_duration * step_gate.unwrap_or(track.gate)
+        };
+    }
+
+    /// True while a track's arpeggiator is running (for UI activity LEDs).
+    pub fn track_arp_active(&self, idx: usize) -> bool {
+        self.tracks.get(idx).and_then(|t| t.arp.as_ref()).map_or(false, |a| a.is_active())
+    }
+
     fn check_arrangement_advance(&mut self) {
         if self.arrangement.is_empty() { return; }
         if self.arrangement_idx >= self.arrangement.len() { return; }
@@ -1346,6 +1544,21 @@ impl SongEngine {
     }
 
     /// Calculate total bars from arrangement.
+    /// Render `steps` sequencer steps from the current position without
+    /// restarting. Call `start()` first. Useful for tests and previews.
+    pub fn render_steps(&mut self, steps: usize) -> (Vec<f32>, Vec<f32>) {
+        let total = (steps as f32 * self.samples_per_step) as usize;
+        let mut out_l = vec![0.0f32; total];
+        let mut out_r = vec![0.0f32; total];
+        let mut pos = 0;
+        while pos < total {
+            let chunk = BLOCK_SIZE.min(total - pos);
+            self.process_block_stereo(&mut out_l[pos..pos + chunk], &mut out_r[pos..pos + chunk]);
+            pos += chunk;
+        }
+        (out_l, out_r)
+    }
+
     pub fn arrangement_bars(&self) -> u32 {
         self.arrangement.iter().map(|(_, r)| *r).sum()
     }
@@ -1353,6 +1566,11 @@ impl SongEngine {
     pub fn tempo(&self) -> f32 { self.tempo }
 
     pub fn reset(&mut self) {
+        for track in self.tracks.iter_mut() {
+            if let Some(arp) = track.arp.as_mut() {
+                arp.reset();
+            }
+        }
         self.running = false;
         self.sample_counter = 0.0;
         self.current_step_duration = self.samples_per_step;
@@ -1496,6 +1714,11 @@ impl SongEngine {
         self.current_step_duration = self.effective_step_samples(self.global_step);
         for inst in self.instruments.iter_mut() {
             inst.set_bpm(bpm);
+        }
+        for track in self.tracks.iter_mut() {
+            if let (Some(arp), Some(cfg)) = (track.arp.as_mut(), track.arp_cfg) {
+                arp.set_bpm(bpm * cfg.rate_mult);
+            }
         }
     }
 

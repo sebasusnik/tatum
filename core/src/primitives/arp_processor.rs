@@ -129,6 +129,11 @@ impl ArpProcessor {
         }
     }
 
+    /// Change the velocity used for subsequent note-ons without restarting.
+    pub fn set_velocity(&mut self, velocity: f32) {
+        self.velocity = velocity;
+    }
+
     pub fn set_bpm(&mut self, bpm: f32) {
         self.samples_per_step = SAMPLE_RATE * 60.0 / bpm / 4.0;
     }

@@ -4,7 +4,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 /// Top-level song structure.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Song {
     pub globals: Globals,
     pub buses: Vec<BusDef>,
@@ -19,7 +19,7 @@ pub struct Song {
     pub grooves: Vec<GrooveDef>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Globals {
     pub tempo: f32,
     pub meter: (u8, u8),
@@ -50,13 +50,13 @@ pub struct ScaleDef {
     pub kind: String,    // "minor", "major", "dorian", etc
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BusDef {
     pub name: String,
 }
 
 /// Instrument definition: a modular signal graph.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InstrumentDef {
     pub name: String,
     pub gain: Option<f32>,
@@ -65,7 +65,7 @@ pub struct InstrumentDef {
 }
 
 /// A node in an instrument graph.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NodeDef {
     pub kind: String,           // "osc", "lowpass", "adsr", "noise", "mix", etc
     pub alias: Option<String>,  // "as osc1"
@@ -73,14 +73,14 @@ pub struct NodeDef {
 }
 
 /// A connection between nodes: a > b > c
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConnectionDef {
     pub from: String,  // node alias or "in"
     pub to: String,    // node alias or "out" / "mix" / "master"
 }
 
 /// Parameter value in a node definition.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Param {
     Float(f32),
     Named(String, f32),
@@ -90,7 +90,7 @@ pub enum Param {
 }
 
 /// Simple expression for frequency math like `55 * 2`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Num(f32),
     Mul(Box<Expr>, Box<Expr>),
@@ -108,7 +108,7 @@ impl Expr {
 }
 
 /// Note pattern definition.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PatternDef {
     pub name: String,
     pub rows: Vec<Vec<Step>>,  // rows of steps (each row = one bar line)
@@ -116,7 +116,7 @@ pub struct PatternDef {
 }
 
 /// Per-step parameter lock: overrides instrument params for a single step.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct PLock {
     pub cutoff: Option<f32>,
     pub env_depth: Option<f32>,
@@ -125,7 +125,7 @@ pub struct PLock {
 }
 
 /// A single step in a pattern.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Step {
     Note(NoteStep),
     Chord(ChordStep),
@@ -135,27 +135,29 @@ pub enum Step {
 }
 
 /// A chord: multiple notes triggered simultaneously on one step.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ChordStep {
     pub notes: Vec<NoteStep>,
     pub velocity: Option<f32>,  // shared velocity (overrides individual if set)
     pub plock: PLock,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NoteRef {
     Absolute(String),        // "A1", "C#4", "G0"
     Degree(u8, u8),          // (degree 1-7, octave 0-9)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NoteStep {
     pub note: NoteRef,
     pub velocity: Option<f32>,
     pub plock: PLock,
+    /// `~note`: glide into this note from the previous one without retriggering.
+    pub slide: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DrumStep {
     pub velocity: f32,       // default 0.8
     pub probability: f32,    // 0.0-1.0, default 1.0 (always play). Syntax: g?0.4
@@ -164,7 +166,7 @@ pub struct DrumStep {
 }
 
 /// Track definition.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TrackDef {
     pub name: String,
     pub play: String,                     // pattern name
@@ -177,36 +179,47 @@ pub struct TrackDef {
     pub delay_send: Option<f32>,          // global delay send amount 0.0-1.0
     pub reverb_send: Option<f32>,         // global reverb send amount 0.0-1.0
     pub sidechain: Option<f32>,           // per-track sidechain amount (overrides global)
+    pub arp: Option<ArpDef>,              // `arp up rate=16 gate=0.6 octaves=2`, `arp off`
+}
+
+/// Arpeggiator settings on a track. The pattern supplies the held notes
+/// (single notes or chords, extended with ties); the arp plays through them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArpDef {
+    pub mode: String,        // up | down | updown | off
+    pub rate: Option<f32>,   // steps per bar subdivision: 4, 8, 16 (default), 32
+    pub gate: Option<f32>,   // 0.1..1.0 fraction of each arp step
+    pub octaves: Option<f32>,// 1..4
 }
 
 /// A node in a routing chain: effect or bus target.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RoutingNode {
     pub kind: String,         // "drive", "chorus", "master", bus name, etc
     pub params: Vec<Param>,
 }
 
 /// Bus FX chain definition.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BusChainDef {
     pub bus_name: String,
     pub chain: Vec<ChainNode>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ChainNode {
     pub kind: String,
     pub params: Vec<Param>,
 }
 
 /// Master FX chain definition.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MasterDef {
     pub chain: Vec<ChainNode>,
 }
 
 /// Module-based instrument definition (bass, fm, keys).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ModuleDef {
     pub module_type: String,     // "bass", "fm", "keys"
     pub name: String,
@@ -215,7 +228,7 @@ pub struct ModuleDef {
 }
 
 /// A named parameter in a module definition.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ModuleParam {
     pub name: String,
     pub value: f32,
@@ -224,7 +237,7 @@ pub struct ModuleParam {
 }
 
 /// Per-operator envelope for FM modules.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct OpEnvelopeDef {
     pub op_index: usize,
     pub a: f32,
@@ -234,14 +247,14 @@ pub struct OpEnvelopeDef {
 }
 
 /// Automation definition within a scene.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AutomationDef {
     pub target: String,           // "funk_bass.cutoff" or "reverb_mix"
     pub keyframes: Vec<f32>,      // 2 = linear, 3 = triangle
 }
 
 /// Scene definition (for arrangement).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SceneDef {
     pub name: String,
     pub extends: Option<String>,
@@ -252,21 +265,21 @@ pub struct SceneDef {
 }
 
 /// Parameter override in a scene.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Override {
     pub target: String,       // "bass.velocity"
     pub value: f32,
 }
 
 /// Per-lane groove definition: per-drum timing offsets and swing overrides.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GrooveDef {
     pub name: String,
     pub lanes: Vec<GrooveLane>,
 }
 
 /// A single lane in a groove block.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GrooveLane {
     pub drum_name: String,      // "hat", "snare", "kick", etc.
     pub swing: Option<f32>,     // per-lane swing override (0.5-0.75)
@@ -274,7 +287,7 @@ pub struct GrooveLane {
 }
 
 /// Arrangement entry: scene name + repeat count.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ArrangeEntry {
     pub scene_name: String,
     pub repeat: u32,

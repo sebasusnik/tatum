@@ -539,6 +539,7 @@ impl Parser {
         let mut current_row: Vec<Step> = Vec::new();
         let mut first_row = true;
         let mut labeled_mode = false;
+        let mut pending_slide = false;
 
         // Skip leading newlines only
         self.skip_newlines();
@@ -587,6 +588,11 @@ impl Parser {
             }
 
             match self.peek().clone() {
+                // Slide marker: `~1.5` glides into the note instead of retriggering
+                Token::Tilde => {
+                    self.advance();
+                    pending_slide = true;
+                }
                 // Chord: [A3 C4 E4]:0.35(plock)
                 Token::LBracket => {
                     self.advance(); // consume [
@@ -608,6 +614,7 @@ impl Parser {
                                     note: NoteRef::Absolute(n),
                                     velocity: vel,
                                     plock: PLock::default(),
+                                    slide: false,
                                 });
                             }
                             Token::Number(v) => {
@@ -626,6 +633,7 @@ impl Parser {
                                         note: NoteRef::Degree(degree, octave),
                                         velocity: vel,
                                         plock: PLock::default(),
+                                        slide: false,
                                     });
                                 }
                             }
@@ -665,6 +673,7 @@ impl Parser {
                         note: NoteRef::Absolute(n),
                         velocity,
                         plock,
+                        slide: core::mem::take(&mut pending_slide),
                     }));
                 }
                 // Scale degree: 1.3 = degree 1, octave 3
@@ -689,6 +698,7 @@ impl Parser {
                             note: NoteRef::Degree(degree, octave),
                             velocity,
                             plock,
+                            slide: core::mem::take(&mut pending_slide),
                         }));
                     }
                 }
@@ -815,6 +825,7 @@ impl Parser {
             delay_send: None,
             reverb_send: None,
             sidechain: None,
+            arp: None,
         };
 
         loop {
@@ -887,12 +898,57 @@ impl Parser {
                         track.sidechain = Some(v);
                     }
                 }
+                Token::Ident(ref word) if word == "arp" => {
+                    self.advance();
+                    track.arp = self.parse_arp_clause();
+                }
                 _ => { self.advance(); }
             }
         }
 
         self.expect(&Token::RBrace);
         tracks.push(track);
+    }
+
+    /// `arp <mode> [rate=N] [gate=F] [octaves=N]` — mode is up, down, updown or off.
+    fn parse_arp_clause(&mut self) -> Option<ArpDef> {
+        let mode = match self.expect_ident() {
+            Some(m) => m,
+            None => return None,
+        };
+        let mut def = ArpDef { mode, rate: None, gate: None, octaves: None };
+        loop {
+            let key = match self.peek().clone() {
+                Token::Ident(ref k) => k.clone(),
+                _ => break,
+            };
+            // Only consume `ident =` pairs; a bare ident belongs to the next clause.
+            let saved = self.pos;
+            self.advance();
+            if !matches!(self.peek(), Token::Eq) {
+                self.pos = saved;
+                break;
+            }
+            self.advance();
+            let value = match self.expect_number() {
+                Some(v) => v,
+                None => break,
+            };
+            match key.as_str() {
+                "rate" => def.rate = Some(value),
+                "gate" => def.gate = Some(value),
+                "octaves" => def.octaves = Some(value),
+                other => {
+                    let s = self.span();
+                    let (l, c) = (s.line, s.col);
+                    self.errors.push(ParseError {
+                        line: l, col: c,
+                        message: format!("arp: unknown option '{}' (expected rate, gate, octaves)", other),
+                    });
+                }
+            }
+        }
+        Some(def)
     }
 
     fn parse_routing_chain(&mut self, routing: &mut Vec<RoutingNode>) {

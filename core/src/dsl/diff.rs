@@ -8,6 +8,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use super::ast::Song;
+use crate::params::{self, ModuleKind};
 
 /// A classified change between two Song ASTs.
 #[derive(Debug, Clone)]
@@ -16,8 +17,8 @@ pub enum DslChange {
     TempoChanged(f32),
     /// Swing changed
     SwingChanged(f32),
-    /// Humanize changed
-    HumanizeChanged(f32),
+    /// Humanize (velocity, timing) changed
+    HumanizeChanged { velocity: f32, timing: f32 },
     /// A module parameter changed — can apply via set_module_param()
     ModuleParamChanged {
         module_name: String,
@@ -38,6 +39,11 @@ pub enum DslChange {
     TrackVelocityChanged {
         track_name: String,
         velocity: f32,
+    },
+    /// A track's gate length changed
+    TrackGateChanged {
+        track_name: String,
+        gate: f32,
     },
     /// A track switched to a different pattern
     TrackPatternSwapped {
@@ -60,18 +66,31 @@ pub fn diff(old: &Song, new: &Song) -> Vec<DslChange> {
     if old.globals.swing != new.globals.swing {
         changes.push(DslChange::SwingChanged(new.globals.swing.unwrap_or(0.5)));
     }
-    if old.globals.humanize != new.globals.humanize {
-        changes.push(DslChange::HumanizeChanged(new.globals.humanize.unwrap_or(0.0)));
+    if old.globals.humanize != new.globals.humanize
+        || old.globals.humanize_timing != new.globals.humanize_timing
+    {
+        changes.push(DslChange::HumanizeChanged {
+            velocity: new.globals.humanize.unwrap_or(0.0),
+            timing: new.globals.humanize_timing.unwrap_or(0.0),
+        });
     }
-    // Scale/meter change = structural (scale affects degree→note resolution)
-    if old.globals.meter != new.globals.meter || old.globals.scale != new.globals.scale {
-        changes.push(DslChange::StructuralChange);
-        return changes;
+    // Every other global (scale, meter, sidechain, ...) = structural
+    {
+        let mut o = old.globals.clone();
+        let mut n = new.globals.clone();
+        o.tempo = 0.0; n.tempo = 0.0;
+        o.swing = None; n.swing = None;
+        o.humanize = None; n.humanize = None;
+        o.humanize_timing = None; n.humanize_timing = None;
+        if o != n {
+            changes.push(DslChange::StructuralChange);
+            return changes;
+        }
     }
 
     // ── Instruments (graph-based) ──
     // Any change = structural (can't hot-swap graph topology)
-    if old.instruments.len() != new.instruments.len() {
+    if old.instruments != new.instruments {
         changes.push(DslChange::StructuralChange);
         return changes;
     }
@@ -82,11 +101,14 @@ pub fn diff(old: &Song, new: &Song) -> Vec<DslChange> {
         return changes;
     }
     for (old_mod, new_mod) in old.module_defs.iter().zip(new.module_defs.iter()) {
-        if old_mod.module_type != new_mod.module_type || old_mod.name != new_mod.name {
+        if old_mod.module_type != new_mod.module_type
+            || old_mod.name != new_mod.name
+            || old_mod.op_envelopes != new_mod.op_envelopes
+        {
             changes.push(DslChange::StructuralChange);
             return changes;
         }
-        // Compare params
+        // Changed or added params
         for new_param in &new_mod.params {
             let old_val = old_mod.params.iter()
                 .find(|p| p.name == new_param.name)
@@ -99,6 +121,22 @@ pub fn diff(old: &Song, new: &Song) -> Vec<DslChange> {
                 });
             }
         }
+        // Removed params go back to the registry default
+        let kind = ModuleKind::from_str(&new_mod.module_type);
+        for old_param in &old_mod.params {
+            if new_mod.params.iter().any(|p| p.name == old_param.name) { continue; }
+            match kind.and_then(|k| params::lookup(k, &old_param.name)) {
+                Some(spec) => changes.push(DslChange::ModuleParamChanged {
+                    module_name: new_mod.name.clone(),
+                    param_name: old_param.name.clone(),
+                    value: spec.default,
+                }),
+                None => {
+                    changes.push(DslChange::StructuralChange);
+                    return changes;
+                }
+            }
+        }
     }
 
     // ── Patterns ──
@@ -109,12 +147,11 @@ pub fn diff(old: &Song, new: &Song) -> Vec<DslChange> {
     }
     // Pattern name changes = structural
     for (old_pat, new_pat) in old.patterns.iter().zip(new.patterns.iter()) {
-        if old_pat.name != new_pat.name {
+        // Any edit to a pattern's steps = structural (quantized hot-swap)
+        if old_pat != new_pat {
             changes.push(DslChange::StructuralChange);
             return changes;
         }
-        // Pattern content changes are handled by hot-swap for now
-        // (comparing step arrays is complex and the hot-swap is fast enough)
     }
 
     // ── Tracks ──
@@ -128,10 +165,22 @@ pub fn diff(old: &Song, new: &Song) -> Vec<DslChange> {
             changes.push(DslChange::StructuralChange);
             return changes;
         }
-        // Routing changes = structural
-        if old_track.routing.len() != new_track.routing.len() {
+        // Routing, sends, sidechain, arp = structural
+        if old_track.routing != new_track.routing
+            || old_track.delay_send != new_track.delay_send
+            || old_track.reverb_send != new_track.reverb_send
+            || old_track.sidechain != new_track.sidechain
+            || old_track.arp != new_track.arp
+        {
             changes.push(DslChange::StructuralChange);
             return changes;
+        }
+        // Gate
+        if old_track.gate != new_track.gate {
+            changes.push(DslChange::TrackGateChanged {
+                track_name: new_track.name.clone(),
+                gate: new_track.gate.unwrap_or(0.85),
+            });
         }
         // Pattern swap
         if old_track.play != new_track.play {
@@ -163,12 +212,15 @@ pub fn diff(old: &Song, new: &Song) -> Vec<DslChange> {
         }
     }
 
-    // ── Buses, Master, Scenes, Arrangement ──
-    // Any change in these = structural for now
-    if old.buses.len() != new.buses.len() ||
-       old.bus_chains.len() != new.bus_chains.len() ||
-       old.scenes.len() != new.scenes.len() ||
-       old.arrangement.len() != new.arrangement.len() {
+    // ── Buses, Master, Scenes, Arrangement, Grooves ──
+    // Any change in these = structural
+    if old.buses != new.buses
+        || old.bus_chains != new.bus_chains
+        || old.master != new.master
+        || old.scenes != new.scenes
+        || old.arrangement != new.arrangement
+        || old.grooves != new.grooves
+    {
         changes.push(DslChange::StructuralChange);
         return changes;
     }
