@@ -77,6 +77,9 @@ pub struct CompiledTrack {
     pub delay_send: f32,    // global delay send amount 0.0-1.0
     pub reverb_send: f32,   // global reverb send amount 0.0-1.0
     pub sidechain: Option<f32>, // per-track sidechain override (None = use global)
+    /// Track whose level ducks this one. `None` = whatever the song's global
+    /// source is, which is the kick unless `sidechain ... from=` says otherwise.
+    pub sidechain_source: Option<String>,
     pub arp: Option<ArpConfig>, // arpeggiator driven by the pattern's held notes
 }
 
@@ -277,6 +280,42 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
         match compile_track(track_def, &instrument_names, &patterns, &buses, None) {
             Ok(t) => tracks.push(t),
             Err(e) => errors.push(e),
+        }
+    }
+
+    // 4b. A sidechain source has to name something that exists, and a track
+    // cannot duck against itself. Getting this wrong used to be impossible
+    // because there was nothing to get wrong: everything ducked the kick.
+    {
+        let known = |name: &str| {
+            song.tracks.iter().any(|t| t.name == name)
+                || instrument_names.iter().any(|n| n == name)
+        };
+        let mut check = |amount: Option<f32>, source: &Option<String>, owner: &str| {
+            let Some(name) = source else { return };
+            if !known(name) {
+                errors.push(CompileError::new(format!(
+                    "{}: sidechain from='{}' names no track or module", owner, name
+                )));
+            } else if owner == name {
+                errors.push(CompileError::new(format!(
+                    "{}: sidechain from='{}' would duck the track against itself", owner, name
+                )));
+            } else if amount.unwrap_or(song.globals.sidechain) <= 0.0 {
+                errors.push(CompileError::new(format!(
+                    "{}: sidechain from='{}' has no amount, so it does nothing. Write `sidechain 0.4 from={}`",
+                    owner, name, name
+                )));
+            }
+        };
+        check(Some(song.globals.sidechain), &song.globals.sidechain_source, "song");
+        for t in &song.tracks {
+            check(t.sidechain, &t.sidechain_source, &t.name);
+        }
+        for scene in &song.scenes {
+            for t in &scene.tracks {
+                check(t.sidechain, &t.sidechain_source, &t.name);
+            }
         }
     }
 
@@ -962,6 +1001,8 @@ fn compile_track(
         delay_send,
         reverb_send,
         sidechain: track.sidechain.or_else(|| defaults.and_then(|d| d.sidechain)),
+        sidechain_source: track.sidechain_source.clone()
+            .or_else(|| defaults.and_then(|d| d.sidechain_source.clone())),
         arp,
     })
 }

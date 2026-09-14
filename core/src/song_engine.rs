@@ -245,6 +245,12 @@ struct TrackPlayback {
     /// Band split of this track alone. Two tracks sitting in the same band is
     /// masking, and it used to take reasoning to notice.
     band: BandMeter,
+    /// Amount this track ducks, and the track it ducks against. `None` source
+    /// means the song's global source, which is the kick unless said otherwise.
+    sc_source: Option<usize>,
+    /// This track's own envelope, maintained only when something ducks against it.
+    sc_env: f32,
+    is_sc_source: bool,
 }
 
 /// Build a fresh arp processor from compiled settings at the given tempo.
@@ -358,6 +364,10 @@ pub struct SongEngine {
     sidechain_amount: f32,
     sc_envelope: f32,
     kick_track_idx: Option<usize>,
+    /// Song-wide `sidechain ... from=`; `None` falls back to the kick track.
+    global_sc_source: Option<String>,
+    /// Resolved once per scene: the audio path must not search by name.
+    global_sc_idx: Option<usize>,
 
     // Scene effect overrides
     reverb_wet_level: f32,
@@ -635,6 +645,9 @@ impl SongEngine {
                     meter_sum_sq: 0.0,
                     meter_samples: 0,
                     band: BandMeter::new(SAMPLE_RATE),
+                    sc_source: None,
+                    sc_env: 0.0,
+                    is_sc_source: false,
                 }
             })
             .collect();
@@ -724,6 +737,8 @@ impl SongEngine {
             gain_comp_current: 1.0,
             sidechain_amount,
             sc_envelope: 0.0,
+            global_sc_source: song.globals.sidechain_source.clone(),
+            global_sc_idx: None,
             kick_track_idx,
             reverb_wet_level: 1.0,
             delay_wet_level: 1.0,
@@ -750,6 +765,7 @@ impl SongEngine {
             running: false,
         };
         engine.retune_fx(tempo);
+        engine.resolve_sidechain_sources(usize::MAX);
         engine
     }
 
@@ -883,6 +899,7 @@ impl SongEngine {
             t.active && t.instrument_idx < self.instruments.len()
                 && matches!(self.instruments[t.instrument_idx], SongInstrument::Beats(_))
         });
+        self.resolve_sidechain_sources(scene_idx);
 
         self.recompute_gain_comp();
 
@@ -898,6 +915,55 @@ impl SongEngine {
             }
         }
         self.active_automations = lanes;
+    }
+
+    /// Bind every track's `sidechain from=` to a track index, and mark which
+    /// tracks have to maintain an envelope. Names are resolved here rather than
+    /// at compile time because a scene can rebind which track plays what.
+    fn resolve_sidechain_sources(&mut self, scene_idx: usize) {
+        for t in self.tracks.iter_mut() {
+            t.sc_source = None;
+            t.is_sc_source = false;
+        }
+        let global = self.global_sc_source.clone();
+        for ti in 0..self.tracks.len() {
+            if !self.tracks[ti].active { continue; }
+            let named = self.scenes.get(scene_idx)
+                .and_then(|s| s.tracks.iter().find(|st| st.name == self.track_names[ti]))
+                .and_then(|st| st.sidechain_source.clone())
+                .or_else(|| global.clone());
+            let source = match named {
+                Some(name) => self.find_source_track(&name),
+                None => self.kick_track_idx,
+            };
+            if let Some(si) = source {
+                if si != ti {
+                    self.tracks[ti].sc_source = Some(si);
+                    self.tracks[si].is_sc_source = true;
+                }
+            }
+        }
+        // The global sends duck against the same source the song names.
+        self.global_sc_idx = match &global {
+            Some(name) => self.find_source_track(name),
+            None => self.kick_track_idx,
+        };
+        if let Some(si) = self.global_sc_idx {
+            self.tracks[si].is_sc_source = true;
+        }
+        if let Some(ki) = self.kick_track_idx {
+            self.tracks[ki].is_sc_source = true;
+        }
+    }
+
+    /// A sidechain source names a track, or the module a track plays.
+    fn find_source_track(&self, name: &str) -> Option<usize> {
+        self.track_names.iter().position(|n| n == name)
+            .filter(|i| self.tracks[*i].active)
+            .or_else(|| {
+                let inst = self.instrument_names.iter().position(|n| n == name)?;
+                self.tracks.iter().position(|t| t.active && t.instrument_idx == inst)
+            })
     }
 
     /// Recompute automatic gain compensation based on active track count.
@@ -1203,32 +1269,39 @@ impl SongEngine {
             || self.reverb_sidechain > 0.0 || self.delay_sidechain > 0.0
             || self.tracks.iter().any(|t| t.active && t.sidechain_amount > 0.0);
         if has_any_sidechain {
-            if let Some(kick_idx) = self.kick_track_idx {
-                for s in 0..len {
-                    // For Beats tracks, use kick_env instead of raw signal
-                    let kick_level = if let SongInstrument::Beats(ref m) = self.instruments[self.tracks[kick_idx].instrument_idx] {
+            for s in 0..len {
+                // Each source keeps its own envelope, so `sidechain from=bass`
+                // breathes with the bass while the drums still duck the pads.
+                for si in 0..track_count {
+                    if !self.tracks[si].is_sc_source || !self.tracks[si].active { continue; }
+                    // A Beats track uses its kick envelope rather than the raw
+                    // signal, so hats and snares do not duck the mix.
+                    let level = if let SongInstrument::Beats(ref m) = self.instruments[self.tracks[si].instrument_idx] {
                         if s < m.kick_env.len() { m.kick_env[s] } else { 0.0 }
                     } else {
-                        track_bufs_l[kick_idx][s].abs()
+                        math::abs(track_bufs_l[si][s])
                     };
-                    self.sc_envelope = if kick_level > self.sc_envelope {
-                        0.01 * self.sc_envelope + 0.99 * kick_level // fast attack
+                    let env = self.tracks[si].sc_env;
+                    self.tracks[si].sc_env = if level > env {
+                        0.01 * env + 0.99 * level // fast attack
                     } else {
-                        0.995 * self.sc_envelope // slow release
+                        0.995 * env // slow release
                     };
-                    for ti in 0..track_count {
-                        if ti != kick_idx && self.tracks[ti].active {
-                            let amount = if self.tracks[ti].sidechain_amount > 0.0 {
-                                self.tracks[ti].sidechain_amount
-                            } else {
-                                self.sidechain_amount
-                            };
-                            if amount > 0.0 {
-                                let duck = 1.0 - amount * self.sc_envelope;
-                                track_bufs_l[ti][s] *= duck;
-                                track_bufs_r[ti][s] *= duck;
-                            }
-                        }
+                }
+                // The sends follow the kick, or the song's named source.
+                self.sc_envelope = self.global_sc_idx.map_or(0.0, |si| self.tracks[si].sc_env);
+                for ti in 0..track_count {
+                    if !self.tracks[ti].active { continue; }
+                    let Some(si) = self.tracks[ti].sc_source else { continue };
+                    let amount = if self.tracks[ti].sidechain_amount > 0.0 {
+                        self.tracks[ti].sidechain_amount
+                    } else {
+                        self.sidechain_amount
+                    };
+                    if amount > 0.0 {
+                        let duck = 1.0 - amount * self.tracks[si].sc_env;
+                        track_bufs_l[ti][s] *= duck;
+                        track_bufs_r[ti][s] *= duck;
                     }
                 }
             }

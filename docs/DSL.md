@@ -357,6 +357,23 @@ the engine scales the mix by 1/sqrt(active tracks) in each scene (so fewer track
 each louder), and sidechain only ducks in scenes that have a beats track (a breakdown
 without drums plays its pads at full level). Set levels per scene, not just per track.
 
+## Sidechain
+
+`sidechain <amount>` ducks a track against the kick. `from=` picks a different
+source: any track name, or the name of the module a track plays.
+
+```
+sidechain 0.4                          # song-wide, against the kick
+track pad  { sidechain 0.6 out > master }             # the kick
+track wash { sidechain 0.5 from=bass out > master }   # breathes with the bass
+```
+
+The source keeps its own envelope, so different tracks can duck against
+different things in the same song. A `beats` source uses its kick envelope
+rather than its full output, so hats and snares do not pump the mix. A source
+that names nothing, or that names the track itself, is a compile error, as is a
+`from=` with no amount.
+
 ## Design warnings
 
 `synth check` and `synth_check` run a set of lints over a song that already

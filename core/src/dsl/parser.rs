@@ -281,6 +281,30 @@ impl Parser {
         if let Some(n) = self.expect_number() {
             globals.sidechain = n;
         }
+        globals.sidechain_source = self.parse_sidechain_source();
+    }
+
+    /// Optional `from=<track or module>` after a sidechain amount.
+    fn parse_sidechain_source(&mut self) -> Option<String> {
+        if !matches!(self.peek(), Token::Ident(ref w) if w == "from") {
+            return None;
+        }
+        self.advance();
+        if !self.expect(&Token::Eq) {
+            return None;
+        }
+        match self.peek().clone() {
+            Token::Ident(name) => { self.advance(); Some(name) }
+            other => {
+                let sp = self.span();
+                let (l, c) = (sp.line, sp.col);
+                self.errors.push(ParseError {
+                    line: l, col: c,
+                    message: format!("sidechain from= needs a track or module name, got {}", describe_token(&other)),
+                });
+                None
+            }
+        }
     }
 
     fn parse_swing(&mut self, globals: &mut Globals) {
@@ -1032,6 +1056,7 @@ impl Parser {
             routing: Vec::new(),
             delay_send: None,
             reverb_send: None,
+            sidechain_source: None,
             sidechain: None,
             arp: None,
         };
@@ -1100,17 +1125,33 @@ impl Parser {
                         track.reverb_send = Some(v);
                     }
                 }
-                Token::Ident(ref word) if word == "sidechain" => {
+                // `sidechain` is a top-level keyword and also a track option.
+                Token::Sidechain | Token::Ident(_) if matches!(self.peek(), Token::Sidechain)
+                    || matches!(self.peek(), Token::Ident(ref w) if w == "sidechain") =>
+                {
                     self.advance();
                     if let Some(v) = self.expect_number() {
                         track.sidechain = Some(v);
                     }
+                    track.sidechain_source = self.parse_sidechain_source();
                 }
                 Token::Ident(ref word) if word == "arp" => {
                     self.advance();
                     track.arp = self.parse_arp_clause();
                 }
-                _ => { self.advance(); }
+                other => {
+                    let sp = self.span();
+                    let (l, c) = (sp.line, sp.col);
+                    self.errors.push(ParseError {
+                        line: l, col: c,
+                        message: format!(
+                            "track '{}': unexpected {} (a track takes play, using, level, pan, gate, velocity, delay_send, reverb_send, sidechain, arp or `out > ...`)",
+                            track.name, describe_token(&other)
+                        ),
+                    });
+                    self.advance();
+                    self.recover_to_line_end();
+                }
             }
         }
 
