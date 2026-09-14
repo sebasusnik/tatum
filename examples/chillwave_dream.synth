@@ -407,7 +407,7 @@ track melody {
 
 master {
     in > eq(low=1.2, mid=1.0, high=1.0)
-       > compressor(-4, ratio=1.8, attack=10, release=90, makeup=1)
+       > compressor(-4, ratio=1.8, attack=10, release=90, makeup=4.00)
        > limiter
        > out
 }

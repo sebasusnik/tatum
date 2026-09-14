@@ -329,7 +329,7 @@ track stabs {
 # ────────────────────────────────────────────────
 
 master {
-  in > eq(low=3.0, mid=1.0, high=0.5) > compressor(-6.0, ratio=4.0, attack=10, release=80, makeup=2.5) > limiter > out
+  in > eq(low=3.0, mid=1.0, high=0.5) > compressor(-6.0, ratio=4.0, attack=10, release=80, makeup=2.80) > limiter > out
 }
 
 # ────────────────────────────────────────────────

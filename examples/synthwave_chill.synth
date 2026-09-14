@@ -246,7 +246,7 @@ track bells {
 master {
     in > tilt(0.15)
        > eq(low=3.0, mid=0.0, high=-1.0)
-       > compressor(-3.0, ratio=3.0, attack=20, release=100, makeup=1.0)
+       > compressor(-3.0, ratio=3.0, attack=20, release=100, makeup=1.00)
        > limiter
        > out
 }

@@ -253,7 +253,7 @@ track arpsynth {
 # ────────────────────────────────────────────────
 
 master {
-    in > eq(low=4.0, mid=2.0, high=1.0) > compressor(-9.0, ratio=5.0, attack=8, release=80, makeup=3.0) > limiter > out
+    in > eq(low=4.0, mid=2.0, high=1.0) > compressor(-9.0, ratio=5.0, attack=8, release=80, makeup=4.00) > limiter > out
 }
 
 # ────────────────────────────────────────────────

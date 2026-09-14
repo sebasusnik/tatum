@@ -295,7 +295,7 @@ track drums {
     using kit
     velocity 1.0
     level 0.65
-    out > compressor(-10, ratio=3, attack=2, release=40, makeup=3) > master
+    out > compressor(-10, ratio=3, attack=2, release=40, makeup=1.41) > master
 }
 
 track bells {
@@ -377,7 +377,7 @@ track subkick {
 
 master {
     in > eq(low=1.5, mid=1.0, high=1.5)
-       > compressor(-5, ratio=2, attack=8, release=80, makeup=2)
+       > compressor(-5, ratio=2, attack=8, release=80, makeup=4.00)
        > limiter
        > out
 }

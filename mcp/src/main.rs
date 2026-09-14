@@ -508,9 +508,9 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let crest_in = analysis::crest(in_peak, in_rms);
     let crest_out = analysis::crest(peak, rms);
     let crest_loss = if crest_in > 0.0 { 20.0 * (crest_out / crest_in).log10() } else { 0.0 };
-    if crest_loss < -1.5 {
+    if crest_loss < -3.0 {
         hints.push(format!(
-            "the master chain removed {:.1} dB of crest factor ({:.1} in, {:.1} out): the limiter is eating the transients. Lower the track levels or the master gain instead of pushing into it.",
+            "the master chain removed {:.1} dB of crest factor ({:.1} in, {:.1} out): it is eating the transients rather than making the mix louder. Lower the compressor makeup (it is a linear gain, so 2 is +6 dB) or the track levels instead of pushing into the limiter.",
             -crest_loss, crest_in, crest_out
         ));
     }

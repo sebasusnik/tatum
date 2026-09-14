@@ -241,9 +241,9 @@ fn cmd_render(args: &[String]) {
     );
     if crest_in > 0.0 {
         let change = 20.0 * (crest_out / crest_in).log10();
-        eprintln!("master: crest {:.1} in -> {:.1} out ({:+.1} dB){}",
-            crest_in, crest_out, change,
-            if change < -1.5 { "  the limiter is eating transients" } else { "" });
+        eprintln!("master: peak {:.2} in -> {:.2} out | crest {:.1} -> {:.1} ({:+.1} dB){}",
+            in_peak, out_peak, crest_in, crest_out, change,
+            if change < -3.0 { "  the master chain is eating transients" } else { "" });
     }
     eprintln!("writing {} ({} samples, {:.1}s)...",
         output_path,

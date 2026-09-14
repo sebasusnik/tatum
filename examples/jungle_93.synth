@@ -318,7 +318,7 @@ track drums {
     velocity 1.0
     level 0.82
     reverb_send 0.06
-    out > saturate(0.15) > eq(low=2.5, mid=1.5, high=1.8) > compressor(-12, ratio=4, attack=1, release=35, makeup=4) > master
+    out > saturate(0.15) > eq(low=2.5, mid=1.5, high=1.8) > compressor(-12, ratio=4, attack=1, release=35, makeup=1.58) > master
 }
 
 track reese {
@@ -389,7 +389,7 @@ track atmosphere {
 
 master {
     in > eq(low=3.0, mid=1.2, high=1.6)
-       > compressor(-10, ratio=3, attack=3, release=55, makeup=3.5)
+       > compressor(-10, ratio=3, attack=3, release=55, makeup=1.00)
        > limiter
        > out
 }

@@ -394,7 +394,7 @@ track drums {
     using iron
     velocity 1.0
     level 0.78
-    out > saturate(0.35) > eq(low=2.2, mid=1.5, high=1.0) > compressor(-12, ratio=5, attack=1, release=20, makeup=4) > master
+    out > saturate(0.35) > eq(low=2.2, mid=1.5, high=1.0) > compressor(-12, ratio=5, attack=1, release=20, makeup=1.58) > master
 }
 
 track acid {
@@ -403,7 +403,7 @@ track acid {
     velocity 1.0
     level 0.62
     gate 0.50
-    out > saturate(0.70) > eq(low=1.5, mid=2.5, high=2.0) > compressor(-10, ratio=4, attack=1, release=15, makeup=3) > master
+    out > saturate(0.70) > eq(low=1.5, mid=2.5, high=2.0) > compressor(-10, ratio=4, attack=1, release=15, makeup=1.41) > master
 }
 
 track filth {
@@ -484,7 +484,7 @@ track doom {
 master {
     in > eq(low=2.8, mid=2.0, high=0.8)
        > saturate(0.30)
-       > compressor(-10, ratio=5.0, attack=1, release=20, makeup=4)
+       > compressor(-10, ratio=5.0, attack=1, release=20, makeup=1.58)
        > limiter
        > out
 }

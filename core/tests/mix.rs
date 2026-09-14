@@ -155,3 +155,33 @@ fn registry_defaults_match_what_a_fresh_module_does() {
     assert!((untouched - with_default).abs() / untouched < 0.01,
         "applying the registry default must be a no-op on a fresh module: {} vs {}", untouched, with_default);
 }
+
+/// 7.6 / 8.8: no example may hand its dynamics to the master chain. This is the
+/// corpus revalidation pass — examples age with the bugs of their era, and
+/// every one of the thirteen read `makeup` as dB when it is a linear gain.
+#[test]
+fn no_example_lets_the_master_chain_eat_its_transients() {
+    use synth_core::analysis;
+    use synth_core::song_engine::SongEngine;
+
+    let mut offenders = Vec::new();
+    for entry in std::fs::read_dir("../examples").unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().and_then(|e| e.to_str()) != Some("synth") { continue; }
+        let src = std::fs::read_to_string(&path).unwrap();
+        let mut engine = SongEngine::from_source(&src).unwrap();
+        engine.start();
+        // Eight bars is enough to catch a chain that is crushing everything.
+        let (l, r) = engine.render(8);
+        let (out_peak, out_rms) = analysis::peak_rms(&l, &r);
+        let (in_peak, in_rms) = engine.master_input_peak_rms();
+        let (ci, co) = (analysis::crest(in_peak, in_rms), analysis::crest(out_peak, out_rms));
+        if ci <= 0.0 || co <= 0.0 { continue; }
+        let change_db = 20.0 * (co / ci).log10();
+        if change_db < -3.0 {
+            offenders.push(format!("{}: {:.1} dB of crest lost ({:.1} -> {:.1})",
+                path.file_stem().unwrap().to_string_lossy(), -change_db, ci, co));
+        }
+    }
+    assert!(offenders.is_empty(), "the master chain is doing the mixing in:\n  {}", offenders.join("\n  "));
+}
