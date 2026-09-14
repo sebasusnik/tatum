@@ -48,7 +48,7 @@ fn dump_funk_dsl_compiled() {
     for pat in &compiled.patterns {
         println!("  \"{}\" ({} steps, {} per row)", pat.name, pat.steps.len(), pat.steps_per_row);
         for (si, step) in pat.steps.iter().enumerate() {
-            let row = si / pat.steps_per_row;
+            let _row = si / pat.steps_per_row;
             let col = si % pat.steps_per_row;
             if col == 0 && si > 0 { println!(); }
             match step {
