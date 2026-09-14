@@ -5,14 +5,16 @@ use alloc::vec::Vec;
 
 use crate::dsl::compiler::{self, *};
 use crate::dsl::error::{ParseError, CompileError};
-use crate::effects::delay::Delay;
+use crate::effects::delay::{Delay, DelaySync};
 use crate::effects::reverb::Reverb;
 use crate::graph::node::{NodeKind, NodeSpec, MAX_NODE_INPUTS};
 use crate::graph::voice::Instrument;
 use crate::modules::bass::{BassModule, BassParam};
-use crate::modules::beats::{BeatsModule, BeatsParam};
-use crate::modules::fm::{FmModule, FmParam};
-use crate::modules::keys::{KeysModule, KeysParam};
+use crate::modules::beats::BeatsModule;
+use crate::modules::fm::FmModule;
+use crate::modules::keys::KeysModule;
+use crate::params::{self, ParamId, ModuleKind};
+use crate::primitives::arp_processor::{ArpProcessor, ArpEvent};
 use crate::rng::Rng;
 use crate::{math, Module, BLOCK_SIZE, SAMPLE_RATE};
 
@@ -43,6 +45,15 @@ impl SongInstrument {
             Self::Fm(m) => m.note_on(note, velocity),
             Self::Keys(m) => m.note_on(note, velocity),
             Self::Beats(m) => m.note_on(note, velocity),
+        }
+    }
+
+    /// Glide to a new note without retriggering envelopes. Returns false when
+    /// the instrument has no portamento, so the caller falls back to note_on.
+    fn slide_to(&mut self, note: u8, velocity: f32) -> bool {
+        match self {
+            Self::Bass(m) => { m.slide_to(note, velocity); true }
+            _ => false,
         }
     }
 
@@ -114,156 +125,37 @@ impl SongInstrument {
     }
 
     /// Set a parameter by name (for automation).
-    fn set_param_by_name(&mut self, name: &str, value: f32) {
+    fn set_param_by_name(&mut self, name: &str, value: f32) -> bool {
+        let kind = match self.module_kind() {
+            Some(k) => k,
+            None => return false, // graph instruments have no named params
+        };
+        match params::lookup(kind, name) {
+            Some(spec) => { apply_param(self, spec.id, value); true }
+            None => false,
+        }
+    }
+
+    /// Registry kind for built-in modules; None for graph instruments.
+    fn module_kind(&self) -> Option<ModuleKind> {
         match self {
-            Self::Graph(_) => {} // Graph instruments don't support named params
-            Self::Bass(m) => {
-                if let Some(p) = bass_param_from_name(name) {
-                    m.set_param(p, value);
-                }
-            }
-            Self::Fm(m) => {
-                if let Some(p) = fm_param_from_name(name) {
-                    m.set_param(p, value);
-                }
-            }
-            Self::Keys(m) => {
-                if let Some(p) = keys_param_from_name(name) {
-                    m.set_param(p, value);
-                }
-            }
-            Self::Beats(m) => {
-                if let Some(p) = beats_param_from_name(name) {
-                    m.set_param(p, value);
-                }
-            }
+            Self::Graph(_) => None,
+            Self::Bass(_) => Some(ModuleKind::Bass),
+            Self::Fm(_) => Some(ModuleKind::Fm),
+            Self::Keys(_) => Some(ModuleKind::Keys),
+            Self::Beats(_) => Some(ModuleKind::Beats),
         }
     }
 }
 
-fn bass_param_from_name(name: &str) -> Option<BassParam> {
-    match name {
-        "cutoff" => Some(BassParam::Cutoff),
-        "cutoff_env" => Some(BassParam::CutoffEnv),
-        "resonance" => Some(BassParam::Resonance),
-        "glide" => Some(BassParam::Glide),
-        "attack" => Some(BassParam::Attack),
-        "decay" => Some(BassParam::Decay),
-        "sustain" => Some(BassParam::Sustain),
-        "release" => Some(BassParam::Release),
-        "lfo_rate" => Some(BassParam::LfoRate),
-        "lfo_depth" => Some(BassParam::LfoDepth),
-        "lfo_waveform" => Some(BassParam::LfoWaveform),
-        "lfo_target" => Some(BassParam::LfoTarget),
-        "lfo_sync" => Some(BassParam::LfoSync),
-        "osc2_pitch" => Some(BassParam::Osc2Pitch),
-        "osc3_pitch" => Some(BassParam::Osc3Pitch),
-        "osc1_wave" => Some(BassParam::Osc1Wave),
-        "osc2_wave" => Some(BassParam::Osc2Wave),
-        "osc3_wave" => Some(BassParam::Osc3Wave),
-        "keytrack" => Some(BassParam::Keytrack),
-        "vibrato_rate" => Some(BassParam::VibratoRate),
-        "vibrato_depth" => Some(BassParam::VibratoDepth),
-        "vel_env" => Some(BassParam::VelEnv),
-        _ => None,
-    }
-}
-
-fn fm_param_from_name(name: &str) -> Option<FmParam> {
-    match name {
-        "algorithm" => Some(FmParam::Algorithm),
-        "mod_index" => Some(FmParam::ModIndex),
-        "feedback" => Some(FmParam::Feedback),
-        "waveform" => Some(FmParam::Waveform),
-        "chorus_mix" => Some(FmParam::ChorusMix),
-        "attack" => Some(FmParam::Attack),
-        "decay" => Some(FmParam::Decay),
-        "sustain" => Some(FmParam::Sustain),
-        "release" => Some(FmParam::Release),
-        "lfo_rate" => Some(FmParam::LfoRate),
-        "lfo_depth" => Some(FmParam::LfoDepth),
-        "lfo_waveform" => Some(FmParam::LfoWaveform),
-        "lfo_target" => Some(FmParam::LfoTarget),
-        "lfo_sync" => Some(FmParam::LfoSync),
-        "vibrato_rate" => Some(FmParam::VibratoRate),
-        "vibrato_depth" => Some(FmParam::VibratoDepth),
-        "op0_attack" => Some(FmParam::Op0Attack),
-        "op0_decay" => Some(FmParam::Op0Decay),
-        "op0_sustain" => Some(FmParam::Op0Sustain),
-        "op0_release" => Some(FmParam::Op0Release),
-        "op1_attack" => Some(FmParam::Op1Attack),
-        "op1_decay" => Some(FmParam::Op1Decay),
-        "op1_sustain" => Some(FmParam::Op1Sustain),
-        "op1_release" => Some(FmParam::Op1Release),
-        "op2_attack" => Some(FmParam::Op2Attack),
-        "op2_decay" => Some(FmParam::Op2Decay),
-        "op2_sustain" => Some(FmParam::Op2Sustain),
-        "op2_release" => Some(FmParam::Op2Release),
-        "op3_attack" => Some(FmParam::Op3Attack),
-        "op3_decay" => Some(FmParam::Op3Decay),
-        "op3_sustain" => Some(FmParam::Op3Sustain),
-        "op3_release" => Some(FmParam::Op3Release),
-        "op0_feedback" => Some(FmParam::Op0Feedback),
-        "op1_feedback" => Some(FmParam::Op1Feedback),
-        "op2_feedback" => Some(FmParam::Op2Feedback),
-        "op3_feedback" => Some(FmParam::Op3Feedback),
-        "op0_ratio" => Some(FmParam::Op0Ratio),
-        "op1_ratio" => Some(FmParam::Op1Ratio),
-        "op2_ratio" => Some(FmParam::Op2Ratio),
-        "op3_ratio" => Some(FmParam::Op3Ratio),
-        _ => None,
-    }
-}
-
-fn keys_param_from_name(name: &str) -> Option<KeysParam> {
-    match name {
-        "cutoff" => Some(KeysParam::Cutoff),
-        "resonance" => Some(KeysParam::Resonance),
-        "detune" => Some(KeysParam::Detune),
-        "chorus_mix" => Some(KeysParam::ChorusMix),
-        "level" => Some(KeysParam::Level),
-        "voice_mode" => Some(KeysParam::VoiceMode),
-        "attack" => Some(KeysParam::Attack),
-        "decay" => Some(KeysParam::Decay),
-        "sustain" => Some(KeysParam::Sustain),
-        "release" => Some(KeysParam::Release),
-        "lfo_rate" => Some(KeysParam::LfoRate),
-        "lfo_depth" => Some(KeysParam::LfoDepth),
-        "lfo_waveform" => Some(KeysParam::LfoWaveform),
-        "lfo_target" => Some(KeysParam::LfoTarget),
-        "lfo_sync" => Some(KeysParam::LfoSync),
-        "vibrato_rate" => Some(KeysParam::VibratoRate),
-        "vibrato_depth" => Some(KeysParam::VibratoDepth),
-        _ => None,
-    }
-}
-
-fn beats_param_from_name(name: &str) -> Option<BeatsParam> {
-    match name {
-        "level" => Some(BeatsParam::Level),
-        "kick_decay" => Some(BeatsParam::KickDecay),
-        "snare_decay" => Some(BeatsParam::SnareDecay),
-        "kick_pan" => Some(BeatsParam::KickPan),
-        "snare_pan" => Some(BeatsParam::SnarePan),
-        "hihat_pan" => Some(BeatsParam::HihatPan),
-        "clap_pan" => Some(BeatsParam::ClapPan),
-        "kick_click" => Some(BeatsParam::KickClick),
-        "kick_level" => Some(BeatsParam::KickLevel),
-        "snare_level" => Some(BeatsParam::SnareLevel),
-        "hihat_level" => Some(BeatsParam::HihatLevel),
-        "clap_level" => Some(BeatsParam::ClapLevel),
-        "kick_pitch" => Some(BeatsParam::KickPitch),
-        "snare_pitch" => Some(BeatsParam::SnarePitch),
-        "hihat_pitch" => Some(BeatsParam::HihatPitch),
-        "stutter_rate" => Some(BeatsParam::StutterRate),
-        "stutter_drum" => Some(BeatsParam::StutterDrum),
-        "tom_pan" => Some(BeatsParam::TomPan),
-        "crash_pan" => Some(BeatsParam::CrashPan),
-        "snare_drive" => Some(BeatsParam::SnareDrive),
-        "snare_snap" => Some(BeatsParam::SnareSnap),
-        "kick_drive" => Some(BeatsParam::KickDrive),
-        "hihat_decay" => Some(BeatsParam::HihatDecay),
-        _ => None,
+/// Apply a registry-typed parameter to the right module.
+fn apply_param(inst: &mut SongInstrument, id: ParamId, value: f32) {
+    match (inst, id) {
+        (SongInstrument::Bass(m), ParamId::Bass(p)) => m.set_param(p, value),
+        (SongInstrument::Fm(m), ParamId::Fm(p)) => m.set_param(p, value),
+        (SongInstrument::Keys(m), ParamId::Keys(p)) => m.set_param(p, value),
+        (SongInstrument::Beats(m), ParamId::Beats(p)) => m.set_param(p, value),
+        _ => {}
     }
 }
 
@@ -331,6 +223,20 @@ struct TrackPlayback {
     gate_samples_remaining: f32,
     active: bool,
     stereo_src: bool,        // true if instrument produces native stereo (BeatsModule)
+    // Arpeggiator: the pattern supplies held notes, the arp schedules them per sample
+    arp: Option<ArpProcessor>,
+    arp_cfg: Option<ArpConfig>,
+}
+
+/// Build a fresh arp processor from compiled settings at the given tempo.
+fn make_arp(cfg: &ArpConfig, tempo: f32) -> ArpProcessor {
+    let mut arp = ArpProcessor::new();
+    arp.set_bpm(tempo * cfg.rate_mult);
+    arp.set_gate(cfg.gate);
+    arp.set_pattern(cfg.pattern);
+    // set_octave_range maps 0..1 → 1..4; nudge past float error so 3 stays 3.
+    arp.set_octave_range((cfg.octaves.saturating_sub(1)) as f32 / 3.0 + 0.01);
+    arp
 }
 
 /// Named bus with FX chain.
@@ -480,8 +386,8 @@ impl DslError {
                 for (i, e) in errs.iter().enumerate() {
                     if i > 0 { out.push(','); }
                     out.push_str(&alloc::format!(
-                        r#"{{"line":0,"col":0,"msg":"{}"}}"#,
-                        json_escape(&e.message),
+                        r#"{{"line":{},"col":0,"msg":"{}"}}"#,
+                        e.line, json_escape(&e.message),
                     ));
                 }
             }
@@ -547,8 +453,8 @@ impl SongEngine {
                     CompiledInstrumentKind::Bass(preset) => {
                         let mut m = BassModule::new();
                         for (name, value) in &preset.params {
-                            if let Some(p) = bass_param_from_name(name) {
-                                m.set_param(p, *value);
+                            if let Some(spec) = params::lookup(ModuleKind::Bass, name) {
+                                if let ParamId::Bass(p) = spec.id { m.set_param(p, *value); }
                             }
                         }
                         m.set_bpm(tempo);
@@ -557,8 +463,8 @@ impl SongEngine {
                     CompiledInstrumentKind::Fm(preset) => {
                         let mut m = FmModule::new();
                         for (name, value) in &preset.params {
-                            if let Some(p) = fm_param_from_name(name) {
-                                m.set_param(p, *value);
+                            if let Some(spec) = params::lookup(ModuleKind::Fm, name) {
+                                if let ParamId::Fm(p) = spec.id { m.set_param(p, *value); }
                             }
                         }
                         // Apply per-operator envelopes if specified
@@ -571,8 +477,8 @@ impl SongEngine {
                     CompiledInstrumentKind::Keys(preset) => {
                         let mut m = KeysModule::new();
                         for (name, value) in &preset.params {
-                            if let Some(p) = keys_param_from_name(name) {
-                                m.set_param(p, *value);
+                            if let Some(spec) = params::lookup(ModuleKind::Keys, name) {
+                                if let ParamId::Keys(p) = spec.id { m.set_param(p, *value); }
                             }
                         }
                         m.set_bpm(tempo);
@@ -581,8 +487,8 @@ impl SongEngine {
                     CompiledInstrumentKind::Beats(preset) => {
                         let mut m = BeatsModule::new();
                         for (name, value) in &preset.params {
-                            if let Some(p) = beats_param_from_name(name) {
-                                m.set_param(p, *value);
+                            if let Some(spec) = params::lookup(ModuleKind::Beats, name) {
+                                if let ParamId::Beats(p) = spec.id { m.set_param(p, *value); }
                             }
                         }
                         m.set_bpm(tempo);
@@ -630,6 +536,8 @@ impl SongEngine {
                     gate_samples_remaining: 0.0,
                     active: true,
                     stereo_src,
+                    arp: t.arp.map(|c| make_arp(&c, tempo)),
+                    arp_cfg: t.arp,
                 }
             })
             .collect();
@@ -657,16 +565,32 @@ impl SongEngine {
         });
 
         // Global send effects — match reference Engine defaults
+        // Defaults: 16th-note delay, small tight room. Overridable with the
+        // top-level `delay ...` / `reverb ...` lines.
         let mut send_delay = Delay::new(SAMPLE_RATE, 2.0);
-        // Tempo-sync delay to 16th note (matching DelaySync::Sixteenth)
-        let sixteenth_time = 60.0 / tempo / 4.0;
-        send_delay.set_time(sixteenth_time, SAMPLE_RATE);
-        send_delay.set_feedback(0.25);
-        send_delay.set_filter(0.6);
+        let d = &song.globals.send_delay;
+        let sync = match d.sync.as_deref() {
+            Some("free") => DelaySync::Free,
+            Some("quarter") => DelaySync::Quarter,
+            Some("dotted_eighth") => DelaySync::DottedEighth,
+            Some("eighth") => DelaySync::Eighth,
+            Some("triplet_eighth") => DelaySync::TripletEighth,
+            _ => DelaySync::Sixteenth,
+        };
+        if let (DelaySync::Free, Some(t)) = (sync, d.time) {
+            send_delay.set_time(t.clamp(0.001, 2.0), SAMPLE_RATE);
+        }
+        send_delay.set_sync(sync, tempo, SAMPLE_RATE);
+        send_delay.set_feedback(d.feedback.unwrap_or(0.25));
+        send_delay.set_filter(d.filter.unwrap_or(0.6));
 
         let mut send_reverb = Reverb::new(SAMPLE_RATE);
-        send_reverb.set_room_size(0.3);  // small room, tight
-        send_reverb.set_damping(0.6);
+        let r = &song.globals.send_reverb;
+        send_reverb.set_room_size(r.size.unwrap_or(0.3));
+        send_reverb.set_damping(r.damp.unwrap_or(0.6));
+        if let Some(pd) = r.predelay {
+            send_reverb.set_pre_delay(pd);
+        }
 
         // Parse swing/humanize from globals
         let swing = song.globals.swing.unwrap_or(0.5);
@@ -764,7 +688,9 @@ impl SongEngine {
             for inst in self.instruments.iter_mut() {
                 inst.set_bpm(t);
             }
+            self.send_delay.set_bpm(t, SAMPLE_RATE);
         }
+        let tempo = self.tempo;
 
         // Apply effect overrides
         if let Some(rmix) = scene.reverb_mix {
@@ -774,21 +700,13 @@ impl SongEngine {
             self.delay_wet_level = dmix;
         }
 
-        // Setup automation lanes
+        // Automation lanes are set up after the scene's tracks are activated
+        // (targets resolve against the new layout, not the previous scene's).
         self.active_automations.clear();
         self.scene_step = 0;
-        // Calculate total steps for this scene from arrangement
         if self.arrangement_idx < self.arrangement.len() {
             let (_, repeat) = self.arrangement[self.arrangement_idx];
             self.scene_total_steps = repeat as usize * self.steps_per_bar;
-        }
-        for auto_def in &scene.automations {
-            if let Some(target) = self.resolve_auto_target(&auto_def.target) {
-                self.active_automations.push(ActiveAutomation {
-                    target,
-                    keyframes: auto_def.keyframes.clone(),
-                });
-            }
         }
 
         // Update tracks from scene
@@ -806,9 +724,10 @@ impl SongEngine {
             track.active = false;
         }
 
-        // Activate scene tracks (reusing existing TrackPlayback slots)
-        for (i, st) in scene.tracks.iter().enumerate() {
-            if i < self.tracks.len() {
+        // Activate scene tracks: each scene track reconfigures the top-level
+        // track slot with the same name (never by position).
+        for st in scene.tracks.iter() {
+            if let Some(i) = self.track_names.iter().position(|n| n == &st.name) {
                 let tp = &mut self.tracks[i];
                 tp.instrument_idx = st.instrument_idx;
                 tp.pattern_idx = st.pattern_idx;
@@ -827,6 +746,8 @@ impl SongEngine {
                 tp.current_step = 0;
                 tp.current_notes_count = 0;
                 tp.gate_samples_remaining = 0.0;
+                tp.arp_cfg = st.arp;
+                tp.arp = st.arp.map(|c| make_arp(&c, tempo));
             }
         }
 
@@ -837,6 +758,15 @@ impl SongEngine {
         });
 
         self.recompute_gain_comp();
+
+        let scene = &self.scenes[scene_idx];
+        let mut lanes = Vec::new();
+        for auto_def in &scene.automations {
+            if let Some(target) = self.resolve_auto_target(&auto_def.target) {
+                lanes.push(ActiveAutomation { target, keyframes: auto_def.keyframes.clone() });
+            }
+        }
+        self.active_automations = lanes;
     }
 
     /// Recompute automatic gain compensation based on active track count.
@@ -863,12 +793,10 @@ impl SongEngine {
                     let param = &target[dot_pos + 1..];
 
                     if param == "level" {
-                        // Look for track by name
-                        let track_idx = self.tracks.iter()
-                            .enumerate()
-                            .position(|(_, _)| false) // tracks don't have names at runtime
+                        // `<track> level` by track name, else by the instrument a track uses
+                        let track_idx = self.track_names.iter()
+                            .position(|n| n == name)
                             .or_else(|| {
-                                // Try matching by instrument name
                                 self.instrument_names.iter()
                                     .position(|n| n == name)
                                     .and_then(|inst_idx| {
@@ -912,6 +840,15 @@ impl SongEngine {
     /// Release all active notes on a track.
     #[inline]
     fn release_track_notes(track: &mut TrackPlayback, instruments: &mut Vec<SongInstrument>) {
+        if let Some(arp) = track.arp.as_mut() {
+            if let Some(ArpEvent::NoteOff(n)) = arp.stop() {
+                if track.instrument_idx < instruments.len() {
+                    instruments[track.instrument_idx].note_off(n);
+                }
+            }
+            track.current_notes_count = 0;
+            return;
+        }
         let count = track.current_notes_count as usize;
         if count > 0 {
             let inst_idx = track.instrument_idx;
@@ -994,6 +931,10 @@ impl SongEngine {
                     self.tracks[ti].gate_samples_remaining -= 1.0;
                     if self.tracks[ti].gate_samples_remaining <= 0.0 {
                         let inst_idx = self.tracks[ti].instrument_idx;
+                        if self.tracks[ti].arp.is_some() {
+                            Self::release_track_notes(&mut self.tracks[ti], &mut self.instruments);
+                            continue;
+                        }
                         let count = self.tracks[ti].current_notes_count as usize;
                         if count > 0 && inst_idx < self.instruments.len() {
                             for ni in 0..count {
@@ -1001,6 +942,20 @@ impl SongEngine {
                             }
                             self.tracks[ti].current_notes_count = 0;
                         }
+                    }
+                }
+            }
+
+            // Arpeggiators: one tick per sample, events go straight to the instrument
+            for ti in 0..track_count {
+                if !self.tracks[ti].active { continue; }
+                let inst_idx = self.tracks[ti].instrument_idx;
+                if inst_idx >= self.instruments.len() { continue; }
+                if let Some(arp) = self.tracks[ti].arp.as_mut() {
+                    match arp.tick() {
+                        Some(ArpEvent::NoteOn(n, v)) => self.instruments[inst_idx].note_on(n, v),
+                        Some(ArpEvent::NoteOff(n)) => self.instruments[inst_idx].note_off(n),
+                        None => {}
                     }
                 }
             }
@@ -1272,7 +1227,21 @@ impl SongEngine {
 
             let gate = self.tracks[ti].gate;
 
-            // Debug: track pad step processing
+            // Arp tracks: the step only updates the held notes; the arp plays them.
+            if self.tracks[ti].arp.is_some() && !matches!(step, CompiledStep::Tie) {
+                let next_step_idx = (step_idx + 1) % pattern.steps.len();
+                let next_is_tie = matches!(pattern.steps[next_step_idx], CompiledStep::Tie);
+                let humanize = self.humanize_velocity;
+                let step_dur = self.current_step_duration;
+                let sps = self.samples_per_step;
+                Self::advance_arp_track(
+                    &mut self.tracks[ti], &mut self.instruments, &mut self.rng,
+                    humanize, sps, step_dur, step, next_is_tie,
+                );
+                self.tracks[ti].current_step += 1;
+                continue;
+            }
+
             match step {
                 CompiledStep::Tie => {
                     // Keep previous note alive — extend gate for another step.
@@ -1307,16 +1276,44 @@ impl SongEngine {
                     // survives until the Tie can extend it.
                     let next_step_idx = (step_idx + 1) % pattern.steps.len();
                     let next_is_tie = matches!(pattern.steps[next_step_idx], CompiledStep::Tie);
+                    // A `~note` next step needs this note still gated to glide from.
+                    let next_slides = matches!(pattern.steps[next_step_idx], CompiledStep::NoteOn { slide: true, .. });
 
                     match step {
-                        CompiledStep::NoteOn { midi_note, velocity, plock } => {
+                        CompiledStep::NoteOn { midi_note, velocity, plock, slide } => {
                             // If the same single note is already playing (pattern loop),
                             // just extend gate — don't re-trigger (avoids click/re-attack).
                             let same_note = self.tracks[ti].current_notes_count == 1
                                 && self.tracks[ti].current_notes[0] == midi_note;
+                            let held = self.tracks[ti].current_notes_count > 0;
                             if same_note && next_is_tie {
                                 // Sustain continuation — treat as tie
                                 self.tracks[ti].gate_samples_remaining = self.samples_per_step * 2.0;
+                            } else if slide && held {
+                                // Slide: glide pitch without retriggering (303-style)
+                                let inst_idx = self.tracks[ti].instrument_idx;
+                                let raw_vel = velocity * self.tracks[ti].velocity;
+                                let vel = Self::humanize_vel(raw_vel, self.humanize_velocity, &mut self.rng);
+                                let handled = inst_idx < self.instruments.len() && {
+                                    self.instruments[inst_idx].stage_plock(plock.cutoff, plock.env_depth, plock.resonance);
+                                    self.instruments[inst_idx].slide_to(midi_note, vel)
+                                };
+                                if !handled {
+                                    Self::release_track_notes(&mut self.tracks[ti], &mut self.instruments);
+                                    if inst_idx < self.instruments.len() {
+                                        self.instruments[inst_idx].note_on(midi_note, vel);
+                                    }
+                                }
+                                self.tracks[ti].current_notes[0] = midi_note;
+                                self.tracks[ti].current_notes_count = 1;
+                                if next_is_tie {
+                                    self.tracks[ti].gate_samples_remaining = self.samples_per_step * 2.0;
+                                } else if next_slides {
+                                    self.tracks[ti].gate_samples_remaining = self.samples_per_step * 1.5;
+                                } else {
+                                    let step_gate = plock.gate.unwrap_or(gate);
+                                    self.tracks[ti].gate_samples_remaining = self.current_step_duration * step_gate;
+                                }
                             } else {
                                 // Release previous notes
                                 Self::release_track_notes(
@@ -1334,6 +1331,8 @@ impl SongEngine {
                                 self.tracks[ti].current_notes_count = 1;
                                 if next_is_tie {
                                     self.tracks[ti].gate_samples_remaining = self.samples_per_step * 2.0;
+                                } else if next_slides {
+                                    self.tracks[ti].gate_samples_remaining = self.samples_per_step * 1.5;
                                 } else {
                                     let step_gate = plock.gate.unwrap_or(gate);
                                     self.tracks[ti].gate_samples_remaining = self.current_step_duration * step_gate;
@@ -1369,6 +1368,8 @@ impl SongEngine {
                                 }
                                 if next_is_tie {
                                     self.tracks[ti].gate_samples_remaining = self.samples_per_step * 2.0;
+                                } else if next_slides {
+                                    self.tracks[ti].gate_samples_remaining = self.samples_per_step * 1.5;
                                 } else {
                                     let step_gate = plock.gate.unwrap_or(gate);
                                     self.tracks[ti].gate_samples_remaining = self.current_step_duration * step_gate;
@@ -1419,6 +1420,102 @@ impl SongEngine {
         }
     }
 
+    /// Step handler for arp tracks: update the held notes, (re)start the arp,
+    /// and set the track gate that will eventually stop it.
+    fn advance_arp_track(
+        track: &mut TrackPlayback,
+        instruments: &mut Vec<SongInstrument>,
+        rng: &mut Rng,
+        humanize_velocity: f32,
+        samples_per_step: f32,
+        step_duration: f32,
+        step: CompiledStep,
+        next_is_tie: bool,
+    ) {
+        let inst_idx = track.instrument_idx;
+        let mut notes = [0u8; compiler::MAX_CHORD_NOTES];
+        let (count, step_vel, step_gate): (usize, f32, Option<f32>) = match step {
+            CompiledStep::NoteOn { midi_note, velocity, plock, .. } => {
+                notes[0] = midi_note;
+                if inst_idx < instruments.len() {
+                    instruments[inst_idx].stage_plock(plock.cutoff, plock.env_depth, plock.resonance);
+                }
+                (1, velocity, plock.gate)
+            }
+            CompiledStep::Chord { notes: cn, count: c, plock } => {
+                let count = (c as usize).min(compiler::MAX_CHORD_NOTES);
+                for i in 0..count {
+                    notes[i] = cn[i].midi_note;
+                }
+                if inst_idx < instruments.len() {
+                    instruments[inst_idx].stage_plock(plock.cutoff, plock.env_depth, plock.resonance);
+                }
+                (count, cn[0].velocity, plock.gate)
+            }
+            CompiledStep::DrumHit { velocity, plock, .. } => {
+                notes[0] = 36;
+                (1, velocity, plock.gate)
+            }
+            CompiledStep::Rest => {
+                Self::release_track_notes(track, instruments);
+                return;
+            }
+            CompiledStep::Tie => return,
+        };
+
+        let same = count == track.current_notes_count as usize
+            && (0..count).all(|i| track.current_notes[i] == notes[i]);
+        for i in 0..count {
+            track.current_notes[i] = notes[i];
+        }
+        track.current_notes_count = count as u8;
+
+        let vel = Self::humanize_vel(step_vel * track.velocity, humanize_velocity, rng);
+
+        // Sorted ascending and expanded across octaves so "up" really goes up.
+        let mut sorted: Vec<u8> = notes[..count].to_vec();
+        sorted.sort_unstable();
+        let octaves = track.arp_cfg.map_or(1, |c| c.octaves).max(1);
+        let mut list: Vec<u8> = Vec::new();
+        for o in 0..octaves {
+            for &n in &sorted {
+                let v = n as u16 + 12 * o as u16;
+                if v <= 127 && list.len() < 16 {
+                    list.push(v as u8);
+                }
+            }
+        }
+
+        let mut pending_off = None;
+        if let Some(arp) = track.arp.as_mut() {
+            arp.set_notes(&list);
+            arp.set_velocity(vel);
+            if !same || !arp.is_active() {
+                // New material: close the open arp note and restart from the first note.
+                if let Some(ArpEvent::NoteOff(n)) = arp.stop() {
+                    pending_off = Some(n);
+                }
+                arp.start(vel);
+            }
+        }
+        if let Some(n) = pending_off {
+            if inst_idx < instruments.len() {
+                instruments[inst_idx].note_off(n);
+            }
+        }
+
+        track.gate_samples_remaining = if next_is_tie {
+            samples_per_step * 2.0
+        } else {
+            step_duration * step_gate.unwrap_or(track.gate)
+        };
+    }
+
+    /// True while a track's arpeggiator is running (for UI activity LEDs).
+    pub fn track_arp_active(&self, idx: usize) -> bool {
+        self.tracks.get(idx).and_then(|t| t.arp.as_ref()).map_or(false, |a| a.is_active())
+    }
+
     fn check_arrangement_advance(&mut self) {
         if self.arrangement.is_empty() { return; }
         if self.arrangement_idx >= self.arrangement.len() { return; }
@@ -1464,6 +1561,21 @@ impl SongEngine {
     }
 
     /// Calculate total bars from arrangement.
+    /// Render `steps` sequencer steps from the current position without
+    /// restarting. Call `start()` first. Useful for tests and previews.
+    pub fn render_steps(&mut self, steps: usize) -> (Vec<f32>, Vec<f32>) {
+        let total = (steps as f32 * self.samples_per_step) as usize;
+        let mut out_l = vec![0.0f32; total];
+        let mut out_r = vec![0.0f32; total];
+        let mut pos = 0;
+        while pos < total {
+            let chunk = BLOCK_SIZE.min(total - pos);
+            self.process_block_stereo(&mut out_l[pos..pos + chunk], &mut out_r[pos..pos + chunk]);
+            pos += chunk;
+        }
+        (out_l, out_r)
+    }
+
     pub fn arrangement_bars(&self) -> u32 {
         self.arrangement.iter().map(|(_, r)| *r).sum()
     }
@@ -1471,6 +1583,11 @@ impl SongEngine {
     pub fn tempo(&self) -> f32 { self.tempo }
 
     pub fn reset(&mut self) {
+        for track in self.tracks.iter_mut() {
+            if let Some(arp) = track.arp.as_mut() {
+                arp.reset();
+            }
+        }
         self.running = false;
         self.sample_counter = 0.0;
         self.current_step_duration = self.samples_per_step;
@@ -1615,6 +1732,17 @@ impl SongEngine {
         for inst in self.instruments.iter_mut() {
             inst.set_bpm(bpm);
         }
+        for track in self.tracks.iter_mut() {
+            if let (Some(arp), Some(cfg)) = (track.arp.as_mut(), track.arp_cfg) {
+                arp.set_bpm(bpm * cfg.rate_mult);
+            }
+        }
+        self.send_delay.set_bpm(bpm, SAMPLE_RATE);
+    }
+
+    /// Pattern index a track is currently playing (for tests and UI).
+    pub fn track_pattern(&self, idx: usize) -> usize {
+        self.tracks.get(idx).map_or(0, |t| t.pattern_idx)
     }
 
     pub fn set_track_pattern(&mut self, track_idx: usize, pattern_idx: usize) {
@@ -1644,25 +1772,38 @@ impl SongEngine {
         self.patterns.get(idx).map_or("", |p| &p.name)
     }
 
-    pub fn set_module_param(&mut self, inst_idx: usize, name: &str, value: f32) {
-        if let Some(inst) = self.instruments.get_mut(inst_idx) {
-            match inst {
-                SongInstrument::Bass(m) => {
-                    if let Some(p) = bass_param_from_name(name) { m.set_param(p, value); }
-                }
-                SongInstrument::Fm(m) => {
-                    if let Some(p) = fm_param_from_name(name) { m.set_param(p, value); }
-                }
-                SongInstrument::Keys(m) => {
-                    if let Some(p) = keys_param_from_name(name) { m.set_param(p, value); }
-                }
-                SongInstrument::Beats(m) => {
-                    if let Some(p) = beats_param_from_name(name) { m.set_param(p, value); }
-                }
-                SongInstrument::Graph(_) => {} // graph params not easily mutable at runtime
-            }
+    /// Set a named module parameter at runtime. Returns false if the
+    /// instrument does not exist or the name is not in the registry.
+    pub fn set_module_param(&mut self, inst_idx: usize, name: &str, value: f32) -> bool {
+        match self.instruments.get_mut(inst_idx) {
+            Some(inst) => inst.set_param_by_name(name, value),
+            None => false,
         }
     }
+
+    pub fn instrument_count(&self) -> usize { self.instruments.len() }
+
+    pub fn instrument_name(&self, idx: usize) -> &str {
+        self.instrument_names.get(idx).map_or("", |n| n.as_str())
+    }
+
+    pub fn instrument_index(&self, name: &str) -> Option<usize> {
+        self.instrument_names.iter().position(|n| n == name)
+    }
+
+    /// Swing 0.5 (straight) ..= 0.75 (hard shuffle). Takes effect on the next step.
+    pub fn set_swing(&mut self, swing: f32) {
+        self.swing = swing.clamp(0.5, 0.75);
+    }
+
+    pub fn set_humanize(&mut self, velocity: f32, timing: f32) {
+        self.humanize_velocity = velocity.clamp(0.0, 1.0);
+        self.humanize_timing = timing.clamp(0.0, 1.0);
+    }
+
+    pub fn swing(&self) -> f32 { self.swing }
+
+    pub fn humanize(&self) -> (f32, f32) { (self.humanize_velocity, self.humanize_timing) }
 }
 
 /// Interpolate automation keyframes at a given progress (0.0 - 1.0).

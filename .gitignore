@@ -10,3 +10,6 @@ test_output/*.wav
 # macOS
 .DS_Store
 core/.DS_Store
+
+# Rendered example audio
+examples/*.wav

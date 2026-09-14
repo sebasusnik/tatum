@@ -109,16 +109,16 @@ fn apply_change(engine: &mut SongEngine, change: &DslChange) {
             }
         }
         DslChange::ModuleParamChanged { module_name, param_name, value } => {
-            // Module names in DSL are instrument names — find by track name
-            // since tracks reference instruments by name
-            for i in 0..engine.track_count() {
-                // Try matching by track name (tracks often share instrument name)
-                engine.set_module_param(i, param_name, *value);
+            if let Some(idx) = engine.instrument_index(module_name) {
+                engine.set_module_param(idx, param_name, *value);
             }
-            let _ = module_name; // TODO: precise instrument index lookup
         }
-        DslChange::SwingChanged(_) | DslChange::HumanizeChanged(_) => {
-            // Will be picked up on next hot-swap
+        DslChange::SwingChanged(swing) => engine.set_swing(*swing),
+        DslChange::HumanizeChanged { velocity, timing } => engine.set_humanize(*velocity, *timing),
+        DslChange::TrackGateChanged { track_name, gate } => {
+            if let Some(idx) = find_track(engine, track_name) {
+                engine.set_track_gate(idx, *gate);
+            }
         }
         DslChange::StructuralChange => {}
     }
@@ -394,13 +394,15 @@ impl Synth {
         }
     }
 
-    pub fn set_module_param(&mut self, inst_idx: usize, name_ptr: *const u8, name_len: usize, value: f32) {
+    /// Returns false if the instrument or parameter name does not exist.
+    pub fn set_module_param(&mut self, inst_idx: usize, name_ptr: *const u8, name_len: usize, value: f32) -> bool {
         let name = unsafe {
             let slice = core::slice::from_raw_parts(name_ptr, name_len);
             core::str::from_utf8_unchecked(slice)
         };
-        if let Some(ref mut engine) = self.engine {
-            engine.set_module_param(inst_idx, name, value);
+        match self.engine {
+            Some(ref mut engine) => engine.set_module_param(inst_idx, name, value),
+            None => false,
         }
     }
 }

@@ -11,14 +11,11 @@ pub mod rng;
 pub mod primitives;
 pub mod harmony;
 pub mod modules;
-pub mod sequencer;
 pub mod effects;
-pub mod track;
-pub mod engine;
-pub mod command;
 pub mod graph;
 pub mod dsl;
 pub mod song_engine;
+pub mod params;
 
 #[cfg(test)]
 pub mod test_utils;

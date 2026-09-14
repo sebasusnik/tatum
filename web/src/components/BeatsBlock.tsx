@@ -1,29 +1,33 @@
-import { For } from "solid-js";
+import { createMemo, For } from "solid-js";
 import { createStore } from "solid-js/store";
 import Knob from "./Knob";
+import ActivityLed from "./ActivityLed";
+import PatternVis from "./PatternVis";
 import {
-  modules, drumLanes, currentStep, playing,
-  setModuleParam, toggleDrumStep, setRawParam,
+  drumLanes, currentStep, playing,
+  toggleDrumStep, setRawParam,
   sends, setModuleSend, muted, soloed, toggleMute, toggleSolo,
+  getModulePagesForTrack, getModuleNameForTrack, setModuleParamForTrack,
+  getPatternForTrack,
 } from "../stores/synth";
 
-// Per-drum param IDs (engine)
-const DRUM_LEVEL_IDS = [104, 105, 106, 107]; // kick, snare, hihat, clap
-const DRUM_PAN_IDS = [99, 100, 101, 102];    // kick, snare, hihat, clap
+const DRUM_LEVEL_IDS = [104, 105, 106, 107];
+const DRUM_PAN_IDS = [99, 100, 101, 102];
 const DRUM_NAMES = ["K", "S", "H", "C"];
 
-// Local store for per-drum levels and pans (0-100 UI)
 const [drumMix, setDrumMix] = createStore({
   levels: [80, 70, 60, 65],
   pans: [50, 50, 50, 50],
 });
 
-export default function BeatsBlock() {
-  const mod = () => modules.beats;
+export default function BeatsBlock(props: { trackName: string }) {
+  const pages = createMemo(() => getModulePagesForTrack(props.trackName));
+  const moduleName = createMemo(() => getModuleNameForTrack(props.trackName));
+  const pattern = createMemo(() => getPatternForTrack(props.trackName));
   const color = "#ff5ea0";
 
-  const knob = (page: number, idx: number) => mod().pages[page].values[idx];
-  const setK = (page: number, idx: number, v: number) => setModuleParam("beats", page, idx, v);
+  const knob = (page: number, idx: number) => pages()[page]?.values[idx] ?? 50;
+  const setK = (page: number, idx: number, v: number) => setModuleParamForTrack(props.trackName, page, idx, v);
 
   function setDrumLevel(drum: number, v: number) {
     const clamped = Math.round(Math.min(100, Math.max(0, v)));
@@ -40,7 +44,8 @@ export default function BeatsBlock() {
   return (
     <div class="rw-block rw-block-beats" data-m="beats">
       <div class="rw-header">
-        <span class="rw-label" style={{ color }}>BEATS</span>
+        <ActivityLed pattern={pattern()} color={color} />
+        <span class="rw-label" style={{ color }}>BEATS{moduleName() ? ` · ${moduleName()}` : ""}</span>
         <div class="rw-btns">
           <button classList={{ "rw-m": true, active: muted().beats }} onClick={() => toggleMute("beats")}>M</button>
           <button classList={{ "rw-s": true, active: soloed().beats }} onClick={() => toggleSolo("beats")}>S</button>
@@ -77,7 +82,6 @@ export default function BeatsBlock() {
         <Knob value={knob(2, 0)} label="Swng" color={color} size={32} onChange={(v) => setK(2, 0, v)} />
       </div>
 
-      {/* Per-drum level & pan mixer */}
       <div class="drum-mixer">
         <For each={DRUM_NAMES}>
           {(name, i) => (
@@ -89,6 +93,8 @@ export default function BeatsBlock() {
           )}
         </For>
       </div>
+
+      <PatternVis pattern={pattern()} color={color} />
 
       <div class="rw-sends">
         <Knob value={sends().beats.delay * 100} label="Dly" color="#5b8cff" size={26} onChange={(v) => setModuleSend("beats", "delay", v / 100)} />

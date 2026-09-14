@@ -1,0 +1,46 @@
+# Arp Keys — canonical arpeggiator example.
+#
+# Mirrors core/tests/arp_demo.rs::test_arp_keys_solo: a single Keys voice,
+# no drums/bass, playing a held Cm7 chord that the track arpeggiator cycles
+# through up/down across two octaves. Delay and reverb sends add space.
+#
+# Note on octaves: arp_demo.rs calls arp.set_octave_range(0.66) and comments
+# "// 3 octaves", but ArpProcessor::set_octave_range does
+# `1 + (value * 3.0) as u8` with truncating (not rounding) integer
+# conversion, so 0.66 -> 1 + (1.98 as u8 == 1) -> octave_range 2, not 3.
+# `octaves=2` below reproduces the demo's actual behavior, not its comment.
+tempo 125
+scale C minor
+
+module keys pad {
+    cutoff 0.6
+    resonance 0.3
+    chorus_mix 0.4
+    attack 0.01
+    decay 0.2
+    sustain 0.4
+    release 0.15
+}
+
+# C minor 7 (degrees 1 3 5 7 = C Eb G Bb), held for the whole bar via ties.
+# The arp reads whatever the pattern holds, so one chord + 15 ties is enough
+# to keep it running continuously for as many bars as the arrangement plays.
+pattern cm7_hold {
+    [1.4 3.4 5.4 7.4]:1.0  ..  ..  ..  ..  ..  ..  ..
+    ..  ..  ..  ..  ..  ..  ..  ..
+}
+
+track keys {
+    play cm7_hold using pad
+    level 0.6
+    arp updown rate=16 gate=0.5 octaves=2
+    delay_send 0.25  reverb_send 0.30
+    out > master
+}
+
+scene main {
+    track keys { play cm7_hold using pad }
+}
+
+# 8 bars, same as arp_demo.rs's 8-bar render.
+arrange { main x8 }

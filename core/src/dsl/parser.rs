@@ -7,6 +7,7 @@ use alloc::format;
 use crate::dsl::ast::*;
 use crate::math;
 use crate::dsl::error::ParseError;
+use crate::params::{self, ModuleKind};
 use crate::dsl::lexer::{Token, Span};
 
 /// Recursive descent parser for .synth files.
@@ -151,6 +152,13 @@ impl Parser {
                 Token::Ident(ref name) if name == "groove" => {
                     self.advance();
                     self.parse_groove(&mut song.grooves);
+                }
+                // `delay key=value ...` / `reverb key=value ...` configure the global sends.
+                // `reverb {` is still a bus chain, so only take this path on `ident =`.
+                Token::Ident(ref name) if (name == "delay" || name == "reverb") && self.next_is_key_value() => {
+                    let which = name.clone();
+                    self.advance();
+                    self.parse_send_fx_globals(&which, &mut song.globals);
                 }
                 Token::Ident(_) => {
                     self.try_parse_bus_chain_or_error(&mut song);
@@ -538,6 +546,7 @@ impl Parser {
         let mut current_row: Vec<Step> = Vec::new();
         let mut first_row = true;
         let mut labeled_mode = false;
+        let mut pending_slide = false;
 
         // Skip leading newlines only
         self.skip_newlines();
@@ -586,6 +595,11 @@ impl Parser {
             }
 
             match self.peek().clone() {
+                // Slide marker: `~1.5` glides into the note instead of retriggering
+                Token::Tilde => {
+                    self.advance();
+                    pending_slide = true;
+                }
                 // Chord: [A3 C4 E4]:0.35(plock)
                 Token::LBracket => {
                     self.advance(); // consume [
@@ -607,6 +621,7 @@ impl Parser {
                                     note: NoteRef::Absolute(n),
                                     velocity: vel,
                                     plock: PLock::default(),
+                                    slide: false,
                                 });
                             }
                             Token::Number(v) => {
@@ -625,6 +640,7 @@ impl Parser {
                                         note: NoteRef::Degree(degree, octave),
                                         velocity: vel,
                                         plock: PLock::default(),
+                                        slide: false,
                                     });
                                 }
                             }
@@ -664,6 +680,7 @@ impl Parser {
                         note: NoteRef::Absolute(n),
                         velocity,
                         plock,
+                        slide: core::mem::take(&mut pending_slide),
                     }));
                 }
                 // Scale degree: 1.3 = degree 1, octave 3
@@ -688,6 +705,7 @@ impl Parser {
                             note: NoteRef::Degree(degree, octave),
                             velocity,
                             plock,
+                            slide: core::mem::take(&mut pending_slide),
                         }));
                     }
                 }
@@ -814,6 +832,7 @@ impl Parser {
             delay_send: None,
             reverb_send: None,
             sidechain: None,
+            arp: None,
         };
 
         loop {
@@ -886,12 +905,57 @@ impl Parser {
                         track.sidechain = Some(v);
                     }
                 }
+                Token::Ident(ref word) if word == "arp" => {
+                    self.advance();
+                    track.arp = self.parse_arp_clause();
+                }
                 _ => { self.advance(); }
             }
         }
 
         self.expect(&Token::RBrace);
         tracks.push(track);
+    }
+
+    /// `arp <mode> [rate=N] [gate=F] [octaves=N]` — mode is up, down, updown or off.
+    fn parse_arp_clause(&mut self) -> Option<ArpDef> {
+        let mode = match self.expect_ident() {
+            Some(m) => m,
+            None => return None,
+        };
+        let mut def = ArpDef { mode, rate: None, gate: None, octaves: None };
+        loop {
+            let key = match self.peek().clone() {
+                Token::Ident(ref k) => k.clone(),
+                _ => break,
+            };
+            // Only consume `ident =` pairs; a bare ident belongs to the next clause.
+            let saved = self.pos;
+            self.advance();
+            if !matches!(self.peek(), Token::Eq) {
+                self.pos = saved;
+                break;
+            }
+            self.advance();
+            let value = match self.expect_number() {
+                Some(v) => v,
+                None => break,
+            };
+            match key.as_str() {
+                "rate" => def.rate = Some(value),
+                "gate" => def.gate = Some(value),
+                "octaves" => def.octaves = Some(value),
+                other => {
+                    let s = self.span();
+                    let (l, c) = (s.line, s.col);
+                    self.errors.push(ParseError {
+                        line: l, col: c,
+                        message: format!("arp: unknown option '{}' (expected rate, gate, octaves)", other),
+                    });
+                }
+            }
+        }
+        Some(def)
     }
 
     fn parse_routing_chain(&mut self, routing: &mut Vec<RoutingNode>) {
@@ -975,6 +1039,58 @@ impl Parser {
     }
 
     // ── Bus chain ──
+
+    /// True when the tokens after the current one look like `ident =`.
+    fn next_is_key_value(&self) -> bool {
+        let n = self.tokens.len();
+        let i = self.pos + 1;
+        i + 1 < n
+            && matches!(self.tokens[i].token, Token::Ident(_))
+            && matches!(self.tokens[i + 1].token, Token::Eq)
+    }
+
+    /// Top-level `delay sync=dotted_eighth feedback=0.45 filter=0.5 time=0.3`
+    /// or `reverb size=0.7 damp=0.4 predelay=20`.
+    fn parse_send_fx_globals(&mut self, which: &str, globals: &mut Globals) {
+        loop {
+            let key = match self.peek().clone() {
+                Token::Ident(ref k) => k.clone(),
+                _ => break,
+            };
+            let s = self.span();
+            let (line, col) = (s.line, s.col);
+            self.advance();
+            if !self.expect(&Token::Eq) { break; }
+            // Value: number, or an identifier for `sync`
+            let ident_value = match self.peek().clone() {
+                Token::Ident(ref v) => { let v = v.clone(); self.advance(); Some(v) }
+                _ => None,
+            };
+            let num_value = if ident_value.is_none() { self.expect_number() } else { None };
+            let mut bad = None;
+            match (which, key.as_str()) {
+                ("delay", "sync") => match ident_value {
+                    Some(v) if ["free", "quarter", "dotted_eighth", "eighth", "sixteenth", "triplet_eighth"].contains(&v.as_str()) => {
+                        globals.send_delay.sync = Some(v);
+                    }
+                    _ => bad = Some(String::from("delay sync: expected free | quarter | dotted_eighth | eighth | sixteenth | triplet_eighth")),
+                },
+                ("delay", "time") => globals.send_delay.time = num_value,
+                ("delay", "feedback") => globals.send_delay.feedback = num_value,
+                ("delay", "filter") => globals.send_delay.filter = num_value,
+                ("reverb", "size") => globals.send_reverb.size = num_value,
+                ("reverb", "damp") => globals.send_reverb.damp = num_value,
+                ("reverb", "predelay") => globals.send_reverb.predelay = num_value,
+                _ => bad = Some(format!(
+                    "{}: unknown option '{}' (delay: sync, time, feedback, filter; reverb: size, damp, predelay)",
+                    which, key
+                )),
+            }
+            if let Some(message) = bad {
+                self.errors.push(ParseError { line, col, message });
+            }
+        }
+    }
 
     fn try_parse_bus_chain_or_error(&mut self, song: &mut Song) {
         // Identifier at top level followed by { — bus chain or scene
@@ -1114,12 +1230,19 @@ impl Parser {
                 // Override: reverb_mix = 0.2 or delay_mix = 0.18
                 Token::Ident(ref target) => {
                     let target = target.clone();
+                    let s = self.span();
+                    let (line, col) = (s.line, s.col);
                     self.advance();
                     if matches!(self.peek(), Token::Eq) {
                         self.advance();
                         if let Some(val) = self.expect_number() {
                             scene.overrides.push(Override { target, value: val });
                         }
+                    } else {
+                        self.errors.push(ParseError {
+                            line, col,
+                            message: format!("scene '{}': unexpected '{}' (expected track, auto, tempo, or <override> = value)", scene.name, target),
+                        });
                     }
                 }
                 _ => { self.advance(); }
@@ -1153,6 +1276,7 @@ impl Parser {
 
             if let Token::Ident(ref key) = self.peek().clone() {
                 let key = key.clone();
+                let line = self.span().line;
                 self.advance();
 
                 // Check for op_envelope shorthand: op0_envelope 0.001 0.12 0.05 0.08
@@ -1179,32 +1303,39 @@ impl Parser {
                     false
                 };
 
-                // Handle waveform names as special param values
-                if let Token::Ident(ref wf) = self.peek().clone() {
-                    if is_waveform(wf) || is_voice_mode(wf) {
-                        let wf = wf.clone();
-                        self.advance();
-                        let value = match wf.as_str() {
-                            "sine" => 0.0,
-                            "saw" => 0.25,
-                            "square" => 0.5,
-                            "triangle" => 0.75,
-                            // Voice modes
-                            "poly" => 0.0,
-                            "unison" => 0.25,
-                            "octave" => 0.5,
-                            "fifth" => 0.75,
-                            "ringmod" => 1.0,
-                            _ => 0.0,
-                        };
-                        params.push(ModuleParam { name: key, value });
-                        continue;
+                // Symbolic values for choice params: `waveform half_sine`, `voice_mode unison`
+                if let Token::Ident(ref word) = self.peek().clone() {
+                    let word = word.clone();
+                    let spec = ModuleKind::from_str(&module_type)
+                        .and_then(|k| params::lookup(k, &key));
+                    match spec {
+                        Some(spec) => match spec.value_from_name(&word) {
+                            Some(value) => {
+                                self.advance();
+                                params.push(ModuleParam { name: key, value, line });
+                            }
+                            None => {
+                                let s = self.span();
+                                let (l, c) = (s.line, s.col);
+                                self.errors.push(ParseError {
+                                    line: l, col: c,
+                                    message: format!("'{}' has no option '{}' (choices: {})", key, word, spec.range.describe()),
+                                });
+                                self.advance();
+                            }
+                        },
+                        // Unknown param: let the compiler report it with a suggestion.
+                        None => {
+                            self.advance();
+                            params.push(ModuleParam { name: key, value: 0.0, line });
+                        }
                     }
+                    continue;
                 }
 
                 if let Some(val) = self.expect_number() {
                     let val = if negative { -val } else { val };
-                    params.push(ModuleParam { name: key, value: val });
+                    params.push(ModuleParam { name: key, value: val, line });
                 }
             } else {
                 self.advance();
@@ -1362,7 +1493,3 @@ fn is_waveform(word: &str) -> bool {
     matches!(word, "sine" | "saw" | "square" | "triangle" | "pulse")
 }
 
-/// Check if a word is a voice mode name.
-fn is_voice_mode(word: &str) -> bool {
-    matches!(word, "poly" | "unison" | "octave" | "fifth" | "ringmod")
-}

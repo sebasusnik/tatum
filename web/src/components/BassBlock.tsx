@@ -1,27 +1,27 @@
-import { For } from "solid-js";
+import { createMemo } from "solid-js";
 import Knob from "./Knob";
-import InlineSeq from "./InlineSeq";
+import ActivityLed from "./ActivityLed";
+import PatternVis from "./PatternVis";
 import {
-  modules, patterns, currentStep, playing,
-  setModuleParam, toggleStepFor, setStepNote,
   sends, setModuleSend, muted, soloed, toggleMute, toggleSolo,
+  getModulePagesForTrack, getModuleNameForTrack, setModuleParamForTrack,
+  getPatternForTrack,
 } from "../stores/synth";
 
-export default function BassBlock() {
-  const mod = () => modules.bass;
+export default function BassBlock(props: { trackName: string }) {
+  const pages = createMemo(() => getModulePagesForTrack(props.trackName));
+  const moduleName = createMemo(() => getModuleNameForTrack(props.trackName));
+  const pattern = createMemo(() => getPatternForTrack(props.trackName));
   const color = "#ff6b35";
-  const pat = () => patterns.bass;
 
-  // Page 0: Cutoff(0), Reso(1), EnvMod(2), Glide(3)
-  // Page 1: Attack(0), Decay(1), Sustain(2), Release(3)
-  // Page 2: Osc2(0), Osc3(1), Wave(2), Keytrack(3)
-  const knob = (page: number, idx: number) => mod().pages[page].values[idx];
-  const setK = (page: number, idx: number, v: number) => setModuleParam("bass", page, idx, v);
+  const knob = (page: number, idx: number) => pages()[page]?.values[idx] ?? 50;
+  const setK = (page: number, idx: number, v: number) => setModuleParamForTrack(props.trackName, page, idx, v);
 
   return (
     <div class="rw-block" data-m="bass">
       <div class="rw-header">
-        <span class="rw-label" style={{ color }}>BASS</span>
+        <ActivityLed pattern={pattern()} color={color} />
+        <span class="rw-label" style={{ color }}>BASS{moduleName() ? ` · ${moduleName()}` : ""}</span>
         <div class="rw-btns">
           <button classList={{ "rw-m": true, active: muted().bass }} onClick={() => toggleMute("bass")}>M</button>
           <button classList={{ "rw-s": true, active: soloed().bass }} onClick={() => toggleSolo("bass")}>S</button>
@@ -42,15 +42,7 @@ export default function BassBlock() {
         <Knob value={knob(2, 0)} label="Os2" color={color} size={32} onChange={(v) => setK(2, 0, v)} />
       </div>
 
-      <InlineSeq
-        moduleId="bass"
-        pattern={pat()}
-        currentStep={currentStep()}
-        playing={playing()}
-        color={color}
-        onToggle={(idx) => toggleStepFor("bass", idx)}
-        onNoteChange={(idx, note) => setStepNote("bass", idx, note)}
-      />
+      <PatternVis pattern={pattern()} color={color} />
 
       <div class="rw-sends">
         <Knob value={sends().bass.delay * 100} label="Dly" color="#5b8cff" size={26} onChange={(v) => setModuleSend("bass", "delay", v / 100)} />

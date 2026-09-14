@@ -30,7 +30,7 @@ module keys wash {
 
 # Bright shimmer pad — higher register, airy
 module keys shimmer {
-    voice_mode 2.0
+    voice_mode ringmod
     cutoff 0.35
     resonance 0.10
     detune 0.06
@@ -87,7 +87,7 @@ module fm glass {
     chorus_mix 0.30
     lfo_rate 0.03
     lfo_depth 0.02
-    lfo_target 2.0
+    lfo_target mod_index
 }
 
 # FM melody — warm but present lead, cuts through the wash
@@ -105,7 +105,7 @@ module fm nostalgia {
     vibrato_depth 0.06
     lfo_rate 0.05
     lfo_depth 0.03
-    lfo_target 2.0
+    lfo_target mod_index
 }
 
 # Soft drum machine — lo-fi, hazy, gentle
@@ -335,7 +335,7 @@ track drums {
     play silence
     using tape
     velocity 1.0
-    level 0.52
+    level 0.62
     out > saturate(0.08) > compressor(-8, ratio=2.5, attack=5, release=60, makeup=1) > master
 }
 
@@ -353,7 +353,7 @@ track shimmer {
     play silence
     using shimmer
     velocity 1.0
-    level 0.22
+    level 0.06
     reverb_send 0.35
     delay_send 0.12
     out > chorus(0.15) > master
@@ -363,7 +363,7 @@ track bass {
     play silence
     using warmth
     velocity 1.0
-    level 0.28
+    level 0.35
     gate 0.80
     out > saturate(0.08) > lowpass(0.35) > master
 }
@@ -381,7 +381,8 @@ track glass {
     play silence
     using glass
     velocity 1.0
-    level 0.10
+    level 0.48
+    pan -0.30
     gate 0.45
     delay_send 0.30
     reverb_send 0.50
@@ -393,6 +394,7 @@ track melody {
     using nostalgia
     velocity 1.0
     level 0.42
+    pan 0.25
     gate 0.45
     delay_send 0.12
     reverb_send 0.15

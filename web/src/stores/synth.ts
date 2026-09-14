@@ -115,18 +115,10 @@ export type ModuleId = "bass" | "keys" | "fm" | "beats" | "arp";
 export type MelodicId = "bass" | "keys" | "fm";
 type PageModuleId = "bass" | "keys" | "fm" | "beats";
 
-const PAGE_MODULES: PageModuleId[] = ["bass", "keys", "fm", "beats"];
-const ALL_MODULES: ModuleId[] = ["bass", "keys", "fm", "beats", "arp"];
-const MELODIC_MODULES: MelodicId[] = ["bass", "keys", "fm"];
-const TRACK_MAP: Record<MelodicId, number> = { bass: 0, keys: 1, fm: 2 };
-const DRUM_LANE_NAMES = [
-  "kick",
-  "snare",
-  "hihat",
-  "clap",
-  "tom",
-  "crash",
-] as const;
+/** "arp" has no knob pages; everything that indexes `modules` narrows to this. */
+function pageModule(id: ModuleId): PageModuleId | null {
+  return id === "arp" ? null : id;
+}
 
 // ── Module configs (knob UI) ─────────────────────────
 
@@ -424,7 +416,7 @@ export const [drumLanes, setDrumLanes] = createStore(DEFAULT_DRUM_LANES);
 export const currentModule = selectedModule;
 export const setCurrentModule = setSelectedModule;
 
-export const mod = () => modules[selectedModule()];
+export const mod = () => modules[pageModule(selectedModule()) ?? "bass"];
 export const page = () => mod().pages[currentPage()];
 export const accentColor = () => mod().color;
 export const pageCount = () => mod().pages.length;
@@ -461,6 +453,151 @@ export interface TrackInfo {
   pan: number;
 }
 export const [trackInfos, setTrackInfos] = createSignal<TrackInfo[]>([]);
+
+// ── DSL Module Instances (parsed from DSL text) ─────────────
+
+export interface DslModuleInstance {
+  kind: string;
+  name: string;
+  params: Record<string, number>;
+}
+
+// Key: "kind:name" e.g. "bass:warmth"
+export const [dslModules, setDslModules] = createStore<Record<string, DslModuleInstance>>({});
+
+// Track name → module name mapping (e.g. "bass" → "warmth")
+export const [trackModuleMap, setTrackModuleMap] = createSignal<Record<string, string>>({});
+
+// ── Parsed patterns from DSL ────────────────────────
+
+/** A single step in a pattern — velocity 0 = rest, >0 = note on */
+export interface ParsedStep {
+  velocity: number;      // 0 = rest/tie placeholder, >0 = note on
+  noteCount: number;     // 1 = mono, >1 = chord (polyphonic)
+  isTie: boolean;        // ".." continuation
+}
+
+export interface ParsedDrumLane {
+  name: string;          // "kick", "snare", "hat", etc.
+  steps: number[];       // velocity per step (0 = rest)
+}
+
+export interface ParsedPattern {
+  type: "melodic" | "drums";
+  steps: ParsedStep[];       // for melodic patterns (16 steps)
+  drumLanes: ParsedDrumLane[]; // for drum patterns
+}
+
+// Pattern name → parsed data
+export const [dslPatterns, setDslPatterns] = createSignal<Record<string, ParsedPattern>>({});
+
+// ── Parsed scenes from DSL ──────────────────────────
+
+export interface ParsedSceneTrack {
+  name: string;
+  pattern: string;
+}
+
+export interface ParsedScene {
+  name: string;
+  tracks: ParsedSceneTrack[];
+}
+
+export const [dslScenes, setDslScenes] = createSignal<ParsedScene[]>([]);
+
+// Track name → current pattern name (from active scene)
+export const [trackPatternMap, setTrackPatternMap] = createSignal<Record<string, string>>({});
+
+// Currently active scene name
+export const [activeSceneName, setActiveSceneName] = createSignal("");
+
+/** Get the parsed pattern for a given track (based on current scene) */
+export function getPatternForTrack(trackName: string): ParsedPattern | null {
+  const patName = trackPatternMap()[trackName];
+  if (!patName) return null;
+  return dslPatterns()[patName] ?? null;
+}
+
+// ── DSL param name → [pageIdx, knobIdx] mappings ────────────
+
+const BASS_PARAM_MAP: Record<string, [number, number]> = {
+  cutoff: [0, 0], resonance: [0, 1], cutoff_env: [0, 2], glide: [0, 3],
+  attack: [1, 0], decay: [1, 1], sustain: [1, 2], release: [1, 3],
+  osc2_pitch: [2, 0], osc1_wave: [2, 2], keytrack: [2, 3],
+  lfo_rate: [3, 0], lfo_depth: [3, 1], lfo_waveform: [3, 2], lfo_target: [3, 3],
+};
+
+const KEYS_PARAM_MAP: Record<string, [number, number]> = {
+  cutoff: [0, 0], detune: [0, 1], chorus_mix: [0, 2],
+  attack: [1, 0], decay: [1, 1], sustain: [1, 2], release: [1, 3],
+  lfo_rate: [2, 0], lfo_depth: [2, 1], voice_mode: [2, 2],
+  resonance: [3, 0],
+};
+
+const FM_PARAM_MAP: Record<string, [number, number]> = {
+  algorithm: [0, 0], mod_index: [0, 1], feedback: [0, 2],
+  attack: [1, 0], decay: [1, 1], sustain: [1, 2], release: [1, 3],
+  lfo_rate: [2, 0], lfo_depth: [2, 1], waveform: [2, 2], chorus_mix: [2, 3],
+  op0_ratio: [3, 0], op0_feedback: [3, 1],
+  op1_ratio: [4, 0], op1_feedback: [4, 1],
+  op2_ratio: [5, 0], op2_feedback: [5, 1],
+  op3_ratio: [6, 0], op3_feedback: [6, 1],
+};
+
+const BEATS_PARAM_MAP: Record<string, [number, number]> = {
+  kick_decay: [0, 0], snare_decay: [0, 1], hihat_decay: [0, 2],
+  kick_pitch: [1, 0], snare_pitch: [1, 1], hihat_pitch: [1, 2], kick_click: [1, 3],
+  kick_level: [0, 0], snare_level: [0, 1], hihat_level: [0, 2], clap_level: [0, 3],
+  kick_drive: [1, 0], snare_drive: [1, 1], snare_snap: [1, 2],
+};
+
+const PARAM_MAPS: Record<string, Record<string, [number, number]>> = {
+  bass: BASS_PARAM_MAP, keys: KEYS_PARAM_MAP, fm: FM_PARAM_MAP, beats: BEATS_PARAM_MAP,
+};
+
+/** Get module pages for a specific track, with DSL values overlaid on defaults */
+export function getModulePagesForTrack(trackName: string): Page[] {
+  const moduleName = trackModuleMap()[trackName];
+  const tracks = trackInfos();
+  const track = tracks.find(t => t.name === trackName);
+  if (!track) return [];
+
+  const kind = track.kind as PageModuleId;
+  const defaults = MODULES[kind];
+  if (!defaults) return [];
+
+  // Deep clone default pages
+  const pages: Page[] = defaults.pages.map(p => ({
+    keys: [...p.keys],
+    values: [...p.values],
+  }));
+
+  if (!moduleName) return pages;
+
+  const dslMod = dslModules[`${kind}:${moduleName}`];
+  if (!dslMod) return pages;
+
+  const paramMap = PARAM_MAPS[kind];
+  if (!paramMap) return pages;
+
+  // Overlay DSL values (0.0-1.0 → 0-100 UI)
+  for (const [paramName, value] of Object.entries(dslMod.params)) {
+    const mapping = paramMap[paramName];
+    if (mapping) {
+      const [pageIdx, knobIdx] = mapping;
+      if (pages[pageIdx] && knobIdx < pages[pageIdx].values.length) {
+        pages[pageIdx].values[knobIdx] = Math.round(value * 100);
+      }
+    }
+  }
+
+  return pages;
+}
+
+/** Get the module name used by a track (e.g. "warmth" for track "bass") */
+export function getModuleNameForTrack(trackName: string): string {
+  return trackModuleMap()[trackName] ?? "";
+}
 
 // ── Audio Bridge ─────────────────────────────────────
 
@@ -558,6 +695,179 @@ export function syncStoreFromDsl(source: string): void {
     const scaleIdx = SCALE_DSL_NAMES.indexOf(scaleMatch[2]);
     if (scaleIdx >= 0) setHarmonyScale(scaleIdx);
   }
+
+  // Parse module definitions: module <kind> <name> { ... }
+  const parsedModules: Record<string, DslModuleInstance> = {};
+  const moduleRe = /^module\s+(bass|keys|fm|beats|chord)\s+(\w+)\s*\{([^}]*)\}/gm;
+  let mm;
+  while ((mm = moduleRe.exec(source)) !== null) {
+    const [, kind, name, body] = mm;
+    const params: Record<string, number> = {};
+    // Parse single-value params: "  paramName value"
+    const paramRe = /^\s+(\w+)\s+([-\d.]+)$/gm;
+    let pp;
+    while ((pp = paramRe.exec(body)) !== null) {
+      params[pp[1]] = parseFloat(pp[2]);
+    }
+    // Parse multi-value envelope params: "  op0_envelope 0.1 0.2 0.3 0.4"
+    const envRe = /^\s+(op\d+_envelope)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)/gm;
+    let ee;
+    while ((ee = envRe.exec(body)) !== null) {
+      const prefix = ee[1].replace("_envelope", "");
+      params[`${prefix}_attack`] = parseFloat(ee[2]);
+      params[`${prefix}_decay`] = parseFloat(ee[3]);
+      params[`${prefix}_sustain`] = parseFloat(ee[4]);
+      params[`${prefix}_release`] = parseFloat(ee[5]);
+    }
+    parsedModules[`${kind}:${name}`] = { kind, name, params };
+  }
+  setDslModules(parsedModules);
+
+  // Parse track → module mappings: track <name> { ... using <moduleName> ... }
+  const mapping: Record<string, string> = {};
+  const trackRe = /^track\s+(\w+)\s*\{[^}]*?using\s+(\w+)/gm;
+  let tt;
+  while ((tt = trackRe.exec(source)) !== null) {
+    mapping[tt[1]] = tt[2];
+  }
+  setTrackModuleMap(mapping);
+
+  // Parse patterns
+  const parsedPatterns: Record<string, ParsedPattern> = {};
+  // Match pattern blocks — need to handle multiline bodies with nested braces
+  const patternBlockRe = /^pattern\s+(\w+)\s*\{([^}]*)\}/gm;
+  let pb;
+  while ((pb = patternBlockRe.exec(source)) !== null) {
+    const [, patName, body] = pb;
+    const lines = body.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+
+    // Detect drum pattern: lines start with "laneName:"
+    const isDrum = lines.some(l => /^\w+:/.test(l));
+
+    if (isDrum) {
+      const drumLanes: ParsedDrumLane[] = [];
+      for (const line of lines) {
+        const laneMatch = line.match(/^(\w+):\s+(.+)$/);
+        if (!laneMatch) continue;
+        const [, laneName, stepsStr] = laneMatch;
+        const tokens = stepsStr.trim().split(/\s+/);
+        const steps = tokens.map(tok => {
+          if (tok === "-") return 0;
+          if (tok === "X" || tok === "x") return 1.0;
+          const vm = tok.match(/^[xX]:?([\d.]+)$/);
+          if (vm) return parseFloat(vm[1]);
+          // Ghost notes: g?0.30
+          const gm = tok.match(/^g\?([\d.]+)$/);
+          if (gm) return parseFloat(gm[1]);
+          // Accent: o
+          if (tok === "o") return 0.6;
+          return 0;
+        });
+        drumLanes.push({ name: laneName, steps });
+      }
+      parsedPatterns[patName] = { type: "drums", steps: [], drumLanes };
+    } else {
+      // Melodic pattern — parse all tokens across all lines
+      const allTokens: string[] = [];
+      for (const line of lines) {
+        allTokens.push(...line.split(/\s+/));
+      }
+      const steps: ParsedStep[] = allTokens.map(tok => {
+        if (tok === "-") return { velocity: 0, noteCount: 1, isTie: false };
+        if (tok === "..") return { velocity: 0, noteCount: 0, isTie: true };
+        // Chord: [notes]:vel
+        const chordMatch = tok.match(/^\[([^\]]+)\](?::([\d.]+))?$/);
+        if (chordMatch) {
+          const notes = chordMatch[1].trim().split(/\s+/);
+          const vel = chordMatch[2] ? parseFloat(chordMatch[2]) : 0.8;
+          return { velocity: vel, noteCount: notes.length, isTie: false };
+        }
+        // Single note: degree.octave:vel or NoteName:vel
+        const noteMatch = tok.match(/^[^:]+(?::([\d.]+))?$/);
+        if (noteMatch && tok !== "-") {
+          const vel = noteMatch[1] ? parseFloat(noteMatch[1]) : 0.8;
+          return { velocity: vel, noteCount: 1, isTie: false };
+        }
+        return { velocity: 0, noteCount: 1, isTie: false };
+      });
+      parsedPatterns[patName] = { type: "melodic", steps, drumLanes: [] };
+    }
+  }
+  setDslPatterns(parsedPatterns);
+
+  // Parse scenes
+  const scenes: ParsedScene[] = [];
+  const sceneRe = /^scene\s+(\w+)\s*\{([^}]*)\}/gm;
+  let sc;
+  while ((sc = sceneRe.exec(source)) !== null) {
+    const [, sceneName, body] = sc;
+    const tracks: ParsedSceneTrack[] = [];
+    const stRe = /track\s+(\w+)\s*\{\s*play\s+(\w+)/g;
+    let st;
+    while ((st = stRe.exec(body)) !== null) {
+      tracks.push({ name: st[1], pattern: st[2] });
+    }
+    scenes.push({ name: sceneName, tracks });
+  }
+  setDslScenes(scenes);
+
+  // Set initial active scene to the first one, populate trackPatternMap
+  if (scenes.length > 0) {
+    setActiveSceneName(scenes[0].name);
+    const patMap: Record<string, string> = {};
+    for (const st of scenes[0].tracks) {
+      patMap[st.name] = st.pattern;
+    }
+    setTrackPatternMap(patMap);
+  }
+}
+
+/** Update a module param for a specific track: RT audio + DSL text patch (no recompile) */
+export function setModuleParamForTrack(
+  trackName: string,
+  pageIdx: number,
+  knobIdx: number,
+  value: number,
+): void {
+  const clamped = Math.round(Math.min(100, Math.max(0, value)));
+  const tracks = trackInfos();
+  const trackIdx = tracks.findIndex(t => t.name === trackName);
+  if (trackIdx < 0) return;
+
+  const track = tracks[trackIdx];
+  const paramMap = PARAM_MAPS[track.kind];
+  if (!paramMap) return;
+
+  // Reverse lookup: find DSL param name from page+knob indices
+  const entry = Object.entries(paramMap).find(
+    ([, [p, k]]) => p === pageIdx && k === knobIdx,
+  );
+  if (!entry) return;
+  const paramName = entry[0];
+
+  // RT message to engine (instant audio change)
+  setModuleParamRT(trackIdx, paramName, clamped / 100);
+
+  // Patch the DSL text (no recompile)
+  const moduleName = trackModuleMap()[trackName];
+  if (moduleName) {
+    patchModuleParam(track.kind, moduleName, paramName, clamped / 100);
+  }
+}
+
+/** Patch a single param value inside a module block in the DSL text */
+function patchModuleParam(kind: string, moduleName: string, param: string, value: number): void {
+  const source = dslSource();
+  // Match the param line within the specific module block
+  const modBlockRe = new RegExp(
+    `(module\\s+${kind}\\s+${moduleName}\\s*\\{[^}]*?)\\b(${param})\\s+[-\\d.]+`,
+    "m",
+  );
+  const formatted = value % 1 === 0 ? value.toFixed(1) : value.toFixed(4).replace(/0+$/, "").replace(/\.$/, ".0");
+  const patched = source.replace(modBlockRe, `$1$2 ${formatted}`);
+  if (patched !== source) {
+    updateDslTextOnly(patched);
+  }
 }
 
 /** Set a real-time track level (0.0-1.0) without recompiling. */
@@ -566,6 +876,19 @@ export function setTrackLevelRT(trackIdx: number, level: number): void {
   audio.setTrackLevel(trackIdx, level);
   // Update local track info
   setTrackInfos((prev) => prev.map((t, i) => i === trackIdx ? { ...t, level } : t));
+}
+
+/** Switch to a scene by name — updates trackPatternMap for the UI */
+export function switchScene(sceneName: string): void {
+  const scenes = dslScenes();
+  const scene = scenes.find(s => s.name === sceneName);
+  if (!scene) return;
+  setActiveSceneName(sceneName);
+  const patMap: Record<string, string> = {};
+  for (const st of scene.tracks) {
+    patMap[st.name] = st.pattern;
+  }
+  setTrackPatternMap(patMap);
 }
 
 /** Set tempo in real-time without recompiling. */
@@ -646,7 +969,8 @@ export function prevPage(): void {
 // ── Actions: Params ──────────────────────────────────
 
 export function setParamValue(knobIdx: number, value: number): void {
-  const m = selectedModule();
+  const m = pageModule(selectedModule());
+  if (!m) return;
   const p = currentPage();
   const clamped = Math.round(Math.min(100, Math.max(0, value)));
   setModules(m, "pages", p, "values", knobIdx, clamped);
@@ -708,8 +1032,10 @@ export function setSidechainValue(value: number): void {
 
 /** Set a param on any module directly (for railway layout where all modules are visible). */
 export function setModuleParam(modId: ModuleId, pageIdx: number, knobIdx: number, value: number): void {
+  const m = pageModule(modId);
+  if (!m) return;
   const clamped = Math.round(Math.min(100, Math.max(0, value)));
-  setModules(modId, "pages", pageIdx, "values", knobIdx, clamped);
+  setModules(m, "pages", pageIdx, "values", knobIdx, clamped);
 }
 
 // ── Actions: Melodic step toggle ─────────────────────

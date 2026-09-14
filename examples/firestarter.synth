@@ -1,0 +1,604 @@
+# Firestarter — industrial rave destruction
+# Inspired by The Prodigy, Nine Inch Nails, Atari Teenage Riot
+tempo 145
+meter 4/4
+scale E minor
+sidechain 0.60
+swing 0.50
+humanize 0.03 timing 0.01
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# Acid bass — screaming 303, full resonance, nasty
+module bass acid {
+    cutoff 0.06
+    cutoff_env 0.95
+    resonance 0.92
+    glide 0.04
+    keytrack 0.5
+    osc1_wave 0.25
+    osc2_pitch 0.508
+    attack 0.0
+    decay 0.06
+    sustain 0.25
+    release 0.03
+    lfo_rate 0.0
+    lfo_depth 0.0
+}
+
+# Sub bass — crushing weight
+module bass sub {
+    cutoff 0.03
+    cutoff_env 0.04
+    resonance 0.08
+    osc1_wave 0.0
+    osc2_pitch 0.50
+    attack 0.001
+    decay 0.12
+    sustain 0.95
+    release 0.02
+}
+
+# Filth bass — grinding, detuned, mechanical
+module bass filth {
+    cutoff 0.10
+    cutoff_env 0.80
+    resonance 0.70
+    glide 0.02
+    keytrack 0.7
+    osc1_wave 0.75
+    osc2_pitch 0.510
+    attack 0.0
+    decay 0.08
+    sustain 0.55
+    release 0.04
+    lfo_rate 0.12
+    lfo_depth 0.20
+    lfo_target 0.0
+}
+
+# Scream lead — brutal FM, metallic, industrial
+module fm scream {
+    algorithm 0.5714
+    mod_index 0.95
+    feedback 0.65
+    waveform 0.75
+    op0_ratio 0.065
+    op1_ratio 0.097
+    op0_envelope 0.001 0.08 0.35 0.06
+    op1_envelope 0.001 0.04 0.50 0.04
+    op1_feedback 0.55
+    chorus_mix 0.0
+    vibrato_rate 0.40
+    vibrato_depth 0.10
+}
+
+# Circuit-bent arp — glitchy, broken, fast
+module fm circuit {
+    algorithm 0.2857
+    mod_index 0.70
+    feedback 0.50
+    waveform 0.25
+    op0_ratio 0.065
+    op1_ratio 0.13
+    op0_envelope 0.001 0.02 0.0 0.01
+    op1_envelope 0.001 0.015 0.0 0.008
+    op1_feedback 0.35
+    chorus_mix 0.0
+}
+
+# Industrial stab — metallic, harsh, mechanical
+module fm stab {
+    algorithm 0.2857
+    mod_index 0.75
+    feedback 0.45
+    waveform 0.5
+    op0_ratio 0.065
+    op1_ratio 0.194
+    op0_envelope 0.001 0.03 0.0 0.02
+    op1_envelope 0.001 0.02 0.0 0.01
+    chorus_mix 0.0
+}
+
+# Machine noise — grinding metallic texture
+module fm machine {
+    algorithm 1.0
+    mod_index 1.0
+    feedback 0.80
+    waveform 1.0
+    op0_ratio 0.42
+    op1_ratio 0.11
+    op2_ratio 0.33
+    op3_ratio 0.07
+    op0_envelope 0.4 0.4 0.45 0.5
+    op1_envelope 0.1 0.2 0.55 0.3
+    op2_envelope 0.2 0.3 0.50 0.4
+    op3_envelope 0.05 0.1 0.65 0.2
+    op0_feedback 0.60
+    op2_feedback 0.70
+    lfo_rate 0.15
+    lfo_depth 0.25
+    lfo_target mod_index
+    lfo_waveform 0.75
+}
+
+# Dark pad — suffocating, low, oppressive
+module keys doom {
+    voice_mode 0.0
+    cutoff 0.06
+    resonance 0.40
+    detune 0.15
+    chorus_mix 0.10
+    attack 1.0
+    decay 0.6
+    sustain 0.30
+    release 0.8
+    lfo_rate 0.015
+    lfo_depth 0.10
+    lfo_target 0.0
+}
+
+# Drum machine — industrial, punishing
+module beats iron {
+    kick_level 1.0
+    kick_click 0.80
+    kick_decay 0.15
+    kick_pitch 0.22
+    kick_drive 0.90
+
+    snare_level 0.40
+    snare_decay 0.10
+    snare_pitch 0.25
+    snare_drive 0.90
+    snare_snap 0.15
+    snare_pan 0.0
+
+    hihat_level 0.60
+    hihat_pitch 0.52
+    hihat_pan 0.15
+    hihat_decay 0.06
+
+    clap_level 1.0
+    clap_pan 0.0
+}
+
+# ────────────────────────────────────────────────
+# PATTERNS
+# ────────────────────────────────────────────────
+
+# ── Industrial breakbeats ──
+
+# Pounding four-on-the-floor — relentless
+pattern beat_pound {
+    kick:    X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -
+    clap:    -  -  -  -  X  -  -  -  -  -  -  -  X  -  -  -
+    hat:     x  x  x  x  x  x  x  x  x  x  x  x  x  x  x  x
+    openhat: -  -  -  -  -  -  x  -  -  -  -  -  -  -  x  -
+}
+
+# Distorted breakbeat — chopped, mechanical
+pattern beat_break {
+    kick:    X  -  x:0.7  -  -  -  X  -  X  -  -  x:0.6  X  -  -  x:0.8
+    clap:    -  -  -  -   X  -  -  -  -  -  -  -  -  X  -  -
+    hat:     x  x:0.6  x  x:0.7  -  x  x:0.6  x  x  x:0.6  x  x:0.7  -  x  x:0.6  x
+    openhat: -  -  -  -  -  -  -  x:0.5  -  -  -  -  -  -  -  x:0.5
+}
+
+# Double kick assault
+pattern beat_assault {
+    kick:    X  -  x:0.7  -  X  x:0.5  x:0.6  -  X  -  x:0.8  -  X  x:0.6  -  x:0.7
+    clap:    -  -  -  -   X  -  -  -    -  -  -  -  X  -  -  -
+    snare:   -  -  -  x:0.3  -  -  -  x:0.4  -  -  -  x:0.3  -  -  x:0.5  -
+    hat:     x  x  x  x  x  x  x  x  x  x  x  x  x  x  x  x
+    openhat: -  -  -  -  -  -  x  -  -  -  -  -  -  -  x  -
+}
+
+# Half-time stomp — massive, menacing
+pattern beat_stomp {
+    kick:    X  -  -  -  -  -  -  -  X  -  -  -  -  -  x:0.8  -
+    clap:    -  -  -  -  -  -  -  -  -  -  -  -  X  -  -  -
+    hat:     x  -  x  -  x  -  x  -  x  -  x  -  x  -  x  -
+}
+
+# Build — kick + hats only, arp carries the tension
+pattern beat_build {
+    kick:    X  -  -  -  -  -  -  -  X  -  -  -  X  -  X  -
+    hat:     x  x  x  x  x  x  x  x  x  x  x  x  x  x  x  x
+    openhat: -  -  -  -  -  -  x  -  -  -  -  -  -  -  x  -
+}
+
+# Sparse — threatening
+pattern beat_sparse {
+    kick:  X  -  -  -  -  -  -  -  X  -  -  -  -  -  -  -
+    hat:   -  -  x:0.3  -  -  -  x:0.3  -  -  -  x:0.3  -  -  -  x:0.3  -
+}
+
+# ── Acid bass — squelchy, violent ──
+
+pattern acid_main {
+    1.1:0.95  -         1.1:0.55  1.1:0.40
+    -         1.2:0.85  -         1.1:0.50
+    1.1:0.95  -         4.1:0.75  -
+    5.1:0.90  1.1:0.50  -         1.1:0.65
+}
+
+pattern acid_frantic {
+    1.1:0.95  1.1:0.55  1.1:0.75  3.1:0.50
+    3.1:0.85  1.1:0.45  1.1:0.60  1.1:0.50
+    4.1:0.95  4.1:0.55  5.1:0.80  4.1:0.45
+    1.1:0.90  7.0:0.55  7.0:0.70  1.1:0.55
+}
+
+pattern acid_pound {
+    1.1:0.95  1.1:0.50  1.1:0.70  1.1:0.45
+    1.1:0.95  1.1:0.50  1.1:0.70  1.1:0.45
+    1.1:0.95  1.1:0.50  1.1:0.70  1.1:0.45
+    1.1:0.95  1.1:0.50  1.1:0.70  1.1:0.45
+}
+
+# ── Filth bass — grinding industrial ──
+
+pattern filth_riff {
+    1.1:0.95  ..  1.1:0.65  -
+    -         -   3.1:0.85  ..
+    4.1:0.95  ..  -         -
+    5.1:0.90  ..  1.1:0.75  -
+}
+
+pattern filth_grind {
+    1.1:0.95  1.1:0.65  1.1:0.75  1.1:0.55
+    1.1:0.95  -         3.1:0.80  -
+    4.1:0.95  4.1:0.65  4.1:0.75  -
+    5.1:0.90  -         1.1:0.85  -
+}
+
+pattern filth_machine {
+    1.0:0.95  ..  1.0:0.70  ..
+    ..        ..  ..        ..
+    1.0:0.90  ..  ..        ..
+    ..        ..  ..        ..
+}
+
+# ── Sub ──
+
+pattern sub_pulse {
+    1.0:0.90  ..  -  -
+    -         -   ..  -
+    1.0:0.85  ..  -  -
+    -         -   -  -
+}
+
+pattern sub_hold {
+    1.0:0.85  ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+}
+
+# ── Scream lead — industrial, metallic ──
+
+pattern scream_main {
+    1.3:0.80  ..  -  1.3:0.55
+    -         -   -  -
+    1.3:0.75  ..  -  -
+    -         -   1.3:0.60  -
+}
+
+pattern scream_assault {
+    1.3:0.85  -  1.3:0.55  -
+    -         -  1.3:0.60  -
+    1.3:0.80  -  -         1.3:0.50
+    -         -  1.3:0.70  -
+}
+
+pattern scream_siren {
+    1.5:0.75  ..  3.5:0.70  ..
+    5.5:0.75  ..  7.4:0.65  ..
+    5.4:0.70  ..  3.4:0.65  ..
+    1.4:0.75  ..  ..        ..
+}
+
+# ── Industrial stabs — metallic, mechanical ──
+
+pattern stab_offbeat {
+    -                    [1.3 5.3]:0.85  -  -
+    -                    [1.3 5.3]:0.80  -  -
+    -                    [1.3 5.3]:0.85  -  -
+    -                    [1.3 5.3]:0.75  -  -
+}
+
+pattern stab_slam {
+    [1.3 3.3 5.3]:0.95  -  -  -
+    -                    -  -  -
+    [1.3 3.3 5.3]:0.90  -  -  -
+    -                    -  -  -
+}
+
+pattern stab_machine {
+    [1.3 5.3]:0.90  -  [1.3 5.3]:0.65  -
+    -                -  [4.3 1.4]:0.70  -
+    [5.3 3.4]:0.85   -  -               -
+    -                -  [1.3 5.3]:0.70  -
+}
+
+# ── Circuit arp — glitchy, frantic, broken ──
+
+pattern arp_rise {
+    1.3:0.80  3.3:0.65  5.3:0.75  7.3:0.60
+    1.4:0.85  3.4:0.70  5.4:0.80  7.4:0.65
+    1.5:0.90  3.5:0.75  5.5:0.85  7.5:0.70
+    1.5:0.90  5.5:0.85  7.5:0.80  1.6:0.75
+}
+
+pattern arp_chaos {
+    5.4:0.85  1.3:0.60  7.4:0.75  3.3:0.55
+    1.5:0.80  5.3:0.65  3.4:0.70  7.3:0.50
+    5.5:0.85  1.4:0.70  7.3:0.75  3.5:0.60
+    1.4:0.80  7.4:0.65  5.3:0.70  3.4:0.55
+}
+
+pattern arp_stutter {
+    1.4:0.85  1.4:0.50  1.4:0.70  1.4:0.40
+    5.4:0.80  5.4:0.45  5.4:0.65  5.4:0.35
+    3.4:0.80  3.4:0.50  3.4:0.70  3.4:0.40
+    7.3:0.75  7.3:0.45  7.3:0.60  7.3:0.35
+}
+
+# ── Machine noise — grinding, metallic ──
+
+pattern machine_grind {
+    [1.2 5.2]:0.40  ..  ..  ..
+    ..               ..  ..  ..
+    ..               ..  ..  ..
+    ..               ..  ..  ..
+}
+
+pattern machine_chaos {
+    [1.3 7.3 3.4]:0.45  ..  ..  ..
+    ..                    ..  ..  ..
+    ..                    ..  ..  ..
+    ..                    ..  ..  ..
+}
+
+# ── Doom pad — suffocating ──
+
+pattern doom_drone {
+    [1.1 5.1 1.2]:0.35  ..  ..  ..
+    ..                    ..  ..  ..
+    ..                    ..  ..  ..
+    ..                    ..  ..  ..
+}
+
+pattern doom_minor {
+    [1.1 3.1 5.1]:0.38  ..  ..  ..
+    ..                    ..  ..  ..
+    ..                    ..  ..  ..
+    ..                    ..  ..  ..
+}
+
+pattern silence {
+    - - - -
+    - - - -
+    - - - -
+    - - - -
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track drums {
+    play silence
+    using iron
+    velocity 1.0
+    level 0.78
+    out > saturate(0.35) > eq(low=2.2, mid=1.5, high=1.0) > compressor(-12, ratio=5, attack=1, release=20, makeup=4) > master
+}
+
+track acid {
+    play silence
+    using acid
+    velocity 1.0
+    level 0.62
+    gate 0.50
+    out > saturate(0.70) > eq(low=1.5, mid=2.5, high=2.0) > compressor(-10, ratio=4, attack=1, release=15, makeup=3) > master
+}
+
+track filth {
+    play silence
+    using filth
+    velocity 1.0
+    level 0.55
+    gate 0.60
+    out > saturate(0.65) > lowpass(0.40) > master
+}
+
+track sub {
+    play silence
+    using sub
+    velocity 1.0
+    level 0.30
+    sidechain 0.50
+    gate 0.95
+    out > master
+}
+
+track scream {
+    play silence
+    using scream
+    velocity 1.0
+    level 0.38
+    pan 0.12
+    gate 0.30
+    delay_send 0.08
+    out > saturate(0.45) > master
+}
+
+track stab {
+    play silence
+    using stab
+    velocity 1.0
+    level 0.48
+    gate 0.06
+    delay_send 0.20
+    out > saturate(0.40) > master
+}
+
+track circuit {
+    play silence
+    using circuit
+    velocity 1.0
+    level 0.38
+    pan -0.15
+    gate 0.05
+    delay_send 0.25
+    out > bitcrush(6, 0.4) > saturate(0.35) > master
+}
+
+track machine {
+    play silence
+    using machine
+    velocity 1.0
+    level 0.18
+    pan -0.25
+    reverb_send 0.20
+    delay_send 0.15
+    out > saturate(0.20) > master
+}
+
+track doom {
+    play silence
+    using doom
+    velocity 1.0
+    level 0.18
+    reverb_send 0.35
+    out > saturate(0.10) > master
+}
+
+# ────────────────────────────────────────────────
+# MASTER
+# ────────────────────────────────────────────────
+
+master {
+    in > eq(low=2.8, mid=2.0, high=0.8)
+       > saturate(0.30)
+       > compressor(-10, ratio=5.0, attack=1, release=20, makeup=4)
+       > limiter
+       > out
+}
+
+# ────────────────────────────────────────────────
+# SCENES
+# ────────────────────────────────────────────────
+
+# INTRO: machine noise, sparse kick, dread
+scene intro {
+    track drums   { play beat_sparse    using iron }
+    track doom    { play doom_drone     using doom }
+    track machine { play machine_grind  using machine }
+    track sub     { play sub_hold       using sub }
+}
+
+# BUILD: frantic arp rising, machine noise
+scene build1 {
+    track drums   { play beat_build     using iron }
+    track circuit { play arp_rise       using circuit }
+    track doom    { play doom_drone     using doom }
+    track machine { play machine_chaos  using machine }
+    track sub     { play sub_hold       using sub }
+}
+
+# DROP A: pounding kicks, acid, stabs — full rave assault
+scene drop_a {
+    track drums   { play beat_pound     using iron }
+    track acid    { play acid_main      using acid }
+    track sub     { play sub_pulse      using sub }
+    track stab    { play stab_offbeat   using stab }
+    track doom    { play doom_minor     using doom }
+}
+
+# DROP A2: add scream, more acid
+scene drop_a2 {
+    track drums   { play beat_pound     using iron }
+    track acid    { play acid_frantic   using acid }
+    track sub     { play sub_pulse      using sub }
+    track stab    { play stab_machine   using stab }
+    track scream  { play scream_main    using scream }
+    track doom    { play doom_minor     using doom }
+}
+
+# STOMP: half-time, filth bass, menacing
+scene stomp {
+    track drums   { play beat_stomp     using iron }
+    track filth   { play filth_machine  using filth }
+    track sub     { play sub_hold       using sub }
+    track machine { play machine_grind  using machine }
+}
+
+# BUILD 2: arp chaos into destruction
+scene build2 {
+    track drums   { play beat_build     using iron }
+    track circuit { play arp_chaos      using circuit }
+    track filth   { play filth_grind    using filth }
+    track machine { play machine_chaos  using machine }
+    track doom    { play doom_drone     using doom }
+}
+
+# DROP B: breakbeat, everything, industrial chaos
+scene drop_b {
+    track drums   { play beat_break     using iron }
+    track acid    { play acid_frantic   using acid }
+    track sub     { play sub_pulse      using sub }
+    track scream  { play scream_assault using scream }
+    track stab    { play stab_slam      using stab }
+    track doom    { play doom_minor     using doom }
+}
+
+# DROP B2: full assault — double kicks, all elements, glitch arp
+scene drop_b2 {
+    track drums   { play beat_assault   using iron }
+    track filth   { play filth_grind    using filth }
+    track acid    { play acid_pound     using acid }
+    track sub     { play sub_pulse      using sub }
+    track scream  { play scream_siren   using scream }
+    track circuit { play arp_stutter    using circuit }
+    track machine { play machine_chaos  using machine }
+}
+
+# BREAK: stripped, grinding, threatening
+scene break1 {
+    track drums   { play beat_stomp     using iron }
+    track filth   { play filth_riff     using filth }
+    track sub     { play sub_hold       using sub }
+    track machine { play machine_grind  using machine }
+}
+
+# OUTRO: machine dying, sparse
+scene outro {
+    track drums   { play beat_sparse    using iron }
+    track doom    { play doom_drone     using doom }
+    track machine { play machine_grind  using machine }
+    track sub     { play sub_hold       using sub }
+}
+
+# ────────────────────────────────────────────────
+# ARRANGEMENT (44 bars)
+# ────────────────────────────────────────────────
+
+arrange {
+    intro x4
+    build1 x2
+    drop_a x4
+    drop_a2 x4
+    stomp x4
+    build2 x2
+    drop_b x4
+    drop_b2 x4
+    break1 x4
+    build2 x2
+    drop_a2 x4
+    drop_b2 x4
+    outro x2
+}

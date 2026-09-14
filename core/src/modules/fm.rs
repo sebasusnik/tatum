@@ -146,6 +146,7 @@ impl FmVoice {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FmParam {
     Algorithm,
     ModIndex,

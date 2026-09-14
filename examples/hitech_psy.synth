@@ -1,0 +1,1075 @@
+# Hi-Tech Psytrance — dark psychedelic machinery
+# Inspired by Vini Vici, Astrix, Infected Mushroom
+tempo 155
+meter 4/4
+scale E minor
+sidechain 0.65
+swing 0.50
+humanize 0.02 timing 0.005
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# Psytrance bass — aggressive, biting, distorted rolling bass
+module bass psy {
+    cutoff 0.08
+    cutoff_env 0.75
+    resonance 0.62
+    glide 0.02
+    keytrack 0.5
+    osc1_wave 0.0
+    osc2_pitch 0.506
+    attack 0.0
+    decay 0.06
+    sustain 0.35
+    release 0.02
+    lfo_rate 0.0
+    lfo_depth 0.0
+}
+
+# Sub — warm sine
+module bass sub {
+    cutoff 0.04
+    cutoff_env 0.05
+    resonance 0.08
+    osc1_wave 0.0
+    osc2_pitch 0.50
+    attack 0.001
+    decay 0.12
+    sustain 0.92
+    release 0.03
+}
+
+# Acid lead — screaming, aggressive filter sweep
+module bass acid_lead {
+    cutoff 0.08
+    cutoff_env 0.80
+    resonance 0.75
+    glide 0.04
+    keytrack 0.6
+    osc1_wave 0.0
+    osc2_pitch 0.507
+    attack 0.001
+    decay 0.08
+    sustain 0.30
+    release 0.03
+    lfo_rate 0.06
+    lfo_depth 0.12
+    lfo_target 0.0
+}
+
+# Alien FM — aggressive, distorted, otherworldly
+module fm alien {
+    algorithm 0.5714
+    mod_index 0.72
+    feedback 0.45
+    waveform 0.5
+    op0_ratio 0.065
+    op1_ratio 0.097
+    op0_envelope 0.003 0.10 0.30 0.08
+    op1_envelope 0.002 0.06 0.40 0.06
+    op1_feedback 0.38
+    chorus_mix 0.0
+    vibrato_rate 0.35
+    vibrato_depth 0.08
+}
+
+# Psy stab — spacey, detuned chords
+module fm psy_stab {
+    algorithm 0.2857
+    mod_index 0.45
+    feedback 0.20
+    waveform 0.0
+    op0_ratio 0.065
+    op1_ratio 0.13
+    op0_envelope 0.002 0.06 0.10 0.05
+    op1_envelope 0.001 0.04 0.15 0.03
+    chorus_mix 0.0
+}
+
+# Psychedelic texture — deep, warping, hallucinatory
+module fm psyche {
+    algorithm 1.0
+    mod_index 0.65
+    feedback 0.48
+    waveform 0.25
+    op0_ratio 0.065
+    op1_ratio 0.042
+    op2_ratio 0.13
+    op3_ratio 0.097
+    op0_envelope 0.5 0.6 0.40 0.8
+    op1_envelope 0.3 0.4 0.50 0.6
+    op2_envelope 0.4 0.5 0.45 0.7
+    op3_envelope 0.2 0.3 0.55 0.5
+    op0_feedback 0.40
+    op2_feedback 0.45
+    lfo_rate 0.08
+    lfo_depth 0.22
+    lfo_target mod_index
+    lfo_waveform 0.25
+}
+
+# Dark wash pad — no chorus, pure dark drone
+module keys void {
+    voice_mode 0.0
+    cutoff 0.05
+    resonance 0.30
+    detune 0.12
+    chorus_mix 0.0
+    attack 1.0
+    decay 0.6
+    sustain 0.30
+    release 0.8
+    lfo_rate 0.015
+    lfo_depth 0.04
+    lfo_target 0.0
+}
+
+# Shimmer — subtle sparkle, no chorus
+module keys shimmer {
+    voice_mode ringmod
+    cutoff 0.12
+    resonance 0.15
+    detune 0.10
+    chorus_mix 0.0
+    attack 0.9
+    decay 0.5
+    sustain 0.25
+    release 0.8
+    lfo_rate 0.025
+    lfo_depth 0.03
+    lfo_target 0.0
+}
+
+# Air escape — maximum noise, no pitch, pure hiss
+module fm air {
+    algorithm 1.0
+    mod_index 1.0
+    feedback 1.0
+    waveform 0.75
+    op0_ratio 0.47
+    op1_ratio 0.13
+    op2_ratio 0.31
+    op3_ratio 0.06
+    op0_envelope 0.001 2.0 0.15 1.5
+    op1_envelope 0.001 1.8 0.20 1.3
+    op2_envelope 0.001 1.6 0.18 1.2
+    op3_envelope 0.001 2.2 0.12 1.8
+    op0_feedback 0.90
+    op1_feedback 0.85
+    op2_feedback 0.88
+    op3_feedback 0.80
+    lfo_rate 0.0
+    lfo_depth 0.0
+}
+
+# Metallic chaos — violent industrial clanging
+module fm metal {
+    algorithm 1.0
+    mod_index 0.95
+    feedback 0.70
+    waveform 0.75
+    op0_ratio 0.37
+    op1_ratio 0.11
+    op2_ratio 0.23
+    op3_ratio 0.07
+    op0_envelope 0.001 0.08 0.0 0.10
+    op1_envelope 0.001 0.12 0.0 0.15
+    op2_envelope 0.001 0.06 0.0 0.08
+    op3_envelope 0.001 0.10 0.0 0.12
+    op0_feedback 0.65
+    op1_feedback 0.55
+    op2_feedback 0.70
+    chorus_mix 0.0
+}
+
+# Insect swarm — angry buzzing, violent alien hive
+module fm insects {
+    algorithm 0.5714
+    mod_index 0.85
+    feedback 0.58
+    waveform 0.5
+    op0_ratio 0.29
+    op1_ratio 0.07
+    op0_envelope 0.1 0.3 0.50 0.4
+    op1_envelope 0.05 0.2 0.60 0.3
+    op0_feedback 0.50
+    op1_feedback 0.45
+    lfo_rate 0.14
+    lfo_depth 0.30
+    lfo_target mod_index
+    lfo_waveform 0.75
+}
+
+# Dialup — rapid-fire electronic chirps, modem handshake noise
+module fm dialup {
+    algorithm 1.0
+    mod_index 0.92
+    feedback 0.70
+    waveform 0.0
+    op0_ratio 0.35
+    op1_ratio 0.09
+    op2_ratio 0.22
+    op3_ratio 0.14
+    op0_envelope 0.001 0.03 0.0 0.02
+    op1_envelope 0.001 0.04 0.0 0.03
+    op2_envelope 0.001 0.02 0.0 0.02
+    op3_envelope 0.001 0.05 0.0 0.04
+    op0_feedback 0.45
+    op1_feedback 0.55
+    op2_feedback 0.40
+    lfo_rate 0.12
+    lfo_depth 0.25
+    lfo_target mod_index
+    lfo_waveform 0.75
+}
+
+# Siren — rising/falling psychedelic alarm
+module fm siren {
+    algorithm 0.2857
+    mod_index 0.60
+    feedback 0.25
+    waveform 0.0
+    op0_ratio 0.13
+    op1_ratio 0.065
+    op0_envelope 0.3 0.5 0.50 0.6
+    op1_envelope 0.2 0.4 0.60 0.5
+    chorus_mix 0.0
+    vibrato_rate 0.40
+    vibrato_depth 0.15
+    lfo_rate 0.08
+    lfo_depth 0.18
+    lfo_target mod_index
+    lfo_waveform 0.0
+}
+
+# Kit — punishing kick, industrial clap
+module beats psy_kit {
+    kick_level 1.0
+    kick_click 0.70
+    kick_decay 0.10
+    kick_pitch 0.25
+    kick_drive 0.70
+
+    snare_level 0.40
+    snare_decay 0.10
+    snare_pitch 0.32
+    snare_drive 0.60
+    snare_snap 0.15
+    snare_pan 0.0
+
+    hihat_level 0.48
+    hihat_pitch 0.60
+    hihat_pan 0.22
+    hihat_decay 0.04
+
+    clap_level 0.70
+    clap_pan 0.0
+}
+
+# ────────────────────────────────────────────────
+# PATTERNS
+# ────────────────────────────────────────────────
+
+# ── Drums — progressive variations ──
+
+# Minimal — just kick and offbeat hat
+pattern beat_minimal {
+    kick:    X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -
+    hat:     -  -  x:0.35  -  -  -  x:0.35  -  -  -  x:0.35  -  -  -  x:0.35  -
+}
+
+# Open hat variation — more movement
+pattern beat_open {
+    kick:    X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -
+    hat:     x:0.30  -  x:0.45  -  x:0.30  -  x:0.45  -  x:0.30  -  x:0.45  -  x:0.30  -  x:0.45  -
+    openhat: -  -  -  -  -  -  -  x:0.25  -  -  -  -  -  -  -  x:0.25
+}
+
+# Driving — 8th hats, clap on 2 and 4
+pattern beat_drive {
+    kick:    X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -
+    clap:    -  -  -  -  X  -  -  -  -  -  -  -  X  -  -  -
+    hat:     x:0.40  x:0.22  x:0.40  x:0.22  x:0.40  x:0.22  x:0.40  x:0.22  x:0.40  x:0.22  x:0.40  x:0.22  x:0.40  x:0.22  x:0.40  x:0.22
+    openhat: -  -  -  -  -  -  -  x:0.28  -  -  -  -  -  -  -  x:0.28
+}
+
+# Syncopated — ghost hat accents, more groove
+pattern beat_groove {
+    kick:    X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -
+    clap:    -  -  -  -  X  -  -  -  -  -  -  -  X  -  -  -
+    hat:     x:0.40  x:0.20  x:0.45  x:0.30  -  x:0.35  x:0.20  x:0.40  x:0.40  x:0.20  x:0.45  x:0.30  -  x:0.35  x:0.20  x:0.40
+    openhat: -  -  -  -  -  -  x:0.30  -  -  -  -  -  -  -  x:0.30  -
+}
+
+# Peak energy — full pattern, ghost snares
+pattern beat_peak {
+    kick:    X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -
+    clap:    -  -  -  -  X  -  -  -  -  -  -  -  X  -  -  -
+    snare:   -  -  -  x:0.20  -  -  -  x:0.22  -  -  x:0.18  -  -  -  -  x:0.25
+    hat:     x:0.42  x:0.25  x:0.48  x:0.25  x:0.42  x:0.25  x:0.48  x:0.25  x:0.42  x:0.25  x:0.48  x:0.25  x:0.42  x:0.25  x:0.48  x:0.25
+    openhat: -  -  -  -  -  -  x:0.30  -  -  -  -  -  -  -  x:0.30  -
+}
+
+# Build — accelerating kicks
+pattern beat_build {
+    kick:    X  -  -  -  X  -  -  -  X  -  X  -  X  -  X  -
+    hat:     x:0.35  x:0.25  x:0.35  x:0.25  x:0.35  x:0.25  x:0.35  x:0.25  x:0.35  x:0.25  x:0.35  x:0.25  x:0.35  x:0.25  x:0.35  x:0.25
+}
+
+# Sparse — tension
+pattern beat_sparse {
+    kick:    X  -  -  -  -  -  -  -  X  -  -  -  -  -  -  -
+}
+
+# ── Rolling bass — evolving over the song ──
+
+# Basic roll — straight 16ths, root only
+pattern bass_roll {
+    1.1:0.80  1.1:0.42  1.1:0.62  1.1:0.38
+    1.1:0.78  1.1:0.42  1.1:0.58  1.1:0.35
+    1.1:0.80  1.1:0.42  1.1:0.62  1.1:0.38
+    1.1:0.78  1.1:0.42  1.1:0.58  1.1:0.35
+}
+
+# First variation — introduce 5th on beat 4
+pattern bass_v1 {
+    1.1:0.80  1.1:0.42  1.1:0.62  1.1:0.38
+    1.1:0.78  1.1:0.42  1.1:0.58  1.1:0.35
+    1.1:0.80  1.1:0.42  1.1:0.62  1.1:0.38
+    5.1:0.75  1.1:0.42  1.1:0.58  1.1:0.35
+}
+
+# Second variation — 4th and 5th intervals, more movement
+pattern bass_v2 {
+    1.1:0.82  1.1:0.42  1.1:0.62  3.1:0.45
+    1.1:0.78  5.0:0.44  1.1:0.58  1.1:0.38
+    1.1:0.82  1.1:0.42  4.1:0.60  1.1:0.38
+    5.1:0.78  1.1:0.42  1.1:0.58  1.1:0.35
+}
+
+# Full morph — walking intervals, peak complexity
+pattern bass_morph {
+    1.1:0.82  3.1:0.48  1.1:0.62  5.0:0.42
+    4.1:0.72  1.1:0.42  3.1:0.58  1.1:0.38
+    5.1:0.78  1.1:0.45  1.1:0.62  4.1:0.42
+    1.1:0.78  5.0:0.42  3.1:0.58  1.1:0.38
+}
+
+# Stutter — triplet-feel gaps for builds
+pattern bass_stutter {
+    1.1:0.82  1.1:0.82  1.1:0.48  -
+    1.1:0.78  1.1:0.78  1.1:0.45  -
+    1.1:0.82  1.1:0.82  1.1:0.48  -
+    1.1:0.78  1.1:0.78  1.1:0.45  -
+}
+
+# Half-time — for breakdowns, breathe
+pattern bass_half {
+    1.1:0.75  ..  -  -
+    -         -   ..  -
+    1.1:0.70  ..  -  -
+    -         -   -  -
+}
+
+# ── Acid lead ──
+
+# Simple — just the root, sparse
+pattern acid_intro {
+    1.2:0.65  -  -  -
+    -         -  -  -
+    1.2:0.58  -  -  -
+    -         -  -  -
+}
+
+# Riff — root and 5th only, rhythmic not melodic
+pattern acid_riff {
+    1.2:0.70  -  1.2:0.45  -
+    5.1:0.62  -  -         -
+    1.2:0.65  -  1.2:0.42  -
+    5.1:0.58  -  -         -
+}
+
+# Hypnotic — repeated root, filter does the work
+pattern acid_hypno {
+    1.2:0.72  ..  1.2:0.48  -
+    1.2:0.65  ..  -         -
+    1.2:0.72  ..  1.2:0.48  -
+    1.2:0.62  ..  -         -
+}
+
+# ── Sub ──
+
+pattern sub_pulse {
+    1.0:0.78  ..  -  -
+    -         -   ..  -
+    1.0:0.72  ..  -  -
+    -         -   -  -
+}
+
+pattern sub_hold {
+    1.0:0.72  ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+}
+
+# ── Alien — textural, not melodic ──
+
+# Sparse stab — rhythmic accent
+pattern alien_sparse {
+    1.3:0.58  -  -  -
+    -         -  -  -
+    -         -  -  -
+    -         -  1.3:0.42  -
+}
+
+# Rhythmic — syncopated hits
+pattern alien_rhythm {
+    1.3:0.62  -  -  1.3:0.42
+    -         -  -  -
+    1.3:0.58  -  -  -
+    -         -  1.3:0.45  -
+}
+
+# Trippy — sustained single tone, let the FM do the movement
+pattern alien_drift {
+    1.3:0.50  ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+}
+
+# ── Stabs — spacey chords ──
+
+pattern stab_offbeat {
+    -                [1.3 5.3]:0.55  -  -
+    -                [1.3 5.3]:0.50  -  -
+    -                [1.3 5.3]:0.55  -  -
+    -                [1.3 5.3]:0.48  -  -
+}
+
+pattern stab_wide {
+    [1.3 5.3]:0.58  -  -  -
+    -                -  -  [1.3 5.3]:0.42
+    -                -  -  -
+    [1.3 5.3]:0.48   -  -  -
+}
+
+# ── Psyche texture ──
+
+pattern psyche_swirl {
+    [1.2 5.2]:0.28  ..  ..  ..
+    ..               ..  ..  ..
+    ..               ..  ..  ..
+    ..               ..  ..  ..
+}
+
+pattern psyche_deep {
+    [1.2 3.2 7.2]:0.30  ..  ..  ..
+    ..                    ..  ..  ..
+    ..                    ..  ..  ..
+    ..                    ..  ..  ..
+}
+
+# ── Void pad ──
+
+pattern void_drone {
+    [1.1 5.1 1.2]:0.25  ..  ..  ..
+    ..                    ..  ..  ..
+    ..                    ..  ..  ..
+    ..                    ..  ..  ..
+}
+
+pattern void_dark {
+    [1.1 3.1 5.1]:0.28  ..  ..  ..
+    ..                    ..  ..  ..
+    ..                    ..  ..  ..
+    ..                    ..  ..  ..
+}
+
+# ── Shimmer ──
+
+pattern shimmer_wash {
+    [1.4 5.4]:0.20  ..  ..  ..
+    ..               ..  ..  ..
+    ..               ..  ..  ..
+    ..               ..  ..  ..
+}
+
+pattern shimmer_glow {
+    [1.4 3.4 5.4]:0.18  ..  ..  ..
+    ..                    ..  ..  ..
+    ..                    ..  ..  ..
+    ..                    ..  ..  ..
+}
+
+# ── Air escape — noise burst ──
+
+pattern air_burst {
+    1.3:0.55  ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+}
+
+pattern air_short {
+    1.3:0.48  ..  ..  ..
+    ..        ..  -   -
+    -         -   -   -
+    -         -   -   -
+}
+
+# ── Metal — industrial percussion hits ──
+
+pattern metal_hit {
+    1.4:0.55  -  -  -
+    -         -  -  1.4:0.38
+    -         -  -  -
+    1.4:0.48  -  -  -
+}
+
+pattern metal_stutter {
+    1.4:0.52  1.4:0.30  -  1.4:0.38
+    -         -         -  -
+    1.4:0.48  1.4:0.28  -  1.4:0.35
+    -         -         -  1.4:0.40
+}
+
+pattern metal_chaos {
+    1.4:0.55  1.3:0.35  -  1.5:0.42
+    1.3:0.38  -         1.4:0.48  -
+    -         1.5:0.32  1.3:0.45  -
+    1.4:0.50  -         -  1.3:0.38
+}
+
+# ── Insects — buzzing, swarming textures ──
+
+pattern insect_swarm {
+    [1.3 3.3]:0.32  ..  ..  ..
+    ..               ..  ..  ..
+    ..               ..  ..  ..
+    ..               ..  ..  ..
+}
+
+pattern insect_pulse {
+    1.3:0.38  -  1.3:0.25  -
+    1.3:0.35  -  -         1.3:0.22
+    1.3:0.38  -  1.3:0.25  -
+    1.3:0.32  -  -         -
+}
+
+pattern insect_scatter {
+    1.4:0.30  -  3.3:0.25  -
+    -         5.3:0.28  -  1.3:0.22
+    3.4:0.30  -  -         5.3:0.25
+    -         1.3:0.28  -  -
+}
+
+# ── Siren — psychedelic alarm ──
+
+# Siren — just one note, vibrato and LFO do the movement
+pattern siren_rise {
+    1.3:0.48  ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+}
+
+pattern siren_wail {
+    1.3:0.50  ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+    ..        ..  ..  ..
+}
+
+pattern siren_stab {
+    1.4:0.45  -  -  -
+    -         -  -  -
+    -         -  -  -
+    -         -  -  -
+}
+
+# ── Deeper breakdowns — more psychedelic ──
+
+pattern beat_tribal {
+    kick:    X  -  -  -  -  -  X  -  -  -  X  -  -  -  -  -
+    clap:    -  -  -  -  -  -  -  -  -  -  -  -  X  -  -  -
+    hat:     -  x:0.25  -  x:0.20  -  x:0.25  -  x:0.20  -  x:0.25  -  x:0.20  -  x:0.25  -  x:0.20
+}
+
+pattern beat_glitch {
+    kick:    X  -  -  x:0.5  -  -  X  -  X  -  -  -  X  -  x:0.4  -
+    clap:    -  -  -  -      X  -  -  -  -  -  -  -  X  -  -       -
+    hat:     x:0.45  x:0.20  -  x:0.30  -  x:0.40  x:0.20  -  x:0.45  x:0.20  -  x:0.30  -  x:0.40  x:0.20  x:0.35
+    snare:   -  -  -  -  -  x:0.18  -  -  -  x:0.15  -  -  -  -  x:0.18  -
+}
+
+# ── More acid variations ──
+
+# Dark — root only, aggressive filter envelope
+pattern acid_dark {
+    1.2:0.72  -  1.2:0.45  -
+    -         -  -         -
+    1.2:0.68  -  1.2:0.42  -
+    -         -  -         -
+}
+
+# Stutter — rapid repeated root note
+pattern acid_stutter {
+    1.2:0.70  1.2:0.40  1.2:0.55  -
+    1.2:0.58  -         -         1.2:0.35
+    1.2:0.62  1.2:0.38  -         -
+    1.2:0.58  -         1.2:0.42  -
+}
+
+# ── More bass variations ──
+
+pattern bass_tribal {
+    1.1:0.80  -  1.1:0.55  -
+    -         -  1.1:0.65  -
+    5.0:0.72  -  1.1:0.55  -
+    -         -  1.1:0.62  -
+}
+
+pattern bass_chaos {
+    1.1:0.82  3.1:0.50  5.0:0.62  1.1:0.40
+    4.1:0.72  -         1.1:0.58  5.0:0.38
+    3.1:0.75  1.1:0.45  5.0:0.62  4.1:0.42
+    1.1:0.78  5.0:0.48  3.1:0.58  1.1:0.40
+}
+
+# ── Dialup — rapid electronic chirps ──
+
+# Burst — machine gun electronic blips
+pattern dialup_burst {
+    3.4:0.48  7.3:0.35  1.5:0.42  5.3:0.30
+    6.4:0.40  2.5:0.32  4.3:0.45  7.4:0.28
+    1.5:0.42  5.4:0.35  3.3:0.38  6.3:0.30
+    2.4:0.45  4.4:0.32  7.3:0.40  1.4:0.28
+}
+
+# Scattered — sparser random chirps
+pattern dialup_scatter {
+    3.5:0.38  -  7.3:0.30  -
+    -         5.4:0.35  -  2.4:0.28
+    6.3:0.32  -  -  4.5:0.30
+    -         1.4:0.35  -  -
+}
+
+# Glitch — very fast repeated notes like data transmission
+pattern dialup_glitch {
+    1.4:0.45  1.4:0.30  5.4:0.42  5.4:0.28
+    3.4:0.40  3.4:0.25  7.3:0.38  7.3:0.22
+    2.4:0.42  2.4:0.28  6.4:0.40  6.4:0.25
+    4.4:0.38  4.4:0.22  1.5:0.35  1.5:0.20
+}
+
+pattern silence {
+    - - - -
+    - - - -
+    - - - -
+    - - - -
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+# Kick — violent, clicky, compressed to death
+track drums {
+    play silence
+    using psy_kit
+    velocity 1.0
+    level 0.75
+    out > saturate(0.18) > eq(low=1.4, mid=1.1, high=0.90) > compressor(-8, ratio=4, attack=1, release=15, makeup=1) > master
+}
+
+# Bass — distorted, aggressive, tight gate
+track bass {
+    play silence
+    using psy
+    velocity 1.0
+    level 0.58
+    gate 0.30
+    sidechain 0.25
+    out > saturate(0.35) > eq(low=1.0, mid=1.4, high=0.90) > compressor(-10, ratio=3, attack=1, release=12, makeup=1) > master
+}
+
+# Acid — dry and upfront, slight pan, minimal reverb
+track acid {
+    play silence
+    using acid_lead
+    velocity 1.0
+    level 0.30
+    gate 0.45
+    pan 0.15
+    delay_send 0.10
+    reverb_send 0.05
+    out > saturate(0.18) > eq(low=0.6, mid=1.2, high=1.1) > master
+}
+
+# Sub — heavy sidechain pump, pure low end
+track sub {
+    play silence
+    using sub
+    velocity 1.0
+    level 0.32
+    sidechain 0.60
+    gate 0.90
+    out > lowpass(0.12) > master
+}
+
+# Alien — dry, gritty, hard panned
+track alien {
+    play silence
+    using alien
+    velocity 1.0
+    level 0.20
+    pan -0.25
+    gate 0.30
+    delay_send 0.15
+    reverb_send 0.10
+    out > saturate(0.20) > master
+}
+
+# Stab — dry and punchy, no reverb muddying it
+track stab {
+    play silence
+    using psy_stab
+    velocity 1.0
+    level 0.22
+    gate 0.10
+    delay_send 0.15
+    reverb_send 0.05
+    out > master
+}
+
+# Psyche — background texture, wide stereo, reverb is ok here
+track psyche {
+    play silence
+    using psyche
+    velocity 1.0
+    level 0.12
+    pan -0.30
+    delay_send 0.18
+    reverb_send 0.30
+    out > master
+}
+
+# Void — very dark, heavily filtered, background rumble
+track void {
+    play silence
+    using void
+    velocity 1.0
+    level 0.14
+    reverb_send 0.30
+    out > lowpass(0.15) > master
+}
+
+# Air — noise sweep, keep it present but filtered
+track air {
+    play silence
+    using air
+    velocity 1.0
+    level 0.35
+    pan 0.10
+    reverb_send 0.20
+    delay_send 0.08
+    out > lowpass(0.65) > master
+}
+
+# Shimmer — subtle high end sparkle, wide
+track shimmer {
+    play silence
+    using shimmer
+    velocity 1.0
+    level 0.08
+    pan 0.28
+    reverb_send 0.35
+    delay_send 0.12
+    out > master
+}
+
+# Metal — hard panned, gritty, percussive
+track metal {
+    play silence
+    using metal
+    velocity 1.0
+    level 0.16
+    pan 0.35
+    gate 0.08
+    delay_send 0.12
+    reverb_send 0.08
+    out > saturate(0.30) > master
+}
+
+# Insects — opposite pan from metal, texture layer
+track insects {
+    play silence
+    using insects
+    velocity 1.0
+    level 0.12
+    pan -0.35
+    delay_send 0.15
+    reverb_send 0.20
+    out > master
+}
+
+# Siren — no chorus, dry with just a touch of delay
+track siren {
+    play silence
+    using siren
+    velocity 1.0
+    level 0.14
+    pan 0.12
+    delay_send 0.15
+    reverb_send 0.12
+    out > master
+}
+
+# Dialup — dry, gritty, center-ish
+track dialup {
+    play silence
+    using dialup
+    velocity 1.0
+    level 0.14
+    pan -0.08
+    gate 0.04
+    delay_send 0.10
+    reverb_send 0.05
+    out > saturate(0.25) > master
+}
+
+# ────────────────────────────────────────────────
+# MASTER
+# ────────────────────────────────────────────────
+
+master {
+    in > eq(low=1.1, mid=1.0, high=0.95)
+       > compressor(-6, ratio=2.0, attack=5, release=50, makeup=1)
+       > limiter
+       > out
+}
+
+# ────────────────────────────────────────────────
+# SCENES — progressive build, each adds one element
+# ────────────────────────────────────────────────
+
+# INTRO: void + shimmer, sparse kick — set the mood
+scene intro {
+    track drums   { play beat_sparse    using psy_kit }
+    track void    { play void_drone     using void }
+    track shimmer { play shimmer_wash   using shimmer }
+    track psyche  { play psyche_swirl   using psyche }
+    track sub     { play sub_hold       using sub }
+}
+
+# BUILD 1: kick accelerates, siren rises, air escape
+scene build1 {
+    track drums   { play beat_build     using psy_kit }
+    track bass    { play bass_stutter   using psy }
+    track air     { play air_burst      using air }
+    track siren   { play siren_rise     using siren }
+    track void    { play void_drone     using void }
+    track psyche  { play psyche_deep    using psyche }
+    track sub     { play sub_hold       using sub }
+}
+
+# DROP 1: minimal groove — just kick, bass roll, sub
+scene drop1 {
+    track drums   { play beat_minimal   using psy_kit }
+    track bass    { play bass_roll      using psy }
+    track sub     { play sub_pulse      using sub }
+    track void    { play void_dark      using void }
+}
+
+# DROP 2: open hats, metal hits enter
+scene drop2 {
+    track drums   { play beat_open      using psy_kit }
+    track bass    { play bass_v1        using psy }
+    track sub     { play sub_pulse      using sub }
+    track void    { play void_dark      using void }
+    track metal   { play metal_hit      using metal }
+    track shimmer { play shimmer_wash   using shimmer }
+}
+
+# DROP 3: acid + stabs, insects buzzing
+scene drop3 {
+    track drums   { play beat_drive     using psy_kit }
+    track bass    { play bass_v2        using psy }
+    track acid    { play acid_intro     using acid_lead }
+    track stab    { play stab_offbeat   using psy_stab }
+    track sub     { play sub_pulse      using sub }
+    track void    { play void_dark      using void }
+    track insects { play insect_pulse   using insects }
+}
+
+# DROP 4: full acid, alien + metal, dialup chirps
+scene drop4 {
+    track drums   { play beat_groove    using psy_kit }
+    track bass    { play bass_v2        using psy }
+    track acid    { play acid_riff      using acid_lead }
+    track alien   { play alien_sparse   using alien }
+    track stab    { play stab_offbeat   using psy_stab }
+    track sub     { play sub_pulse      using sub }
+    track void    { play void_dark      using void }
+    track psyche  { play psyche_swirl   using psyche }
+    track metal   { play metal_stutter  using metal }
+    track dialup  { play dialup_scatter using dialup }
+}
+
+# PSYCHEDELIC BREAK: insects, siren, alien drift, dialup scatter
+scene psy_break {
+    track drums   { play beat_tribal    using psy_kit }
+    track bass    { play bass_tribal    using psy }
+    track insects { play insect_scatter using insects }
+    track siren   { play siren_wail     using siren }
+    track alien   { play alien_drift    using alien }
+    track void    { play void_drone     using void }
+    track psyche  { play psyche_deep    using psyche }
+    track sub     { play sub_hold       using sub }
+    track dialup  { play dialup_scatter using dialup }
+}
+
+# DARK INTERLUDE: metal chaos, no kick, dialup noise, just textures
+scene dark_interlude {
+    track metal   { play metal_chaos    using metal }
+    track insects { play insect_swarm   using insects }
+    track siren   { play siren_stab     using siren }
+    track dialup  { play dialup_glitch  using dialup }
+    track void    { play void_dark      using void }
+    track psyche  { play psyche_deep    using psyche }
+    track air     { play air_short      using air }
+    track sub     { play sub_hold       using sub }
+}
+
+# BUILD 2: stutter + siren rising, air escape
+scene build2 {
+    track drums   { play beat_build     using psy_kit }
+    track bass    { play bass_stutter   using psy }
+    track air     { play air_burst      using air }
+    track siren   { play siren_rise     using siren }
+    track psyche  { play psyche_deep    using psyche }
+    track shimmer { play shimmer_glow   using shimmer }
+    track void    { play void_drone     using void }
+    track sub     { play sub_hold       using sub }
+}
+
+# PEAK 1: full morph bass, dark acid, all noise layers + dialup
+scene peak1 {
+    track drums   { play beat_peak      using psy_kit }
+    track bass    { play bass_morph     using psy }
+    track acid    { play acid_dark      using acid_lead }
+    track alien   { play alien_rhythm   using alien }
+    track stab    { play stab_wide      using psy_stab }
+    track sub     { play sub_pulse      using sub }
+    track void    { play void_dark      using void }
+    track psyche  { play psyche_deep    using psyche }
+    track metal   { play metal_stutter  using metal }
+    track insects { play insect_pulse   using insects }
+    track dialup  { play dialup_burst   using dialup }
+}
+
+# PEAK 2: glitch drums, stutter acid, siren screams, dialup chaos
+scene peak2 {
+    track drums   { play beat_glitch    using psy_kit }
+    track bass    { play bass_chaos     using psy }
+    track acid    { play acid_stutter   using acid_lead }
+    track alien   { play alien_rhythm   using alien }
+    track stab    { play stab_offbeat   using psy_stab }
+    track sub     { play sub_pulse      using sub }
+    track void    { play void_dark      using void }
+    track shimmer { play shimmer_wash   using shimmer }
+    track siren   { play siren_wail     using siren }
+    track dialup  { play dialup_glitch  using dialup }
+}
+
+# BREAK 2: deep psychedelia — alien + insects + siren
+scene break2 {
+    track drums   { play beat_sparse    using psy_kit }
+    track alien   { play alien_drift    using alien }
+    track insects { play insect_scatter using insects }
+    track siren   { play siren_wail     using siren }
+    track void    { play void_dark      using void }
+    track shimmer { play shimmer_glow   using shimmer }
+    track sub     { play sub_hold       using sub }
+}
+
+# TRIBAL SECTION: primal, hypnotic, building
+scene tribal {
+    track drums   { play beat_tribal    using psy_kit }
+    track bass    { play bass_tribal    using psy }
+    track acid    { play acid_dark      using acid_lead }
+    track metal   { play metal_hit      using metal }
+    track sub     { play sub_pulse      using sub }
+    track void    { play void_dark      using void }
+    track insects { play insect_pulse   using insects }
+}
+
+# FINAL BUILD: everything rising
+scene build3 {
+    track drums   { play beat_build     using psy_kit }
+    track bass    { play bass_stutter   using psy }
+    track acid    { play acid_intro     using acid_lead }
+    track air     { play air_burst      using air }
+    track siren   { play siren_rise     using siren }
+    track psyche  { play psyche_deep    using psyche }
+    track metal   { play metal_stutter  using metal }
+    track void    { play void_drone     using void }
+    track sub     { play sub_hold       using sub }
+}
+
+# FINAL PEAK: maximum chaos — everything at once
+scene peak_final {
+    track drums   { play beat_peak      using psy_kit }
+    track bass    { play bass_morph     using psy }
+    track acid    { play acid_stutter   using acid_lead }
+    track alien   { play alien_rhythm   using alien }
+    track stab    { play stab_wide      using psy_stab }
+    track sub     { play sub_pulse      using sub }
+    track psyche  { play psyche_deep    using psyche }
+    track shimmer { play shimmer_wash   using shimmer }
+    track metal   { play metal_chaos    using metal }
+    track insects { play insect_scatter using insects }
+    track siren   { play siren_stab     using siren }
+    track dialup  { play dialup_burst   using dialup }
+}
+
+# OUTRO: dissolving into noise, insects fade
+scene outro {
+    track drums   { play beat_sparse    using psy_kit }
+    track void    { play void_drone     using void }
+    track insects { play insect_swarm   using insects }
+    track psyche  { play psyche_swirl   using psyche }
+    track sub     { play sub_hold       using sub }
+}
+
+# ────────────────────────────────────────────────
+# ARRANGEMENT (72 bars) — longer, more psychedelic journey
+# ────────────────────────────────────────────────
+
+arrange {
+    intro x4
+    build1 x2
+    drop1 x4
+    drop2 x4
+    drop3 x4
+    drop4 x4
+    psy_break x4
+    dark_interlude x2
+    build2 x2
+    peak1 x4
+    peak2 x4
+    break2 x2
+    tribal x4
+    build3 x2
+    drop3 x4
+    drop4 x4
+    peak1 x4
+    psy_break x2
+    build3 x2
+    peak_final x4
+    outro x4
+}

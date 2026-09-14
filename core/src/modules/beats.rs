@@ -591,6 +591,7 @@ fn pan_equal_power(signal: f32, pan: f32) -> (f32, f32) {
 // ─── Beats Module ───
 // MIDI mapping: kick=36, snare=38, clap=39, hihat=42, tom=43/45/47, open_hihat=46, crash=49
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BeatsParam {
     Level,
     KickDecay,

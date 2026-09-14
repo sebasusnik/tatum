@@ -4,14 +4,16 @@ import BassBlock from "./BassBlock";
 import KeysBlock from "./KeysBlock";
 import FmBlock from "./FmBlock";
 import BeatsBlock from "./BeatsBlock";
+import ChordBlock from "./ChordBlock";
 import { DelayBlock, ReverbBlock } from "./EffectsRack";
 import MasterStrip from "./MasterStrip";
 import FxBlock from "./FxBlock";
 import FxPalette from "./FxPalette";
 import {
-  useGraph, setFxNodePosition,
+  useGraph,
+  setFxNodePosition,
   edgeInsertInfo,
-  type GraphNode as GNode, type GraphEdge,
+  type GraphNode as GNode,
 } from "../stores/graph";
 import {
   tracksFx, masterFx,
@@ -66,6 +68,7 @@ const KIND_SIZES: Record<string, { w: number; h: number }> = {
   keys:   { w: 210, h: 290 },
   fm:     { w: 210, h: 440 },
   beats:  { w: 250, h: 340 },
+  chord:  { w: 210, h: 360 },
   graph:  { w: 210, h: 200 },
   unknown: { w: 210, h: 200 },
 };
@@ -76,7 +79,7 @@ const FIXED_SIZES: Record<string, { w: number; h: number }> = {
 };
 
 function getSize(id: string, tracks: TrackInfo[]): { w: number; h: number } {
-  if (FIXED_getSize(id, trackInfos())) return FIXED_getSize(id, trackInfos());
+  if (FIXED_SIZES[id]) return FIXED_SIZES[id];
   const track = tracks.find((t) => t.name === id);
   if (track) return KIND_SIZES[track.kind] || KIND_SIZES.unknown;
   return KIND_SIZES.unknown;
@@ -116,16 +119,18 @@ const KIND_COLORS: Record<string, string> = {
   keys: "#00c9b1",
   fm: "#ffd23f",
   beats: "#ff5ea0",
+  chord: "#b07aff",
   graph: "#88aaff",
   unknown: "#888888",
 };
 
-function BlockForKind(props: { kind: string }) {
+function BlockForKind(props: { kind: string; trackName: string }) {
   switch (props.kind) {
-    case "bass": return <BassBlock />;
-    case "keys": return <KeysBlock />;
-    case "fm": return <FmBlock />;
-    case "beats": return <BeatsBlock />;
+    case "bass": return <BassBlock trackName={props.trackName} />;
+    case "keys": return <KeysBlock trackName={props.trackName} />;
+    case "fm": return <FmBlock trackName={props.trackName} />;
+    case "beats": return <BeatsBlock trackName={props.trackName} />;
+    case "chord": return <ChordBlock trackName={props.trackName} />;
     default: return <div class="block-placeholder">{props.kind}</div>;
   }
 }
@@ -220,12 +225,12 @@ function getNodeCenter(
 
   // Master internal ports
   if (nodeId === "master-in") {
-    const p = pos.master;
-    return { x: p.x, y: p.y + 16 + (SIZES.master.h - 16) / 2 };
+    const p = pos.master ?? { x: 700, y: 200 };
+    return { x: p.x, y: p.y + 16 + (FIXED_SIZES.master.h - 16) / 2 };
   }
   if (nodeId === "master-out") {
-    const p = pos.master;
-    return { x: p.x + SIZES.master.w, y: p.y + 16 + (SIZES.master.h - 16) / 2 };
+    const p = pos.master ?? { x: 700, y: 200 };
+    return { x: p.x + FIXED_SIZES.master.w, y: p.y + 16 + (FIXED_SIZES.master.h - 16) / 2 };
   }
 
   // FX node
@@ -266,7 +271,7 @@ function Node(props: {
   showInputPort?: boolean;
   children: JSX.Element;
 }) {
-  const p = () => pos[props.id];
+  const p = () => pos[props.id] ?? { x: 0, y: 0 };
 
   function onGrab(e: PointerEvent) {
     e.stopPropagation();
@@ -569,7 +574,7 @@ export default function Canvas() {
   function minimapScale() {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const id of allIds()) {
-      const p = pos[id];
+      const p = pos[id] ?? { x: 0, y: 0 };
       const s = getSize(id, trackInfos());
       if (p.x < minX) minX = p.x;
       if (p.y < minY) minY = p.y;
@@ -685,7 +690,7 @@ export default function Canvas() {
               color={KIND_COLORS[track.kind] || KIND_COLORS.unknown}
               showOutputPort
             >
-              <BlockForKind kind={track.kind} />
+              <BlockForKind kind={track.kind} trackName={track.name} />
             </Node>
           )}
         </For>
@@ -761,8 +766,9 @@ export default function Canvas() {
           <For each={allIds()}>
             {(id) => {
               const ms = () => minimapScale();
-              const bx = () => (pos[id].x - ms().ox) * ms().s + (MINIMAP_W - ms().cw * ms().s) / 2;
-              const by = () => (pos[id].y - ms().oy) * ms().s + (MINIMAP_H - ms().ch * ms().s) / 2;
+              const p = () => pos[id] ?? { x: 0, y: 0 };
+              const bx = () => (p().x - ms().ox) * ms().s + (MINIMAP_W - ms().cw * ms().s) / 2;
+              const by = () => (p().y - ms().oy) * ms().s + (MINIMAP_H - ms().ch * ms().s) / 2;
               const bw = () => getSize(id, trackInfos()).w * ms().s;
               const bh = () => getSize(id, trackInfos()).h * ms().s;
               return (

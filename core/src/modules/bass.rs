@@ -11,6 +11,7 @@ fn semitone_ratio(semitones: i8) -> f32 {
     math::pow2(semitones as f32 / 12.0)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BassParam {
     Cutoff,
     CutoffEnv,

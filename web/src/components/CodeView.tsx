@@ -1,6 +1,7 @@
-import { onMount, onCleanup, createSignal, createEffect } from "solid-js";
-import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } from "@codemirror/view";
-import { EditorState } from "@codemirror/state";
+import { onMount, onCleanup, createEffect } from "solid-js";
+import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection, Decoration } from "@codemirror/view";
+import type { DecorationSet } from "@codemirror/view";
+import { EditorState, StateField, StateEffect } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
@@ -22,6 +23,31 @@ const synthHighlight = HighlightStyle.define([
   { tag: tags.comment, color: "#555", fontStyle: "italic" },
   { tag: tags.lineComment, color: "#555", fontStyle: "italic" },
 ]);
+
+// ── Error line highlighting ──
+// The engine reports parse and compile errors with a 1-based line. We mark
+// those lines with a line decoration and let CSS style `.cm-error-line`.
+const setErrorLines = StateEffect.define<number[]>();
+
+const errorLineMark = Decoration.line({ class: "cm-error-line" });
+
+const errorLineField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    deco = deco.map(tr.changes);
+    for (const effect of tr.effects) {
+      if (!effect.is(setErrorLines)) continue;
+      const doc = tr.state.doc;
+      const marks = [...new Set(effect.value)]
+        .filter((line) => line >= 1 && line <= doc.lines)
+        .sort((a, b) => a - b)
+        .map((line) => errorLineMark.range(doc.line(line).from));
+      deco = Decoration.set(marks);
+    }
+    return deco;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
 
 const synthTheme = EditorView.theme({
   "&": {
@@ -52,7 +78,6 @@ export default function CodeView(props: CodeViewProps) {
   let container!: HTMLDivElement;
   let view: EditorView | undefined;
   let debounceTimer: number | undefined;
-  const [errorCount, setErrorCount] = createSignal(0);
   let lastSource = "";
   // Track externally-set source to break feedback loops.
   // When an external update sets the editor text, we store it here.
@@ -68,11 +93,22 @@ export default function CodeView(props: CodeViewProps) {
     }
   };
 
-  // Update error count from props
-  const errors = () => {
-    const errs = props.errors;
-    setErrorCount(errs.length);
-    return errs;
+  const errors = () => props.errors;
+
+  // Push error lines into the editor whenever the engine reports a new result
+  createEffect(() => {
+    const lines = props.errors.map((e) => e.line);
+    view?.dispatch({ effects: setErrorLines.of(lines) });
+  });
+
+  const jumpToLine = (line: number) => {
+    if (!view || line < 1) return;
+    const pos = view.state.doc.line(Math.min(line, view.state.doc.lines)).from;
+    view.dispatch({
+      selection: { anchor: pos },
+      effects: EditorView.scrollIntoView(pos, { y: "center" }),
+    });
+    view.focus();
   };
 
   // React to external source changes (e.g. from mixer persisting to DSL)
@@ -99,6 +135,7 @@ export default function CodeView(props: CodeViewProps) {
         keymap.of([...defaultKeymap, ...historyKeymap]),
         syntaxHighlighting(synthHighlight),
         synthTheme,
+        errorLineField,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             clearTimeout(debounceTimer);
@@ -144,6 +181,16 @@ export default function CodeView(props: CodeViewProps) {
         )}
       </div>
       <div ref={container} class="code-editor" />
+      {errors().length > 0 && (
+        <ul class="code-error-list">
+          {errors().map((e) => (
+            <li onClick={() => jumpToLine(e.line)} classList={{ jumpable: e.line > 0 }}>
+              <span class="code-error-line">{e.line > 0 ? `L${e.line}` : "—"}</span>
+              <span class="code-error-msg">{e.msg}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

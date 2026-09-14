@@ -1,11 +1,15 @@
 import { createMemo } from "solid-js";
 import { createStore } from "solid-js/store";
 import {
-  tracksFx, masterFx, sends,
-  FX_TYPE, FX_LABELS,
+  tracksFx,
+  masterFx,
+  sends,
+  FX_TYPE,
+  FX_LABELS,
   trackInfos,
-  type FxTypeId, type InsertFxState,
-  MAX_INSERT_FX, MAX_MASTER_FX,
+  type FxTypeId,
+  MAX_INSERT_FX,
+  MAX_MASTER_FX,
 } from "./synth";
 
 // ── Types ────────────────────────────────────────────
@@ -90,7 +94,7 @@ let saveTimer = 0;
 // FX nodes are spaced evenly between instrument output and master input
 function autoLayoutFxNodes(
   instrX: number, instrY: number, instrH: number,
-  masterX: number, masterY: number,
+  masterX: number, _masterY: number,
   fxCount: number, fxIndex: number,
 ): { x: number; y: number } {
   const startX = instrX + 230; // after instrument block

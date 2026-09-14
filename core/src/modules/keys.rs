@@ -119,6 +119,7 @@ impl KeysVoice {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeysParam {
     Cutoff,
     Detune,
