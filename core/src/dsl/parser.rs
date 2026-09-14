@@ -82,11 +82,21 @@ impl Parser {
                 self.advance();
                 Some(name)
             }
+            // `x`, `X` and `o` lex as drum hits but are fine as names outside patterns.
+            Token::DrumHit | Token::DrumAccent | Token::DrumGhost => {
+                let name = match self.peek() {
+                    Token::DrumHit => String::from("x"),
+                    Token::DrumAccent => String::from("X"),
+                    _ => String::from("o"),
+                };
+                self.advance();
+                Some(name)
+            }
             _ => {
                 let s = self.span();
                 self.errors.push(ParseError {
                     line: s.line, col: s.col,
-                    message: format!("expected identifier, got {:?}", self.peek()),
+                    message: format!("expected identifier, got {}", describe_token(self.peek())),
                 });
                 None
             }
@@ -167,9 +177,9 @@ impl Parser {
                     let s = self.span().clone();
                     self.errors.push(ParseError {
                         line: s.line, col: s.col,
-                        message: format!("unexpected token at top level: {:?}", s.token),
+                        message: format!("unexpected {} at top level", describe_token(&s.token)),
                     });
-                    self.advance();
+                    self.recover_to_line_end();
                 }
             }
         }
@@ -1109,9 +1119,17 @@ impl Parser {
         let s = self.span().clone();
         self.errors.push(ParseError {
             line: s.line, col: s.col,
-            message: format!("unexpected token at top level: {:?}", s.token),
+            message: format!("unexpected {} at top level (expected tempo, scale, module, pattern, track, scene, arrange, ...)", describe_token(&s.token)),
         });
-        self.advance();
+        self.recover_to_line_end();
+    }
+
+    /// After a top-level error, skip the rest of the line so one mistake
+    /// produces one diagnostic instead of one per token.
+    fn recover_to_line_end(&mut self) {
+        while !matches!(self.peek(), Token::Newline | Token::Eof) {
+            self.pos += 1;
+        }
     }
 
     fn parse_bus_chain_body(&mut self, bus_name: String, chains: &mut Vec<BusChainDef>) {
@@ -1486,6 +1504,23 @@ fn is_dsp_keyword(word: &str) -> bool {
         "compressor" | "limiter" |
         "tilt" | "eq"
     )
+}
+
+/// Human-readable token for error messages.
+fn describe_token(t: &Token) -> String {
+    match t {
+        Token::Ident(s) => format!("'{}'", s),
+        Token::Number(n) => format!("number {}", n),
+        Token::Note(n) => format!("note {}", n),
+        Token::DrumHit => String::from("'x'"),
+        Token::DrumAccent => String::from("'X'"),
+        Token::DrumGhost => String::from("'o'"),
+        Token::LBrace => String::from("'{'"),
+        Token::RBrace => String::from("'}'"),
+        Token::Newline => String::from("end of line"),
+        Token::Eof => String::from("end of file"),
+        other => format!("{:?}", other).to_lowercase(),
+    }
 }
 
 /// Check if a word is a waveform name.

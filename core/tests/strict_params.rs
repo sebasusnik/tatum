@@ -146,3 +146,22 @@ fn swing_and_humanize_apply_live() {
     engine.set_humanize(0.2, 0.05);
     assert_eq!(engine.humanize(), (0.2, 0.05));
 }
+
+#[test]
+fn short_names_that_look_like_drum_hits_are_valid_identifiers() {
+    let src = BASE.replace("module bass acid {", "module bass x {")
+        .replace("using acid", "using x")
+        .replace("auto acid cutoff", "auto x cutoff");
+    assert!(compile_errors(&src).is_empty(), "{:?}", compile_errors(&src));
+    let src = BASE.replace("track pad  {", "track o  {");
+    assert!(compile_errors(&src).is_empty(), "{:?}", compile_errors(&src));
+}
+
+#[test]
+fn one_top_level_mistake_yields_one_error() {
+    let src = "tempo 120\nmodul bass acid { cutoff 0.3 resonance 0.5 }\nscale A minor\n";
+    let errs = dsl::parse(src).unwrap_err();
+    assert_eq!(errs.len(), 1, "{:?}", errs);
+    assert_eq!(errs[0].line, 2);
+    assert!(errs[0].message.contains("unexpected 'modul'"), "{}", errs[0].message);
+}

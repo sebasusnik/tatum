@@ -16,6 +16,7 @@ pub mod graph;
 pub mod dsl;
 pub mod song_engine;
 pub mod params;
+pub mod wav;
 
 #[cfg(test)]
 pub mod test_utils;
