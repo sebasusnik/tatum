@@ -395,13 +395,13 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         let (rms, peak) = stats(&l[a..b], &r[a..b]);
         let at_ceiling = peak >= LIMITER_CEILING - 0.005;
         if at_ceiling { at_ceiling_sections.push(name.clone()); }
-        let (lo, mid, hi) = balance(&l[a..b], &r[a..b]);
+        let (lo, mid, harsh, air) = balance(&l[a..b], &r[a..b]);
         report.push(json!({
             "scene": name, "bars": count,
             "rms": round3(rms), "peak": round3(peak),
             "db": round1(20.0 * rms.max(1e-6).log10()),
             "crest": round1(peak / rms.max(1e-6)),
-            "balance_pct": { "low": lo, "mid": mid, "high": hi },
+            "balance_pct": { "low": lo, "mid": mid, "harsh": harsh, "air": air },
             "at_limiter_ceiling": at_ceiling
         }));
         bar_cursor += count;
@@ -434,10 +434,22 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     if !silent.is_empty() {
         hints.push(format!("silent for the whole render: {}. They play in no scene, or their pattern is all rests.", silent.join(", ")));
     }
-    if let Some(worst) = report.iter().find(|s| s["balance_pct"]["mid"].as_f64().unwrap_or(0.0) >= 80.0) {
+    if let Some(w) = report.iter().find(|s| s["balance_pct"]["mid"].as_f64().unwrap_or(0.0) >= 70.0) {
         hints.push(format!(
-            "scene '{}' is {}% midrange: it will sound boxy and small. Give the bass room below 200 Hz and let something live above 2 kHz (hats, air, an open filter).",
-            worst["scene"].as_str().unwrap_or(""), worst["balance_pct"]["mid"]
+            "scene '{}' is {}% midrange (250 Hz-2 kHz): it will sound boxy and small. Give the bass room below 250 Hz and let something live above 5 kHz.",
+            w["scene"].as_str().unwrap_or(""), w["balance_pct"]["mid"]
+        ));
+    }
+    if let Some(w) = report.iter().find(|s| s["balance_pct"]["harsh"].as_f64().unwrap_or(0.0) >= 20.0) {
+        hints.push(format!(
+            "scene '{}' puts {}% of its energy in 2-5 kHz, where the ear is most sensitive: it will sound fatiguing. Usual causes are distortion with no filter after it, bright hats, or a positive master tilt.",
+            w["scene"].as_str().unwrap_or(""), w["balance_pct"]["harsh"]
+        ));
+    }
+    if let Some(w) = report.iter().find(|s| s["balance_pct"]["low"].as_f64().unwrap_or(100.0) <= 15.0) {
+        hints.push(format!(
+            "scene '{}' has only {}% of its energy below 250 Hz: it will sound thin. Heavy distortion trades a fundamental for harmonics, so a distorted bass usually needs a clean sub layer under it.",
+            w["scene"].as_str().unwrap_or(""), w["balance_pct"]["low"]
         ));
     }
     let hint = if hints.is_empty() { Value::Null } else { json!(hints.join(" | ")) };
@@ -457,25 +469,43 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     })).unwrap())
 }
 
-/// Energy split into low (<200 Hz), mid (200 Hz..2 kHz) and high (>2 kHz),
-/// as a percentage of the total. One-pole filters: cheap and good enough to
-/// tell "all mids" from "no low end".
-fn balance(l: &[f32], r: &[f32]) -> (f64, f64, f64) {
-    let lo_c = (-2.0 * core::f32::consts::PI * 200.0 / SAMPLE_RATE).exp();
-    let hi_c = (-2.0 * core::f32::consts::PI * 2000.0 / SAMPLE_RATE).exp();
-    let (mut lp1, mut lp2) = (0.0f32, 0.0f32);
-    let (mut lo, mut mid, mut hi) = (0.0f64, 0.0f64, 0.0f64);
+/// Energy split into low (<250 Hz), mid (250 Hz..2 kHz), harsh (2..5 kHz,
+/// where the ear is most sensitive) and air (>5 kHz), as percentages.
+///
+/// Uses three cascaded one-pole sections per edge. A single pole rolls off so
+/// gently that midrange leaks into the "high" bucket and a dark mix reads as
+/// bright, which is worse than no number at all.
+fn balance(l: &[f32], r: &[f32]) -> (f64, f64, f64, f64) {
+    const POLES: usize = 3;
+    // Cascading N one-poles drags the overall -3 dB point down; scale each
+    // section up by 1/sqrt(2^(1/N) - 1) so the stated edge is the real one.
+    const CASCADE_FIX: f32 = 1.9615;
+    let coeff = |hz: f32| (-2.0 * core::f32::consts::PI * hz * CASCADE_FIX / SAMPLE_RATE).exp();
+    let (c_lo, c_mid, c_hi) = (coeff(250.0), coeff(2000.0), coeff(5000.0));
+    let (mut s_lo, mut s_mid, mut s_hi) = ([0.0f32; POLES], [0.0f32; POLES], [0.0f32; POLES]);
+    let cascade = |x: f32, state: &mut [f32; POLES], c: f32| {
+        let mut v = x;
+        for s in state.iter_mut() {
+            *s = v * (1.0 - c) + *s * c;
+            v = *s;
+        }
+        v
+    };
+    let (mut lo, mut mid, mut harsh, mut air) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
     for (a, b) in l.iter().zip(r) {
         let x = (a + b) * 0.5;
-        lp1 = x * (1.0 - lo_c) + lp1 * lo_c;
-        lp2 = x * (1.0 - hi_c) + lp2 * hi_c;
-        lo += (lp1 * lp1) as f64;
-        mid += ((lp2 - lp1) * (lp2 - lp1)) as f64;
-        hi += ((x - lp2) * (x - lp2)) as f64;
+        let v_lo = cascade(x, &mut s_lo, c_lo);
+        let v_mid = cascade(x, &mut s_mid, c_mid);
+        let v_hi = cascade(x, &mut s_hi, c_hi);
+        lo += (v_lo * v_lo) as f64;
+        mid += ((v_mid - v_lo) * (v_mid - v_lo)) as f64;
+        harsh += ((v_hi - v_mid) * (v_hi - v_mid)) as f64;
+        air += ((x - v_hi) * (x - v_hi)) as f64;
     }
-    let total = lo + mid + hi;
-    if total <= 0.0 { return (0.0, 0.0, 0.0); }
-    ((lo / total * 100.0).round(), (mid / total * 100.0).round(), (hi / total * 100.0).round())
+    let total = lo + mid + harsh + air;
+    if total <= 0.0 { return (0.0, 0.0, 0.0, 0.0); }
+    let pct = |v: f64| (v / total * 1000.0).round() / 10.0;
+    (pct(lo), pct(mid), pct(harsh), pct(air))
 }
 
 fn stats(l: &[f32], r: &[f32]) -> (f32, f32) {
@@ -624,5 +654,42 @@ mod tests {
         assert_eq!(slug_from_source("# Acid Arp — a showcase\ntempo 1"), "acid_arp");
         assert_eq!(slug_from_source("tempo 120"), "tempo_120");
         assert_eq!(slug_from_source(""), "song");
+    }
+}
+
+#[cfg(test)]
+mod band_tests {
+    use super::*;
+
+    fn tone(hz: f32, secs: f32) -> Vec<f32> {
+        (0..(SAMPLE_RATE * secs) as usize)
+            .map(|i| (i as f32 / SAMPLE_RATE * hz * core::f32::consts::TAU).sin() * 0.5)
+            .collect()
+    }
+
+    /// A pure tone must land in the band its frequency belongs to. Without the
+    /// cascade correction a 1 kHz tone leaked most of its energy into "air".
+    #[test]
+    fn each_band_catches_its_own_tone() {
+        let cases = [
+            (80.0, 0usize, "low"),
+            (1000.0, 1, "mid"),
+            (3000.0, 2, "harsh"),
+            (9000.0, 3, "air"),
+        ];
+        for (hz, idx, name) in cases {
+            let x = tone(hz, 1.0);
+            let (lo, mid, harsh, air) = balance(&x, &x);
+            let pct = [lo, mid, harsh, air];
+            // The bands overlap (one-pole cascades are gentle and 2-5 kHz is
+            // barely more than an octave wide), so the bar is that the right
+            // band dominates, not that it takes everything.
+            let winner = pct.iter().cloned().fold(f64::MIN, f64::max);
+            assert!(
+                (pct[idx] - winner).abs() < 1e-9 && pct[idx] > 50.0,
+                "a {} Hz tone should read mostly '{}', got low {} mid {} harsh {} air {}",
+                hz, name, lo, mid, harsh, air
+            );
+        }
     }
 }
