@@ -248,7 +248,7 @@ track rhodes {
     velocity 0.7
     level 0.45
     gate 0.6
-    pan 0.1
+    pan -0.38
     delay_send 0.15
     reverb_send 0.25
     out > master
@@ -270,7 +270,7 @@ track stabs {
     velocity 0.5
     level 0.35
     gate 0.2
-    pan -0.3
+    pan 0.34
     delay_send 0.25
     reverb_send 0.15
     out > master
@@ -298,7 +298,7 @@ scene intro {
 scene buildup {
     track drums  { play drums_main  using drums     velocity 1.0 level 0.55 }
     track bass   { play bass_intro  using deep_bass velocity 0.8 level 0.5 }
-    track rhodes { play rhodes_fm7  using rhodes    velocity 0.6 level 0.35 delay_send 0.15 reverb_send 0.25 }
+    track rhodes { play rhodes_fm7  using rhodes    velocity 0.6 level 0.35 delay_send 0.15 reverb_send 0.25 pan -0.38 }
 }
 
 # Main groove: full arrangement
@@ -307,8 +307,8 @@ scene main {
 
     track drums  { play drums_groove using drums     velocity 1.0 level 0.55 }
     track bass   { play bass_main    using deep_bass velocity 0.9 level 0.55 }
-    track rhodes { play rhodes_fm7   using rhodes    velocity 0.7 level 0.45 delay_send 0.15 reverb_send 0.25 }
-    track stabs  { play stab_off     using stab      velocity 0.5 level 0.35 delay_send 0.25 reverb_send 0.15 }
+    track rhodes { play rhodes_fm7   using rhodes    velocity 0.7 level 0.45 delay_send 0.15 reverb_send 0.25 pan -0.38 }
+    track stabs { play stab_off     using stab      velocity 0.5 level 0.35 delay_send 0.25 reverb_send 0.15 pan 0.34 }
 }
 
 # Breakdown: pads + sparse hats, no kick
@@ -327,7 +327,7 @@ scene bridge {
 
     track drums  { play drums_main   using drums     velocity 1.0 level 0.55 }
     track bass   { play bass_bridge  using deep_bass velocity 0.85 level 0.55 }
-    track rhodes { play rhodes_db    using rhodes    velocity 0.65 level 0.4 delay_send 0.15 reverb_send 0.3 }
+    track rhodes { play rhodes_db    using rhodes    velocity 0.65 level 0.4 delay_send 0.15 reverb_send 0.3 pan -0.38 }
     track pads { play pad_db       using lush_pad  velocity 0.4 level 0.2021 reverb_send 0.35 }
 }
 
@@ -337,8 +337,8 @@ scene drop {
 
     track drums  { play drums_drop  using drums     velocity 1.0 level 0.6 }
     track bass   { play bass_main   using deep_bass velocity 0.95 level 0.6 }
-    track rhodes { play rhodes_fm7  using rhodes    velocity 0.75 level 0.45 delay_send 0.1 reverb_send 0.2 }
-    track stabs  { play stab_off    using stab      velocity 0.6  level 0.4  delay_send 0.2 reverb_send 0.1 }
+    track rhodes { play rhodes_fm7  using rhodes    velocity 0.75 level 0.45 delay_send 0.1 reverb_send 0.2 pan -0.38 }
+    track stabs { play stab_off    using stab      velocity 0.6  level 0.4  delay_send 0.2 reverb_send 0.1 pan 0.34 }
 }
 
 # Outro: fade down

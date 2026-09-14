@@ -253,7 +253,7 @@ track stab {
     velocity 0.5
     level 0.4
     gate 0.25
-    pan -0.25
+    pan -0.38
     delay_send 0.2
     reverb_send 0.15
     out > master
@@ -275,7 +275,7 @@ track lead {
     velocity 0.6
     level 0.35
     gate 0.7
-    pan 0.15
+    pan 0.34
     delay_send 0.15
     reverb_send 0.2
     arp up rate=16 gate=0.6 octaves=2
@@ -304,7 +304,7 @@ scene intro {
 scene groove {
     track drums { play drums_groove using drums    velocity 1.0 level 0.55 }
     track bass  { play bass_groove  using sub_bass  velocity 0.85 level 0.55 }
-    track stab  { play stab_chords  using stab_fm   velocity 0.55 level 0.4 delay_send 0.2 reverb_send 0.15 }
+    track stab { play stab_chords  using stab_fm   velocity 0.55 level 0.4 delay_send 0.2 reverb_send 0.15 pan -0.38 }
     track pad { play pad_fm       using warm_pad  velocity 0.5 level 0.2309 reverb_send 0.3 }
 }
 
@@ -314,7 +314,7 @@ scene build {
 
     track drums { play drums_build using drums    velocity 1.0 level 0.6 }
     track bass  { play bass_build  using sub_bass  velocity 0.9 level 0.58 }
-    track stab  { play stab_chords using stab_fm   velocity 0.6 level 0.42 delay_send 0.2 reverb_send 0.15 }
+    track stab { play stab_chords using stab_fm   velocity 0.6 level 0.42 delay_send 0.2 reverb_send 0.15 pan -0.38 }
     track pad { play pad_fm      using warm_pad  velocity 0.55 level 0.2598 reverb_send 0.32 }
 }
 
@@ -324,9 +324,9 @@ scene drop {
 
     track drums { play drums_drop    using drums    velocity 1.0 level 0.65 }
     track bass  { play bass_drop     using sub_bass  velocity 0.95 level 0.62 }
-    track stab  { play stab_drop     using stab_fm   velocity 0.65 level 0.45 delay_send 0.18 reverb_send 0.12 }
+    track stab { play stab_drop     using stab_fm   velocity 0.65 level 0.45 delay_send 0.18 reverb_send 0.12 pan -0.38 }
     track pad { play pad_fm        using warm_pad  velocity 0.5 level 0.2309 reverb_send 0.3 }
-    track lead  { play arp_lead_pat  using arp_lead  velocity 0.65 level 0.4 gate 0.7 delay_send 0.15 reverb_send 0.2 arp up rate=16 gate=0.6 octaves=2 }
+    track lead { play arp_lead_pat  using arp_lead  velocity 0.65 level 0.4 gate 0.7 delay_send 0.15 reverb_send 0.2 arp up rate=16 gate=0.6 octaves=2 pan 0.34 }
 }
 
 # Breakdown (4 bars): pull back — pad + sparse hats, no kick

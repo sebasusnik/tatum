@@ -375,7 +375,7 @@ track shine {
     velocity 0.70
     level 0.23
     gate 1.0
-    pan 0.26
+    pan -0.38
     sidechain 0.38
     delay_send 0.20
     reverb_send 0.42
@@ -391,7 +391,7 @@ track stabs {
     velocity 0.65
     level 0.26
     gate 0.30
-    pan -0.34
+    pan 0.34
     sidechain 0.35
     delay_send 0.28
     reverb_send 0.14
@@ -404,7 +404,7 @@ track chime {
     velocity 0.60
     level 0.85
     gate 0.90
-    pan 0.30
+    pan -0.50
     sidechain 0.25
     delay_send 0.34
     reverb_send 0.36
@@ -473,7 +473,7 @@ scene lift {
     track drums  { play dr_main  using nine level 0.85 }
     track bass   { play bs_a     using walker level 0.70 }
     track chords { play ch_a     using warmth level 0.25 }
-    track shine  { play ch_a_hi  using shimmer level 0.23 }
+    track shine { play ch_a_hi  using shimmer level 0.23 pan -0.38 }
 }
 
 # 4. BRIDGE (16) — cycle B: four minor 9ths, no resolution. The kit picks up
@@ -489,7 +489,7 @@ scene bridge {
     track drums  { play dr_full  using nine level 0.87 }
     track bass   { play bs_b     using walker level 0.73 }
     track chords { play ch_b     using warmth level 0.25 }
-    track shine  { play ch_b_hi  using shimmer level 0.23 }
+    track shine { play ch_b_hi  using shimmer level 0.23 pan -0.38 }
 }
 
 # 5. BREAKDOWN (16) — drums and bass gone. The chords carry it alone, the
@@ -507,9 +507,9 @@ scene breakdown {
     auto master tilt -0.12 > 0.06
 
     track chords { play ch_a    using warmth  level 0.35 velocity 0.88 sidechain 0.0 reverb_send 0.44 delay_send 0.20 }
-    track shine  { play ch_a_hi using shimmer level 0.31 velocity 0.80 sidechain 0.0 reverb_send 0.54 delay_send 0.28 }
+    track shine { play ch_a_hi using shimmer level 0.31 velocity 0.80 sidechain 0.0 reverb_send 0.54 delay_send 0.28 pan -0.38 }
     track under  { play ch_low  using under   level 0.16 velocity 0.72 sidechain 0.0 }
-    track chime  { play bl_a    using bell    level 1.00 velocity 0.72 sidechain 0.0 reverb_send 0.46 delay_send 0.40 }
+    track chime { play bl_a    using bell    level 1.00 velocity 0.72 sidechain 0.0 reverb_send 0.46 delay_send 0.40 pan -0.50 }
 }
 
 # 6. REBUILD (8) — the kick and the hats come back first. No clap, no bass:
@@ -522,8 +522,8 @@ scene rebuild {
 
     track drums  { play dr_thin using nine level 0.80 }
     track chords { play ch_a    using warmth  level 0.25 }
-    track shine  { play ch_a_hi using shimmer level 0.23 }
-    track chime  { play bl_a    using bell    level 0.85 }
+    track shine { play ch_a_hi using shimmer level 0.23 pan -0.38 }
+    track chime { play bl_a    using bell    level 0.85 pan -0.50 }
 }
 
 # 7. PEAK (16) — the payoff. Full kit, bass walking cycle A, offbeat stabs
@@ -538,9 +538,9 @@ scene peak {
     track drums  { play dr_full  using nine    level 0.90 }
     track bass   { play bs_a     using walker  level 0.76 }
     track chords { play ch_a     using warmth  level 0.25 }
-    track shine  { play ch_a_hi  using shimmer level 0.23 }
-    track stabs  { play st_a     using stab    level 0.26 }
-    track chime  { play bl_a     using bell    level 0.85 }
+    track shine { play ch_a_hi  using shimmer level 0.23 pan -0.38 }
+    track stabs { play st_a     using stab    level 0.26 pan 0.34 }
+    track chime { play bl_a     using bell    level 0.85 pan -0.50 }
 }
 
 # 8. OUTRO (8) — one chord, the kit thinning out, the master tilting dark
@@ -556,7 +556,7 @@ scene outro {
 
     track drums  { play dr_thin using nine    level 0.80 }
     track chords { play ch_hold using warmth  level 0.25 reverb_send 0.40 }
-    track shine  { play ch_hold using shimmer level 0.23 reverb_send 0.46 }
+    track shine { play ch_hold using shimmer level 0.23 reverb_send 0.46 pan -0.38 }
 }
 
 # ────────────────────────────────────────────────

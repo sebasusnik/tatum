@@ -18,14 +18,14 @@ sidechain 0.45 attack=1ms release=150ms
 # Dotted eighth at 122 = ~369 ms: the repeats land against the
 # offbeat stab instead of on top of it. filter=0.72 is a dark
 # one-pole in the feedback path, so every repeat loses top end.
-delay sync=dotted_eighth feedback=0.74 filter=0.72 sidechain=0.35
-reverb size=0.88 damp=0.62 predelay=38 sidechain=0.5
+delay sync=dotted_eighth feedback=0.74 filter=0.28 sidechain=0.35
+reverb size=0.88 damp=0.5 predelay=38 sidechain=0.5
 
 # Shape the repeats on the way back: out of the sub, under the
 # air, drifting across the stereo field over 8 bars.
 delay_return {
     in > highpass(210hz, 0.2)
-       > lowpass(1.6khz, 0.24, lfo_bars=8, lfo_depth=700)
+       > lowpass(6khz, 0.1, lfo_bars=8, lfo_depth=2000)
        > autopan(0.5, bars=8)
        > out
 }
@@ -34,7 +34,7 @@ delay_return {
 # reverb sidechain= above.
 reverb_return {
     in > highpass(260hz, 0.15)
-       > lowpass(1.9khz, 0.22, lfo_bars=8, lfo_depth=900)
+       > lowpass(6.5khz, 0.1, lfo_bars=8, lfo_depth=2200)
        > autopan(0.32, bars=8)
        > out
 }
@@ -49,7 +49,7 @@ module keys chord {
     voice_mode poly
     detune 22%
     chorus_mix 55%
-    cutoff 820hz
+    cutoff 1.7khz
     resonance 26%
     attack 14ms
     decay 210ms
@@ -299,8 +299,8 @@ track stab {
     delay_send 0.85
     reverb_send 0.60
     sidechain 0.5
-    out > highpass(230hz, 0.2)
-        > lowpass(1.5khz, 0.28, lfo_bars=8, lfo_depth=600)
+    out > highpass(300hz, 0.15)
+        > lowpass(3.6khz, 0.12, lfo_bars=8, lfo_depth=1400)
         > compressor(-14, ratio=2.0, attack=15, release=200, makeup=3db)
         > saturate(0.2)
         > master
@@ -309,6 +309,7 @@ track stab {
 track bed {
     play hiss_hold
     using hiss
+    pan -0.38
     level 0.36
     reverb_send 0.3
     delay_send 0.06
@@ -322,6 +323,7 @@ track bed {
 track ghostchord {
     play stab_ghost
     using chord
+    pan 0.34
     level 0.3115
     gate 0.2
     velocity 0.7
@@ -362,7 +364,7 @@ scene drift {
     auto master cutoff 2500 > 9000
     auto stab level 0.07 > 0.24
     track stab { play stab_ghost using chord sidechain 0.0 velocity 0.55 }
-    track bed  { play hiss_hold using hiss  sidechain 0.0 }
+    track bed { play hiss_hold using hiss  sidechain 0.0 pan -0.38 }
 }
 
 # 2. pulse (16) — kick and sub arrive. Still nothing to hum.
@@ -372,7 +374,7 @@ scene pulse {
     auto master cutoff 9000 > 14000
     track beat { play beat_kick using kit level 0.77 }
     track sub  { play sub_long using sub level 0.56 }
-    track bed  { play hiss_hold using hiss }
+    track bed { play hiss_hold using hiss pan -0.38 }
 }
 
 # 3. enter (16) — the chord, far away, opening over sixteen bars.
@@ -381,23 +383,23 @@ scene enter {
     delay_mix = 0.45
     # keys cutoff is exponential 200Hz..20kHz; `auto` will not take unit
     # literals, so these are the float equivalents of 480Hz -> 1.1kHz.
-    auto chord cutoff 0.190 > 0.370
+    auto chord cutoff 0.410 > 0.590            # 1.2kHz -> 3.2kHz
     auto stab level 0.09 > 0.29
     track beat { play beat_sparse using kit level 0.81 }
     track sub  { play sub_f      using sub  level 0.59 }
     track stab { play stab_half  using chord }
-    track bed  { play hiss_hold  using hiss }
+    track bed { play hiss_hold  using hiss pan -0.38 }
 }
 
 # 4. deep (16) — full chord on every offbeat, hat and rim in.
 scene deep {
     reverb_mix = 0.56
     delay_mix = 0.58
-    auto chord cutoff 0.370 > 0.423 > 0.327    # 1.1kHz -> 1.4kHz -> 900Hz
+    auto chord cutoff 0.590 > 0.640 > 0.545            # 3.2kHz -> 4.1kHz -> 2.4kHz
     track beat { play beat_main using kit level 0.84 }
     track sub  { play sub_f     using sub  level 0.62 }
     track stab { play stab_full using chord level 0.2914 }
-    track bed  { play hiss_hold using hiss }
+    track bed { play hiss_hold using hiss pan -0.38 }
 }
 
 # 5. dub (16) — the one chord change, the delay pushed up.
@@ -405,11 +407,11 @@ scene dub {
     reverb_mix = 0.62
     delay_mix = 0.74
     auto master tilt -0.16 > -0.34
-    auto chord cutoff 0.338 > 0.398            # 950Hz -> 1.25kHz
+    auto chord cutoff 0.560 > 0.618            # 2.7kHz -> 3.7kHz
     track beat { play beat_dub  using kit level 0.81 }
     track sub  { play sub_dub   using sub  level 0.62 }
     track stab { play stab_dub  using chord level 0.3016 }
-    track bed  { play hiss_hold using hiss }
+    track bed { play hiss_hold using hiss pan -0.38 }
 }
 
 # 6. echoes (8) — reverb frozen, the chord goes to the capture
@@ -421,8 +423,8 @@ scene echoes {
     auto master tilt -0.34 > -0.2
     track beat       { play beat_thin  using kit level 0.70 }
     track sub        { play sub_long   using sub level 0.56 }
-    track ghostchord { play stab_ghost using chord }
-    track bed        { play hiss_hold  using hiss }
+    track ghostchord { play stab_ghost using chord pan 0.34 }
+    track bed { play hiss_hold  using hiss pan -0.38 }
 }
 
 # 7. return (16) — the chord back, darker than it left.
@@ -430,11 +432,11 @@ scene return {
     reverb_mix = 0.58
     delay_mix = 0.62
     auto master tilt -0.2 > -0.3
-    auto chord cutoff 0.389 > 0.272            # 1.2kHz -> 700Hz
+    auto chord cutoff 0.610 > 0.490            # 3.6kHz -> 1.9kHz
     track beat { play beat_main using kit level 0.84 }
     track sub  { play sub_f     using sub  level 0.62 }
     track stab { play stab_full using chord level 0.2914 }
-    track bed  { play hiss_hold using hiss }
+    track bed { play hiss_hold using hiss pan -0.38 }
 }
 
 # 8. fade (16) — eight bars of thinning out, then eight bars in which
@@ -444,11 +446,11 @@ scene fade {
     reverb_mix = 0.66
     delay_mix = 0.58
     auto master cutoff 12000 > 900
-    auto chord cutoff 0.272 > 0.150            # 700Hz -> 400Hz
+    auto chord cutoff 0.490 > 0.370            # 1.9kHz -> 1.1kHz
     track beat { play beat_out  using kit  level 0.63 }
     track sub  { play sub_out   using sub  level 0.53 }
     track stab { play stab_out  using chord level 0.2111 }
-    track bed  { play hiss_out  using hiss }
+    track bed { play hiss_out  using hiss pan -0.38 }
 }
 
 # ════════════════════════════════════════════════════════

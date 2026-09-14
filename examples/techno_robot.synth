@@ -184,7 +184,7 @@ track zaps {
     using metal
     velocity 1.0
     level 1.001
-    pan 0.1
+    pan 0.34
     gate 0.15
     delay_send 0.15
     reverb_send 0.10
@@ -194,6 +194,7 @@ track zaps {
 track pad {
     play silence
     using darkpad
+    pan -0.38
     velocity 1.0
     level 0.877
     reverb_send 0.18
@@ -229,8 +230,8 @@ scene intro {
     track drums { play beat_main using nine09 level 1.753 out > master }
     track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 out > master }
     track arp   { play silence   using arpvoice level 1.252 out > master }
-    track zaps  { play silence   using metal    level 1.001 pan 0.1 out > master }
-    track pad   { play silence   using darkpad  level 0.877 out > master }
+    track zaps { play silence   using metal    level 1.001 out > master pan 0.34 }
+    track pad { play silence   using darkpad  level 0.877 out > master pan -0.38 }
 }
 
 # 2. BUILD-UP (bars 5-12) — the arp enters, bass filter opens 0.15 -> 0.25,
@@ -242,8 +243,8 @@ scene build {
     track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 out > master }
     track arp   { play arp_chord using arpvoice level 1.252 gate 1.0 delay_send 0.12 reverb_send 0.10
                   arp up rate=16 gate=0.6 octaves=2 out > master }
-    track zaps  { play fm_build  using metal level 1.001 pan 0.1 gate 0.15 delay_send 0.15 reverb_send 0.10 out > master }
-    track pad   { play silence   using darkpad level 0.877 out > master }
+    track zaps { play fm_build  using metal level 1.001 gate 0.15 delay_send 0.15 reverb_send 0.10 out > master pan 0.34 }
+    track pad { play silence   using darkpad level 0.877 out > master pan -0.38 }
 }
 
 # 3. CLIMAX (bars 13-16) — rides + claps, bass filter wide open, harder pump.
@@ -252,8 +253,8 @@ scene climax {
     track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 sidechain 0.8 out > master }
     track arp   { play arp_chord using arpvoice level 1.252 gate 1.0 delay_send 0.12 reverb_send 0.10 sidechain 0.8
                   arp up rate=16 gate=0.6 octaves=2 out > master }
-    track zaps  { play fm_climax using metal level 1.001 pan 0.1 gate 0.15 delay_send 0.15 reverb_send 0.10 sidechain 0.8 out > master }
-    track pad   { play silence   using darkpad level 0.877 sidechain 0.8 out > master }
+    track zaps { play fm_climax using metal level 1.001 gate 0.15 delay_send 0.15 reverb_send 0.10 sidechain 0.8 out > master pan 0.34 }
+    track pad { play silence   using darkpad level 0.877 sidechain 0.8 out > master pan -0.38 }
 }
 
 # 4. BREAKDOWN (bars 17-20) — kick gone, pad enters, more delay + reverb.
@@ -269,8 +270,8 @@ scene breakdown {
     track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.08 reverb_send 0.08 out > master }
     track arp   { play arp_chord using arpvoice level 1.252 gate 1.0 delay_send 0.20 reverb_send 0.18
                   arp up rate=16 gate=0.6 octaves=2 out > master }
-    track zaps  { play silence using metal level 1.001 pan 0.1 out > master }
-    track pad   { play pad_chord using darkpad level 0.877 reverb_send 0.18 delay_send 0.10 out > master }
+    track zaps { play silence using metal level 1.001 out > master pan 0.34 }
+    track pad { play pad_chord using darkpad level 0.877 reverb_send 0.18 delay_send 0.10 out > master pan -0.38 }
 }
 
 # 5. THE DROP (bars 21-24) — drums slam back, everything wide open.
@@ -282,8 +283,8 @@ scene drop {
     track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 sidechain 0.8 out > master }
     track arp   { play arp_chord using arpvoice level 1.252 gate 1.0 delay_send 0.12 reverb_send 0.10 sidechain 0.8
                   arp up rate=16 gate=0.6 octaves=2 out > master }
-    track zaps  { play fm_drop using metal level 1.001 pan 0.1 gate 0.15 delay_send 0.15 reverb_send 0.10 sidechain 0.8 out > master }
-    track pad   { play silence using darkpad level 0.877 sidechain 0.8 out > master }
+    track zaps { play fm_drop using metal level 1.001 gate 0.15 delay_send 0.15 reverb_send 0.10 sidechain 0.8 out > master pan 0.34 }
+    track pad { play silence using darkpad level 0.877 sidechain 0.8 out > master pan -0.38 }
 }
 
 # 6. OUTRO (bars 25-29) — elements muted one by one, then a fade.
@@ -299,8 +300,8 @@ scene outro_a {
     track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 sidechain 0.8 out > master }
     track arp   { play arp_chord using arpvoice level 1.252 gate 1.0 delay_send 0.12 reverb_send 0.10 sidechain 0.8
                   arp up rate=16 gate=0.6 octaves=2 out > master }
-    track zaps  { play silence using metal level 1.001 pan 0.1 out > master }
-    track pad   { play silence using darkpad level 0.877 sidechain 0.8 out > master }
+    track zaps { play silence using metal level 1.001 out > master pan 0.34 }
+    track pad { play silence using darkpad level 0.877 sidechain 0.8 out > master pan -0.38 }
 }
 
 # bar 26 — arp muted
@@ -310,8 +311,8 @@ scene outro_b {
     track drums { play beat_drop using nine09 level 1.753 out > master }
     track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 sidechain 0.8 out > master }
     track arp   { play silence using arpvoice level 0.0 arp off out > master }
-    track zaps  { play silence using metal level 1.001 pan 0.1 out > master }
-    track pad   { play silence using darkpad level 0.877 sidechain 0.8 out > master }
+    track zaps { play silence using metal level 1.001 out > master pan 0.34 }
+    track pad { play silence using darkpad level 0.877 sidechain 0.8 out > master pan -0.38 }
 }
 
 # bar 27 — hats gone, kick only
@@ -321,8 +322,8 @@ scene outro_c {
     track drums { play beat_kick_only using nine09 level 1.753 out > master }
     track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 sidechain 0.8 out > master }
     track arp   { play silence using arpvoice level 0.0 arp off out > master }
-    track zaps  { play silence using metal level 1.001 pan 0.1 out > master }
-    track pad   { play silence using darkpad level 0.877 sidechain 0.8 out > master }
+    track zaps { play silence using metal level 1.001 out > master pan 0.34 }
+    track pad { play silence using darkpad level 0.877 sidechain 0.8 out > master pan -0.38 }
 }
 
 # bars 28-29 — the fade out (the reference scales the master buffer 1 -> 0)
@@ -339,8 +340,8 @@ scene outro_d {
     track drums { play beat_kick_only using nine09 level 1.753 out > master }
     track bass  { play bass_hold using rollbass level 1.378 gate 0.9 delay_send 0.05 sidechain 0.8 out > master }
     track arp   { play silence using arpvoice level 0.0 arp off out > master }
-    track zaps  { play silence using metal level 1.001 pan 0.1 out > master }
-    track pad   { play silence using darkpad level 0.877 sidechain 0.8 out > master }
+    track zaps { play silence using metal level 1.001 out > master pan 0.34 }
+    track pad { play silence using darkpad level 0.877 sidechain 0.8 out > master pan -0.38 }
 }
 
 # ────────────────────────────────────────────────

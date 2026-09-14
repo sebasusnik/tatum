@@ -301,6 +301,7 @@ track drums {
 track bells {
     play silence
     using bell
+    pan 0.34
     velocity 1.0
     level 0.28
     gate 0.50
@@ -355,6 +356,7 @@ track acid {
 track drone {
     play silence
     using drone
+    pan -0.38
     velocity 1.0
     level 0.15
     reverb_send 0.60
@@ -388,18 +390,18 @@ master {
 
 # INTRO: eerie bells + drone, no drums
 scene intro {
-    track bells  { play bell_sparse  using bell }
-    track drone  { play drone_low    using drone }
+    track bells { play bell_sparse  using bell pan 0.34 }
+    track drone { play drone_low    using drone pan -0.38 }
     track pad    { play pad_cm       using evolve }
 }
 
 # BUILD: drums enter, glitch hints, pad evolves
 scene build {
     track drums  { play drums_minimal using kit }
-    track bells  { play bell_sparse   using bell }
+    track bells { play bell_sparse   using bell pan 0.34 }
     track glitch { play glitch_sparse using glitch }
     track pad    { play pad_cm        using evolve }
-    track drone  { play drone_low     using drone }
+    track drone { play drone_low     using drone pan -0.38 }
 }
 
 # DROP A: full energy — screaming lead + acid + full drums
@@ -407,7 +409,7 @@ scene drop_a {
     track drums   { play drums_full    using kit }
     track scream  { play scream_riff   using scream }
     track acid    { play acid_pattern  using acid }
-    track bells   { play bell_cascade  using bell }
+    track bells { play bell_cascade  using bell pan 0.34 }
     track subkick { play subkick_four  using subkick }
     track pad     { play pad_cm        using evolve }
 }
@@ -425,8 +427,8 @@ scene drop_a2 {
 # BREAKDOWN: stripped, dissonant, halftime
 scene breakdown {
     track drums  { play drums_halftime using kit }
-    track drone  { play drone_high     using drone }
-    track bells  { play bell_sparse    using bell }
+    track drone { play drone_high     using drone pan -0.38 }
+    track bells { play bell_sparse    using bell pan 0.34 }
     track pad    { play pad_abmaj      using evolve }
     track glitch { play glitch_sparse  using glitch }
 }
@@ -436,17 +438,17 @@ scene drop_b {
     track drums   { play drums_full    using kit }
     track scream  { play scream_riff   using scream }
     track acid    { play acid_fast     using acid }
-    track bells   { play bell_cascade  using bell }
+    track bells { play bell_cascade  using bell pan 0.34 }
     track glitch  { play glitch_seq    using glitch }
     track subkick { play subkick_four  using subkick }
     track pad     { play pad_cm        using evolve }
-    track drone   { play drone_low     using drone }
+    track drone { play drone_low     using drone pan -0.38 }
 }
 
 # OUTRO: fading bells + drone
 scene outro {
-    track bells { play bell_sparse using bell }
-    track drone { play drone_low   using drone }
+    track bells { play bell_sparse using bell pan 0.34 }
+    track drone { play drone_low   using drone pan -0.38 }
     track pad   { play pad_abmaj   using evolve }
 }
 

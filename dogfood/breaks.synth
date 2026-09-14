@@ -210,7 +210,7 @@ track stab {
     velocity 0.9
     level 0.38
     gate 0.08
-    pan 0.15
+    pan -0.38
     delay_send 0.2
     out > saturate(0.22) > master
 }
@@ -230,6 +230,7 @@ track siren {
 track pad {
     play silence
     using darkpad
+    pan 0.34
     velocity 0.9
     level 0.1848
     reverb_send 0.4
@@ -257,9 +258,9 @@ scene intro {
     delay_mix = 0.3
     track drums { play beat_intro using brk }
     track bass  { play silence using acid }
-    track stab  { play silence using stab }
+    track stab { play silence using stab pan -0.38 }
     track siren { play silence using siren }
-    track pad { play pad_intro using darkpad }
+    track pad { play pad_intro using darkpad pan 0.34 }
 }
 
 scene beat {
@@ -267,9 +268,9 @@ scene beat {
     delay_mix = 0.2
     track drums { play beat_main using brk }
     track bass  { play acid_groove using acid }
-    track stab  { play stab_hits using stab }
+    track stab { play stab_hits using stab pan -0.38 }
     track siren { play silence using siren }
-    track pad { play silence using darkpad }
+    track pad { play silence using darkpad pan 0.34 }
 }
 
 scene break {
@@ -277,9 +278,9 @@ scene break {
     delay_mix = 0.35
     track drums { play beat_break using brk }
     track bass  { play silence using acid }
-    track stab  { play silence using stab }
+    track stab { play silence using stab pan -0.38 }
     track siren { play silence using siren }
-    track pad { play pad_break using darkpad }
+    track pad { play pad_break using darkpad pan 0.34 }
 }
 
 scene fill {
@@ -287,9 +288,9 @@ scene fill {
     delay_mix = 0.3
     track drums { play fill using brk }
     track bass  { play silence using acid }
-    track stab  { play silence using stab }
+    track stab { play silence using stab pan -0.38 }
     track siren { play silence using siren }
-    track pad { play pad_break using darkpad }
+    track pad { play pad_break using darkpad pan 0.34 }
 }
 
 scene drop {
@@ -298,9 +299,9 @@ scene drop {
     auto acid resonance 0.35 > 0.9 > 0.35
     track drums { play beat_drop using brk }
     track bass  { play acid_drop using acid }
-    track stab  { play stab_hits using stab }
+    track stab { play stab_hits using stab pan -0.38 }
     track siren { play siren_main using siren }
-    track pad { play silence using darkpad }
+    track pad { play silence using darkpad pan 0.34 }
 }
 
 scene outro {
@@ -309,9 +310,9 @@ scene outro {
     auto drums level 0.8 > 0.0
     track drums { play beat_outro using brk }
     track bass  { play silence using acid }
-    track stab  { play silence using stab }
+    track stab { play silence using stab pan -0.38 }
     track siren { play silence using siren }
-    track pad { play pad_intro using darkpad }
+    track pad { play pad_intro using darkpad pan 0.34 }
 }
 
 # ────────────────────────────────────────────────

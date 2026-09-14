@@ -411,6 +411,7 @@ track sub {
 track pad {
     play silence
     using cloud
+    pan 0.45
     velocity 0.95
     level 0.1061
     reverb_send 0.48
@@ -425,7 +426,7 @@ track rhodes {
     velocity 0.9
     level 0.26
     gate 0.70
-    pan -0.18
+    pan -0.38
     reverb_send 0.42
     delay_send 0.26
     sidechain 0.30
@@ -448,7 +449,7 @@ track glass {
     velocity 0.8
     level 0.16
     gate 0.40
-    pan 0.26
+    pan -0.28
     reverb_send 0.52
     delay_send 0.34
     sidechain 0.35
@@ -462,7 +463,7 @@ track lead {
     velocity 0.85
     level 0.22
     gate 0.80
-    pan 0.12
+    pan 0.34
     reverb_send 0.40
     delay_send 0.30
     sidechain 0.30
@@ -472,6 +473,7 @@ track lead {
 track air {
     play silence
     using air
+    pan -0.50
     velocity 0.8
     level 0.15
     reverb_send 0.55
@@ -502,8 +504,8 @@ scene intro {
     delay_mix = 0.25
     auto cloud cutoff 0.10 > 0.24
     auto master tilt -0.25 > -0.05
-    track pad { play voice_intro using cloud sidechain 0.0 velocity 0.85 }
-    track air { play air_low    using air   sidechain 0.0 velocity 0.7 }
+    track pad { play voice_intro using cloud sidechain 0.0 velocity 0.85 pan 0.45 }
+    track air { play air_low    using air   sidechain 0.0 velocity 0.7 pan -0.50 }
 }
 
 # LIFT — shakers and the sub arrive; still no kick.
@@ -512,10 +514,10 @@ scene lift {
     delay_mix = 0.25
     auto cloud cutoff 0.24 > 0.32
     track drums  { play brk_air    using brk  level 0.62 }
-    track pad { play voice_intro using cloud velocity 0.9 }
-    track air    { play air_low    using air }
+    track pad { play voice_intro using cloud velocity 0.9 pan 0.45 }
+    track air { play air_low    using air pan -0.50 }
     track sub    { play sub_hold   using sub  velocity 0.85 }
-    track rhodes { play rhodes_a   using rhodes velocity 0.7 }
+    track rhodes { play rhodes_a   using rhodes velocity 0.7 pan -0.38 }
 }
 
 # BUILD — the break assembles, the filter opens, the reverb pulls back.
@@ -526,10 +528,10 @@ scene build {
     auto brk kick_level 0.75 > 0.95
     auto master tilt -0.12 > 0.0
     track drums  { play brk_build using brk level 0.64 }
-    track pad { play voice_a   using cloud }
-    track air    { play air_low   using air }
+    track pad { play voice_a   using cloud pan 0.45 }
+    track air { play air_low   using air pan -0.50 }
     track sub    { play sub_a     using sub velocity 0.80 }
-    track rhodes { play rhodes_a  using rhodes }
+    track rhodes { play rhodes_a  using rhodes pan -0.38 }
 }
 
 # DROP A — the break enters whole.
@@ -539,10 +541,10 @@ scene drop_a {
     auto cloud cutoff 0.40 > 0.50 > 0.42
     track drums  { play brk_main using brk level 0.80 }
     track sub    { play sub_a    using sub }
-    track pad { play voice_a  using cloud }
-    track rhodes { play rhodes_a using rhodes }
-    track glass  { play glass_a  using glass }
-    track air    { play air_high using air }
+    track pad { play voice_a  using cloud pan 0.45 }
+    track rhodes { play rhodes_a using rhodes pan -0.38 }
+    track glass { play glass_a  using glass pan -0.28 }
+    track air { play air_high using air pan -0.50 }
 }
 
 # DROP B — chords move to Ab, break varies, ghost starts feeding the echo chamber.
@@ -553,11 +555,11 @@ scene drop_b {
     auto lead mod_index 0.26 > 0.36
     track drums  { play brk_var   using brk level 0.80 }
     track sub    { play sub_b     using sub }
-    track pad { play voice_b   using cloud }
-    track rhodes { play rhodes_b  using rhodes }
-    track lead   { play lead_a    using lead }
+    track pad { play voice_b   using cloud pan 0.45 }
+    track rhodes { play rhodes_b  using rhodes pan -0.38 }
+    track lead { play lead_a    using lead pan 0.34 }
     track ghost  { play ghost_hold using rhodes velocity 0.55 }
-    track air    { play air_low   using air }
+    track air { play air_low   using air pan -0.50 }
 }
 
 # BREAKDOWN — no drums, reverb frozen, the echo chamber carries the chords.
@@ -567,10 +569,10 @@ scene breakdown {
     auto reverb_freeze 0 > 1
     auto cloud cutoff 0.30 > 0.46
     auto master tilt -0.30 > 0.0
-    track pad { play voice_break using cloud sidechain 0.0 velocity 0.72 }
-    track air   { play air_high    using air   sidechain 0.0 velocity 0.62 }
+    track pad { play voice_break using cloud sidechain 0.0 velocity 0.72 pan 0.45 }
+    track air { play air_high    using air   sidechain 0.0 velocity 0.62 pan -0.50 }
     track ghost { play ghost_hold  using rhodes velocity 0.66 }
-    track lead  { play lead_b      using lead  sidechain 0.0 velocity 0.55 }
+    track lead { play lead_b      using lead  sidechain 0.0 velocity 0.55 pan 0.34 }
 }
 
 # DROP C — everything, the fullest the record gets.
@@ -581,11 +583,11 @@ scene drop_c {
     auto glass mod_index 0.36 > 0.46
     track drums  { play brk_peak using brk level 1.0 }
     track sub    { play sub_a    using sub }
-    track pad { play voice_a  using cloud }
-    track rhodes { play rhodes_a using rhodes velocity 1.0 }
-    track glass  { play glass_b  using glass velocity 0.95 }
-    track lead   { play lead_b   using lead velocity 0.95 }
-    track air    { play air_high using air }
+    track pad { play voice_a  using cloud pan 0.45 }
+    track rhodes { play rhodes_a using rhodes velocity 1.0 pan -0.38 }
+    track glass { play glass_b  using glass velocity 0.95 pan -0.28 }
+    track lead { play lead_b   using lead velocity 0.95 pan 0.34 }
+    track air { play air_high using air pan -0.50 }
 }
 
 # OUTRO — the break thins out, the tail takes over.
@@ -597,9 +599,9 @@ scene outro {
     auto master tilt 0.0 > -0.30
     track drums  { play brk_thin  using brk }
     track sub    { play sub_hold  using sub velocity 0.8 }
-    track pad { play voice_a   using cloud }
-    track air    { play air_low   using air }
-    track rhodes { play rhodes_a  using rhodes velocity 0.7 }
+    track pad { play voice_a   using cloud pan 0.45 }
+    track air { play air_low   using air pan -0.50 }
+    track rhodes { play rhodes_a  using rhodes velocity 0.7 pan -0.38 }
 }
 
 # ────────────────────────────────────────────────
