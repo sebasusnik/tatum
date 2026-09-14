@@ -363,21 +363,67 @@ pub struct SongEngine {
     global_step: usize,
 
     // Pending nudge triggers: (samples_remaining, instrument_idx, midi_note, velocity)
+    // Capacity is reserved up front; see `push_trigger` for what happens when it fills.
     pending_triggers: Vec<(f32, usize, u8, f32)>,
+
+    // Per-track render buffers, allocated once. The audio path takes them with
+    // `mem::take` and puts them back, so a block never touches the allocator.
+    track_bufs_l: Vec<[f32; BLOCK_SIZE]>,
+    track_bufs_r: Vec<[f32; BLOCK_SIZE]>,
 
     running: bool,
 }
 
-/// A running automation lane within a scene.
+/// The arpeggiator holds at most this many notes (chord notes x octaves).
+const MAX_ARP_NOTES: usize = 16;
+
+/// How many delayed drum hits can be in flight at once. A nudge resolves within a
+/// fraction of a step, so this is far above anything a pattern can produce.
+const MAX_PENDING_TRIGGERS: usize = 128;
+
+/// The longest name in the parameter registry is 13 bytes; this leaves room.
+/// `inline_name_holds_every_registry_param` keeps that true as params are added.
+pub const INLINE_NAME_CAP: usize = 24;
+
+/// A parameter name stored inline. Automation targets are resolved when a scene
+/// starts, which happens on the audio thread, where a `String` would allocate.
+#[derive(Clone, Copy)]
+struct InlineName {
+    bytes: [u8; INLINE_NAME_CAP],
+    len: u8,
+}
+
+impl InlineName {
+    /// `None` when the name does not fit. No registry name is that long.
+    fn new(s: &str) -> Option<Self> {
+        let src = s.as_bytes();
+        if src.len() > INLINE_NAME_CAP {
+            return None;
+        }
+        let mut bytes = [0u8; INLINE_NAME_CAP];
+        bytes[..src.len()].copy_from_slice(src);
+        Some(Self { bytes, len: src.len() as u8 })
+    }
+
+    fn as_str(&self) -> &str {
+        // Always built from a &str, so the prefix is valid UTF-8.
+        core::str::from_utf8(&self.bytes[..self.len as usize]).unwrap_or("")
+    }
+}
+
+/// A running automation lane within a scene. `keyframes` points back into
+/// `scenes[scene_idx].automations[auto_idx]` rather than copying them: applying a
+/// scene happens on the audio thread.
 struct ActiveAutomation {
     target: AutoTarget,
-    keyframes: Vec<f32>,
+    scene_idx: usize,
+    auto_idx: usize,
 }
 
 /// Resolved automation target.
 enum AutoTarget {
-    InstrumentParam { instrument_idx: usize, param_name: String },
-    MasterParam { param_name: String },
+    InstrumentParam { instrument_idx: usize, param_name: InlineName },
+    MasterParam { param_name: InlineName },
     TrackLevel { track_idx: usize },
     ReverbMix,
     DelayMix,
@@ -626,6 +672,7 @@ impl SongEngine {
         let humanize_velocity = song.globals.humanize.unwrap_or(0.0);
         let humanize_timing = song.globals.humanize_timing.unwrap_or(0.0);
 
+        let track_buf_count = tracks.len();
         let mut engine = Self {
             instruments,
             instrument_names,
@@ -667,7 +714,9 @@ impl SongEngine {
             arrangement_bar_count: 0,
             current_bar: 0,
             global_step: 0,
-            pending_triggers: Vec::new(),
+            pending_triggers: Vec::with_capacity(MAX_PENDING_TRIGGERS),
+            track_bufs_l: vec![[0.0f32; BLOCK_SIZE]; track_buf_count],
+            track_bufs_r: vec![[0.0f32; BLOCK_SIZE]; track_buf_count],
             running: false,
         };
         engine.retune_fx(tempo);
@@ -807,11 +856,15 @@ impl SongEngine {
 
         self.recompute_gain_comp();
 
-        let scene = &self.scenes[scene_idx];
-        let mut lanes = Vec::new();
-        for auto_def in &scene.automations {
-            if let Some(target) = self.resolve_auto_target(&auto_def.target) {
-                lanes.push(ActiveAutomation { target, keyframes: auto_def.keyframes.clone() });
+        // Reuses the existing capacity: applying a scene runs on the audio thread.
+        let mut lanes = core::mem::take(&mut self.active_automations);
+        lanes.clear();
+        for auto_idx in 0..self.scenes[scene_idx].automations.len() {
+            let target_name = core::mem::take(&mut self.scenes[scene_idx].automations[auto_idx].target);
+            let resolved = self.resolve_auto_target(&target_name);
+            self.scenes[scene_idx].automations[auto_idx].target = target_name;
+            if let Some(target) = resolved {
+                lanes.push(ActiveAutomation { target, scene_idx, auto_idx });
             }
         }
         self.active_automations = lanes;
@@ -864,7 +917,7 @@ impl SongEngine {
                     let param = &target[dot_pos + 1..];
 
                     if name == "master" {
-                        return Some(AutoTarget::MasterParam { param_name: String::from(param) });
+                        return InlineName::new(param).map(|param_name| AutoTarget::MasterParam { param_name });
                     }
 
                     if param == "level" {
@@ -885,9 +938,9 @@ impl SongEngine {
 
                     // Try as instrument.param
                     if let Some(inst_idx) = self.instrument_names.iter().position(|n| n == name) {
-                        return Some(AutoTarget::InstrumentParam {
+                        return InlineName::new(param).map(|param_name| AutoTarget::InstrumentParam {
                             instrument_idx: inst_idx,
-                            param_name: String::from(param),
+                            param_name,
                         });
                     }
                 }
@@ -956,16 +1009,16 @@ impl SongEngine {
             output_r[i] = 0.0;
         }
 
-        if !self.running { return; }
+        if !self.running {
+            return;
+        }
 
-        // Per-track instrument render buffers (L and R)
+        // Per-track instrument render buffers (L and R), borrowed from the engine so
+        // the block allocates nothing. Instruments write the whole slice they are
+        // given, so no clearing is needed between blocks.
         let track_count = self.tracks.len();
-        let mut track_bufs_l: Vec<[f32; BLOCK_SIZE]> = (0..track_count)
-            .map(|_| [0.0f32; BLOCK_SIZE])
-            .collect();
-        let mut track_bufs_r: Vec<[f32; BLOCK_SIZE]> = (0..track_count)
-            .map(|_| [0.0f32; BLOCK_SIZE])
-            .collect();
+        let mut track_bufs_l = core::mem::take(&mut self.track_bufs_l);
+        let mut track_bufs_r = core::mem::take(&mut self.track_bufs_r);
 
         // Step sequencer: process sample-by-sample for accurate timing
         for _s in 0..len {
@@ -1223,22 +1276,45 @@ impl SongEngine {
                 output_r[s] *= g;
             }
         }
+
+        self.track_bufs_l = track_bufs_l;
+        self.track_bufs_r = track_bufs_r;
+    }
+
+    /// Schedule a nudged hit. If the queue is full the hit fires now rather than
+    /// growing the queue: the audio thread must not allocate, and losing a few
+    /// milliseconds of swing is better than losing the hit.
+    fn push_trigger(
+        pending: &mut Vec<(f32, usize, u8, f32)>,
+        instruments: &mut [SongInstrument],
+        samples: f32,
+        inst_idx: usize,
+        midi_note: u8,
+        vel: f32,
+    ) {
+        if pending.len() < MAX_PENDING_TRIGGERS {
+            pending.push((samples, inst_idx, midi_note, vel));
+        } else if inst_idx < instruments.len() {
+            instruments[inst_idx].note_on(midi_note, vel);
+        }
     }
 
     fn advance_step(&mut self) {
         // Process automation before note events
         if self.scene_total_steps > 0 && !self.active_automations.is_empty() {
             let progress = self.scene_step as f32 / self.scene_total_steps as f32;
-            for auto_lane in &self.active_automations {
-                let value = interpolate_automation(&auto_lane.keyframes, progress);
+            let lanes = core::mem::take(&mut self.active_automations);
+            for auto_lane in &lanes {
+                let keyframes = &self.scenes[auto_lane.scene_idx].automations[auto_lane.auto_idx].keyframes;
+                let value = interpolate_automation(keyframes, progress);
                 match &auto_lane.target {
                     AutoTarget::InstrumentParam { instrument_idx, param_name } => {
                         if *instrument_idx < self.instruments.len() {
-                            self.instruments[*instrument_idx].set_param_by_name(param_name, value);
+                            self.instruments[*instrument_idx].set_param_by_name(param_name.as_str(), value);
                         }
                     }
                     AutoTarget::MasterParam { param_name } => {
-                        self.master_fx.set_param(param_name, value);
+                        self.master_fx.set_param(param_name.as_str(), value);
                     }
                     AutoTarget::TrackLevel { track_idx } => {
                         if *track_idx < self.tracks.len() {
@@ -1250,6 +1326,7 @@ impl SongEngine {
                     AutoTarget::DelayMix => self.delay_wet_level = value,
                 }
             }
+            self.active_automations = lanes;
         }
         self.scene_step += 1;
 
@@ -1287,7 +1364,8 @@ impl SongEngine {
                                 let nudge_samples = lane.nudge * self.samples_per_step;
                                 if nudge_samples.abs() > 0.5 && nudge_samples > 0.0 {
                                     // Positive nudge = delay trigger
-                                    self.pending_triggers.push((nudge_samples, inst_idx, lane.midi_note, vel));
+                                    Self::push_trigger(&mut self.pending_triggers, &mut self.instruments,
+                                        nudge_samples, inst_idx, lane.midi_note, vel);
                                 } else {
                                     // No nudge or negative nudge (trigger immediately, can't go back in time)
                                     self.instruments[inst_idx].note_on(lane.midi_note, vel);
@@ -1568,22 +1646,27 @@ impl SongEngine {
         let vel = Self::humanize_vel(step_vel * track.velocity, humanize_velocity, rng);
 
         // Sorted ascending and expanded across octaves so "up" really goes up.
-        let mut sorted: Vec<u8> = notes[..count].to_vec();
-        sorted.sort_unstable();
+        // Fixed buffers: this runs on the audio thread, once per step.
+        let mut sorted = [0u8; compiler::MAX_CHORD_NOTES];
+        sorted[..count].copy_from_slice(&notes[..count]);
+        sorted[..count].sort_unstable();
         let octaves = track.arp_cfg.map_or(1, |c| c.octaves).max(1);
-        let mut list: Vec<u8> = Vec::new();
+        let mut list = [0u8; MAX_ARP_NOTES];
+        let mut list_len = 0usize;
         for o in 0..octaves {
-            for &n in &sorted {
+            for &n in &sorted[..count] {
                 let v = n as u16 + 12 * o as u16;
-                if v <= 127 && list.len() < 16 {
-                    list.push(v as u8);
+                if v <= 127 && list_len < MAX_ARP_NOTES {
+                    list[list_len] = v as u8;
+                    list_len += 1;
                 }
             }
         }
+        let list = &list[..list_len];
 
         let mut pending_off = None;
         if let Some(arp) = track.arp.as_mut() {
-            arp.set_notes(&list);
+            arp.set_notes(list);
             arp.set_velocity(vel);
             if !same || !arp.is_active() {
                 // New material: close the open arp note and restart from the first note.
