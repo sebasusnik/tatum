@@ -24,21 +24,26 @@ fn lints(src: &str) -> Vec<&'static str> {
     lint::lint_song(&ast).into_iter().map(|l| l.code).collect()
 }
 
+/// Lints other than the sidechain one (scene b of SONG has no drums on purpose).
+fn pad_lints(src: &str) -> Vec<&'static str> {
+    lints(src).into_iter().filter(|c| *c != "sidechain_without_kick").collect()
+}
+
 #[test]
 fn static_pad_is_flagged_and_modulation_clears_it() {
-    assert_eq!(lints(SONG), vec!["static_pad"]);
+    assert_eq!(pad_lints(SONG), vec!["static_pad"]);
     let moving = SONG.replace("module keys pad { cutoff 0.3 }", "module keys pad { cutoff 0.3 lfo_target cutoff lfo_depth 0.2 }");
-    assert!(lints(&moving).is_empty());
+    assert!(pad_lints(&moving).is_empty());
     // Automating only scene b still leaves scene a static, and the message says so
     let half = SONG.replace("scene b { track pad { play hold using pad } }", "scene b { auto pad cutoff 0.2 > 0.6 track pad { play hold using pad } }");
     let ast = dsl::parse(&half).unwrap();
-    let l = lint::lint_song(&ast);
+    let l: Vec<_> = lint::lint_song(&ast).into_iter().filter(|l| l.code == "static_pad").collect();
     assert_eq!(l.len(), 1);
     assert!(l[0].message.ends_with("in: a"), "{}", l[0].message);
     let automated = half.replace("scene a { track pad", "scene a { auto pad cutoff 0.2 > 0.6 track pad");
-    assert!(lints(&automated).is_empty());
+    assert!(pad_lints(&automated).is_empty());
     let arped = SONG.replace("track pad   { play hold using pad reverb_send 0.3 out > master }", "track pad   { play hold using pad arp up reverb_send 0.3 out > master }");
-    assert!(lints(&arped).is_empty());
+    assert!(pad_lints(&arped).is_empty());
 }
 
 #[test]
@@ -54,4 +59,11 @@ fn mix_and_arrangement_lints() {
     let unused = SONG.replace("module beats kit { kick_level 1.0 }", "module beats kit { kick_level 1.0 }\nmodule fm spare { }\npattern spare_p { 1.1 - - - }");
     let l = lints(&unused);
     assert!(l.contains(&"unused_module") && l.contains(&"unused_pattern"), "{:?}", l);
+}
+
+#[test]
+fn sidechain_without_kick_in_a_scene() {
+    // scene b has no drums; the pad inherits the global sidechain
+    let l = lints(&SONG.replace("module keys pad { cutoff 0.3 }", "module keys pad { cutoff 0.3 lfo_target cutoff lfo_depth 0.2 }"));
+    assert_eq!(l, vec!["sidechain_without_kick"], "{:?}", l);
 }

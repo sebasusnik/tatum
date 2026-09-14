@@ -119,6 +119,27 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
         ));
     }
 
+    // ── sidechain_without_kick: ducking set, but this scene has no beats track ──
+    let is_beats = |name: &str| song.module_defs.iter().any(|m| m.name == name && m.module_type == "beats");
+    for scene in &song.scenes {
+        if scene.tracks.iter().any(|t| is_beats(&t.using_instrument)) { continue; }
+        let ducked: Vec<&str> = scene.tracks.iter()
+            .filter(|t| {
+                let global = song.tracks.iter().find(|g| g.name == t.name);
+                let amount = t.sidechain.or(global.and_then(|g| g.sidechain)).unwrap_or(song.globals.sidechain);
+                amount > 0.0
+            })
+            .map(|t| t.name.as_str())
+            .collect();
+        if !ducked.is_empty() {
+            out.push(lint(
+                "sidechain_without_kick",
+                format!("scene '{}' has no drums, so sidechain does nothing there for: {}", scene.name, ducked.join(", ")),
+                "Those tracks play at full, unducked level in this scene. Lower their level or velocity here so a breakdown does not end up louder than the drop.",
+            ));
+        }
+    }
+
     // ── single_scene: long song with no arrangement shape ──
     let total_bars: u32 = song.arrangement.iter().map(|a| a.repeat).sum();
     if song.scenes.len() <= 1 && total_bars > 8 {

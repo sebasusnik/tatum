@@ -196,3 +196,14 @@ fn effect_arguments_are_validated() {
     let errs = dsl::parse(&bad).unwrap_err();
     assert!(errs[0].message.contains("unexpected 'warm' in arguments"), "{}", errs[0].message);
 }
+
+#[test]
+fn tie_and_rest_repeat_shorthand() {
+    let src = BASE.replace("pattern p { 1.1:0.9 - - - }", "pattern p { 1.1:0.9 ..*7 -*4 [1.3 3.3]:0.5 ..*3 }");
+    let ast = dsl::parse(&src).expect("parse");
+    let p = ast.patterns.iter().find(|p| p.name == "p").unwrap();
+    assert_eq!(p.rows[0].len(), 1 + 7 + 4 + 1 + 3);
+    let bad = BASE.replace("pattern p { 1.1:0.9 - - - }", "pattern p { 1.1:0.9 ..*0 }");
+    let errs = dsl::parse(&bad).unwrap_err();
+    assert!(errs[0].message.contains("expected a count 1..256"), "{}", errs[0].message);
+}

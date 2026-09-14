@@ -407,6 +407,58 @@ mod tests {
     }
 }
 
+// ── Track options (not module params, but the same "only valid names" promise) ──
+
+/// One `track { }` option.
+#[derive(Debug, Clone, Copy)]
+pub struct TrackOption {
+    pub name: &'static str,
+    pub range: &'static str,
+    pub default: &'static str,
+    pub doc: &'static str,
+}
+
+pub const TRACK_OPTIONS: &[TrackOption] = &[
+    TrackOption { name: "play", range: "pattern name", default: "required", doc: "Pattern the track loops" },
+    TrackOption { name: "using", range: "module or instrument name", default: "required", doc: "Instrument that plays it" },
+    TrackOption { name: "level", range: "0.0..1.0", default: "0.8", doc: "Output level after the instrument" },
+    TrackOption { name: "pan", range: "-1.0..1.0", default: "0.0", doc: "Stereo position" },
+    TrackOption { name: "velocity", range: "0.0..1.0", default: "0.8", doc: "Scales every note's velocity" },
+    TrackOption { name: "gate", range: "0.0..1.0", default: "0.85", doc: "Note length as a fraction of the step" },
+    TrackOption { name: "delay_send", range: "0.0..1.0", default: "0.0", doc: "Amount into the global delay" },
+    TrackOption { name: "reverb_send", range: "0.0..1.0", default: "0.0", doc: "Amount into the global reverb" },
+    TrackOption { name: "sidechain", range: "0.0..1.0", default: "global `sidechain`", doc: "How much the kick ducks this track; only acts in scenes that have a beats track" },
+    TrackOption { name: "arp", range: "up | down | updown | off, rate=4|8|16|32, gate=0.1..1, octaves=1..4", default: "none", doc: "Arpeggiate the held notes; a scene can add, change or turn it off" },
+    TrackOption { name: "out", range: "`> node(...) > ... > master` or `> <bus>`", default: "`> master`", doc: "Insert chain and destination; see effects and nodes" },
+];
+
+/// Markdown table of track options.
+pub fn track_markdown() -> String {
+    let mut out = String::from("## track options\n\n");
+    out.push_str("Inside `track name { ... }` at top level or in a scene. A scene track overrides\n");
+    out.push_str("the top-level track with the same name; unset options are inherited.\n\n");
+    out.push_str("| option | range | default | description |\n|--------|-------|---------|-------------|\n");
+    for t in TRACK_OPTIONS {
+        out.push_str(&alloc::format!("| `{}` | {} | {} | {} |\n", t.name, t.range, t.default, t.doc));
+    }
+    out.push('\n');
+    out
+}
+
+/// JSON list of track options.
+pub fn track_json() -> String {
+    let mut out = String::from("[\n");
+    for (i, t) in TRACK_OPTIONS.iter().enumerate() {
+        out.push_str(&alloc::format!(
+            "  {{\"name\": \"{}\", \"range\": \"{}\", \"default\": \"{}\", \"doc\": \"{}\"}}{}\n",
+            t.name, json_escape(t.range), json_escape(t.default), json_escape(t.doc),
+            if i + 1 < TRACK_OPTIONS.len() { "," } else { "" }
+        ));
+    }
+    out.push_str("]\n");
+    out
+}
+
 // ── Reference generation (shared by the CLI and the MCP server) ──
 
 fn json_escape(s: &str) -> String {

@@ -71,7 +71,7 @@ pattern riff { 1.2:0.9  -  ~5.2:0.8  ..  [1.3 3.3 5.3]:0.6  ..  ..  .. }
 | token | meaning |
 |-------|---------|
 | `-` | rest |
-| `..` | tie: hold the previous step |
+| `..` | tie: hold the previous step; `..*15` writes fifteen ties, `-*8` eight rests |
 | `~note` | slide: glide into this note without retriggering the envelope (303 style). The previous note is held until the slide. Bass modules glide at their `glide` rate; other instruments fall back to a normal retrigger. |
 | `[a b c]` | chord |
 | `1.2:0.8(cutoff=0.4, edepth=0.3, res=0.6, gate=0.5)` | per-step parameter lock (bass filter and gate) |

@@ -119,6 +119,21 @@ impl Parser {
         }
     }
 
+    /// Optional `*N` after a tie or rest: `..*15` is fifteen ties.
+    fn repeat_count(&mut self) -> usize {
+        if !matches!(self.peek(), Token::Star) { return 1; }
+        self.advance();
+        match self.peek().clone() {
+            Token::Number(n) if n >= 1.0 && n <= 256.0 => { self.advance(); n as usize }
+            _ => {
+                let s = self.span();
+                let (l, c) = (s.line, s.col);
+                self.errors.push(ParseError { line: l, col: c, message: String::from("expected a count 1..256 after '*'") });
+                1
+            }
+        }
+    }
+
     fn at_block_end(&self) -> bool {
         matches!(self.peek(), Token::RBrace | Token::Eof)
     }
@@ -794,11 +809,13 @@ impl Parser {
                 }
                 Token::Rest => {
                     self.advance();
-                    current_row.push(Step::Rest);
+                    let n = self.repeat_count();
+                    for _ in 0..n { current_row.push(Step::Rest); }
                 }
                 Token::Tie => {
                     self.advance();
-                    current_row.push(Step::Tie);
+                    let n = self.repeat_count();
+                    for _ in 0..n { current_row.push(Step::Tie); }
                 }
                 Token::Newline => {
                     if !current_row.is_empty() {

@@ -144,11 +144,11 @@ fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "synth_params",
-            "description": "Parameter registry. module = bass|fm|keys|beats gives every valid module parameter with range, default, option names and meaning; module = fx gives every effect and graph node with its arguments and options. This is the only source of valid names.",
+            "description": "Parameter registry. module = bass|fm|keys|beats gives every valid module parameter with range, default, option names and meaning; module = track gives the track options (level, pan, gate, sends, sidechain, arp, out); module = fx gives every effect and graph node with its arguments and options. This is the only source of valid names.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "module": { "type": "string", "enum": ["bass", "fm", "keys", "beats", "fx"], "description": "One module type, or fx for effects and nodes. Omit for all modules." },
+                    "module": { "type": "string", "enum": ["bass", "fm", "keys", "beats", "track", "fx"], "description": "One module type, track for track options, or fx for effects and nodes. Omit for all modules." },
                     "format": { "type": "string", "enum": ["markdown", "json"], "description": "Default markdown." }
                 },
                 "additionalProperties": false
@@ -208,6 +208,12 @@ fn call_tool(ctx: &Ctx, params: &Value) -> Result<Value, (i64, String)> {
 }
 
 fn tool_params(args: &Value) -> Result<String, String> {
+    if matches!(args.get("module").and_then(Value::as_str), Some("track")) {
+        return Ok(match args.get("format").and_then(Value::as_str) {
+            Some("json") => params::track_json(),
+            _ => params::track_markdown(),
+        });
+    }
     if matches!(args.get("module").and_then(Value::as_str), Some("fx") | Some("nodes")) {
         return Ok(match args.get("format").and_then(Value::as_str) {
             Some("json") => synth_core::nodes::json(),
@@ -435,7 +441,7 @@ fn read_resource(ctx: &Ctx, params: &Value) -> Result<Value, (i64, String)> {
     let uri = params.get("uri").and_then(Value::as_str).unwrap_or("");
     let (mime, text) = match uri {
         "synth://docs/dsl" => ("text/markdown", DSL_DOC.to_string()),
-        "synth://docs/params" => ("text/markdown", params::markdown(&ModuleKind::ALL) + &synth_core::nodes::markdown()),
+        "synth://docs/params" => ("text/markdown", params::markdown(&ModuleKind::ALL) + &params::track_markdown() + &synth_core::nodes::markdown()),
         _ => match uri.strip_prefix("synth://examples/") {
             Some(name) => ("text/plain", tool_examples(ctx, &json!({ "name": name })).map_err(|e| (-32002, e))?),
             None => return Err((-32002, format!("unknown resource: {}", uri))),
