@@ -211,6 +211,11 @@ module fm hiss {
 
 # ── Drums ──
 
+pattern beat_open {
+    hat:  x:0.16  x:0.26  x:0.18  x:0.28  x:0.16  x:0.26  x:0.18  x:0.28  x:0.18  x:0.28  x:0.2  x:0.3  x:0.2  x:0.3  x:0.24  x:0.36
+    tom:  -  -  -  x:0.14  -  -  -  x:0.16  -  -  -  x:0.18  -  -  x:0.2  x:0.22
+}
+
 pattern beat_intro {
     kick: X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -
     hat:  -  -  x:0.28  -  -  -  x:0.28  -  -  -  x:0.28  -  -  -  x:0.34  -
@@ -218,9 +223,10 @@ pattern beat_intro {
 
 pattern beat_main {
     kick:    X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -
-    hat:     x:0.44  x:0.18  x:0.5  x:0.2  x:0.42  x:0.18  x:0.5  x:0.2  x:0.44  x:0.18  x:0.5  x:0.2  x:0.42  x:0.18  x:0.5  x:0.3
+    hat:     x:0.42  x:0.3  x:0.46  x:0.32  x:0.42  x:0.3  x:0.46  x:0.32  x:0.42  x:0.3  x:0.46  x:0.32  x:0.42  x:0.3  x:0.48  x:0.36
+    tom:     -  -  -  x:0.16  -  -  -  x:0.18  -  -  -  x:0.16  -  -  -  x:0.2
     openhat: -  -  -  -  -  -  -  x:0.3  -  -  -  -  -  -  -  x:0.3
-    snare:   -  -  -  -  -  -  -  -  -  -  o:0.25  -  -  -  -  -
+    snare:   -  o:0.14  -  -  -  -  -  -  -  o:0.16  o:0.25  -  -  -  o:0.18  -
 }
 
 # Two bars: the second answers the first, which is what stops a 148 BPM loop
@@ -228,16 +234,18 @@ pattern beat_main {
 pattern beat_drop {
     kick:    X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -   X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -
     clap:    -  -  -  -  X  -  -  -  -  -  -  -  X  -  -  -   -  -  -  -  X  -  -  -  -  -  -  -  X  -  -  -
-    hat:     x:0.46  x:0.2  x:0.52  x?0.5  x:0.44  x:0.2  x:0.52  x:0.22  x:0.46  x:0.2  x:0.52  x?0.5  x:0.44  x:0.2  x:0.52  x:0.3   x:0.46  x:0.2  x:0.52  x?0.5  x:0.44  x:0.2  x:0.52  x:0.22  x:0.46  x:0.2  x:0.52  x?0.5  x:0.44  x:0.22  x:0.5  x*2
+    hat:     x:0.44  x:0.34  x:0.48  x:0.34  x:0.44  x:0.34  x:0.48  x:0.34  x:0.44  x:0.34  x:0.48  x:0.34  x:0.44  x:0.34  x:0.5  x:0.4   x:0.44  x:0.34  x:0.48  x:0.34  x:0.44  x:0.34  x:0.48  x:0.34  x:0.44  x:0.34  x:0.48  x:0.34  x:0.44  x:0.36  x:0.5  x*3
+    tom:     -  -  -  x:0.2  -  -  -  x:0.22  -  -  -  x:0.2  -  -  -  x:0.24   -  -  -  x:0.2  -  -  -  x:0.22  -  -  -  x:0.2  -  x:0.18  -  x:0.26
     openhat: -  -  -  -  -  -  -  x:0.32  -  -  -  -  -  -  -  x:0.32   -  -  -  -  -  -  -  x:0.32  -  -  -  -  -  -  x:0.36  -
-    snare:   -  -  o:0.22  -  -  -  -  -  -  -  o:0.24  -  -  -  -  o:0.28   -  -  o:0.22  -  -  -  -  o:0.2  -  -  o:0.24  -  -  -  -  o:0.3
+    snare:   -  o:0.16  o:0.22  -  -  o:0.14  -  -  -  o:0.16  o:0.24  -  -  o:0.14  -  o:0.28   -  o:0.16  o:0.22  -  -  o:0.14  -  o:0.2  -  o:0.16  o:0.24  -  -  o:0.18  -  o:0.3
     crash:   x:0.22  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -   -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 }
 
 pattern beat_build {
     kick:    X  -  -  -  X  -  -  -  X  -  -  -  X  -  X  -
-    hat:     x:0.4  x:0.24  x:0.4  x:0.24  x:0.4  x:0.24  x:0.4  x:0.24  x:0.42  x:0.26  x:0.42  x:0.26  x:0.44  x:0.3  x:0.46  x:0.34
-    snare:   -  -  -  -  -  -  -  o:0.2  -  -  -  o:0.24  -  o:0.3  x:0.4  x*2
+    hat:     x:0.4  x:0.3  x:0.42  x:0.3  x:0.4  x:0.3  x:0.42  x:0.3  x:0.42  x:0.32  x:0.44  x:0.32  x:0.44  x:0.34  x:0.48  x:0.38
+    tom:     -  -  -  x:0.16  -  -  -  x:0.18  -  -  -  x:0.2  -  -  x:0.22  -
+    snare:   -  o:0.14  -  -  -  o:0.14  -  o:0.2  -  o:0.16  -  o:0.24  -  o:0.3  x:0.4  x*3
 }
 
 # No kick: the breakdown. A beats track is still present so the ticking keeps
@@ -437,7 +445,7 @@ pattern riser_up { 1.3:0.55  ..*63 }
 # the breakdown and the outro, and is simply absent everywhere else. An unfed
 # bus is skipped whole, so the loop stops the moment nothing plays into it.
 bus rsmp
-rsmp { in > capture(2, start=28, speed=0.5, reverse=1, mix=0.88)
+rsmp { in > capture(2, start=32, speed=0.5, reverse=1, mix=0.88)
           > highpass(55, 0.2)
           > lowpass(1400, 0.3, lfo_bars=8, lfo_depth=600)
           > saturate(0.5)
@@ -467,9 +475,9 @@ track bass {
     level 0.4961
     gate 0.3
     sidechain 0.82
-    out > highpass(58hz, 0.2)
+    out > highpass(44hz, 0.2)
         > saturate(1.1)
-        > eq(low=0.5, mid=0.5, high=-2.5)
+        > eq(low=2.0, mid=-2.5, high=-2.5)
         > lowpass(2600, 0.2)
         > compressor(-12, ratio=3, attack=1, release=20, makeup=1.5db)
         > master
@@ -479,7 +487,7 @@ track sub {
     play sub_roll
     using sub
     velocity 1.0
-    level 0.2587
+    level 0.401
     gate 0.55
     sidechain 0.85
     out > lowpass(190hz, 0.1) > saturate(0.4) > master
@@ -567,7 +575,7 @@ track riser {
     sidechain 0.5
     reverb_send 0.22
     delay_send 0.1
-    out > gain(9) > bandpass(5000, 0.35, lfo_bars=4, lfo_depth=2000) > lowpass(10khz, 0.2) > master
+    out > gain(10) > gain(1.6) > bandpass(5000, 0.35, lfo_bars=4, lfo_depth=2000) > lowpass(10khz, 0.2) > master
 }
 
 # ────────────────────────────────────────────────
@@ -586,8 +594,17 @@ master {
 # SCENES
 # ────────────────────────────────────────────────
 
+# 0. Four bars of air before anything hits, so the kick is an arrival.
+scene open {
+    auto murk cutoff 0.04 > 0.16
+    auto drums level 0.18 > 0.46
+    track drums { play beat_open using kit level 0.46 }
+    track murk { play murk_dark using murk level 0.0715 }
+}
+
 # 1. Drums and atmosphere. No bass yet, so the roll lands as an event.
 scene intro {
+    auto drums level 0.3 > 0.537
     auto murk cutoff 0.088 > 0.246
     track drums { play beat_intro using kit level 0.5368 }
     track murk { play murk_dark using murk level 0.0715 }
@@ -601,7 +618,7 @@ scene build1 {
     auto murk cutoff 0.246 > 0.327
     track drums { play beat_build using kit level 0.6656 }
     track bass { play bass_stut using roll level 0.34 }
-    track sub { play sub_roll using sub level 0.18 }
+    track sub { play sub_roll using sub level 0.279 }
     track acid { play acid_a using squelch level 0.40 }
     track murk { play murk_dark using murk level 0.0715 }
     track clank { play clank_a using clank level 0.09 }
@@ -614,7 +631,7 @@ scene drop1 {
     auto murk cutoff 0.327 > 0.161
     track drums { play beat_drop using kit level 0.6978 }
     track bass { play bass_v1 using roll level 0.4914 }
-    track sub { play sub_drop using sub level 0.2402 }
+    track sub { play sub_drop using sub level 0.3723 }
     track acid { play acid_b using squelch level 0.8519 }
     track clank { play clank_b using clank level 0.1836 }
     track zap { play zap_b using zap level 0.1386 }
@@ -628,7 +645,7 @@ scene bridge {
     auto squelch cutoff 0.434 > 0.593
     track drums { play beat_main using kit level 0.612 }
     track bass { play bass_v2 using roll level 0.4961 }
-    track sub { play sub_roll using sub level 0.2587 }
+    track sub { play sub_roll using sub level 0.401 }
     track murk { play murk_lift using murk level 0.0715 }
     track acid { play acid_b using squelch level 0.7385 }
     track clank { play clank_b using clank level 0.216 }
@@ -656,7 +673,7 @@ scene build2 {
     auto murk cutoff 0.37 > 0.272
     track drums { play beat_build using kit level 0.6656 }
     track bass { play bass_stut using roll level 0.5288 }
-    track sub { play sub_roll using sub level 0.2664 }
+    track sub { play sub_roll using sub level 0.4129 }
     track acid { play acid_b using squelch level 0.7952 }
     track clank { play clank_b using clank level 0.1836 }
     track murk { play murk_dark using murk level 0.0715 }
@@ -669,7 +686,7 @@ scene drop2 {
     auto murk cutoff 0.272 > 0.151
     track drums { play beat_drop using kit level 0.8696 }
     track bass { play bass_v3 using roll level 0.6162 }
-    track sub { play sub_drop using sub level 0.3003 }
+    track sub { play sub_drop using sub level 0.4655 }
     track acid { play acid_c using squelch level 0.999 }
     track clank { play clank_c using clank level 0.216 }
     track zap { play zap_c using zap level 0.1598 }
@@ -694,6 +711,7 @@ scene outro {
 # ────────────────────────────────────────────────
 
 arrange {
+    open x4
     intro x8
     build1 x8
     drop1 x12
