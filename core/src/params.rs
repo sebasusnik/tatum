@@ -176,7 +176,7 @@ pub const FILTER_LFO_TARGETS: &[&str] = &["cutoff", "pitch", "amplitude"];
 pub const VOICE_MODES: &[&str] = &["poly", "unison", "octave", "fifth", "ringmod"];
 pub const STUTTER_DRUMS: &[&str] = &["kick", "snare", "hihat", "clap", "tom"];
 
-const ENV_TIME_DOC: &str = "Exponential 1ms..2s";
+const ENV_TIME_DOC: &str = "Exponential 1ms..2s (0.25 ≈ 7ms, 0.5 ≈ 45ms, 0.75 ≈ 300ms, 1.0 = 2s)";
 
 macro_rules! spec {
     ($name:expr, $id:expr, $range:expr, $default:expr, $doc:expr) => {
@@ -187,7 +187,7 @@ macro_rules! spec {
 // ── Bass ──
 
 pub const BASS_PARAMS: &[ParamSpec] = &[
-    spec!("cutoff", ParamId::Bass(BassParam::Cutoff), Range::Unit, 0.43, "Ladder filter cutoff, exponential 20Hz..20kHz (0.5 ≈ 630Hz)"),
+    spec!("cutoff", ParamId::Bass(BassParam::Cutoff), Range::Unit, 0.43, "Ladder filter cutoff, exponential 20Hz..20kHz (0.25 ≈ 110Hz, 0.5 ≈ 630Hz, 0.75 ≈ 3.5kHz)"),
     spec!("cutoff_env", ParamId::Bass(BassParam::CutoffEnv), Range::Unit, 0.88, "Filter envelope depth, exponential 20Hz..8kHz sweep"),
     spec!("resonance", ParamId::Bass(BassParam::Resonance), Range::Unit, 0.3, "Ladder resonance, self-oscillates near 1.0"),
     spec!("glide", ParamId::Bass(BassParam::Glide), Range::Unit, 0.06, "Portamento rate between notes (0 = instant)"),
@@ -215,7 +215,7 @@ pub const BASS_PARAMS: &[ParamSpec] = &[
 
 pub const FM_PARAMS: &[ParamSpec] = &[
     spec!("algorithm", ParamId::Fm(FmParam::Algorithm), Range::Choice(FM_ALGORITHMS), 0.0, "Operator routing"),
-    spec!("mod_index", ParamId::Fm(FmParam::ModIndex), Range::Unit, 0.5, "Modulation index, exponential 0.1..4.0"),
+    spec!("mod_index", ParamId::Fm(FmParam::ModIndex), Range::Unit, 0.5, "Modulation index, exponential 0.1..4.0 (0.5 ≈ 0.63, 0.75 ≈ 1.6)"),
     spec!("feedback", ParamId::Fm(FmParam::Feedback), Range::Unit, 0.0, "Global operator feedback (scaled to 0..0.7)"),
     spec!("waveform", ParamId::Fm(FmParam::Waveform), Range::Choice(FM_WAVEFORMS), 0.0, "Operator waveform"),
     spec!("chorus_mix", ParamId::Fm(FmParam::ChorusMix), Range::Unit, 0.0, "Dedicated chorus wet mix"),
@@ -250,16 +250,16 @@ pub const FM_PARAMS: &[ParamSpec] = &[
     spec!("op1_feedback", ParamId::Fm(FmParam::Op1Feedback), Range::Unit, 0.0, "Self-modulation of operator 1"),
     spec!("op2_feedback", ParamId::Fm(FmParam::Op2Feedback), Range::Unit, 0.0, "Self-modulation of operator 2"),
     spec!("op3_feedback", ParamId::Fm(FmParam::Op3Feedback), Range::Unit, 0.0, "Self-modulation of operator 3"),
-    spec!("op0_ratio", ParamId::Fm(FmParam::Op0Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5)"),
-    spec!("op1_ratio", ParamId::Fm(FmParam::Op1Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5)"),
-    spec!("op2_ratio", ParamId::Fm(FmParam::Op2Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5)"),
-    spec!("op3_ratio", ParamId::Fm(FmParam::Op3Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5)"),
+    spec!("op0_ratio", ParamId::Fm(FmParam::Op0Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
+    spec!("op1_ratio", ParamId::Fm(FmParam::Op1Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
+    spec!("op2_ratio", ParamId::Fm(FmParam::Op2Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
+    spec!("op3_ratio", ParamId::Fm(FmParam::Op3Ratio), Range::Unit, 0.032, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
 ];
 
 // ── Keys ──
 
 pub const KEYS_PARAMS: &[ParamSpec] = &[
-    spec!("cutoff", ParamId::Keys(KeysParam::Cutoff), Range::Unit, 0.59, "Biquad lowpass cutoff, exponential 200Hz..20kHz"),
+    spec!("cutoff", ParamId::Keys(KeysParam::Cutoff), Range::Unit, 0.59, "Biquad lowpass cutoff, exponential 200Hz..20kHz (0.5 ≈ 2kHz)"),
     spec!("resonance", ParamId::Keys(KeysParam::Resonance), Range::Unit, 0.2, "Filter resonance"),
     spec!("detune", ParamId::Keys(KeysParam::Detune), Range::Unit, 0.25, "Osc detune, up to 2%"),
     spec!("chorus_mix", ParamId::Keys(KeysParam::ChorusMix), Range::Unit, 0.0, "Chorus wet mix"),

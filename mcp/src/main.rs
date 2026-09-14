@@ -24,6 +24,8 @@ use synth_core::SAMPLE_RATE;
 const DSL_DOC: &str = include_str!("../../docs/DSL.md");
 const PROTOCOL_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18"];
 const MAX_RENDER_BARS: u32 = 512;
+/// Default threshold of the `limiter` node; a section peaking here is being limited.
+const LIMITER_CEILING: f32 = 0.95;
 
 const INSTRUCTIONS: &str = "\
 synth-core writes music as `.synth` files: modules (instruments), patterns, tracks, \
@@ -171,7 +173,7 @@ fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "synth_render",
-            "description": "Compile and render .synth source to a 16-bit stereo WAV file. Returns the file path plus a loudness report: overall peak and RMS, and per arrangement section its scene name, bars, RMS and peak. Use the report to check that builds rise, drops hit hardest and nothing clips.",
+            "description": "Compile and render .synth source to a 16-bit stereo WAV file. Returns the file path plus a loudness report: overall peak and RMS, clipped sample count, and per arrangement section its scene name, bars, RMS, peak and dB. Use the report to check that builds rise, drops hit hardest and nothing clips. For quick level checks pass bars (e.g. 8) to render only the start; a full render is a few seconds per minute of audio.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -223,9 +225,15 @@ fn list_examples(ctx: &Ctx) -> Vec<(String, String)> {
                 continue;
             }
             let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+            // First comment line that has words in it (skips box-drawing banners).
             let first_line = std::fs::read_to_string(&path)
                 .ok()
-                .and_then(|s| s.lines().next().map(|l| l.trim_start_matches('#').trim().to_string()))
+                .and_then(|s| {
+                    s.lines()
+                        .take(8)
+                        .map(|l| l.trim_start_matches('#').trim().trim_matches(|c: char| !c.is_alphanumeric()).trim().to_string())
+                        .find(|l| l.chars().filter(|c| c.is_alphabetic()).count() >= 4)
+                })
                 .unwrap_or_default();
             out.push((name, first_line));
         }
@@ -331,6 +339,7 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     // Loudness report per section
     let samples_per_bar = (SAMPLE_RATE * 60.0 / tempo / 4.0 * steps_per_bar as f32) as usize;
     let mut report = Vec::new();
+    let mut at_ceiling_sections: Vec<String> = Vec::new();
     let mut bar_cursor = 0u32;
     for (name, count) in &sections {
         if bar_cursor >= bars { break; }
@@ -338,11 +347,21 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         let a = (bar_cursor as usize * samples_per_bar).min(l.len());
         let b = ((bar_cursor + count) as usize * samples_per_bar).min(l.len());
         let (rms, peak) = stats(&l[a..b], &r[a..b]);
-        report.push(json!({ "scene": name, "bars": count, "rms": round3(rms), "peak": round3(peak), "db": round1(20.0 * rms.max(1e-6).log10()) }));
+        let at_ceiling = peak >= LIMITER_CEILING - 0.005;
+        if at_ceiling { at_ceiling_sections.push(name.clone()); }
+        report.push(json!({ "scene": name, "bars": count, "rms": round3(rms), "peak": round3(peak), "db": round1(20.0 * rms.max(1e-6).log10()), "at_limiter_ceiling": at_ceiling }));
         bar_cursor += count;
     }
     let (rms, peak) = stats(&l, &r);
     let clipped = l.iter().chain(r.iter()).filter(|s| s.abs() >= 0.999).count();
+    let hint = if at_ceiling_sections.is_empty() {
+        Value::Null
+    } else {
+        json!(format!(
+            "peak sits at the master limiter ceiling ({}) in: {}. The limiter is flattening dynamics there; lower track levels or the compressor makeup, or raise the sections that should be quieter instead.",
+            LIMITER_CEILING, at_ceiling_sections.join(", ")
+        ))
+    };
 
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
@@ -352,7 +371,8 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         "peak": round3(peak),
         "rms": round3(rms),
         "clipped_samples": clipped,
-        "sections": report
+        "sections": report,
+        "hint": hint
     })).unwrap())
 }
 

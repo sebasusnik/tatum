@@ -13,10 +13,10 @@ humanize 0.15 timing 0.10
 
 # Metallic bell — inharmonic ratios, long decay, bright shimmering
 module fm bell {
-    algorithm 0.2857
+    algorithm dual_pairs
     mod_index 0.45
     feedback 0.15
-    waveform 0.0
+    waveform sine
     op0_ratio 0.065
     op1_ratio 0.194
     op0_envelope 0.001 0.6 0.0 0.8
@@ -29,10 +29,10 @@ module fm bell {
 
 # Screaming lead — high mod index, feedback, aggressive
 module fm scream {
-    algorithm 0.5714
+    algorithm additive
     mod_index 0.82
     feedback 0.55
-    waveform 0.5
+    waveform half_sine
     op0_ratio 0.065
     op1_ratio 0.10
     op0_envelope 0.005 0.20 0.35 0.15
@@ -47,10 +47,10 @@ module fm scream {
 
 # Glitch percussion — ultra-short envelopes, weird ratios
 module fm glitch {
-    algorithm 0.8571
+    algorithm dual_mod
     mod_index 0.95
     feedback 0.40
-    waveform 0.75
+    waveform abs_sine
     op0_ratio 0.065
     op1_ratio 0.42
     op2_ratio 0.29
@@ -65,10 +65,10 @@ module fm glitch {
 
 # Evolving pad — slow attack, LFO modulating mod index
 module fm evolve {
-    algorithm 0.4286
+    algorithm additive
     mod_index 0.38
     feedback 0.12
-    waveform 0.0
+    waveform sine
     op0_envelope 0.8 0.5 0.60 1.2
     op1_envelope 0.3 0.8 0.45 0.8
     op2_envelope 0.5 1.0 0.35 1.0
@@ -79,15 +79,15 @@ module fm evolve {
     lfo_rate 0.03
     lfo_depth 0.15
     lfo_target mod_index
-    lfo_waveform 0.25
+    lfo_waveform triangle
 }
 
 # Acid stab — DX bass with bite, short percussive
 module fm acid {
-    algorithm 0.5714
+    algorithm additive
     mod_index 0.70
     feedback 0.30
-    waveform 0.0
+    waveform sine
     op0_ratio 0.065
     op1_ratio 0.065
     op0_envelope 0.001 0.10 0.0 0.05
@@ -97,10 +97,10 @@ module fm acid {
 
 # Dissonant drone — detuned ratios, high feedback, chaotic
 module fm drone {
-    algorithm 1.0
+    algorithm pair_plus_two
     mod_index 0.60
     feedback 0.50
-    waveform 0.0
+    waveform sine
     op0_ratio 0.065
     op1_ratio 0.068
     op2_ratio 0.19
@@ -115,15 +115,15 @@ module fm drone {
     lfo_rate 0.02
     lfo_depth 0.08
     lfo_target mod_index
-    lfo_waveform 0.5
+    lfo_waveform saw
 }
 
 # Sub kick — FM sine with fast pitch decay
 module fm subkick {
-    algorithm 0.2857
+    algorithm dual_pairs
     mod_index 0.25
     feedback 0.05
-    waveform 0.0
+    waveform sine
     op0_ratio 0.032
     op1_ratio 0.097
     op0_envelope 0.001 0.25 0.0 0.08

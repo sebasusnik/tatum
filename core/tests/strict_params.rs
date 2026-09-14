@@ -165,3 +165,11 @@ fn one_top_level_mistake_yields_one_error() {
     assert_eq!(errs[0].line, 2);
     assert!(errs[0].message.contains("unexpected 'modul'"), "{}", errs[0].message);
 }
+
+#[test]
+fn unknown_drum_lane_is_an_error() {
+    let src = BASE.replace("pattern p { 1.1:0.9 - - - }", "pattern p { kik: X - - - }")
+        .replace("using bell", "using bell");
+    let errs = compile_errors(&src);
+    assert!(errs.iter().any(|e| e.contains("unknown drum lane 'kik'")), "{:?}", errs);
+}

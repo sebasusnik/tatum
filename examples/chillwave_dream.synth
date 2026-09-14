@@ -13,7 +13,7 @@ humanize 0.15 timing 0.10
 
 # Warm pad — lush, detuned, dreamy, the signature chillwave wash
 module keys wash {
-    voice_mode 0.0
+    voice_mode poly
     cutoff 0.20
     resonance 0.15
     detune 0.09
@@ -24,8 +24,8 @@ module keys wash {
     release 0.7
     lfo_rate 0.04
     lfo_depth 0.06
-    lfo_target 0.0
-    lfo_waveform 0.0
+    lfo_target cutoff
+    lfo_waveform sine
 }
 
 # Bright shimmer pad — higher register, airy
@@ -41,7 +41,7 @@ module keys shimmer {
     release 0.8
     lfo_rate 0.03
     lfo_depth 0.04
-    lfo_target 0.0
+    lfo_target cutoff
 }
 
 # Soft bass — round, warm, simple
@@ -51,7 +51,7 @@ module bass warmth {
     resonance 0.18
     glide 0.12
     keytrack 0.3
-    osc1_wave 0.0
+    osc1_wave saw
     osc2_pitch 0.50
     attack 0.01
     decay 0.25
@@ -66,7 +66,7 @@ module bass pillow {
     cutoff 0.06
     cutoff_env 0.08
     resonance 0.10
-    osc1_wave 0.0
+    osc1_wave saw
     osc2_pitch 0.50
     attack 0.005
     decay 0.20
@@ -76,10 +76,10 @@ module bass pillow {
 
 # FM bell — glassy, nostalgic, lo-fi bell tones
 module fm glass {
-    algorithm 0.2857
+    algorithm dual_pairs
     mod_index 0.30
     feedback 0.08
-    waveform 0.0
+    waveform sine
     op0_ratio 0.065
     op1_ratio 0.194
     op0_envelope 0.002 0.5 0.0 0.6
@@ -92,10 +92,10 @@ module fm glass {
 
 # FM melody — warm but present lead, cuts through the wash
 module fm nostalgia {
-    algorithm 0.5714
+    algorithm additive
     mod_index 0.40
     feedback 0.12
-    waveform 0.0
+    waveform sine
     op0_ratio 0.065
     op1_ratio 0.065
     op0_envelope 0.005 0.25 0.40 0.30

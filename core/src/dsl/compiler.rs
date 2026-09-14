@@ -226,7 +226,10 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     let (intervals, root_pc) = scale_context(song);
     let mut patterns = Vec::new();
     for pat_def in &song.patterns {
-        patterns.push(compile_pattern(pat_def, &intervals, root_pc));
+        match compile_pattern(pat_def, &intervals, root_pc) {
+            Ok(p) => patterns.push(p),
+            Err(e) => errors.push(e),
+        }
     }
 
     // 3. Compile buses
@@ -610,7 +613,7 @@ fn scale_context(song: &Song) -> ([u8; 7], u8) {
 
 // ── Pattern compilation ──
 
-fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> CompiledPattern {
+fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> Result<CompiledPattern, CompileError> {
     // Multi-lane drum pattern
     if !pat.lane_labels.is_empty() {
         let mut lanes = Vec::new();
@@ -621,6 +624,12 @@ fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> C
                 continue;
             };
             let midi_note = drum_name_to_midi(label);
+            if midi_note == 0 {
+                return Err(CompileError::new(format!(
+                    "pattern '{}': unknown drum lane '{}' (kick, snare, clap, hat, openhat, tom, tom2, tom3, crash)",
+                    pat.name, label
+                )));
+            }
             let steps: Vec<CompiledStep> = row.iter().map(|step| {
                 match step {
                     Step::DrumHit(ds) => {
@@ -656,12 +665,12 @@ fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> C
             lanes.push(CompiledLane { midi_note, steps, swing_override: None, nudge: 0.0 });
         }
         let steps_per_row = lanes.first().map(|l| l.steps.len()).unwrap_or(4);
-        return CompiledPattern {
+        return Ok(CompiledPattern {
             name: pat.name.clone(),
             steps: Vec::new(),
             steps_per_row,
             lanes,
-        };
+        });
     }
 
     // Sequential pattern (existing behavior)
@@ -728,12 +737,12 @@ fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> C
         }
     }
 
-    CompiledPattern {
+    Ok(CompiledPattern {
         name: pat.name.clone(),
         steps,
         steps_per_row: if max_row_len > 0 { max_row_len } else { 4 },
         lanes: Vec::new(),
-    }
+    })
 }
 
 /// Map drum lane label to MIDI note number.
@@ -748,7 +757,7 @@ fn drum_name_to_midi(name: &str) -> u8 {
         "tom3" | "ht" => 47,
         "openhat" | "oh" => 46,
         "crash" | "cr" => 49,
-        _ => 36, // fallback to kick
+        _ => 0, // unknown: caller reports an error
     }
 }
 

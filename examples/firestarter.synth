@@ -18,7 +18,7 @@ module bass acid {
     resonance 0.92
     glide 0.04
     keytrack 0.5
-    osc1_wave 0.25
+    osc1_wave saw
     osc2_pitch 0.508
     attack 0.0
     decay 0.06
@@ -33,7 +33,7 @@ module bass sub {
     cutoff 0.03
     cutoff_env 0.04
     resonance 0.08
-    osc1_wave 0.0
+    osc1_wave saw
     osc2_pitch 0.50
     attack 0.001
     decay 0.12
@@ -48,7 +48,7 @@ module bass filth {
     resonance 0.70
     glide 0.02
     keytrack 0.7
-    osc1_wave 0.75
+    osc1_wave saw
     osc2_pitch 0.510
     attack 0.0
     decay 0.08
@@ -56,15 +56,15 @@ module bass filth {
     release 0.04
     lfo_rate 0.12
     lfo_depth 0.20
-    lfo_target 0.0
+    lfo_target cutoff
 }
 
 # Scream lead — brutal FM, metallic, industrial
 module fm scream {
-    algorithm 0.5714
+    algorithm additive
     mod_index 0.95
     feedback 0.65
-    waveform 0.75
+    waveform abs_sine
     op0_ratio 0.065
     op1_ratio 0.097
     op0_envelope 0.001 0.08 0.35 0.06
@@ -77,10 +77,10 @@ module fm scream {
 
 # Circuit-bent arp — glitchy, broken, fast
 module fm circuit {
-    algorithm 0.2857
+    algorithm dual_pairs
     mod_index 0.70
     feedback 0.50
-    waveform 0.25
+    waveform sine
     op0_ratio 0.065
     op1_ratio 0.13
     op0_envelope 0.001 0.02 0.0 0.01
@@ -91,10 +91,10 @@ module fm circuit {
 
 # Industrial stab — metallic, harsh, mechanical
 module fm stab {
-    algorithm 0.2857
+    algorithm dual_pairs
     mod_index 0.75
     feedback 0.45
-    waveform 0.5
+    waveform half_sine
     op0_ratio 0.065
     op1_ratio 0.194
     op0_envelope 0.001 0.03 0.0 0.02
@@ -104,10 +104,10 @@ module fm stab {
 
 # Machine noise — grinding metallic texture
 module fm machine {
-    algorithm 1.0
+    algorithm pair_plus_two
     mod_index 1.0
     feedback 0.80
-    waveform 1.0
+    waveform quarter_sine
     op0_ratio 0.42
     op1_ratio 0.11
     op2_ratio 0.33
@@ -121,12 +121,12 @@ module fm machine {
     lfo_rate 0.15
     lfo_depth 0.25
     lfo_target mod_index
-    lfo_waveform 0.75
+    lfo_waveform square
 }
 
 # Dark pad — suffocating, low, oppressive
 module keys doom {
-    voice_mode 0.0
+    voice_mode poly
     cutoff 0.06
     resonance 0.40
     detune 0.15
@@ -137,7 +137,7 @@ module keys doom {
     release 0.8
     lfo_rate 0.015
     lfo_depth 0.10
-    lfo_target 0.0
+    lfo_target cutoff
 }
 
 # Drum machine — industrial, punishing

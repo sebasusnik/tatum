@@ -16,7 +16,7 @@ synth params --json             # machine-readable registry (for tools and agent
 ```
 tempo 124
 meter 4/4
-scale A minor          # major | minor | dorian | mixolydian | pentatonic_minor
+scale A minor          # major | minor | dorian | phrygian | lydian | mixolydian | locrian
 swing 0.56             # 0.5 straight .. 0.75 hard shuffle
 humanize 0.05 timing 0.02
 sidechain 0.4
@@ -85,6 +85,8 @@ pattern beat {
 ```
 
 `X` accent, `x` normal, `o` ghost, `x:0.6` explicit velocity, `x?0.5` probability, `x*2` roll.
+A lane line can be longer than one bar (32 steps = two bars); keep every lane the same length.
+Lane names: `kick`, `snare`, `clap`, `hat`, `openhat`, `tom`, `tom2`, `tom3`, `crash` (aliases `bd`, `sd`, `cp`, `hh`, `oh`, `lt`, `mt`, `ht`, `cr`). An unknown lane is a compile error.
 
 ## Tracks
 
@@ -112,6 +114,45 @@ The pattern supplies what is held: a single note or a chord, extended with `..` 
 The arp cycles through those notes and stops at the next rest or when the track gate
 expires. Scene tracks inherit the arp from the global track definition.
 
+## Effects and routing
+
+Every track ends with a routing chain: `out > <fx>(...) > ... > master` or `> <bus>`.
+Buses are declared with `bus <name>` and get their own chain; the master chain is
+`master { in > ... > out }`. Effects take positional arguments and `key=value` options.
+
+```
+bus drums                                   # declare
+drums { in > compressor(-8, ratio=4, attack=8, release=60) > saturate(0.1) > master }
+
+track kick  { play beat using kit out > drums }                 # route into the bus
+track bass  { play riff using acid out > saturate(0.4) > master } # inline inserts
+master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2, release=40, makeup=3) > limiter > out }
+```
+
+| effect | arguments | notes |
+|--------|-----------|-------|
+| `saturate(drive)` / `drive(drive)` | drive gain, 1.0 = mild | tanh soft clip |
+| `gain(amount)` | linear multiplier | |
+| `lowpass(cutoff_hz, resonance)` / `highpass` / `bandpass` | Hz, 0..1 | optional envelope: `ea= ed= es= er= edepth=` (seconds, level, Hz) |
+| `ladder(cutoff_hz, resonance)` | Hz, 0..1 | Moog-style 4-pole, same envelope options |
+| `chorus(mix)` | 0..1 | |
+| `bitcrush(bits, rate)` | bits, sample-rate reduction 0..1 | |
+| `compressor(threshold_db, ratio=, attack=, release=, makeup=)` | dB, ratio, ms, ms, gain | |
+| `limiter(threshold)` | 0..1, default 0.95 | lookahead peak limiter; a section whose peak sits at the threshold is being flattened, so lower what feeds it |
+| `eq(low=, mid=, high=)` | dB per band (200Hz, 1kHz, 8kHz) | |
+| `tilt(amount)` | -1..1, negative = darker | one-knob tilt EQ |
+| `delay(1/8, feedback)` | note division, 0..1 | tempo-synced delay inside a chain |
+| `reverb(size)` | 0..1 | plate reverb inside a chain |
+
+Two ways to get ambience, usable together:
+
+- **Global sends**: every track has `delay_send` / `reverb_send` into the shared delay and
+  reverb configured by the top-level `delay ...` / `reverb ...` lines; scenes can scale the
+  wet level with `delay_mix = ` / `reverb_mix = ` or automate `auto reverb_mix`.
+- **Buses**: a `bus` with its own chain (`reverb { in > reverb(0.55) > out }`) that tracks
+  route into with `out > reverb`. Use a bus when different tracks need different
+  ambience, or to compress a group (`drums` above).
+
 ## Scenes and arrangement
 
 ```
@@ -120,7 +161,7 @@ scene drop {
     reverb_mix = 0.3                     # wet level of the global sends for this scene
     delay_mix = 0.2
     auto acid cutoff 0.2 > 0.6 > 0.2     # linear (2 values) or triangle (3 values)
-    auto drums level 1.0 > 0.0           # track (or instrument) level fade
+    auto drums level 1.0 > 0.0           # level fade: resolves a track name first, else an instrument name
     auto reverb_mix 0.1 > 0.5
     track drums { play beat using kit }
     track acid  { play riff using acid }
