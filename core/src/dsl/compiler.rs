@@ -622,6 +622,7 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
 fn resolve_note(note: &crate::dsl::ast::NoteRef, scale_intervals: &[u8], root_midi: u8) -> u8 {
     match note {
         crate::dsl::ast::NoteRef::Absolute(name) => note_name_to_midi(name),
+        crate::dsl::ast::NoteRef::Midi(m) => *m,
         crate::dsl::ast::NoteRef::Degree(degree, octave) => {
             // degree is 1-7, map to 0-indexed
             let deg_idx = (*degree as usize).saturating_sub(1) % scale_intervals.len();
@@ -1209,6 +1210,23 @@ fn unknown_param_message(kind: ModuleKind, module_name: &str, param: &str) -> St
     format!("{}. Run `synth params {}` for the list", base, kind.as_str())
 }
 
+/// Master-chain parameters that `auto master <param>` can move.
+pub const MASTER_AUTO_PARAMS: &[&str] = &["tilt", "eq_low", "eq_mid", "eq_high", "drive", "gain", "cutoff", "limiter", "comp_threshold"];
+
+/// Node kinds that carry a given master automation parameter.
+pub fn master_auto_node_kinds(param: &str) -> &'static [&'static str] {
+    match param {
+        "tilt" => &["tilt"],
+        "eq_low" | "eq_mid" | "eq_high" => &["eq"],
+        "drive" => &["saturate", "drive"],
+        "gain" => &["gain"],
+        "cutoff" => &["lowpass", "highpass", "bandpass", "ladder"],
+        "limiter" => &["limiter"],
+        "comp_threshold" => &["compressor"],
+        _ => &[],
+    }
+}
+
 /// Validate `auto <target> ...` lanes against tracks, instruments and the param registry.
 fn validate_automations(song: &Song) -> Vec<CompileError> {
     let mut errors = Vec::new();
@@ -1228,6 +1246,21 @@ fn validate_automations(song: &Song) -> Vec<CompileError> {
                     continue;
                 }
             };
+            if name == "master" {
+                let needed = master_auto_node_kinds(param);
+                if needed.is_empty() {
+                    errors.push(CompileError::new(format!(
+                        "scene '{}': automation — master has no parameter '{}' (expected {})",
+                        scene.name, param, MASTER_AUTO_PARAMS.join(", ")
+                    )));
+                } else if !song.master.as_ref().map_or(false, |m| m.chain.iter().any(|n| needed.contains(&n.kind.as_str()))) {
+                    errors.push(CompileError::new(format!(
+                        "scene '{}': automation — `auto master {}` needs a {} node in the master chain",
+                        scene.name, param, needed.join(" or ")
+                    )));
+                }
+                continue;
+            }
             let is_track = scene.tracks.iter().chain(song.tracks.iter()).any(|t| t.name == name);
             let module = song.module_defs.iter().find(|m| m.name == name);
             let is_graph = song.instruments.iter().any(|i| i.name == name);

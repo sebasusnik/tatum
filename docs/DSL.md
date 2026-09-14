@@ -73,7 +73,8 @@ pattern riff { 1.2:0.9  -  ~5.2:0.8  ..  [1.3 3.3 5.3]:0.6  ..  ..  .. }
 | `-` | rest |
 | `..` | tie: hold the previous step; `..*15` writes fifteen ties, `-*8` eight rests |
 | `~note` | slide: glide into this note without retriggering the envelope (303 style). The previous note is held until the slide. Bass modules glide at their `glide` rate; other instruments fall back to a normal retrigger. |
-| `[a b c]` | chord |
+| `[a b c]` | chord, any notes or degrees |
+| `Fm9` `Dbmaj7/2` `C7:0.6` | chord symbol: root, optional `#`/`b`, quality, optional `/octave` (default 3), then `:velocity` and `(locks)` as usual. Qualities: maj, m, 7, maj7, m7, 9, maj9, m9, add9, madd9, 6, m6, sus2, sus4, 7sus4, dim, dim7, m7b5, aug, 11, m11, 13, maj13, m13, 5, mmaj7. A note token with octave 7 or above (`C7`, `Ab9`) is read as a chord. |
 | `1.2:0.8(cutoff=0.4, edepth=0.3, res=0.6, gate=0.5)` | per-step parameter lock (bass filter and gate) |
 
 Drum patterns use labeled lanes:
@@ -186,6 +187,8 @@ scene drop {
     auto acid cutoff 0.2 > 0.6 > 0.2     # linear (2 values) or triangle (3 values)
     auto drums level 1.0 > 0.0           # level fade: resolves a track name first, else an instrument name
     auto reverb_mix 0.1 > 0.5
+    auto master tilt 0.4 > -0.2          # master chain sweeps: tilt, eq_low, eq_mid, eq_high, drive,
+    auto master cutoff 20000 > 400       #   gain, cutoff, limiter, comp_threshold (the node must be in the chain)
     track drums { play beat using kit }
     track acid  { play riff using acid }
 }
@@ -251,12 +254,7 @@ stays out of the sub, LFOs that take 8 to 16 bars per cycle, and a slow autopan:
 
 ```
 reverb size=1.0 damp=0.25 predelay=40
-pattern voicings {
-    [F3 Ab3 C4 Eb4 G4]:0.6 .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..    # one bar, held
-    .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..                        # second bar, still held
-    [Db3 F3 Ab3 C4 Eb4]:0.6 .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..
-    .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..
-}
+pattern voicings { Fm9:0.6 ..*31  Dbmaj7:0.6 ..*31 }      # two bars each, held
 module keys cloud { voice_mode unison detune 0.45 chorus_mix 0.6 attack 1.0 release 1.0
                     cutoff 0.28 resonance 0.35 lfo_target cutoff lfo_sync bars_8 lfo_depth 0.08 }
 track pad { play voicings using cloud level 0.15 reverb_send 0.4 sidechain 0.5

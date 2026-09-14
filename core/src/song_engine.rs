@@ -204,6 +204,11 @@ impl FxChain {
             node.set_bpm(bpm);
         }
     }
+
+    /// Set a named parameter on the first node that has it.
+    fn set_param(&mut self, name: &str, value: f32) -> bool {
+        self.nodes.iter_mut().any(|n| n.set_named(name, value))
+    }
 }
 
 /// Per-track playback state.
@@ -363,6 +368,7 @@ struct ActiveAutomation {
 /// Resolved automation target.
 enum AutoTarget {
     InstrumentParam { instrument_idx: usize, param_name: String },
+    MasterParam { param_name: String },
     TrackLevel { track_idx: usize },
     ReverbMix,
     DelayMix,
@@ -808,6 +814,10 @@ impl SongEngine {
                     let name = &target[..dot_pos];
                     let param = &target[dot_pos + 1..];
 
+                    if name == "master" {
+                        return Some(AutoTarget::MasterParam { param_name: String::from(param) });
+                    }
+
                     if param == "level" {
                         // `<track> level` by track name, else by the instrument a track uses
                         let track_idx = self.track_names.iter()
@@ -1157,6 +1167,9 @@ impl SongEngine {
                         if *instrument_idx < self.instruments.len() {
                             self.instruments[*instrument_idx].set_param_by_name(param_name, value);
                         }
+                    }
+                    AutoTarget::MasterParam { param_name } => {
+                        self.master_fx.set_param(param_name, value);
                     }
                     AutoTarget::TrackLevel { track_idx } => {
                         if *track_idx < self.tracks.len() {
