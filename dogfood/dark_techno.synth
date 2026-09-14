@@ -115,13 +115,15 @@ module beats kit {
 
 # Rolling 16th-note sub bassline that answers the kick.
 module bass pulse {
-    cutoff 0.36
-    cutoff_env 0.7
-    resonance 0.55
+    cutoff 0.34
+    cutoff_env 0.62
+    resonance 0.5
     glide 0.03
     osc1_wave saw
     osc2_wave square
-    osc2_pitch 0.5
+    osc2_pitch 0.25     # one octave down: the weight
+    osc3_wave saw
+    osc3_pitch 0.5
     attack 0.0
     decay 0.18
     sustain 0.3
@@ -277,11 +279,11 @@ track bassline {
     play bass_pulse_groove
     using pulse
     velocity 0.9
-    level 1.05
+    level 1.35
     gate 0.4
     sidechain 0.65
     out > saturate(1.3)
-        > eq(low=-1.0, mid=3.0, high=-0.5)
+        > eq(low=3.5, mid=1.5, high=-0.5)
         > lowpass(3000, 0.2) > master
 }
 
@@ -305,7 +307,7 @@ track stab {
 master {
     in > tilt(-0.08)
        > eq(low=1.0, mid=-1.5, high=1.0)
-       > compressor(-10, ratio=3.0, attack=15, release=110, makeup=1.12)
+       > compressor(-10, ratio=3.0, attack=15, release=110, makeup=0.95)
        > limiter
        > out
 }
@@ -345,7 +347,7 @@ scene groove {
     track subwall   { play sub_cm8 using subwall level 0.14 sidechain 0.75 }
     track organ     { play organ_cm8 using doomorgan level 0.16 reverb_send 0.42 sidechain 0.8 }
     track drums     { play beat_groove using kit level 0.95 reverb_send 0.06 }
-    track bassline  { play bass_pulse_groove using pulse level 1.2 gate 0.4 sidechain 0.65 }
+    track bassline  { play bass_pulse_groove using pulse level 1.15 gate 0.4 sidechain 0.65 }
 }
 
 # 4. Breakdown — kick and bassline drop out, drone rises, reverb freezes.
@@ -372,8 +374,8 @@ scene drop {
     track bassdrone { play drone_edrop12 using drone level 0.19 reverb_send 0.26 sidechain 0.8 }
     track subwall   { play sub_edrop12 using subwall level 0.14 sidechain 0.75 }
     track organ     { play organ_edrop12 using doomorgan level 0.16 reverb_send 0.38 sidechain 0.8 }
-    track drums     { play beat_drop using kit level 0.92 reverb_send 0.06 }
-    track bassline  { play bass_pulse_drop using pulse level 1.18 gate 0.4 sidechain 0.7 }
+    track drums     { play beat_drop using kit level 0.85 reverb_send 0.06 }
+    track bassline  { play bass_pulse_drop using pulse level 1.15 gate 0.4 sidechain 0.7 }
     track atmos     { play atmos_low using atmos level 0.24 reverb_send 0.7 delay_send 0.3 sidechain 0.5 }
     track stab      { play stab_answer using stab level 0.62 gate 0.25 pan 0.15 delay_send 0.2 reverb_send 0.25 sidechain 0.5 }
 }
