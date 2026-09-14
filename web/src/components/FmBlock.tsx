@@ -1,27 +1,30 @@
-import { For } from "solid-js";
+import { createMemo, For } from "solid-js";
 import Knob from "./Knob";
-import InlineSeq from "./InlineSeq";
+import ActivityLed from "./ActivityLed";
+import PatternVis from "./PatternVis";
 import {
-  modules, patterns, currentStep, playing,
-  setModuleParam, toggleStepFor, setStepNote,
   sends, setModuleSend, muted, soloed, toggleMute, toggleSolo,
+  getModulePagesForTrack, getModuleNameForTrack, setModuleParamForTrack,
+  getPatternForTrack,
 } from "../stores/synth";
 
 const OP_LABELS = ["OP1", "OP2", "OP3", "OP4"];
-const OP_PAGES = [3, 4, 5, 6]; // pages in FM module config
+const OP_PAGES = [3, 4, 5, 6];
 
-export default function FmBlock() {
-  const mod = () => modules.fm;
+export default function FmBlock(props: { trackName: string }) {
+  const pages = createMemo(() => getModulePagesForTrack(props.trackName));
+  const moduleName = createMemo(() => getModuleNameForTrack(props.trackName));
+  const pattern = createMemo(() => getPatternForTrack(props.trackName));
   const color = "#ffd23f";
-  const pat = () => patterns.fm;
 
-  const knob = (page: number, idx: number) => mod().pages[page].values[idx];
-  const setK = (page: number, idx: number, v: number) => setModuleParam("fm", page, idx, v);
+  const knob = (page: number, idx: number) => pages()[page]?.values[idx] ?? 50;
+  const setK = (page: number, idx: number, v: number) => setModuleParamForTrack(props.trackName, page, idx, v);
 
   return (
     <div class="rw-block" data-m="fm">
       <div class="rw-header">
-        <span class="rw-label" style={{ color }}>FM</span>
+        <ActivityLed pattern={pattern()} color={color} />
+        <span class="rw-label" style={{ color }}>FM{moduleName() ? ` · ${moduleName()}` : ""}</span>
         <div class="rw-btns">
           <button classList={{ "rw-m": true, active: muted().fm }} onClick={() => toggleMute("fm")}>M</button>
           <button classList={{ "rw-s": true, active: soloed().fm }} onClick={() => toggleSolo("fm")}>S</button>
@@ -42,7 +45,6 @@ export default function FmBlock() {
         <Knob value={knob(1, 2)} label="Sus" color={color} size={32} onChange={(v) => setK(1, 2, v)} />
       </div>
 
-      {/* Per-operator controls */}
       <div class="fm-operators">
         <For each={OP_LABELS}>
           {(label, i) => {
@@ -60,15 +62,7 @@ export default function FmBlock() {
         </For>
       </div>
 
-      <InlineSeq
-        moduleId="fm"
-        pattern={pat()}
-        currentStep={currentStep()}
-        playing={playing()}
-        color={color}
-        onToggle={(idx) => toggleStepFor("fm", idx)}
-        onNoteChange={(idx, note) => setStepNote("fm", idx, note)}
-      />
+      <PatternVis pattern={pattern()} color={color} />
 
       <div class="rw-sends">
         <Knob value={sends().fm.delay * 100} label="Dly" color="#5b8cff" size={26} onChange={(v) => setModuleSend("fm", "delay", v / 100)} />

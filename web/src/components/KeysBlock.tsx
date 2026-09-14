@@ -1,23 +1,27 @@
+import { createMemo } from "solid-js";
 import Knob from "./Knob";
-import InlineSeq from "./InlineSeq";
+import ActivityLed from "./ActivityLed";
+import PatternVis from "./PatternVis";
 import {
-  modules, patterns, currentStep, playing,
-  setModuleParam, toggleStepFor, setStepNote,
   sends, setModuleSend, muted, soloed, toggleMute, toggleSolo,
+  getModulePagesForTrack, getModuleNameForTrack, setModuleParamForTrack,
+  getPatternForTrack,
 } from "../stores/synth";
 
-export default function KeysBlock() {
-  const mod = () => modules.keys;
+export default function KeysBlock(props: { trackName: string }) {
+  const pages = createMemo(() => getModulePagesForTrack(props.trackName));
+  const moduleName = createMemo(() => getModuleNameForTrack(props.trackName));
+  const pattern = createMemo(() => getPatternForTrack(props.trackName));
   const color = "#00c9b1";
-  const pat = () => patterns.keys;
 
-  const knob = (page: number, idx: number) => mod().pages[page].values[idx];
-  const setK = (page: number, idx: number, v: number) => setModuleParam("keys", page, idx, v);
+  const knob = (page: number, idx: number) => pages()[page]?.values[idx] ?? 50;
+  const setK = (page: number, idx: number, v: number) => setModuleParamForTrack(props.trackName, page, idx, v);
 
   return (
     <div class="rw-block" data-m="keys">
       <div class="rw-header">
-        <span class="rw-label" style={{ color }}>KEYS</span>
+        <ActivityLed pattern={pattern()} color={color} />
+        <span class="rw-label" style={{ color }}>KEYS{moduleName() ? ` · ${moduleName()}` : ""}</span>
         <div class="rw-btns">
           <button classList={{ "rw-m": true, active: muted().keys }} onClick={() => toggleMute("keys")}>M</button>
           <button classList={{ "rw-s": true, active: soloed().keys }} onClick={() => toggleSolo("keys")}>S</button>
@@ -32,21 +36,13 @@ export default function KeysBlock() {
 
       <div class="rw-knobs-secondary">
         <Knob value={knob(0, 1)} label="Det" color={color} size={32} onChange={(v) => setK(0, 1, v)} />
-        <Knob value={knob(0, 3)} label="Lvl" color={color} size={32} onChange={(v) => setK(0, 3, v)} />
         <Knob value={knob(3, 0)} label="Res" color={color} size={32} onChange={(v) => setK(3, 0, v)} />
-        <Knob value={knob(2, 3)} label="Vib" color={color} size={32} onChange={(v) => setK(2, 3, v)} />
+        <Knob value={knob(1, 0)} label="Atk" color={color} size={32} onChange={(v) => setK(1, 0, v)} />
+        <Knob value={knob(1, 1)} label="Dcy" color={color} size={32} onChange={(v) => setK(1, 1, v)} />
         <Knob value={knob(2, 0)} label="LFO" color={color} size={32} onChange={(v) => setK(2, 0, v)} />
       </div>
 
-      <InlineSeq
-        moduleId="keys"
-        pattern={pat()}
-        currentStep={currentStep()}
-        playing={playing()}
-        color={color}
-        onToggle={(idx) => toggleStepFor("keys", idx)}
-        onNoteChange={(idx, note) => setStepNote("keys", idx, note)}
-      />
+      <PatternVis pattern={pattern()} color={color} />
 
       <div class="rw-sends">
         <Knob value={sends().keys.delay * 100} label="Dly" color="#5b8cff" size={26} onChange={(v) => setModuleSend("keys", "delay", v / 100)} />
