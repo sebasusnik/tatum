@@ -5,6 +5,8 @@ use crate::primitives::lfo::Lfo;
 use crate::primitives::noise::NoiseGen;
 use crate::effects::saturator::Saturator;
 use crate::effects::chorus::Chorus;
+use crate::effects::phaser::Phaser;
+use crate::effects::formant::Formant;
 use crate::effects::bitcrusher::Bitcrusher;
 use crate::effects::compressor::Compressor;
 use crate::effects::limiter::Limiter;
@@ -43,6 +45,10 @@ pub enum NodeSpec {
     },
     /// Stereo auto-panner: slow LFO moves the signal between L and R.
     AutoPan { hz: f32, bars: f32, depth: f32 },
+    /// Swept allpass phaser.
+    Phaser { mix: f32, hz: f32, bars: f32, stages: u8, feedback: f32, depth: f32 },
+    /// Vowel formant filter morphing between two vowels.
+    Vowel { from: u8, to: u8, hz: f32, bars: f32, mix: f32 },
     Mix,
     Gain { amount: f32 },
     Vca,
@@ -143,6 +149,12 @@ impl NodeSpec {
             }
             NodeSpec::AutoPan { hz, bars, depth } => {
                 NodeKind::AutoPan { lfo: make_lfo(hz), bars, depth }
+            }
+            NodeSpec::Phaser { mix, hz, bars, stages, feedback, depth } => {
+                NodeKind::Phaser(Phaser::new(mix, hz, bars, stages as usize, feedback, depth))
+            }
+            NodeSpec::Vowel { from, to, hz, bars, mix } => {
+                NodeKind::Vowel(Formant::new(from, to, hz, bars, mix))
             }
             NodeSpec::Ladder { cutoff, resonance,
                                env_attack, env_decay, env_sustain, env_release, env_depth, lfo } => {
@@ -413,6 +425,8 @@ pub enum NodeKind {
 
     // ── Effects ──
     AutoPan { lfo: Lfo, bars: f32, depth: f32 },
+    Phaser(Phaser),
+    Vowel(Formant),
     Saturator(Saturator),
     Chorus(Chorus),
     Bitcrusher(Bitcrusher),
@@ -440,6 +454,8 @@ impl NodeKind {
             NodeKind::Biquad(m) => m.process(inputs[0]),
             NodeKind::Ladder(m) => m.process(inputs[0]),
             NodeKind::AutoPan { lfo, .. } => { let _ = lfo.next_sample(); inputs[0] }
+            NodeKind::Phaser(p) => p.process(inputs[0]),
+            NodeKind::Vowel(v) => v.process(inputs[0]),
 
             NodeKind::Mix => {
                 let n = input_count as usize;
@@ -494,6 +510,8 @@ impl NodeKind {
             NodeKind::Bitcrusher(bc) => bc.process_stereo(l, r),
             NodeKind::Saturator(sat) => (sat.process(l), sat.process(r)),
             NodeKind::Gain(g) => (l * *g, r * *g),
+            NodeKind::Phaser(p) => p.process_stereo(l, r),
+            NodeKind::Vowel(v) => v.process_stereo(l, r),
             NodeKind::AutoPan { lfo, depth, .. } => {
                 // Equal-power pan driven by the LFO: p in -1..1
                 let p = lfo.next_sample() * *depth;
@@ -524,6 +542,8 @@ impl NodeKind {
             NodeKind::AutoPan { lfo, bars, .. } => {
                 if *bars > 0.0 { lfo.set_rate(bpm / 60.0 / 4.0 / *bars); }
             }
+            NodeKind::Phaser(p) => p.set_bpm(bpm),
+            NodeKind::Vowel(v) => v.set_bpm(bpm),
             _ => {}
         }
     }
@@ -574,6 +594,8 @@ impl NodeKind {
             NodeKind::Noise(_) => {}
             NodeKind::Lfo(lfo) => lfo.reset(),
             NodeKind::AutoPan { lfo, .. } => lfo.reset(),
+            NodeKind::Phaser(p) => p.reset(),
+            NodeKind::Vowel(v) => v.reset(),
             NodeKind::Env(env) => env.reset(),
             NodeKind::Biquad(m) => m.reset(),
             NodeKind::Ladder(m) => m.reset(),

@@ -71,3 +71,33 @@ fn module_lfo_can_sync_to_bars() {
     let (l, _) = e.render(1);
     assert!(rms(&l) > 0.001);
 }
+
+#[test]
+fn phaser_sweeps_and_widens() {
+    let (dry_l, _) = render("gain(1.0)");
+    let (l, r) = render("phaser(0.5, bars=1, stages=6, feedback=0.5)");
+    let diff: f32 = dry_l.iter().zip(&l).map(|(a, b)| (a - b).abs()).sum::<f32>() / l.len() as f32;
+    assert!(diff > 1e-3, "phaser must change the signal, avg diff = {}", diff);
+    let width: f32 = l.iter().zip(&r).map(|(a, b)| (a - b).abs()).sum::<f32>() / l.len() as f32;
+    assert!(width > 1e-4, "right channel runs a quarter cycle behind, avg |L-R| = {}", width);
+    assert!(rms(&l) > 0.001 && rms(&l).is_finite());
+}
+
+#[test]
+fn vowel_filter_shapes_and_morphs() {
+    let (dry_l, _) = render("gain(1.0)");
+    let (a_l, _) = render("vowel(a)");
+    let (ao_l, _) = render("vowel(a, o, bars=1)");
+    let d1: f32 = dry_l.iter().zip(&a_l).map(|(x, y)| (x - y).abs()).sum::<f32>() / a_l.len() as f32;
+    let d2: f32 = a_l.iter().zip(&ao_l).map(|(x, y)| (x - y).abs()).sum::<f32>() / a_l.len() as f32;
+    assert!(d1 > 1e-3, "a static vowel must filter the signal");
+    assert!(d2 > 1e-4, "morphing a→o must differ from a static a");
+    assert!(rms(&ao_l).is_finite() && rms(&ao_l) > 0.0005);
+
+    let bad = BASE.replace("CHAIN", "vowel(x)");
+    let errs = dsl::parse(&bad).unwrap_err();
+    assert!(errs[0].message.contains("unexpected 'x' in arguments"), "{}", errs[0].message);
+    let bad = BASE.replace("CHAIN", "vowel(bars=2)");
+    let errs = match compiler::compile(&dsl::parse(&bad).unwrap()) { Err(e) => e, Ok(_) => panic!() };
+    assert!(errs[0].message.contains("needs one or two vowels"), "{}", errs[0].message);
+}

@@ -158,5 +158,7 @@ then `name=value` options. Unknown names and out-of-range values are compile err
 | `eq` | chain, graph | none | `low=` -12..12 (default 0), dB shelf at 200 Hz; `mid=` -12..12 (default 0), dB peak at 1 kHz; `high=` -12..12 (default 0), dB shelf at 8 kHz | Three-band EQ. |
 | `delay` | chain, graph | `feedback` 0..0.95 (default 0.3); division like `1/8` | none | Tempo-synced delay inside a chain: `delay(1/8, 0.4)`. Division defaults to 1/4. |
 | `autopan` | chain, graph | `depth` 0..1 (default 0.5) | `bars=` 0..64 (default 0), cycle length in bars (tempo-synced); `hz=` 0..20 (default 0.25), free rate in Hz when bars is 0 | Slow stereo movement: `autopan(0.6, bars=4)`. |
+| `phaser` | chain, graph | `mix` 0..1 (default 0.5) | `bars=` 0..64 (default 0), sweep cycle in bars (tempo-synced); `hz=` 0..10 (default 0.3), free sweep rate when bars is 0; `stages=` 2..12 (default 6), allpass stages; more = deeper notches; `feedback=` 0..0.9 (default 0.4), resonance of the notches; `depth=` 0..1 (default 1), sweep range | Swept allpass phaser, the liquid pad effect: `phaser(0.5, bars=4)`. Right channel runs a quarter cycle behind. |
+| `vowel` | chain, graph | waveform word | `bars=` 0..64 (default 0), morph cycle in bars (tempo-synced); `hz=` 0..10 (default 0.25), free morph rate when bars is 0; `mix=` 0..1 (default 1), wet amount | Formant filter: `vowel(a)` holds a vowel, `vowel(a, o, bars=2)` morphs between two. Words: a e i o u. |
 | `reverb` | chain, graph | `size` 0..1 (default 0.5) | none | Plate reverb, wet only; use it on a bus. |
 

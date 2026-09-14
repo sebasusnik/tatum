@@ -574,6 +574,36 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
             let room_size = float_param_at(&node.params, 0).unwrap_or(0.5);
             Ok(NodeSpec::Reverb { room_size })
         }
+        "phaser" => {
+            let mix = float_param_at(&node.params, 0).unwrap_or(0.5);
+            let bars = named_param(&node.params, "bars").unwrap_or(0.0);
+            let hz = named_param(&node.params, "hz").unwrap_or(if bars > 0.0 { 0.0 } else { 0.3 });
+            let stages = named_param(&node.params, "stages").unwrap_or(6.0) as u8;
+            let feedback = named_param(&node.params, "feedback").unwrap_or(0.4);
+            let depth = named_param(&node.params, "depth").unwrap_or(1.0);
+            Ok(NodeSpec::Phaser { mix, hz, bars, stages, feedback, depth })
+        }
+        "vowel" => {
+            let words: Vec<&str> = node.params.iter()
+                .filter_map(|p| if let Param::Waveform(w) = p { Some(w.as_str()) } else { None })
+                .collect();
+            let mut idx = Vec::new();
+            for w in &words {
+                match crate::effects::formant::vowel_index(w) {
+                    Some(i) => idx.push(i),
+                    None => return Err(CompileError::new(format!("vowel: '{}' is not a vowel (a, e, i, o, u)", w))),
+                }
+            }
+            if idx.is_empty() {
+                return Err(CompileError::new(String::from("vowel: needs one or two vowels, e.g. vowel(a, o, bars=2)")));
+            }
+            let from = idx[0];
+            let to = *idx.get(1).unwrap_or(&from);
+            let bars = named_param(&node.params, "bars").unwrap_or(0.0);
+            let hz = named_param(&node.params, "hz").unwrap_or(if bars > 0.0 { 0.0 } else { 0.25 });
+            let mix = named_param(&node.params, "mix").unwrap_or(1.0);
+            Ok(NodeSpec::Vowel { from, to, hz, bars, mix })
+        }
         "autopan" => {
             let depth = float_param_at(&node.params, 0).unwrap_or(0.5);
             let bars = named_param(&node.params, "bars").unwrap_or(0.0);

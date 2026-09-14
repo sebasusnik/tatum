@@ -90,9 +90,9 @@ pattern amen_ish {
 }
 
 track pad    { play voicings using cloud level 0.15 reverb_send 0.4 delay_send 0.1 sidechain 0.5
-               out > highpass(300, 0.4) > lowpass(3200, 0.3, lfo_bars=16, lfo_depth=1200) > autopan(0.3, bars=8) > master }
+               out > highpass(300, 0.4) > lowpass(3200, 0.3, lfo_bars=16, lfo_depth=1200) > phaser(0.35, bars=6) > autopan(0.3, bars=8) > master }
 track rhodes { play rhodes_hits using rhodes level 0.15 reverb_send 0.6 delay_send 0.25
-               out > highpass(220, 0.3) > master }
+               out > highpass(220, 0.3) > vowel(o, a, bars=8, mix=0.5) > master }
 track sub    { play sub_line using sub level 0.4 out > master }
 track drums  { play amen_ish using kit level 0.55 out > saturate(0.3) > master }
 

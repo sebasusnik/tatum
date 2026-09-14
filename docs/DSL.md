@@ -153,6 +153,8 @@ master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2
 | `lowpass(cutoff_hz, resonance)` / `highpass` / `bandpass` | Hz, 0..1 | options: envelope `ea= ed= es= er= edepth=` (seconds, level, Hz); LFO `lfo_bars=` or `lfo_hz=` with `lfo_depth=` in Hz, e.g. `lowpass(800, 0.6, lfo_bars=2, lfo_depth=600)` |
 | `ladder(cutoff_hz, resonance)` | Hz, 0..1 | Moog-style 4-pole, same envelope and LFO options |
 | `autopan(depth, bars=)` | 0..1, bars | slow stereo movement, `autopan(0.6, bars=4)`; `hz=` for a free rate |
+| `phaser(mix, bars=, stages=, feedback=, depth=)` | 0..1, bars, 2..12, 0..0.9, 0..1 | swept allpass phaser, the liquid pad effect: `phaser(0.5, bars=4)` |
+| `vowel(a, o, bars=, mix=)` | vowels a e i o u, bars, 0..1 | formant filter; one vowel holds, two morph: `vowel(a, o, bars=2)` |
 | `chorus(mix)` | 0..1 | |
 | `bitcrush(bits, rate)` | bits, sample-rate reduction 0..1 | |
 | `compressor(threshold_db, ratio=, attack=, release=, makeup=)` | dB, ratio, ms, ms, gain | |
@@ -211,7 +213,8 @@ Things a producer does that a first draft usually forgets. `synth_check` warns a
 first three.
 
 **A pad that moves.** Slow LFO on the filter with some resonance, detuned unison, chorus,
-a hint of vibrato, sends, and sidechain so it breathes with the kick:
+a hint of vibrato, a slow phaser, sends, and sidechain so it breathes with the kick. For a
+"talking" pad swap the phaser for `vowel(a, o, bars=2, mix=0.6)`:
 
 ```
 module keys pad {
@@ -222,7 +225,7 @@ module keys pad {
     attack 0.9  release 1.0
 }
 track pad { play chords using pad level 0.3 reverb_send 0.4 delay_send 0.15 sidechain 0.45
-            out > highpass(250, 0.4) > autopan(0.4, bars=4) > master }
+            out > highpass(250, 0.4) > phaser(0.4, bars=4) > autopan(0.4, bars=4) > master }
 ```
 
 **A 303 line.** Low cutoff, high resonance and envelope amount, glide, and `~` slides on

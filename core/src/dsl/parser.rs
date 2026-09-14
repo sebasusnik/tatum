@@ -445,7 +445,7 @@ impl Parser {
                 } else {
                     // Not named — restore and parse as positional
                     self.pos = saved_pos;
-                    if is_waveform(&name) {
+                    if is_waveform(&name) || is_vowel(&name) {
                         self.advance();
                         params.push(Param::Waveform(name));
                     } else {
@@ -458,6 +458,10 @@ impl Parser {
                         self.advance();
                     }
                 }
+            } else if matches!(self.peek(), Token::DrumGhost) {
+                // `o` lexes as a ghost hit; inside arguments it is the vowel word
+                self.advance();
+                params.push(Param::Waveform(String::from("o")));
             } else if let Token::Number(_) = self.peek() {
                 // Could be a number or a rhythm division (1/4)
                 let n = self.expect_number().unwrap_or(0.0);
@@ -1526,6 +1530,11 @@ fn describe_token(t: &Token) -> String {
         Token::Eof => String::from("end of file"),
         other => format!("{:?}", other).to_lowercase(),
     }
+}
+
+/// Vowel words accepted by the `vowel` node.
+fn is_vowel(word: &str) -> bool {
+    matches!(word, "a" | "e" | "i" | "o" | "u")
 }
 
 /// Check if a word is a waveform name.
