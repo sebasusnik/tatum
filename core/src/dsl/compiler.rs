@@ -184,6 +184,9 @@ pub struct CompiledSong {
     pub scenes: Vec<CompiledScene>,
     pub arrangement: Vec<(usize, u32)>, // (scene_idx, repeat_count)
     pub grooves: Vec<CompiledGroove>,
+    /// Insert chains on the global send returns: `reverb_return { in > ... > out }`.
+    pub reverb_return: Vec<NodeSpec>,
+    pub delay_return: Vec<NodeSpec>,
 }
 
 // ── Compiler ──
@@ -245,6 +248,26 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
             None => Vec::new(),
         };
         buses.push(CompiledBus { name: bus_def.name.clone(), fx_chain: chain });
+    }
+
+    // 3b. Return chains on the global sends, and chains that belong to nothing
+    let mut reverb_return = Vec::new();
+    let mut delay_return = Vec::new();
+    for bc in &song.bus_chains {
+        match bc.bus_name.as_str() {
+            "reverb_return" => match compile_fx_chain("reverb_return", &bc.chain) {
+                Ok(c) => reverb_return = c,
+                Err(e) => errors.push(e),
+            },
+            "delay_return" => match compile_fx_chain("delay_return", &bc.chain) {
+                Ok(c) => delay_return = c,
+                Err(e) => errors.push(e),
+            },
+            name if !song.buses.iter().any(|b| b.name == name) => errors.push(CompileError::new(format!(
+                "chain '{}' has no `bus {}` declaration (or use reverb_return / delay_return for the global sends)", name, name
+            ))),
+            _ => {}
+        }
     }
 
     // 4. Compile tracks
@@ -328,6 +351,8 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
         scenes,
         arrangement,
         grooves,
+        reverb_return,
+        delay_return,
     })
 }
 

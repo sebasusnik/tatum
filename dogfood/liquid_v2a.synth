@@ -1,0 +1,233 @@
+# liquid_v2a — "keys cloud"
+# Liquid DnB pad, Calibre / LTJ Bukem school. 172 BPM, F minor, 32 bars.
+#
+# Source: heavily detuned unison keys, plus an octave-up "air" keys with a different
+# detune so the two ensembles beat against each other, plus a quiet octave-mode keys
+# that stays dry enough to keep the harmony legible.
+#
+# The cloud is the global send reverb (size 1.0). The `wash` bus is NOT the reverb —
+# a chain `reverb()` node diverges with sustained input (see the log) — it is the
+# near-dry return: it attenuates the direct signal to a few percent and carries the
+# post-reverb-style movement (phaser 12 bars, autopan 10 bars).
+# `reverb_send` is tapped at the track output, after the insert chain, so the inserts
+# on `cloud` (highpass + 16-bar LFO lowpass) are what shape the cloud itself.
+#
+# Chords: Fm9 -> Dbmaj9 -> Abmaj9 -> Eb7sus4, two bars each, held with ties (8-bar loop).
+# Arrangement: intro 8 (cloud alone) / groove 8 (drums in) / frozen 4 / full 12.
+
+tempo 172
+scale F minor
+humanize 0.03 timing 0.012
+sidechain 0.45
+
+delay sync=dotted_eighth feedback=0.42 filter=0.55
+reverb size=1.0 damp=0.22 predelay=55
+
+# ---------------------------------------------------------------- modules
+
+# Main cloud source. Never meant to be heard dry.
+module keys haze {
+    voice_mode unison
+    detune 0.55            # heavy: the ensemble beat is most of the "washed out"
+    chorus_mix 0.7
+    cutoff 0.30
+    resonance 0.32
+    attack 1.0             # 2 s bloom: no transient survives into the reverb
+    decay 0.85
+    sustain 0.95
+    release 1.0
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync bars_8        # cycle 1: 8 bars
+    lfo_depth 0.11
+    vibrato_rate 0.22
+    vibrato_depth 0.05
+}
+
+# Octave-up air layer, deliberately a different detune so it beats against `haze`.
+module keys air {
+    voice_mode unison
+    detune 0.22
+    chorus_mix 0.45
+    cutoff 0.40
+    resonance 0.22
+    attack 1.0
+    decay 0.9
+    sustain 0.9
+    release 1.0
+    lfo_target cutoff
+    lfo_waveform sine
+    lfo_sync bars_16       # cycle 2: 16 bars
+    lfo_depth 0.14
+    vibrato_rate 0.3
+    vibrato_depth 0.04
+}
+
+# The layer that stays audible dry: keeps the chord changes readable under the wash.
+module keys warm {
+    voice_mode octave
+    detune 0.3
+    chorus_mix 0.35
+    cutoff 0.34
+    resonance 0.25
+    attack 0.82            # ~0.5 s: still no transient, but the change reads
+    decay 0.8
+    sustain 0.9
+    release 1.0
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync bars_4
+    lfo_depth 0.07
+    vibrato_rate 0.25
+    vibrato_depth 0.03
+}
+
+module bass sub_osc {
+    cutoff 0.12
+    cutoff_env 0.05
+    resonance 0.06
+    glide 0.1
+    osc1_wave saw
+    osc2_pitch 0.5
+    osc3_pitch 0.5
+    attack 0.2
+    decay 0.6
+    sustain 0.95
+    release 0.45
+    lfo_target cutoff
+    lfo_waveform sine
+    lfo_sync bars_4
+    lfo_depth 0.05
+}
+
+module beats kit {
+    kick_level 0.95
+    kick_decay 0.32
+    kick_pitch 0.28
+    kick_click 0.35
+    kick_drive 0.15
+    snare_level 0.85
+    snare_decay 0.28
+    snare_snap 0.55
+    snare_drive 0.1
+    hihat_level 0.45
+    hihat_decay 0.2
+    hihat_pan 0.25
+}
+
+# ---------------------------------------------------------------- patterns
+
+pattern voicings {
+    Fm9:0.6 ..*31
+    Dbmaj9:0.6 ..*31
+    Abmaj9:0.55 ..*31
+    Eb7sus4:0.6 ..*31
+}
+
+pattern voicings_hi {
+    Fm9/4:0.5 ..*31
+    Dbmaj9/4:0.5 ..*31
+    Abmaj9/4:0.45 ..*31
+    Eb7sus4/4:0.5 ..*31
+}
+
+pattern sub_line {
+    F1:0.85 ..*13 - -
+    F1:0.7 ..*13 - -
+    Db1:0.85 ..*13 - -
+    Db1:0.7 ..*13 - -
+    Ab1:0.85 ..*13 - -
+    Ab1:0.7 ..*13 - -
+    Eb1:0.85 ..*13 - -
+    Eb1:0.7 ..*13 - -
+}
+
+# Simple two-step. Context, not the point.
+pattern brk {
+    kick:  X - - -  - - - -  - - x -  - - - -   X - - -  - - - o  - - x -  - - - -
+    snare: - - - -  X - - -  - - - o  X - - -   - - - -  X - - -  - - - -  X - - o
+    hat:   x - o -  x - o -  x - o -  x - o x   x - o -  x - o -  x - o -  o - x o
+}
+
+# ---------------------------------------------------------------- buses
+
+bus wash
+# Near-dry return, ~4% of the direct signal, carrying the slow movement.
+wash { in > gain(0.3)
+          > phaser(0.45, bars=12, stages=8, feedback=0.5)
+          > autopan(0.4, bars=10)
+          > master }
+
+bus kitbus
+kitbus { in > compressor(-10, ratio=3.5, attack=8, release=70) > saturate(0.25) > master }
+
+# ---------------------------------------------------------------- tracks
+
+# Inserts here shape what feeds the global reverb, i.e. the cloud itself.
+track cloud { play voicings using haze level 0.2 reverb_send 0.85 delay_send 0.12 sidechain 0.5
+              out > highpass(300, 0.3)
+                  > lowpass(4200, 0.25, lfo_bars=16, lfo_depth=1800)
+                  > wash }
+track layer { play voicings_hi using air level 0.07 reverb_send 0.6 sidechain 0.4
+              out > highpass(500, 0.2)
+                  > lowpass(6000, 0.2, lfo_bars=14, lfo_depth=2400)
+                  > wash }
+track body  { play voicings using warm level 0.1 reverb_send 0.35 delay_send 0.18 sidechain 0.6
+              out > highpass(330, 0.35)
+                  > lowpass(3400, 0.3, lfo_bars=9, lfo_depth=1400)
+                  > chorus(0.4)
+                  > autopan(0.25, bars=6)
+                  > master }
+track sub   { play sub_line using sub_osc level 0.42 sidechain 0.2
+              out > lowpass(260, 0.1) > saturate(0.2) > master }
+track drums { play brk using kit level 0.55 reverb_send 0.08 out > kitbus }
+
+master { in > tilt(0)
+            > eq(low=1.0, mid=-1.0, high=1.0)
+            > compressor(-6, ratio=2, attack=15, release=180, makeup=1.3)
+            > limiter(0.95)
+            > out }
+
+# ---------------------------------------------------------------- scenes
+
+scene intro {
+    reverb_mix = 0.7
+    auto master tilt -0.4 > -0.05
+    auto haze cutoff 0.20 > 0.32
+    track cloud { play voicings using haze level 0.12 }
+    track layer { play voicings_hi using air level 0.04 }
+}
+
+scene groove {
+    reverb_mix = 0.8
+    auto master tilt -0.05 > 0.05
+    auto haze cutoff 0.32 > 0.26 > 0.34
+    track cloud { play voicings using haze level 0.17 }
+    track layer { play voicings_hi using air level 0.06 }
+    track body  { play voicings using warm level 0.1 }
+    track sub   { play sub_line using sub_osc level 0.5 }
+    track drums { play brk using kit level 0.85 }
+}
+
+# Break: pads silent, global reverb frozen, the tail is the only pad sound.
+scene frozen {
+    reverb_freeze = 1
+    reverb_mix = 0.32
+    auto master tilt 0.0 > -0.35
+    track sub   { play sub_line using sub_osc level 0.22 }
+    track drums { play brk using kit level 0.3 }
+}
+
+scene full {
+    reverb_mix = 0.85
+    auto master tilt -0.15 > 0.08
+    auto haze cutoff 0.28 > 0.40 > 0.30
+    auto air cutoff 0.36 > 0.46
+    track cloud { play voicings using haze level 0.245 }
+    track layer { play voicings_hi using air level 0.085 }
+    track body  { play voicings using warm level 0.17 }
+    track sub   { play sub_line using sub_osc level 0.661 }
+    track drums { play brk using kit level 0.944 }
+}
+
+arrange { intro x8  groove x8  frozen x4  full x12 }

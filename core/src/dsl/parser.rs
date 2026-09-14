@@ -1172,6 +1172,7 @@ impl Parser {
         loop {
             let key = match self.peek().clone() {
                 Token::Ident(ref k) => k.clone(),
+                Token::Sidechain => String::from("sidechain"),
                 _ => break,
             };
             let s = self.span();
@@ -1195,11 +1196,13 @@ impl Parser {
                 ("delay", "time") => globals.send_delay.time = num_value,
                 ("delay", "feedback") => globals.send_delay.feedback = num_value,
                 ("delay", "filter") => globals.send_delay.filter = num_value,
+                ("delay", "sidechain") => globals.send_delay.sidechain = num_value,
+                ("reverb", "sidechain") => globals.send_reverb.sidechain = num_value,
                 ("reverb", "size") => globals.send_reverb.size = num_value,
                 ("reverb", "damp") => globals.send_reverb.damp = num_value,
                 ("reverb", "predelay") => globals.send_reverb.predelay = num_value,
                 _ => bad = Some(format!(
-                    "{}: unknown option '{}' (delay: sync, time, feedback, filter; reverb: size, damp, predelay)",
+                    "{}: unknown option '{}' (delay: sync, time, feedback, filter, sidechain; reverb: size, damp, predelay, sidechain)",
                     which, key
                 )),
             }

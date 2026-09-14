@@ -25,7 +25,8 @@ sidechain 0.4
 delay sync=dotted_eighth feedback=0.45 filter=0.5   # sync: free | quarter | dotted_eighth |
                                                     #       eighth | sixteenth (default) | triplet_eighth
                                                     # time=0.3 (seconds) applies when sync=free
-reverb size=0.7 damp=0.4 predelay=20                # predelay in ms; size 1.0 is a very long hall
+reverb size=0.7 damp=0.4 predelay=20 sidechain=0.5  # predelay in ms; size 1.0 is a very long hall;
+                                                    # sidechain= ducks the return against the kick (delay too)
 ```
 
 ## Modules
@@ -168,6 +169,14 @@ master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2
 Exact ranges and defaults for every node are in [PARAMS.md](PARAMS.md) under "effects and
 nodes" (`synth params fx`). Filter cutoffs are in Hz, not 0..1.
 
+The global send returns can carry their own insert chain, applied after the effect and
+before the master. This is where movement on the tail itself goes:
+
+```
+reverb_return { in > lowpass(1200, 0.3, lfo_bars=16, lfo_depth=800) > autopan(0.4, bars=8) > out }
+delay_return  { in > highpass(300, 0.3) > out }
+```
+
 Two ways to get ambience, usable together:
 
 - **Global sends**: every track has `delay_send` / `reverb_send` into the shared delay and
@@ -265,8 +274,11 @@ track pad { play voicings using cloud level 0.15 reverb_send 0.4 sidechain 0.5
 
 **The resampled cloud, without resampling.** Play the voicings into a big reverb for a
 scene, then freeze it: the next scene keeps the tail as a texture with nothing feeding it.
+Put the slow movement and the ducking on the return, so the tail itself breathes:
 
 ```
+reverb size=1.0 damp=0.3 sidechain=0.5
+reverb_return { in > highpass(250, 0.3) > lowpass(2500, 0.3, lfo_bars=16, lfo_depth=1200) > autopan(0.4, bars=8) > out }
 scene bloom  { track pad { play voicings using cloud } }
 scene frozen { reverb_freeze = 1  track drums { play brk using kit } }   # pad silent, cloud sustains
 ```

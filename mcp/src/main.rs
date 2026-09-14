@@ -341,6 +341,13 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
 
     let mut engine = SongEngine::from_compiled(song);
     let (l, r) = engine.render(bars);
+    let bad = l.iter().chain(r.iter()).filter(|v| !v.is_finite()).count();
+    if bad > 0 {
+        return Err(format!(
+            "render produced {} non-finite samples: an effect is unstable. Check reverb sizes, delay/phaser feedback and compressor makeup, then re-render.",
+            bad
+        ));
+    }
 
     // Output path
     let output = match args.get("output").and_then(Value::as_str) {

@@ -310,6 +310,10 @@ pub struct SongEngine {
 
     // Master FX chain
     master_fx: FxChain,
+    reverb_return: FxChain,
+    delay_return: FxChain,
+    reverb_sidechain: f32,
+    delay_sidechain: f32,
 
     // Timing
     tempo: f32,
@@ -519,6 +523,10 @@ impl SongEngine {
 
         // Build master FX chain
         let master_fx = FxChain::new(&song.master.fx_chain);
+        let reverb_return = FxChain::new(&song.reverb_return);
+        let delay_return = FxChain::new(&song.delay_return);
+        let reverb_sidechain = song.globals.send_reverb.sidechain.unwrap_or(0.0);
+        let delay_sidechain = song.globals.send_delay.sidechain.unwrap_or(0.0);
 
         // Build track playback states from the compiled tracks
         let track_names: Vec<String> = song.tracks.iter().map(|t| t.name.clone()).collect();
@@ -620,6 +628,10 @@ impl SongEngine {
             send_delay,
             send_reverb,
             master_fx,
+            reverb_return,
+            delay_return,
+            reverb_sidechain,
+            delay_sidechain,
             tempo,
             samples_per_step,
             sample_counter: 0.0,
@@ -658,6 +670,8 @@ impl SongEngine {
         for t in self.tracks.iter_mut() { t.insert_fx.set_bpm(bpm); }
         for b in self.buses.iter_mut() { b.fx_chain.set_bpm(bpm); }
         self.master_fx.set_bpm(bpm);
+        self.reverb_return.set_bpm(bpm);
+        self.delay_return.set_bpm(bpm);
     }
 
     pub fn start(&mut self) {
@@ -1019,6 +1033,7 @@ impl SongEngine {
         // Sidechain ducking: use kick track to duck other tracks
         // Per-track sidechain_amount overrides the global amount when > 0.
         let has_any_sidechain = self.sidechain_amount > 0.0
+            || self.reverb_sidechain > 0.0 || self.delay_sidechain > 0.0
             || self.tracks.iter().any(|t| t.active && t.sidechain_amount > 0.0);
         if has_any_sidechain {
             if let Some(kick_idx) = self.kick_track_idx {
@@ -1122,11 +1137,28 @@ impl SongEngine {
         let rwet = self.reverb_wet_level;
         // Always tick the sends: their tails must ring out (and freeze must
         // hold) after every track has gone silent.
+        let duck_delay = self.delay_sidechain;
+        let duck_reverb = self.reverb_sidechain;
+        let sc = self.sc_envelope;
         for s in 0..len {
-            let (dl, dr) = self.send_delay.process_stereo_wet(delay_in_l[s], delay_in_r[s]);
+            let (mut dl, mut dr) = self.send_delay.process_stereo_wet(delay_in_l[s], delay_in_r[s]);
+            if !self.delay_return.nodes.is_empty() {
+                (dl, dr) = self.delay_return.process_stereo(dl, dr);
+            }
+            if duck_delay > 0.0 {
+                let g = 1.0 - duck_delay * sc;
+                dl *= g; dr *= g;
+            }
             output_l[s] += dl * dwet;
             output_r[s] += dr * dwet;
-            let (rl, rr) = self.send_reverb.process_stereo_in_wet(reverb_in_l[s], reverb_in_r[s]);
+            let (mut rl, mut rr) = self.send_reverb.process_stereo_in_wet(reverb_in_l[s], reverb_in_r[s]);
+            if !self.reverb_return.nodes.is_empty() {
+                (rl, rr) = self.reverb_return.process_stereo(rl, rr);
+            }
+            if duck_reverb > 0.0 {
+                let g = 1.0 - duck_reverb * sc;
+                rl *= g; rr *= g;
+            }
             output_l[s] += rl * rwet;
             output_r[s] += rr * rwet;
         }
@@ -1640,6 +1672,8 @@ impl SongEngine {
         self.send_delay.reset();
         self.send_reverb.reset();
         self.master_fx.reset();
+        self.reverb_return.reset();
+        self.delay_return.reset();
         for track in self.tracks.iter_mut() {
             track.current_step = 0;
             track.current_notes_count = 0;

@@ -39,6 +39,7 @@ pub struct SendDelayDef {
     pub time: Option<f32>,      // seconds, used when sync is free
     pub feedback: Option<f32>,
     pub filter: Option<f32>,
+    pub sidechain: Option<f32>, // duck the delay return against the kick
 }
 
 /// Global send reverb settings (top-level `reverb ...` line).
@@ -47,6 +48,7 @@ pub struct SendReverbDef {
     pub size: Option<f32>,
     pub damp: Option<f32>,
     pub predelay: Option<f32>,  // milliseconds
+    pub sidechain: Option<f32>, // duck the reverb return against the kick
 }
 
 impl Default for Globals {

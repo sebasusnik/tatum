@@ -198,6 +198,10 @@ fn cmd_render(args: &[String]) {
 
     let (out_l, out_r) = engine.render(render_bars);
 
+    if out_l.iter().chain(out_r.iter()).any(|v| !v.is_finite()) {
+        eprintln!("error: render produced non-finite samples (an effect is unstable)");
+        process::exit(1);
+    }
     eprintln!("writing {} ({} samples, {:.1}s)...",
         output_path,
         out_l.len(),

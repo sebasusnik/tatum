@@ -520,7 +520,8 @@ impl StaticAllpass {
 
     fn process(&mut self, input: f32) -> f32 {
         let buffered = self.buffer[self.pos];
-        let output = buffered - input * self.gain;
+        // Schroeder allpass: v = x + g*v_d ; y = -g*v + v_d = v_d*(1 - g²) - g*x
+        let output = buffered * (1.0 - self.gain * self.gain) - input * self.gain;
         self.buffer[self.pos] = input + buffered * self.gain;
         self.pos += 1;
         if self.pos >= self.buffer.len() {
@@ -581,7 +582,7 @@ impl ModAllpass {
         let read_pos_1 = if read_pos_0 == 0 { buf_len - 1 } else { read_pos_0 - 1 };
 
         let buffered = math::lerp(self.buffer[read_pos_0], self.buffer[read_pos_1], frac);
-        let output = buffered - input * self.gain;
+        let output = buffered * (1.0 - self.gain * self.gain) - input * self.gain;
         self.buffer[self.pos] = input + buffered * self.gain;
 
         self.pos += 1;
@@ -832,3 +833,4 @@ mod tests {
         assert!(found_non_zero, "ModCombFilter should produce non-zero output after impulse");
     }
 }
+
