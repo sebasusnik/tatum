@@ -600,7 +600,10 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     // Two instruments in the same place in the stereo field cannot be told
     // apart, however well they are balanced. Twenty-one of the twenty-five
     // songs in this repo measured under 2% wide before anything reported it.
-    let mix_width = analysis::stereo_width(&l, &r) * 200.0;
+    // Above 250 Hz, because the low end is mono on purpose in most genres and
+    // it carries most of the energy: a techno mix with a hard-panned pad still
+    // reads 1% wide on the plain figure.
+    let mix_width = analysis::stereo_width_above(&l, &r, 250.0, SAMPLE_RATE) * 200.0;
     let centred: Vec<String> = track_report.iter()
         .filter(|t| t["width_pct"].as_f64().unwrap_or(0.0) < 4.0
             && t["db"].as_f64().unwrap_or(-99.0) > loudest_db - 18.0)
@@ -608,7 +611,7 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         .collect();
     if mix_width < 12.0 {
         hints.push(format!(
-            "the mix is {:.0}% wide, so it is very nearly mono and the instruments sit on top of each other. {} are within a few degrees of centre. Pan them apart, or give them autopan(), chorus or a stereo send.",
+            "above 250 Hz the mix is only {:.0}% wide, so the instruments sit on top of each other. {} are within a few degrees of centre. Pan them apart, or give them autopan(), chorus or a stereo send. The kick and the sub should stay where they are.",
             mix_width,
             if centred.len() > 4 {
                 format!("{} and {} others", centred[..3].join(", "), centred.len() - 3)
@@ -638,7 +641,7 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
             "crest_out": round1(crest_out),
             "crest_change_db": round1(crest_loss as f32),
         },
-        "stereo_width_pct": round1(mix_width),
+        "stereo_width_above_250hz_pct": round1(mix_width),
         "sections": report,
         "tracks": track_report,
         "buses": bus_report,

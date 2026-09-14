@@ -130,6 +130,31 @@ pub fn stereo_width(l: &[f32], r: &[f32]) -> f32 {
     if total <= 0.0 { 0.0 } else { (side / total) as f32 }
 }
 
+/// Stereo width of everything above `hz`. The plain figure is dominated by the
+/// low end, which in most genres is mono on purpose -- a techno mix with a
+/// hard-panned pad still reads 1% because the kick and the sub carry the energy.
+/// Measured above 250 Hz it answers the question anyone actually has: can I
+/// tell the instruments apart.
+pub fn stereo_width_above(l: &[f32], r: &[f32], hz: f32, sample_rate: f32) -> f32 {
+    const POLES: usize = 3;
+    let c = math::exp(-2.0 * math::PI * hz * CASCADE_FIX / sample_rate);
+    let (mut sl, mut sr) = ([0.0f32; POLES], [0.0f32; POLES]);
+    let (mut mid, mut side) = (0.0f64, 0.0f64);
+    for (a, b) in l.iter().zip(r) {
+        let mut low_l = *a;
+        for s in sl.iter_mut() { *s = low_l * (1.0 - c) + *s * c; low_l = *s; }
+        let mut low_r = *b;
+        for s in sr.iter_mut() { *s = low_r * (1.0 - c) + *s * c; low_r = *s; }
+        let (hl, hr) = (a - low_l, b - low_r);
+        let m = (hl + hr) as f64;
+        let d = (hl - hr) as f64;
+        mid += m * m;
+        side += d * d;
+    }
+    let total = mid + side;
+    if total <= 0.0 { 0.0 } else { (side / total) as f32 }
+}
+
 /// Crest factor: peak over RMS. Around 4-6 for a punchy mix; a limiter that is
 /// working hard pulls it towards 2-3 and takes the transients with it.
 pub fn crest(peak: f32, rms: f32) -> f32 {
