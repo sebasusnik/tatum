@@ -20,6 +20,10 @@ struct Kick {
     click_level: f32,
     click_decay: f32,
     click_filter: BiquadFilter,
+    /// The click used to be white noise with only a highpass on it, so it ran
+    /// at full level to 20 kHz and read as a tick rather than a beater. This
+    /// keeps it in the band where a beater actually lives.
+    click_tone: BiquadFilter,
     rng: Rng,
     drive: f32,
     active: bool,
@@ -28,7 +32,9 @@ struct Kick {
 impl Kick {
     fn new() -> Self {
         let mut click_filter = BiquadFilter::new(SAMPLE_RATE);
-        click_filter.set_params(FilterType::HighPass, 2500.0, 0.3);
+        click_filter.set_params(FilterType::HighPass, 1400.0, 0.3);
+        let mut click_tone = BiquadFilter::new(SAMPLE_RATE);
+        click_tone.set_params(FilterType::LowPass, 5500.0, 0.4);
         Self {
             phase: 0.0,
             freq: 50.0,
@@ -41,8 +47,9 @@ impl Kick {
             pitch: 1.0,
             click_amp: 0.0,
             click_level: 0.7,
-            click_decay: 0.92,
+            click_decay: 0.955,
             click_filter,
+            click_tone,
             rng: Rng::new(88888),
             drive: 1.8,
             active: false,
@@ -65,8 +72,8 @@ impl Kick {
         // Click transient: highpass-filtered noise burst
         let click = if self.click_amp > 0.001 {
             let noise = self.rng.next_bipolar() * self.click_amp;
-            let filtered_click = self.click_filter.process(noise);
-            self.click_amp *= self.click_decay; // ~2ms decay at 44.1kHz
+            let filtered_click = self.click_tone.process(self.click_filter.process(noise));
+            self.click_amp *= self.click_decay; // ~0.5 ms at 44.1 kHz
             filtered_click
         } else {
             self.click_amp = 0.0;
