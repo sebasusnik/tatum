@@ -75,7 +75,7 @@ pattern riff { 1.2:0.9  -  ~5.2:0.8  ..  [1.3 3.3 5.3]:0.6  ..  ..  .. }
 | `..` | tie: hold the previous step; `..*15` writes fifteen ties, `-*8` eight rests |
 | `~note` | slide: glide into this note without retriggering the envelope (303 style). The previous note is held until the slide. Bass modules glide at their `glide` rate; other instruments fall back to a normal retrigger. |
 | `[a b c]` | chord, any notes or degrees |
-| `Fm9` `Dbmaj7/2` `C7:0.6` | chord symbol: root, optional `#`/`b`, quality, optional `/octave` (default 3), then `:velocity` and `(locks)` as usual. Qualities: maj, m, 7, maj7, m7, 9, maj9, m9, add9, madd9, 6, m6, sus2, sus4, 7sus4, dim, dim7, m7b5, aug, 11, m11, 13, maj13, m13, 5, mmaj7. A note token with octave 7 or above (`C7`, `Ab9`) is read as a chord. |
+| `Fm9` `Dbmaj7/2` `C7:0.6` | chord symbol: root, optional `#`/`b`, quality, optional `/octave` (default 3), then `:velocity` and `(locks)` as usual. Qualities: maj, m, 7, maj7, m7, 9, maj9, m9, add9, madd9, 6, m6, sus2, sus4, 7sus4, dim, dim7, m7b5, aug, 11, m11, 13, maj13, m13, 5, mmaj7. A note token with octave 7 or above (`C7`, `Ab9`) is read as a chord; for a power chord write `E5/3` (bare `E5` is the note). |
 | `1.2:0.8(cutoff=0.4, edepth=0.3, res=0.6, gate=0.5)` | per-step parameter lock (bass filter and gate) |
 
 Drum patterns use labeled lanes:
@@ -299,4 +299,7 @@ track beat { play brk using kit out > drums }
 
 **Loudness shape.** Intro quietest, drop loudest, nothing at the limiter ceiling. Use the
 per-section report from `synth_render`; if a section sits at 0.95, lower what feeds it
-rather than pushing the others up.
+rather than pushing the others up. Two things that make section loudness non-obvious:
+the engine scales the mix by 1/sqrt(active tracks) in each scene (so fewer tracks are
+each louder), and sidechain only ducks in scenes that have a beats track (a breakdown
+without drums plays its pads at full level). Set levels per scene, not just per track.

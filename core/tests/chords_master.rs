@@ -91,3 +91,12 @@ fn chord_symbol_with_velocity_at_row_start_is_not_a_drum_lane() {
     assert_eq!(chords.rows.len(), 2);
     assert!(compiler::compile(&ast).is_ok());
 }
+
+#[test]
+fn power_chord_needs_an_explicit_octave() {
+    let src = SONG.replace("pattern chords { Fm9 ..*7 Dbmaj7/2 ..*7 }", "pattern chords { E5/3 ..*7 E5 ..*7 }");
+    let ast = dsl::parse(&src).expect("parse");
+    let chords = ast.patterns.iter().find(|p| p.name == "chords").unwrap();
+    assert_eq!(chord_midi(&chords.rows[0][0]), vec![52, 59], "E5/3 is a power chord");
+    assert!(matches!(chords.rows[0][8], Step::Note(_)), "bare E5 stays a note");
+}
