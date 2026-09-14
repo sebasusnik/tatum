@@ -464,13 +464,13 @@ track bass {
     play bass_roll
     using roll
     velocity 1.0
-    level 0.636
+    level 0.4961
     gate 0.3
     sidechain 0.65
-    out > highpass(110hz, 0.25)
-        > saturate(1.6)
-        > eq(low=-1.5, mid=3.5, high=-2.5)
-        > lowpass(3000, 0.2)
+    out > highpass(38hz, 0.2)
+        > saturate(1.1)
+        > eq(low=0.5, mid=0.5, high=-2.5)
+        > lowpass(2600, 0.2)
         > compressor(-12, ratio=3, attack=1, release=20, makeup=1.5db)
         > master
 }
@@ -479,17 +479,17 @@ track sub {
     play sub_roll
     using sub
     velocity 1.0
-    level 0.168
+    level 0.2587
     gate 0.55
     sidechain 0.7
-    out > lowpass(150hz, 0.1) > saturate(0.4) > master
+    out > lowpass(190hz, 0.1) > saturate(0.4) > master
 }
 
 track acid {
     play acid_a
     using squelch
     velocity 1.0
-    level 0.631
+    level 0.8519
     gate 0.42
     pan 0.16
     sidechain 0.55
@@ -506,33 +506,33 @@ track clank {
     play clank_a
     using clank
     velocity 1.0
-    level 0.36
+    level 0.243
     gate 0.1
     pan -0.34
     sidechain 0.5
     delay_send 0.2
     reverb_send 0.12
-    out > saturate(0.5) > highpass(1.2khz, 0.2) > eq(low=0, mid=-3.5, high=1.5) > lowpass(9khz, 0.25) > master
+    out > saturate(0.25) > highpass(1.4khz, 0.2) > eq(low=0, mid=-3.5, high=0.5) > lowpass(6.5khz, 0.25) > master
 }
 
 track zap {
     play zap_a
     using zap
     velocity 1.0
-    level 0.10
+    level 0.085
     gate 0.06
     pan 0.36
     sidechain 0.5
     delay_send 0.26
     reverb_send 0.1
-    out > gain(1.3) > highpass(1.8khz, 0.2) > lowpass(12khz, 0.2) > master
+    out > gain(0.9) > highpass(2khz, 0.2) > lowpass(8khz, 0.2) > master
 }
 
 track murk {
     play murk_dark
     using murk
     velocity 0.9
-    level 0.055
+    level 0.0715
     gate 1.0
     # Breathes with the bass, not the kick: the kick already owns the low end,
     # and following the roll makes the layer feel like part of the groove.
@@ -551,10 +551,10 @@ track ghost {
     play ghost_stab
     using smear
     velocity 0.9
-    level 0.16
+    level 0.128
     gate 0.5
     sidechain 0.45
-    out > lowpass(300hz, 0.3) > saturate(0.7) > rsmp
+    out > highpass(70hz, 0.2) > lowpass(240hz, 0.3) > saturate(0.7) > rsmp
 }
 
 track riser {
@@ -590,8 +590,8 @@ master {
 scene intro {
     auto murk cutoff 0.088 > 0.246
     track drums { play beat_intro using kit level 0.5 }
-    track murk  { play murk_dark using murk level 0.055 }
-    track zap   { play zap_a using zap level 0.138 }
+    track murk { play murk_dark using murk level 0.0715 }
+    track zap { play zap_a using zap level 0.1173 }
 }
 
 # 2. Build: the roll enters stuttered, the acid opens, the riser climbs.
@@ -600,11 +600,11 @@ scene build1 {
     auto riser level 0.02 > 0.22
     auto murk cutoff 0.246 > 0.327
     track drums { play beat_build using kit level 0.57 }
-    track bass  { play bass_stut using roll level 0.636 }
-    track sub   { play sub_roll using sub level 0.168 }
-    track acid  { play acid_a using squelch level 0.505 }
-    track murk  { play murk_dark using murk level 0.055 }
-    track clank { play clank_a using clank level 0.224 }
+    track bass { play bass_stut using roll level 0.4961 }
+    track sub { play sub_roll using sub level 0.2587 }
+    track acid { play acid_a using squelch level 0.6818 }
+    track murk { play murk_dark using murk level 0.0715 }
+    track clank { play clank_a using clank level 0.1512 }
     track riser { play riser_up using hiss level 0.2 }
 }
 
@@ -613,12 +613,12 @@ scene drop1 {
     auto squelch cutoff 0.371 > 0.68 > 0.434
     auto murk cutoff 0.327 > 0.161
     track drums { play beat_drop using kit level 0.65 }
-    track bass  { play bass_v1 using roll level 0.63 }
-    track sub   { play sub_drop using sub level 0.156 }
-    track acid  { play acid_b using squelch level 0.631 }
-    track clank { play clank_b using clank level 0.272 }
-    track zap   { play zap_b using zap level 0.163 }
-    track murk  { play murk_dark using murk level 0.055 }
+    track bass { play bass_v1 using roll level 0.4914 }
+    track sub { play sub_drop using sub level 0.2402 }
+    track acid { play acid_b using squelch level 0.8519 }
+    track clank { play clank_b using clank level 0.1836 }
+    track zap { play zap_b using zap level 0.1386 }
+    track murk { play murk_dark using murk level 0.0715 }
 }
 
 # 4. Bridge: the ghost stabs enter, routed into the capture bus. Bars 28-30
@@ -627,12 +627,12 @@ scene drop1 {
 scene bridge {
     auto squelch cutoff 0.434 > 0.593
     track drums { play beat_main using kit level 0.57 }
-    track bass  { play bass_v2 using roll level 0.636 }
-    track sub   { play sub_roll using sub level 0.168 }
-    track murk  { play murk_lift using murk level 0.055 }
-    track acid  { play acid_b using squelch level 0.547 }
-    track clank { play clank_b using clank level 0.32 }
-    track ghost { play ghost_stab using smear level 0.16 }
+    track bass { play bass_v2 using roll level 0.4961 }
+    track sub { play sub_roll using sub level 0.2587 }
+    track murk { play murk_lift using murk level 0.0715 }
+    track acid { play acid_b using squelch level 0.7385 }
+    track clank { play clank_b using clank level 0.216 }
+    track ghost { play ghost_stab using smear level 0.128 }
 }
 
 # 5. Breakdown: no kick. The reversed loop is the lead; the ghost holds a tone
@@ -642,11 +642,11 @@ scene breakdown {
     auto squelch cutoff 0.593 > 0.36 > 0.534
     auto murk cutoff 0.161 > 0.37
     track drums { play beat_break using kit level 0.58 }
-    track murk  { play murk_lift using murk level 0.055 }
-    track ghost { play ghost_hold using smear level 0.16 }
-    track acid  { play acid_ghost using squelch level 0.58 }
-    track clank { play clank_break using clank level 0.24 }
-    track zap   { play zap_a using zap level 0.138 }
+    track murk { play murk_lift using murk level 0.0715 }
+    track ghost { play ghost_hold using smear level 0.128 }
+    track acid { play acid_ghost using squelch level 0.783 }
+    track clank { play clank_break using clank level 0.162 }
+    track zap { play zap_a using zap level 0.1173 }
 }
 
 # 6. Second build: kick back, bass stutters, riser and acid climb together.
@@ -655,11 +655,11 @@ scene build2 {
     auto riser level 0.04 > 0.26
     auto murk cutoff 0.37 > 0.272
     track drums { play beat_build using kit level 0.62 }
-    track bass  { play bass_stut using roll level 0.678 }
-    track sub   { play sub_roll using sub level 0.173 }
-    track acid  { play acid_b using squelch level 0.589 }
-    track clank { play clank_b using clank level 0.272 }
-    track murk  { play murk_dark using murk level 0.055 }
+    track bass { play bass_stut using roll level 0.5288 }
+    track sub { play sub_roll using sub level 0.2664 }
+    track acid { play acid_b using squelch level 0.7952 }
+    track clank { play clank_b using clank level 0.1836 }
+    track murk { play murk_dark using murk level 0.0715 }
     track riser { play riser_up using hiss level 0.2 }
 }
 
@@ -668,12 +668,12 @@ scene drop2 {
     auto squelch cutoff 0.401 > 0.735 > 0.466
     auto murk cutoff 0.272 > 0.151
     track drums { play beat_drop using kit level 0.81 }
-    track bass  { play bass_v3 using roll level 0.79 }
-    track sub   { play sub_drop using sub level 0.195 }
-    track acid  { play acid_c using squelch level 0.74 }
-    track clank { play clank_c using clank level 0.32 }
-    track zap   { play zap_c using zap level 0.188 }
-    track murk  { play murk_dark using murk level 0.055 }
+    track bass { play bass_v3 using roll level 0.6162 }
+    track sub { play sub_drop using sub level 0.3003 }
+    track acid { play acid_c using squelch level 0.999 }
+    track clank { play clank_c using clank level 0.216 }
+    track zap { play zap_c using zap level 0.1598 }
+    track murk { play murk_dark using murk level 0.0715 }
 }
 
 # 8. Outro: the kick thins to half time, the acid dies into its own filter.
@@ -683,10 +683,10 @@ scene outro {
     auto drums level 0.52 > 0.15
     auto murk cutoff 0.151 > 0.04
     track drums { play beat_out using kit level 0.52 }
-    track acid  { play acid_ghost using squelch level 0.589 }
-    track murk  { play murk_dark using murk level 0.055 }
-    track zap   { play zap_a using zap level 0.125 }
-    track ghost { play ghost_hold using smear level 0.16 }
+    track acid { play acid_ghost using squelch level 0.7952 }
+    track murk { play murk_dark using murk level 0.0715 }
+    track zap { play zap_a using zap level 0.1062 }
+    track ghost { play ghost_hold using smear level 0.128 }
 }
 
 # ────────────────────────────────────────────────
