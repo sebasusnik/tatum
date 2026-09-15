@@ -378,7 +378,7 @@ pattern silence {
 # ────────────────────────────────────────────────
 
 bus drums
-drums { in > eq(low=2.0, mid=-1.0, high=2.0) > compressor(-14, ratio=3, attack=12, release=90, makeup=1.26) > saturate(0.25) > master }
+drums { in > eq(low=2.0, mid=-1.0, high=2.0) > compressor(-7, ratio=2, attack=25, release=130, makeup=1.4) > master }
 
 # The echo chamber the ghost chords fall into: quarter-note repeats, darkened,
 # swinging across the stereo field. It is what carries the breakdown.
@@ -413,24 +413,24 @@ track pad {
     using cloud
     pan 0.45
     velocity 0.95
-    level 0.1061
+    level 0.2759
     reverb_send 0.48
     delay_send 0.14
     sidechain 0.40
-    out > highpass(240, 0.02) > lowpass(1600, 0.02, lfo_bars=16, lfo_depth=800) > phaser(0.32, bars=8, stages=8, feedback=0.3) > autopan(0.30, bars=8) > master
+    out > highpass(130, 0.02) > lowpass(3400, 0.02, lfo_bars=16, lfo_depth=1500) > phaser(0.32, bars=8, stages=8, feedback=0.3) > autopan(0.30, bars=8) > master
 }
 
 track rhodes {
     play silence
     using rhodes
     velocity 0.9
-    level 0.26
+    level 0.676
     gate 0.70
     pan -0.38
     reverb_send 0.42
     delay_send 0.26
     sidechain 0.30
-    out > highpass(340, 0.02) > eq(low=-2.0, mid=0, high=0.5) > chorus(0.30) > master
+    out > highpass(300, 0.02) > eq(low=-1.0, mid=1.5, high=1.5) > chorus(0.30) > master
 }
 
 track ghost {
@@ -438,7 +438,7 @@ track ghost {
     using rhodes
     pan -0.32
     velocity 0.85
-    level 0.17
+    level 0.442
     reverb_send 0.40
     sidechain 0.0
     out > highpass(220, 0.02) > chorus(0.35) > tape
@@ -448,21 +448,21 @@ track glass {
     play silence
     using glass
     velocity 0.8
-    level 0.16
+    level 0.416
     gate 0.40
     pan -0.45
     reverb_send 0.52
     delay_send 0.34
     sidechain 0.35
     arp up rate=16 gate=0.35 octaves=2
-    out > highpass(700, 0.02) > lowpass(5khz, 0.02) > master
+    out > highpass(700, 0.02) > lowpass(7khz, 0.02) > master
 }
 
 track lead {
     play silence
     using lead
     velocity 0.85
-    level 0.22
+    level 0.572
     gate 0.80
     pan 0.28
     reverb_send 0.40
@@ -480,7 +480,7 @@ track air {
     reverb_send 0.55
     delay_send 0.16
     sidechain 0.35
-    out > highpass(900, 0.02) > lowpass(6khz, 0.02) > autopan(0.45, bars=16) > master
+    out > highpass(900, 0.02) > lowpass(8khz, 0.02) > autopan(0.45, bars=16) > master
 }
 
 # ────────────────────────────────────────────────
@@ -490,7 +490,7 @@ track air {
 master {
     in > eq(low=1.5, mid=-0.5, high=1.5)
        > tilt(0.0)
-       > compressor(-16, ratio=1.8, attack=30, release=170, makeup=2.35)
+       > compressor(-6, ratio=1.5, attack=45, release=220, makeup=1.35)
        > limiter(0.95)
        > out
 }
@@ -503,10 +503,10 @@ master {
 scene intro {
     reverb_mix = 0.55
     delay_mix = 0.25
-    auto cloud cutoff 0.10 > 0.24
+    auto cloud cutoff 0.24 > 0.52            # 600hz -> 2.2khz
     auto master tilt -0.25 > -0.05
     track pad { play voice_intro using cloud sidechain 0.0 velocity 0.85 pan 0.45 }
-    track air { play air_low    using air   sidechain 0.0 velocity 0.7 pan 0.4 }
+    track air { play air_low    using air   sidechain 0.0 velocity 0.4 pan 0.4 }
 }
 
 # LIFT — shakers and the sub arrive; still no kick.
@@ -568,10 +568,10 @@ scene breakdown {
     reverb_mix = 0.52
     delay_mix = 0.28
     auto reverb_freeze 0 > 1
-    auto cloud cutoff 0.30 > 0.46
+    auto cloud cutoff 0.40 > 0.58            # 1.3khz -> 3.6khz
     auto master tilt -0.30 > 0.0
     track pad { play voice_break using cloud sidechain 0.0 velocity 0.72 pan 0.45 }
-    track air { play air_high    using air   sidechain 0.0 velocity 0.62 pan 0.4 }
+    track air { play air_high    using air   sidechain 0.0 velocity 0.38 pan 0.4 }
     track ghost { play ghost_hold  using rhodes velocity 0.66 pan -0.32 }
     track lead { play lead_b      using lead  sidechain 0.0 velocity 0.55 pan 0.28 }
 }
