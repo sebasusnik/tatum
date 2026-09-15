@@ -133,7 +133,14 @@ impl Parser {
 
     /// A named argument's value, which may carry a unit (`cutoff=2khz`).
     fn named_arg_value(&mut self, kind: &str, name: &str) -> Option<f32> {
+        // A minus sign used to drop out of the unit path entirely.
+        let negative = matches!(self.peek(), Token::Rest)
+            && matches!(self.peek_ahead(1), Token::Quantity(_, _));
+        if negative {
+            self.advance();
+        }
         if let Token::Quantity(raw, suffix) = self.peek().clone() {
+            let raw = if negative { -raw } else { raw };
             let sp = self.span();
             let (l, c) = (sp.line, sp.col);
             self.advance();
@@ -1267,6 +1274,12 @@ impl Parser {
             return false;
         }
         matches!(self.tokens[i].token, Token::Ident(_)) && matches!(self.tokens[i + 1].token, Token::Colon)
+    }
+
+    /// The token `n` places ahead, without consuming anything.
+    fn peek_ahead(&self, n: usize) -> &Token {
+        let i = (self.pos + n).min(self.tokens.len().saturating_sub(1));
+        &self.tokens[i].token
     }
 
     fn peek_past_newlines(&self) -> &Token {

@@ -112,3 +112,28 @@ fn plain_numbers_still_work_everywhere() {
     assert!(dsl::parse(&song("    cutoff 0.4\n    resonance 0.8\n    attack 0.2\n")).is_ok());
     let _ = ModuleKind::Bass;
 }
+
+/// A minus sign used to drop out of the unit path: `makeup=6db` worked and
+/// `makeup=-6db` answered "this takes a plain number; units work on effect
+/// arguments", which is what it was.
+#[test]
+fn a_negative_quantity_keeps_its_unit() {
+    let src = song("    cutoff 0.4\n")
+        .replace("out > master", "out > compressor(-8, makeup=-6db) > eq(mid=-3db) > master");
+    let ast = dsl::parse(&src).unwrap_or_else(|e| panic!("{:?}", e));
+    let track = &ast.tracks[0];
+    let comp = track.routing.iter().find(|r| r.kind == "compressor").expect("compressor");
+    let makeup = comp.params.iter().find_map(|p| match p {
+        dsl::ast::Param::Named(n, v) if n == "makeup" => Some(*v),
+        _ => None,
+    }).expect("makeup");
+    // -6 dB is a gain of one half.
+    assert!((makeup - 0.5).abs() < 0.01, "-6db became {}", makeup);
+
+    let eq = track.routing.iter().find(|r| r.kind == "eq").expect("eq");
+    let mid = eq.params.iter().find_map(|p| match p {
+        dsl::ast::Param::Named(n, v) if n == "mid" => Some(*v),
+        _ => None,
+    }).expect("mid");
+    assert!((mid + 3.0).abs() < 0.01, "an eq band is already in dB, so -3db is -3: got {}", mid);
+}
