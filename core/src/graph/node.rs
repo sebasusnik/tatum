@@ -524,6 +524,11 @@ impl NodeKind {
             // Explicit, because the dual-mono fallback would step the capture's
             // read position twice per stereo sample.
             NodeKind::Capture(c) => c.process_stereo(l, r),
+            // Same reason, and it matters more here: calling a delay line twice
+            // per stereo sample double-clocks it and runs both channels through
+            // one state. A bus reverb came out as wind and rain.
+            NodeKind::Delay(d) => d.process_stereo(l, r),
+            NodeKind::Reverb(rv) => rv.process_stereo_in(l, r),
             NodeKind::Vowel(v) => v.process_stereo(l, r),
             NodeKind::AutoPan { lfo, depth, .. } => {
                 // Equal-power pan driven by the LFO: p in -1..1

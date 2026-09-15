@@ -73,7 +73,7 @@ module keys cloud {
     detune 0.42
     chorus_mix 0.55
     cutoff 0.2457           # 620 Hz
-    resonance 0.16
+    resonance 4%
     attack 0.9328           # 1.2 s, no transient
     decay 0.8949            # 900 ms
     sustain 0.86
@@ -241,6 +241,24 @@ pattern brk_thin {
 # F minor. Fm9 / Dbmaj9 / Bbm11 / Eb11 — every one of them diatonic,
 # every one of them an extension, nothing that resolves too hard.
 
+# Sparse: one chord, then thirty-two beats of nothing so the reverb can
+# bloom and decay. Feeding it continuously gives a wash, not a tail.
+pattern voice_intro_bloom {
+    Fm9:0.62  ..*31  -*32
+}
+
+pattern voice_a_bloom {
+    Fm9:0.62  ..*31  -*32
+}
+
+pattern voice_b_bloom {
+    Abmaj9:0.62  ..*31  -*32
+}
+
+pattern voice_break_bloom {
+    Bbm11:0.62  ..*31  -*32
+}
+
 pattern voice_intro {
     Fm9:0.52     ..*63
     Dbmaj9:0.52  ..*63
@@ -387,8 +405,8 @@ drums { in > eq(low=2.0, mid=-1.0, high=2.0) > compressor(-7, ratio=2, attack=25
 # velocidad: la parte de "resamplear" de la receta. Lo que suena aca no tiene
 # transitorios, por eso deja de ser un instrumento y pasa a ser atmosfera.
 bus haze
-haze { in > reverb(0.95)
-          > capture(4, start=8, speed=0.5)
+haze { in > reverb(0.78)
+          > capture(4, start=8, speed=0.75)
           > highpass(300hz, 0.02)
           > lowpass(2.6khz, 0.02, lfo_bars=16, lfo_depth=1100)
           > autopan(0.45, bars=16)
@@ -527,11 +545,12 @@ master {
 scene intro {
     reverb_mix = 0.55
     delay_mix = 0.25
-    auto cloud cutoff 0.24 > 0.52            # 600hz -> 2.2khz
+    auto cloud cutoff 0.32 > 0.62            # 850hz -> 4.3khz
     auto master tilt -0.25 > -0.05
+    track sub { play sub_hold using sub sidechain 0.0 velocity 0.5 level 0.11 }
     track pad { play voice_intro using cloud sidechain 0.0 velocity 0.85 pan 0.45 }
-    track haze { play voice_intro using cloud velocity 0.85 }
-    track air { play air_low    using air   sidechain 0.0 velocity 0.4 pan 0.4 }
+    track haze { play voice_intro_bloom using cloud velocity 0.45 }
+    track air { play air_low    using air   sidechain 0.0 velocity 0.22 pan 0.4 }
 }
 
 # LIFT — shakers and the sub arrive; still no kick.
@@ -541,7 +560,7 @@ scene lift {
     auto cloud cutoff 0.24 > 0.32
     track drums  { play brk_air    using brk  level 0.62 }
     track pad { play voice_intro using cloud velocity 0.9 pan 0.45 }
-    track haze { play voice_intro using cloud velocity 0.9 }
+    track haze { play voice_intro_bloom using cloud velocity 0.9 }
     track air { play air_low    using air pan 0.4 }
     track sub    { play sub_hold   using sub  velocity 0.85 }
     track rhodes { play rhodes_a   using rhodes velocity 0.7 pan -0.38 }
@@ -556,7 +575,7 @@ scene build {
     auto master tilt -0.12 > 0.0
     track drums  { play brk_build using brk level 0.64 }
     track pad { play voice_a   using cloud pan 0.45 }
-    track haze { play voice_a using cloud }
+    track haze { play voice_a_bloom using cloud }
     track air { play air_low   using air pan 0.4 }
     track sub    { play sub_a     using sub velocity 0.80 }
     track rhodes { play rhodes_a  using rhodes pan -0.38 }
@@ -570,7 +589,7 @@ scene drop_a {
     track drums  { play brk_main using brk level 0.80 }
     track sub    { play sub_a    using sub }
     track pad { play voice_a  using cloud pan 0.45 }
-    track haze { play voice_a using cloud }
+    track haze { play voice_a_bloom using cloud }
     track rhodes { play rhodes_a using rhodes pan -0.38 }
     track glass { play glass_a  using glass pan -0.45 }
     track air { play air_high using air pan 0.4 }
@@ -585,7 +604,7 @@ scene drop_b {
     track drums  { play brk_var   using brk level 0.80 }
     track sub    { play sub_b     using sub }
     track pad { play voice_b   using cloud pan 0.45 }
-    track haze { play voice_b using cloud }
+    track haze { play voice_b_bloom using cloud }
     track rhodes { play rhodes_b  using rhodes pan -0.38 }
     track lead { play lead_a    using lead pan 0.28 }
     track ghost { play ghost_hold using rhodes velocity 0.55 pan -0.32 }
@@ -600,7 +619,7 @@ scene breakdown {
     auto cloud cutoff 0.40 > 0.58            # 1.3khz -> 3.6khz
     auto master tilt -0.30 > 0.0
     track pad { play voice_break using cloud sidechain 0.0 velocity 0.72 pan 0.45 }
-    track haze { play voice_break using cloud velocity 0.72 }
+    track haze { play voice_break_bloom using cloud velocity 0.72 }
     track air { play air_high    using air   sidechain 0.0 velocity 0.38 pan 0.4 }
     track ghost { play ghost_hold  using rhodes velocity 0.66 pan -0.32 }
     track lead { play lead_b      using lead  sidechain 0.0 velocity 0.55 pan 0.28 }
@@ -615,7 +634,7 @@ scene drop_c {
     track drums  { play brk_peak using brk level 1.0 }
     track sub    { play sub_a    using sub }
     track pad { play voice_a  using cloud pan 0.45 }
-    track haze { play voice_a using cloud }
+    track haze { play voice_a_bloom using cloud }
     track rhodes { play rhodes_a using rhodes velocity 1.0 pan -0.38 }
     track glass { play glass_b  using glass velocity 0.95 pan -0.45 }
     track lead { play lead_b   using lead velocity 0.95 pan 0.28 }
@@ -632,7 +651,7 @@ scene outro {
     track drums  { play brk_thin  using brk }
     track sub    { play sub_hold  using sub velocity 0.8 }
     track pad { play voice_a   using cloud pan 0.45 }
-    track haze { play voice_a using cloud }
+    track haze { play voice_a_bloom using cloud }
     track air { play air_low   using air pan 0.4 }
     track rhodes { play rhodes_a  using rhodes velocity 0.7 pan -0.38 }
 }
