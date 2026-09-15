@@ -283,9 +283,11 @@ impl ParamSpec {
     /// otherwise lands inside the valid range and goes unnoticed.
     pub fn value_from_quantity(&self, value: f32, suffix: &str) -> Result<f32, String> {
         match suffix {
+            // A percentage is a percentage of unity, which reads the same on a
+            // 0..1 knob and on a gain: `kick_level 100%` is 1.0 either way.
             "%" => match self.range {
-                Range::Unit | Range::Bipolar => Ok(value / 100.0),
-                _ => Err(self.unit_help(suffix)),
+                Range::Unit | Range::Bipolar | Range::Gain { .. } => Ok(value / 100.0),
+                Range::Choice(_) => Err(self.unit_help(suffix)),
             },
             "db" => match self.range {
                 Range::Gain { .. } => Ok(crate::math::pow(10.0, value / 20.0)),
@@ -318,7 +320,10 @@ impl ParamSpec {
         }
         match self.range {
             Range::Unit | Range::Bipolar => accepted.push(String::from("a percentage like 80%")),
-            Range::Gain { .. } => accepted.push(String::from("decibels like 6db")),
+            Range::Gain { .. } => {
+                accepted.push(String::from("decibels like 6db"));
+                accepted.push(String::from("a percentage of unity like 80%"));
+            }
             Range::Choice(_) => {}
         }
         accepted.push(alloc::format!("a plain number ({})", self.range.describe()));
@@ -496,7 +501,7 @@ pub const KEYS_PARAMS: &[ParamSpec] = &[
 
 pub const BEATS_PARAMS: &[ParamSpec] = &[
     spec!("level", ParamId::Beats(BeatsParam::Level), Range::Gain { max: 2.0 }, 1.0, "Module output gain"),
-    spec!("kick_level", ParamId::Beats(BeatsParam::KickLevel), Range::Unit, 1.0, "Kick level"),
+    spec!("kick_level", ParamId::Beats(BeatsParam::KickLevel), Range::Gain { max: 2.0 }, 1.0, "Kick level"),
     spec!("kick_decay", ParamId::Beats(BeatsParam::KickDecay), Range::Unit, 0.222222, "Kick amp decay, tight..long"),
     spec!("kick_pitch", ParamId::Beats(BeatsParam::KickPitch), Range::Unit, 0.333333, DRUM_PITCH, "Kick pitch multiplier 0.5..2.0"),
     spec!("kick_click", ParamId::Beats(BeatsParam::KickClick), Range::Unit, 0.7, "Noise transient at kick onset"),
@@ -508,11 +513,11 @@ pub const BEATS_PARAMS: &[ParamSpec] = &[
     spec!("snare_drive", ParamId::Beats(BeatsParam::SnareDrive), Range::Unit, 0.3125, "Snare saturation, clean..gritty"),
     spec!("snare_snap", ParamId::Beats(BeatsParam::SnareSnap), Range::Unit, 0.4, "Snare noise crack intensity"),
     spec!("snare_pan", ParamId::Beats(BeatsParam::SnarePan), Range::Bipolar, -0.1, "Snare stereo position"),
-    spec!("hihat_level", ParamId::Beats(BeatsParam::HihatLevel), Range::Unit, 1.0, "Hi-hat level"),
+    spec!("hihat_level", ParamId::Beats(BeatsParam::HihatLevel), Range::Gain { max: 2.0 }, 1.0, "Hi-hat level"),
     spec!("hihat_decay", ParamId::Beats(BeatsParam::HihatDecay), Range::Unit, 0.625, "Closed hat decay, tight..ringy"),
     spec!("hihat_pitch", ParamId::Beats(BeatsParam::HihatPitch), Range::Unit, 0.333333, DRUM_PITCH, "Hat pitch multiplier 0.5..2.0"),
     spec!("hihat_pan", ParamId::Beats(BeatsParam::HihatPan), Range::Bipolar, 0.3, "Hat stereo position"),
-    spec!("clap_level", ParamId::Beats(BeatsParam::ClapLevel), Range::Unit, 1.0, "Clap level"),
+    spec!("clap_level", ParamId::Beats(BeatsParam::ClapLevel), Range::Gain { max: 2.0 }, 1.0, "Clap level"),
     spec!("clap_pan", ParamId::Beats(BeatsParam::ClapPan), Range::Bipolar, 0.15, "Clap stereo position"),
     spec!("tom_pan", ParamId::Beats(BeatsParam::TomPan), Range::Bipolar, 0.0, "Tom stereo position"),
     spec!("crash_pan", ParamId::Beats(BeatsParam::CrashPan), Range::Bipolar, -0.2, "Crash stereo position"),

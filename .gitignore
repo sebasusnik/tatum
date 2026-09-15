@@ -16,3 +16,7 @@ examples/*.wav
 
 # Dogfood renders
 dogfood/*.wav
+
+# Renders and DSP probes are artifacts, not source.
+test_output/
+core/test_output/

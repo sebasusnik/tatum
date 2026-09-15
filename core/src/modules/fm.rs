@@ -193,6 +193,9 @@ pub struct FmModule {
     chorus_mix: f32,
     // Pitch bend (set by engine)
     pub pitch_bend_ratio: f32,
+    /// One-pole DC blocker state; see the comment in `process_block`.
+    dc_x1: f32,
+    dc_y1: f32,
     // Vibrato
     vibrato_phase: f32,
     vibrato_rate: f32,
@@ -214,6 +217,8 @@ impl FmModule {
             chorus: Chorus::new(),
             chorus_mix: 0.0,
             pitch_bend_ratio: 1.0,
+            dc_x1: 0.0,
+            dc_y1: 0.0,
             vibrato_phase: 0.0,
             vibrato_rate: 5.0,
             vibrato_depth: 0.0,
@@ -499,7 +504,18 @@ impl Module for FmModule {
                 sum = self.chorus.process(sum);
             }
 
-            *sample = sum;
+            // The rectified operator waveforms are rectifiers, so they carry a
+            // DC offset by construction: measured at 32% of peak on half_sine,
+            // 64% on abs_sine and 15% on quarter_sine. It eats headroom, it
+            // sums across every track that uses one, and it made a C4 note read
+            // as 74% sub in the band report -- there was no sub, it was the
+            // offset. A 5 Hz blocker takes it out below anything audible.
+            const DC_R: f32 = 0.99929;
+            let blocked = sum - self.dc_x1 + DC_R * self.dc_y1;
+            self.dc_x1 = sum;
+            self.dc_y1 = blocked;
+
+            *sample = blocked;
         }
     }
 
@@ -529,6 +545,8 @@ impl Module for FmModule {
         self.voice_counter = 0;
         self.lfo_router.reset();
         self.chorus.reset();
+        self.dc_x1 = 0.0;
+        self.dc_y1 = 0.0;
         self.pitch_bend_ratio = 1.0;
         self.vibrato_phase = 0.0;
         self.vibrato_onset = 0.0;

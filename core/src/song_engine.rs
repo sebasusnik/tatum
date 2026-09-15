@@ -8,7 +8,7 @@ use crate::dsl::compiler::{self, *};
 use crate::dsl::error::{ParseError, CompileError};
 use crate::effects::delay::{Delay, DelaySync};
 use crate::effects::reverb::Reverb;
-use crate::graph::node::{NodeKind, NodeSpec, MAX_NODE_INPUTS};
+use crate::graph::node::{NodeKind, NodeSpec};
 use crate::graph::voice::Instrument;
 use crate::modules::bass::{BassModule, BassParam};
 use crate::modules::beats::BeatsModule;
@@ -171,17 +171,6 @@ impl FxChain {
         Self { nodes }
     }
 
-    #[inline]
-    fn process(&mut self, input: f32) -> f32 {
-        let mut val = input;
-        let inputs_buf = [0.0f32; MAX_NODE_INPUTS];
-        for node in self.nodes.iter_mut() {
-            let mut inp = inputs_buf;
-            inp[0] = val;
-            val = node.process(&inp, 1);
-        }
-        val
-    }
 
     /// Process a stereo pair through the chain (for master bus).
     #[inline]
@@ -286,7 +275,11 @@ fn make_arp(cfg: &ArpConfig, tempo: f32) -> ArpProcessor {
 struct SongBus {
     name: String,
     fx_chain: FxChain,
+    /// Stereo. A bus used to sum L and R and return the result down the middle,
+    /// so any track routed into one lost its position in the stereo field --
+    /// which is most of what tells instruments apart.
     buffer: [f32; BLOCK_SIZE],
+    buffer_r: [f32; BLOCK_SIZE],
     // Metered after the bus chain: a track can read fine on its own meter and
     // still arrive at master 12 dB down because of what the bus does to it.
     meter_peak: f32,
@@ -300,6 +293,7 @@ impl SongBus {
             name,
             fx_chain: FxChain::new(specs),
             buffer: [0.0; BLOCK_SIZE],
+            buffer_r: [0.0; BLOCK_SIZE],
             meter_peak: 0.0,
             meter_sum_sq: 0.0,
             meter_samples: 0,
@@ -309,6 +303,7 @@ impl SongBus {
     fn clear(&mut self, len: usize) {
         for i in 0..len {
             self.buffer[i] = 0.0;
+            self.buffer_r[i] = 0.0;
         }
     }
 
@@ -1391,7 +1386,8 @@ impl SongEngine {
                 // Bus send (mono sum to bus)
                 if let Some((bus_idx, amount)) = self.tracks[ti].bus_send {
                     if bus_idx < self.buses.len() {
-                        self.buses[bus_idx].buffer[s] += (sample_l + sample_r) * 0.5 * amount;
+                        self.buses[bus_idx].buffer[s] += sample_l * amount;
+                        self.buses[bus_idx].buffer_r[s] += sample_r * amount;
                     }
                 }
 
@@ -1416,12 +1412,12 @@ impl SongEngine {
         // Process bus FX chains and mix into master
         for bus in self.buses.iter_mut() {
             for s in 0..len {
-                if bus.buffer[s] != 0.0 {
-                    let processed = bus.fx_chain.process(bus.buffer[s]);
-                    bus.meter_peak = bus.meter_peak.max(math::abs(processed));
-                    bus.meter_sum_sq += (processed * processed) as f64;
-                    output_l[s] += processed;
-                    output_r[s] += processed;
+                if bus.buffer[s] != 0.0 || bus.buffer_r[s] != 0.0 {
+                    let (pl, pr) = bus.fx_chain.process_stereo(bus.buffer[s], bus.buffer_r[s]);
+                    bus.meter_peak = bus.meter_peak.max(math::abs(pl)).max(math::abs(pr));
+                    bus.meter_sum_sq += ((pl * pl + pr * pr) * 0.5) as f64;
+                    output_l[s] += pl;
+                    output_r[s] += pr;
                 }
                 bus.meter_samples += 1;
             }
@@ -1550,6 +1546,20 @@ impl SongEngine {
     }
 
     fn advance_step(&mut self) {
+        // Cross the bar line before triggering, when the step about to fire is
+        // the first of a bar. It used to be counted after the last step of the
+        // previous bar fired, so `current_bar` read one sixteenth early: scene
+        // changes killed the note the last step had just started, every
+        // arranged render stopped a sixteenth short, and a hot-swap keyed on
+        // the bar counter landed a sixteenth before the downbeat.
+        if self.steps_per_bar > 0 {
+            let bar_of_step = self.global_step / self.steps_per_bar;
+            if bar_of_step > self.current_bar {
+                self.current_bar = bar_of_step;
+                self.check_arrangement_advance();
+                if !self.running { return; }
+            }
+        }
         self.scene_step += 1;
 
         let track_count = self.tracks.len();
@@ -1807,12 +1817,6 @@ impl SongEngine {
         }
 
         self.global_step += 1;
-
-        // Bar boundary check for arrangement
-        if self.steps_per_bar > 0 && self.global_step % self.steps_per_bar == 0 {
-            self.current_bar += 1;
-            self.check_arrangement_advance();
-        }
     }
 
     /// Step handler for arp tracks: update the held notes, (re)start the arp,

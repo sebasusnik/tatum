@@ -9,6 +9,7 @@
 //! These are the assertions that would have caught them, applied to every voice.
 
 
+use synth_core::params::{self, ModuleKind};
 use synth_core::song_engine::SongEngine;
 use synth_core::SAMPLE_RATE;
 
@@ -106,6 +107,46 @@ fn no_voice_leaves_a_dc_offset() {
         let p = peak(&x).max(1e-9);
         assert!((mean.abs() as f32) < p * 0.01, "{}: DC offset {:.6} against a peak of {:.3}", kind, mean, p);
     }
+}
+
+/// The DC test above only ever saw each module's default settings, which is how
+/// the FM rectified waveforms shipped: `abs_sine` is `|sin(x)|`, a rectifier, so
+/// it carries a DC offset of 64% of its peak by construction. A C4 note read as
+/// 74% sub in the band report -- there was no sub, it was the offset. Sweeping
+/// every option of every choice parameter is what catches that shape.
+#[test]
+fn no_choice_of_any_parameter_introduces_a_dc_offset() {
+    use synth_core::params::Range;
+    let mut offenders = Vec::new();
+    for kind in ModuleKind::ALL {
+        if kind == ModuleKind::Beats { continue; } // drums are one-shots, tested above
+        for spec in params::specs(kind) {
+            let Range::Choice(names) = spec.range else { continue };
+            for name in names {
+                let body = format!("    {} {}\n", spec.name, name);
+                let src = format!(
+                    "tempo 120\nscale C major\n\nmodule {k} m {{\n{body}}}\n\n                     pattern p {{ 1.4:0.9 ..*15 }}\n                     track t {{ play p using m out > master }}\n                     master {{ in > out }}\n                     scene a {{ track t {{ play p using m }} }}\narrange {{ a x1 }}\n",
+                    k = kind.as_str(), body = body
+                );
+                let x = render(&src);
+                let p = peak(&x);
+                if p < 1e-6 { continue; }
+                let mean = x.iter().map(|v| *v as f64).sum::<f64>() / x.len() as f64;
+                let share = (mean.abs() as f32) / p;
+                if share > 0.02 {
+                    offenders.push(format!(
+                        "{}.{} = {}: DC is {:.0}% of peak",
+                        kind.as_str(), spec.name, name, share * 100.0
+                    ));
+                }
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "{} settings leave a DC offset:\n  {}",
+        offenders.len(), offenders.join("\n  ")
+    );
 }
 
 #[test]

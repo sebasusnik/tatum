@@ -114,7 +114,7 @@ module fm psyche {
 module keys void {
     voice_mode poly
     cutoff 0.05
-    resonance 0.30
+    resonance 8%
     detune 0.12
     chorus_mix 0.0
     attack 1.0
@@ -147,6 +147,10 @@ module fm air {
     algorithm pair_plus_two
     mod_index 1.0
     feedback 1.0
+    lfo_target mod_index
+    lfo_waveform triangle
+    lfo_sync bars_8
+    lfo_depth 22%
     waveform abs_sine
     op0_ratio 0.47
     op1_ratio 0.13
@@ -246,10 +250,10 @@ module fm siren {
 
 # Kit — punishing kick, industrial clap
 module beats psy_kit {
-    kick_level 1.0
+    kick_level 0.9
     kick_click 0.70
     kick_decay 0.10
-    kick_pitch 0.25
+    kick_pitch 0.46
     kick_drive 0.70
 
     snare_level 0.40
@@ -259,10 +263,10 @@ module beats psy_kit {
     snare_snap 0.15
     snare_pan 0.0
 
-    hihat_level 0.48
-    hihat_pitch 0.60
+    hihat_level 1.6
+    hihat_pitch 0.70
     hihat_pan 0.22
-    hihat_decay 0.04
+    hihat_decay 0.22
 
     clap_level 0.70
     clap_pan 0.0
@@ -277,30 +281,30 @@ module beats psy_kit {
 # Minimal — just kick and offbeat hat
 pattern beat_minimal {
     kick:    X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -
-    hat:     -  -  x:0.35  -  -  -  x:0.35  -  -  -  x:0.35  -  -  -  x:0.35  -
+    hat:     -  -  x:0.59  -  -  -  x:0.59  -  -  -  x:0.59  -  -  -  x:0.59  -
 }
 
 # Open hat variation — more movement
 pattern beat_open {
     kick:    X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -
-    hat:     x:0.30  -  x:0.45  -  x:0.30  -  x:0.45  -  x:0.30  -  x:0.45  -  x:0.30  -  x:0.45  -
-    openhat: -  -  -  -  -  -  -  x:0.25  -  -  -  -  -  -  -  x:0.25
+    hat:     x:0.51  -  x:0.77  -  x:0.51  -  x:0.77  -  x:0.51  -  x:0.77  -  x:0.51  -  x:0.77  -
+    openhat: -  -  -  -  -  -  -  x:0.42  -  -  -  -  -  -  -  x:0.42
 }
 
 # Driving — 8th hats, clap on 2 and 4
 pattern beat_drive {
     kick:    X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -
     clap:    -  -  -  -  X  -  -  -  -  -  -  -  X  -  -  -
-    hat:     x:0.40  x:0.22  x:0.40  x:0.22  x:0.40  x:0.22  x:0.40  x:0.22  x:0.40  x:0.22  x:0.40  x:0.22  x:0.40  x:0.22  x:0.40  x:0.22
-    openhat: -  -  -  -  -  -  -  x:0.28  -  -  -  -  -  -  -  x:0.28
+    hat:     x:0.68  x:0.37  x:0.68  x:0.37  x:0.68  x:0.37  x:0.68  x:0.37  x:0.68  x:0.37  x:0.68  x:0.37  x:0.68  x:0.37  x:0.68  x:0.37
+    openhat: -  -  -  -  -  -  -  x:0.48  -  -  -  -  -  -  -  x:0.48
 }
 
 # Syncopated — ghost hat accents, more groove
 pattern beat_groove {
     kick:    X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -
     clap:    -  -  -  -  X  -  -  -  -  -  -  -  X  -  -  -
-    hat:     x:0.40  x:0.20  x:0.45  x:0.30  -  x:0.35  x:0.20  x:0.40  x:0.40  x:0.20  x:0.45  x:0.30  -  x:0.35  x:0.20  x:0.40
-    openhat: -  -  -  -  -  -  x:0.30  -  -  -  -  -  -  -  x:0.30  -
+    hat:     x:0.68  x:0.34  x:0.77  x:0.51  -  x:0.59  x:0.34  x:0.68  x:0.68  x:0.34  x:0.77  x:0.51  -  x:0.59  x:0.34  x:0.68
+    openhat: -  -  -  -  -  -  x:0.51  -  -  -  -  -  -  -  x:0.51  -
 }
 
 # Peak energy — full pattern, ghost snares
@@ -308,14 +312,14 @@ pattern beat_peak {
     kick:    X  -  -  -  X  -  -  -  X  -  -  -  X  -  -  -
     clap:    -  -  -  -  X  -  -  -  -  -  -  -  X  -  -  -
     snare:   -  -  -  x:0.20  -  -  -  x:0.22  -  -  x:0.18  -  -  -  -  x:0.25
-    hat:     x:0.42  x:0.25  x:0.48  x:0.25  x:0.42  x:0.25  x:0.48  x:0.25  x:0.42  x:0.25  x:0.48  x:0.25  x:0.42  x:0.25  x:0.48  x:0.25
-    openhat: -  -  -  -  -  -  x:0.30  -  -  -  -  -  -  -  x:0.30  -
+    hat:     x:0.71  x:0.42  x:0.82  x:0.42  x:0.71  x:0.42  x:0.82  x:0.42  x:0.71  x:0.42  x:0.82  x:0.42  x:0.71  x:0.42  x:0.82  x:0.42
+    openhat: -  -  -  -  -  -  x:0.51  -  -  -  -  -  -  -  x:0.51  -
 }
 
 # Build — accelerating kicks
 pattern beat_build {
     kick:    X  -  -  -  X  -  -  -  X  -  X  -  X  -  X  -
-    hat:     x:0.35  x:0.25  x:0.35  x:0.25  x:0.35  x:0.25  x:0.35  x:0.25  x:0.35  x:0.25  x:0.35  x:0.25  x:0.35  x:0.25  x:0.35  x:0.25
+    hat:     x:0.59  x:0.42  x:0.59  x:0.42  x:0.59  x:0.42  x:0.59  x:0.42  x:0.59  x:0.42  x:0.59  x:0.42  x:0.59  x:0.42  x:0.59  x:0.42
 }
 
 # Sparse — tension
@@ -366,12 +370,6 @@ pattern bass_stutter {
 }
 
 # Half-time — for breakdowns, breathe
-pattern bass_half {
-    1.1:0.75  ..  -  -
-    -         -   ..  -
-    1.1:0.70  ..  -  -
-    -         -   -  -
-}
 
 # ── Acid lead ──
 
@@ -392,12 +390,6 @@ pattern acid_riff {
 }
 
 # Hypnotic — repeated root, filter does the work
-pattern acid_hypno {
-    1.2:0.72  ..  1.2:0.48  -
-    1.2:0.65  ..  -         -
-    1.2:0.72  ..  1.2:0.48  -
-    1.2:0.62  ..  -         -
-}
 
 # ── Sub ──
 
@@ -596,13 +588,13 @@ pattern siren_stab {
 pattern beat_tribal {
     kick:    X  -  -  -  -  -  X  -  -  -  X  -  -  -  -  -
     clap:    -  -  -  -  -  -  -  -  -  -  -  -  X  -  -  -
-    hat:     -  x:0.25  -  x:0.20  -  x:0.25  -  x:0.20  -  x:0.25  -  x:0.20  -  x:0.25  -  x:0.20
+    hat:     -  x:0.42  -  x:0.34  -  x:0.42  -  x:0.34  -  x:0.42  -  x:0.34  -  x:0.42  -  x:0.34
 }
 
 pattern beat_glitch {
     kick:    X  -  -  x:0.5  -  -  X  -  X  -  -  -  X  -  x:0.4  -
     clap:    -  -  -  -      X  -  -  -  -  -  -  -  X  -  -       -
-    hat:     x:0.45  x:0.20  -  x:0.30  -  x:0.40  x:0.20  -  x:0.45  x:0.20  -  x:0.30  -  x:0.40  x:0.20  x:0.35
+    hat:     x:0.77  x:0.34  -  x:0.51  -  x:0.68  x:0.34  -  x:0.77  x:0.34  -  x:0.51  -  x:0.68  x:0.34  x:0.59
     snare:   -  -  -  -  -  x:0.18  -  -  -  x:0.15  -  -  -  -  x:0.18  -
 }
 
@@ -682,8 +674,8 @@ track drums {
     play silence
     using psy_kit
     velocity 1.0
-    level 0.75
-    out > saturate(0.18) > eq(low=1.4, mid=1.1, high=0.90) > compressor(-8, ratio=4, attack=1, release=15, makeup=1) > master
+    level 0.69
+    out > saturate(0.18) > eq(low=1.0, mid=0.5, high=2.6) > compressor(-8, ratio=4, attack=1, release=15, makeup=1) > master
 }
 
 # Bass — distorted, aggressive, tight gate
@@ -702,9 +694,9 @@ track acid {
     play silence
     using acid_lead
     velocity 1.0
-    level 0.30
+    level 0.48
     gate 0.45
-    pan 0.15
+    pan 0.18
     delay_send 0.10
     reverb_send 0.05
     out > saturate(0.18) > eq(low=0.6, mid=1.2, high=1.1) > master
@@ -738,8 +730,9 @@ track alien {
 track stab {
     play silence
     using psy_stab
+    pan 0.32
     velocity 1.0
-    level 0.22
+    level 0.352
     gate 0.10
     delay_send 0.15
     reverb_send 0.05
@@ -751,7 +744,7 @@ track psyche {
     play silence
     using psyche
     velocity 1.0
-    level 0.12
+    level 0.192
     pan 0.34
     delay_send 0.18
     reverb_send 0.30
@@ -762,8 +755,9 @@ track psyche {
 track void {
     play silence
     using void
+    pan -0.3
     velocity 1.0
-    level 0.14
+    level 0.224
     reverb_send 0.30
     out > lowpass(400) > master
 }
@@ -785,7 +779,7 @@ track shimmer {
     play silence
     using shimmer
     velocity 1.0
-    level 0.04619
+    level 0.0739
     pan -0.50
     reverb_send 0.35
     delay_send 0.12
@@ -822,7 +816,7 @@ track siren {
     play silence
     using siren
     velocity 1.0
-    level 0.14
+    level 0.224
     pan -0.38
     delay_send 0.15
     reverb_send 0.12
@@ -859,8 +853,8 @@ master {
 
 # INTRO: void + shimmer, sparse kick — set the mood
 scene intro {
-    track drums   { play beat_sparse    using psy_kit }
-    track void    { play void_drone     using void }
+    track drums { play beat_sparse    using psy_kit }
+    track void { play void_drone     using void pan -0.3 }
     track shimmer { play shimmer_wash   using shimmer pan -0.50 }
     track psyche { play psyche_swirl   using psyche pan 0.34 }
     track sub     { play sub_hold       using sub }
@@ -868,53 +862,53 @@ scene intro {
 
 # BUILD 1: kick accelerates, siren rises, air escape
 scene build1 {
-    track drums   { play beat_build     using psy_kit }
+    track drums { play beat_build     using psy_kit }
     track bass    { play bass_stutter   using psy }
     track air     { play air_burst      using air }
     track siren { play siren_rise     using siren pan -0.38 }
-    track void    { play void_drone     using void }
+    track void { play void_drone     using void pan -0.3 }
     track psyche { play psyche_deep    using psyche pan 0.34 }
     track sub     { play sub_hold       using sub }
 }
 
 # DROP 1: minimal groove — just kick, bass roll, sub
 scene drop1 {
-    track drums   { play beat_minimal   using psy_kit }
+    track drums { play beat_minimal   using psy_kit }
     track bass    { play bass_roll      using psy }
     track sub     { play sub_pulse      using sub }
-    track void    { play void_dark      using void }
+    track void { play void_dark      using void pan -0.3 }
 }
 
 # DROP 2: open hats, metal hits enter
 scene drop2 {
-    track drums   { play beat_open      using psy_kit }
+    track drums { play beat_open      using psy_kit }
     track bass    { play bass_v1        using psy }
     track sub     { play sub_pulse      using sub }
-    track void    { play void_dark      using void }
+    track void { play void_dark      using void pan -0.3 }
     track metal   { play metal_hit      using metal }
     track shimmer { play shimmer_wash   using shimmer pan -0.50 }
 }
 
 # DROP 3: acid + stabs, insects buzzing
 scene drop3 {
-    track drums   { play beat_drive     using psy_kit }
+    track drums { play beat_drive     using psy_kit }
     track bass    { play bass_v2        using psy }
-    track acid    { play acid_intro     using acid_lead }
-    track stab    { play stab_offbeat   using psy_stab }
+    track acid { play acid_intro     using acid_lead pan 0.18 }
+    track stab { play stab_offbeat   using psy_stab pan 0.32 }
     track sub     { play sub_pulse      using sub }
-    track void    { play void_dark      using void }
+    track void { play void_dark      using void pan -0.3 }
     track insects { play insect_pulse   using insects }
 }
 
 # DROP 4: full acid, alien + metal, dialup chirps
 scene drop4 {
-    track drums   { play beat_groove    using psy_kit }
+    track drums { play beat_groove    using psy_kit }
     track bass    { play bass_v2        using psy }
-    track acid    { play acid_riff      using acid_lead }
+    track acid { play acid_riff      using acid_lead pan 0.18 }
     track alien   { play alien_sparse   using alien }
-    track stab    { play stab_offbeat   using psy_stab }
+    track stab { play stab_offbeat   using psy_stab pan 0.32 }
     track sub     { play sub_pulse      using sub }
-    track void    { play void_dark      using void }
+    track void { play void_dark      using void pan -0.3 }
     track psyche { play psyche_swirl   using psyche pan 0.34 }
     track metal   { play metal_stutter  using metal }
     track dialup { play dialup_scatter using dialup pan 0.45 }
@@ -922,12 +916,12 @@ scene drop4 {
 
 # PSYCHEDELIC BREAK: insects, siren, alien drift, dialup scatter
 scene psy_break {
-    track drums   { play beat_tribal    using psy_kit }
+    track drums { play beat_tribal    using psy_kit }
     track bass    { play bass_tribal    using psy }
     track insects { play insect_scatter using insects }
     track siren { play siren_wail     using siren pan -0.38 }
     track alien   { play alien_drift    using alien }
-    track void    { play void_drone     using void }
+    track void { play void_drone     using void pan -0.3 }
     track psyche { play psyche_deep    using psyche pan 0.34 }
     track sub     { play sub_hold       using sub }
     track dialup { play dialup_scatter using dialup pan 0.45 }
@@ -939,7 +933,7 @@ scene dark_interlude {
     track insects { play insect_swarm   using insects }
     track siren { play siren_stab     using siren pan -0.38 }
     track dialup { play dialup_glitch  using dialup pan 0.45 }
-    track void    { play void_dark      using void }
+    track void { play void_dark      using void pan -0.3 }
     track psyche { play psyche_deep    using psyche pan 0.34 }
     track air     { play air_short      using air }
     track sub     { play sub_hold       using sub }
@@ -947,25 +941,25 @@ scene dark_interlude {
 
 # BUILD 2: stutter + siren rising, air escape
 scene build2 {
-    track drums   { play beat_build     using psy_kit }
+    track drums { play beat_build     using psy_kit }
     track bass    { play bass_stutter   using psy }
     track air     { play air_burst      using air }
     track siren { play siren_rise     using siren pan -0.38 }
     track psyche { play psyche_deep    using psyche pan 0.34 }
     track shimmer { play shimmer_glow   using shimmer pan -0.50 }
-    track void    { play void_drone     using void }
+    track void { play void_drone     using void pan -0.3 }
     track sub     { play sub_hold       using sub }
 }
 
 # PEAK 1: full morph bass, dark acid, all noise layers + dialup
 scene peak1 {
-    track drums   { play beat_peak      using psy_kit }
+    track drums { play beat_peak      using psy_kit }
     track bass    { play bass_morph     using psy }
-    track acid    { play acid_dark      using acid_lead }
+    track acid { play acid_dark      using acid_lead pan 0.18 }
     track alien   { play alien_rhythm   using alien }
-    track stab    { play stab_wide      using psy_stab }
+    track stab { play stab_wide      using psy_stab pan 0.32 }
     track sub     { play sub_pulse      using sub }
-    track void    { play void_dark      using void }
+    track void { play void_dark      using void pan -0.3 }
     track psyche { play psyche_deep    using psyche pan 0.34 }
     track metal   { play metal_stutter  using metal }
     track insects { play insect_pulse   using insects }
@@ -974,13 +968,13 @@ scene peak1 {
 
 # PEAK 2: glitch drums, stutter acid, siren screams, dialup chaos
 scene peak2 {
-    track drums   { play beat_glitch    using psy_kit }
+    track drums { play beat_glitch    using psy_kit }
     track bass    { play bass_chaos     using psy }
-    track acid    { play acid_stutter   using acid_lead }
+    track acid { play acid_stutter   using acid_lead pan 0.18 }
     track alien   { play alien_rhythm   using alien }
-    track stab    { play stab_offbeat   using psy_stab }
+    track stab { play stab_offbeat   using psy_stab pan 0.32 }
     track sub     { play sub_pulse      using sub }
-    track void    { play void_dark      using void }
+    track void { play void_dark      using void pan -0.3 }
     track shimmer { play shimmer_wash   using shimmer pan -0.50 }
     track siren { play siren_wail     using siren pan -0.38 }
     track dialup { play dialup_glitch  using dialup pan 0.45 }
@@ -988,46 +982,46 @@ scene peak2 {
 
 # BREAK 2: deep psychedelia — alien + insects + siren
 scene break2 {
-    track drums   { play beat_sparse    using psy_kit }
+    track drums { play beat_sparse    using psy_kit }
     track alien   { play alien_drift    using alien }
     track insects { play insect_scatter using insects }
     track siren { play siren_wail     using siren pan -0.38 }
-    track void    { play void_dark      using void }
+    track void { play void_dark      using void pan -0.3 }
     track shimmer { play shimmer_glow   using shimmer pan -0.50 }
     track sub     { play sub_hold       using sub }
 }
 
 # TRIBAL SECTION: primal, hypnotic, building
 scene tribal {
-    track drums   { play beat_tribal    using psy_kit }
+    track drums { play beat_tribal    using psy_kit }
     track bass    { play bass_tribal    using psy }
-    track acid    { play acid_dark      using acid_lead }
+    track acid { play acid_dark      using acid_lead pan 0.18 }
     track metal   { play metal_hit      using metal }
     track sub     { play sub_pulse      using sub }
-    track void    { play void_dark      using void }
+    track void { play void_dark      using void pan -0.3 }
     track insects { play insect_pulse   using insects }
 }
 
 # FINAL BUILD: everything rising
 scene build3 {
-    track drums   { play beat_build     using psy_kit }
+    track drums { play beat_build     using psy_kit }
     track bass    { play bass_stutter   using psy }
-    track acid    { play acid_intro     using acid_lead }
+    track acid { play acid_intro     using acid_lead pan 0.18 }
     track air     { play air_burst      using air }
     track siren { play siren_rise     using siren pan -0.38 }
     track psyche { play psyche_deep    using psyche pan 0.34 }
     track metal   { play metal_stutter  using metal }
-    track void    { play void_drone     using void }
+    track void { play void_drone     using void pan -0.3 }
     track sub     { play sub_hold       using sub }
 }
 
 # FINAL PEAK: maximum chaos — everything at once
 scene peak_final {
-    track drums   { play beat_peak      using psy_kit }
+    track drums { play beat_peak      using psy_kit }
     track bass    { play bass_morph     using psy }
-    track acid    { play acid_stutter   using acid_lead }
+    track acid { play acid_stutter   using acid_lead pan 0.18 }
     track alien   { play alien_rhythm   using alien }
-    track stab    { play stab_wide      using psy_stab }
+    track stab { play stab_wide      using psy_stab pan 0.32 }
     track sub     { play sub_pulse      using sub }
     track psyche { play psyche_deep    using psyche pan 0.34 }
     track shimmer { play shimmer_wash   using shimmer pan -0.50 }
@@ -1039,8 +1033,8 @@ scene peak_final {
 
 # OUTRO: dissolving into noise, insects fade
 scene outro {
-    track drums   { play beat_sparse    using psy_kit }
-    track void    { play void_drone     using void }
+    track drums { play beat_sparse    using psy_kit }
+    track void { play void_drone     using void pan -0.3 }
     track insects { play insect_swarm   using insects }
     track psyche { play psyche_swirl   using psyche pan 0.34 }
     track sub     { play sub_hold       using sub }
