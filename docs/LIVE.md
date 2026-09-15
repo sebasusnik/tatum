@@ -294,3 +294,36 @@ esa es la medida de "se sostiene".
 
 Lo que dejo fuera a propósito: entrada MIDI, resampleo a 48 kHz, la Pi. Nada
 de eso cambia el diseño; todo depende de que el swap sea correcto primero.
+
+## Resultado (rama `live/session`)
+
+Los cinco pasos están hechos. Dos cosas cambiaron respecto del diseño de
+arriba, las dos por medición:
+
+- **El swap no parte el bloque en la muestra exacta: entra al inicio del
+  bloque en que cae el compás.** El motor dispara un step al inicio del bloque
+  donde cae (el loop del secuenciador corre antes de renderizar los
+  instrumentos), así que partir el bloque daba un resultado *más* preciso que
+  el render directo, y por eso no idéntico. El motor nuevo toma el bloque
+  entero con su reloj de steps alineado en fase al viejo, y arranca
+  posicionado *antes* de la línea de compás (`start_before_bar`) para cruzarla
+  él mismo: cambio de escena, fin del arreglo y progreso de las
+  automatizaciones caen en la misma muestra que en el render directo.
+- **La cola vieja se suma con fade-out; lo nuevo no hace fade-in.** Si todo
+  se hereda, el motor viejo queda sin nada y suma silencio, y el render es
+  idéntico bit a bit. Un crossfade tradicional habría hundido 12 ms de lo que
+  no cambió.
+
+Soak: `synth watch` cinco minutos con auriculares y un script que guardaba
+cada dos segundos (valores, patrones, cada tanto un guardado inválido):
+
+```
+played 304.9 s in 26262 callbacks of ~512 frames (11.61 ms each)
+worst callback 4.385 ms of 11.61 ms budget (38%), 0 late
+39 swaps, 61 instant edits, 28 rejected saves
+swap latency after save: mean 0.84 s, max 1.56 s (un compás a 120 BPM son 2 s)
+```
+
+Cero callbacks tarde, cero planes obsoletos, cero motores liberados en el hilo
+de audio. El peor callback es el del swap (dos motores en un bloque más el
+fade); en `play` sin ediciones el peor es 2.4 ms.

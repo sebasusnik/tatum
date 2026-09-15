@@ -1,3 +1,6 @@
+mod include;
+mod live;
+
 use std::fs;
 use std::process;
 
@@ -13,6 +16,8 @@ fn main() {
         "render" => cmd_render(&args[2..]),
         "check" => cmd_check(&args[2..]),
         "params" => cmd_params(&args[2..]),
+        "play" => live::cmd(&args[2..], false),
+        "watch" => live::cmd(&args[2..], true),
         "help" | "--help" | "-h" => print_usage(),
         other => {
             eprintln!("unknown command: {}", other);
@@ -29,11 +34,18 @@ USAGE:
     synth render <song.synth> [-o output.wav] [--bars N]
     synth check <song.synth>
     synth params [bass|fm|keys|beats|track|fx] [--json]
+    synth play <song.synth> [--device <name>]
+    synth watch <song.synth> [--device <name>]
 
 COMMANDS:
     render    Parse, compile, and render a .synth file to WAV
     check     Parse and validate a .synth file (no audio output)
     params    Print the module parameter reference (markdown, or JSON with --json)
+    play      Play a .synth file on the audio device until it ends or you type q
+    watch     Play, and re-evaluate the file every time it is saved: value edits
+              apply at once, anything else takes over on the next bar; a save
+              that does not compile is reported and the last good version keeps
+              playing. --list-devices shows the output devices.
     help      Show this help
 ");
 }
@@ -79,25 +91,25 @@ fn cmd_check(args: &[String]) {
     }
 
     let path = &args[0];
-    let source = match fs::read_to_string(path) {
+    let source = match include::Source::load(std::path::Path::new(path)) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("error: cannot read '{}': {}", path, e);
+            eprintln!("error: {}", e);
             process::exit(1);
         }
     };
+    if source.files.len() > 1 {
+        eprintln!("  {} files via `use`", source.files.len());
+    }
 
     // Parse
-    let ast = match synth_core::dsl::parse(&source) {
+    let ast = match synth_core::dsl::parse(&source.text) {
         Ok(ast) => {
             eprintln!("  parse OK");
             ast
         }
         Err(errs) => {
-            eprintln!("parse errors:");
-            for e in &errs {
-                eprintln!("  line {}: {}", e.line, e.message);
-            }
+            source.print_errors(&synth_core::song_engine::DslError::Parse(errs));
             process::exit(1);
         }
     };
@@ -128,10 +140,7 @@ fn cmd_check(args: &[String]) {
             }
         }
         Err(errs) => {
-            eprintln!("compile errors:");
-            for e in &errs {
-                eprintln!("  {}", e);
-            }
+            source.print_errors(&synth_core::song_engine::DslError::Compile(errs));
             process::exit(1);
         }
     }
@@ -171,20 +180,20 @@ fn cmd_render(args: &[String]) {
         i += 1;
     }
 
-    let source = match fs::read_to_string(path) {
+    let source = match include::Source::load(std::path::Path::new(path)) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("error: cannot read '{}': {}", path, e);
+            eprintln!("error: {}", e);
             process::exit(1);
         }
     };
 
     eprintln!("loading {}...", path);
 
-    let mut engine = match synth_core::song_engine::SongEngine::from_source(&source) {
+    let mut engine = match synth_core::song_engine::SongEngine::try_from_source(&source.text) {
         Ok(e) => e,
-        Err(msg) => {
-            eprintln!("{}", msg);
+        Err(err) => {
+            source.print_errors(&err);
             process::exit(1);
         }
     };

@@ -272,12 +272,39 @@ arrangement and its targets are validated: the module and parameter must exist.
 
 ## Livecoding semantics
 
-When the source is re-evaluated while playing:
+A song without `scene` and `arrange` is a live set: its tracks loop for as long as it
+plays. That is the file you edit while it sounds, and it can be a dozen lines when the
+rig lives elsewhere:
 
-- Parameter, level, pan, velocity, gate, tempo, swing and humanize edits apply instantly.
-- Deleting a parameter line restores the registry default instantly.
-- Any other edit (pattern notes, scenes, routing, arp, new modules) is a structural change:
-  the new song is compiled and swapped in at the next bar boundary with a short crossfade.
+```
+use "rig.synth"          # modules, buses, master and the global sends, tuned offline
+tempo 124
+pattern beat { kick: X - - - X - - - X - - - X - - - }
+pattern line { 1.1 - 1.3 - 1.5 - 1.3 - }
+track kick { play beat using kit out > drums }
+track bass { play line using low level 0.7 delay_send 0.3 out > master }
+```
+
+`use "file"` is replaced by that file, resolved relative to the one that contains it.
+The CLI resolves it before parsing (`check`, `render`, `play`, `watch`); errors point at
+the file and line they came from. Globals set later win, so a set that `use`s its rig
+first can override its `tempo` or `scale`. A missing file or a `use` cycle is an error.
+
+When the source is re-evaluated while playing (`synth watch`, or the browser):
+
+- The new text is always parsed and compiled first. A save that does not compile is
+  reported and the last good version keeps playing: what `check` rejects, the live
+  path rejects too.
+- Parameter, level, pan, velocity, gate, tempo, swing and humanize edits apply at once.
+  Deleting a parameter line restores the registry default at once.
+- Anything else (pattern notes, which pattern a track plays, routing, sends, arp, module
+  definitions, scenes) takes over on the next bar line. What did not change in the text
+  keeps its state: instruments keep their voices, the global reverb and delay keep their
+  tails, buses and master keep their chains, unchanged tracks keep their place in the
+  pattern and their held notes. Only what disappeared from the text fades out, over
+  12 ms. A swap to a song that sounds the same is sample-identical to not swapping.
+- Two saves inside one bar are fine: a value edit made while a swap is queued lands on
+  the engine that takes over.
 
 ## Recipes
 
