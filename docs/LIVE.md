@@ -1,8 +1,9 @@
 # synth-core como sinte portable con superficie de livecoding
 
 > Análisis independiente, 2026-09-15. Todo lo que afirma está medido en este
-> repo; los números salen de `core/tests/live_probe.rs` (sonda temporal, en
-> release) y de la CLI. Donde no medí, lo digo.
+> repo con una sonda temporal en release (reemplazada después por los tests
+> permanentes de `core/tests/bar_timing.rs` y `core/tests/live.rs`) y con la
+> CLI. Donde no medí, lo digo.
 
 ## Resumen en una pantalla
 
@@ -86,13 +87,14 @@ Tres consecuencias, todas silenciosas:
   mira `current_bar`. Cada edición estructural corría toda la canción 125 ms
   hacia adelante.
 
-El fix está en el árbol de trabajo (`advance_step` cruza la línea de compás
-antes de disparar, comparando `global_step / steps_per_bar` contra
+El fix está en la rama `live/session` (`advance_step` cruza la línea de
+compás antes de disparar, comparando `global_step / steps_per_bar` contra
 `current_bar` para que `start_from_bar` no cuente doble). La suite completa
-pasa con el fix: 214 tests más los 6 de la sonda, todos en verde. Los WAV de
-referencia en `core/test_output/probes/` cambian porque ahora tienen el
-último 16avo. Ningún test existente detectaba el problema, porque todos
-verifican que algo suene y no cuándo.
+pasa con el fix. Los WAV de referencia en `core/test_output/probes/` cambian
+porque ahora tienen el último 16avo. Ningún test existente detectaba el
+problema, porque todos verifican que algo suene y no cuándo; los cuatro de
+`core/tests/bar_timing.rs` verifican cuándo, y los cuatro fallan contra el
+motor anterior.
 
 ### El swap corta el bloque en el lugar equivocado
 
