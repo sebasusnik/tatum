@@ -1,0 +1,26 @@
+# live_set: the set that ran the five-minute `synth watch` soak (docs/LIVE.md).
+# No scenes, no arrange: it loops until you stop it. That is the file you edit
+# while it plays. Kick and hat, a bass line into the delay, a held minor chord
+# with both sends. During the soak a script kept moving it, and every version
+# of it sounded right: kick level 0.3..0.7, bass cutoff 0.2..0.7, pad
+# reverb_send 0.4..0.7, and the bass line with the first note doubled
+# (`1.1 1.1 1.3 -`). Try `synth watch examples/live_set.synth`.
+
+tempo 120
+scale A minor
+reverb size=0.9 damp=0.3 predelay=10
+delay sync=dotted_eighth feedback=0.5
+
+module beats kit { kick_level 1.0 }
+module keys pad { voice_mode poly attack 10ms release 400ms cutoff 2khz }
+module bass low { cutoff 0.4 }
+
+pattern beat { kick: X - - - X - - - X - - - X - - -
+               hihat: - - x - - - x - - - x - - - x - }
+pattern hold { [1.3 3.3 5.3]:0.8 ..*15 }
+pattern line { 1.1 - 1.3 -  1.5 - 1.3 -  1.1 - 1.3 -  1.5 - 1.3 - }
+
+track kick { play beat using kit level 0.8 out > master }
+track bass { play line using low level 0.6 delay_send 0.3 out > master }
+track pad  { play hold using pad level 0.5 reverb_send 0.7 delay_send 0.5 out > master }
+master { in > limiter > out }
