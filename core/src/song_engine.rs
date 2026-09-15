@@ -132,7 +132,7 @@ impl SongInstrument {
             None => return false, // graph instruments have no named params
         };
         match params::lookup(kind, name) {
-            Some(spec) => { apply_param(self, spec.id, value); true }
+            Some(spec) => apply_param(self, spec.id, value),
             None => false,
         }
     }
@@ -149,15 +149,17 @@ impl SongInstrument {
     }
 }
 
-/// Apply a registry-typed parameter to the right module.
-fn apply_param(inst: &mut SongInstrument, id: ParamId, value: f32) {
+/// Apply a registry-typed parameter to the right module. False when the id
+/// belongs to another module kind: that is a caller bug, not a no-op.
+fn apply_param(inst: &mut SongInstrument, id: ParamId, value: f32) -> bool {
     match (inst, id) {
         (SongInstrument::Bass(m), ParamId::Bass(p)) => m.set_param(p, value),
         (SongInstrument::Fm(m), ParamId::Fm(p)) => m.set_param(p, value),
         (SongInstrument::Keys(m), ParamId::Keys(p)) => m.set_param(p, value),
         (SongInstrument::Beats(m), ParamId::Beats(p)) => m.set_param(p, value),
-        _ => {}
+        _ => return false,
     }
+    true
 }
 
 /// FX chain processing helper: a chain of NodeKind applied in series (mono).
@@ -480,6 +482,7 @@ enum AutoTarget {
 }
 
 /// Structured error from DSL parsing or compilation, preserving line/col info.
+#[derive(Debug, Clone)]
 pub enum DslError {
     Parse(Vec<ParseError>),
     Compile(Vec<CompileError>),
@@ -947,16 +950,20 @@ impl SongEngine {
             t.sc_source = None;
             t.is_sc_source = false;
         }
-        let global = self.global_sc_source.clone();
+        // Names are borrowed, never cloned: this runs on the audio thread at
+        // every scene change and at every live swap.
+        let global_idx = match self.global_sc_source.as_deref() {
+            Some(name) => self.find_source_track(name),
+            None => self.kick_track_idx,
+        };
         for ti in 0..self.tracks.len() {
             if !self.tracks[ti].active { continue; }
             let named = self.scenes.get(scene_idx)
                 .and_then(|s| s.tracks.iter().find(|st| st.name == self.track_names[ti]))
-                .and_then(|st| st.sidechain_source.clone())
-                .or_else(|| global.clone());
+                .and_then(|st| st.sidechain_source.as_deref());
             let source = match named {
-                Some(name) => self.find_source_track(&name),
-                None => self.kick_track_idx,
+                Some(name) => self.find_source_track(name),
+                None => global_idx,
             };
             if let Some(si) = source {
                 if si != ti {
@@ -966,10 +973,7 @@ impl SongEngine {
             }
         }
         // The global sends duck against the same source the song names.
-        self.global_sc_idx = match &global {
-            Some(name) => self.find_source_track(name),
-            None => self.kick_track_idx,
-        };
+        self.global_sc_idx = global_idx;
         if let Some(si) = self.global_sc_idx {
             self.tracks[si].is_sc_source = true;
         }
@@ -1410,16 +1414,19 @@ impl SongEngine {
         }
 
         // Process bus FX chains and mix into master
+        // Always, even on silence. Gating on a non-zero input truncated the
+        // tail of any reverb or delay on a bus the instant its tracks stopped,
+        // and made `capture(start=N)` count processed samples rather than bars,
+        // so its window landed on the wrong music. The global sends have always
+        // been ticked unconditionally for the same reason.
         for bus in self.buses.iter_mut() {
             for s in 0..len {
-                if bus.buffer[s] != 0.0 || bus.buffer_r[s] != 0.0 {
-                    let (pl, pr) = bus.fx_chain.process_stereo(bus.buffer[s], bus.buffer_r[s]);
-                    bus.meter_peak = bus.meter_peak.max(math::abs(pl)).max(math::abs(pr));
-                    bus.meter_sum_sq += ((pl * pl + pr * pr) * 0.5) as f64;
-                    output_l[s] += pl;
-                    output_r[s] += pr;
-                }
+                let (pl, pr) = bus.fx_chain.process_stereo(bus.buffer[s], bus.buffer_r[s]);
+                bus.meter_peak = bus.meter_peak.max(math::abs(pl)).max(math::abs(pr));
+                bus.meter_sum_sq += ((pl * pl + pr * pr) * 0.5) as f64;
                 bus.meter_samples += 1;
+                output_l[s] += pl;
+                output_r[s] += pr;
             }
         }
 
@@ -2071,6 +2078,10 @@ impl SongEngine {
             }
             let (scene_idx, _) = self.arrangement[self.arrangement_idx];
             self.apply_scene(scene_idx);
+            // `apply_scene` starts the scene clock at zero. Landing mid-scene
+            // must not restart its automation: a sweep that was three bars in
+            // stays three bars in.
+            self.scene_step = self.arrangement_bar_count as usize * self.steps_per_bar;
         } else {
             self.recompute_gain_comp();
         }
@@ -2196,6 +2207,166 @@ impl SongEngine {
 
     pub fn instrument_index(&self, name: &str) -> Option<usize> {
         self.instrument_names.iter().position(|n| n == name)
+    }
+
+    /// Set a parameter already resolved to a registry id. False if the
+    /// instrument does not exist or the id belongs to another module kind.
+    pub fn set_module_param_id(&mut self, inst_idx: usize, id: ParamId, value: f32) -> bool {
+        match self.instruments.get_mut(inst_idx) {
+            Some(inst) => apply_param(inst, id, value),
+            None => false,
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    //  Live session support (see live.rs)
+    // ═══════════════════════════════════════════════════════
+
+    /// Samples this engine will render before the next step fires: the trigger
+    /// happens on the first sample where the step clock reaches the step
+    /// duration. Zero means the next sample rendered is that step.
+    fn samples_until_step(&self) -> f32 {
+        let k = -math::floor(-(self.current_step_duration - self.sample_counter));
+        (k - 1.0).max(0.0)
+    }
+
+    /// Samples this engine will render before the first step of the next bar
+    /// fires. Exact within the current step; across the remaining steps it
+    /// assumes no timing humanization, which a caller absorbs by asking again
+    /// every block. `usize::MAX` when not running.
+    pub fn samples_until_bar(&self) -> usize {
+        if !self.running || self.steps_per_bar == 0 {
+            return usize::MAX;
+        }
+        let mut total = self.samples_until_step();
+        let mut step = self.global_step;
+        while step % self.steps_per_bar != 0 {
+            step += 1;
+            total += self.effective_step_samples(step);
+        }
+        total as usize
+    }
+
+    /// Bar the next step to fire belongs to. On a bar line this is the bar
+    /// about to start, while `current_bar` still reads the one that ended.
+    pub fn bar_of_next_step(&self) -> usize {
+        if self.steps_per_bar == 0 { 0 } else { self.global_step / self.steps_per_bar }
+    }
+
+    /// True when `bar` opens an arrangement entry: the straight run applies a
+    /// scene there and resets every track, so nothing sequenced carries over.
+    pub fn bar_starts_entry(&self, bar: usize) -> bool {
+        let mut start = 0usize;
+        for (_, repeat) in &self.arrangement {
+            if bar == start { return true; }
+            start += *repeat as usize;
+        }
+        false
+    }
+
+    /// Stop sequencing but keep rendering: what sounds decays, nothing new
+    /// fires. The retiring half of a swap runs like this under a fade-out.
+    pub fn coast(&mut self) {
+        self.current_step_duration = f32::MAX;
+        self.sample_counter = 0.0;
+        self.pending_triggers.clear();
+        self.active_automations.clear();
+        self.scene_total_steps = 0;
+        for t in self.tracks.iter_mut() {
+            t.arp = None;
+            t.gate_samples_remaining = 0.0;
+        }
+    }
+
+    /// Take over state from `old`, the engine this one replaces on a bar line.
+    /// What the source text did not change keeps sounding: instruments keep
+    /// their voices, sends and buses keep their tails, inherited tracks keep
+    /// their place in the pattern and their held notes. Everything moves with
+    /// `mem::swap`, so this allocates nothing. Call after `start_from_bar`.
+    ///
+    /// `inherit_tracks` is false on a bar that opens an arrangement entry,
+    /// where the straight run would have reset every track anyway.
+    pub fn inherit_from(&mut self, old: &mut SongEngine, map: &crate::live::Inherit, inherit_tracks: bool) {
+        // Old tracks nobody continues release their notes now, on the old
+        // instruments, before an instrument moves over with a note that no
+        // track in the new engine would ever release.
+        for j in 0..old.tracks.len() {
+            let continued = inherit_tracks && map.tracks.iter().any(|m| *m == Some(j));
+            if !continued {
+                Self::release_track_notes(&mut old.tracks[j], &mut old.instruments);
+                old.tracks[j].gate_samples_remaining = 0.0;
+            }
+        }
+        for (i, m) in map.instruments.iter().enumerate() {
+            if let Some(j) = *m {
+                if i < self.instruments.len() && j < old.instruments.len() {
+                    core::mem::swap(&mut self.instruments[i], &mut old.instruments[j]);
+                    self.instruments[i].set_bpm(self.tempo);
+                }
+            }
+        }
+        if inherit_tracks {
+            for (i, m) in map.tracks.iter().enumerate() {
+                let Some(j) = *m else { continue };
+                if i >= self.tracks.len() || j >= old.tracks.len() { continue; }
+                let n = &mut self.tracks[i];
+                let o = &mut old.tracks[j];
+                core::mem::swap(&mut n.current_step, &mut o.current_step);
+                core::mem::swap(&mut n.current_notes, &mut o.current_notes);
+                core::mem::swap(&mut n.current_notes_count, &mut o.current_notes_count);
+                core::mem::swap(&mut n.gate_samples_remaining, &mut o.gate_samples_remaining);
+                core::mem::swap(&mut n.arp, &mut o.arp);
+                core::mem::swap(&mut n.insert_fx, &mut o.insert_fx);
+                core::mem::swap(&mut n.sc_env, &mut o.sc_env);
+                n.insert_fx.set_bpm(self.tempo);
+                if let (Some(arp), Some(cfg)) = (n.arp.as_mut(), n.arp_cfg) {
+                    arp.set_bpm(self.tempo * cfg.rate_mult);
+                }
+            }
+        }
+        // The sidechain follower of a track is the envelope of whatever it
+        // plays: it continues by name even where the track itself does not.
+        for i in 0..self.tracks.len() {
+            if let Some(j) = old.track_names.iter().position(|n| *n == self.track_names[i]) {
+                self.tracks[i].sc_env = old.tracks[j].sc_env;
+            }
+        }
+        for (i, m) in map.buses.iter().enumerate() {
+            if let Some(j) = *m {
+                if i < self.buses.len() && j < old.buses.len() {
+                    core::mem::swap(&mut self.buses[i].fx_chain, &mut old.buses[j].fx_chain);
+                    self.buses[i].fx_chain.set_bpm(self.tempo);
+                }
+            }
+        }
+        if map.sends {
+            // Freeze belongs to the scene this engine is starting, not to the
+            // reverb that carried the tail here.
+            let frozen = self.send_reverb.is_frozen();
+            core::mem::swap(&mut self.send_delay, &mut old.send_delay);
+            core::mem::swap(&mut self.send_reverb, &mut old.send_reverb);
+            core::mem::swap(&mut self.reverb_return, &mut old.reverb_return);
+            core::mem::swap(&mut self.delay_return, &mut old.delay_return);
+            self.send_reverb.set_freeze(frozen);
+            self.send_delay.set_bpm(self.tempo, SAMPLE_RATE);
+            self.reverb_return.set_bpm(self.tempo);
+            self.delay_return.set_bpm(self.tempo);
+        }
+        if map.master {
+            core::mem::swap(&mut self.master_fx, &mut old.master_fx);
+            self.master_fx.set_bpm(self.tempo);
+        }
+        // Smoothed and random state continues regardless of what changed: a
+        // gain ramp restarting or the humanize sequence rewinding is audible.
+        core::mem::swap(&mut self.rng, &mut old.rng);
+        self.gain_comp_current = old.gain_comp_current;
+        self.sc_envelope = old.sc_envelope;
+        // The step clock carries a fractional residue (5512.5 samples per step
+        // at 120 BPM). Starting the new clock exactly on the boundary keeps it.
+        if old.running && old.samples_until_step() == 0.0 {
+            let residue = (old.sample_counter + 1.0 - old.current_step_duration).clamp(0.0, 1.0);
+            self.sample_counter = self.current_step_duration - 1.0 + residue;
+        }
     }
 
     /// Swing 0.5 (straight) ..= 0.75 (hard shuffle). Takes effect on the next step.
