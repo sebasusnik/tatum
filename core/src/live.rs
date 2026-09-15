@@ -7,15 +7,20 @@
 //!   compiles it (so the live path validates exactly what `synth check`
 //!   validates), diffs it against what is playing, and returns a [`Plan`].
 //!   Anything the fast path cannot resolve becomes a swap; nothing is dropped.
-//! - [`LivePlayer`] (audio thread) applies plans and renders. A swap lands on
-//!   the exact sample of the next bar line: the old engine renders up to it and
-//!   the new one from it, so the downbeat fires once. The new engine inherits,
-//!   by name, every piece of state whose definition did not change in the text
-//!   (instruments keep their voices, sends and buses keep their tails,
-//!   unchanged tracks keep their place and their held notes), all moved with
-//!   `mem::swap`. What the old engine still owns afterwards, which is exactly
-//!   what disappeared from the text, coasts under a short fade-out. Retired
-//!   engines are handed back so their memory is freed off the audio thread.
+//! - [`LivePlayer`] (audio thread) applies plans and renders. A swap happens
+//!   at the start of the block in which the next bar line falls. The new
+//!   engine takes that whole block, positioned just before the line with its
+//!   step clock phase-aligned to the old one, so it crosses the line itself on
+//!   the exact sample, and the downbeat fires once. (The engine triggers steps
+//!   at the start of the block they fall in, so handing over a whole block is
+//!   what keeps a swapped render identical to a straight one.) The new engine
+//!   inherits, by name, every piece of state whose definition did not change
+//!   in the text (instruments keep their voices, sends and buses keep their
+//!   tails, unchanged tracks keep their place and their held notes), all moved
+//!   with `mem::swap`. What the old engine still owns afterwards, which is
+//!   exactly what disappeared from the text, coasts under a short fade-out.
+//!   Retired engines are handed back so their memory is freed off the audio
+//!   thread.
 //!
 //! The rule the whole thing serves: what did not change in the text keeps its
 //! state in the engine. A swap to an identical song is bit-identical to not
@@ -436,21 +441,16 @@ impl LivePlayer {
         };
 
         let mut swapped = None;
-        let mut pos = 0;
         if self.pending.is_some() && engine.running() {
             let until = engine.samples_until_bar();
             if until < len {
-                engine.process_block_stereo(&mut out_l[..until], &mut out_r[..until]);
-                pos = until;
-                swapped = Some(self.swap_now());
+                swapped = Some(self.swap_now(until));
             }
         }
         let engine = self.engine.as_mut().expect("engine present");
-        engine.process_block_stereo(&mut out_l[pos..], &mut out_r[pos..]);
-        // What the previous engine still owns fades out on top. A swap that
-        // landed mid-block starts its fade at the split, not at the block.
-        let fade_from = if swapped.is_some() { pos } else { 0 };
-        self.render_fade(&mut out_l[fade_from..], &mut out_r[fade_from..]);
+        engine.process_block_stereo(out_l, out_r);
+        // What the previous engine still owns fades out on top.
+        self.render_fade(out_l, out_r);
         swapped
     }
 
@@ -476,17 +476,15 @@ impl LivePlayer {
         }
     }
 
-    /// The bar line is the next sample. Hand over.
-    fn swap_now(&mut self) -> usize {
+    /// The bar line falls `until` samples into the block about to render.
+    /// Hand over now; the new engine renders the block and crosses the line.
+    fn swap_now(&mut self, until: usize) -> usize {
         let (mut new, generation, maps) = self.pending.take().expect("pending present");
         let mut old = self.engine.take().expect("engine present");
         let bar = old.bar_of_next_step();
-        new.start_from_bar(bar);
+        new.start_before_bar(bar);
         match maps.iter().find(|(g, _)| *g == self.generation) {
-            Some((_, map)) => {
-                let inherit_tracks = !new.bar_starts_entry(bar);
-                new.inherit_from(&mut old, map, inherit_tracks);
-            }
+            Some((_, map)) => new.inherit_from(&mut old, map, until),
             None => self.blind_swaps += 1,
         }
         old.coast();

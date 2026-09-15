@@ -107,3 +107,61 @@ fn rendering_blocks_never_allocates() {
     assert_eq!(n, 0, "the audio path allocated {} times over 8000 blocks", n);
     assert!(heard, "rendered silence, so the test proved nothing");
 }
+
+/// The live swap is the other path that runs on the audio thread: the split
+/// block, the handover (`start_from_bar`, inheritance by `mem::swap`, the
+/// coasting old engine under its fade) and the retirement of the old engine.
+/// Every engine is built outside the count, as the control thread does.
+#[test]
+fn live_swap_never_allocates() {
+    use synth_core::live::{Applied, LivePlanner, LivePlayer};
+
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    let plan = planner.plan(SONG, player.generation()).expect("compiles");
+    assert_eq!(player.apply(plan), Applied::Loaded);
+    player.start();
+    let mut l = [0.0f32; BLOCK_SIZE];
+    let mut r = [0.0f32; BLOCK_SIZE];
+    for _ in 0..64 {
+        player.process(&mut l, &mut r);
+    }
+    // Two edits: one that keeps every track (an unused pattern) and one that
+    // changes the pad into another kind of module, so both the inherited and
+    // the released paths run. Both are planned, and their engines built,
+    // outside the count.
+    let edit_a = format!("{}\npattern unused {{ 1.1 - - - }}\n", SONG);
+    let edit_b = edit_a.replace("module keys pad { cutoff 0.5 }", "module bass pad { cutoff 0.5 }");
+    assert_ne!(edit_a, edit_b);
+    let plan_a = planner.plan(&edit_a, player.generation()).expect("compiles");
+
+    ALLOCS.store(0, Ordering::Relaxed);
+    COUNTING.store(true, Ordering::Relaxed);
+    assert_eq!(player.apply(plan_a), Applied::Queued);
+    let mut swaps = 0;
+    let mut blocks = 0;
+    while swaps < 1 && blocks < 4000 {
+        if player.process(&mut l, &mut r).is_some() { swaps += 1; }
+        blocks += 1;
+    }
+    COUNTING.store(false, Ordering::Relaxed);
+    let plan_b = planner.plan(&edit_b, player.generation()).expect("compiles");
+    COUNTING.store(true, Ordering::Relaxed);
+    assert_eq!(player.apply(plan_b), Applied::Queued);
+    while swaps < 2 && blocks < 8000 {
+        if player.process(&mut l, &mut r).is_some() { swaps += 1; }
+        blocks += 1;
+    }
+    // Past the fade-out, so the coasting engine retires inside the count.
+    for _ in 0..8 {
+        player.process(&mut l, &mut r);
+    }
+    COUNTING.store(false, Ordering::Relaxed);
+
+    assert_eq!(swaps, 2, "both swaps must land");
+    let n = ALLOCS.load(Ordering::Relaxed);
+    assert_eq!(n, 0, "the live swap path allocated {} times", n);
+    let mut retired = 0;
+    while player.take_retired().is_some() { retired += 1; }
+    assert_eq!(retired, 2, "both old engines must come back for dropping");
+}

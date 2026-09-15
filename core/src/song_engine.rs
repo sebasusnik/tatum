@@ -2253,15 +2253,24 @@ impl SongEngine {
         if self.steps_per_bar == 0 { 0 } else { self.global_step / self.steps_per_bar }
     }
 
-    /// True when `bar` opens an arrangement entry: the straight run applies a
-    /// scene there and resets every track, so nothing sequenced carries over.
-    pub fn bar_starts_entry(&self, bar: usize) -> bool {
-        let mut start = 0usize;
-        for (_, repeat) in &self.arrangement {
-            if bar == start { return true; }
-            start += *repeat as usize;
+    /// Position the engine as if it had just played through bar `bar - 1`
+    /// and were about to fire the downbeat of `bar`: the previous entry's
+    /// scene is active, the bar line has not been crossed. A live swap starts
+    /// the new engine here so that it crosses the line itself, on the same
+    /// sample and with the same consequences (scene change, arrangement end,
+    /// automation progress) as the engine it replaces would have.
+    pub fn start_before_bar(&mut self, bar: usize) {
+        if bar == 0 {
+            self.start_from_bar(0);
+            return;
         }
-        false
+        self.start_from_bar(bar - 1);
+        self.global_step = bar * self.steps_per_bar;
+        if !self.arrangement.is_empty() {
+            self.scene_step = (self.arrangement_bar_count as usize + 1) * self.steps_per_bar;
+        }
+        self.current_step_duration = self.effective_step_samples(self.global_step);
+        self.sample_counter = self.current_step_duration;
     }
 
     /// Stop sequencing but keep rendering: what sounds decays, nothing new
@@ -2278,20 +2287,18 @@ impl SongEngine {
         }
     }
 
-    /// Take over state from `old`, the engine this one replaces on a bar line.
+    /// Take over state from `old`, the engine this one replaces at the start
+    /// of the block in which the next bar line falls, `until` samples in.
     /// What the source text did not change keeps sounding: instruments keep
     /// their voices, sends and buses keep their tails, inherited tracks keep
     /// their place in the pattern and their held notes. Everything moves with
-    /// `mem::swap`, so this allocates nothing. Call after `start_from_bar`.
-    ///
-    /// `inherit_tracks` is false on a bar that opens an arrangement entry,
-    /// where the straight run would have reset every track anyway.
-    pub fn inherit_from(&mut self, old: &mut SongEngine, map: &crate::live::Inherit, inherit_tracks: bool) {
+    /// `mem::swap`, so this allocates nothing. Call after `start_before_bar`.
+    pub fn inherit_from(&mut self, old: &mut SongEngine, map: &crate::live::Inherit, until: usize) {
         // Old tracks nobody continues release their notes now, on the old
         // instruments, before an instrument moves over with a note that no
         // track in the new engine would ever release.
         for j in 0..old.tracks.len() {
-            let continued = inherit_tracks && map.tracks.iter().any(|m| *m == Some(j));
+            let continued = map.tracks.iter().any(|m| *m == Some(j));
             if !continued {
                 Self::release_track_notes(&mut old.tracks[j], &mut old.instruments);
                 old.tracks[j].gate_samples_remaining = 0.0;
@@ -2305,25 +2312,33 @@ impl SongEngine {
                 }
             }
         }
-        if inherit_tracks {
-            for (i, m) in map.tracks.iter().enumerate() {
-                let Some(j) = *m else { continue };
-                if i >= self.tracks.len() || j >= old.tracks.len() { continue; }
-                let n = &mut self.tracks[i];
-                let o = &mut old.tracks[j];
-                core::mem::swap(&mut n.current_step, &mut o.current_step);
-                core::mem::swap(&mut n.current_notes, &mut o.current_notes);
-                core::mem::swap(&mut n.current_notes_count, &mut o.current_notes_count);
-                core::mem::swap(&mut n.gate_samples_remaining, &mut o.gate_samples_remaining);
-                core::mem::swap(&mut n.arp, &mut o.arp);
-                core::mem::swap(&mut n.insert_fx, &mut o.insert_fx);
-                core::mem::swap(&mut n.sc_env, &mut o.sc_env);
-                n.insert_fx.set_bpm(self.tempo);
-                if let (Some(arp), Some(cfg)) = (n.arp.as_mut(), n.arp_cfg) {
-                    arp.set_bpm(self.tempo * cfg.rate_mult);
+        for (i, m) in map.tracks.iter().enumerate() {
+            let Some(j) = *m else { continue };
+            if i >= self.tracks.len() || j >= old.tracks.len() { continue; }
+            let n = &mut self.tracks[i];
+            let o = &mut old.tracks[j];
+            core::mem::swap(&mut n.current_step, &mut o.current_step);
+            core::mem::swap(&mut n.current_notes, &mut o.current_notes);
+            core::mem::swap(&mut n.current_notes_count, &mut o.current_notes_count);
+            core::mem::swap(&mut n.gate_samples_remaining, &mut o.gate_samples_remaining);
+            core::mem::swap(&mut n.arp, &mut o.arp);
+            core::mem::swap(&mut n.insert_fx, &mut o.insert_fx);
+            n.insert_fx.set_bpm(self.tempo);
+            if let (Some(arp), Some(cfg)) = (n.arp.as_mut(), n.arp_cfg) {
+                arp.set_bpm(self.tempo * cfg.rate_mult);
+            }
+        }
+        // Nudged hits still in flight follow their instrument. The queue's
+        // capacity is reserved, so this cannot allocate.
+        for k in 0..old.pending_triggers.len() {
+            let (samples, inst, note, vel) = old.pending_triggers[k];
+            if let Some(i) = map.instruments.iter().position(|m| *m == Some(inst)) {
+                if self.pending_triggers.len() < MAX_PENDING_TRIGGERS {
+                    self.pending_triggers.push((samples, i, note, vel));
                 }
             }
         }
+        old.pending_triggers.clear();
         // The sidechain follower of a track is the envelope of whatever it
         // plays: it continues by name even where the track itself does not.
         for i in 0..self.tracks.len() {
@@ -2361,11 +2376,13 @@ impl SongEngine {
         core::mem::swap(&mut self.rng, &mut old.rng);
         self.gain_comp_current = old.gain_comp_current;
         self.sc_envelope = old.sc_envelope;
-        // The step clock carries a fractional residue (5512.5 samples per step
-        // at 120 BPM). Starting the new clock exactly on the boundary keeps it.
-        if old.running && old.samples_until_step() == 0.0 {
-            let residue = (old.sample_counter + 1.0 - old.current_step_duration).clamp(0.0, 1.0);
-            self.sample_counter = self.current_step_duration - 1.0 + residue;
+        // The downbeat fires `until` samples into this block, on the old
+        // clock; the new clock is set so it fires there too, carrying the
+        // fractional residue (5512.5 samples per step at 120 BPM) with it.
+        if old.running {
+            let until = until as f32;
+            let residue = (old.sample_counter + until + 1.0 - old.current_step_duration).clamp(0.0, 1.0);
+            self.sample_counter = self.current_step_duration - until - 1.0 + residue;
         }
     }
 
