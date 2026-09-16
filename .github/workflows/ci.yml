@@ -4,7 +4,7 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
 
 env:
@@ -109,6 +109,6 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       # The workspace is at zero warnings. This step is what keeps it there;
       # it used to count them into the run summary and pass regardless. The
-      # four allows left in the tree each say in a comment why the lint's
+      # five allows left in the tree each say in a comment why the lint's
       # suggestion is worse than the code.
       - run: cargo clippy --workspace --locked -- -D warnings
