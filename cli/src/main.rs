@@ -1,3 +1,6 @@
+mod include;
+mod live;
+
 use std::fs;
 use std::process;
 
@@ -13,6 +16,8 @@ fn main() {
         "render" => cmd_render(&args[2..]),
         "check" => cmd_check(&args[2..]),
         "params" => cmd_params(&args[2..]),
+        "play" => live::cmd(&args[2..], false),
+        "watch" => live::cmd(&args[2..], true),
         "help" | "--help" | "-h" => print_usage(),
         other => {
             eprintln!("unknown command: {}", other);
@@ -29,11 +34,18 @@ USAGE:
     synth render <song.synth> [-o output.wav] [--bars N]
     synth check <song.synth>
     synth params [bass|fm|keys|beats|track|fx] [--json]
+    synth play <song.synth> [--device <name>]
+    synth watch <song.synth> [--device <name>]
 
 COMMANDS:
     render    Parse, compile, and render a .synth file to WAV
     check     Parse and validate a .synth file (no audio output)
     params    Print the module parameter reference (markdown, or JSON with --json)
+    play      Play a .synth file on the audio device until it ends or you type q
+    watch     Play, and re-evaluate the file every time it is saved: value edits
+              apply at once, anything else takes over on the next bar; a save
+              that does not compile is reported and the last good version keeps
+              playing. --list-devices shows the output devices.
     help      Show this help
 ");
 }
@@ -79,25 +91,25 @@ fn cmd_check(args: &[String]) {
     }
 
     let path = &args[0];
-    let source = match fs::read_to_string(path) {
+    let source = match include::Source::load(std::path::Path::new(path)) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("error: cannot read '{}': {}", path, e);
+            eprintln!("error: {}", e);
             process::exit(1);
         }
     };
+    if source.files.len() > 1 {
+        eprintln!("  {} files via `use`", source.files.len());
+    }
 
     // Parse
-    let ast = match synth_core::dsl::parse(&source) {
+    let ast = match synth_core::dsl::parse(&source.text) {
         Ok(ast) => {
             eprintln!("  parse OK");
             ast
         }
         Err(errs) => {
-            eprintln!("parse errors:");
-            for e in &errs {
-                eprintln!("  line {}: {}", e.line, e.message);
-            }
+            source.print_errors(&synth_core::song_engine::DslError::Parse(errs));
             process::exit(1);
         }
     };
@@ -128,10 +140,7 @@ fn cmd_check(args: &[String]) {
             }
         }
         Err(errs) => {
-            eprintln!("compile errors:");
-            for e in &errs {
-                eprintln!("  {}", e);
-            }
+            source.print_errors(&synth_core::song_engine::DslError::Compile(errs));
             process::exit(1);
         }
     }
@@ -171,20 +180,20 @@ fn cmd_render(args: &[String]) {
         i += 1;
     }
 
-    let source = match fs::read_to_string(path) {
+    let source = match include::Source::load(std::path::Path::new(path)) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("error: cannot read '{}': {}", path, e);
+            eprintln!("error: {}", e);
             process::exit(1);
         }
     };
 
     eprintln!("loading {}...", path);
 
-    let mut engine = match synth_core::song_engine::SongEngine::from_source(&source) {
+    let mut engine = match synth_core::song_engine::SongEngine::try_from_source(&source.text) {
         Ok(e) => e,
-        Err(msg) => {
-            eprintln!("{}", msg);
+        Err(err) => {
+            source.print_errors(&err);
             process::exit(1);
         }
     };
@@ -196,6 +205,7 @@ fn cmd_render(args: &[String]) {
 
     eprintln!("rendering {} bars at {} BPM...", render_bars, engine.tempo());
 
+    engine.set_band_metering(true);
     engine.reset_meters();
     let (out_l, out_r) = engine.render(render_bars);
 
@@ -204,16 +214,45 @@ fn cmd_render(args: &[String]) {
         process::exit(1);
     }
     // Mix report: per-track levels, so a buried or silent track is visible.
+    // Peak and RMS both: they rank tracks differently, and reading only RMS
+    // hides a sparse bass under a continuous pad.
     let loudest = (0..engine.track_count()).fold(0.0f32, |a, i| a.max(engine.track_rms(i)));
+    let loudest_peak = (0..engine.track_count()).fold(0.0f32, |a, i| a.max(engine.track_peak(i)));
     if engine.track_count() > 0 && loudest > 0.0 {
         eprintln!("mix (post level/pan, pre master):");
+        eprintln!("  {:<12} {:>6} {:>8} {:>8} {:>8} {:>6}  {}",
+            "track", "peak", "rms", "rms dB", "peak dB", "crest", "band");
         for i in 0..engine.track_count() {
             let rms = engine.track_rms(i);
+            let peak = engine.track_peak(i);
             let rel = 20.0 * (rms.max(1e-6) / loudest).log10();
+            let rel_peak = 20.0 * (peak.max(1e-6) / loudest_peak.max(1e-6)).log10();
             let flag = if rms <= 0.0 { "  SILENT" } else if rel < -30.0 { "  buried" } else { "" };
-            eprintln!("  {:<12} peak {:.3}  rms {:.4}  {:+.1} dB vs loudest{}",
-                engine.track_name(i), engine.track_peak(i), rms, rel, flag);
+            let band = engine.track_dominant_band(i).map_or("-", |b| synth_core::analysis::BAND_NAMES[b]);
+            eprintln!("  {:<12} {:>6.3} {:>8.4} {:>+8.1} {:>+8.1} {:>6.1}  {}{}",
+                engine.track_name(i), peak, rms, rel, rel_peak,
+                synth_core::analysis::crest(peak, rms), band, flag);
         }
+        for i in 0..engine.bus_count() {
+            let (p, rms) = (engine.bus_peak(i), engine.bus_rms(i));
+            eprintln!("  bus {:<8} {:>6.3} {:>8.4} {:>8} {:>8} {:>6.1}",
+                engine.bus_name(i), p, rms, "", "", synth_core::analysis::crest(p, rms));
+        }
+    }
+    // What the master chain costs in dynamics: raising the master gain looks
+    // free on the peak meter because the limiter catches it, and the punch
+    // leaves with the transients.
+    let (in_peak, in_rms) = engine.master_input_peak_rms();
+    let (out_peak, out_rms) = synth_core::analysis::peak_rms(&out_l, &out_r);
+    let (crest_in, crest_out) = (
+        synth_core::analysis::crest(in_peak, in_rms),
+        synth_core::analysis::crest(out_peak, out_rms),
+    );
+    if crest_in > 0.0 {
+        let change = 20.0 * (crest_out / crest_in).log10();
+        eprintln!("master: peak {:.2} in -> {:.2} out | crest {:.1} -> {:.1} ({:+.1} dB){}",
+            in_peak, out_peak, crest_in, crest_out, change,
+            if change < -3.0 { "  the master chain is eating transients" } else { "" });
     }
     eprintln!("writing {} ({} samples, {:.1}s)...",
         output_path,

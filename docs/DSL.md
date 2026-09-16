@@ -34,13 +34,41 @@ reverb size=0.7 damp=0.4 predelay=20 sidechain=0.5  # predelay in ms; size 1.0 i
 
 ## Modules
 
-Built-in instruments. Values are floats in the range listed in PARAMS.md.
-Choice parameters accept the option name.
+Built-in instruments. Choice parameters accept the option name.
+
+Values can be written two ways. The plain form is a float in the range listed in
+PARAMS.md. The readable form is the real quantity with its unit, which is what
+you should write:
+
+| suffix | means | applies to |
+| --- | --- | --- |
+| `hz`, `khz` | frequency | `cutoff`, `cutoff_env`, `lfo_rate`, `vibrato_rate` |
+| `ms`, `s` | time | `attack`, `decay`, `release`, and the per-operator versions |
+| `st` | semitones | `osc2_pitch`, `osc3_pitch` |
+| `x` | multiplier | `op0_ratio`..`op3_ratio`, `kick_pitch`, `snare_pitch`, `hihat_pitch` |
+| `%` | percent | any 0..1 parameter |
+| `db` | decibels | any gain (`level`, and `makeup` on a compressor) |
+
+`cutoff 800hz` and `cutoff 0.4337` are the same thing. A unit that does not apply
+is an error naming what the parameter does take, so `cutoff 20ms` does not quietly
+become 20. The `in units` column of PARAMS.md gives each parameter's span and its
+default in units.
+
+Write what you mean, in units, and let the float form be the output of a tool.
+Units are as precise as you write them; a resonant filter can hear the difference
+between `91.4hz` and `91.37hz`, so keep a digit more than feels necessary when you
+are matching an existing sound.
+
+The one to remember: a compressor's `makeup` is a **linear gain**, so `makeup=4`
+is +12 dB, not +4. Every example in this repo got that wrong until it was
+measured. Write `makeup=6db`.
 
 ```
 module bass acid {
-    cutoff 0.25
-    resonance 0.8
+    cutoff 800hz
+    attack 20ms
+    release 1.5s
+    resonance 80%
     osc1_wave saw            # saw | square
     lfo_target cutoff        # cutoff | pitch | amplitude
     lfo_sync bars_4          # free | quarter | eighth | sixteenth | dotted_eighth | triplet_eighth |
@@ -56,7 +84,12 @@ module fm bell {
     op0_envelope 0.001 0.2 0.0 0.3    # attack decay sustain release for operator 0
 }
 
-module keys pad { voice_mode unison }      # poly | unison | octave | fifth | ringmod
+module keys pad { voice_mode poly }        # poly | unison | octave | fifth | ringmod
+
+# Only `poly` holds a chord. unison stacks all eight voices on one note, octave
+# on two and fifth on two, copying the hardware they come from -- so a chord
+# sent to any of them plays its last note alone, and `chord_into_mono_voice`
+# will say so. Use poly for chords and unison for a thick single-note lead.
 module beats kit { kick_level 1.0 stutter_drum snare }
 ```
 
@@ -239,25 +272,52 @@ arrangement and its targets are validated: the module and parameter must exist.
 
 ## Livecoding semantics
 
-When the source is re-evaluated while playing:
+A song without `scene` and `arrange` is a live set: its tracks loop for as long as it
+plays. That is the file you edit while it sounds, and it can be a dozen lines when the
+rig lives elsewhere:
 
-- Parameter, level, pan, velocity, gate, tempo, swing and humanize edits apply instantly.
-- Deleting a parameter line restores the registry default instantly.
-- Any other edit (pattern notes, scenes, routing, arp, new modules) is a structural change:
-  the new song is compiled and swapped in at the next bar boundary with a short crossfade.
+```
+use "rig.synth"          # modules, buses, master and the global sends, tuned offline
+tempo 124
+pattern beat { kick: X - - - X - - - X - - - X - - - }
+pattern line { 1.1 - 1.3 - 1.5 - 1.3 - }
+track kick { play beat using kit out > drums }
+track bass { play line using low level 0.7 delay_send 0.3 out > master }
+```
+
+`use "file"` is replaced by that file, resolved relative to the one that contains it.
+The CLI resolves it before parsing (`check`, `render`, `play`, `watch`); errors point at
+the file and line they came from. Globals set later win, so a set that `use`s its rig
+first can override its `tempo` or `scale`. A missing file or a `use` cycle is an error.
+
+When the source is re-evaluated while playing (`synth watch`, or the browser):
+
+- The new text is always parsed and compiled first. A save that does not compile is
+  reported and the last good version keeps playing: what `check` rejects, the live
+  path rejects too.
+- Parameter, level, pan, velocity, gate, tempo, swing and humanize edits apply at once.
+  Deleting a parameter line restores the registry default at once.
+- Anything else (pattern notes, which pattern a track plays, routing, sends, arp, module
+  definitions, scenes) takes over on the next bar line. What did not change in the text
+  keeps its state: instruments keep their voices, the global reverb and delay keep their
+  tails, buses and master keep their chains, unchanged tracks keep their place in the
+  pattern and their held notes. Only what disappeared from the text fades out, over
+  12 ms. A swap to a song that sounds the same is sample-identical to not swapping.
+- Two saves inside one bar are fine: a value edit made while a swap is queued lands on
+  the engine that takes over.
 
 ## Recipes
 
 Things a producer does that a first draft usually forgets. `synth_check` warns about the
 first three.
 
-**A pad that moves.** Slow LFO on the filter with some resonance, detuned unison, chorus,
+**A pad that moves.** Slow LFO on the filter with some resonance, chorus,
 a hint of vibrato, a slow phaser, sends, and sidechain so it breathes with the kick. For a
 "talking" pad swap the phaser for `vowel(a, o, bars=2, mix=0.6)`:
 
 ```
 module keys pad {
-    voice_mode unison  detune 0.3  chorus_mix 0.5
+    voice_mode poly  detune 0.3  chorus_mix 0.5
     cutoff 0.3  resonance 0.5
     lfo_target cutoff  lfo_waveform triangle  lfo_sync bars_2  lfo_depth 0.12
     vibrato_rate 0.35  vibrato_depth 0.06
@@ -291,7 +351,7 @@ stays out of the sub, LFOs that take 8 to 16 bars per cycle, and a slow autopan:
 ```
 reverb size=1.0 damp=0.25 predelay=40
 pattern voicings { Fm9:0.6 ..*31  Dbmaj7:0.6 ..*31 }      # two bars each, held
-module keys cloud { voice_mode unison detune 0.45 chorus_mix 0.6 attack 1.0 release 1.0
+module keys cloud { voice_mode poly detune 0.45 chorus_mix 0.6 attack 1.0 release 1.0
                     cutoff 0.28 resonance 0.35 lfo_target cutoff lfo_sync bars_8 lfo_depth 0.08 }
 track pad { play voicings using cloud level 0.15 reverb_send 0.4 sidechain 0.5
             out > highpass(300, 0.4) > lowpass(3200, 0.3, lfo_bars=16, lfo_depth=1200) > autopan(0.3, bars=8) > master }
@@ -328,3 +388,101 @@ rather than pushing the others up. Two things that make section loudness non-obv
 the engine scales the mix by 1/sqrt(active tracks) in each scene (so fewer tracks are
 each louder), and sidechain only ducks in scenes that have a beats track (a breakdown
 without drums plays its pads at full level). Set levels per scene, not just per track.
+
+## Capture
+
+`capture` records a window of whatever passes through its chain and then loops
+it back, optionally stretched or reversed. It is the one effect that holds a
+musical phrase rather than a few hundred milliseconds of tail.
+
+```
+bus ghost
+ghost { in > capture(2, speed=0.5, reverse=1) > lowpass(1.8khz) > master }
+track pad { play chord using pad out > ghost }
+```
+
+| argument | default | what it does |
+| --- | --- | --- |
+| `bars` (positional) | 2 | length of the window |
+| `start` | 0 | which bar the recording begins on |
+| `speed` | 1 | playback rate; 0.5 is half speed and an octave down |
+| `reverse` | 0 | 1 plays the window backwards |
+| `mix` | 1 | wet against the live signal |
+
+Until the window is full the signal passes through untouched, so the first
+`bars` bars sound exactly as they would without it. After that the recording
+plays and, at `mix 1`, replaces the input.
+
+Put it on a bus fed by the tracks you want to capture. On a track's own insert
+chain it captures that track alone, which is the freeze gesture rather than the
+resample one. The buffer is sized at compile time from the song's slowest tempo
+and allocated when the chain is built, so nothing is allocated while audio runs.
+
+## Sidechain
+
+`sidechain <amount>` ducks a track against the kick. `from=` picks a different
+source: any track name, or the name of the module a track plays.
+
+```
+sidechain 0.4                          # song-wide, against the kick
+track pad  { sidechain 0.6 out > master }             # the kick
+track wash { sidechain 0.5 from=bass out > master }   # breathes with the bass
+```
+
+`attack=` and `release=` shape the envelope every source follows, in
+milliseconds. The release is what decides whether a duck reads as a gap or as a
+pump: the default 4.5 ms lets the bass back inside the kick, while 70-150 ms
+makes the two read as one instrument.
+
+```
+sidechain 0.6 attack=1ms release=70ms
+```
+
+The source keeps its own envelope, so different tracks can duck against
+different things in the same song. A `beats` source uses its kick envelope
+rather than its full output, so hats and snares do not pump the mix. A source
+that names nothing, or that names the track itself, is a compile error, as is a
+`from=` with no amount.
+
+## Separation: why a mix turns into one sound
+
+Balance is not the only reason instruments blur together. Three things decide
+whether you can pick a part out of a mix, and the report measures all three:
+
+**Where it is.** Two instruments in the same place in the stereo field cannot be
+told apart however well they are balanced. `pan -0.4` and `pan 0.35` on the parts
+that share a frequency band is the cheapest separation there is; `autopan(0.4,
+bars=8)` and `chorus_mix` give width that moves. The kick, the sub and the lead
+stay centred — everything else should not. `stereo_width_pct` in the render
+report is 0 for a mono mix and around 50 for one hard-panned source; under 12 the
+report says so, and `mono_mix` warns at check time.
+
+**What band it occupies.** `band` and `band_pct` per track say where each one
+lives. Two tracks whose dominant band is the same and whose levels are within
+6 dB are masking each other; carve one with `eq(mid=-3)` or move them apart.
+
+**When it plays.** A part that sounds on every sixteenth alongside everything
+else has nowhere to be heard. Space is an arrangement decision, not a mix one.
+
+Saturation works against all three: every `saturate()` fills the gaps between
+instruments with harmonics, so a chain with three of them is gluing where you
+want separation.
+
+## Design warnings
+
+`synth check` and `synth_check` run a set of lints over a song that already
+compiles. They never block a render; they exist so the author gets "this pad
+never moves" instead of only "this parses". Each one came from a real session.
+
+| code | fires when | why it matters |
+| --- | --- | --- |
+| `static_pad` | a `keys`/`fm` track holds notes for 8+ steps with no LFO, vibrato, arp or `auto` | sustained sounds that do not move stop being heard as sound and start being heard as a drone of level |
+| `level_used_as_fader` | a sustained track's `level` moves more than 3 dB between scenes | a continuous bed is not a fader; riding it is audible as the bed changing volume under everything else |
+| `dry_mix` | nothing uses `reverb_send`, `delay_send` or a bus | everything sits at the same depth |
+| `mono_mix` | fewer than a third of the tonal tracks are panned off centre | instruments in the same place cannot be told apart |
+| `chord_into_mono_voice` | a chord plays through a `keys` module whose `voice_mode` is not `poly` | unison, octave and fifth stack their voices on one note, so only the last note sounds |
+| `no_sidechain` | drums and tonal tracks with no ducking anywhere | the kick has to fight through the mix |
+| `sidechain_without_kick` | a scene ducks tracks but has no beats track | those tracks play unducked, so a breakdown can end up louder than the drop |
+| `single_scene` | more than 8 bars in one scene | no arrangement shape |
+| `no_limiter` | the master chain has no `limiter` | peaks clip instead of being caught |
+| `unused_module` / `unused_pattern` | defined but never played | usually a typo in a `using` or `play` name |

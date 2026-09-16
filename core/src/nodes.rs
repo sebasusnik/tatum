@@ -44,6 +44,58 @@ pub struct Arg {
     pub doc: &'static str,
 }
 
+impl Arg {
+    /// Resolve a number written with a unit against this argument. Node
+    /// arguments are already in real units, so a suffix is a scale plus a check
+    /// that the author meant the unit the argument actually uses.
+    ///
+    /// `makeup` is why this exists: it is a linear gain, and all fourteen uses
+    /// in the corpus wrote it as if it were dB. `makeup=6db` now says so.
+    pub fn value_from_quantity(&self, value: f32, suffix: &str) -> Result<f32, String> {
+        let doc = self.doc;
+        let is_hz = doc.starts_with("Hz");
+        let is_ms = doc.starts_with("ms");
+        let is_db = doc.starts_with("dB");
+        let is_linear_gain = doc.starts_with("linear gain");
+        let resolved = match suffix {
+            "hz" if is_hz => Some(value),
+            "khz" if is_hz => Some(value * 1000.0),
+            "ms" if is_ms => Some(value),
+            "s" | "sec" if is_ms => Some(value * 1000.0),
+            "db" if is_db => Some(value),
+            "db" if is_linear_gain => Some(crate::math::pow(10.0, value / 20.0)),
+            _ => None,
+        };
+        match resolved {
+            Some(v) => Ok(v),
+            None => {
+                let accepts = if is_hz {
+                    "hz or khz"
+                } else if is_ms {
+                    "ms or s"
+                } else if is_db || is_linear_gain {
+                    "db"
+                } else {
+                    "no unit"
+                };
+                Err(format!(
+                    "'{}' takes {} ({}), not '{}'",
+                    self.name, accepts, self.doc, suffix
+                ))
+            }
+        }
+    }
+}
+
+/// Look up one argument of a node by name, or by position among the positionals.
+pub fn arg_at(kind: &str, name: Option<&str>, index: usize) -> Option<&'static Arg> {
+    let def = lookup(kind)?;
+    match name {
+        Some(n) => def.named.iter().chain(def.positional.iter()).find(|a| a.name == n),
+        None => def.positional.get(index),
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct NodeDefSpec {
     pub name: &'static str,
@@ -78,7 +130,11 @@ const FILTER_ENV: &[Arg] = &[
 ];
 const FILTER_POS: &[Arg] = &[
     arg!("cutoff", 20.0, 20000.0, 1000.0, "Hz"),
-    arg!("resonance", 0.0, 1.0, 0.5, "0 = none, 1 = self-oscillation"),
+    // The curve is Q = 0.5 + resonance * 19.5, so this number climbs fast:
+    // 0.01 is flat, 0.1 is already a 2.5 dB bump, 0.3 is a clear whistle. The
+    // default used to be 0.5, which is a Q of 10 -- a resonant filter for
+    // anyone who just wrote `lowpass(2000)`.
+    arg!("resonance", 0.0, 1.0, 0.01, "0.01 is flat, 0.1 a bump, 0.3 a whistle, 1 self-oscillation (Q = 0.5 + n*19.5)"),
 ];
 const OSC_POS: &[Arg] = &[arg!("freq", 1.0, 20000.0, 440.0, "base frequency in Hz; notes retune it")];
 
@@ -129,6 +185,16 @@ pub const NODES: &[NodeDefSpec] = &[
         positional: &[arg!("threshold", -60.0, 0.0, -3.0, "dB")],
         named: &[arg!("ratio", 1.0, 20.0, 3.0, "n:1"), arg!("attack", 0.0, 500.0, 20.0, "ms"), arg!("release", 1.0, 2000.0, 100.0, "ms"), arg!("makeup", 0.0, 4.0, 1.0, "linear gain after compression; 2 = +6 dB")],
         waveform: false, rhythm: false, in_chains: true, doc: "Feed-forward compressor." },
+    NodeDefSpec { name: "capture", aliases: &[], category: Category::Effect,
+        positional: &[arg!("bars", 0.25, 16.0, 2.0, "bars of audio to record")],
+        named: &[
+            arg!("start", 0.0, 512.0, 0.0, "bar the recording starts on"),
+            arg!("speed", 0.05, 4.0, 1.0, "playback rate; 0.5 is half speed and an octave down"),
+            arg!("reverse", 0.0, 1.0, 0.0, "1 plays the window backwards"),
+            arg!("mix", 0.0, 1.0, 1.0, "wet amount against the live signal"),
+        ],
+        waveform: false, rhythm: false, in_chains: true,
+        doc: "Record a window of this chain and loop it back, stretched or reversed. Passes the signal through until the window is full." },
     NodeDefSpec { name: "limiter", aliases: &[], category: Category::Effect,
         positional: &[arg!("threshold", 0.1, 1.0, 0.95, "output ceiling")], named: &[],
         waveform: false, rhythm: false, in_chains: true, doc: "Lookahead peak limiter; put it last on the master." },

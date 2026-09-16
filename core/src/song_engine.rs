@@ -3,11 +3,12 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::analysis::BandMeter;
 use crate::dsl::compiler::{self, *};
 use crate::dsl::error::{ParseError, CompileError};
 use crate::effects::delay::{Delay, DelaySync};
 use crate::effects::reverb::Reverb;
-use crate::graph::node::{NodeKind, NodeSpec, MAX_NODE_INPUTS};
+use crate::graph::node::{NodeKind, NodeSpec};
 use crate::graph::voice::Instrument;
 use crate::modules::bass::{BassModule, BassParam};
 use crate::modules::beats::BeatsModule;
@@ -131,7 +132,7 @@ impl SongInstrument {
             None => return false, // graph instruments have no named params
         };
         match params::lookup(kind, name) {
-            Some(spec) => { apply_param(self, spec.id, value); true }
+            Some(spec) => apply_param(self, spec.id, value),
             None => false,
         }
     }
@@ -148,15 +149,17 @@ impl SongInstrument {
     }
 }
 
-/// Apply a registry-typed parameter to the right module.
-fn apply_param(inst: &mut SongInstrument, id: ParamId, value: f32) {
+/// Apply a registry-typed parameter to the right module. False when the id
+/// belongs to another module kind: that is a caller bug, not a no-op.
+fn apply_param(inst: &mut SongInstrument, id: ParamId, value: f32) -> bool {
     match (inst, id) {
         (SongInstrument::Bass(m), ParamId::Bass(p)) => m.set_param(p, value),
         (SongInstrument::Fm(m), ParamId::Fm(p)) => m.set_param(p, value),
         (SongInstrument::Keys(m), ParamId::Keys(p)) => m.set_param(p, value),
         (SongInstrument::Beats(m), ParamId::Beats(p)) => m.set_param(p, value),
-        _ => {}
+        _ => return false,
     }
+    true
 }
 
 /// FX chain processing helper: a chain of NodeKind applied in series (mono).
@@ -170,17 +173,6 @@ impl FxChain {
         Self { nodes }
     }
 
-    #[inline]
-    fn process(&mut self, input: f32) -> f32 {
-        let mut val = input;
-        let inputs_buf = [0.0f32; MAX_NODE_INPUTS];
-        for node in self.nodes.iter_mut() {
-            let mut inp = inputs_buf;
-            inp[0] = val;
-            val = node.process(&inp, 1);
-        }
-        val
-    }
 
     /// Process a stereo pair through the chain (for master bus).
     #[inline]
@@ -241,6 +233,33 @@ struct TrackPlayback {
     meter_peak: f32,
     meter_sum_sq: f64,
     meter_samples: u64,
+    /// Mid and side energy, so the report can say where in the stereo field a
+    /// track sits. Two instruments in the same place cannot be told apart.
+    meter_mid_sq: f64,
+    meter_side_sq: f64,
+    /// Band split of this track alone. Two tracks sitting in the same band is
+    /// masking, and it used to take reasoning to notice.
+    band: BandMeter,
+    /// Amount this track ducks, and the track it ducks against. `None` source
+    /// means the song's global source, which is the kick unless said otherwise.
+    sc_source: Option<usize>,
+    /// This track's own envelope, maintained only when something ducks against it.
+    sc_env: f32,
+    is_sc_source: bool,
+}
+
+/// Share of a new peak the follower takes in one sample. The 0.005 ms default
+/// reproduces the 0.99 that used to be hardcoded, which is effectively instant.
+fn attack_alpha(ms: f32) -> f32 {
+    let samples = (ms * 0.001 * SAMPLE_RATE).max(0.001);
+    1.0 - math::exp(-1.0 / samples)
+}
+
+/// What the envelope keeps per sample while it falls. The 4.5 ms default
+/// reproduces the 0.995 that used to be hardcoded.
+fn release_coeff(ms: f32) -> f32 {
+    let samples = (ms * 0.001 * SAMPLE_RATE).max(1.0);
+    math::exp(-1.0 / samples)
 }
 
 /// Build a fresh arp processor from compiled settings at the given tempo.
@@ -256,21 +275,37 @@ fn make_arp(cfg: &ArpConfig, tempo: f32) -> ArpProcessor {
 
 /// Named bus with FX chain.
 struct SongBus {
+    name: String,
     fx_chain: FxChain,
+    /// Stereo. A bus used to sum L and R and return the result down the middle,
+    /// so any track routed into one lost its position in the stereo field --
+    /// which is most of what tells instruments apart.
     buffer: [f32; BLOCK_SIZE],
+    buffer_r: [f32; BLOCK_SIZE],
+    // Metered after the bus chain: a track can read fine on its own meter and
+    // still arrive at master 12 dB down because of what the bus does to it.
+    meter_peak: f32,
+    meter_sum_sq: f64,
+    meter_samples: u64,
 }
 
 impl SongBus {
-    fn new(specs: &[NodeSpec]) -> Self {
+    fn new(name: String, specs: &[NodeSpec]) -> Self {
         Self {
+            name,
             fx_chain: FxChain::new(specs),
             buffer: [0.0; BLOCK_SIZE],
+            buffer_r: [0.0; BLOCK_SIZE],
+            meter_peak: 0.0,
+            meter_sum_sq: 0.0,
+            meter_samples: 0,
         }
     }
 
     fn clear(&mut self, len: usize) {
         for i in 0..len {
             self.buffer[i] = 0.0;
+            self.buffer_r[i] = 0.0;
         }
     }
 
@@ -344,6 +379,15 @@ pub struct SongEngine {
     sidechain_amount: f32,
     sc_envelope: f32,
     kick_track_idx: Option<usize>,
+    /// Song-wide `sidechain ... from=`; `None` falls back to the kick track.
+    global_sc_source: Option<String>,
+    /// One-pole coefficients for the source envelope. The release is what makes
+    /// a duck read as a pump: too fast and the bass snaps back inside the kick,
+    /// too slow and it never comes back.
+    sc_attack_coeff: f32,
+    sc_release_coeff: f32,
+    /// Resolved once per scene: the audio path must not search by name.
+    global_sc_idx: Option<usize>,
 
     // Scene effect overrides
     reverb_wet_level: f32,
@@ -363,21 +407,74 @@ pub struct SongEngine {
     global_step: usize,
 
     // Pending nudge triggers: (samples_remaining, instrument_idx, midi_note, velocity)
+    // Capacity is reserved up front; see `push_trigger` for what happens when it fills.
     pending_triggers: Vec<(f32, usize, u8, f32)>,
+
+    // Band metering costs nine one-poles per track per sample, so it is off
+    // unless a render report asks for it.
+    band_metering: bool,
+    master_in_peak: f32,
+    master_in_sum_sq: f64,
+    master_in_samples: u64,
+
+    // Per-track render buffers, allocated once. The audio path takes them with
+    // `mem::take` and puts them back, so a block never touches the allocator.
+    track_bufs_l: Vec<[f32; BLOCK_SIZE]>,
+    track_bufs_r: Vec<[f32; BLOCK_SIZE]>,
 
     running: bool,
 }
 
-/// A running automation lane within a scene.
+/// The arpeggiator holds at most this many notes (chord notes x octaves).
+const MAX_ARP_NOTES: usize = 16;
+
+/// How many delayed drum hits can be in flight at once. A nudge resolves within a
+/// fraction of a step, so this is far above anything a pattern can produce.
+const MAX_PENDING_TRIGGERS: usize = 128;
+
+/// The longest name in the parameter registry is 13 bytes; this leaves room.
+/// `inline_name_holds_every_registry_param` keeps that true as params are added.
+pub const INLINE_NAME_CAP: usize = 24;
+
+/// A parameter name stored inline. Automation targets are resolved when a scene
+/// starts, which happens on the audio thread, where a `String` would allocate.
+#[derive(Clone, Copy)]
+struct InlineName {
+    bytes: [u8; INLINE_NAME_CAP],
+    len: u8,
+}
+
+impl InlineName {
+    /// `None` when the name does not fit. No registry name is that long.
+    fn new(s: &str) -> Option<Self> {
+        let src = s.as_bytes();
+        if src.len() > INLINE_NAME_CAP {
+            return None;
+        }
+        let mut bytes = [0u8; INLINE_NAME_CAP];
+        bytes[..src.len()].copy_from_slice(src);
+        Some(Self { bytes, len: src.len() as u8 })
+    }
+
+    fn as_str(&self) -> &str {
+        // Always built from a &str, so the prefix is valid UTF-8.
+        core::str::from_utf8(&self.bytes[..self.len as usize]).unwrap_or("")
+    }
+}
+
+/// A running automation lane within a scene. `keyframes` points back into
+/// `scenes[scene_idx].automations[auto_idx]` rather than copying them: applying a
+/// scene happens on the audio thread.
 struct ActiveAutomation {
     target: AutoTarget,
-    keyframes: Vec<f32>,
+    scene_idx: usize,
+    auto_idx: usize,
 }
 
 /// Resolved automation target.
 enum AutoTarget {
-    InstrumentParam { instrument_idx: usize, param_name: String },
-    MasterParam { param_name: String },
+    InstrumentParam { instrument_idx: usize, param_name: InlineName },
+    MasterParam { param_name: InlineName },
     TrackLevel { track_idx: usize },
     ReverbMix,
     DelayMix,
@@ -385,6 +482,7 @@ enum AutoTarget {
 }
 
 /// Structured error from DSL parsing or compilation, preserving line/col info.
+#[derive(Debug, Clone)]
 pub enum DslError {
     Parse(Vec<ParseError>),
     Compile(Vec<CompileError>),
@@ -523,7 +621,7 @@ impl SongEngine {
         // Build buses
         let buses: Vec<SongBus> = song.buses
             .iter()
-            .map(|b| SongBus::new(&b.fx_chain))
+            .map(|b| SongBus::new(b.name.clone(), &b.fx_chain))
             .collect();
 
         // Build master FX chain
@@ -567,6 +665,12 @@ impl SongEngine {
                     meter_peak: 0.0,
                     meter_sum_sq: 0.0,
                     meter_samples: 0,
+                    meter_mid_sq: 0.0,
+                    meter_side_sq: 0.0,
+                    band: BandMeter::new(SAMPLE_RATE),
+                    sc_source: None,
+                    sc_env: 0.0,
+                    is_sc_source: false,
                 }
             })
             .collect();
@@ -626,6 +730,7 @@ impl SongEngine {
         let humanize_velocity = song.globals.humanize.unwrap_or(0.0);
         let humanize_timing = song.globals.humanize_timing.unwrap_or(0.0);
 
+        let track_buf_count = tracks.len();
         let mut engine = Self {
             instruments,
             instrument_names,
@@ -655,10 +760,18 @@ impl SongEngine {
             gain_comp_current: 1.0,
             sidechain_amount,
             sc_envelope: 0.0,
+            global_sc_source: song.globals.sidechain_source.clone(),
+            sc_attack_coeff: attack_alpha(song.globals.sidechain_attack_ms.unwrap_or(0.005)),
+            sc_release_coeff: release_coeff(song.globals.sidechain_release_ms.unwrap_or(4.5)),
+            global_sc_idx: None,
             kick_track_idx,
             reverb_wet_level: 1.0,
             delay_wet_level: 1.0,
-            active_automations: Vec::new(),
+            // Sized for the busiest scene so the first scene change, which
+            // happens on the audio thread, does not grow it.
+            active_automations: Vec::with_capacity(
+                song.scenes.iter().map(|s| s.automations.len()).max().unwrap_or(0)
+            ),
             scene_step: 0,
             scene_total_steps: 0,
             scenes: song.scenes,
@@ -667,10 +780,17 @@ impl SongEngine {
             arrangement_bar_count: 0,
             current_bar: 0,
             global_step: 0,
-            pending_triggers: Vec::new(),
+            band_metering: false,
+            master_in_peak: 0.0,
+            master_in_sum_sq: 0.0,
+            master_in_samples: 0,
+            pending_triggers: Vec::with_capacity(MAX_PENDING_TRIGGERS),
+            track_bufs_l: vec![[0.0f32; BLOCK_SIZE]; track_buf_count],
+            track_bufs_r: vec![[0.0f32; BLOCK_SIZE]; track_buf_count],
             running: false,
         };
         engine.retune_fx(tempo);
+        engine.resolve_sidechain_sources(usize::MAX);
         engine
     }
 
@@ -804,17 +924,72 @@ impl SongEngine {
             t.active && t.instrument_idx < self.instruments.len()
                 && matches!(self.instruments[t.instrument_idx], SongInstrument::Beats(_))
         });
+        self.resolve_sidechain_sources(scene_idx);
 
         self.recompute_gain_comp();
 
-        let scene = &self.scenes[scene_idx];
-        let mut lanes = Vec::new();
-        for auto_def in &scene.automations {
-            if let Some(target) = self.resolve_auto_target(&auto_def.target) {
-                lanes.push(ActiveAutomation { target, keyframes: auto_def.keyframes.clone() });
+        // Reuses the existing capacity: applying a scene runs on the audio thread.
+        let mut lanes = core::mem::take(&mut self.active_automations);
+        lanes.clear();
+        for auto_idx in 0..self.scenes[scene_idx].automations.len() {
+            let target_name = core::mem::take(&mut self.scenes[scene_idx].automations[auto_idx].target);
+            let resolved = self.resolve_auto_target(&target_name);
+            self.scenes[scene_idx].automations[auto_idx].target = target_name;
+            if let Some(target) = resolved {
+                lanes.push(ActiveAutomation { target, scene_idx, auto_idx });
             }
         }
         self.active_automations = lanes;
+    }
+
+    /// Bind every track's `sidechain from=` to a track index, and mark which
+    /// tracks have to maintain an envelope. Names are resolved here rather than
+    /// at compile time because a scene can rebind which track plays what.
+    fn resolve_sidechain_sources(&mut self, scene_idx: usize) {
+        for t in self.tracks.iter_mut() {
+            t.sc_source = None;
+            t.is_sc_source = false;
+        }
+        // Names are borrowed, never cloned: this runs on the audio thread at
+        // every scene change and at every live swap.
+        let global_idx = match self.global_sc_source.as_deref() {
+            Some(name) => self.find_source_track(name),
+            None => self.kick_track_idx,
+        };
+        for ti in 0..self.tracks.len() {
+            if !self.tracks[ti].active { continue; }
+            let named = self.scenes.get(scene_idx)
+                .and_then(|s| s.tracks.iter().find(|st| st.name == self.track_names[ti]))
+                .and_then(|st| st.sidechain_source.as_deref());
+            let source = match named {
+                Some(name) => self.find_source_track(name),
+                None => global_idx,
+            };
+            if let Some(si) = source {
+                if si != ti {
+                    self.tracks[ti].sc_source = Some(si);
+                    self.tracks[si].is_sc_source = true;
+                }
+            }
+        }
+        // The global sends duck against the same source the song names.
+        self.global_sc_idx = global_idx;
+        if let Some(si) = self.global_sc_idx {
+            self.tracks[si].is_sc_source = true;
+        }
+        if let Some(ki) = self.kick_track_idx {
+            self.tracks[ki].is_sc_source = true;
+        }
+    }
+
+    /// A sidechain source names a track, or the module a track plays.
+    fn find_source_track(&self, name: &str) -> Option<usize> {
+        self.track_names.iter().position(|n| n == name)
+            .filter(|i| self.tracks[*i].active)
+            .or_else(|| {
+                let inst = self.instrument_names.iter().position(|n| n == name)?;
+                self.tracks.iter().position(|t| t.active && t.instrument_idx == inst)
+            })
     }
 
     /// Recompute automatic gain compensation based on active track count.
@@ -845,7 +1020,71 @@ impl SongEngine {
             t.meter_peak = 0.0;
             t.meter_sum_sq = 0.0;
             t.meter_samples = 0;
+            t.meter_mid_sq = 0.0;
+            t.meter_side_sq = 0.0;
+            t.band.reset();
         }
+        for b in self.buses.iter_mut() {
+            b.meter_peak = 0.0;
+            b.meter_sum_sq = 0.0;
+            b.meter_samples = 0;
+        }
+        self.master_in_peak = 0.0;
+        self.master_in_sum_sq = 0.0;
+        self.master_in_samples = 0;
+    }
+
+    /// Turn on per-track band analysis. Off by default: it costs nine one-pole
+    /// sections per track per sample, which a live audio thread should not pay.
+    pub fn set_band_metering(&mut self, on: bool) {
+        self.band_metering = on;
+    }
+
+    /// Where this track sits in the stereo field: 0 is dead centre, 0.5 is hard
+    /// to one side.
+    pub fn track_width(&self, idx: usize) -> f32 {
+        self.tracks.get(idx).map_or(0.0, |t| {
+            let total = t.meter_mid_sq + t.meter_side_sq;
+            if total <= 0.0 { 0.0 } else { (t.meter_side_sq / total) as f32 }
+        })
+    }
+
+    /// Share of this track's energy in each of `analysis::BAND_NAMES`, in percent.
+    pub fn track_bands(&self, idx: usize) -> [f32; 5] {
+        self.tracks.get(idx).map_or([0.0; 5], |t| t.band.percentages())
+    }
+
+    /// Index into `analysis::BAND_NAMES` of the band this track mostly occupies.
+    pub fn track_dominant_band(&self, idx: usize) -> Option<usize> {
+        self.tracks.get(idx).and_then(|t| t.band.dominant())
+    }
+
+    pub fn bus_count(&self) -> usize { self.buses.len() }
+
+    pub fn bus_name(&self, idx: usize) -> &str {
+        self.buses.get(idx).map_or("", |b| b.name.as_str())
+    }
+
+    /// Peak of a bus after its own chain, before it reaches master.
+    pub fn bus_peak(&self, idx: usize) -> f32 {
+        self.buses.get(idx).map_or(0.0, |b| b.meter_peak)
+    }
+
+    pub fn bus_rms(&self, idx: usize) -> f32 {
+        self.buses.get(idx).map_or(0.0, |b| {
+            if b.meter_samples == 0 { 0.0 } else { math::sqrt((b.meter_sum_sq / b.meter_samples as f64) as f32) }
+        })
+    }
+
+    /// Peak and RMS entering the master chain, so the caller can compare the
+    /// crest factor before and after and see what the limiter took.
+    pub fn master_input_peak_rms(&self) -> (f32, f32) {
+        let rms = if self.master_in_samples == 0 {
+            0.0
+        } else {
+            math::sqrt((self.master_in_sum_sq / self.master_in_samples as f64) as f32)
+        };
+        (self.master_in_peak, rms)
     }
 
     /// Automatic gain compensation applied right now (1.0 = none).
@@ -864,7 +1103,7 @@ impl SongEngine {
                     let param = &target[dot_pos + 1..];
 
                     if name == "master" {
-                        return Some(AutoTarget::MasterParam { param_name: String::from(param) });
+                        return InlineName::new(param).map(|param_name| AutoTarget::MasterParam { param_name });
                     }
 
                     if param == "level" {
@@ -885,9 +1124,9 @@ impl SongEngine {
 
                     // Try as instrument.param
                     if let Some(inst_idx) = self.instrument_names.iter().position(|n| n == name) {
-                        return Some(AutoTarget::InstrumentParam {
+                        return InlineName::new(param).map(|param_name| AutoTarget::InstrumentParam {
                             instrument_idx: inst_idx,
-                            param_name: String::from(param),
+                            param_name,
                         });
                     }
                 }
@@ -956,16 +1195,16 @@ impl SongEngine {
             output_r[i] = 0.0;
         }
 
-        if !self.running { return; }
+        if !self.running {
+            return;
+        }
 
-        // Per-track instrument render buffers (L and R)
+        // Per-track instrument render buffers (L and R), borrowed from the engine so
+        // the block allocates nothing. Instruments write the whole slice they are
+        // given, so no clearing is needed between blocks.
         let track_count = self.tracks.len();
-        let mut track_bufs_l: Vec<[f32; BLOCK_SIZE]> = (0..track_count)
-            .map(|_| [0.0f32; BLOCK_SIZE])
-            .collect();
-        let mut track_bufs_r: Vec<[f32; BLOCK_SIZE]> = (0..track_count)
-            .map(|_| [0.0f32; BLOCK_SIZE])
-            .collect();
+        let mut track_bufs_l = core::mem::take(&mut self.track_bufs_l);
+        let mut track_bufs_r = core::mem::take(&mut self.track_bufs_r);
 
         // Step sequencer: process sample-by-sample for accurate timing
         for _s in 0..len {
@@ -1066,33 +1305,41 @@ impl SongEngine {
         let has_any_sidechain = self.sidechain_amount > 0.0
             || self.reverb_sidechain > 0.0 || self.delay_sidechain > 0.0
             || self.tracks.iter().any(|t| t.active && t.sidechain_amount > 0.0);
+        let (sc_attack, sc_release) = (self.sc_attack_coeff, self.sc_release_coeff);
         if has_any_sidechain {
-            if let Some(kick_idx) = self.kick_track_idx {
-                for s in 0..len {
-                    // For Beats tracks, use kick_env instead of raw signal
-                    let kick_level = if let SongInstrument::Beats(ref m) = self.instruments[self.tracks[kick_idx].instrument_idx] {
+            for s in 0..len {
+                // Each source keeps its own envelope, so `sidechain from=bass`
+                // breathes with the bass while the drums still duck the pads.
+                for si in 0..track_count {
+                    if !self.tracks[si].is_sc_source || !self.tracks[si].active { continue; }
+                    // A Beats track uses its kick envelope rather than the raw
+                    // signal, so hats and snares do not duck the mix.
+                    let level = if let SongInstrument::Beats(ref m) = self.instruments[self.tracks[si].instrument_idx] {
                         if s < m.kick_env.len() { m.kick_env[s] } else { 0.0 }
                     } else {
-                        track_bufs_l[kick_idx][s].abs()
+                        math::abs(track_bufs_l[si][s])
                     };
-                    self.sc_envelope = if kick_level > self.sc_envelope {
-                        0.01 * self.sc_envelope + 0.99 * kick_level // fast attack
+                    let env = self.tracks[si].sc_env;
+                    self.tracks[si].sc_env = if level > env {
+                        env + (level - env) * sc_attack
                     } else {
-                        0.995 * self.sc_envelope // slow release
+                        sc_release * env
                     };
-                    for ti in 0..track_count {
-                        if ti != kick_idx && self.tracks[ti].active {
-                            let amount = if self.tracks[ti].sidechain_amount > 0.0 {
-                                self.tracks[ti].sidechain_amount
-                            } else {
-                                self.sidechain_amount
-                            };
-                            if amount > 0.0 {
-                                let duck = 1.0 - amount * self.sc_envelope;
-                                track_bufs_l[ti][s] *= duck;
-                                track_bufs_r[ti][s] *= duck;
-                            }
-                        }
+                }
+                // The sends follow the kick, or the song's named source.
+                self.sc_envelope = self.global_sc_idx.map_or(0.0, |si| self.tracks[si].sc_env);
+                for ti in 0..track_count {
+                    if !self.tracks[ti].active { continue; }
+                    let Some(si) = self.tracks[ti].sc_source else { continue };
+                    let amount = if self.tracks[ti].sidechain_amount > 0.0 {
+                        self.tracks[ti].sidechain_amount
+                    } else {
+                        self.sidechain_amount
+                    };
+                    if amount > 0.0 {
+                        let duck = 1.0 - amount * self.tracks[si].sc_env;
+                        track_bufs_l[ti][s] *= duck;
+                        track_bufs_r[ti][s] *= duck;
                     }
                 }
             }
@@ -1112,6 +1359,9 @@ impl SongEngine {
         // Mix tracks into master + bus sends + global sends with level and panning
         // NOTE: velocity is already baked into the instrument output (via voice.velocity
         // which = step_vel * track_vel, set in note_on). Only apply track level here.
+        self.apply_automation();
+
+        let band_metering = self.band_metering;
         for ti in 0..track_count {
             if !self.tracks[ti].active { continue; }
             let gain = self.tracks[ti].level;
@@ -1130,11 +1380,18 @@ impl SongEngine {
                 t.meter_peak = t.meter_peak.max(sample_l.abs()).max(sample_r.abs());
                 t.meter_sum_sq += (sample_l * sample_l + sample_r * sample_r) as f64;
                 t.meter_samples += 2;
+                let (mid, side) = ((sample_l + sample_r) as f64, (sample_l - sample_r) as f64);
+                t.meter_mid_sq += mid * mid;
+                t.meter_side_sq += side * side;
+                if band_metering {
+                    t.band.push_stereo(sample_l, sample_r);
+                }
 
                 // Bus send (mono sum to bus)
                 if let Some((bus_idx, amount)) = self.tracks[ti].bus_send {
                     if bus_idx < self.buses.len() {
-                        self.buses[bus_idx].buffer[s] += (sample_l + sample_r) * 0.5 * amount;
+                        self.buses[bus_idx].buffer[s] += sample_l * amount;
+                        self.buses[bus_idx].buffer_r[s] += sample_r * amount;
                     }
                 }
 
@@ -1157,13 +1414,19 @@ impl SongEngine {
         }
 
         // Process bus FX chains and mix into master
+        // Always, even on silence. Gating on a non-zero input truncated the
+        // tail of any reverb or delay on a bus the instant its tracks stopped,
+        // and made `capture(start=N)` count processed samples rather than bars,
+        // so its window landed on the wrong music. The global sends have always
+        // been ticked unconditionally for the same reason.
         for bus in self.buses.iter_mut() {
             for s in 0..len {
-                if bus.buffer[s] != 0.0 {
-                    let processed = bus.fx_chain.process(bus.buffer[s]);
-                    output_l[s] += processed;
-                    output_r[s] += processed;
-                }
+                let (pl, pr) = bus.fx_chain.process_stereo(bus.buffer[s], bus.buffer_r[s]);
+                bus.meter_peak = bus.meter_peak.max(math::abs(pl)).max(math::abs(pr));
+                bus.meter_sum_sq += ((pl * pl + pr * pr) * 0.5) as f64;
+                bus.meter_samples += 1;
+                output_l[s] += pl;
+                output_r[s] += pr;
             }
         }
 
@@ -1207,10 +1470,11 @@ impl SongEngine {
                 self.gain_comp_current = SMOOTH_COEFF * self.gain_comp_current
                     + (1.0 - SMOOTH_COEFF) * self.gain_comp_target;
                 let g = ml * self.gain_comp_current;
-                let (fl, fr) = self.master_fx.process_stereo(
-                    output_l[s] * g,
-                    output_r[s] * g,
-                );
+                let (in_l, in_r) = (output_l[s] * g, output_r[s] * g);
+                self.master_in_peak = self.master_in_peak.max(math::abs(in_l)).max(math::abs(in_r));
+                self.master_in_sum_sq += (in_l * in_l + in_r * in_r) as f64;
+                self.master_in_samples += 2;
+                let (fl, fr) = self.master_fx.process_stereo(in_l, in_r);
                 output_l[s] = fl;
                 output_r[s] = fr;
             }
@@ -1221,34 +1485,86 @@ impl SongEngine {
                 let g = ml * self.gain_comp_current;
                 output_l[s] *= g;
                 output_r[s] *= g;
+                self.master_in_peak = self.master_in_peak.max(math::abs(output_l[s])).max(math::abs(output_r[s]));
+                self.master_in_sum_sq += (output_l[s] * output_l[s] + output_r[s] * output_r[s]) as f64;
+                self.master_in_samples += 2;
             }
+        }
+
+        self.track_bufs_l = track_bufs_l;
+        self.track_bufs_r = track_bufs_r;
+    }
+
+    /// Schedule a nudged hit. If the queue is full the hit fires now rather than
+    /// growing the queue: the audio thread must not allocate, and losing a few
+    /// milliseconds of swing is better than losing the hit.
+    fn push_trigger(
+        pending: &mut Vec<(f32, usize, u8, f32)>,
+        instruments: &mut [SongInstrument],
+        samples: f32,
+        inst_idx: usize,
+        midi_note: u8,
+        vel: f32,
+    ) {
+        if pending.len() < MAX_PENDING_TRIGGERS {
+            pending.push((samples, inst_idx, midi_note, vel));
+        } else if inst_idx < instruments.len() {
+            instruments[inst_idx].note_on(midi_note, vel);
         }
     }
 
-    fn advance_step(&mut self) {
-        // Process automation before note events
-        if self.scene_total_steps > 0 && !self.active_automations.is_empty() {
-            let progress = self.scene_step as f32 / self.scene_total_steps as f32;
-            for auto_lane in &self.active_automations {
-                let value = interpolate_automation(&auto_lane.keyframes, progress);
-                match &auto_lane.target {
-                    AutoTarget::InstrumentParam { instrument_idx, param_name } => {
-                        if *instrument_idx < self.instruments.len() {
-                            self.instruments[*instrument_idx].set_param_by_name(param_name, value);
-                        }
+    /// Automation, evaluated once per block. It used to run in `advance_step`,
+    /// which meant a sweep moved in sixteenth-note stairs: eight jumps a second
+    /// on a resonant filter, which is heard as steps rather than a sweep.
+    fn apply_automation(&mut self) {
+        if self.scene_total_steps == 0 || self.active_automations.is_empty() {
+            return;
+        }
+        let within_step = if self.current_step_duration > 0.0 {
+            (self.sample_counter / self.current_step_duration).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let progress = ((self.scene_step as f32 + within_step) / self.scene_total_steps as f32).clamp(0.0, 1.0);
+        let lanes = core::mem::take(&mut self.active_automations);
+        for auto_lane in &lanes {
+            let keyframes = &self.scenes[auto_lane.scene_idx].automations[auto_lane.auto_idx].keyframes;
+            let value = interpolate_automation(keyframes, progress);
+            match &auto_lane.target {
+                AutoTarget::InstrumentParam { instrument_idx, param_name } => {
+                    if *instrument_idx < self.instruments.len() {
+                        self.instruments[*instrument_idx].set_param_by_name(param_name.as_str(), value);
                     }
-                    AutoTarget::MasterParam { param_name } => {
-                        self.master_fx.set_param(param_name, value);
-                    }
-                    AutoTarget::TrackLevel { track_idx } => {
-                        if *track_idx < self.tracks.len() {
-                            self.tracks[*track_idx].level = value;
-                        }
-                    }
-                    AutoTarget::ReverbMix => self.reverb_wet_level = value,
-                    AutoTarget::ReverbFreeze => self.send_reverb.set_freeze(value >= 0.5),
-                    AutoTarget::DelayMix => self.delay_wet_level = value,
                 }
+                AutoTarget::MasterParam { param_name } => {
+                    self.master_fx.set_param(param_name.as_str(), value);
+                }
+                AutoTarget::TrackLevel { track_idx } => {
+                    if *track_idx < self.tracks.len() {
+                        self.tracks[*track_idx].level = value;
+                    }
+                }
+                AutoTarget::ReverbMix => self.reverb_wet_level = value,
+                AutoTarget::ReverbFreeze => self.send_reverb.set_freeze(value >= 0.5),
+                AutoTarget::DelayMix => self.delay_wet_level = value,
+            }
+        }
+        self.active_automations = lanes;
+    }
+
+    fn advance_step(&mut self) {
+        // Cross the bar line before triggering, when the step about to fire is
+        // the first of a bar. It used to be counted after the last step of the
+        // previous bar fired, so `current_bar` read one sixteenth early: scene
+        // changes killed the note the last step had just started, every
+        // arranged render stopped a sixteenth short, and a hot-swap keyed on
+        // the bar counter landed a sixteenth before the downbeat.
+        if self.steps_per_bar > 0 {
+            let bar_of_step = self.global_step / self.steps_per_bar;
+            if bar_of_step > self.current_bar {
+                self.current_bar = bar_of_step;
+                self.check_arrangement_advance();
+                if !self.running { return; }
             }
         }
         self.scene_step += 1;
@@ -1287,7 +1603,8 @@ impl SongEngine {
                                 let nudge_samples = lane.nudge * self.samples_per_step;
                                 if nudge_samples.abs() > 0.5 && nudge_samples > 0.0 {
                                     // Positive nudge = delay trigger
-                                    self.pending_triggers.push((nudge_samples, inst_idx, lane.midi_note, vel));
+                                    Self::push_trigger(&mut self.pending_triggers, &mut self.instruments,
+                                        nudge_samples, inst_idx, lane.midi_note, vel);
                                 } else {
                                     // No nudge or negative nudge (trigger immediately, can't go back in time)
                                     self.instruments[inst_idx].note_on(lane.midi_note, vel);
@@ -1507,12 +1824,6 @@ impl SongEngine {
         }
 
         self.global_step += 1;
-
-        // Bar boundary check for arrangement
-        if self.steps_per_bar > 0 && self.global_step % self.steps_per_bar == 0 {
-            self.current_bar += 1;
-            self.check_arrangement_advance();
-        }
     }
 
     /// Step handler for arp tracks: update the held notes, (re)start the arp,
@@ -1568,22 +1879,27 @@ impl SongEngine {
         let vel = Self::humanize_vel(step_vel * track.velocity, humanize_velocity, rng);
 
         // Sorted ascending and expanded across octaves so "up" really goes up.
-        let mut sorted: Vec<u8> = notes[..count].to_vec();
-        sorted.sort_unstable();
+        // Fixed buffers: this runs on the audio thread, once per step.
+        let mut sorted = [0u8; compiler::MAX_CHORD_NOTES];
+        sorted[..count].copy_from_slice(&notes[..count]);
+        sorted[..count].sort_unstable();
         let octaves = track.arp_cfg.map_or(1, |c| c.octaves).max(1);
-        let mut list: Vec<u8> = Vec::new();
+        let mut list = [0u8; MAX_ARP_NOTES];
+        let mut list_len = 0usize;
         for o in 0..octaves {
-            for &n in &sorted {
+            for &n in &sorted[..count] {
                 let v = n as u16 + 12 * o as u16;
-                if v <= 127 && list.len() < 16 {
-                    list.push(v as u8);
+                if v <= 127 && list_len < MAX_ARP_NOTES {
+                    list[list_len] = v as u8;
+                    list_len += 1;
                 }
             }
         }
+        let list = &list[..list_len];
 
         let mut pending_off = None;
         if let Some(arp) = track.arp.as_mut() {
-            arp.set_notes(&list);
+            arp.set_notes(list);
             arp.set_velocity(vel);
             if !same || !arp.is_active() {
                 // New material: close the open arp note and restart from the first note.
@@ -1762,6 +2078,10 @@ impl SongEngine {
             }
             let (scene_idx, _) = self.arrangement[self.arrangement_idx];
             self.apply_scene(scene_idx);
+            // `apply_scene` starts the scene clock at zero. Landing mid-scene
+            // must not restart its automation: a sweep that was three bars in
+            // stays three bars in.
+            self.scene_step = self.arrangement_bar_count as usize * self.steps_per_bar;
         } else {
             self.recompute_gain_comp();
         }
@@ -1887,6 +2207,183 @@ impl SongEngine {
 
     pub fn instrument_index(&self, name: &str) -> Option<usize> {
         self.instrument_names.iter().position(|n| n == name)
+    }
+
+    /// Set a parameter already resolved to a registry id. False if the
+    /// instrument does not exist or the id belongs to another module kind.
+    pub fn set_module_param_id(&mut self, inst_idx: usize, id: ParamId, value: f32) -> bool {
+        match self.instruments.get_mut(inst_idx) {
+            Some(inst) => apply_param(inst, id, value),
+            None => false,
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    //  Live session support (see live.rs)
+    // ═══════════════════════════════════════════════════════
+
+    /// Samples this engine will render before the next step fires: the trigger
+    /// happens on the first sample where the step clock reaches the step
+    /// duration. Zero means the next sample rendered is that step.
+    fn samples_until_step(&self) -> f32 {
+        let k = -math::floor(-(self.current_step_duration - self.sample_counter));
+        (k - 1.0).max(0.0)
+    }
+
+    /// Samples this engine will render before the first step of the next bar
+    /// fires. Exact within the current step; across the remaining steps it
+    /// assumes no timing humanization, which a caller absorbs by asking again
+    /// every block. `usize::MAX` when not running.
+    pub fn samples_until_bar(&self) -> usize {
+        if !self.running || self.steps_per_bar == 0 {
+            return usize::MAX;
+        }
+        let mut total = self.samples_until_step();
+        let mut step = self.global_step;
+        while step % self.steps_per_bar != 0 {
+            step += 1;
+            total += self.effective_step_samples(step);
+        }
+        total as usize
+    }
+
+    /// Bar the next step to fire belongs to. On a bar line this is the bar
+    /// about to start, while `current_bar` still reads the one that ended.
+    pub fn bar_of_next_step(&self) -> usize {
+        if self.steps_per_bar == 0 { 0 } else { self.global_step / self.steps_per_bar }
+    }
+
+    /// Position the engine as if it had just played through bar `bar - 1`
+    /// and were about to fire the downbeat of `bar`: the previous entry's
+    /// scene is active, the bar line has not been crossed. A live swap starts
+    /// the new engine here so that it crosses the line itself, on the same
+    /// sample and with the same consequences (scene change, arrangement end,
+    /// automation progress) as the engine it replaces would have.
+    pub fn start_before_bar(&mut self, bar: usize) {
+        if bar == 0 {
+            self.start_from_bar(0);
+            return;
+        }
+        self.start_from_bar(bar - 1);
+        self.global_step = bar * self.steps_per_bar;
+        if !self.arrangement.is_empty() {
+            self.scene_step = (self.arrangement_bar_count as usize + 1) * self.steps_per_bar;
+        }
+        self.current_step_duration = self.effective_step_samples(self.global_step);
+        self.sample_counter = self.current_step_duration;
+    }
+
+    /// Stop sequencing but keep rendering: what sounds decays, nothing new
+    /// fires. The retiring half of a swap runs like this under a fade-out.
+    pub fn coast(&mut self) {
+        self.current_step_duration = f32::MAX;
+        self.sample_counter = 0.0;
+        self.pending_triggers.clear();
+        self.active_automations.clear();
+        self.scene_total_steps = 0;
+        for t in self.tracks.iter_mut() {
+            t.arp = None;
+            t.gate_samples_remaining = 0.0;
+        }
+    }
+
+    /// Take over state from `old`, the engine this one replaces at the start
+    /// of the block in which the next bar line falls, `until` samples in.
+    /// What the source text did not change keeps sounding: instruments keep
+    /// their voices, sends and buses keep their tails, inherited tracks keep
+    /// their place in the pattern and their held notes. Everything moves with
+    /// `mem::swap`, so this allocates nothing. Call after `start_before_bar`.
+    pub fn inherit_from(&mut self, old: &mut SongEngine, map: &crate::live::Inherit, until: usize) {
+        // Old tracks nobody continues release their notes now, on the old
+        // instruments, before an instrument moves over with a note that no
+        // track in the new engine would ever release.
+        for j in 0..old.tracks.len() {
+            let continued = map.tracks.iter().any(|m| *m == Some(j));
+            if !continued {
+                Self::release_track_notes(&mut old.tracks[j], &mut old.instruments);
+                old.tracks[j].gate_samples_remaining = 0.0;
+            }
+        }
+        for (i, m) in map.instruments.iter().enumerate() {
+            if let Some(j) = *m {
+                if i < self.instruments.len() && j < old.instruments.len() {
+                    core::mem::swap(&mut self.instruments[i], &mut old.instruments[j]);
+                    self.instruments[i].set_bpm(self.tempo);
+                }
+            }
+        }
+        for (i, m) in map.tracks.iter().enumerate() {
+            let Some(j) = *m else { continue };
+            if i >= self.tracks.len() || j >= old.tracks.len() { continue; }
+            let n = &mut self.tracks[i];
+            let o = &mut old.tracks[j];
+            core::mem::swap(&mut n.current_step, &mut o.current_step);
+            core::mem::swap(&mut n.current_notes, &mut o.current_notes);
+            core::mem::swap(&mut n.current_notes_count, &mut o.current_notes_count);
+            core::mem::swap(&mut n.gate_samples_remaining, &mut o.gate_samples_remaining);
+            core::mem::swap(&mut n.arp, &mut o.arp);
+            core::mem::swap(&mut n.insert_fx, &mut o.insert_fx);
+            n.insert_fx.set_bpm(self.tempo);
+            if let (Some(arp), Some(cfg)) = (n.arp.as_mut(), n.arp_cfg) {
+                arp.set_bpm(self.tempo * cfg.rate_mult);
+            }
+        }
+        // Nudged hits still in flight follow their instrument. The queue's
+        // capacity is reserved, so this cannot allocate.
+        for k in 0..old.pending_triggers.len() {
+            let (samples, inst, note, vel) = old.pending_triggers[k];
+            if let Some(i) = map.instruments.iter().position(|m| *m == Some(inst)) {
+                if self.pending_triggers.len() < MAX_PENDING_TRIGGERS {
+                    self.pending_triggers.push((samples, i, note, vel));
+                }
+            }
+        }
+        old.pending_triggers.clear();
+        // The sidechain follower of a track is the envelope of whatever it
+        // plays: it continues by name even where the track itself does not.
+        for i in 0..self.tracks.len() {
+            if let Some(j) = old.track_names.iter().position(|n| *n == self.track_names[i]) {
+                self.tracks[i].sc_env = old.tracks[j].sc_env;
+            }
+        }
+        for (i, m) in map.buses.iter().enumerate() {
+            if let Some(j) = *m {
+                if i < self.buses.len() && j < old.buses.len() {
+                    core::mem::swap(&mut self.buses[i].fx_chain, &mut old.buses[j].fx_chain);
+                    self.buses[i].fx_chain.set_bpm(self.tempo);
+                }
+            }
+        }
+        if map.sends {
+            // Freeze belongs to the scene this engine is starting, not to the
+            // reverb that carried the tail here.
+            let frozen = self.send_reverb.is_frozen();
+            core::mem::swap(&mut self.send_delay, &mut old.send_delay);
+            core::mem::swap(&mut self.send_reverb, &mut old.send_reverb);
+            core::mem::swap(&mut self.reverb_return, &mut old.reverb_return);
+            core::mem::swap(&mut self.delay_return, &mut old.delay_return);
+            self.send_reverb.set_freeze(frozen);
+            self.send_delay.set_bpm(self.tempo, SAMPLE_RATE);
+            self.reverb_return.set_bpm(self.tempo);
+            self.delay_return.set_bpm(self.tempo);
+        }
+        if map.master {
+            core::mem::swap(&mut self.master_fx, &mut old.master_fx);
+            self.master_fx.set_bpm(self.tempo);
+        }
+        // Smoothed and random state continues regardless of what changed: a
+        // gain ramp restarting or the humanize sequence rewinding is audible.
+        core::mem::swap(&mut self.rng, &mut old.rng);
+        self.gain_comp_current = old.gain_comp_current;
+        self.sc_envelope = old.sc_envelope;
+        // The downbeat fires `until` samples into this block, on the old
+        // clock; the new clock is set so it fires there too, carrying the
+        // fractional residue (5512.5 samples per step at 120 BPM) with it.
+        if old.running {
+            let until = until as f32;
+            let residue = (old.sample_counter + until + 1.0 - old.current_step_duration).clamp(0.0, 1.0);
+            self.sample_counter = self.current_step_duration - until - 1.0 + residue;
+        }
     }
 
     /// Swing 0.5 (straight) ..= 0.75 (hard shuffle). Takes effect on the next step.

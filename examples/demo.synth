@@ -10,8 +10,6 @@ scale A minor
 sidechain 0.3
 
 # ── Buses ──
-bus reverb
-bus delay
 bus drumBus
 
 # ────────────────────────────────────────────────
@@ -238,13 +236,7 @@ pattern stab_off {
 # BUS FX CHAINS
 # ────────────────────────────────────────────────
 
-reverb {
-  in > reverb(0.5) > out
-}
 
-delay {
-  in > delay(1/4, 0.35) > out
-}
 
 drumBus {
   in > compressor(-6.0, ratio=4.0, attack=10, release=80) > saturate(0.15) > master
@@ -279,7 +271,7 @@ track hats {
   using hat
   velocity 0.6
   level 0.55
-  pan 0.3
+  pan 0.34
   out > drumBus
 }
 
@@ -288,7 +280,7 @@ track openhat {
   using openhat
   velocity 0.45
   level 0.4
-  pan -0.2
+  pan 0.45
   out > drumBus
 }
 
@@ -297,7 +289,7 @@ track snare {
   using snare
   velocity 0.75
   level 0.7
-  pan 0.0
+  pan -0.50
   reverb_send 0.06
   out > drumBus
 }
@@ -318,7 +310,7 @@ track stabs {
   velocity 0.5
   level 0.4
   gate 0.3
-  pan -0.4
+  pan -0.38
   delay_send 0.2
   reverb_send 0.12
   out > master
@@ -329,7 +321,7 @@ track stabs {
 # ────────────────────────────────────────────────
 
 master {
-  in > eq(low=3.0, mid=1.0, high=0.5) > compressor(-6.0, ratio=4.0, attack=10, release=80, makeup=2.5) > limiter > out
+  in > eq(low=3.0, mid=1.0, high=0.5) > compressor(-6.0, ratio=4.0, attack=10, release=80, makeup=2.80) > limiter > out
 }
 
 # ────────────────────────────────────────────────
@@ -338,43 +330,43 @@ master {
 
 # Intro: kick + sparse bass
 scene intro {
-  track kick { play kick_4x4 using kick level 0.85 }
-  track bass { play bass_intro using bass level 0.5 velocity 0.7 }
+  track kick { play kick_4x4 using kick level 0.426 }
+  track bass { play bass_intro using bass level 0.2506 velocity 0.7 }
 }
 
 # Buildup: add hats + open hat
 scene buildup {
   track kick { play kick_4x4 using kick level 0.9 }
   track bass { play bass_intro using bass level 0.65 velocity 0.8 }
-  track hats { play hat_offbeat using hat level 0.45 velocity 0.5 pan 0.3 }
-  track openhat { play openhat_accent using openhat level 0.3 velocity 0.4 pan -0.2 }
+  track hats { play hat_offbeat using hat level 0.45 velocity 0.5 pan 0.34 }
+  track openhat { play openhat_accent using openhat level 0.3 velocity 0.4 pan 0.45 }
 }
 
 # Main: full groove
 scene main {
   track kick { play kick_4x4 using kick level 0.9 }
   track bass { play bassline using bass level 0.75 velocity 0.85 }
-  track hats { play hat_16th using hat level 0.5 velocity 0.55 pan 0.3 }
-  track openhat { play openhat_accent using openhat level 0.35 velocity 0.4 pan -0.2 }
-  track snare { play snare_2_4 using snare level 0.7 velocity 0.75 }
+  track hats { play hat_16th using hat level 0.5 velocity 0.55 pan 0.34 }
+  track openhat { play openhat_accent using openhat level 0.35 velocity 0.4 pan 0.45 }
+  track snare { play snare_2_4 using snare level 0.7 velocity 0.75 pan -0.50 }
   track pads { play pad_am using pad level 0.4 velocity 0.35 }
-  track stabs { play stab_hit using stab level 0.35 velocity 0.45 pan -0.4 }
+  track stabs { play stab_hit using stab level 0.35 velocity 0.45 pan -0.38 }
 }
 
 # Drop: bass variation + ghost snares
 scene drop {
   track kick { play kick_4x4 using kick level 0.9 }
   track bass { play bass_var using bass level 0.8 velocity 0.9 }
-  track hats { play hat_16th using hat level 0.55 velocity 0.6 pan 0.3 }
-  track openhat { play openhat_accent using openhat level 0.4 velocity 0.45 pan -0.2 }
-  track snare { play snare_ghost using snare level 0.7 velocity 0.75 }
-  track stabs { play stab_off using stab level 0.4 velocity 0.5 pan 0.4 }
+  track hats { play hat_16th using hat level 0.55 velocity 0.6 pan 0.34 }
+  track openhat { play openhat_accent using openhat level 0.4 velocity 0.45 pan 0.45 }
+  track snare { play snare_ghost using snare level 0.7 velocity 0.75 pan -0.50 }
+  track stabs { play stab_off using stab level 0.4 velocity 0.5 pan -0.38 }
 }
 
 # Breakdown: pads only + sparse hats
 scene breakdown {
   track pads { play pad_dm using pad level 0.5 velocity 0.4 }
-  track hats { play hat_offbeat using hat level 0.3 velocity 0.35 pan 0.3 }
+  track hats { play hat_offbeat using hat level 0.3 velocity 0.35 pan 0.34 }
 }
 
 # ────────────────────────────────────────────────

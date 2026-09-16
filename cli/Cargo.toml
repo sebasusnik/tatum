@@ -8,4 +8,5 @@ name = "synth"
 path = "src/main.rs"
 
 [dependencies]
+cpal = "0.18"
 synth-core = { path = "../core" }

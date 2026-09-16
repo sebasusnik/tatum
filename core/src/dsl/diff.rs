@@ -45,11 +45,6 @@ pub enum DslChange {
         track_name: String,
         gate: f32,
     },
-    /// A track switched to a different pattern
-    TrackPatternSwapped {
-        track_name: String,
-        new_pattern: String,
-    },
     /// Something structural changed — requires full hot-swap
     StructuralChange,
 }
@@ -182,12 +177,12 @@ pub fn diff(old: &Song, new: &Song) -> Vec<DslChange> {
                 gate: new_track.gate.unwrap_or(0.85),
             });
         }
-        // Pattern swap
+        // Which pattern a track plays is quantized to the bar like any other
+        // edit to what is played (docs/DSL.md, livecoding semantics). It used
+        // to switch instantly and restart the pattern from step 0 mid-bar.
         if old_track.play != new_track.play {
-            changes.push(DslChange::TrackPatternSwapped {
-                track_name: new_track.name.clone(),
-                new_pattern: new_track.play.clone(),
-            });
+            changes.push(DslChange::StructuralChange);
+            return changes;
         }
         // Level
         if old_track.level != new_track.level {

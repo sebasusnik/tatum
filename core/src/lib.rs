@@ -15,8 +15,10 @@ pub mod effects;
 pub mod graph;
 pub mod dsl;
 pub mod song_engine;
+pub mod live;
 pub mod params;
 pub mod wav;
+pub mod analysis;
 pub mod nodes;
 
 #[cfg(test)]

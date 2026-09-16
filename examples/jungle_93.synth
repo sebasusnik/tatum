@@ -318,7 +318,7 @@ track drums {
     velocity 1.0
     level 0.82
     reverb_send 0.06
-    out > saturate(0.15) > eq(low=2.5, mid=1.5, high=1.8) > compressor(-12, ratio=4, attack=1, release=35, makeup=4) > master
+    out > saturate(0.15) > eq(low=2.5, mid=1.5, high=1.8) > compressor(-12, ratio=4, attack=1, release=35, makeup=1.58) > master
 }
 
 track reese {
@@ -344,6 +344,7 @@ track sub {
 track stabs {
     play silence
     using stab
+    pan 0.34
     velocity 1.0
     level 0.22
     gate 0.12
@@ -355,6 +356,7 @@ track stabs {
 track psylead {
     play silence
     using psylead
+    pan -0.50
     velocity 1.0
     level 0.20
     gate 0.25
@@ -376,6 +378,7 @@ track pad {
 track atmosphere {
     play silence
     using atmo
+    pan -0.38
     velocity 1.0
     level 0.18
     reverb_send 0.50
@@ -389,7 +392,7 @@ track atmosphere {
 
 master {
     in > eq(low=3.0, mid=1.2, high=1.6)
-       > compressor(-10, ratio=3, attack=3, release=55, makeup=3.5)
+       > compressor(-10, ratio=3, attack=3, release=55, makeup=1.00)
        > limiter
        > out
 }
@@ -401,7 +404,7 @@ master {
 # INTRO: sparse kicks + eerie atmosphere + pad fades in
 scene intro {
     track drums      { play brk_intro  using breaks }
-    track atmosphere { play atmo_dark  using atmo }
+    track atmosphere { play atmo_dark  using atmo pan -0.38 }
     track pad        { play pad_am7    using dreampad }
 }
 
@@ -411,8 +414,8 @@ scene build {
     track reese      { play reese_half  using reese }
     track sub        { play sub_hold    using sub }
     track pad        { play pad_am7     using dreampad }
-    track psylead    { play psy_ghost   using psylead }
-    track atmosphere { play atmo_wide   using atmo }
+    track psylead { play psy_ghost   using psylead pan -0.50 }
+    track atmosphere { play atmo_wide   using atmo pan -0.38 }
 }
 
 # FILL: snare roll
@@ -425,8 +428,8 @@ scene drop_a {
     track drums      { play brk_shuffle   using breaks }
     track reese      { play reese_main    using reese }
     track sub        { play sub_main      using sub }
-    track stabs      { play stab_sparse   using stab }
-    track psylead    { play psy_melody_a  using psylead }
+    track stabs { play stab_sparse   using stab pan 0.34 }
+    track psylead { play psy_melody_a  using psylead pan -0.50 }
     track pad        { play pad_am7       using dreampad }
 }
 
@@ -435,8 +438,8 @@ scene drop_a2 {
     track drums      { play brk_amen_a    using breaks }
     track reese      { play reese_main    using reese }
     track sub        { play sub_main      using sub }
-    track stabs      { play stab_call     using stab }
-    track psylead    { play psy_melody_b  using psylead }
+    track stabs { play stab_call     using stab pan 0.34 }
+    track psylead { play psy_melody_b  using psylead pan -0.50 }
     track pad        { play pad_dm9       using dreampad }
 }
 
@@ -447,8 +450,8 @@ scene breakdown {
     track drums      { play brk_break    using breaks }
     track reese      { play reese_break  using reese }
     track pad        { play pad_em       using dreampad }
-    track psylead    { play psy_ghost    using psylead }
-    track atmosphere { play atmo_dark    using atmo }
+    track psylead { play psy_ghost    using psylead pan -0.50 }
+    track atmosphere { play atmo_dark    using atmo pan -0.38 }
 }
 
 # FILL 2
@@ -461,10 +464,10 @@ scene drop_b {
     track drums      { play brk_amen_b    using breaks }
     track reese      { play reese_groove  using reese }
     track sub        { play sub_main      using sub }
-    track stabs      { play stab_call     using stab }
-    track psylead    { play psy_melody_a  using psylead }
+    track stabs { play stab_call     using stab pan 0.34 }
+    track psylead { play psy_melody_a  using psylead pan -0.50 }
     track pad        { play pad_am7       using dreampad }
-    track atmosphere { play atmo_wide     using atmo }
+    track atmosphere { play atmo_wide     using atmo pan -0.38 }
 }
 
 # DROP B2: variation
@@ -472,8 +475,8 @@ scene drop_b2 {
     track drums      { play brk_shuffle   using breaks }
     track reese      { play reese_groove  using reese }
     track sub        { play sub_main      using sub }
-    track stabs      { play stab_sparse   using stab }
-    track psylead    { play psy_melody_b  using psylead }
+    track stabs { play stab_sparse   using stab pan 0.34 }
+    track psylead { play psy_melody_b  using psylead pan -0.50 }
     track pad        { play pad_dm9       using dreampad }
 }
 
@@ -483,14 +486,14 @@ scene outro {
     track reese      { play reese_half    using reese }
     track sub        { play sub_hold      using sub }
     track pad        { play pad_am7       using dreampad }
-    track atmosphere { play atmo_dark     using atmo }
+    track atmosphere { play atmo_dark     using atmo pan -0.38 }
 }
 
 # TAIL: reverb ghosts
 scene tail {
     track drums      { play brk_outro  using breaks }
     track pad        { play pad_em     using dreampad }
-    track atmosphere { play atmo_dark  using atmo }
+    track atmosphere { play atmo_dark  using atmo pan -0.38 }
 }
 
 # ────────────────────────────────────────────────

@@ -169,13 +169,31 @@ pub fn ln(x: f32) -> f32 {
         return -3.4028235e38;
     }
     let bits = x.to_bits();
-    let e = ((bits >> 23) & 0xFF) as i32 - 127;
+    let mut e = ((bits >> 23) & 0xFF) as i32 - 127;
     let m_bits = (bits & 0x007F_FFFF) | 0x3F80_0000;
-    let m = f32::from_bits(m_bits); // m in [1, 2)
-    let f = m - 1.0;
-    // ln(1+f) ≈ f - f²/2 + f³/3 - f⁴/4 (for f in [0, 1))
-    let ln_m = f * (1.0 - f * (0.5 - f * (0.333333 - f * 0.25)));
+    let mut m = f32::from_bits(m_bits); // m in [1, 2)
+
+    // The four-term Taylor series for ln(1+f) that used to live here is only good
+    // near f = 0: at f close to 1 it was off by 0.11, which is 11% once it goes
+    // through exp(). Every exponential mapping in the engine (filter cutoffs,
+    // envelope times) inherited that error, so the documented anchors were wrong.
+    //
+    // Reduce the mantissa to [sqrt(1/2), sqrt(2)) and use ln(m) = 2*atanh(s) with
+    // s = (m-1)/(m+1), which stays under 0.172 and converges in four terms.
+    if m > core::f32::consts::SQRT_2 {
+        m *= 0.5;
+        e += 1;
+    }
+    let s = (m - 1.0) / (m + 1.0);
+    let s2 = s * s;
+    let ln_m = s * (2.0 + s2 * (0.6666667 + s2 * (0.4 + s2 * 0.2857143)));
     ln_m + (e as f32) * LN2
+}
+
+/// Base-10 logarithm.
+#[inline]
+pub fn log10(x: f32) -> f32 {
+    ln(x) * core::f32::consts::LOG10_E
 }
 
 /// Power function: x^y = exp(y * ln(x))

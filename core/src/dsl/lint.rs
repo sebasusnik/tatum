@@ -160,6 +160,91 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
         ));
     }
 
+    // ── level_used_as_fader: a sustained element ridden up and down per scene ──
+    //
+    // A continuous drone or pad is a bed, not a fader. Moving its level between
+    // scenes to hit a loudness target is audible as the bed changing volume
+    // under everything else, which is exactly the complaint this came from.
+    for track in &song.tracks {
+        let Some(m) = song.module_defs.iter().find(|m| m.name == track.using_instrument) else { continue };
+        if m.module_type == "beats" { continue; }
+        let mut levels: Vec<(String, f32)> = Vec::new();
+        for scene in &song.scenes {
+            let Some(st) = scene.tracks.iter().find(|t| t.name == track.name) else { continue };
+            // Only sustained material: a staccato part may well be a fader.
+            if longest_hold(song, &st.play) < 8 { continue; }
+            let level = st.level.or(track.level).unwrap_or(0.8);
+            levels.push((scene.name.clone(), level));
+        }
+        if levels.len() < 2 { continue; }
+        let lo = levels.iter().fold(f32::MAX, |a, (_, v)| a.min(*v));
+        let hi = levels.iter().fold(0.0f32, |a, (_, v)| a.max(*v));
+        if lo <= 0.0 { continue; }
+        // 3 dB is where a level move stops reading as arrangement and starts
+        // reading as someone touching the fader.
+        let spread_db = 20.0 * crate::math::log10(hi / lo);
+        if spread_db > 3.0 {
+            out.push(lint(
+                "level_used_as_fader",
+                format!(
+                    "track '{}' holds long notes and its level moves {:.1} dB across scenes ({:.2} to {:.2})",
+                    track.name, spread_db, lo, hi
+                ),
+                "A sustained bed should keep one level. Change what plays over it instead, or move it with a filter or a send so the change reads as texture rather than volume.",
+            ));
+        }
+    }
+
+    // ── chord_into_mono_voice: a chord played by a voice mode that cannot hold it ──
+    //
+    // `unison` stacks all eight voices on one note, which is what the hardware
+    // it copies does, so a five-note chord arrives as five note-ons and only the
+    // last survives. Both the docs and the MCP instructions used to recommend
+    // unison for pads, and an agent spent two thirds of a session wondering why
+    // its harmony was thin. Rendering two different chords through it gives
+    // bit-identical output.
+    for track in &all_tracks {
+        let Some(m) = song.module_defs.iter().find(|m| m.name == track.using_instrument) else { continue };
+        if m.module_type != "keys" { continue; }
+        let mode = param(m, "voice_mode").unwrap_or(0.0);
+        // poly is index 0 of VOICE_MODES; every other mode collapses voices.
+        if mode < 0.01 { continue; }
+        let Some(pat) = song.patterns.iter().find(|p| p.name == track.play) else { continue };
+        let widest = pat.rows.iter().flatten()
+            .filter_map(|s| match s { Step::Chord(c) => Some(c.notes.len()), _ => None })
+            .max()
+            .unwrap_or(0);
+        if widest > 1 {
+            out.push(lint(
+                "chord_into_mono_voice",
+                format!(
+                    "track '{}' plays a {}-note chord through module '{}', whose voice_mode is not poly",
+                    track.name, widest, m.name
+                ),
+                "unison, octave, fifth and ringmod all stack their voices on one note, so only the last note of a chord sounds. Use `voice_mode poly` for chords, or play one note.",
+            ));
+        }
+    }
+
+    // ── mono_mix: everything in the same place in the stereo field ──
+    //
+    // Twenty-one of the twenty-five songs in this repo measured under 2% wide.
+    // Instruments that sit on top of each other cannot be told apart however
+    // well they are balanced, and nothing in the tooling looked at it.
+    {
+        let tonal: Vec<&&TrackDef> = all_tracks.iter()
+            .filter(|t| song.module_defs.iter().any(|m| m.name == t.using_instrument && m.module_type != "beats"))
+            .collect();
+        let panned = tonal.iter().filter(|t| t.pan.map_or(false, |p| crate::math::abs(p) > 0.15)).count();
+        if tonal.len() >= 4 && panned * 3 < tonal.len() {
+            out.push(lint(
+                "mono_mix",
+                format!("{} of {} tonal tracks sit within 0.15 of centre", tonal.len() - panned, tonal.len()),
+                "Give each instrument its own place: `pan -0.4` and `pan 0.35` on the parts that share a frequency band, or `autopan(0.4, bars=8)` and `chorus_mix` for width that moves. The kick, sub and lead stay centred.",
+            ));
+        }
+    }
+
     // ── unused definitions ──
     for m in &song.module_defs {
         if !all_tracks.iter().any(|t| t.using_instrument == m.name) {
@@ -169,6 +254,18 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
     for p in &song.patterns {
         if !all_tracks.iter().any(|t| t.play == p.name) {
             out.push(lint("unused_pattern", format!("pattern '{}' is never played", p.name), "Remove it or play it from a track or scene."));
+        }
+    }
+    // A declared bus nothing routes into processes silence. Easy to write when
+    // a track means to use `reverb_send` and the author also declares a bus
+    // called `reverb`, which is how two of the examples ended up with one.
+    for b in &song.buses {
+        if !all_tracks.iter().any(|t| t.routing.iter().any(|r| r.kind == b.name)) {
+            out.push(lint(
+                "unused_bus",
+                format!("bus '{}' has no track routed into it", b.name),
+                "Route a track with `out > <bus>`, or remove it. `reverb_send` and `delay_send` feed the global sends, not a bus of that name.",
+            ));
         }
     }
 

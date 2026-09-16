@@ -207,3 +207,16 @@ fn tie_and_rest_repeat_shorthand() {
     let errs = dsl::parse(&bad).unwrap_err();
     assert!(errs[0].message.contains("expected a count 1..256"), "{}", errs[0].message);
 }
+
+#[test]
+fn unknown_step_parameter_is_an_error() {
+    // A step lock used to drop names it did not recognise, so `(cutof=80)` set
+    // nothing and the step just played normally.
+    let src = BASE.replace("pattern p { 1.1:0.9 - - - }", "pattern p { 1.1:0.9(cutof=0.8) - - - }");
+    let errs = dsl::parse(&src).expect_err("should fail to parse");
+    assert!(errs[0].message.contains("unknown step parameter 'cutof'"), "{}", errs[0].message);
+    assert!(errs[0].message.contains("cutoff, edepth, res or gate"), "{}", errs[0].message);
+
+    let src = BASE.replace("pattern p { 1.1:0.9 - - - }", "pattern p { 1.1:0.9(cutoff=0.8, gate=0.4) - - - }");
+    assert!(dsl::parse(&src).is_ok(), "the real names still parse");
+}

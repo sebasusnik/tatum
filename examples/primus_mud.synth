@@ -325,7 +325,7 @@ track drums {
     using kit
     velocity 1.0
     level 0.68
-    out > saturate(0.10) > eq(low=1.5, mid=1.5, high=1.6) > compressor(-10, ratio=3, attack=2, release=40, makeup=3) > master
+    out > saturate(0.10) > eq(low=1.5, mid=1.5, high=1.6) > compressor(-10, ratio=3, attack=2, release=40, makeup=1.41) > master
 }
 
 track slap {
@@ -335,7 +335,7 @@ track slap {
     level 0.52
     gate 0.75
     delay_send 0.05
-    out > saturate(0.30) > eq(low=1.5, mid=2.5, high=2.0) > compressor(-8, ratio=3, attack=1, release=30, makeup=2) > master
+    out > saturate(0.30) > eq(low=1.5, mid=2.5, high=2.0) > compressor(-8, ratio=3, attack=1, release=30, makeup=1.26) > master
 }
 
 track finger {
@@ -395,7 +395,7 @@ track scrape {
 
 master {
     in > eq(low=2.2, mid=1.4, high=0.9)
-       > compressor(-6, ratio=3.0, attack=3, release=50, makeup=2)
+       > compressor(-6, ratio=3.0, attack=3, release=50, makeup=2.00)
        > limiter
        > out
 }

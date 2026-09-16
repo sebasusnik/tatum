@@ -30,7 +30,7 @@ module keys wash {
 
 # Bright shimmer pad — higher register, airy
 module keys shimmer {
-    voice_mode ringmod
+    voice_mode poly
     cutoff 0.35
     resonance 0.10
     detune 0.06
@@ -353,7 +353,7 @@ track shimmer {
     play silence
     using shimmer
     velocity 1.0
-    level 0.06
+    level 0.03464
     reverb_send 0.35
     delay_send 0.12
     out > chorus(0.15) > master
@@ -407,7 +407,7 @@ track melody {
 
 master {
     in > eq(low=1.2, mid=1.0, high=1.0)
-       > compressor(-4, ratio=1.8, attack=10, release=90, makeup=1)
+       > compressor(-4, ratio=1.8, attack=10, release=90, makeup=4.00)
        > limiter
        > out
 }

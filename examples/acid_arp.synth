@@ -28,9 +28,9 @@ module fm pluck {
 }
 
 module keys wash {
-    voice_mode unison
-    cutoff 0.35
-    resonance 0.4
+    voice_mode poly
+    cutoff 1khz
+    resonance 6%
     detune 0.3
     chorus_mix 0.4
     lfo_target cutoff
@@ -73,16 +73,16 @@ pattern wash_pad {
 
 track drums { play beat using kit level 0.8 out > master }
 track acid  { play acid_line using acid level 0.6 gate 0.7 delay_send 0.15 out > saturate(0.4) > master }
-track pluck { play chord_hold using pluck level 0.45 delay_send 0.3 reverb_send 0.2
+track pluck { play chord_hold using pluck level 0.38 pan 0.35 delay_send 0.3 reverb_send 0.2
               arp up rate=16 gate=0.5 octaves=2 out > master }
-track wash  { play wash_pad using wash level 0.25 reverb_send 0.5 out > master }
+track wash  { play wash_pad using wash level 0.25 pan -0.4 reverb_send 0.5 out > autopan(0.25, bars=8) > master }
 
 master {
-    in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2, release=40, makeup=3) > limiter > out
+    in > eq(low=2.0, mid=-1.5, high=1.2) > compressor(-10, ratio=4, attack=2, release=40, makeup=2.80) > limiter > out
 }
 
 scene intro {
-    track wash  { play wash_pad using wash }
+    track wash { play wash_pad using wash }
     track pluck { play chord_hold using pluck arp up rate=8 gate=0.7 octaves=1 }
 }
 
@@ -91,7 +91,7 @@ scene groove {
     track drums { play beat using kit }
     track acid  { play acid_line using acid }
     track pluck { play chord_hold using pluck }
-    track wash  { play wash_pad using wash }
+    track wash { play wash_pad using wash }
 }
 
 scene peak {
@@ -99,7 +99,7 @@ scene peak {
     track drums { play beat using kit }
     track acid  { play acid_line using acid }
     track pluck { play chord_hold using pluck arp updown rate=32 gate=0.4 octaves=3 }
-    track wash  { play wash_pad using wash }
+    track wash { play wash_pad using wash }
 }
 
 arrange { intro x2  groove x4  peak x4  groove x2 }

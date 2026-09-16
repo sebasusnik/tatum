@@ -2,6 +2,10 @@ extern crate alloc;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+/// Suffixes the lexer will attach to a number. The parser decides whether the
+/// suffix makes sense for the parameter it lands on.
+pub const UNIT_SUFFIXES: &[&str] = &["hz", "khz", "ms", "s", "sec", "st", "x", "db", "%"];
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     // Keywords
@@ -34,6 +38,11 @@ pub enum Token {
     // Literals
     Ident(String),     // bass, osc1, etc
     Number(f32),       // 120, 0.01, 55
+    /// A number written with a unit: `800hz`, `20ms`, `-12st`, `6db`, `80%`.
+    /// The suffix is kept as written; the parser resolves it against the
+    /// parameter it belongs to, because the same number means different things
+    /// on a cutoff and on a gain.
+    Quantity(f32, String),
     Note(String),      // A1, C#4, G0
     DrumHit,           // x  (normal velocity 0.8)
     DrumAccent,        // X  (accent velocity 1.0)
@@ -148,8 +157,30 @@ pub fn tokenize(source: &str) -> Vec<Span> {
                 i += 1;
             }
             let s: String = chars[start..i].iter().collect();
+            // A unit suffix written against the number: `800hz`, `20ms`, `80%`.
+            // Anything else stays a plain number, so note degrees and repeats
+            // are untouched.
+            let suffix_start = i;
+            if i < len && chars[i] == '%' {
+                i += 1;
+            } else {
+                while i < len && chars[i].is_ascii_alphabetic() {
+                    i += 1;
+                }
+            }
+            let suffix: String = chars[suffix_start..i].iter().collect::<String>().to_ascii_lowercase();
+            if !suffix.is_empty() && !UNIT_SUFFIXES.contains(&suffix.as_str()) {
+                // Not a unit: leave those characters for the identifier scanner.
+                i = suffix_start;
+            }
+            let suffix: String = chars[suffix_start..i].iter().collect::<String>().to_ascii_lowercase();
             if let Ok(n) = s.parse::<f32>() {
-                tokens.push(Span { token: Token::Number(n), line, col: start_col });
+                let token = if suffix.is_empty() {
+                    Token::Number(n)
+                } else {
+                    Token::Quantity(n, suffix)
+                };
+                tokens.push(Span { token, line, col: start_col });
             }
             col += i - start;
             continue;

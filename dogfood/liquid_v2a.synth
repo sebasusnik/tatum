@@ -39,7 +39,7 @@ delay_return  { in > highpass(400, 0.2) > out }
 
 # Main cloud source. Gentle: the reverb, not the detune, does the washing out.
 module keys haze {
-    voice_mode unison
+    voice_mode poly
     detune 0.26            # rev 1 had 0.55, which beat like distortion
     chorus_mix 0.3         # rev 1 had 0.7
     cutoff 0.30
@@ -58,7 +58,7 @@ module keys haze {
 
 # Octave-up air layer, a different detune so it beats gently against `haze`.
 module keys air {
-    voice_mode unison
+    voice_mode poly
     detune 0.16
     chorus_mix 0.22
     cutoff 0.40
@@ -77,7 +77,7 @@ module keys air {
 
 # The only pad that reaches the master dry: keeps the chord changes readable.
 module keys warm {
-    voice_mode octave
+    voice_mode poly
     detune 0.2
     chorus_mix 0.18
     cutoff 0.34
@@ -203,16 +203,16 @@ scene intro {
     reverb_mix = 0.45
     auto master tilt -0.45 > -0.15
     auto haze cutoff 0.20 > 0.30
-    track cloud { play voicings using haze level 0.12 }
+    track cloud { play voicings using haze level 0.05367 }
 }
 
 scene groove {
     reverb_mix = 0.7
     auto master tilt -0.1 > 0.02
     auto haze cutoff 0.30 > 0.26 > 0.33
-    track cloud { play voicings using haze level 0.22 }
-    track layer { play voicings_hi using air level 0.08 }
-    track body  { play voicings using warm level 0.1 }
+    track cloud { play voicings using haze level 0.09839 }
+    track layer { play voicings_hi using air level 0.03578 }
+    track body { play voicings using warm level 0.04472 }
     track sub   { play sub_line using sub_osc level 0.45 }
     track drums { play brk using kit level 0.78 }
 }
@@ -231,9 +231,9 @@ scene full {
     auto master tilt -0.15 > 0.06
     auto haze cutoff 0.28 > 0.38 > 0.30
     auto air cutoff 0.36 > 0.44
-    track cloud { play voicings using haze level 0.378 }
-    track layer { play voicings_hi using air level 0.162 }
-    track body  { play voicings using warm level 0.189 }
+    track cloud { play voicings using haze level 0.169 }
+    track layer { play voicings_hi using air level 0.07245 }
+    track body { play voicings using warm level 0.08452 }
     track sub   { play sub_line using sub_osc level 0.666 }
     track drums { play brk using kit level 0.9 }
 }

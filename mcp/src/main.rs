@@ -16,12 +16,55 @@ use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
+use synth_core::analysis::{self, BAND_NAMES};
 use synth_core::dsl::{self, compiler, lint};
 use synth_core::params::{self, ModuleKind};
 use synth_core::song_engine::{DslError, SongEngine};
 use synth_core::SAMPLE_RATE;
 
 const DSL_DOC: &str = include_str!("../../docs/DSL.md");
+
+/// The server compiles the docs, the parser and the registries in. A client
+/// that connected before the last build keeps talking to all of them, and
+/// nothing in the protocol says so: two agents spent most of a session writing
+/// what `synth_docs` told them to write and being told it was a syntax error.
+/// Every response carries this, and `staleness()` compares it against the
+/// source on disk.
+const BUILD_STAMP: &str = concat!(env!("CARGO_PKG_VERSION"), " built ", env!("SYNTH_BUILD_TIME"));
+
+/// A warning when the sources are newer than this binary, so the mismatch is
+/// visible in the one place the client is already reading.
+fn staleness() -> Option<String> {
+    let built: u64 = env!("SYNTH_BUILD_EPOCH").parse().ok()?;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent()?;
+    let mut newest = 0u64;
+    let mut newest_name = String::new();
+    for rel in ["core/src", "mcp/src", "docs"] {
+        let mut stack = vec![root.join(rel)];
+        while let Some(dir) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+            for e in entries.flatten() {
+                let path = e.path();
+                if path.is_dir() { stack.push(path); continue; }
+                let Ok(meta) = e.metadata() else { continue };
+                let Ok(modified) = meta.modified() else { continue };
+                let Ok(secs) = modified.duration_since(std::time::UNIX_EPOCH) else { continue };
+                if secs.as_secs() > newest {
+                    newest = secs.as_secs();
+                    newest_name = path.strip_prefix(root).unwrap_or(&path).display().to_string();
+                }
+            }
+        }
+    }
+    if newest > built + 5 {
+        Some(format!(
+            "this server was built before {} was last changed, so its parser, its docs and its parameter registry are all out of date. Restart the MCP connection (or rebuild with `cargo build --release -p synth-mcp`) before trusting anything below.",
+            newest_name
+        ))
+    } else {
+        None
+    }
+}
 const PROTOCOL_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18"];
 const MAX_RENDER_BARS: u32 = 512;
 /// Default threshold of the `limiter` node; a section peaking here is being limited.
@@ -34,8 +77,14 @@ recipes), look at one example from `synth_examples` for the target genre, write 
 run `synth_check` and fix every error it reports (they carry line numbers and suggestions), \
 act on its design warnings, then `synth_render` and read the per-section loudness report to \
 judge the arrangement. Parameter names and ranges come from `synth_params`; never invent a \
-parameter. Nothing that sustains should stay static: pads and leads get an LFO on the \
-filter, vibrato, an `auto` sweep or an arp, plus sends and sidechain against the kick.";
+parameter. Write values in their units where `synth_params` lists one — `cutoff 800hz`, \
+`attack 20ms`, `osc2_pitch -12st`, `resonance 80%`, `makeup=6db` — rather than normalized \
+floats; a wrong unit is an error, a wrong float is not. A compressor's `makeup` is a linear \
+gain, so `makeup=4` is +12 dB: say `makeup=6db` if you mean decibels. Nothing that sustains \
+should stay static: pads and leads get an LFO on the filter, vibrato, an `auto` sweep or an \
+arp, plus sends and sidechain against the kick. On `keys`, only `voice_mode poly` holds a chord: \
+unison, octave and fifth stack their voices on one note, so a chord sent to them plays its last \
+note alone.";
 
 fn main() {
     let ctx = Ctx::from_env();
@@ -128,8 +177,11 @@ fn initialize(params: &Value) -> Value {
             "tools": { "listChanged": false },
             "resources": { "subscribe": false, "listChanged": false }
         },
-        "serverInfo": { "name": "synth-mcp", "version": env!("CARGO_PKG_VERSION") },
-        "instructions": INSTRUCTIONS
+        "serverInfo": { "name": "synth-mcp", "version": env!("CARGO_PKG_VERSION"), "build": BUILD_STAMP },
+        "instructions": match staleness() {
+            Some(w) => format!("STALE SERVER: {}\n\n{}", w, INSTRUCTIONS),
+            None => INSTRUCTIONS.to_string(),
+        }
     })
 }
 
@@ -194,7 +246,10 @@ fn call_tool(ctx: &Ctx, params: &Value) -> Result<Value, (i64, String)> {
     let name = params.get("name").and_then(Value::as_str).unwrap_or("");
     let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
     let outcome = match name {
-        "synth_docs" => Ok(DSL_DOC.to_string()),
+        "synth_docs" => Ok(match staleness() {
+            Some(w) => format!("> **STALE SERVER.** {}\n\n{}", w, DSL_DOC),
+            None => DSL_DOC.to_string(),
+        }),
         "synth_params" => tool_params(&args),
         "synth_examples" => tool_examples(ctx, &args),
         "synth_check" => tool_check(&args),
@@ -312,9 +367,17 @@ fn tool_check(args: &Value) -> Result<String, String> {
                 .into_iter()
                 .map(|l| json!({ "code": l.code, "message": l.message, "hint": l.hint }))
                 .collect();
-            Ok(serde_json::to_string_pretty(&json!({ "ok": true, "summary": summary(&song), "warnings": warnings })).unwrap())
+            Ok(serde_json::to_string_pretty(&json!({
+                "ok": true,
+                "stale_server": staleness(),
+                "summary": summary(&song),
+                "warnings": warnings
+            })).unwrap())
         }
-        Err(err_json) => Err(pretty(&err_json)),
+        Err(err_json) => Err(match staleness() {
+            Some(w) => format!("STALE SERVER: {}\n\n{}", w, pretty(&err_json)),
+            None => pretty(&err_json),
+        }),
     }
 }
 
@@ -340,24 +403,48 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let steps_per_bar = song.globals.meter.0 as usize * 4;
 
     let mut engine = SongEngine::from_compiled(song);
+    engine.set_band_metering(true);
     engine.reset_meters();
     let (l, r) = engine.render(bars);
-    // Per-track levels: post level and pan, before the master chain.
+    // Per-track levels: post level and pan, before the master chain. Peak and
+    // RMS both, because they rank differently: a sparse bass reads far below a
+    // continuous drone on RMS while peaking higher, and trusting RMS alone once
+    // sent me chasing the wrong track for three revisions.
     let mut track_report = Vec::new();
-    let mut loudest = 0.0f32;
+    let mut loudest_rms = 0.0f32;
+    let mut loudest_peak = 0.0f32;
     for i in 0..engine.track_count() {
-        loudest = loudest.max(engine.track_rms(i));
+        loudest_rms = loudest_rms.max(engine.track_rms(i));
+        loudest_peak = loudest_peak.max(engine.track_peak(i));
     }
     for i in 0..engine.track_count() {
         let (p, rr) = (engine.track_peak(i), engine.track_rms(i));
+        let bands = engine.track_bands(i);
         track_report.push(json!({
             "track": engine.track_name(i),
             "peak": round3(p),
             "rms": round3(rr),
             "db": round1(20.0 * rr.max(1e-6).log10()),
-            "vs_loudest_db": round1(20.0 * (rr.max(1e-6) / loudest.max(1e-6)).log10()),
+            "vs_loudest_db": round1(20.0 * (rr.max(1e-6) / loudest_rms.max(1e-6)).log10()),
+            "peak_vs_loudest_db": round1(20.0 * (p.max(1e-6) / loudest_peak.max(1e-6)).log10()),
+            "crest": round1(analysis::crest(p, rr)),
+            "band": engine.track_dominant_band(i).map(|b| BAND_NAMES[b]),
+            "width_pct": round1(engine.track_width(i) * 200.0),
+            "band_pct": { "sub": bands[0], "low": bands[1], "mid": bands[2], "harsh": bands[3], "air": bands[4] },
         }));
     }
+    // Buses carry level too, and a track can meter fine on its own while the
+    // bus chain it feeds swallows it before master.
+    let bus_report: Vec<Value> = (0..engine.bus_count()).map(|i| {
+        let (p, rr) = (engine.bus_peak(i), engine.bus_rms(i));
+        json!({
+            "bus": engine.bus_name(i),
+            "peak": round3(p),
+            "rms": round3(rr),
+            "db": round1(20.0 * rr.max(1e-6).log10()),
+            "crest": round1(analysis::crest(p, rr)),
+        })
+    }).collect();
     let bad = l.iter().chain(r.iter()).filter(|v| !v.is_finite()).count();
     if bad > 0 {
         return Err(format!(
@@ -395,13 +482,13 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         let (rms, peak) = stats(&l[a..b], &r[a..b]);
         let at_ceiling = peak >= LIMITER_CEILING - 0.005;
         if at_ceiling { at_ceiling_sections.push(name.clone()); }
-        let (lo, mid, harsh, air) = balance(&l[a..b], &r[a..b]);
+        let [sub, lo, mid, harsh, air] = balance(&l[a..b], &r[a..b]);
         report.push(json!({
             "scene": name, "bars": count,
             "rms": round3(rms), "peak": round3(peak),
             "db": round1(20.0 * rms.max(1e-6).log10()),
             "crest": round1(peak / rms.max(1e-6)),
-            "balance_pct": { "low": lo, "mid": mid, "harsh": harsh, "air": air },
+            "balance_pct": { "sub": sub, "low": lo, "mid": mid, "harsh": harsh, "air": air },
             "at_limiter_ceiling": at_ceiling
         }));
         bar_cursor += count;
@@ -446,12 +533,111 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
             w["scene"].as_str().unwrap_or(""), w["balance_pct"]["harsh"]
         ));
     }
-    if let Some(w) = report.iter().find(|s| s["balance_pct"]["low"].as_f64().unwrap_or(100.0) <= 15.0) {
+    if let Some(w) = report.iter().find(|s| {
+        s["balance_pct"]["low"].as_f64().unwrap_or(100.0) + s["balance_pct"]["sub"].as_f64().unwrap_or(0.0) <= 15.0
+    }) {
         hints.push(format!(
             "scene '{}' has only {}% of its energy below 250 Hz: it will sound thin. Heavy distortion trades a fundamental for harmonics, so a distorted bass usually needs a clean sub layer under it.",
             w["scene"].as_str().unwrap_or(""), w["balance_pct"]["low"]
         ));
     }
+    // Two tracks whose energy sits in the same band, at similar level, mask each
+    // other. It took a lot of listening to work out that the kick was fighting
+    // the drone; the numbers were there the whole time.
+    let loudest_db = track_report.iter()
+        .filter_map(|t| t["db"].as_f64())
+        .fold(f64::MIN, f64::max);
+    let mut masking: Vec<(f64, String)> = Vec::new();
+    for i in 0..track_report.len() {
+        for j in (i + 1)..track_report.len() {
+            let (a, b) = (&track_report[i], &track_report[j]);
+            if a["band"] != b["band"] || a["band"].is_null() { continue; }
+            let (da, db_) = (a["db"].as_f64().unwrap_or(-99.0), b["db"].as_f64().unwrap_or(-99.0));
+            // Two quiet tracks sharing a band mask nothing anyone can hear.
+            if da < loudest_db - 12.0 || db_ < loudest_db - 12.0 { continue; }
+            let apart = (da - db_).abs();
+            if apart > 6.0 { continue; }
+            masking.push((apart, format!(
+                "{} and {} are {:.0} dB apart in {}",
+                a["track"].as_str().unwrap_or(""), b["track"].as_str().unwrap_or(""),
+                apart, a["band"].as_str().unwrap_or("")
+            )));
+        }
+    }
+    masking.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap_or(std::cmp::Ordering::Equal));
+    if !masking.is_empty() {
+        let worst: Vec<String> = masking.iter().take(3).map(|(_, m)| m.clone()).collect();
+        let more = if masking.len() > 3 { format!(" (and {} more pairs)", masking.len() - 3) } else { String::new() };
+        hints.push(format!(
+            "masking: {}{}. Carve one of each pair out of the other's band with eq() or a filter, or move them apart in level.",
+            worst.join("; "), more
+        ));
+    }
+
+    // What the master chain does to the dynamics. Raising the master gain used
+    // to look like a free win: the peak barely moved because the limiter caught
+    // it, and the punch quietly went with it.
+    let (in_peak, in_rms) = engine.master_input_peak_rms();
+    let crest_in = analysis::crest(in_peak, in_rms);
+    let crest_out = analysis::crest(peak, rms);
+    let crest_loss = if crest_in > 0.0 { 20.0 * (crest_out / crest_in).log10() } else { 0.0 };
+    if crest_loss < -3.0 {
+        hints.push(format!(
+            "the master chain removed {:.1} dB of crest factor ({:.1} in, {:.1} out): it is eating the transients rather than making the mix louder. Lower the compressor makeup (it is a linear gain, so 2 is +6 dB) or the track levels instead of pushing into the limiter.",
+            -crest_loss, crest_in, crest_out
+        ));
+    }
+
+    let buried_buses: Vec<String> = bus_report.iter()
+        .filter(|b| b["rms"].as_f64().unwrap_or(1.0) <= 0.0)
+        .map(|b| b["bus"].as_str().unwrap_or("").to_string())
+        .collect();
+    if !buried_buses.is_empty() {
+        hints.push(format!(
+            "no signal reached these buses: {}. Check that a track routes into them.",
+            buried_buses.join(", ")
+        ));
+    }
+
+    // Two instruments in the same place in the stereo field cannot be told
+    // apart, however well they are balanced. Twenty-one of the twenty-five
+    // songs in this repo measured under 2% wide before anything reported it.
+    // Above 250 Hz, because the low end is mono on purpose in most genres and
+    // it carries most of the energy: a techno mix with a hard-panned pad still
+    // reads 1% wide on the plain figure.
+    let mix_width = analysis::stereo_width_above(&l, &r, 250.0, SAMPLE_RATE) * 200.0;
+    let centred: Vec<String> = track_report.iter()
+        .filter(|t| t["width_pct"].as_f64().unwrap_or(0.0) < 4.0
+            && t["db"].as_f64().unwrap_or(-99.0) > loudest_db - 18.0)
+        .map(|t| t["track"].as_str().unwrap_or("").to_string())
+        .collect();
+    if mix_width < 12.0 {
+        hints.push(format!(
+            "above 250 Hz the mix is only {:.0}% wide, so the instruments sit on top of each other. {} are within a few degrees of centre. Pan them apart, or give them autopan(), chorus or a stereo send. The kick and the sub should stay where they are.",
+            mix_width,
+            if centred.len() > 4 {
+                format!("{} and {} others", centred[..3].join(", "), centred.len() - 3)
+            } else if centred.is_empty() {
+                String::from("Most tracks")
+            } else {
+                centred.join(", ")
+            }
+        ));
+    }
+
+    // Heavy on speakers and thin on headphones at the same time is 60-250 Hz
+    // too loud against under 60 Hz too quiet. One "low" bucket could not say it.
+    if let Some(w) = report.iter().find(|s| {
+        let sub = s["balance_pct"]["sub"].as_f64().unwrap_or(0.0);
+        let low = s["balance_pct"]["low"].as_f64().unwrap_or(0.0);
+        low > 35.0 && sub < low / 4.0
+    }) {
+        hints.push(format!(
+            "scene '{}' has {}% of its energy in 60-250 Hz against {}% below 60: that is the range speakers exaggerate and headphones do not, so it will sound like mud on speakers and thin on headphones at once. Move the weight down with a sub layer, or take 60-250 Hz out of whatever is filling it.",
+            w["scene"].as_str().unwrap_or(""), w["balance_pct"]["low"], w["balance_pct"]["sub"]
+        ));
+    }
+
     let hint = if hints.is_empty() { Value::Null } else { json!(hints.join(" | ")) };
 
     Ok(serde_json::to_string_pretty(&json!({
@@ -463,60 +649,33 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         "rms": round3(rms),
         "clipped_samples": clipped,
         "gain_compensation": round3(engine.gain_compensation()),
+        "master": {
+            "peak_in": round3(in_peak),
+            "rms_in": round3(in_rms),
+            "crest_in": round1(crest_in),
+            "crest_out": round1(crest_out),
+            "crest_change_db": round1(crest_loss as f32),
+        },
+        "stereo_width_above_250hz_pct": round1(mix_width),
         "sections": report,
         "tracks": track_report,
+        "buses": bus_report,
         "hint": hint
     })).unwrap())
 }
 
-/// Energy split into low (<250 Hz), mid (250 Hz..2 kHz), harsh (2..5 kHz,
-/// where the ear is most sensitive) and air (>5 kHz), as percentages.
-///
-/// Uses three cascaded one-pole sections per edge. A single pole rolls off so
-/// gently that midrange leaks into the "high" bucket and a dark mix reads as
-/// bright, which is worse than no number at all.
-fn balance(l: &[f32], r: &[f32]) -> (f64, f64, f64, f64) {
-    const POLES: usize = 3;
-    // Cascading N one-poles drags the overall -3 dB point down; scale each
-    // section up by 1/sqrt(2^(1/N) - 1) so the stated edge is the real one.
-    const CASCADE_FIX: f32 = 1.9615;
-    let coeff = |hz: f32| (-2.0 * core::f32::consts::PI * hz * CASCADE_FIX / SAMPLE_RATE).exp();
-    let (c_lo, c_mid, c_hi) = (coeff(250.0), coeff(2000.0), coeff(5000.0));
-    let (mut s_lo, mut s_mid, mut s_hi) = ([0.0f32; POLES], [0.0f32; POLES], [0.0f32; POLES]);
-    let cascade = |x: f32, state: &mut [f32; POLES], c: f32| {
-        let mut v = x;
-        for s in state.iter_mut() {
-            *s = v * (1.0 - c) + *s * c;
-            v = *s;
-        }
-        v
-    };
-    let (mut lo, mut mid, mut harsh, mut air) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
-    for (a, b) in l.iter().zip(r) {
-        let x = (a + b) * 0.5;
-        let v_lo = cascade(x, &mut s_lo, c_lo);
-        let v_mid = cascade(x, &mut s_mid, c_mid);
-        let v_hi = cascade(x, &mut s_hi, c_hi);
-        lo += (v_lo * v_lo) as f64;
-        mid += ((v_mid - v_lo) * (v_mid - v_lo)) as f64;
-        harsh += ((v_hi - v_mid) * (v_hi - v_mid)) as f64;
-        air += ((x - v_hi) * (x - v_hi)) as f64;
-    }
-    let total = lo + mid + harsh + air;
-    if total <= 0.0 { return (0.0, 0.0, 0.0, 0.0); }
-    let pct = |v: f64| (v / total * 1000.0).round() / 10.0;
-    (pct(lo), pct(mid), pct(harsh), pct(air))
+fn stats(l: &[f32], r: &[f32]) -> (f32, f32) {
+    let (peak, rms) = analysis::peak_rms(l, r);
+    (rms, peak)
 }
 
-fn stats(l: &[f32], r: &[f32]) -> (f32, f32) {
-    let n = l.len().max(1);
-    let mut sum = 0.0f64;
-    let mut peak = 0.0f32;
+/// Band split of a stereo slice, in percent, via the engine's calibrated meter.
+fn balance(l: &[f32], r: &[f32]) -> [f32; 5] {
+    let mut m = analysis::BandMeter::new(SAMPLE_RATE);
     for (a, b) in l.iter().zip(r) {
-        sum += (a * a + b * b) as f64;
-        peak = peak.max(a.abs()).max(b.abs());
+        m.push_stereo(*a, *b);
     }
-    ((sum / (2 * n) as f64).sqrt() as f32, peak)
+    m.percentages()
 }
 
 fn round3(v: f32) -> f64 { ((v as f64) * 1000.0).round() / 1000.0 }
@@ -654,42 +813,5 @@ mod tests {
         assert_eq!(slug_from_source("# Acid Arp — a showcase\ntempo 1"), "acid_arp");
         assert_eq!(slug_from_source("tempo 120"), "tempo_120");
         assert_eq!(slug_from_source(""), "song");
-    }
-}
-
-#[cfg(test)]
-mod band_tests {
-    use super::*;
-
-    fn tone(hz: f32, secs: f32) -> Vec<f32> {
-        (0..(SAMPLE_RATE * secs) as usize)
-            .map(|i| (i as f32 / SAMPLE_RATE * hz * core::f32::consts::TAU).sin() * 0.5)
-            .collect()
-    }
-
-    /// A pure tone must land in the band its frequency belongs to. Without the
-    /// cascade correction a 1 kHz tone leaked most of its energy into "air".
-    #[test]
-    fn each_band_catches_its_own_tone() {
-        let cases = [
-            (80.0, 0usize, "low"),
-            (1000.0, 1, "mid"),
-            (3000.0, 2, "harsh"),
-            (9000.0, 3, "air"),
-        ];
-        for (hz, idx, name) in cases {
-            let x = tone(hz, 1.0);
-            let (lo, mid, harsh, air) = balance(&x, &x);
-            let pct = [lo, mid, harsh, air];
-            // The bands overlap (one-pole cascades are gentle and 2-5 kHz is
-            // barely more than an octave wide), so the bar is that the right
-            // band dominates, not that it takes everything.
-            let winner = pct.iter().cloned().fold(f64::MIN, f64::max);
-            assert!(
-                (pct[idx] - winner).abs() < 1e-9 && pct[idx] > 50.0,
-                "a {} Hz tone should read mostly '{}', got low {} mid {} harsh {} air {}",
-                hz, name, lo, mid, harsh, air
-            );
-        }
     }
 }

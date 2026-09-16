@@ -193,6 +193,9 @@ pub struct FmModule {
     chorus_mix: f32,
     // Pitch bend (set by engine)
     pub pitch_bend_ratio: f32,
+    /// One-pole DC blocker state; see the comment in `process_block`.
+    dc_x1: f32,
+    dc_y1: f32,
     // Vibrato
     vibrato_phase: f32,
     vibrato_rate: f32,
@@ -214,6 +217,8 @@ impl FmModule {
             chorus: Chorus::new(),
             chorus_mix: 0.0,
             pitch_bend_ratio: 1.0,
+            dc_x1: 0.0,
+            dc_y1: 0.0,
             vibrato_phase: 0.0,
             vibrato_rate: 5.0,
             vibrato_depth: 0.0,
@@ -343,22 +348,22 @@ impl FmModule {
                 self.chorus_mix = value;
                 self.chorus.set_mix(value);
             }
-            FmParam::VibratoRate => self.vibrato_rate = 0.5 + value * 9.5,
+            FmParam::VibratoRate => self.vibrato_rate = crate::params::VIBRATO_RATE.to_real(value),
             FmParam::VibratoDepth => self.vibrato_depth = value * 0.5,
             FmParam::Attack => {
                 // Carrier (op 0) only — modulators keep their own envelopes
-                let a = 0.001 * math::pow(2000.0, value);
+                let a = crate::params::ENV_TIME.to_real(value) * 0.001;
                 for v in &mut self.voices { v.ops[0].env.set_attack(a); }
             }
             FmParam::Decay => {
-                let d = 0.001 * math::pow(2000.0, value);
+                let d = crate::params::ENV_TIME.to_real(value) * 0.001;
                 for v in &mut self.voices { v.ops[0].env.set_decay(d); }
             }
             FmParam::Sustain => {
                 for v in &mut self.voices { v.ops[0].env.set_sustain(value); }
             }
             FmParam::Release => {
-                let r = 0.001 * math::pow(2000.0, value);
+                let r = crate::params::ENV_TIME.to_real(value) * 0.001;
                 for v in &mut self.voices { v.ops[0].env.set_release(r); }
             }
             // Per-operator ADSR (logarithmic for A/D/R, raw for S)
@@ -499,7 +504,18 @@ impl Module for FmModule {
                 sum = self.chorus.process(sum);
             }
 
-            *sample = sum;
+            // The rectified operator waveforms are rectifiers, so they carry a
+            // DC offset by construction: measured at 32% of peak on half_sine,
+            // 64% on abs_sine and 15% on quarter_sine. It eats headroom, it
+            // sums across every track that uses one, and it made a C4 note read
+            // as 74% sub in the band report -- there was no sub, it was the
+            // offset. A 5 Hz blocker takes it out below anything audible.
+            const DC_R: f32 = 0.99929;
+            let blocked = sum - self.dc_x1 + DC_R * self.dc_y1;
+            self.dc_x1 = sum;
+            self.dc_y1 = blocked;
+
+            *sample = blocked;
         }
     }
 
@@ -529,6 +545,8 @@ impl Module for FmModule {
         self.voice_counter = 0;
         self.lfo_router.reset();
         self.chorus.reset();
+        self.dc_x1 = 0.0;
+        self.dc_y1 = 0.0;
         self.pitch_bend_ratio = 1.0;
         self.vibrato_phase = 0.0;
         self.vibrato_onset = 0.0;

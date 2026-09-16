@@ -61,7 +61,7 @@ module fm tines {
 
 # The keys pad kept underneath, quiet: it fills the gaps between the FM partials.
 module keys air {
-    voice_mode unison
+    voice_mode poly
     detune 0.24                # rev 1 had 0.42
     chorus_mix 0.3             # rev 1 had 0.6
     cutoff 0.30
@@ -210,7 +210,7 @@ scene groove {
     auto master tilt -0.1 > 0.02
     auto tines mod_index 0.32 > 0.27 > 0.34
     track cloud { play voicings using tines level 0.193 }
-    track layer { play voicings using air level 0.069 }
+    track layer { play voicings using air level 0.03086 }
     track body  { play voicings using tines_body level 0.089 }
     track sub   { play sub_line using sub_osc level 0.369 }
     track drums { play brk using kit level 0.64 }
@@ -231,7 +231,7 @@ scene full {
     auto tines mod_index 0.28 > 0.40 > 0.30
     auto air cutoff 0.28 > 0.38
     track cloud { play voicings using tines level 0.197 }
-    track layer { play voicings using air level 0.09 }
+    track layer { play voicings using air level 0.04025 }
     track body  { play voicings using tines_body level 0.099 }
     track sub   { play sub_line using sub_osc level 0.566 }
     track drums { play brk using kit level 0.765 }

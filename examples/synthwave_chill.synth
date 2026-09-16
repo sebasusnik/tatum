@@ -18,7 +18,7 @@ sidechain 0.3
 # engine.keys: VoiceMode 0.25 (unison), Cutoff 0.10, Detune 0.25,
 #              ChorusMix 0.5, VibratoRate 0.15, VibratoDepth 0.12
 module keys pad {
-    voice_mode unison
+    voice_mode poly
     cutoff 0.10
     detune 0.25
     chorus_mix 0.5
@@ -203,7 +203,8 @@ track drums {
 track pads {
     play silence
     using pad
-    level 0.98
+    pan -0.38
+    level 0.49
     reverb_send 0.22
     delay_send 0.12
     out > master
@@ -231,7 +232,7 @@ track bells {
     play silence
     using bell
     level 1.12
-    pan 0.1
+    pan 0.34
     reverb_send 0.25
     delay_send 0.20
     out > master
@@ -246,7 +247,7 @@ track bells {
 master {
     in > tilt(0.15)
        > eq(low=3.0, mid=0.0, high=-1.0)
-       > compressor(-3.0, ratio=3.0, attack=20, release=100, makeup=1.0)
+       > compressor(-3.0, ratio=3.0, attack=20, release=100, makeup=1.00)
        > limiter
        > out
 }
@@ -261,10 +262,10 @@ scene intro {
     auto pad cutoff 0.10 > 0.13
 
     track drums    { play silence using kit  level 1.96 reverb_send 0.08 out > master }
-    track pads     { play pad_em7_intro using pad level 0.98 reverb_send 0.22 delay_send 0.12 out > master }
+    track pads { play pad_em7_intro using pad level 0.49 reverb_send 0.22 delay_send 0.12 out > master pan -0.38 }
     track arpsynth { play arp_em7_hold using arp level 0.98 gate 0.6 reverb_send 0.18 delay_send 0.15 out > master }
     track bassline { play silence using sub  level 1.54 reverb_send 0.04 out > master }
-    track bells    { play silence using bell level 1.12 pan 0.1 reverb_send 0.25 delay_send 0.20 out > master }
+    track bells { play silence using bell level 1.12 reverb_send 0.25 delay_send 0.20 out > master pan 0.34 }
 }
 
 # VERSE (bars 5-12) — soft half-time drums, bass walks E D C B, arp opens.
@@ -275,10 +276,10 @@ scene verse {
     auto pad cutoff 0.13 > 0.18
 
     track drums    { play beat_verse using kit  level 1.96 reverb_send 0.08 out > master }
-    track pads     { play pad_em     using pad  level 0.98 reverb_send 0.22 delay_send 0.12 out > master }
+    track pads { play pad_em     using pad  level 0.49 reverb_send 0.22 delay_send 0.12 out > master pan -0.38 }
     track arpsynth { play arp_em7    using arp  level 0.98 gate 0.6 reverb_send 0.18 delay_send 0.15 arp updown rate=16 gate=0.6 octaves=2 out > master }
     track bassline { play bass_verse using sub  level 1.54 reverb_send 0.04 out > master }
-    track bells    { play silence    using bell level 1.12 pan 0.1 reverb_send 0.25 delay_send 0.20 out > master }
+    track bells { play silence    using bell level 1.12 reverb_send 0.25 delay_send 0.20 out > master pan 0.34 }
 }
 
 # CHORUS (bars 13-20) — full energy, FM bell melody, pad follows the changes.
@@ -288,10 +289,10 @@ scene chorus {
     auto pad vibrato_depth 0.12 > 0.20
 
     track drums    { play beat_chorus using kit  level 1.96 reverb_send 0.08 out > master }
-    track pads     { play pad_chorus  using pad  level 0.98 reverb_send 0.22 delay_send 0.12 out > master }
+    track pads { play pad_chorus  using pad  level 0.49 reverb_send 0.22 delay_send 0.12 out > master pan -0.38 }
     track arpsynth { play arp_em7     using arp  level 1.4 gate 0.6 reverb_send 0.18 delay_send 0.15 arp updown rate=16 gate=0.6 octaves=2 out > master }
     track bassline { play bass_chorus using sub  level 1.54 reverb_send 0.04 out > master }
-    track bells    { play bell_chorus using bell level 1.12 pan 0.1 reverb_send 0.25 delay_send 0.20 out > master }
+    track bells { play bell_chorus using bell level 1.12 reverb_send 0.25 delay_send 0.20 out > master pan 0.34 }
 }
 
 # OUTRO A (bars 21-22) — strip to pad + bass + soft kick, arp fading.
@@ -301,10 +302,10 @@ scene outro_a {
     auto arp level 0.56 > 0.28
 
     track drums    { play beat_outro   using kit  level 1.96 reverb_send 0.08 out > master }
-    track pads     { play pad_em_soft  using pad  level 0.98 reverb_send 0.26 delay_send 0.14 out > master }
+    track pads { play pad_em_soft  using pad  level 0.49 reverb_send 0.26 delay_send 0.14 out > master pan -0.38 }
     track arpsynth { play arp_em7      using arp  level 0.56 gate 0.6 reverb_send 0.18 delay_send 0.15 arp updown rate=16 gate=0.6 octaves=2 out > master }
     track bassline { play bass_outro   using sub  level 1.54 reverb_send 0.04 out > master }
-    track bells    { play silence      using bell level 1.12 pan 0.1 reverb_send 0.25 delay_send 0.20 out > master }
+    track bells { play silence      using bell level 1.12 reverb_send 0.25 delay_send 0.20 out > master pan 0.34 }
 }
 
 # OUTRO B (bars 23-25) — drums gone, arp fades to nothing.
@@ -314,10 +315,10 @@ scene outro_b {
     auto arp level 0.28 > 0.0
 
     track drums    { play silence      using kit  level 1.96 reverb_send 0.08 out > master }
-    track pads     { play pad_em_soft  using pad  level 0.98 reverb_send 0.26 delay_send 0.14 out > master }
+    track pads { play pad_em_soft  using pad  level 0.49 reverb_send 0.26 delay_send 0.14 out > master pan -0.38 }
     track arpsynth { play arp_em7      using arp  level 0.28 gate 0.6 reverb_send 0.18 delay_send 0.15 arp updown rate=16 gate=0.6 octaves=2 out > master }
     track bassline { play bass_outro   using sub  level 1.54 reverb_send 0.04 out > master }
-    track bells    { play silence      using bell level 1.12 pan 0.1 reverb_send 0.25 delay_send 0.20 out > master }
+    track bells { play silence      using bell level 1.12 reverb_send 0.25 delay_send 0.20 out > master pan 0.34 }
 }
 
 # OUTRO C (bars 26-28) — the reference's master fade over the last 3 bars,
@@ -329,10 +330,10 @@ scene outro_c {
     auto sub level 1.54 > 0.0
 
     track drums    { play silence      using kit  level 1.96 reverb_send 0.08 out > master }
-    track pads     { play pad_em_soft  using pad  level 0.98 reverb_send 0.26 delay_send 0.14 out > master }
+    track pads { play pad_em_soft  using pad  level 0.49 reverb_send 0.26 delay_send 0.14 out > master pan -0.38 }
     track arpsynth { play silence      using arp  level 0.0 gate 0.6 reverb_send 0.18 delay_send 0.15 out > master }
     track bassline { play bass_outro   using sub  level 1.54 reverb_send 0.04 out > master }
-    track bells    { play silence      using bell level 1.12 pan 0.1 reverb_send 0.25 delay_send 0.20 out > master }
+    track bells { play silence      using bell level 1.12 reverb_send 0.25 delay_send 0.20 out > master pan 0.34 }
 }
 
 # ────────────────────────────────────────────────

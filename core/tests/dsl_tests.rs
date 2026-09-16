@@ -399,3 +399,53 @@ track t { play p using simple }
     assert_eq!(template.osc_count, 1, "should have 1 oscillator");
     assert_eq!(template.env_count, 1, "should have 1 envelope");
 }
+
+/// A drum lane written across several lines used to end at the first newline,
+/// which turned the continuation into an unlabelled row that the compiler then
+/// dropped. The pattern compiled clean and played half of what was written --
+/// the same silent-wrong-output shape as the routing chains that used to
+/// truncate at a newline.
+#[test]
+fn a_drum_lane_can_span_several_lines() {
+    let src = "tempo 120\nscale C major\n\
+        module beats kit { kick_level 1.0 }\n\
+        pattern wide {\n\
+        \x20   kick: X - - -  - - - -  - - - -  - - - -\n\
+        \x20         - - - -  - - - -  X - - -  - - - -\n\
+        \x20   hat:  x - x -  x - x -  x - x -  x - x -\n\
+        \x20         x - x -  x - x -  x - x -  x - x -\n\
+        }\n\
+        track d { play wide using kit out > master }\n\
+        master { in > out }\n\
+        scene a { track d { play wide using kit } }\narrange { a x2 }\n";
+    let ast = dsl::parse(src).unwrap_or_else(|e| panic!("{:?}", e));
+    let p = ast.patterns.iter().find(|p| p.name == "wide").unwrap();
+    assert_eq!(p.lane_labels, vec!["kick", "hat"], "two lanes, not four rows");
+    assert_eq!(p.rows.len(), 2, "each lane is one row: {:?}", p.rows.iter().map(|r| r.len()).collect::<Vec<_>>());
+    assert_eq!(p.rows[0].len(), 32, "the kick lane keeps both of its bars");
+    assert_eq!(p.rows[1].len(), 32, "and so does the hat lane");
+}
+
+/// And if the counts ever disagree again it says so rather than dropping rows.
+#[test]
+fn a_drum_row_without_a_label_is_an_error() {
+    let src = "tempo 120\nscale C major\n\
+        module beats kit { kick_level 1.0 }\n\
+        pattern bad {\n\
+        \x20   kick: X - - -\n\
+        \x20   X - - -\n\
+        \x20   hat: x - x -\n\
+        }\n\
+        track d { play bad using kit out > master }\n\
+        scene a { track d { play bad using kit } }\narrange { a x1 }\n";
+    // Either the continuation joins the kick lane, or it is reported. What it
+    // must never do is vanish.
+    match dsl::parse(src) {
+        Ok(ast) => {
+            let p = ast.patterns.iter().find(|p| p.name == "bad").unwrap();
+            let steps: usize = p.rows.iter().map(|r| r.len()).sum();
+            assert_eq!(steps, 12, "every written step survives: {:?}", p.rows.iter().map(|r| r.len()).collect::<Vec<_>>());
+        }
+        Err(errs) => assert!(errs[0].message.contains("lane labels"), "{}", errs[0].message),
+    }
+}

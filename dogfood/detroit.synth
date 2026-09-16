@@ -1,0 +1,575 @@
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  detroit.synth — "Belle Isle After Midnight"                         ║
+# ║  Detroit techno, the warm end: Model 500 / Carl Craig / early UR.    ║
+# ║  130 BPM, F minor (Ab major), 4/4, 96 bars (~2:57).                  ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+#
+# The idea: the chords are the song. Two eight-bar cycles, both moving by
+# fourths, two bars per chord:
+#
+#   A (hopeful, lands on a major 7th):  Fm9 -> Bbm9 -> Eb9 -> Abmaj9
+#   B (darker, all minor 9ths):         Cm9 -> Fm9 -> Bbm9 -> Ebm9
+#
+# The bass walks those changes instead of rolling one note: root on the
+# downbeat, a chord tone on the "and" of 2, a third on beat 3. Four notes a
+# bar, nothing on the sixteenths.
+#
+# The kit is a dry 909: short kick, clap on 2 and 4, closed hats only on the
+# offbeats. It never touches the reverb or the delay — everything else does.
+#
+# A note on units: envelopes, depths, detunes and effect arguments are written
+# in their units (82ms, 24%, -12st, 2.6khz, -18db). Filter CUTOFFS are left as
+# normalized floats on purpose: every one of them is swept by an `auto` lane
+# per scene, and `auto <module> cutoff 400hz > 3khz` is a parse error, so
+# writing the module in Hz and the sweep in 0..1 would be worse than both.
+#
+# Arrangement (96 bars):
+#   intro 8      kick + offbeat hat + a two-note bass hint
+#   pulse 8      clap in, bass walks, chords creep in under a closed filter
+#   lift 16      cycle A wide open, shimmer layer on top
+#   bridge 16    cycle B, drums pick up an openhat, everything darker
+#   breakdown 16 DRUMS GONE. Chords and the bell carry it alone.
+#   rebuild 8    kick + hats return, no clap yet, bass still out
+#   peak 16      cycle A, full kit, offbeat stabs, the payoff
+#   outro 8      back to the kit and one held chord, master tilts dark
+
+tempo 130
+meter 4/4
+scale F minor
+swing 0.52
+humanize 0.04 timing 0.008   # the kit stays machine-tight; this is just velocity life
+sidechain 0.35 attack=2ms release=110ms   # long release: kick and bass read as one instrument
+gain_comp 0.3            # mostly off: scene density should map to loudness
+
+# Dotted-eighth delay: the Detroit "echo that never quite lands on the beat".
+delay sync=dotted_eighth feedback=0.34 filter=0.55 sidechain=0.35
+
+# Medium room, not a cathedral. Damped so the chords stay warm, not glassy.
+# predelay is in ms, but the global `reverb` line rejects a unit suffix.
+reverb size=0.62 damp=0.45 predelay=28 sidechain=0.45
+
+# Movement lives on the tail, not on what feeds it. Nothing destructive here.
+reverb_return { in > highpass(300hz, 0.05)
+                   > lowpass(3.4khz, 0.08, lfo_bars=16, lfo_depth=900)
+                   > autopan(0.3, bars=8)
+                   > out }
+
+delay_return  { in > highpass(420hz, 0.05) > lowpass(5khz, 0.05) > out }
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# The chords. Unison + detune is the whole sound; the slow LFO keeps it from
+# sitting still between the per-scene `auto cutoff` sweeps.
+module keys warmth {
+    # NOT `unison`: VoiceMode::Unison releases every active voice on each
+    # note_on, so a five-note chord collapses to its top note. Poly + detune
+    # + chorus is the only way to get a real 9th voicing out of `keys`.
+    voice_mode poly
+    detune 24%
+    chorus_mix 38%
+    cutoff 0.30                # ~800 Hz; swept per scene, see the header note
+    resonance 0.06             # Q = 0.5 + n*19.5, so 0.2 here was a 4.4-Q whistle
+    attack 82ms                # soft, but the chord change is still audible
+    decay 205ms
+    sustain 82%
+    release 277ms              # tail that laps into the next chord
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync bars_4
+    lfo_depth 10%
+    vibrato_rate 20%
+    vibrato_depth 3%
+}
+
+# Octave-up layer. Poly, barely detuned, brighter, sits above the main voicing
+# and gets the phaser. This is the width.
+module keys shimmer {
+    voice_mode poly
+    detune 11%
+    chorus_mix 50%
+    cutoff 0.44                # ~2.9 kHz
+    resonance 0.05
+    attack 205ms               # later than `warmth`, so the chord blooms
+    decay 238ms
+    sustain 68%
+    release 437ms
+    lfo_target cutoff
+    lfo_waveform sine
+    lfo_sync bars_8
+    lfo_depth 9%
+    vibrato_rate 30%
+    vibrato_depth 4%
+}
+
+# Offbeat stabs for the last sixteen bars only.
+module keys stab {
+    voice_mode poly
+    detune 18%
+    chorus_mix 20%
+    cutoff 1.26khz
+    resonance 0.12
+    attack 1ms
+    decay 96ms
+    sustain 10%
+    release 31ms
+}
+
+# The breakdown's bottom half. Dark, slow, no detune — it is a fundamental,
+# not a texture.
+module keys under {
+    voice_mode poly
+    detune 6%
+    cutoff 0.10                # ~320 Hz; swept in the breakdown
+    resonance 0.05
+    attack 205ms
+    decay 238ms
+    sustain 85%
+    release 437ms
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync bars_8
+    lfo_depth 8%
+}
+
+# Melodic bass, not an acid line: low resonance, a sub an octave down, just
+# enough glide to smear the step between two notes a fourth apart.
+module bass walker {
+    cutoff 0.30                # ~250 Hz; swept per scene
+    cutoff_env 46%
+    resonance 0.15
+    glide 5%
+    osc1_wave saw
+    osc2_wave square
+    osc2_pitch 0st
+    osc3_pitch -12st           # the sub
+    keytrack 35%
+    attack 1.2ms
+    decay 71ms
+    sustain 55%
+    release 8ms
+    vel_env 40%
+}
+
+# 909: short kick, crisp closed hat, clap slightly left.
+module beats nine {
+    kick_level 100%
+    kick_decay 30%
+    kick_pitch 30%
+    kick_click 34%
+    kick_drive 22%
+    kick_pan 0%
+    clap_level 72%
+    clap_pan -14%
+    hihat_level 58%
+    hihat_decay 20%
+    hihat_pitch 36%
+    hihat_pan 28%
+}
+
+# One bell voice, four notes every eight bars. Not a lead — punctuation.
+module fm bell {
+    algorithm two_op
+    waveform sine
+    mod_index 34%
+    feedback 10%
+    op0_ratio 0.032            # ratio 1.0 (op*_ratio takes no unit)
+    op1_ratio 0.097            # ratio 2.0
+    op0_envelope 0.004 0.86 0.0 0.80   # the shorthand takes plain knobs only
+    op1_envelope 0.002 0.55 0.0 0.40
+    vibrato_rate 25%
+    vibrato_depth 3%
+}
+
+# ────────────────────────────────────────────────
+# DRUM PATTERNS — two bars each, dry, offbeat hats
+# ────────────────────────────────────────────────
+
+pattern dr_intro {
+    kick: X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:  - - x:0.40 -  - - x:0.40 -  - - x:0.40 -  - - x:0.40 -   - - x:0.40 -  - - x:0.40 -  - - x:0.40 -  - - x:0.46 -
+}
+
+pattern dr_main {
+    kick: X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap: - - - -  x:0.75 - - -  - - - -  x:0.75 - - -   - - - -  x:0.75 - - -  - - - -  x:0.80 - - -
+    hat:  - - x:0.46 -  - - x:0.42 -  - - x:0.46 -  - - x:0.42 -   - - x:0.46 -  - - x:0.42 -  - - x:0.46 -  - - x:0.48 -
+}
+
+pattern dr_full {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - x:0.5
+    clap:    - - - -  x:0.78 - - -  - - - -  x:0.78 - - -   - - - -  x:0.78 - - -  - - - -  x:0.85 - - o
+    hat:     - - x:0.48 -  - - x:0.44 -  - - x:0.48 -  - - x:0.44 -   - - x:0.48 -  - - x:0.44 -  - - x:0.48 -  - - x:0.50 -
+    openhat: - - - -  - - - -  - - - -  - - x:0.42 -   - - - -  - - - -  - - - -  - - x:0.48 -
+}
+
+pattern dr_thin {
+    kick: X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:  - - x:0.34 -  - - x:0.34 -  - - x:0.34 -  - - x:0.34 -   - - x:0.34 -  - - x:0.34 -  - - x:0.34 -  - - x:0.38 -
+    clap: - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  x:0.60 - - -
+}
+
+# ────────────────────────────────────────────────
+# CHORDS — eight bars, two bars a chord, held with ties
+# ────────────────────────────────────────────────
+
+# Cycle A: vi - ii - V - I of Ab major. Every root a fourth above the last.
+pattern ch_a {
+    Fm9:0.62     ..*31
+    Bbm9:0.60    ..*31
+    Eb9:0.58     ..*31
+    Abmaj9:0.62  ..*31
+}
+
+pattern ch_a_hi {
+    Fm9/4:0.42     ..*31
+    Bbm9/4:0.40    ..*31
+    Eb9/4:0.38     ..*31
+    Abmaj9/4:0.42  ..*31
+}
+
+# Cycle B: four minor 9ths, still climbing by fourths. No resolution.
+pattern ch_b {
+    Cm9:0.60   ..*31
+    Fm9:0.60   ..*31
+    Bbm9:0.58  ..*31
+    Ebm9:0.58  ..*31
+}
+
+pattern ch_b_hi {
+    Cm9/4:0.40   ..*31
+    Fm9/4:0.40   ..*31
+    Bbm9/4:0.38  ..*31
+    Ebm9/4:0.38  ..*31
+}
+
+# Breakdown low register. With the bass gone there is nothing under 250 Hz and
+# Fm9/3 starts at F3 (175 Hz), so the breakdown reads thin. This is the root and
+# the fifth an octave down, played by its own low-passed voice — the chords'
+# own bottom half rather than a bassline.
+pattern ch_low {
+    [F2 C3]:0.55   ..*31
+    [Bb2 F3]:0.55  ..*31
+    [Eb2 Bb2]:0.52 ..*31
+    [Ab2 Eb3]:0.55 ..*31
+}
+
+# One chord, eight bars of it, for the outro.
+pattern ch_hold {
+    Fm9:0.55  ..*31
+}
+
+# ────────────────────────────────────────────────
+# BASS — walks the changes, four notes a bar
+# ────────────────────────────────────────────────
+
+pattern bs_intro {
+    F1:0.85 -  -  -    -  -  -  -    -  -  C2:0.50 -    -  -  -  -
+    F1:0.80 -  -  -    -  -  -  -    -  -  -  -    -  -  Ab1:0.45 -
+}
+
+pattern bs_a {
+    F1:0.90  -  -  -    -  -  -  Ab1:0.55    -  -  C2:0.70  -    -  -  -  -
+    F1:0.82  -  -  -    -  -  Eb2:0.58 -     -  -  F1:0.50  -    -  -  -  -
+    Bb1:0.90 -  -  -    -  -  -  Db2:0.55    -  -  F1:0.70  -    -  -  -  -
+    Bb1:0.82 -  -  -    -  -  Ab1:0.58 -     -  -  Bb1:0.50 -    -  -  -  -
+    Eb2:0.88 -  -  -    -  -  -  Db2:0.55    -  -  Bb1:0.70 -    -  -  -  -
+    Eb2:0.80 -  -  -    -  -  G1:0.58  -     -  -  Eb2:0.50 -    -  -  -  -
+    Ab1:0.90 -  -  -    -  -  -  C2:0.55     -  -  Eb2:0.70 -    -  -  -  -
+    Ab1:0.82 -  -  -    -  -  G1:0.58  -     -  -  Ab1:0.50 -    -  -  -  -
+}
+
+pattern bs_b {
+    C2:0.90  -  -  -    -  -  -  Bb1:0.55    -  -  G1:0.70  -    -  -  -  -
+    C2:0.82  -  -  -    -  -  Eb2:0.58 -     -  -  C2:0.50  -    -  -  -  -
+    F1:0.90  -  -  -    -  -  -  Eb2:0.55    -  -  C2:0.70  -    -  -  -  -
+    F1:0.82  -  -  -    -  -  Ab1:0.58 -     -  -  F1:0.50  -    -  -  -  -
+    Bb1:0.90 -  -  -    -  -  -  Ab1:0.55    -  -  F1:0.70  -    -  -  -  -
+    Bb1:0.82 -  -  -    -  -  Db2:0.58 -     -  -  Bb1:0.50 -    -  -  -  -
+    Eb2:0.88 -  -  -    -  -  -  Db2:0.55    -  -  Bb1:0.70 -    -  -  -  -
+    Eb2:0.80 -  -  -    -  -  Gb1:0.58 -     -  -  Eb2:0.50 -    -  -  -  -
+}
+
+# ────────────────────────────────────────────────
+# STABS AND BELL — eight bars, aligned to cycle A
+# ────────────────────────────────────────────────
+
+pattern st_a {
+    -  -  -  -    -  -  Fm9/4:0.50 -       -  -  -  -    -  -  Fm9/4:0.40 -
+    -  -  -  -    -  -  -  -                -  -  Fm9/4:0.45 -    -  -  -  -
+    -  -  -  -    -  -  Bbm9/4:0.50 -      -  -  -  -    -  -  Bbm9/4:0.40 -
+    -  -  -  -    -  -  -  -                -  -  Bbm9/4:0.45 -   -  -  -  -
+    -  -  -  -    -  -  Eb9/4:0.48 -       -  -  -  -    -  -  Eb9/4:0.38 -
+    -  -  -  -    -  -  -  -                -  -  Eb9/4:0.44 -    -  -  -  -
+    -  -  -  -    -  -  Abmaj9/4:0.50 -    -  -  -  -    -  -  Abmaj9/4:0.42 -
+    -  -  -  -    -  -  -  -                -  -  -  -    -  -  -  -
+}
+
+pattern bl_a {
+    -  -  -  -    -  -  -  -    -  -  -  -    Ab4:0.50 -  -  -
+    -  -  -  -    -  -  -  -    -  -  -  -    -  -  -  -
+    -  -  -  -    -  -  -  -    -  -  -  -    Db5:0.48 -  -  -
+    -  -  -  -    -  -  -  -    -  -  -  -    -  -  -  -
+    -  -  -  -    -  -  -  -    -  -  -  -    Bb4:0.46 -  -  -
+    -  -  -  -    -  -  -  -    -  -  -  -    -  -  -  -
+    -  -  -  -    -  -  -  -    -  -  -  -    C5:0.50  -  -  -
+    -  -  -  -    -  -  -  -    -  -  -  -    -  -  Eb5:0.40 -
+}
+
+# ────────────────────────────────────────────────
+# BUSES
+# ────────────────────────────────────────────────
+
+bus kit
+kit { in > compressor(-9db, ratio=4, attack=10ms, release=70ms)
+         > saturate(0.5)
+         > eq(low=1.5, mid=-0.5, high=0.8)     # dB; a negative value rejects the db suffix
+         > master }
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track drums {
+    play dr_main
+    using nine
+    velocity 1.0
+    level 0.85
+    sidechain 0.0            # the kick must not duck itself
+    out > kit
+}
+
+track bass {
+    play bs_a
+    using walker
+    velocity 0.92
+    level 0.70
+    gate 0.62
+    sidechain 0.55
+    out > saturate(0.7)
+        > highpass(32hz, 0.05)
+        > compressor(-18db, ratio=4, attack=2ms, release=90ms, makeup=6db)
+        > master
+}
+
+track chords {
+    play ch_a
+    using warmth
+    velocity 0.80
+    level 0.25
+    gate 1.0
+    sidechain 0.42
+    delay_send 0.14
+    reverb_send 0.30
+    out > highpass(190hz, 0.05)
+        > lowpass(2.6khz, 0.05, lfo_bars=12, lfo_depth=700)
+        > eq(mid=-1.5, high=0.8)      # leave the 1 kHz window to the stabs and the bell
+        > autopan(0.22, bars=8)
+        > master
+}
+
+track shine {
+    play ch_a_hi
+    using shimmer
+    velocity 0.70
+    level 0.23
+    gate 1.0
+    pan -0.38
+    sidechain 0.38
+    delay_send 0.20
+    reverb_send 0.42
+    out > highpass(750hz, 0.05)       # 750, not 620: it was masking `chords`
+        > phaser(0.28, bars=8, stages=4, feedback=0.18)
+        > eq(high=3.0)                # the only thing in the air band
+        > master
+}
+
+track stabs {
+    play st_a
+    using stab
+    velocity 0.65
+    level 0.26
+    gate 0.30
+    pan 0.34
+    sidechain 0.35
+    delay_send 0.28
+    reverb_send 0.14
+    out > saturate(0.8) > highpass(400hz, 0.05) > master
+}
+
+track chime {
+    play bl_a
+    using bell
+    velocity 0.60
+    level 0.85
+    gate 0.90
+    pan -0.50
+    sidechain 0.25
+    delay_send 0.34
+    reverb_send 0.36
+    out > highpass(500hz, 0.05) > master
+}
+
+track under {
+    play ch_low
+    using under
+    velocity 0.70
+    level 0.16
+    gate 1.0
+    sidechain 0.30
+    reverb_send 0.12
+    out > highpass(45hz, 0.05) > lowpass(320hz, 0.05) > master
+}
+
+# ────────────────────────────────────────────────
+# MASTER
+# ────────────────────────────────────────────────
+
+master {
+    in > eq(low=1.8, mid=0.0, high=1.0)
+       > tilt(0.0)
+       > compressor(-7db, ratio=2.2, attack=18ms, release=140ms, makeup=4.6db)
+       > limiter(0.95)
+       > out
+}
+
+# ────────────────────────────────────────────────
+# SCENES
+# ────────────────────────────────────────────────
+
+# 1. INTRO (8) — the machine starts. Kick, offbeat hat, two bass notes.
+scene intro {
+    reverb_mix = 0.20
+    delay_mix  = 0.14
+    auto walker cutoff 0.20 > 0.30
+
+    track drums { play dr_intro using nine level 0.72 }
+    track bass  { play bs_intro using walker level 0.55 velocity 0.78 }
+}
+
+# 2. PULSE (8) — clap on 2 and 4, the bass starts walking, the chords creep
+#    in from under a closed filter. No level fade: the filter is the fade.
+scene pulse {
+    reverb_mix = 0.24
+    delay_mix  = 0.16
+    auto warmth cutoff 0.16 > 0.32
+    auto walker cutoff 0.28 > 0.34
+
+    track drums  { play dr_main using nine level 0.79 }
+    track bass   { play bs_a    using walker level 0.66 }
+    track chords { play ch_a    using warmth level 0.25 reverb_send 0.34 }
+}
+
+# 3. LIFT (16) — cycle A wide open, shimmer layer above it. The filter
+#    sweep is a slow triangle across the whole sixteen bars.
+scene lift {
+    reverb_mix = 0.28
+    delay_mix  = 0.18
+    auto warmth cutoff 0.24 > 0.48 > 0.32
+    auto shimmer cutoff 0.40 > 0.54 > 0.44
+    auto walker cutoff 0.26 > 0.38
+
+    track drums  { play dr_main  using nine level 0.85 }
+    track bass   { play bs_a     using walker level 0.70 }
+    track chords { play ch_a     using warmth level 0.25 }
+    track shine { play ch_a_hi  using shimmer level 0.23 pan -0.38 }
+}
+
+# 4. BRIDGE (16) — cycle B: four minor 9ths, no resolution. The kit picks up
+#    an openhat and a sixteenth on the last kick. Everything tilts darker.
+scene bridge {
+    reverb_mix = 0.30
+    delay_mix  = 0.20
+    auto warmth cutoff 0.24 > 0.40
+    auto shimmer cutoff 0.38 > 0.48
+    auto walker cutoff_env 0.46 > 0.58
+    auto master tilt 0.0 > -0.12
+
+    track drums  { play dr_full  using nine level 0.87 }
+    track bass   { play bs_b     using walker level 0.73 }
+    track chords { play ch_b     using warmth level 0.25 }
+    track shine { play ch_b_hi  using shimmer level 0.23 pan -0.38 }
+}
+
+# 5. BREAKDOWN (16) — drums and bass gone. The chords carry it alone, the
+#    bell answers them, the room opens up and the filter breathes twice.
+#    `under` supplies the chord's own bottom half: without it the section is
+#    80% midrange and reads boxy. (A scene track's `out > ...` chain override
+#    parses but is ignored by the engine, so this has to be its own track.)
+scene breakdown {
+    reverb_mix = 0.52
+    delay_mix  = 0.30
+    auto warmth cutoff 0.18 > 0.52 > 0.28
+    auto shimmer cutoff 0.36 > 0.68 > 0.46
+    auto under cutoff 0.06 > 0.16 > 0.09
+    auto reverb_mix 0.38 > 0.58
+    auto master tilt -0.12 > 0.06
+
+    track chords { play ch_a    using warmth  level 0.35 velocity 0.88 sidechain 0.0 reverb_send 0.44 delay_send 0.20 }
+    track shine { play ch_a_hi using shimmer level 0.31 velocity 0.80 sidechain 0.0 reverb_send 0.54 delay_send 0.28 pan -0.38 }
+    track under  { play ch_low  using under   level 0.16 velocity 0.72 sidechain 0.0 }
+    track chime { play bl_a    using bell    level 1.00 velocity 0.72 sidechain 0.0 reverb_send 0.46 delay_send 0.40 pan -0.50 }
+}
+
+# 6. REBUILD (8) — the kick and the hats come back first. No clap, no bass:
+#    the floor knows what is coming.
+scene rebuild {
+    reverb_mix = 0.36
+    delay_mix  = 0.22
+    auto warmth cutoff 0.28 > 0.44
+    auto shimmer cutoff 0.40 > 0.50
+
+    track drums  { play dr_thin using nine level 0.80 }
+    track chords { play ch_a    using warmth  level 0.25 }
+    track shine { play ch_a_hi using shimmer level 0.23 pan -0.38 }
+    track chime { play bl_a    using bell    level 0.85 pan -0.50 }
+}
+
+# 7. PEAK (16) — the payoff. Full kit, bass walking cycle A, offbeat stabs
+#    on the left, bell on the right, chords at their brightest.
+scene peak {
+    reverb_mix = 0.26
+    delay_mix  = 0.20
+    auto warmth cutoff 0.32 > 0.52 > 0.38
+    auto shimmer cutoff 0.44 > 0.58 > 0.48
+    auto walker cutoff 0.32 > 0.40
+
+    track drums  { play dr_full  using nine    level 0.90 }
+    track bass   { play bs_a     using walker  level 0.76 }
+    track chords { play ch_a     using warmth  level 0.25 }
+    track shine { play ch_a_hi  using shimmer level 0.23 pan -0.38 }
+    track stabs { play st_a     using stab    level 0.26 pan 0.34 }
+    track chime { play bl_a     using bell    level 0.85 pan -0.50 }
+}
+
+# 8. OUTRO (8) — one chord, the kit thinning out, the master tilting dark
+#    and the last bars fading on the instruments themselves.
+scene outro {
+    reverb_mix = 0.34
+    delay_mix  = 0.22
+    auto warmth cutoff 0.36 > 0.16
+    auto master tilt 0.0 > -0.35
+    auto nine level 0.80 > 0.0
+    auto warmth level 0.25 > 0.0
+    auto shimmer level 0.23 > 0.0
+
+    track drums  { play dr_thin using nine    level 0.80 }
+    track chords { play ch_hold using warmth  level 0.25 reverb_send 0.40 }
+    track shine { play ch_hold using shimmer level 0.23 reverb_send 0.46 pan -0.38 }
+}
+
+# ────────────────────────────────────────────────
+# ARRANGEMENT — 96 bars
+# ────────────────────────────────────────────────
+
+arrange {
+    intro     x8
+    pulse     x8
+    lift      x16
+    bridge    x16
+    breakdown x16
+    rebuild   x8
+    peak      x16
+    outro     x8
+}

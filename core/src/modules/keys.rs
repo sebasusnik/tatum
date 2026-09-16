@@ -262,7 +262,7 @@ impl KeysModule {
         match param {
             KeysParam::Cutoff => {
                 // Exponential: 200Hz at 0.0, ~2kHz at 0.5, ~20kHz at 1.0
-                let freq = 200.0 * crate::math::pow(100.0, value);
+                let freq = crate::params::KEYS_CUTOFF.to_real(value);
                 self.cutoff_base = freq;
                 for voice in &mut self.voices {
                     voice.filter.set_params(FilterType::LowPass, freq, self.resonance);
@@ -276,7 +276,7 @@ impl KeysModule {
             KeysParam::ChorusMix => self.chorus.mix = value,
             KeysParam::Level => self.level = value,
             KeysParam::LfoRate => {
-                self.lfo_router.lfo.set_rate(0.1 + value * 19.9);
+                self.lfo_router.lfo.set_rate(crate::params::LFO_RATE.to_real(value));
             }
             KeysParam::LfoDepth => {
                 self.lfo_router.lfo.set_depth(value);
@@ -330,10 +330,10 @@ impl KeysModule {
                     _ => VoiceMode::RingMod,
                 };
             }
-            KeysParam::VibratoRate => self.vibrato_rate = 0.5 + value * 9.5,
+            KeysParam::VibratoRate => self.vibrato_rate = crate::params::VIBRATO_RATE.to_real(value),
             KeysParam::VibratoDepth => self.vibrato_depth = value * 0.5,
             KeysParam::Attack => {
-                let a = 0.001 * crate::math::pow(2000.0, value);
+                let a = crate::params::ENV_TIME.to_real(value) * 0.001;
                 for voice in &mut self.voices { voice.env.set_attack(a); }
             }
             KeysParam::Decay => {
@@ -344,7 +344,7 @@ impl KeysModule {
                 for voice in &mut self.voices { voice.env.set_sustain(value); }
             }
             KeysParam::Release => {
-                let r = 0.001 * crate::math::pow(2000.0, value);
+                let r = crate::params::ENV_TIME.to_real(value) * 0.001;
                 for voice in &mut self.voices { voice.env.set_release(r); }
             }
             KeysParam::Resonance => {

@@ -20,6 +20,10 @@ struct Kick {
     click_level: f32,
     click_decay: f32,
     click_filter: BiquadFilter,
+    /// The click used to be white noise with only a highpass on it, so it ran
+    /// at full level to 20 kHz and read as a tick rather than a beater. This
+    /// keeps it in the band where a beater actually lives.
+    click_tone: BiquadFilter,
     rng: Rng,
     drive: f32,
     active: bool,
@@ -28,7 +32,9 @@ struct Kick {
 impl Kick {
     fn new() -> Self {
         let mut click_filter = BiquadFilter::new(SAMPLE_RATE);
-        click_filter.set_params(FilterType::HighPass, 2500.0, 0.3);
+        click_filter.set_params(FilterType::HighPass, 1400.0, 0.3);
+        let mut click_tone = BiquadFilter::new(SAMPLE_RATE);
+        click_tone.set_params(FilterType::LowPass, 5500.0, 0.4);
         Self {
             phase: 0.0,
             freq: 50.0,
@@ -41,8 +47,9 @@ impl Kick {
             pitch: 1.0,
             click_amp: 0.0,
             click_level: 0.7,
-            click_decay: 0.92,
+            click_decay: 0.955,
             click_filter,
+            click_tone,
             rng: Rng::new(88888),
             drive: 1.8,
             active: false,
@@ -65,8 +72,8 @@ impl Kick {
         // Click transient: highpass-filtered noise burst
         let click = if self.click_amp > 0.001 {
             let noise = self.rng.next_bipolar() * self.click_amp;
-            let filtered_click = self.click_filter.process(noise);
-            self.click_amp *= self.click_decay; // ~2ms decay at 44.1kHz
+            let filtered_click = self.click_tone.process(self.click_filter.process(noise));
+            self.click_amp *= self.click_decay; // ~0.5 ms at 44.1 kHz
             filtered_click
         } else {
             self.click_amp = 0.0;
@@ -278,6 +285,10 @@ struct HiHat {
     decay_rate: f32,
     filter: BiquadFilter,
     bp_filter: BiquadFilter,
+    /// Six square oscillators through a 7.5 kHz highpass leaves only their
+    /// top harmonics, which ran to Nyquist: 60% of the hat's energy sat above
+    /// 10 kHz with its peak at 15 kHz. This puts a ceiling on it.
+    tone: BiquadFilter,
     active: bool,
     level: f32,
     pitch: f32,
@@ -290,6 +301,8 @@ impl HiHat {
         filter.set_params(FilterType::HighPass, 7500.0, 0.15);
         let mut bp_filter = BiquadFilter::new(SAMPLE_RATE);
         bp_filter.set_params(FilterType::BandPass, 9000.0, 0.25);
+        let mut tone = BiquadFilter::new(SAMPLE_RATE);
+        tone.set_params(FilterType::LowPass, 10000.0, 0.02);
         let base_freqs = [280.0, 350.0, 420.0, 495.0, 618.0, 725.0];
         Self {
             phases: [0.0; 6],
@@ -299,6 +312,7 @@ impl HiHat {
             decay_rate: 0.9975,
             filter,
             bp_filter,
+            tone,
             active: false,
             level: 1.0,
             pitch: 1.0,
@@ -316,6 +330,7 @@ impl HiHat {
         }
         self.filter.set_params(FilterType::HighPass, 7500.0 * self.pitch, 0.15);
         self.bp_filter.set_params(FilterType::BandPass, 9000.0 * self.pitch, 0.25);
+        self.tone.set_params(FilterType::LowPass, 10000.0 * self.pitch, 0.02);
         self.active = true;
     }
 
@@ -338,7 +353,7 @@ impl HiHat {
         let input = sum * self.amp;
         let hp = self.filter.process(input);
         let bp = self.bp_filter.process(input);
-        let filtered = hp * 0.7 + bp * 0.3;
+        let filtered = self.tone.process(hp * 0.7 + bp * 0.3);
 
         self.amp *= self.decay_rate;
         if self.amp < 0.001 {
@@ -655,13 +670,13 @@ impl BeatsModule {
             BeatsParam::HihatPan => self.hihat_pan = math::clamp(value, -1.0, 1.0),
             BeatsParam::ClapPan => self.clap_pan = math::clamp(value, -1.0, 1.0),
             BeatsParam::KickClick => self.kick.click_level = math::clamp(value, 0.0, 1.0),
-            BeatsParam::KickLevel => self.kick.level = math::clamp(value, 0.0, 1.0),
+            BeatsParam::KickLevel => self.kick.level = value.max(0.0),
             BeatsParam::SnareLevel => self.snare.level = value.max(0.0),
-            BeatsParam::HihatLevel => self.hihat.level = math::clamp(value, 0.0, 1.0),
-            BeatsParam::ClapLevel => self.clap.level = math::clamp(value, 0.0, 1.0),
-            BeatsParam::KickPitch => self.kick.pitch = 0.5 + value * 1.5,
-            BeatsParam::SnarePitch => self.snare.pitch = 0.5 + value * 1.5,
-            BeatsParam::HihatPitch => self.hihat.pitch = 0.5 + value * 1.5,
+            BeatsParam::HihatLevel => self.hihat.level = value.max(0.0),
+            BeatsParam::ClapLevel => self.clap.level = value.max(0.0),
+            BeatsParam::KickPitch => self.kick.pitch = crate::params::DRUM_PITCH.to_real(value),
+            BeatsParam::SnarePitch => self.snare.pitch = crate::params::DRUM_PITCH.to_real(value),
+            BeatsParam::HihatPitch => self.hihat.pitch = crate::params::DRUM_PITCH.to_real(value),
             BeatsParam::StutterRate => self.set_stutter_rate(value),
             BeatsParam::StutterDrum => {
                 // 0.0 = kick(36), 0.25 = snare(38), 0.5 = hihat(42), 0.75 = clap(39), 1.0 = tom(45)

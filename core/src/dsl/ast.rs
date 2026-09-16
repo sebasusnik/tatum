@@ -25,6 +25,11 @@ pub struct Globals {
     pub meter: (u8, u8),
     pub scale: Option<ScaleDef>,
     pub sidechain: f32,
+    /// Track or module whose level drives the ducking. `None` = the kick.
+    pub sidechain_source: Option<String>,
+    /// Shape of the ducking envelope, in milliseconds.
+    pub sidechain_attack_ms: Option<f32>,
+    pub sidechain_release_ms: Option<f32>,
     pub swing: Option<f32>,              // 0.5 = straight, 0.67 = triplet feel
     pub humanize: Option<f32>,           // velocity humanization 0.0-1.0
     pub humanize_timing: Option<f32>,    // timing humanization 0.0-1.0
@@ -60,6 +65,9 @@ impl Default for Globals {
             meter: (4, 4),
             scale: None,
             sidechain: 0.0,
+            sidechain_source: None,
+            sidechain_attack_ms: None,
+            sidechain_release_ms: None,
             swing: None,
             humanize: None,
             humanize_timing: None,
@@ -206,6 +214,7 @@ pub struct TrackDef {
     pub delay_send: Option<f32>,          // global delay send amount 0.0-1.0
     pub reverb_send: Option<f32>,         // global reverb send amount 0.0-1.0
     pub sidechain: Option<f32>,           // per-track sidechain amount (overrides global)
+    pub sidechain_source: Option<String>, // what ducks it; None = the global source
     pub arp: Option<ArpDef>,              // `arp up rate=16 gate=0.6 octaves=2`, `arp off`
 }
 

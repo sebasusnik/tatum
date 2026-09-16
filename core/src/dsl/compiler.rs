@@ -77,6 +77,9 @@ pub struct CompiledTrack {
     pub delay_send: f32,    // global delay send amount 0.0-1.0
     pub reverb_send: f32,   // global reverb send amount 0.0-1.0
     pub sidechain: Option<f32>, // per-track sidechain override (None = use global)
+    /// Track whose level ducks this one. `None` = whatever the song's global
+    /// source is, which is the kick unless `sidechain ... from=` says otherwise.
+    pub sidechain_source: Option<String>,
     pub arp: Option<ArpConfig>, // arpeggiator driven by the pattern's held notes
 }
 
@@ -194,11 +197,20 @@ pub struct CompiledSong {
 pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     let mut errors = Vec::new();
 
+    // A `capture` window is sized in samples at compile time so the buffer can
+    // be allocated when the chain is built. Use the slowest tempo the song ever
+    // reaches, since a scene can override it and a slower bar is a longer one.
+    let slowest_tempo = song.scenes.iter()
+        .filter_map(|s| s.tempo)
+        .fold(song.globals.tempo, f32::min)
+        .max(20.0);
+    let samples_per_bar = crate::SAMPLE_RATE * 60.0 / slowest_tempo * song.globals.meter.0 as f32;
+
     // 1. Compile graph instruments
     let mut instruments: Vec<CompiledInstrumentKind> = Vec::new();
     let mut instrument_names = Vec::new();
     for inst_def in &song.instruments {
-        match compile_instrument(inst_def) {
+        match compile_instrument(inst_def, samples_per_bar) {
             Ok(template) => {
                 instruments.push(CompiledInstrumentKind::Graph(template));
                 instrument_names.push(inst_def.name.clone());
@@ -241,7 +253,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     let mut buses = Vec::new();
     for bus_def in &song.buses {
         let chain = match song.bus_chains.iter().find(|bc| bc.bus_name == bus_def.name) {
-            Some(bc) => match compile_fx_chain(&format!("bus '{}'", bus_def.name), &bc.chain) {
+            Some(bc) => match compile_fx_chain(&format!("bus '{}'", bus_def.name), &bc.chain, samples_per_bar) {
                 Ok(c) => c,
                 Err(e) => { errors.push(e); Vec::new() }
             },
@@ -255,17 +267,18 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     let mut delay_return = Vec::new();
     for bc in &song.bus_chains {
         match bc.bus_name.as_str() {
-            "reverb_return" => match compile_fx_chain("reverb_return", &bc.chain) {
+            "reverb_return" => match compile_fx_chain("reverb_return", &bc.chain, samples_per_bar) {
                 Ok(c) => reverb_return = c,
                 Err(e) => errors.push(e),
             },
-            "delay_return" => match compile_fx_chain("delay_return", &bc.chain) {
+            "delay_return" => match compile_fx_chain("delay_return", &bc.chain, samples_per_bar) {
                 Ok(c) => delay_return = c,
                 Err(e) => errors.push(e),
             },
             name if !song.buses.iter().any(|b| b.name == name) => errors.push(CompileError::new(format!(
                 "chain '{}' has no `bus {}` declaration (or use reverb_return / delay_return for the global sends)", name, name
             ))),
+            // Names that do match a declared bus were already compiled in step 3.
             _ => {}
         }
     }
@@ -273,15 +286,51 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     // 4. Compile tracks
     let mut tracks = Vec::new();
     for track_def in &song.tracks {
-        match compile_track(track_def, &instrument_names, &patterns, &buses, None) {
+        match compile_track(track_def, &instrument_names, &patterns, &buses, None, samples_per_bar) {
             Ok(t) => tracks.push(t),
             Err(e) => errors.push(e),
         }
     }
 
+    // 4b. A sidechain source has to name something that exists, and a track
+    // cannot duck against itself. Getting this wrong used to be impossible
+    // because there was nothing to get wrong: everything ducked the kick.
+    {
+        let known = |name: &str| {
+            song.tracks.iter().any(|t| t.name == name)
+                || instrument_names.iter().any(|n| n == name)
+        };
+        let mut check = |amount: Option<f32>, source: &Option<String>, owner: &str| {
+            let Some(name) = source else { return };
+            if !known(name) {
+                errors.push(CompileError::new(format!(
+                    "{}: sidechain from='{}' names no track or module", owner, name
+                )));
+            } else if owner == name {
+                errors.push(CompileError::new(format!(
+                    "{}: sidechain from='{}' would duck the track against itself", owner, name
+                )));
+            } else if amount.unwrap_or(song.globals.sidechain) <= 0.0 {
+                errors.push(CompileError::new(format!(
+                    "{}: sidechain from='{}' has no amount, so it does nothing. Write `sidechain 0.4 from={}`",
+                    owner, name, name
+                )));
+            }
+        };
+        check(Some(song.globals.sidechain), &song.globals.sidechain_source, "song");
+        for t in &song.tracks {
+            check(t.sidechain, &t.sidechain_source, &t.name);
+        }
+        for scene in &song.scenes {
+            for t in &scene.tracks {
+                check(t.sidechain, &t.sidechain_source, &t.name);
+            }
+        }
+    }
+
     // 5. Compile master
     let master = match &song.master {
-        Some(m) => match compile_fx_chain("master", &m.chain) {
+        Some(m) => match compile_fx_chain("master", &m.chain, samples_per_bar) {
             Ok(c) => CompiledMaster { fx_chain: c },
             Err(e) => { errors.push(e); CompiledMaster { fx_chain: Vec::new() } }
         },
@@ -291,7 +340,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     // 6. Compile scenes
     let mut scenes = Vec::new();
     for scene_def in &song.scenes {
-        match compile_scene(scene_def, &instrument_names, &patterns, &buses, &tracks) {
+        match compile_scene(scene_def, &instrument_names, &patterns, &buses, &tracks, samples_per_bar) {
             Ok(s) => scenes.push(s),
             Err(e) => errors.push(e),
         }
@@ -358,7 +407,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
 
 // ── Instrument compilation ──
 
-fn compile_instrument(inst: &InstrumentDef) -> Result<GraphTemplate, CompileError> {
+fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> Result<GraphTemplate, CompileError> {
     let mut builder = GraphBuilder::new();
     let mut name_to_idx: Vec<(String, u8)> = Vec::new();
     let mut noise_seed = 42u32;
@@ -394,7 +443,7 @@ fn compile_instrument(inst: &InstrumentDef) -> Result<GraphTemplate, CompileErro
 
     // Create explicit nodes
     for node_def in &inst.nodes {
-        let spec = node_def_to_spec(node_def, &mut noise_seed, &mut osc_drift_seed)?;
+        let spec = node_def_to_spec(node_def, &mut noise_seed, &mut osc_drift_seed, samples_per_bar)?;
 
         if matches!(spec, NodeSpec::Env { .. }) {
             // Envelope+VCA pattern: an envelope in a signal chain means
@@ -441,7 +490,7 @@ fn compile_instrument(inst: &InstrumentDef) -> Result<GraphTemplate, CompileErro
     Ok(template)
 }
 
-fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u32) -> Result<NodeSpec, CompileError> {
+fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u32, samples_per_bar: f32) -> Result<NodeSpec, CompileError> {
     let problems = crate::nodes::validate(&node.kind, &node.params);
     if !problems.is_empty() {
         return Err(CompileError::new(problems.join("; ")));
@@ -521,7 +570,7 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
         }
         "lowpass" => {
             let cutoff = float_param_at(&node.params, 0).unwrap_or(1000.0);
-            let res = float_param_at(&node.params, 1).unwrap_or(0.5);
+            let res = float_param_at(&node.params, 1).unwrap_or(0.01);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
             Ok(NodeSpec::Biquad { filter_type: FilterType::LowPass, cutoff, resonance: res,
                 env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,
@@ -529,7 +578,7 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
         }
         "highpass" => {
             let cutoff = float_param_at(&node.params, 0).unwrap_or(1000.0);
-            let res = float_param_at(&node.params, 1).unwrap_or(0.5);
+            let res = float_param_at(&node.params, 1).unwrap_or(0.01);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
             Ok(NodeSpec::Biquad { filter_type: FilterType::HighPass, cutoff, resonance: res,
                 env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,
@@ -630,6 +679,22 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
             let hz = named_param(&node.params, "hz").unwrap_or(if bars > 0.0 { 0.0 } else { 0.25 });
             let mix = named_param(&node.params, "mix").unwrap_or(1.0);
             Ok(NodeSpec::Vowel { from, to, hz, bars, mix })
+        }
+        "capture" => {
+            let bars = float_param_at(&node.params, 0)
+                .or_else(|| named_param(&node.params, "bars"))
+                .unwrap_or(2.0);
+            let start = named_param(&node.params, "start").unwrap_or(0.0);
+            let speed = named_param(&node.params, "speed").unwrap_or(1.0);
+            let reverse = named_param(&node.params, "reverse").unwrap_or(0.0) >= 0.5;
+            let mix = named_param(&node.params, "mix").unwrap_or(1.0);
+            Ok(NodeSpec::Capture {
+                samples: (bars * samples_per_bar) as u32,
+                start_samples: (start * samples_per_bar) as u32,
+                speed,
+                reverse,
+                mix,
+            })
         }
         "autopan" => {
             let depth = float_param_at(&node.params, 0).unwrap_or(0.5);
@@ -886,6 +951,7 @@ fn compile_track(
     patterns: &[CompiledPattern],
     buses: &[CompiledBus],
     defaults: Option<&CompiledTrack>,
+    samples_per_bar: f32,
 ) -> Result<CompiledTrack, CompileError> {
     let instrument_idx = inst_names.iter().position(|n| n == &track.using_instrument)
         .ok_or_else(|| CompileError { line: 0,
@@ -929,7 +995,7 @@ fn compile_track(
                     alias: None,
                     params: rnode.params.clone(),
                 };
-                match node_def_to_spec(&node, &mut noise_seed, &mut drift_seed) {
+                match node_def_to_spec(&node, &mut noise_seed, &mut drift_seed, samples_per_bar) {
                     Ok(spec) => insert_fx.push(spec),
                     Err(e) => return Err(CompileError::new(format!(
                         "track '{}': {} (or declare `bus {}` if it is a bus)", track.name, e.message, rnode.kind
@@ -961,6 +1027,8 @@ fn compile_track(
         delay_send,
         reverb_send,
         sidechain: track.sidechain.or_else(|| defaults.and_then(|d| d.sidechain)),
+        sidechain_source: track.sidechain_source.clone()
+            .or_else(|| defaults.and_then(|d| d.sidechain_source.clone())),
         arp,
     })
 }
@@ -1004,7 +1072,7 @@ fn compile_arp(track_name: &str, def: &ArpDef) -> Result<Option<ArpConfig>, Comp
 
 // ── Bus/Master FX chain compilation ──
 
-fn compile_fx_chain(owner: &str, chain: &[ChainNode]) -> Result<Vec<NodeSpec>, CompileError> {
+fn compile_fx_chain(owner: &str, chain: &[ChainNode], samples_per_bar: f32) -> Result<Vec<NodeSpec>, CompileError> {
     let mut specs = Vec::new();
     let mut noise_seed = 200u32;
     let mut drift_seed = 8000u32;
@@ -1015,7 +1083,7 @@ fn compile_fx_chain(owner: &str, chain: &[ChainNode]) -> Result<Vec<NodeSpec>, C
             alias: None,
             params: node.params.clone(),
         };
-        match node_def_to_spec(&node_def, &mut noise_seed, &mut drift_seed) {
+        match node_def_to_spec(&node_def, &mut noise_seed, &mut drift_seed, samples_per_bar) {
             Ok(spec) => specs.push(spec),
             Err(e) => return Err(CompileError::new(format!("{}: {}", owner, e.message))),
         }
@@ -1031,6 +1099,7 @@ fn compile_scene(
     patterns: &[CompiledPattern],
     buses: &[CompiledBus],
     global_tracks: &[CompiledTrack],
+    samples_per_bar: f32,
 ) -> Result<CompiledScene, CompileError> {
     let mut tracks = Vec::new();
     for track_def in &scene.tracks {
@@ -1042,8 +1111,23 @@ fn compile_scene(
                 scene.name, track_def.name
             )));
         }
-        match compile_track(track_def, inst_names, patterns, buses, defaults) {
-            Ok(t) => tracks.push(t),
+        match compile_track(track_def, inst_names, patterns, buses, defaults, samples_per_bar) {
+            Ok(t) => {
+                // A scene track's own `out > ...` parses and compiles and is
+                // then never applied: insert chains are built once per track
+                // and the engine does not rebuild them on a scene change.
+                // Restating the same chain is harmless; changing it is not, and
+                // it used to change nothing in silence.
+                if let Some(d) = defaults {
+                    if !track_def.routing.is_empty() && t.insert_fx != d.insert_fx {
+                        return Err(CompileError::new(format!(
+                            "scene '{}': track '{}' cannot change its `out > ...` chain. Insert chains are fixed per track for the whole song; move the chain to the top-level `track {}` block, or add a second track with the other chain and swap which one plays.",
+                            scene.name, track_def.name, track_def.name
+                        )));
+                    }
+                }
+                tracks.push(t)
+            }
             Err(e) => return Err(e),
         }
     }

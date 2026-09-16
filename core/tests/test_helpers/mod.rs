@@ -4,7 +4,10 @@
 use std::fs::{self, File};
 use std::io::Write;
 
-const OUTPUT_DIR: &str = "test_output";
+/// Single-voice probes from the DSP tests. They live apart from the songs
+/// because a raw bass with no mix on it is not something to listen to, and a
+/// folder that mixes the two is a folder nobody can judge.
+const OUTPUT_DIR: &str = "test_output/probes";
 
 fn ensure_output_dir() {
     fs::create_dir_all(OUTPUT_DIR).expect("Failed to create test_output directory");

@@ -109,6 +109,18 @@ impl Parser {
             let n = *n;
             self.advance();
             Some(n)
+        } else if let Token::Quantity(n, suffix) = self.peek().clone() {
+            // Do not silently drop the unit: say where units are allowed.
+            let s = self.span();
+            self.errors.push(ParseError {
+                line: s.line, col: s.col,
+                message: format!(
+                    "'{}{}' has a unit, but this takes a plain number. Units work on module parameters and effect arguments.",
+                    n, suffix
+                ),
+            });
+            self.advance();
+            Some(n)
         } else {
             let s = self.span();
             self.errors.push(ParseError {
@@ -116,6 +128,43 @@ impl Parser {
                 message: format!("expected number, got {:?}", self.peek()),
             });
             None
+        }
+    }
+
+    /// A named argument's value, which may carry a unit (`cutoff=2khz`).
+    fn named_arg_value(&mut self, kind: &str, name: &str) -> Option<f32> {
+        // A minus sign used to drop out of the unit path entirely.
+        let negative = matches!(self.peek(), Token::Rest)
+            && matches!(self.peek_ahead(1), Token::Quantity(_, _));
+        if negative {
+            self.advance();
+        }
+        if let Token::Quantity(raw, suffix) = self.peek().clone() {
+            let raw = if negative { -raw } else { raw };
+            let sp = self.span();
+            let (l, c) = (sp.line, sp.col);
+            self.advance();
+            return match self.resolve_arg_quantity(kind, Some(name), 0, raw, &suffix) {
+                Ok(v) => Some(v),
+                Err(message) => {
+                    self.errors.push(ParseError { line: l, col: c, message });
+                    None
+                }
+            };
+        }
+        self.parse_expr_value()
+    }
+
+    fn resolve_arg_quantity(&self, kind: &str, name: Option<&str>, index: usize, raw: f32, suffix: &str)
+        -> Result<f32, String>
+    {
+        match crate::nodes::arg_at(kind, name, index) {
+            Some(arg) => arg.value_from_quantity(raw, suffix),
+            None => Err(format!(
+                "'{}{}' carries a unit, but {} has no argument there to give it meaning",
+                raw, suffix,
+                if kind.is_empty() { "this" } else { kind }
+            )),
         }
     }
 
@@ -238,6 +287,66 @@ impl Parser {
     fn parse_sidechain(&mut self, globals: &mut Globals) {
         if let Some(n) = self.expect_number() {
             globals.sidechain = n;
+        }
+        globals.sidechain_source = self.parse_sidechain_source();
+        // `attack=` and `release=` shape the envelope every source follows.
+        loop {
+            let key = match self.peek().clone() {
+                Token::Ident(ref k) if k == "attack" || k == "release" => k.clone(),
+                _ => break,
+            };
+            let sp = self.span();
+            let (l, c) = (sp.line, sp.col);
+            self.advance();
+            if !self.expect(&Token::Eq) { break; }
+            let ms = match self.peek().clone() {
+                Token::Quantity(v, ref suffix) if suffix == "ms" => { self.advance(); Some(v) }
+                Token::Quantity(v, ref suffix) if suffix == "s" || suffix == "sec" => { self.advance(); Some(v * 1000.0) }
+                Token::Number(v) => { self.advance(); Some(v) }
+                other => {
+                    self.errors.push(ParseError {
+                        line: l, col: c,
+                        message: format!("sidechain {}= takes a time like 80ms, got {}", key, describe_token(&other)),
+                    });
+                    None
+                }
+            };
+            let Some(ms) = ms else { break };
+            if !(0.1..=2000.0).contains(&ms) {
+                self.errors.push(ParseError {
+                    line: l, col: c,
+                    message: format!("sidechain {}= {}ms is outside 0.1ms..2000ms", key, ms),
+                });
+                continue;
+            }
+            if key == "attack" {
+                globals.sidechain_attack_ms = Some(ms);
+            } else {
+                globals.sidechain_release_ms = Some(ms);
+            }
+        }
+    }
+
+    /// Optional `from=<track or module>` after a sidechain amount.
+    fn parse_sidechain_source(&mut self) -> Option<String> {
+        if !matches!(self.peek(), Token::Ident(ref w) if w == "from") {
+            return None;
+        }
+        self.advance();
+        if !self.expect(&Token::Eq) {
+            return None;
+        }
+        match self.peek().clone() {
+            Token::Ident(name) => { self.advance(); Some(name) }
+            other => {
+                let sp = self.span();
+                let (l, c) = (sp.line, sp.col);
+                self.errors.push(ParseError {
+                    line: l, col: c,
+                    message: format!("sidechain from= needs a track or module name, got {}", describe_token(&other)),
+                });
+                None
+            }
         }
     }
 
@@ -431,7 +540,7 @@ impl Parser {
         // Parse optional (params)
         if matches!(self.peek(), Token::LParen) {
             self.advance();
-            self.parse_param_list(&mut params);
+            self.parse_param_list_for(&mut params, &kind);
             self.expect(&Token::RParen);
         }
 
@@ -447,7 +556,8 @@ impl Parser {
         ChainElement::NodeDef(node_def)
     }
 
-    fn parse_param_list(&mut self, params: &mut Vec<Param>) {
+    fn parse_param_list_for(&mut self, params: &mut Vec<Param>, kind: &str) {
+        let mut positional = 0usize;
         loop {
             self.skip_newlines();
             if matches!(self.peek(), Token::RParen | Token::Eof) { break; }
@@ -465,7 +575,7 @@ impl Parser {
                 self.advance();
                 if matches!(self.peek(), Token::Eq) {
                     self.advance();
-                    if let Some(val) = self.parse_expr_value() {
+                    if let Some(val) = self.named_arg_value(kind, kn) {
                         params.push(Param::Named(String::from(kn), val));
                     }
                     continue;
@@ -478,7 +588,7 @@ impl Parser {
                 self.advance();
                 if matches!(self.peek(), Token::Eq) {
                     self.advance();
-                    if let Some(val) = self.parse_expr_value() {
+                    if let Some(val) = self.named_arg_value(kind, &name) {
                         params.push(Param::Named(name, val));
                     }
                 } else {
@@ -509,7 +619,19 @@ impl Parser {
                     message: String::from("unexpected 'x' in arguments (use name=value, a number, a waveform word or a vowel)"),
                 });
                 self.advance();
+            } else if let Token::Quantity(raw, suffix) = self.peek().clone() {
+                let sp = self.span();
+                let (l, c) = (sp.line, sp.col);
+                self.advance();
+                match self.resolve_arg_quantity(kind, None, positional, raw, &suffix) {
+                    Ok(v) => params.push(Param::Float(v)),
+                    Err(message) => self.errors.push(ParseError { line: l, col: c, message }),
+                }
+                positional += 1;
+                if matches!(self.peek(), Token::Comma) { self.advance(); }
+                continue;
             } else if let Token::Number(_) = self.peek() {
+                positional += 1;
                 // Could be a number or a rhythm division (1/4)
                 let n = self.expect_number().unwrap_or(0.0);
                 if matches!(self.peek(), Token::Slash) {
@@ -533,7 +655,17 @@ impl Parser {
                 if let Token::Number(n) = self.peek() {
                     let n = *n;
                     self.advance();
+                    positional += 1;
                     params.push(Param::Float(-n));
+                } else if let Token::Quantity(raw, suffix) = self.peek().clone() {
+                    let sp = self.span();
+                    let (l, c) = (sp.line, sp.col);
+                    self.advance();
+                    match self.resolve_arg_quantity(kind, None, positional, -raw, &suffix) {
+                        Ok(v) => params.push(Param::Float(v)),
+                        Err(message) => self.errors.push(ParseError { line: l, col: c, message }),
+                    }
+                    positional += 1;
                 }
             } else {
                 break;
@@ -831,7 +963,15 @@ impl Parser {
                     for _ in 0..n { current_row.push(Step::Tie); }
                 }
                 Token::Newline => {
-                    if !current_row.is_empty() {
+                    // A drum lane may be written across several lines. Ending
+                    // the row at the first newline turned the continuation into
+                    // an unlabelled row, which the compiler then dropped: the
+                    // pattern compiled clean and played half of what was written.
+                    let lane_continues = labeled_mode
+                        && !current_row.is_empty()
+                        && !self.next_line_starts_a_lane()
+                        && !matches!(self.peek_past_newlines(), Token::RBrace | Token::Eof);
+                    if !current_row.is_empty() && !lane_continues {
                         rows.push(current_row);
                         current_row = Vec::new();
                     }
@@ -858,6 +998,16 @@ impl Parser {
         }
 
         self.expect(&Token::RBrace);
+        if !lane_labels.is_empty() && lane_labels.len() != rows.len() {
+            let s = self.span();
+            self.errors.push(ParseError {
+                line: s.line, col: s.col,
+                message: format!(
+                    "pattern '{}': {} lane labels but {} rows. Every row of a drum pattern needs its own `lane:` label.",
+                    name, lane_labels.len(), rows.len()
+                ),
+            });
+        }
         patterns.push(PatternDef { name, rows, lane_labels });
     }
 
@@ -917,7 +1067,17 @@ impl Parser {
                             "edepth" => plock.env_depth = Some(val),
                             "res" => plock.resonance = Some(val),
                             "gate" => plock.gate = Some(val),
-                            _ => {} // unknown p-lock param, ignore
+                            other => {
+                                let sp = self.tokens[saved_pos].clone();
+                                self.errors.push(ParseError {
+                                    line: sp.line,
+                                    col: sp.col,
+                                    message: format!(
+                                        "unknown step parameter '{}'. A step lock takes cutoff, edepth, res or gate",
+                                        other
+                                    ),
+                                });
+                            }
                         }
                     }
                 } else {
@@ -957,6 +1117,7 @@ impl Parser {
             routing: Vec::new(),
             delay_send: None,
             reverb_send: None,
+            sidechain_source: None,
             sidechain: None,
             arp: None,
         };
@@ -1025,17 +1186,33 @@ impl Parser {
                         track.reverb_send = Some(v);
                     }
                 }
-                Token::Ident(ref word) if word == "sidechain" => {
+                // `sidechain` is a top-level keyword and also a track option.
+                Token::Sidechain | Token::Ident(_) if matches!(self.peek(), Token::Sidechain)
+                    || matches!(self.peek(), Token::Ident(ref w) if w == "sidechain") =>
+                {
                     self.advance();
                     if let Some(v) = self.expect_number() {
                         track.sidechain = Some(v);
                     }
+                    track.sidechain_source = self.parse_sidechain_source();
                 }
                 Token::Ident(ref word) if word == "arp" => {
                     self.advance();
                     track.arp = self.parse_arp_clause();
                 }
-                _ => { self.advance(); }
+                other => {
+                    let sp = self.span();
+                    let (l, c) = (sp.line, sp.col);
+                    self.errors.push(ParseError {
+                        line: l, col: c,
+                        message: format!(
+                            "track '{}': unexpected {} (a track takes play, using, level, pan, gate, velocity, delay_send, reverb_send, sidechain, arp or `out > ...`)",
+                            track.name, describe_token(&other)
+                        ),
+                    });
+                    self.advance();
+                    self.recover_to_line_end();
+                }
             }
         }
 
@@ -1085,6 +1262,26 @@ impl Parser {
     }
 
     /// The next token, looking past newlines (without consuming them).
+    /// In a drum pattern, does a new lane start after the newlines ahead?
+    /// `hat:` begins one; anything else is the current lane continuing onto
+    /// another line.
+    fn next_line_starts_a_lane(&self) -> bool {
+        let mut i = self.pos;
+        while i < self.tokens.len() && matches!(self.tokens[i].token, Token::Newline) {
+            i += 1;
+        }
+        if i + 1 >= self.tokens.len() {
+            return false;
+        }
+        matches!(self.tokens[i].token, Token::Ident(_)) && matches!(self.tokens[i + 1].token, Token::Colon)
+    }
+
+    /// The token `n` places ahead, without consuming anything.
+    fn peek_ahead(&self, n: usize) -> &Token {
+        let i = (self.pos + n).min(self.tokens.len().saturating_sub(1));
+        &self.tokens[i].token
+    }
+
     fn peek_past_newlines(&self) -> &Token {
         let mut i = self.pos;
         while i < self.tokens.len() && matches!(self.tokens[i].token, Token::Newline) {
@@ -1125,7 +1322,7 @@ impl Parser {
             let mut params = Vec::new();
             if matches!(self.peek(), Token::LParen) {
                 self.advance();
-                self.parse_param_list(&mut params);
+                self.parse_param_list_for(&mut params, &kind);
                 self.expect(&Token::RParen);
             }
 
@@ -1296,7 +1493,7 @@ impl Parser {
                     let mut params = Vec::new();
                     if matches!(self.peek(), Token::LParen) {
                         self.advance();
-                        self.parse_param_list(&mut params);
+                        self.parse_param_list_for(&mut params, &name);
                         self.expect(&Token::RParen);
                     }
                     chain.push(ChainNode { kind: name, params });
@@ -1329,7 +1526,7 @@ impl Parser {
                     let mut params = Vec::new();
                     if matches!(self.peek(), Token::LParen) {
                         self.advance();
-                        self.parse_param_list(&mut params);
+                        self.parse_param_list_for(&mut params, &name);
                         self.expect(&Token::RParen);
                     }
                     chain.push(ChainNode { kind: name, params });
@@ -1502,6 +1699,24 @@ impl Parser {
                             self.advance();
                             params.push(ModuleParam { name: key, value: 0.0, line });
                         }
+                    }
+                    continue;
+                }
+
+                if let Token::Quantity(raw, suffix) = self.peek().clone() {
+                    let sp = self.span();
+                    let (l, c) = (sp.line, sp.col);
+                    self.advance();
+                    let raw = if negative { -raw } else { raw };
+                    let spec = ModuleKind::from_str(&module_type)
+                        .and_then(|k| params::lookup(k, &key));
+                    match spec {
+                        Some(spec) => match spec.value_from_quantity(raw, &suffix) {
+                            Ok(value) => params.push(ModuleParam { name: key, value, line }),
+                            Err(message) => self.errors.push(ParseError { line: l, col: c, message }),
+                        },
+                        // Unknown param: let the compiler name it with a suggestion.
+                        None => params.push(ModuleParam { name: key, value: raw, line }),
                     }
                     continue;
                 }
@@ -1683,6 +1898,7 @@ fn describe_token(t: &Token) -> String {
     match t {
         Token::Ident(s) => format!("'{}'", s),
         Token::Number(n) => format!("number {}", n),
+        Token::Quantity(n, u) => format!("'{}{}'", n, u),
         Token::Note(n) => format!("note {}", n),
         Token::DrumHit => String::from("'x'"),
         Token::DrumAccent => String::from("'X'"),

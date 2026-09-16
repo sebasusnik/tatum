@@ -79,7 +79,7 @@ module fm atmos {
 # Doom-organ overtones an octave above the drone: fifth voicing,
 # saturated and phased for movement.
 module keys doomorgan {
-    voice_mode fifth
+    voice_mode poly
     cutoff 0.44
     resonance 0.45
     detune 0.6          # wide: the two oscillators beat against each other
@@ -236,8 +236,9 @@ track subwall {
 track organ {
     play organ_em8
     using doomorgan
+    pan -0.50
     velocity 0.85
-    level 0.16
+    level 0.09238
     gate 1.0
     reverb_send 0.42
     delay_send 0.15
@@ -252,6 +253,7 @@ track organ {
 track atmos {
     play atmos_a
     using atmos
+    pan 0.34
     velocity 0.8
     level 0.3
     gate 0.9
@@ -293,7 +295,7 @@ track stab {
     velocity 0.85
     level 0.55
     gate 0.25
-    pan 0.15
+    pan -0.38
     delay_send 0.2
     reverb_send 0.25
     sidechain 0.5
@@ -322,22 +324,22 @@ master {
 scene intro {
     track bassdrone { play drone_em8 using drone level 0.19 reverb_send 0.3 sidechain 0.8 }
     track subwall   { play sub_em8 using subwall level 0.14 sidechain 0.75 }
-    track organ     { play organ_em8 using doomorgan level 0.16 reverb_send 0.42 sidechain 0.8 }
+    track organ { play organ_em8 using doomorgan level 0.09238 reverb_send 0.42 sidechain 0.8 pan -0.50 }
 }
 
 # 2. Kick enters, drone holds.
 scene intro_b {
     track bassdrone { play drone_em8 using drone level 0.19 reverb_send 0.3 sidechain 0.8 }
     track subwall   { play sub_em8 using subwall level 0.14 sidechain 0.75 }
-    track organ     { play organ_em8 using doomorgan level 0.16 reverb_send 0.42 sidechain 0.8 }
-    track atmos     { play atmos_a using atmos level 0.3 reverb_send 0.75 delay_send 0.35 sidechain 0.5 }
+    track organ { play organ_em8 using doomorgan level 0.09238 reverb_send 0.42 sidechain 0.8 pan -0.50 }
+    track atmos { play atmos_a using atmos level 0.3 reverb_send 0.75 delay_send 0.35 sidechain 0.5 pan 0.34 }
 }
 
 scene kick_enter {
     track bassdrone { play drone_em8 using drone level 0.19 reverb_send 0.3 sidechain 0.8 }
     track subwall   { play sub_em8 using subwall level 0.14 sidechain 0.75 }
-    track organ     { play organ_em8 using doomorgan level 0.16 reverb_send 0.42 sidechain 0.8 }
-    track atmos     { play atmos_low using atmos level 0.22 reverb_send 0.7 delay_send 0.3 sidechain 0.5 }
+    track organ { play organ_em8 using doomorgan level 0.09238 reverb_send 0.42 sidechain 0.8 pan -0.50 }
+    track atmos { play atmos_low using atmos level 0.22 reverb_send 0.7 delay_send 0.3 sidechain 0.5 pan 0.34 }
     track drums     { play beat_enter using kit level 0.78 reverb_send 0.06 }
 }
 
@@ -345,7 +347,7 @@ scene kick_enter {
 scene groove {
     track bassdrone { play drone_cm8 using drone level 0.19 reverb_send 0.3 sidechain 0.8 }
     track subwall   { play sub_cm8 using subwall level 0.14 sidechain 0.75 }
-    track organ     { play organ_cm8 using doomorgan level 0.16 reverb_send 0.42 sidechain 0.8 }
+    track organ { play organ_cm8 using doomorgan level 0.09238 reverb_send 0.42 sidechain 0.8 pan -0.50 }
     track drums     { play beat_groove using kit level 0.95 reverb_send 0.06 }
     track bassline  { play bass_pulse_groove using pulse level 1.15 gate 0.4 sidechain 0.65 }
 }
@@ -361,8 +363,8 @@ scene breakdown {
 
     track bassdrone { play drone_em8 using drone level 0.19 reverb_send 0.3 sidechain 0.8 }
     track subwall   { play sub_em8 using subwall level 0.14 sidechain 0.75 }
-    track organ     { play organ_em8 using doomorgan level 0.16 reverb_send 0.42 sidechain 0.8 }
-    track atmos     { play atmos_b using atmos level 0.38 reverb_send 0.8 delay_send 0.4 sidechain 0.5 }
+    track organ { play organ_em8 using doomorgan level 0.09238 reverb_send 0.42 sidechain 0.8 pan -0.50 }
+    track atmos { play atmos_b using atmos level 0.38 reverb_send 0.8 delay_send 0.4 sidechain 0.5 pan 0.34 }
 }
 
 # 5. The drop — everything, master brightens.
@@ -373,11 +375,11 @@ scene drop {
 
     track bassdrone { play drone_edrop12 using drone level 0.19 reverb_send 0.26 sidechain 0.8 }
     track subwall   { play sub_edrop12 using subwall level 0.14 sidechain 0.75 }
-    track organ     { play organ_edrop12 using doomorgan level 0.16 reverb_send 0.38 sidechain 0.8 }
+    track organ { play organ_edrop12 using doomorgan level 0.09238 reverb_send 0.38 sidechain 0.8 pan -0.50 }
     track drums     { play beat_drop using kit level 0.85 reverb_send 0.06 }
     track bassline  { play bass_pulse_drop using pulse level 1.15 gate 0.4 sidechain 0.7 }
-    track atmos     { play atmos_low using atmos level 0.24 reverb_send 0.7 delay_send 0.3 sidechain 0.5 }
-    track stab      { play stab_answer using stab level 0.62 gate 0.25 pan 0.15 delay_send 0.2 reverb_send 0.25 sidechain 0.5 }
+    track atmos { play atmos_low using atmos level 0.24 reverb_send 0.7 delay_send 0.3 sidechain 0.5 pan 0.34 }
+    track stab { play stab_answer using stab level 0.62 gate 0.25 delay_send 0.2 reverb_send 0.25 sidechain 0.5 pan -0.38 }
 }
 
 # 6. Outro — drone alone, dying. No drums here, so sidechain is inert
@@ -392,8 +394,8 @@ scene outro {
 
     track bassdrone { play drone_em4 using drone level 0.19 reverb_send 0.3 sidechain 0.8 }
     track subwall   { play sub_em4 using subwall level 0.14 sidechain 0.75 }
-    track organ     { play organ_em4 using doomorgan level 0.16 reverb_send 0.42 sidechain 0.8 }
-    track atmos     { play atmos_low using atmos level 0.24 reverb_send 0.75 delay_send 0.3 sidechain 0.5 }
+    track organ { play organ_em4 using doomorgan level 0.09238 reverb_send 0.42 sidechain 0.8 pan -0.50 }
+    track atmos { play atmos_low using atmos level 0.24 reverb_send 0.75 delay_send 0.3 sidechain 0.5 pan 0.34 }
 }
 
 # ────────────────────────────────────────────────

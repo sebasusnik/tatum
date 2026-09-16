@@ -13,6 +13,7 @@ use crate::effects::limiter::Limiter;
 use crate::effects::eq::{TiltEq, ThreeBandEq};
 use crate::effects::delay::Delay;
 use crate::effects::reverb::DattorroReverb;
+use crate::effects::capture::Capture;
 use crate::SAMPLE_RATE;
 
 /// Maximum number of inputs a single node can accept.
@@ -22,7 +23,7 @@ pub const MAX_NODE_INPUTS: usize = 8;
 
 /// Describes how to create a node. Stored in GraphTemplate.
 /// Small, Copy-able, no heap allocations.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum NodeSpec {
     Osc { waveform: Waveform, freq: f32, drift_seed: u32, fixed: bool, pitch_semitones: f32 },
     /// Oscillator with built-in pitch envelope (exponential sweep from start→end).
@@ -63,6 +64,10 @@ pub enum NodeSpec {
     Delay { sync_div: f32, feedback: f32 },
     /// Reverb (bus/master chain only, not per-voice).
     Reverb { room_size: f32 },
+    /// Record a window of the chain's output and loop it back. The window is
+    /// already in samples: the compiler resolves `bars` against the song's
+    /// slowest tempo so the buffer can be allocated when the chain is built.
+    Capture { samples: u32, start_samples: u32, speed: f32, reverse: bool, mix: f32 },
     Output,
 }
 
@@ -152,6 +157,9 @@ impl NodeSpec {
             }
             NodeSpec::Phaser { mix, hz, bars, stages, feedback, depth } => {
                 NodeKind::Phaser(Phaser::new(mix, hz, bars, stages as usize, feedback, depth))
+            }
+            NodeSpec::Capture { samples, start_samples, speed, reverse, mix } => {
+                NodeKind::Capture(Capture::new(samples, start_samples, speed, reverse, mix))
             }
             NodeSpec::Vowel { from, to, hz, bars, mix } => {
                 NodeKind::Vowel(Formant::new(from, to, hz, bars, mix))
@@ -436,6 +444,7 @@ pub enum NodeKind {
     ThreeBandEq(ThreeBandEq),
     Delay(Delay),
     Reverb(DattorroReverb),
+    Capture(Capture),
 
     // ── Output ──
     Output,
@@ -450,6 +459,7 @@ impl NodeKind {
             NodeKind::PitchOsc(po) => po.next_sample(),
             NodeKind::Noise(noise) => noise.next_sample(),
             NodeKind::Lfo(lfo) => lfo.next_sample(),
+            NodeKind::Capture(c) => c.process(inputs[0]),
             NodeKind::Env(env) => env.next_sample(),
             NodeKind::Biquad(m) => m.process(inputs[0]),
             NodeKind::Ladder(m) => m.process(inputs[0]),
@@ -511,6 +521,14 @@ impl NodeKind {
             NodeKind::Saturator(sat) => (sat.process(l), sat.process(r)),
             NodeKind::Gain(g) => (l * *g, r * *g),
             NodeKind::Phaser(p) => p.process_stereo(l, r),
+            // Explicit, because the dual-mono fallback would step the capture's
+            // read position twice per stereo sample.
+            NodeKind::Capture(c) => c.process_stereo(l, r),
+            // Same reason, and it matters more here: calling a delay line twice
+            // per stereo sample double-clocks it and runs both channels through
+            // one state. A bus reverb came out as wind and rain.
+            NodeKind::Delay(d) => d.process_stereo(l, r),
+            NodeKind::Reverb(rv) => rv.process_stereo_in(l, r),
             NodeKind::Vowel(v) => v.process_stereo(l, r),
             NodeKind::AutoPan { lfo, depth, .. } => {
                 // Equal-power pan driven by the LFO: p in -1..1
@@ -544,6 +562,7 @@ impl NodeKind {
             (NodeKind::ThreeBandEq(eq), "eq_high") => { eq.set_high(value); true }
             (NodeKind::Saturator(s), "drive") => { s.set_drive(value); true }
             (NodeKind::Gain(g), "gain") => { *g = value; true }
+            (NodeKind::Capture(c), n) => c.set_named(n, value),
             (NodeKind::Limiter(l), "limiter") => { l.set_threshold(value); true }
             (NodeKind::Compressor(c), "comp_threshold") => { c.set_threshold(value); true }
             (NodeKind::Biquad(m), "cutoff") => { m.base_cutoff = value; m.filter.set_cutoff(value); true }
@@ -612,6 +631,7 @@ impl NodeKind {
             NodeKind::Noise(_) => {}
             NodeKind::Lfo(lfo) => lfo.reset(),
             NodeKind::AutoPan { lfo, .. } => lfo.reset(),
+            NodeKind::Capture(c) => c.reset(),
             NodeKind::Phaser(p) => p.reset(),
             NodeKind::Vowel(v) => v.reset(),
             NodeKind::Env(env) => env.reset(),
