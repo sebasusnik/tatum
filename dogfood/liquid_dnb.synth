@@ -86,31 +86,36 @@ module keys cloud {
     vibrato_depth 0.04
 }
 
-# Rhodes: FM electric piano for the syncopated chord hits.
-module fm rhodes {
-    algorithm dual_pairs
+# La chapa. Era un Rhodes FM; ahora es la fuente de un filtro de envolvente, y
+# el caracter lo pone el filtro, no el timbre. Por eso aca no hay ratios
+# inarmonicos ni feedback: el feedback en FM es un generador de ruido, y con
+# `chorus_mix` habia dos chorus en serie (uno aca y otro en la cadena), que es
+# lo que raspaba -- un chorus es una copia desafinada, y desafinar es batir.
+# Aspereza medida sobre el track aislado: 34.9% de la modulacion antes, 6.3%
+# despues de sacar los dos.
+module fm chapa {
+    algorithm two_op
     level 2.0
-    mod_index 0.34
-    feedback 0.08
+    mod_index 0.66          # el brillo del ataque sale de aca: subir un shelf
+                            # detras de un resonante de Q alto no llega, se lo come
+    feedback 0.0
     waveform sine
-    op0_ratio 0.032258      # 1x
-    op1_ratio 0.096774      # 2x
-    op2_ratio 0.032258      # 1x
-    op3_ratio 0.225806      # 4x
-    op0_attack 0.2117       # 5 ms
-    op0_decay 0.9213        # 1.1 s
-    op0_sustain 0.24
-    op0_release 0.8794      # 800 ms
-    op1_attack 0.1445       # 3 ms
-    op1_decay 0.8176        # 500 ms
-    op1_sustain 0.08
-    op1_release 0.7883      # 400 ms
-    chorus_mix 0.35
+    op0_ratio 0.032258      # 1x, portadora
+    op1_ratio 0.096774      # 2x armonico: limpio
+    op0_attack 0.0912       # 2 ms, el golpe que dispara el seguidor
+    op0_decay 0.8459        # 620 ms
+    op0_sustain 0.12        # cae rapido: seco, no sostenido
+    op0_release 0.7504      # 300 ms
+    op1_attack 0.0          # 1 ms
+    op1_decay 0.7815        # 380 ms
+    op1_sustain 0.10
+    op1_release 0.7211      # 240 ms
+    chorus_mix 0.0
     vibrato_rate 0.0316     # 0.8 Hz
-    vibrato_depth 0.03
+    vibrato_depth 0.02
     lfo_target mod_index
     lfo_sync bars_8
-    lfo_depth 0.14
+    lfo_depth 0.0           # el unico que se mueve es el filtro
 }
 
 # Air: the high drone that makes the record sound wide.
@@ -243,22 +248,6 @@ pattern brk_thin {
 
 # Sparse: one chord, then thirty-two beats of nothing so the reverb can
 # bloom and decay. Feeding it continuously gives a wash, not a tail.
-pattern voice_intro_bloom {
-    Fm9:0.62  ..*31  -*32
-}
-
-pattern voice_a_bloom {
-    Fm9:0.62  ..*31  -*32
-}
-
-pattern voice_b_bloom {
-    Abmaj9:0.62  ..*31  -*32
-}
-
-pattern voice_break_bloom {
-    Bbm11:0.62  ..*31  -*32
-}
-
 pattern voice_intro {
     Fm9:0.52     ..*63
     Dbmaj9:0.52  ..*63
@@ -286,24 +275,24 @@ pattern voice_break {
 # Rhodes: the chords again, syncopated, landing off the kick.
 pattern rhodes_a {
     -  -  Fm9/4:0.45  ..   -  -  -  -    -  -  -  Fm9/4:0.40   ..  -  -  -
-    -  -  -  -   Fm9/4:0.42  ..  -  -    -  -  Fm9/4:0.36  ..   -  -  -  -
+    -  -  -  Fm9/4:0.42  Fm9/4:0.32  ..  -  -  Fm9/4:0.32  ..  -  -  -  -  -  -
     -  -  Dbmaj9/4:0.45  ..   -  -  -  -    -  -  -  Dbmaj9/4:0.40   ..  -  -  -
-    -  -  -  -   Dbmaj9/4:0.42  ..  -  -    -  -  Dbmaj9/4:0.36  ..   -  -  -  -
+    -  -  -  Dbmaj9/4:0.42  Dbmaj9/4:0.32  ..  -  -  Dbmaj9/4:0.32  ..  -  -  -  -  -  -
     -  -  Bbm11/3:0.42  ..   -  -  -  -    -  -  -  Bbm11/3:0.38   ..  -  -  -
-    -  -  -  -   Bbm11/3:0.40  ..  -  -    -  -  Bbm11/3:0.34  ..   -  -  -  -
+    -  -  -  Bbm11/3:0.40  Bbm11/3:0.30  ..  -  -  Bbm11/3:0.30  ..  -  -  -  -  -  -
     -  -  Eb11/3:0.42  ..   -  -  -  -    -  -  -  Eb11/3:0.38   ..  -  -  -
-    -  -  -  -   Eb11/3:0.40  ..  -  -    -  -  Eb11/3:0.34  ..   -  -  -  -
+    -  -  -  Eb11/3:0.40  Eb11/3:0.30  ..  -  -  Eb11/3:0.30  ..  -  -  -  -  -  -
 }
 
 pattern rhodes_b {
     -  -  -  Abmaj9/4:0.44   ..  -  -  -    -  -  Abmaj9/4:0.38  ..   -  -  -  -
-    -  -  Abmaj9/4:0.40  ..   -  -  -  -    -  -  -  -   Abmaj9/4:0.34  ..  -  -
+    -  -  -  Abmaj9/4:0.40  Abmaj9/4:0.30  ..  -  -  Abmaj9/4:0.30  ..  -  -  -  -  -  -
     -  -  -  Eb11/3:0.42   ..  -  -  -    -  -  Eb11/3:0.38  ..   -  -  -  -
-    -  -  Eb11/3:0.40  ..   -  -  -  -    -  -  -  -   Eb11/3:0.34  ..  -  -
+    -  -  -  Eb11/3:0.40  Eb11/3:0.30  ..  -  -  Eb11/3:0.30  ..  -  -  -  -  -  -
     -  -  -  Fm9/4:0.46   ..  -  -  -    -  -  Fm9/4:0.40  ..   -  -  -  -
-    -  -  Fm9/4:0.42  ..   -  -  -  -    -  -  -  -   Fm9/4:0.36  ..  -  -
+    -  -  -  Fm9/4:0.42  Fm9/4:0.32  ..  -  -  Fm9/4:0.32  ..  -  -  -  -  -  -
     -  -  -  Dbmaj9/4:0.44   ..  -  -  -    -  -  Dbmaj9/4:0.38  ..   -  -  -  -
-    -  -  Dbmaj9/4:0.40  ..   -  -  -  -    -  -  -  -   Dbmaj9/4:0.34  ..  -  -
+    -  -  -  Dbmaj9/4:0.40  Dbmaj9/4:0.30  ..  -  -  Dbmaj9/4:0.30  ..  -  -  -  -  -  -
 }
 
 # Fed into the tape bus so the echo chamber has something to chew on.
@@ -398,17 +387,19 @@ pattern silence {
 bus drums
 drums { in > eq(low=2.0, mid=-1.0, high=2.0) > compressor(-7, ratio=2, attack=25, release=130, makeup=1.4) > master }
 
-# The echo chamber the ghost chords fall into: quarter-note repeats, darkened,
-# swinging across the stereo field. It is what carries the breakdown.
-# La nube. El acorde entra, sale solo su cola de reverb (el nodo es wet only),
-# y `capture` se queda con cuatro compases de esa cola y los repite a media
-# velocidad: la parte de "resamplear" de la receta. Lo que suena aca no tiene
-# transitorios, por eso deja de ser un instrumento y pasa a ser atmosfera.
+# La nube. El acorde entra y sale solo su cola: el nodo `reverb` es wet only,
+# asi que lo que llega a master no tiene nada del ataque. Eso es lo que la
+# receta busca al resamplear la cola, y aca se consigue sin resamplear.
+#
+# Aca habia un `capture(4, start=8, speed=0.75)`. Grababa cuatro compases de
+# cola y los repetia para siempre, asi que la nube dejaba de seguir la
+# armonia: la similitud de coseno entre un compas sobre Fm9 y uno sobre
+# Abmaj9 daba 1.000, y el centroide quedaba clavado en 338 Hz durante siete
+# escenas. Un loop de cinta, no una nube.
 bus haze
-haze { in > reverb(0.78)
-          > capture(4, start=8, speed=0.75)
+haze { in > reverb(0.92)
           > highpass(300hz, 0.02)
-          > lowpass(2.6khz, 0.02, lfo_bars=16, lfo_depth=1100)
+          > lowpass(2.8khz, 0.02, lfo_bars=16, lfo_depth=1100)
           > autopan(0.45, bars=16)
           > master }
 
@@ -443,11 +434,13 @@ track pad {
     using cloud
     pan 0.45
     velocity 0.95
-    level 0.2759
+    level 0.30
     reverb_send 0.48
     delay_send 0.14
     sidechain 0.40
-    out > highpass(290hz, 0.02)
+    # y se agacha cuando pega la chapa, en vez de subirle el nivel a ella
+    sidechain 0.28 from=rhodes
+    out > highpass(290hz, 0.02) > eq(low=0.0, mid=-2.5, high=1.0)
         > lowpass(3.4khz, 0.02, lfo_bars=16, lfo_depth=1500)
         > autopan(0.30, bars=12)
         > master
@@ -457,30 +450,44 @@ track haze {
     play silence
     using cloud
     velocity 0.9
-    level 0.5
+    level 0.32              # la nube era lo que sonaba adelante, no el pad:
+                            # estaba 6.4 dB encima de la chapa y en su misma banda
     sidechain 0.35
     out > haze
 }
 
 track rhodes {
     play silence
-    using rhodes
+    using chapa
     velocity 0.9
-    level 0.676
-    gate 0.70
-    pan -0.38
-    reverb_send 0.42
-    delay_send 0.26
+    level 0.22              # detras del pad, no delante: medido, no a ojo
+    gate 0.55               # nota corta: la chapa es un golpe, no un acorde sostenido
+    pan -0.20
+    reverb_send 0.06        # casi seca. El piso entre golpes pasa de -15 a -36 dB.
+    delay_send 0.0
     sidechain 0.30
-    out > highpass(300, 0.02) > eq(low=-1.0, mid=1.5, high=1.5) > chorus(0.30) > master
+    out > highpass(260, 0.02)
+        # El filtro de envolvente. `peak` es Q = 0.5 + n*19.5, y el tiempo de
+        # respuesta de un resonante es Q/(pi*f): con peak 0.92 a 220 Hz eso da
+        # 26.7 ms, que se oye como un ataque tarde por rapido que sea el golpe.
+        # A peak 0.58 y 480 Hz son 7.8 ms. `wobble` es lo que separa esto de un
+        # wah comun: la resonancia no se mueve una vez y se queda, oscila y se
+        # muere con la nota, que es lo que hace una chapa fina al flexionarse.
+        > autowah(0.88, base=480hz, range=2600hz, peak=0.58, attack=1,
+                  release=520, wobble=1500hz, wobble_hz=6)
+        > eq(low=-2.0, mid=0.5, high=1.5)
+        # paneo por envolvente, y dos autopan de periodos coprimos encima: las
+        # fases no vuelven a coincidir en 77 compases
+        > panenv(0.65, attack=3, release=240)
+        > autopan(0.50, bars=7) > autopan(0.30, bars=11) > master
 }
 
 track ghost {
     play silence
-    using rhodes
+    using chapa
     pan -0.32
     velocity 0.85
-    level 0.442
+    level 0.33
     reverb_send 0.40
     sidechain 0.0
     out > highpass(220, 0.02) > chorus(0.35) > tape
@@ -532,7 +539,7 @@ track air {
 master {
     in > eq(low=1.5, mid=-0.5, high=1.5)
        > tilt(0.0)
-       > compressor(-6, ratio=1.5, attack=45, release=220, makeup=1.7)
+       > compressor(-6, ratio=1.5, attack=45, release=220, makeup=1.49)
        > limiter(0.95)
        > out
 }
@@ -545,11 +552,11 @@ master {
 scene intro {
     reverb_mix = 0.55
     delay_mix = 0.25
-    auto cloud cutoff 0.32 > 0.62            # 850hz -> 4.3khz
+    auto cloud cutoff 0.46 > 0.76            # 1.7khz -> 6.6khz
     auto master tilt -0.25 > -0.05
-    track sub { play sub_hold using sub sidechain 0.0 velocity 0.5 level 0.11 }
+    track sub { play sub_hold using sub sidechain 0.0 velocity 0.85 level 0.16 }
     track pad { play voice_intro using cloud sidechain 0.0 velocity 0.85 pan 0.45 }
-    track haze { play voice_intro_bloom using cloud velocity 0.45 }
+    track haze { play voice_intro using cloud velocity 0.45 }
     track air { play air_low    using air   sidechain 0.0 velocity 0.22 pan 0.4 }
 }
 
@@ -557,40 +564,40 @@ scene intro {
 scene lift {
     reverb_mix = 0.50
     delay_mix = 0.25
-    auto cloud cutoff 0.24 > 0.32
+    auto cloud cutoff 0.38 > 0.46            # 1.2khz -> 1.7khz
     track drums  { play brk_air    using brk  level 0.62 }
     track pad { play voice_intro using cloud velocity 0.9 pan 0.45 }
-    track haze { play voice_intro_bloom using cloud velocity 0.9 }
+    track haze { play voice_intro using cloud velocity 0.9 }
     track air { play air_low    using air pan 0.4 }
     track sub    { play sub_hold   using sub  velocity 0.85 }
-    track rhodes { play rhodes_a   using rhodes velocity 0.7 pan -0.38 }
+    track rhodes { play rhodes_a   using chapa velocity 0.7 pan -0.38 }
 }
 
 # BUILD — the break assembles, the filter opens, the reverb pulls back.
 scene build {
     reverb_mix = 0.45
     delay_mix = 0.22
-    auto cloud cutoff 0.32 > 0.44
+    auto cloud cutoff 0.46 > 0.58            # 1.7khz -> 2.9khz
     auto brk kick_level 0.75 > 0.95
     auto master tilt -0.12 > 0.0
     track drums  { play brk_build using brk level 0.64 }
     track pad { play voice_a   using cloud pan 0.45 }
-    track haze { play voice_a_bloom using cloud }
+    track haze { play voice_a using cloud }
     track air { play air_low   using air pan 0.4 }
     track sub    { play sub_a     using sub velocity 0.80 }
-    track rhodes { play rhodes_a  using rhodes pan -0.38 }
+    track rhodes { play rhodes_a  using chapa pan -0.38 }
 }
 
 # DROP A — the break enters whole.
 scene drop_a {
     reverb_mix = 0.36
     delay_mix = 0.20
-    auto cloud cutoff 0.40 > 0.50 > 0.42
+    auto cloud cutoff 0.54 > 0.64 > 0.56     # 2.4khz -> 3.8khz -> 2.6khz
     track drums  { play brk_main using brk level 0.80 }
     track sub    { play sub_a    using sub }
     track pad { play voice_a  using cloud pan 0.45 }
-    track haze { play voice_a_bloom using cloud }
-    track rhodes { play rhodes_a using rhodes pan -0.38 }
+    track haze { play voice_a using cloud }
+    track rhodes { play rhodes_a using chapa pan -0.38 }
     track glass { play glass_a  using glass pan -0.45 }
     track air { play air_high using air pan 0.4 }
 }
@@ -599,15 +606,15 @@ scene drop_a {
 scene drop_b {
     reverb_mix = 0.38
     delay_mix = 0.24
-    auto cloud cutoff 0.42 > 0.36
+    auto cloud cutoff 0.56 > 0.50            # 2.6khz -> 2.0khz
     auto lead mod_index 0.26 > 0.36
     track drums  { play brk_var   using brk level 0.80 }
     track sub    { play sub_b     using sub }
     track pad { play voice_b   using cloud pan 0.45 }
-    track haze { play voice_b_bloom using cloud }
-    track rhodes { play rhodes_b  using rhodes pan -0.38 }
+    track haze { play voice_b using cloud }
+    track rhodes { play rhodes_b  using chapa pan -0.38 }
     track lead { play lead_a    using lead pan 0.28 }
-    track ghost { play ghost_hold using rhodes velocity 0.55 pan -0.32 }
+    track ghost { play ghost_hold using chapa velocity 0.55 pan -0.32 }
     track air { play air_low   using air pan 0.4 }
 }
 
@@ -616,12 +623,16 @@ scene breakdown {
     reverb_mix = 0.52
     delay_mix = 0.28
     auto reverb_freeze 0 > 1
-    auto cloud cutoff 0.40 > 0.58            # 1.3khz -> 3.6khz
+    auto cloud cutoff 0.54 > 0.72            # 2.4khz -> 5.5khz
     auto master tilt -0.30 > 0.0
+    # Sin esto la escena medía 82.7% de medios y 0% de sub: una masa de
+    # medios desnuda. El pad necesita algo abajo sobre lo que flotar, que es
+    # justo lo que el highpass de 290 Hz le saca a él.
+    track sub { play sub_hold using sub sidechain 0.0 velocity 0.85 }
     track pad { play voice_break using cloud sidechain 0.0 velocity 0.72 pan 0.45 }
-    track haze { play voice_break_bloom using cloud velocity 0.72 }
-    track air { play air_high    using air   sidechain 0.0 velocity 0.38 pan 0.4 }
-    track ghost { play ghost_hold  using rhodes velocity 0.66 pan -0.32 }
+    track haze { play voice_break using cloud velocity 0.72 }
+    track air { play air_high    using air   sidechain 0.0 velocity 0.62 pan 0.4 }
+    track ghost { play ghost_hold  using chapa velocity 0.66 pan -0.32 }
     track lead { play lead_b      using lead  sidechain 0.0 velocity 0.55 pan 0.28 }
 }
 
@@ -629,13 +640,13 @@ scene breakdown {
 scene drop_c {
     reverb_mix = 0.34
     delay_mix = 0.20
-    auto cloud cutoff 0.44 > 0.56 > 0.46
+    auto cloud cutoff 0.58 > 0.70 > 0.60     # 2.9khz -> 5.0khz -> 3.2khz
     auto glass mod_index 0.36 > 0.46
     track drums  { play brk_peak using brk level 1.0 }
     track sub    { play sub_a    using sub }
     track pad { play voice_a  using cloud pan 0.45 }
-    track haze { play voice_a_bloom using cloud }
-    track rhodes { play rhodes_a using rhodes velocity 1.0 pan -0.38 }
+    track haze { play voice_a using cloud }
+    track rhodes { play rhodes_a using chapa velocity 1.0 pan -0.38 }
     track glass { play glass_b  using glass velocity 0.95 pan -0.45 }
     track lead { play lead_b   using lead velocity 0.95 pan 0.28 }
     track air { play air_high using air pan 0.4 }
@@ -646,14 +657,14 @@ scene outro {
     reverb_mix = 0.50
     delay_mix = 0.26
     auto drums level 0.80 > 0.0
-    auto cloud cutoff 0.42 > 0.20
+    auto cloud cutoff 0.56 > 0.34            # 2.6khz -> 960hz
     auto master tilt 0.0 > -0.30
     track drums  { play brk_thin  using brk }
     track sub    { play sub_hold  using sub velocity 0.8 }
     track pad { play voice_a   using cloud pan 0.45 }
-    track haze { play voice_a_bloom using cloud }
+    track haze { play voice_a using cloud }
     track air { play air_low   using air pan 0.4 }
-    track rhodes { play rhodes_a  using rhodes velocity 0.7 pan -0.38 }
+    track rhodes { play rhodes_a  using chapa velocity 0.7 pan -0.38 }
 }
 
 # ────────────────────────────────────────────────

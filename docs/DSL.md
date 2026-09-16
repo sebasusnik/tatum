@@ -162,8 +162,8 @@ A routing chain may wrap across lines as long as each continuation line starts w
 
 ```
 track pad { play chords using cloud level 0.3 reverb_send 0.5
-            out > highpass(300, 0.3)
-                > lowpass(3000, 0.3, lfo_bars=16, lfo_depth=1200)
+            out > highpass(300, 0.05)
+                > lowpass(3000, 0.05, lfo_bars=16, lfo_depth=1200)
                 > autopan(0.4, bars=8) > master }
 ```
 
@@ -210,10 +210,12 @@ master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2
 |--------|-----------|-------|
 | `saturate(drive)` / `drive(drive)` | drive gain, 1.0 = mild | tanh soft clip |
 | `gain(amount)` | linear multiplier | |
-| `lowpass(cutoff_hz, resonance)` / `highpass` / `bandpass` | Hz, 0..1 | options: envelope `ea= ed= es= er= edepth=` (seconds, level, Hz); LFO `lfo_bars=` or `lfo_hz=` with `lfo_depth=` in Hz, e.g. `lowpass(800, 0.6, lfo_bars=2, lfo_depth=600)` |
+| `lowpass(cutoff_hz, resonance)` / `highpass` / `bandpass` | Hz, 0..1 (Q 0.5..20: 0.05 is gentle, 0.3 is already a +15 dB peak) | options: envelope `ea= ed= es= er= edepth=` (seconds, level, Hz); LFO `lfo_bars=` or `lfo_hz=` with `lfo_depth=` in Hz, e.g. `lowpass(800, 0.6, lfo_bars=2, lfo_depth=600)` |
 | `ladder(cutoff_hz, resonance)` | Hz, 0..1 | Moog-style 4-pole, same envelope and LFO options |
 | `autopan(depth, bars=)` | 0..1, bars | slow stereo movement, `autopan(0.6, bars=4)`; `hz=` for a free rate |
 | `phaser(mix, bars=, stages=, feedback=, depth=)` | 0..1, bars, 2..12, 0..0.9, 0..1 | swept allpass phaser, the liquid pad effect: `phaser(0.5, bars=4)` |
+| `autowah(sens, base=, range=, peak=, attack=, release=, down=, wobble=, wobble_hz=)` | 0..1, Hz, Hz, 0..1, ms, ms, 0/1, Hz, Hz | envelope filter: the signal sweeps a resonant filter with its own loudness, no LFO. Add `lowpass`, `bandpass` or `highpass` as a word for the mode: `autowah(0.8, base=250, range=2500, peak=0.8, bandpass)`. `wobble` makes each hit ring the cutoff back and forth |
+| `panenv(depth, attack=, release=)` | 0..1, ms, ms | pans by the signal's own envelope: the hit lands to one side and the decay walks back |
 | `vowel(a, o, bars=, mix=)` | vowels a e i o u, bars, 0..1 | formant filter; one vowel holds, two morph: `vowel(a, o, bars=2)` |
 | `chorus(mix)` | 0..1 | |
 | `bitcrush(bits, rate)` | bits, sample-rate reduction 0..1 | |
@@ -231,8 +233,8 @@ The global send returns can carry their own insert chain, applied after the effe
 before the master. This is where movement on the tail itself goes:
 
 ```
-reverb_return { in > lowpass(1200, 0.3, lfo_bars=16, lfo_depth=800) > autopan(0.4, bars=8) > out }
-delay_return  { in > highpass(300, 0.3) > out }
+reverb_return { in > lowpass(1200, 0.05, lfo_bars=16, lfo_depth=800) > autopan(0.4, bars=8) > out }
+delay_return  { in > highpass(300, 0.05) > out }
 ```
 
 Two ways to get ambience, usable together:
@@ -324,7 +326,7 @@ module keys pad {
     attack 0.9  release 1.0
 }
 track pad { play chords using pad level 0.3 reverb_send 0.4 delay_send 0.15 sidechain 0.45
-            out > highpass(250, 0.4) > phaser(0.4, bars=4) > autopan(0.4, bars=4) > master }
+            out > highpass(250, 0.05) > phaser(0.4, bars=4) > autopan(0.4, bars=4) > master }
 ```
 
 **A 303 line.** Low cutoff, high resonance and envelope amount, glide, and `~` slides on
@@ -354,7 +356,7 @@ pattern voicings { Fm9:0.6 ..*31  Dbmaj7:0.6 ..*31 }      # two bars each, held
 module keys cloud { voice_mode poly detune 0.45 chorus_mix 0.6 attack 1.0 release 1.0
                     cutoff 0.28 resonance 0.35 lfo_target cutoff lfo_sync bars_8 lfo_depth 0.08 }
 track pad { play voicings using cloud level 0.15 reverb_send 0.4 sidechain 0.5
-            out > highpass(300, 0.4) > lowpass(3200, 0.3, lfo_bars=16, lfo_depth=1200) > autopan(0.3, bars=8) > master }
+            out > highpass(300, 0.05) > lowpass(3200, 0.05, lfo_bars=16, lfo_depth=1200) > autopan(0.3, bars=8) > master }
 ```
 
 **The resampled cloud, without resampling.** Play the voicings into a big reverb for a
@@ -363,7 +365,7 @@ Put the slow movement and the ducking on the return, so the tail itself breathes
 
 ```
 reverb size=1.0 damp=0.3 sidechain=0.5
-reverb_return { in > highpass(250, 0.3) > lowpass(2500, 0.3, lfo_bars=16, lfo_depth=1200) > autopan(0.4, bars=8) > out }
+reverb_return { in > highpass(250, 0.05) > lowpass(2500, 0.05, lfo_bars=16, lfo_depth=1200) > autopan(0.4, bars=8) > out }
 scene bloom  { track pad { play voicings using cloud } }
 scene frozen { reverb_freeze = 1  track drums { play brk using kit } }   # pad silent, cloud sustains
 ```

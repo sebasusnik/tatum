@@ -477,11 +477,14 @@ impl KeysModule {
                 } else {
                     1.0
                 };
-                // Non-Unison: apply chorus to mono sum, output L=R (centered)
-                let mono = (sum_l + sum_r) * voice_scaler;
-                let chorused = self.chorus.process(mono * self.level * amp_mod);
-                output_l[i] = chorused;
-                output_r[i] = chorused;
+                // Non-Unison: the chord is centred, and the chorus is what opens
+                // it out. Summing to mono and copying L into R made `chorus_mix`
+                // a comb filter on one channel instead of the width the docs
+                // promise it is.
+                let mono = (sum_l + sum_r) * voice_scaler * self.level * amp_mod;
+                let (cl, cr) = self.chorus.process_stereo(mono, mono);
+                output_l[i] = cl;
+                output_r[i] = cr;
             }
         }
     }

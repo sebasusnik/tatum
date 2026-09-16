@@ -95,6 +95,12 @@ impl SongInstrument {
     fn process_block_stereo(&mut self, out_l: &mut [f32], out_r: &mut [f32]) -> bool {
         match self {
             Self::Beats(m) => { m.process_block_stereo(out_l, out_r); true }
+            // Keys pans its voices (unison spreads eight of them across the
+            // field) and runs the chorus in stereo. Routing it through the mono
+            // `process_block` downmixed all of that and then copied one channel
+            // into the other.
+            Self::Keys(m) => { m.process_block_stereo(out_l, out_r); true }
+            Self::Fm(m) => { m.process_block_stereo(out_l, out_r); true }
             _ => { self.process_block(out_l); false }
         }
     }
@@ -347,6 +353,11 @@ pub struct SongEngine {
     // Compiled data
     instruments: Vec<SongInstrument>,
     instrument_names: Vec<String>,
+    /// Which live instrument a track plays for each compiled module it may
+    /// name, flat: `inst_for[track * n_instruments + module]`. Every pair
+    /// gets its own instance so no two tracks drive one set of voices.
+    inst_for: Vec<usize>,
+    n_instruments: usize,
     patterns: Vec<CompiledPattern>,
 
     // Playback tracks
@@ -576,10 +587,67 @@ impl SongEngine {
     pub fn from_compiled(song: CompiledSong) -> Self {
         // Build instruments from compiled instrument kinds
         let tempo = song.globals.tempo;
-        let instruments: Vec<SongInstrument> = song.instruments
-            .into_iter()
-            .map(|kind| {
-                match kind {
+        let mut instruments: Vec<SongInstrument> = song.instruments
+            .iter()
+            .map(|kind| Self::build_instrument(kind, tempo))
+            .collect();
+
+        // One instrument, one track. Two tracks naming the same module used to
+        // share a single instance, and the render loop then called it once per
+        // track: each track got every other block of one stream, with the
+        // envelopes, LFOs and vibrato running at twice their written rate. A
+        // 1.2 s attack measured 0.6 s and the discarded half left a comb at the
+        // block rate (344.5 Hz), four times the energy a track that owned its
+        // module had there. Extra users get their own copy, appended past the
+        // compiled indices so `inherit_from` still lines up.
+        //
+        // A scene can point a track at another module, so a copy is owed to
+        // each (track, module) pair the song actually names, top level and in
+        // every scene. `inst_for` is that table, flat, one row per track.
+        let n_inst = song.instruments.len();
+        let n_tracks = song.tracks.len();
+        let mut inst_for = vec![usize::MAX; n_tracks * n_inst];
+        let mut claimed = vec![false; n_inst];
+        let mut instrument_names = song.instrument_names.clone();
+
+        let mut pairs: Vec<(usize, usize)> = Vec::new();
+        for (ti, t) in song.tracks.iter().enumerate() {
+            pairs.push((ti, t.instrument_idx));
+        }
+        for scene in &song.scenes {
+            for st in &scene.tracks {
+                if let Some(ti) = song.tracks.iter().position(|t| t.name == st.name) {
+                    pairs.push((ti, st.instrument_idx));
+                }
+            }
+        }
+        for (ti, ii) in pairs {
+            if ti >= n_tracks || ii >= n_inst { continue; }
+            let slot = ti * n_inst + ii;
+            if inst_for[slot] != usize::MAX { continue; }
+            if !claimed[ii] {
+                claimed[ii] = true;
+                inst_for[slot] = ii;
+            } else {
+                instruments.push(Self::build_instrument(&song.instruments[ii], tempo));
+                let name = instrument_names.get(ii).cloned().unwrap_or_default();
+                instrument_names.push(name);
+                inst_for[slot] = instruments.len() - 1;
+            }
+        }
+        // Pairs the song never names still need an answer, in case a lookup
+        // arrives for one: the compiled instrument itself.
+        for (slot, v) in inst_for.iter_mut().enumerate() {
+            if *v == usize::MAX { *v = slot % n_inst.max(1); }
+        }
+
+        Self::assemble(song, instruments, instrument_names, inst_for, n_inst, tempo)
+    }
+
+    /// Build one live instrument from a compiled preset. Called once per track
+    /// that names the module, so each gets its own voices and envelopes.
+    fn build_instrument(kind: &CompiledInstrumentKind, tempo: f32) -> SongInstrument {
+                match kind.clone() {
                     CompiledInstrumentKind::Graph(template) => {
                         SongInstrument::Graph(Instrument::new(*template))
                     }
@@ -628,9 +696,17 @@ impl SongEngine {
                         SongInstrument::Beats(m)
                     }
                 }
-            })
-            .collect();
+    }
 
+    /// Everything after the instruments exist: buses, tracks, sends, master.
+    fn assemble(
+        song: CompiledSong,
+        instruments: Vec<SongInstrument>,
+        instrument_names: Vec<String>,
+        inst_for: Vec<usize>,
+        n_inst: usize,
+        tempo: f32,
+    ) -> Self {
         // Build buses
         let buses: Vec<SongBus> = song.buses
             .iter()
@@ -648,12 +724,17 @@ impl SongEngine {
         let track_names: Vec<String> = song.tracks.iter().map(|t| t.name.clone()).collect();
         let tracks: Vec<TrackPlayback> = song.tracks
             .iter()
-            .map(|t| {
+            .enumerate()
+            .map(|(ti, t)| {
+                let inst_idx = inst_for
+                    .get(ti * n_inst + t.instrument_idx)
+                    .copied()
+                    .unwrap_or(t.instrument_idx);
                 let (pan_l, pan_r) = pan_gains(t.pan);
-                let stereo_src = t.instrument_idx < instruments.len()
-                    && matches!(instruments[t.instrument_idx], SongInstrument::Beats(_));
+                let stereo_src = inst_idx < instruments.len()
+                    && matches!(instruments[inst_idx], SongInstrument::Beats(_));
                 TrackPlayback {
-                    instrument_idx: t.instrument_idx,
+                    instrument_idx: inst_idx,
                     pattern_idx: t.pattern_idx,
                     velocity: t.velocity,
                     level: t.level,
@@ -692,8 +773,6 @@ impl SongEngine {
         let sidechain_amount = song.globals.sidechain;
         let steps_per_bar = (meter.0 as usize) * 4; // 4 steps per beat (16th notes)
         let samples_per_step = SAMPLE_RATE * 60.0 / tempo / 4.0; // 16th note duration
-
-        let instrument_names = song.instrument_names.clone();
 
         // Auto-detect kick track by instrument name or Beats module
         let kick_track_idx = tracks.iter().position(|t| {
@@ -747,6 +826,8 @@ impl SongEngine {
         let mut engine = Self {
             instruments,
             instrument_names,
+            inst_for,
+            n_instruments: n_inst,
             patterns: song.patterns,
             tracks,
             track_names,
@@ -909,8 +990,13 @@ impl SongEngine {
         // track slot with the same name (never by position).
         for st in scene.tracks.iter() {
             if let Some(i) = self.track_names.iter().position(|n| n == &st.name) {
+                // The scene names a module; this track's own copy of it plays.
+                let inst_idx = self.inst_for
+                    .get(i * self.n_instruments + st.instrument_idx)
+                    .copied()
+                    .unwrap_or(st.instrument_idx);
                 let tp = &mut self.tracks[i];
-                tp.instrument_idx = st.instrument_idx;
+                tp.instrument_idx = inst_idx;
                 tp.pattern_idx = st.pattern_idx;
                 tp.velocity = st.velocity;
                 tp.level = st.level;
@@ -921,8 +1007,8 @@ impl SongEngine {
                 tp.delay_send = st.delay_send;
                 tp.reverb_send = st.reverb_send;
                 tp.sidechain_amount = st.sidechain.unwrap_or(0.0);
-                tp.stereo_src = st.instrument_idx < self.instruments.len()
-                    && matches!(self.instruments[st.instrument_idx], SongInstrument::Beats(_));
+                tp.stereo_src = inst_idx < self.instruments.len()
+                    && matches!(self.instruments[inst_idx], SongInstrument::Beats(_));
                 tp.active = true;
                 tp.current_step = 0;
                 tp.current_notes_count = 0;
@@ -1545,8 +1631,19 @@ impl SongEngine {
             let value = interpolate_automation(keyframes, progress);
             match &auto_lane.target {
                 AutoTarget::InstrumentParam { instrument_idx, param_name } => {
+                    // `auto cloud cutoff` means the module, so it reaches every
+                    // copy of it — one per track that named it.
                     if *instrument_idx < self.instruments.len() {
-                        self.instruments[*instrument_idx].set_param_by_name(param_name.as_str(), value);
+                        let names = &self.instrument_names;
+                        for (i, inst) in self.instruments.iter_mut().enumerate() {
+                            let same = match (names.get(*instrument_idx), names.get(i)) {
+                                (Some(a), Some(b)) => a == b,
+                                _ => i == *instrument_idx,
+                            };
+                            if same {
+                                inst.set_param_by_name(param_name.as_str(), value);
+                            }
+                        }
                     }
                 }
                 AutoTarget::MasterParam { param_name } => {
@@ -2217,6 +2314,12 @@ impl SongEngine {
 
     pub fn instrument_index(&self, name: &str) -> Option<usize> {
         self.instrument_names.iter().position(|n| n == name)
+    }
+
+    /// The live instrument a track plays right now. With one copy per track
+    /// that names a module this is not the compiled index.
+    pub fn track_instrument(&self, idx: usize) -> Option<usize> {
+        self.tracks.get(idx).map(|t| t.instrument_idx)
     }
 
     /// Set a parameter already resolved to a registry id. False if the

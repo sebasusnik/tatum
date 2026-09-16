@@ -288,3 +288,37 @@ fn stopping_takes_the_queued_engine_at_once() {
     assert_eq!(player.engine().unwrap().pattern_count(), 4);
     assert!(player.take_retired().is_some());
 }
+
+#[test]
+fn two_tracks_on_one_module_both_keep_their_voices_across_a_swap() {
+    // The engine gives every track that names a module its own copy, under
+    // the same name. Inheriting by name alone paired both copies with the
+    // first old one, so the second track retriggered at every swap. Copies
+    // pair by occurrence now, and the render stays identical.
+    let src = "tempo 120\nscale A minor\nmodule keys pad { voice_mode poly attack 10ms release 400ms cutoff 2khz }\npattern hold { [1.3 3.3 5.3]:0.8 ..*15 }\npattern high { [1.5 3.5]:0.6 ..*15 }\ntrack a { play hold using pad level 0.5 out > master }\ntrack b { play high using pad level 0.5 out > master }\nmaster { in > out }\n";
+    let reference = render_straight(src, 6);
+    let edited = with_unused_pattern(src);
+    let (l, r, swaps) = render_live(src, &[(2 * BAR + 100, &edited)], 6);
+    assert_eq!(swaps, vec![3]);
+    assert_identical(&reference, &(l, r), "two tracks on one module");
+
+    // And a value edit on the module reaches every copy: the live render
+    // after the edit equals a straight render of the edited song.
+    let cut = src.replace("cutoff 2khz", "cutoff 500hz");
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    player.apply(planner.plan(src, player.generation()).unwrap());
+    player.start();
+    assert_eq!(player.apply(planner.plan(&cut, player.generation()).unwrap()), Applied::Fast);
+    let (expected, _) = render_straight(&cut, 1);
+    let mut got = vec![0.0f32; BAR];
+    let mut scratch = vec![0.0f32; BAR];
+    let mut pos = 0;
+    while pos < BAR {
+        let chunk = BLOCK_SIZE.min(BAR - pos);
+        player.process(&mut got[pos..pos + chunk], &mut scratch[pos..pos + chunk]);
+        pos += chunk;
+    }
+    let first = first_difference(&expected, &got);
+    assert_eq!(first, None, "the cutoff edit did not reach every copy (differs at {:?})", first);
+}

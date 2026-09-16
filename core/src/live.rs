@@ -119,22 +119,28 @@ impl Plan {
 }
 
 /// A song the planner knows the player has (or will have) an engine for.
+/// Instrument names come from the built engine, not the compiled song: the
+/// engine gives every track that names a module its own copy, appended past
+/// the compiled indices under the same name.
 struct Known {
     generation: Generation,
     ast: Song,
     instruments: Vec<String>,
+    /// Which engine instrument each track plays (top level).
+    track_instruments: Vec<usize>,
     tracks: Vec<String>,
     buses: Vec<String>,
 }
 
 impl Known {
-    fn new(generation: Generation, ast: Song, compiled: &CompiledSong) -> Self {
+    fn new(generation: Generation, ast: Song, engine: &SongEngine) -> Self {
         Self {
             generation,
             ast,
-            instruments: compiled.instrument_names.clone(),
-            tracks: compiled.tracks.iter().map(|t| t.name.clone()).collect(),
-            buses: compiled.buses.iter().map(|b| b.name.clone()).collect(),
+            instruments: (0..engine.instrument_count()).map(|i| String::from(engine.instrument_name(i))).collect(),
+            track_instruments: (0..engine.track_count()).map(|i| engine.track_instrument(i).unwrap_or(usize::MAX)).collect(),
+            tracks: (0..engine.track_count()).map(|i| String::from(engine.track_name(i))).collect(),
+            buses: (0..engine.bus_count()).map(|i| String::from(engine.bus_name(i))).collect(),
         }
     }
 }
@@ -172,7 +178,7 @@ impl LivePlanner {
             }
             let changes = diff::diff(&latest.ast, &ast);
             if !diff::has_structural_change(&changes) {
-                if let Some(ops) = resolve_fast(&changes, &ast, &compiled) {
+                if let Some(ops) = resolve_fast(&changes, &ast, &compiled, &latest.instruments) {
                     latest.ast = ast;
                     return Ok(Plan::Fast { base: latest.generation, ops });
                 }
@@ -181,12 +187,12 @@ impl LivePlanner {
 
         let generation = self.next_generation;
         self.next_generation += 1;
-        let mut inherit = Vec::with_capacity(2);
-        for known in self.running.iter().chain(self.pending.iter()) {
-            inherit.push((known.generation, inherit_map(known, &ast, &compiled)));
-        }
-        let known = Known::new(generation, ast, &compiled);
         let engine = Box::new(SongEngine::from_compiled(compiled));
+        let known = Known::new(generation, ast, &engine);
+        let mut inherit = Vec::with_capacity(2);
+        for old in self.running.iter().chain(self.pending.iter()) {
+            inherit.push((old.generation, inherit_map(old, &known)));
+        }
         if self.running.is_none() {
             self.running = Some(known);
         } else {
@@ -197,8 +203,9 @@ impl LivePlanner {
 }
 
 /// Resolve non-structural changes to indices in the new song. `None` when a
-/// name does not resolve, which makes the caller swap instead.
-fn resolve_fast(changes: &[DslChange], ast: &Song, compiled: &CompiledSong) -> Option<Vec<FastOp>> {
+/// name does not resolve, which makes the caller swap instead. `instruments`
+/// are the engine's names, one per copy: a module edit reaches every copy.
+fn resolve_fast(changes: &[DslChange], ast: &Song, compiled: &CompiledSong, instruments: &[String]) -> Option<Vec<FastOp>> {
     let track = |name: &str| compiled.tracks.iter().position(|t| t.name == name);
     let mut ops = Vec::with_capacity(changes.len());
     for change in changes {
@@ -228,11 +235,18 @@ fn resolve_fast(changes: &[DslChange], ast: &Song, compiled: &CompiledSong) -> O
                 FastOp::TrackGate { track: t, gate: compiled.tracks[t].gate }
             }
             DslChange::ModuleParamChanged { module_name, param_name, value } => {
-                let instrument = compiled.instrument_names.iter().position(|n| n == module_name)?;
                 let def = ast.module_defs.iter().find(|m| &m.name == module_name)?;
                 let kind = ModuleKind::from_str(&def.module_type)?;
                 let spec = params::lookup(kind, param_name)?;
-                FastOp::ModuleParam { instrument, id: spec.id, value: *value }
+                let mut any = false;
+                for (instrument, name) in instruments.iter().enumerate() {
+                    if name == module_name {
+                        ops.push(FastOp::ModuleParam { instrument, id: spec.id, value: *value });
+                        any = true;
+                    }
+                }
+                if !any { return None; }
+                continue;
             }
             DslChange::StructuralChange => return None,
         };
@@ -258,23 +272,33 @@ fn same_instrument(old: &Song, new: &Song, name: &str) -> bool {
     }
 }
 
+/// Index in `names` of the `k`-th entry equal to `name`, where `k` is how
+/// many entries before `at` in `own` carry that same name: copies of a
+/// module pair up by occurrence, first with first.
+fn nth_same(names: &[String], own: &[String], at: usize) -> Option<usize> {
+    let name = &own[at];
+    let k = own[..at].iter().filter(|n| *n == name).count();
+    names.iter().enumerate().filter(|(_, n)| *n == name).nth(k).map(|(i, _)| i)
+}
+
 /// What the new song can take over from `old`, by name and definition.
-fn inherit_map(old: &Known, new: &Song, compiled: &CompiledSong) -> Inherit {
+fn inherit_map(old: &Known, known: &Known) -> Inherit {
     let o = &old.ast;
+    let new = &known.ast;
     let sends = o.globals.send_delay == new.globals.send_delay
         && o.globals.send_reverb == new.globals.send_reverb
         && chain_of(o, "reverb_return") == chain_of(new, "reverb_return")
         && chain_of(o, "delay_return") == chain_of(new, "delay_return");
     let master = o.master == new.master;
 
-    let buses = compiled.buses.iter().map(|b| {
-        let j = old.buses.iter().position(|n| *n == b.name)?;
-        (chain_of(o, &b.name) == chain_of(new, &b.name)).then_some(j)
+    let buses = known.buses.iter().map(|name| {
+        let j = old.buses.iter().position(|n| n == name)?;
+        (chain_of(o, name) == chain_of(new, name)).then_some(j)
     }).collect::<Vec<_>>();
 
-    let instruments = compiled.instrument_names.iter().map(|name| {
-        let j = old.instruments.iter().position(|n| n == name)?;
-        same_instrument(o, new, name).then_some(j)
+    let instruments = (0..known.instruments.len()).map(|i| {
+        let j = nth_same(&old.instruments, &known.instruments, i)?;
+        same_instrument(o, new, &known.instruments[i]).then_some(j)
     }).collect::<Vec<_>>();
 
     // A track continues only where everything that decides what it plays is
@@ -286,17 +310,20 @@ fn inherit_map(old: &Known, new: &Song, compiled: &CompiledSong) -> Inherit {
         && o.grooves == new.grooves
         && o.globals.scale == new.globals.scale
         && o.globals.meter == new.globals.meter;
-    let tracks = compiled.tracks.iter().enumerate().map(|(i, t)| {
+    let tracks = known.tracks.iter().enumerate().map(|(i, name)| {
         if !composition_same { return None; }
-        let j = old.tracks.iter().position(|n| *n == t.name)?;
-        let od = o.tracks.iter().find(|d| d.name == t.name)?;
-        let nd = new.tracks.iter().find(|d| d.name == t.name)?;
+        let j = old.tracks.iter().position(|n| n == name)?;
+        let od = o.tracks.iter().find(|d| &d.name == name)?;
+        let nd = new.tracks.iter().find(|d| &d.name == name)?;
         if od != nd { return None; }
         let op = o.patterns.iter().find(|p| p.name == nd.play)?;
         let np = new.patterns.iter().find(|p| p.name == nd.play)?;
         if op != np { return None; }
-        let inst = compiled.tracks[i].instrument_idx;
-        instruments.get(inst).copied().flatten().map(|_| j)
+        // The copy this track plays must be the one inherited from the copy
+        // the old track played.
+        let inst = *known.track_instruments.get(i)?;
+        let old_inst = *old.track_instruments.get(j)?;
+        (instruments.get(inst).copied().flatten() == Some(old_inst)).then_some(j)
     }).collect::<Vec<_>>();
 
     Inherit { sends, master, buses, instruments, tracks }

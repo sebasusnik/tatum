@@ -180,11 +180,15 @@ kitbus { in > compressor(-10, ratio=3.5, attack=8, release=70) > saturate(0.25) 
 # `synth_check` still reports ok. Both of these files were wrong that way until the
 # chains were flattened. Bus, master and reverb_return chains do NOT have this problem.
 
-# gain(4.2) / gain(3.8): fm at a given track level runs ~12 dB under unison keys, so the
-# make-up lives in the chain and the scene levels stay on the same scale as liquid_v2a.
-track cloud { play voicings using tines level 0.3 reverb_send 0.7 delay_send 0.1 sidechain 0.5 out > highpass(300, 0.25) > lowpass(4000, 0.2, lfo_bars=16, lfo_depth=1500) > gain(4.2) > wash }
+# gain(): fm at a given track level runs under unison keys, so the make-up lives in the
+# chain and the scene levels stay on the same scale as liquid_v2a. These read 4.2 and 3.8
+# until the filters were fixed to run at their written rate rather than double it: the
+# resonant peaks of `lowpass(4000, 0.2)` and `lowpass(3400, 0.25)` used to sit an octave
+# above the signal and now sit on it. The make-up was covering for that, and the song
+# entered the limiter at a peak of 9.08 with its crest collapsing from 6.4 to 2.0.
+track cloud { play voicings using tines level 0.3 reverb_send 0.7 delay_send 0.1 sidechain 0.5 out > highpass(300, 0.25) > lowpass(4000, 0.2, lfo_bars=16, lfo_depth=1500) > gain(0.45) > wash }
 track layer { play voicings using air level 0.12 reverb_send 0.5 sidechain 0.4 out > highpass(340, 0.25) > lowpass(3800, 0.2, lfo_bars=14, lfo_depth=1500) > wash }
-track body  { play voicings using tines_body level 0.1 reverb_send 0.3 delay_send 0.15 sidechain 0.6 out > highpass(330, 0.3) > lowpass(3400, 0.25, lfo_bars=9, lfo_depth=1200) > chorus(0.25) > autopan(0.25, bars=6) > gain(3.8) > master }
+track body  { play voicings using tines_body level 0.1 reverb_send 0.3 delay_send 0.15 sidechain 0.6 out > highpass(330, 0.3) > lowpass(3400, 0.25, lfo_bars=9, lfo_depth=1200) > chorus(0.25) > autopan(0.25, bars=6) > gain(0.5) > master }
 track sub   { play sub_line using sub_osc level 0.42 sidechain 0.2 out > lowpass(260, 0.1) > saturate(0.2) > master }
 track drums { play brk using kit level 0.55 reverb_send 0.08 out > kitbus }
 

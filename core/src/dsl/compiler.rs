@@ -131,6 +131,7 @@ pub struct CompiledMaster {
 }
 
 /// A compiled instrument — either a graph template or a module preset.
+#[derive(Clone)]
 pub enum CompiledInstrumentKind {
     /// Boxed: the template is ~2 KB and every other variant is under 50, so
     /// inline it made a Vec of mostly-module instruments carry the graph's
@@ -700,6 +701,37 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
                 reverse,
                 mix,
             })
+        }
+        "autowah" | "envfilter" => {
+            let sens = float_param_at(&node.params, 0).unwrap_or(0.7);
+            let base = named_param(&node.params, "base").unwrap_or(300.0);
+            let range = named_param(&node.params, "range").unwrap_or(2200.0);
+            let q = named_param(&node.params, "peak").unwrap_or(0.75);
+            let attack_ms = named_param(&node.params, "attack").unwrap_or(8.0);
+            let release_ms = named_param(&node.params, "release").unwrap_or(200.0);
+            let down = named_param(&node.params, "down").unwrap_or(0.0) > 0.5;
+            let wobble = named_param(&node.params, "wobble").unwrap_or(0.0);
+            let wobble_hz = named_param(&node.params, "wobble_hz").unwrap_or(5.0);
+            let mut mode = 0u8;
+            for p in node.params.iter() {
+                if let Param::Waveform(w) = p {
+                    mode = match w.as_str() {
+                        "lowpass" | "lp" => 0,
+                        "bandpass" | "bp" => 1,
+                        "highpass" | "hp" => 2,
+                        other => return Err(CompileError::new(format!(
+                            "autowah: '{}' is not a mode (lowpass, bandpass, highpass)", other))),
+                    };
+                }
+            }
+            Ok(NodeSpec::AutoWah { sens, base, range, q, attack_ms, release_ms, mode, down,
+                                   wobble, wobble_hz })
+        }
+        "panenv" => {
+            let depth = float_param_at(&node.params, 0).unwrap_or(0.6);
+            let attack_ms = named_param(&node.params, "attack").unwrap_or(5.0);
+            let release_ms = named_param(&node.params, "release").unwrap_or(300.0);
+            Ok(NodeSpec::PanEnv { depth, attack_ms, release_ms })
         }
         "autopan" => {
             let depth = float_param_at(&node.params, 0).unwrap_or(0.5);

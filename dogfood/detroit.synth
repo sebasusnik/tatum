@@ -429,7 +429,7 @@ track under {
 master {
     in > eq(low=1.8, mid=0.0, high=1.0)
        > tilt(0.0)
-       > compressor(-7db, ratio=2.2, attack=18ms, release=140ms, makeup=4.6db)
+       > compressor(-7db, ratio=2.2, attack=18ms, release=140ms, makeup=4.23db)
        > limiter(0.95)
        > out
 }

@@ -46,6 +46,13 @@ pub enum NodeSpec {
     },
     /// Stereo auto-panner: slow LFO moves the signal between L and R.
     AutoPan { hz: f32, bars: f32, depth: f32 },
+    /// Stereo panner driven by the signal's own envelope rather than an LFO.
+    PanEnv { depth: f32, attack_ms: f32, release_ms: f32 },
+    /// Envelope filter: a resonant filter whose cutoff the signal's own
+    /// envelope sweeps. `mode` is 0 lowpass, 1 bandpass, 2 highpass.
+    AutoWah { sens: f32, base: f32, range: f32, q: f32,
+              attack_ms: f32, release_ms: f32, mode: u8, down: bool,
+              wobble: f32, wobble_hz: f32 },
     /// Swept allpass phaser.
     Phaser { mix: f32, hz: f32, bars: f32, stages: u8, feedback: f32, depth: f32 },
     /// Vowel formant filter morphing between two vowels.
@@ -78,6 +85,20 @@ pub struct FilterLfo {
     pub hz: f32,
     pub bars: f32,
     pub depth: f32,
+}
+
+/// How fast the peak reference forgets, per sample: about four seconds, long
+/// enough to span the gap between two chords.
+const PANENV_PEAK_FALL: f32 = 0.999996;
+/// Below this the follower is dividing noise by noise; hold the last position.
+const PANENV_FLOOR: f32 = 1.0e-4;
+/// One-pole on the pan position itself, about 30 ms, so it can never jump.
+const PANENV_SLEW: f32 = 0.0007;
+
+/// One-pole coefficient for a time constant in milliseconds.
+fn coeff(ms: f32) -> f32 {
+    let t = (ms * 0.001 * SAMPLE_RATE).max(1.0);
+    1.0 - crate::math::exp(-1.0 / t)
 }
 
 fn make_lfo(hz: f32) -> Lfo {
@@ -145,15 +166,42 @@ impl NodeSpec {
                                env_attack, env_decay, env_sustain, env_release, env_depth, lfo } => {
                 let mut f = BiquadFilter::new(SAMPLE_RATE);
                 f.set_params(filter_type, cutoff, resonance);
+                let mut fr = BiquadFilter::new(SAMPLE_RATE);
+                fr.set_params(filter_type, cutoff, resonance);
                 let mut env = Envelope::new(SAMPLE_RATE);
                 env.set_adsr(env_attack, env_decay, env_sustain, env_release);
                 NodeKind::Biquad(ModBiquad {
-                    filter: f, env, base_cutoff: cutoff, env_depth, velocity: 1.0,
+                    filter: f, filter_r: fr, env, base_cutoff: cutoff, env_depth, velocity: 1.0,
                     lfo: make_lfo(lfo.hz), lfo_depth: lfo.depth, lfo_bars: lfo.bars, lfo_tick: 0,
                 })
             }
             NodeSpec::AutoPan { hz, bars, depth } => {
                 NodeKind::AutoPan { lfo: make_lfo(hz), bars, depth }
+            }
+            NodeSpec::AutoWah { sens, base, range, q, attack_ms, release_ms, mode, down,
+                                wobble, wobble_hz } => {
+                let ft = match mode { 1 => FilterType::BandPass, 2 => FilterType::HighPass,
+                                      _ => FilterType::LowPass };
+                let mut fl = BiquadFilter::new(SAMPLE_RATE);
+                fl.set_params(ft, base, q);
+                let mut fr = BiquadFilter::new(SAMPLE_RATE);
+                fr.set_params(ft, base, q);
+                NodeKind::AutoWah {
+                    left: fl, right: fr, sens, base, range, q,
+                    atk: coeff(attack_ms), rel: coeff(release_ms), down,
+                    env: 0.0, peak: 0.0, cutoff: base, tick: 0,
+                    wobble, wob_inc: wobble_hz / SAMPLE_RATE, wob_phase: 0.0,
+                }
+            }
+            NodeSpec::PanEnv { depth, attack_ms, release_ms } => {
+                NodeKind::PanEnv {
+                    depth,
+                    atk: coeff(attack_ms),
+                    rel: coeff(release_ms),
+                    env: 0.0,
+                    peak: 0.0,
+                    pos: 0.0,
+                }
             }
             NodeSpec::Phaser { mix, hz, bars, stages, feedback, depth } => {
                 NodeKind::Phaser(Phaser::new(mix, hz, bars, stages as usize, feedback, depth))
@@ -168,10 +216,12 @@ impl NodeSpec {
                                env_attack, env_decay, env_sustain, env_release, env_depth, lfo } => {
                 let mut f = LadderFilter::new(SAMPLE_RATE);
                 f.set_params(cutoff, resonance);
+                let mut fr = LadderFilter::new(SAMPLE_RATE);
+                fr.set_params(cutoff, resonance);
                 let mut env = Envelope::new(SAMPLE_RATE);
                 env.set_adsr(env_attack, env_decay, env_sustain, env_release);
                 NodeKind::Ladder(ModLadder {
-                    filter: f, env, base_cutoff: cutoff, env_depth, velocity: 1.0,
+                    filter: f, filter_r: fr, env, base_cutoff: cutoff, env_depth, velocity: 1.0,
                     lfo: make_lfo(lfo.hz), lfo_depth: lfo.depth, lfo_bars: lfo.bars, lfo_tick: 0,
                 })
             }
@@ -259,8 +309,13 @@ impl NodeSpec {
 // ── Modulated filter wrappers ──
 
 /// Ladder filter with built-in filter envelope for per-note cutoff sweeps.
+///
+/// Two filters, one per channel. A single one processed twice per stereo frame
+/// runs at twice its design rate — a `lowpass(3400)` measured its -3 dB corner
+/// at 7681 Hz — and mixes the channels through one set of state registers.
 pub struct ModLadder {
     pub filter: LadderFilter,
+    pub filter_r: LadderFilter,
     pub env: Envelope,
     pub base_cutoff: f32,
     pub env_depth: f32,
@@ -284,27 +339,44 @@ impl ModLadder {
         self.velocity = vel;
     }
 
+    /// Advance the envelope and LFO one frame and retune both filters. Called
+    /// once per frame, mono or stereo, so the modulation runs at the same rate
+    /// either way.
     #[inline]
-    pub fn process(&mut self, input: f32) -> f32 {
+    fn tick_cutoff(&mut self) {
         let has_env = self.env_depth > 0.0;
         let has_lfo = self.lfo_depth > 0.0;
-        if has_env || has_lfo {
-            let mut cutoff = self.base_cutoff;
-            if has_env {
-                cutoff += self.env.next_sample() * self.env_depth;
-            }
-            if has_lfo {
-                // Cheap: advance the LFO every sample, retune the filter every 8.
-                let v = self.lfo.next_sample();
-                self.lfo_tick = self.lfo_tick.wrapping_add(1);
-                if !self.lfo_tick.is_multiple_of(8) && !has_env {
-                    return self.filter.process(input);
-                }
-                cutoff += v * self.lfo_depth;
-            }
-            self.filter.set_cutoff(cutoff);
+        if !(has_env || has_lfo) {
+            return;
         }
+        let mut cutoff = self.base_cutoff;
+        if has_env {
+            cutoff += self.env.next_sample() * self.env_depth;
+        }
+        if has_lfo {
+            // Cheap: advance the LFO every sample, retune the filter every 8.
+            let v = self.lfo.next_sample();
+            self.lfo_tick = self.lfo_tick.wrapping_add(1);
+            if !self.lfo_tick.is_multiple_of(8) && !has_env {
+                return;
+            }
+            cutoff += v * self.lfo_depth;
+        }
+        self.filter.set_cutoff(cutoff);
+        self.filter_r.set_cutoff(cutoff);
+    }
+
+    #[inline]
+    pub fn process(&mut self, input: f32) -> f32 {
+        self.tick_cutoff();
         self.filter.process(input)
+    }
+
+    /// One filter per channel: see the note on the struct.
+    #[inline]
+    pub fn process_stereo(&mut self, l: f32, r: f32) -> (f32, f32) {
+        self.tick_cutoff();
+        (self.filter.process(l), self.filter_r.process(r))
     }
 
     /// Retune a bar-synced LFO to the song tempo (4/4).
@@ -316,6 +388,7 @@ impl ModLadder {
 
     pub fn reset(&mut self) {
         self.filter.reset();
+        self.filter_r.reset();
         self.env.reset();
     }
 }
@@ -323,6 +396,7 @@ impl ModLadder {
 /// Biquad filter with built-in filter envelope for per-note cutoff sweeps.
 pub struct ModBiquad {
     pub filter: BiquadFilter,
+    pub filter_r: BiquadFilter,
     pub env: Envelope,
     pub base_cutoff: f32,
     pub env_depth: f32,
@@ -346,27 +420,44 @@ impl ModBiquad {
         self.velocity = vel;
     }
 
+    /// Advance the envelope and LFO one frame and retune both filters. Called
+    /// once per frame, mono or stereo, so the modulation runs at the same rate
+    /// either way.
     #[inline]
-    pub fn process(&mut self, input: f32) -> f32 {
+    fn tick_cutoff(&mut self) {
         let has_env = self.env_depth > 0.0;
         let has_lfo = self.lfo_depth > 0.0;
-        if has_env || has_lfo {
-            let mut cutoff = self.base_cutoff;
-            if has_env {
-                cutoff += self.env.next_sample() * self.env_depth;
-            }
-            if has_lfo {
-                // Cheap: advance the LFO every sample, retune the filter every 8.
-                let v = self.lfo.next_sample();
-                self.lfo_tick = self.lfo_tick.wrapping_add(1);
-                if !self.lfo_tick.is_multiple_of(8) && !has_env {
-                    return self.filter.process(input);
-                }
-                cutoff += v * self.lfo_depth;
-            }
-            self.filter.set_cutoff(cutoff);
+        if !(has_env || has_lfo) {
+            return;
         }
+        let mut cutoff = self.base_cutoff;
+        if has_env {
+            cutoff += self.env.next_sample() * self.env_depth;
+        }
+        if has_lfo {
+            // Cheap: advance the LFO every sample, retune the filter every 8.
+            let v = self.lfo.next_sample();
+            self.lfo_tick = self.lfo_tick.wrapping_add(1);
+            if !self.lfo_tick.is_multiple_of(8) && !has_env {
+                return;
+            }
+            cutoff += v * self.lfo_depth;
+        }
+        self.filter.set_cutoff(cutoff);
+        self.filter_r.set_cutoff(cutoff);
+    }
+
+    #[inline]
+    pub fn process(&mut self, input: f32) -> f32 {
+        self.tick_cutoff();
         self.filter.process(input)
+    }
+
+    /// One filter per channel: see the note on the struct.
+    #[inline]
+    pub fn process_stereo(&mut self, l: f32, r: f32) -> (f32, f32) {
+        self.tick_cutoff();
+        (self.filter.process(l), self.filter_r.process(r))
     }
 
     /// Retune a bar-synced LFO to the song tempo (4/4).
@@ -378,6 +469,7 @@ impl ModBiquad {
 
     pub fn reset(&mut self) {
         self.filter.reset();
+        self.filter_r.reset();
         self.env.reset();
     }
 }
@@ -436,6 +528,17 @@ pub enum NodeKind {
 
     // ── Effects ──
     AutoPan { lfo: Lfo, bars: f32, depth: f32 },
+    /// `env` follows the input, `peak` is a slowly falling reference so the
+    /// follower reads 0..1 whatever the level going in.
+    PanEnv { depth: f32, atk: f32, rel: f32, env: f32, peak: f32, pos: f32 },
+    /// A resonant filter the signal sweeps by its own envelope. At high `q` the
+    /// filter rings near self-oscillation and every attack excites it, so what
+    /// you hear is a narrow resonant peak sliding -- which is what a thin sheet
+    /// does when you flex it and its modes shift.
+    AutoWah { left: BiquadFilter, right: BiquadFilter, sens: f32, base: f32,
+              range: f32, q: f32, atk: f32, rel: f32, down: bool,
+              env: f32, peak: f32, cutoff: f32, tick: u32,
+              wobble: f32, wob_inc: f32, wob_phase: f32 },
     Phaser(Phaser),
     Vowel(Formant),
     Saturator(Saturator),
@@ -467,6 +570,9 @@ impl NodeKind {
             NodeKind::Biquad(m) => m.process(inputs[0]),
             NodeKind::Ladder(m) => m.process(inputs[0]),
             NodeKind::AutoPan { lfo, .. } => { let _ = lfo.next_sample(); inputs[0] }
+            // Panning is a stereo gesture; in mono the signal passes.
+            NodeKind::PanEnv { .. } => inputs[0],
+            NodeKind::AutoWah { left, .. } => left.process(inputs[0]),
             NodeKind::Phaser(p) => p.process(inputs[0]),
             NodeKind::Vowel(v) => v.process(inputs[0]),
 
@@ -517,6 +623,12 @@ impl NodeKind {
             NodeKind::Saturator(sat) => (sat.process(l), sat.process(r)),
             NodeKind::Gain(g) => (l * *g, r * *g),
             NodeKind::Phaser(p) => p.process_stereo(l, r),
+            // Filters and the chorus each hold a delay line or state registers.
+            // The dual-mono fallback below clocks them twice per stereo frame
+            // and runs both channels through one copy of that state.
+            NodeKind::Biquad(m) => m.process_stereo(l, r),
+            NodeKind::Ladder(m) => m.process_stereo(l, r),
+            NodeKind::Chorus(c) => c.process_stereo(l, r),
             // Explicit, because the dual-mono fallback would step the capture's
             // read position twice per stereo sample.
             NodeKind::Capture(c) => c.process_stereo(l, r),
@@ -535,9 +647,76 @@ impl NodeKind {
                 let angle = (p + 1.0) * 0.25 * crate::math::PI; // 0..pi/2
                 let gl = crate::math::cos(angle) * 1.4142;
                 let gr = crate::math::sin(angle) * 1.4142;
-                let mono = (l + r) * 0.5;
-                // Keep the source stereo image, scaled by the pan law
-                (l * gl * 0.5 + mono * gl * 0.5, r * gr * 0.5 + mono * gr * 0.5)
+                // Pan the channels where they are. Blending half the mono sum
+                // back in fed a quarter of each channel into the other, which on
+                // a reverb return — the one place the signal is already wide —
+                // took the correlation of a 100% wet bus from 0.37 to 0.77. With
+                // a mono source the two forms are the same expression.
+                (l * gl, r * gr)
+            }
+            NodeKind::AutoWah { left, right, sens, base, range, atk, rel, down,
+                                env, peak, cutoff, tick, wobble, wob_inc, wob_phase, .. } => {
+                let level = crate::math::abs(l) + crate::math::abs(r);
+                let c = if level > *env { *atk } else { *rel };
+                *env += (level - *env) * c;
+                // The pedal's Gain knob: how much signal reaches the detector,
+                // against a fixed threshold. Normalising against a rolling peak
+                // instead leaves the filter open for as long as a chord rings,
+                // and the sweep stops following the playing.
+                *peak = *sens * 40.0 + 0.5;
+                // Retune every 8 samples and glide there gently. A biquad at
+                // Q 18 whose coefficients jump is a zipper: the ring is what we
+                // want, the grit on the way is not.
+                *tick = tick.wrapping_add(1);
+                if *tick % 8 == 0 {
+                    let norm = (*env * *peak).min(1.0);
+                    let mut target = if *down { *base + *range * (1.0 - norm) }
+                                     else { *base + *range * norm };
+                    // Bending a sheet and letting go does not move the resonance
+                    // once: it rings back and forth and settles. The wobble
+                    // rides on the envelope, so a fresh hit swings wide and the
+                    // swing dies with the note.
+                    if *wobble > 0.0 {
+                        *wob_phase += *wob_inc * 8.0;
+                        if *wob_phase >= 1.0 { *wob_phase -= 1.0; }
+                        target += *wobble * norm * crate::math::sin(*wob_phase * crate::math::TWO_PI);
+                    }
+                    // Asymmetric on purpose: the sweep opens with the attack
+                    // and closes slowly. Gliding up as gently as it comes down
+                    // puts the bright part of the hit after the transient
+                    // instead of on it, which reads as a late attack.
+                    let slew = if target > *cutoff { 0.55 } else { 0.06 };
+                    *cutoff += (target - *cutoff) * slew;
+                    let hz = crate::math::clamp(*cutoff, 30.0, 16000.0);
+                    left.set_cutoff(hz);
+                    right.set_cutoff(hz);
+                }
+                (left.process(l), right.process(r))
+            }
+            NodeKind::PanEnv { depth, atk, rel, env, peak, pos } => {
+                // Follow the input, then place it by how loud it is against its
+                // own recent peak: the hit lands to one side and the decay walks
+                // back across. A struck chord sweeps as it rings out.
+                let level = crate::math::abs(l) + crate::math::abs(r);
+                let c = if level > *env { *atk } else { *rel };
+                *env += (level - *env) * c;
+                *peak = if *env > *peak { *env } else { *peak * PANENV_PEAK_FALL };
+                // Below the floor the ratio is two small numbers dividing each
+                // other, which chatters at sample rate and reads as a crushed,
+                // grainy tail. There, hold the last position instead.
+                if *peak > PANENV_FLOOR {
+                    let norm = (*env / *peak).min(1.0);
+                    let target = *depth * (2.0 * norm - 1.0);
+                    *pos += (target - *pos) * PANENV_SLEW;
+                }
+                // A balance law, not a pan law: one channel holds at unity and
+                // the other gives way. Constant-power panning boosts a channel
+                // by 3 dB at the extremes, and this node is reached for on
+                // signals that are already near the ceiling.
+                let p = *pos;
+                let gl = if p > 0.0 { 1.0 - p } else { 1.0 };
+                let gr = if p < 0.0 { 1.0 + p } else { 1.0 };
+                (l * gl, r * gr)
             }
             // Dual-mono fallback for everything else
             _ => {
@@ -564,8 +743,8 @@ impl NodeKind {
             (NodeKind::Capture(c), n) => c.set_named(n, value),
             (NodeKind::Limiter(l), "limiter") => { l.set_threshold(value); true }
             (NodeKind::Compressor(c), "comp_threshold") => { c.set_threshold(value); true }
-            (NodeKind::Biquad(m), "cutoff") => { m.base_cutoff = value; m.filter.set_cutoff(value); true }
-            (NodeKind::Ladder(m), "cutoff") => { m.base_cutoff = value; m.filter.set_cutoff(value); true }
+            (NodeKind::Biquad(m), "cutoff") => { m.base_cutoff = value; m.filter.set_cutoff(value); m.filter_r.set_cutoff(value); true }
+            (NodeKind::Ladder(m), "cutoff") => { m.base_cutoff = value; m.filter.set_cutoff(value); m.filter_r.set_cutoff(value); true }
             _ => false,
         }
     }
@@ -634,6 +813,11 @@ impl NodeKind {
             NodeKind::Phaser(p) => p.reset(),
             NodeKind::Vowel(v) => v.reset(),
             NodeKind::Env(env) => env.reset(),
+            NodeKind::PanEnv { env, peak, pos, .. } => { *env = 0.0; *peak = 0.0; *pos = 0.0; }
+            NodeKind::AutoWah { left, right, env, peak, cutoff, base, wob_phase, .. } => {
+                left.reset(); right.reset(); *env = 0.0; *peak = 0.0;
+                *cutoff = *base; *wob_phase = 0.0;
+            }
             NodeKind::Biquad(m) => m.reset(),
             NodeKind::Ladder(m) => m.reset(),
             NodeKind::Mix | NodeKind::Gain(_) | NodeKind::Vca | NodeKind::Output => {}

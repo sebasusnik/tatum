@@ -24,6 +24,7 @@ impl Edge {
 
 /// Graph topology + node creation specs. Shared across all voices.
 /// No runtime DSP state — just the blueprint.
+#[derive(Clone)]
 pub struct GraphTemplate {
     pub specs: [NodeSpec; MAX_GRAPH_NODES],
     pub node_count: u8,

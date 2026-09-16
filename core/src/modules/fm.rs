@@ -439,6 +439,51 @@ impl FmModule {
 
 impl Module for FmModule {
     fn process_block(&mut self, output: &mut [f32]) {
+        self.render_dry(output);
+        if self.chorus_mix > 0.001 {
+            for sample in output.iter_mut() {
+                *sample = self.chorus.process(*sample);
+            }
+        }
+    }
+
+    fn note_on(&mut self, note: u8, velocity: f32) {
+        self.vibrato_onset = 0.0;
+        let idx = self.find_voice();
+        self.voice_counter += 1;
+        self.voices[idx].algorithm = self.algorithm;
+        self.voices[idx].mod_index = self.mod_index;
+        self.voices[idx].age = self.voice_counter;
+        self.voices[idx].note_on(note, velocity);
+    }
+
+    fn note_off(&mut self, note: u8) {
+        for voice in &mut self.voices {
+            if voice.active && voice.note == note {
+                voice.note_off();
+                break;
+            }
+        }
+    }
+
+    fn reset(&mut self) {
+        for voice in &mut self.voices {
+            voice.reset();
+        }
+        self.voice_counter = 0;
+        self.lfo_router.reset();
+        self.chorus.reset();
+        self.dc_x1 = 0.0;
+        self.dc_y1 = 0.0;
+        self.pitch_bend_ratio = 1.0;
+        self.vibrato_phase = 0.0;
+        self.vibrato_onset = 0.0;
+    }
+}
+
+impl FmModule {
+    /// Every voice summed, modulated and DC-blocked, before the chorus.
+    fn render_dry(&mut self, output: &mut [f32]) {
         for sample in output.iter_mut() {
             let lfo_val = self.lfo_router.next_sample();
 
@@ -502,11 +547,6 @@ impl Module for FmModule {
 
             sum *= amp_mod * self.level;
 
-            // Apply chorus post-process
-            if self.chorus_mix > 0.001 {
-                sum = self.chorus.process(sum);
-            }
-
             // The rectified operator waveforms are rectifiers, so they carry a
             // DC offset by construction: measured at 32% of peak on half_sine,
             // 64% on abs_sine and 15% on quarter_sine. It eats headroom, it
@@ -522,36 +562,20 @@ impl Module for FmModule {
         }
     }
 
-    fn note_on(&mut self, note: u8, velocity: f32) {
-        self.vibrato_onset = 0.0;
-        let idx = self.find_voice();
-        self.voice_counter += 1;
-        self.voices[idx].algorithm = self.algorithm;
-        self.voices[idx].mod_index = self.mod_index;
-        self.voices[idx].age = self.voice_counter;
-        self.voices[idx].note_on(note, velocity);
-    }
-
-    fn note_off(&mut self, note: u8) {
-        for voice in &mut self.voices {
-            if voice.active && voice.note == note {
-                voice.note_off();
-                break;
+    /// Stereo out. The chorus is the only stereo stage an FM voice has --
+    /// the operators themselves are mono -- so `chorus_mix` is the whole
+    /// width budget, and one delay line shared by both channels made it a
+    /// comb filter instead of width.
+    pub fn process_block_stereo(&mut self, out_l: &mut [f32], out_r: &mut [f32]) {
+        self.render_dry(out_l);
+        if self.chorus_mix > 0.001 {
+            for i in 0..out_l.len() {
+                let (l, r) = self.chorus.process_stereo(out_l[i], out_l[i]);
+                out_l[i] = l;
+                out_r[i] = r;
             }
+        } else {
+            out_r.copy_from_slice(out_l);
         }
-    }
-
-    fn reset(&mut self) {
-        for voice in &mut self.voices {
-            voice.reset();
-        }
-        self.voice_counter = 0;
-        self.lfo_router.reset();
-        self.chorus.reset();
-        self.dc_x1 = 0.0;
-        self.dc_y1 = 0.0;
-        self.pitch_bend_ratio = 1.0;
-        self.vibrato_phase = 0.0;
-        self.vibrato_onset = 0.0;
     }
 }

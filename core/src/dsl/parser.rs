@@ -594,7 +594,7 @@ impl Parser {
                 } else {
                     // Not named — restore and parse as positional
                     self.pos = saved_pos;
-                    if is_waveform(&name) || is_vowel(&name) {
+                    if is_waveform(&name) || is_vowel(&name) || is_filter_mode(&name) {
                         self.advance();
                         params.push(Param::Waveform(name));
                     } else {
@@ -1914,5 +1914,10 @@ fn is_vowel(word: &str) -> bool {
 /// Check if a word is a waveform name.
 fn is_waveform(word: &str) -> bool {
     matches!(word, "sine" | "saw" | "square" | "triangle" | "pulse")
+}
+
+/// Filter modes, for the nodes that take one as a bare word (`autowah`).
+fn is_filter_mode(word: &str) -> bool {
+    matches!(word, "lowpass" | "bandpass" | "highpass" | "lp" | "bp" | "hp")
 }
 
