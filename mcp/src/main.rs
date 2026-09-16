@@ -654,7 +654,7 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
             "rms_in": round3(in_rms),
             "crest_in": round1(crest_in),
             "crest_out": round1(crest_out),
-            "crest_change_db": round1(crest_loss as f32),
+            "crest_change_db": round1(crest_loss),
         },
         "stereo_width_above_250hz_pct": round1(mix_width),
         "sections": report,
@@ -684,7 +684,7 @@ fn round1(v: f32) -> f64 { ((v as f64) * 10.0).round() / 10.0 }
 /// File name from the first `# Title` comment, else "song".
 fn slug_from_source(source: &str) -> String {
     let title = source.lines().next().unwrap_or("").trim_start_matches('#').trim();
-    let title = title.split(|c| c == '—' || c == '-' || c == ':').next().unwrap_or("").trim();
+    let title = title.split(['—', '-', ':']).next().unwrap_or("").trim();
     let slug: String = title.chars()
         .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' })
         .collect::<String>()

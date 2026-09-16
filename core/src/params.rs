@@ -29,6 +29,10 @@ pub enum ModuleKind {
 }
 
 impl ModuleKind {
+    // should_implement_trait: FromStr would have to return Result, which means
+    // inventing an error none of the eight call sites want; renaming is a
+    // breaking change to a public method for no gain.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "bass" => Some(Self::Bass),
@@ -547,7 +551,7 @@ pub fn suggest(kind: ModuleKind, name: &str) -> Option<&'static str> {
     let mut best: Option<(usize, &'static str)> = None;
     for s in specs(kind) {
         let d = levenshtein(name, s.name);
-        if best.map_or(true, |(bd, _)| d < bd) {
+        if best.is_none_or(|(bd, _)| d < bd) {
             best = Some((d, s.name));
         }
     }

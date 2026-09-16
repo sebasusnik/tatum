@@ -38,12 +38,12 @@ impl TapeStop {
     }
 
     pub fn set_ramp_time(&mut self, seconds: f32) {
-        self.ramp_time = if seconds < 0.05 { 0.05 } else if seconds > 3.0 { 3.0 } else { seconds };
+        self.ramp_time = seconds.clamp(0.05, 3.0);
         self.ramp_decrement = 1.0 / (self.ramp_time * self.sample_rate);
     }
 
     pub fn set_mix(&mut self, mix: f32) {
-        self.mix = if mix < 0.0 { 0.0 } else if mix > 1.0 { 1.0 } else { mix };
+        self.mix = mix.clamp(0.0, 1.0);
     }
 
     pub fn trigger(&mut self, on: bool) {

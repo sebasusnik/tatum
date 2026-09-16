@@ -173,7 +173,7 @@ impl Parser {
         if !matches!(self.peek(), Token::Star) { return 1; }
         self.advance();
         match self.peek().clone() {
-            Token::Number(n) if n >= 1.0 && n <= 256.0 => { self.advance(); n as usize }
+            Token::Number(n) if (1.0..=256.0).contains(&n) => { self.advance(); n as usize }
             _ => {
                 let s = self.span();
                 let (l, c) = (s.line, s.col);
@@ -825,11 +825,10 @@ impl Parser {
                                 });
                             }
                             Token::Number(v) => {
-                                let v = v;
                                 self.advance();
                                 let degree = math::floor(v) as u8;
                                 let octave = ((v - math::floor(v)) * 10.0 + 0.5) as u8;
-                                if degree >= 1 && degree <= 7 {
+                                if (1..=7).contains(&degree) {
                                     let vel = if matches!(self.peek(), Token::Colon) {
                                         self.advance();
                                         self.expect_number()
@@ -892,11 +891,10 @@ impl Parser {
                 }
                 // Scale degree: 1.3 = degree 1, octave 3
                 Token::Number(v) => {
-                    let v = v;
                     self.advance();
                     let degree = math::floor(v) as u8;
                     let octave = ((v - math::floor(v)) * 10.0 + 0.5) as u8;
-                    if degree >= 1 && degree <= 7 {
+                    if (1..=7).contains(&degree) {
                         let velocity = if matches!(self.peek(), Token::Colon) {
                             self.advance();
                             self.expect_number()
@@ -1013,7 +1011,7 @@ impl Parser {
 
     /// Is the token after the current one a `/`? (`E5/3` is a power chord, `E5` a note.)
     fn peek_is_slash_next(&self) -> bool {
-        self.tokens.get(self.pos + 1).map_or(false, |s| matches!(s.token, Token::Slash))
+        self.tokens.get(self.pos + 1).is_some_and(|s| matches!(s.token, Token::Slash))
     }
 
     /// After a chord symbol: optional `/octave`, `:velocity`, `(plocks)`.
@@ -1222,16 +1220,9 @@ impl Parser {
 
     /// `arp <mode> [rate=N] [gate=F] [octaves=N]` — mode is up, down, updown or off.
     fn parse_arp_clause(&mut self) -> Option<ArpDef> {
-        let mode = match self.expect_ident() {
-            Some(m) => m,
-            None => return None,
-        };
+        let mode = self.expect_ident()?;
         let mut def = ArpDef { mode, rate: None, gate: None, octaves: None };
-        loop {
-            let key = match self.peek().clone() {
-                Token::Ident(ref k) => k.clone(),
-                _ => break,
-            };
+        while let Token::Ident(key) = self.peek().clone() {
             // Only consume `ident =` pairs; a bare ident belongs to the next clause.
             let saved = self.pos;
             self.advance();
@@ -1755,44 +1746,38 @@ impl Parser {
         // We need to handle "ident . ident" → "ident.ident" by checking for Number(.) after ident
         // Actually, looking at the lexer, a '.' followed by non-digit is skipped.
         // Let's check if next token gives us continuation
-        loop {
-            // The lexer would have produced a number starting with . if followed by digits
-            // For "funk_bass.cutoff", the '.' is between two identifiers
-            // Since '.' isn't handled as a single char token, it gets skipped by the lexer
-            // The two parts "funk_bass" and "cutoff" come as separate Ident tokens
-            // But actually, looking at lexer, identifiers include _ but not .
-            // So "funk_bass.cutoff" → Ident("funk_bass"), then '.' gets skipped, then Ident("cutoff")
-            // We need to peek and see if there's an unexpected ident right after (the '.' was eaten)
+        // The lexer would have produced a number starting with . if followed by digits
+        // For "funk_bass.cutoff", the '.' is between two identifiers
+        // Since '.' isn't handled as a single char token, it gets skipped by the lexer
+        // The two parts "funk_bass" and "cutoff" come as separate Ident tokens
+        // But actually, looking at lexer, identifiers include _ but not .
+        // So "funk_bass.cutoff" → Ident("funk_bass"), then '.' gets skipped, then Ident("cutoff")
+        // We need to peek and see if there's an unexpected ident right after (the '.' was eaten)
 
-            // Workaround: if next token is an Ident and it's NOT a number/arrow, treat as continuation
-            // Actually let's just check if the raw source has a dot by looking at column positions
-            // Simplest approach: check if next token is an Ident that could be a param name
-            self.skip_newlines();
-            // Extract param name from Ident or keyword tokens (level, velocity, etc.)
-            let param_name = match self.peek().clone() {
-                Token::Ident(ref s) => Some(s.clone()),
-                Token::Level => Some(alloc::string::String::from("level")),
-                Token::Velocity => Some(alloc::string::String::from("velocity")),
-                Token::Pan => Some(alloc::string::String::from("pan")),
-                _ => None,
-            };
-            if let Some(part_clone) = param_name {
-                // Check if this could be a dotted continuation
-                // Heuristic: if the next thing after this ident is a number (the first keyframe),
-                // then this ident is the param part of a dotted target
-                let saved = self.pos;
-                self.advance();
-                if let Token::Number(_) | Token::Rest = self.peek() {
-                    // This is the param part
-                    target = alloc::format!("{}.{}", target, part_clone);
-                    break;
-                } else {
-                    // Not a param part, restore
-                    self.pos = saved;
-                    break;
-                }
+        // Workaround: if next token is an Ident and it's NOT a number/arrow, treat as continuation
+        // Actually let's just check if the raw source has a dot by looking at column positions
+        // Simplest approach: check if next token is an Ident that could be a param name
+        self.skip_newlines();
+        // Extract param name from Ident or keyword tokens (level, velocity, etc.)
+        let param_name = match self.peek().clone() {
+            Token::Ident(ref s) => Some(s.clone()),
+            Token::Level => Some(alloc::string::String::from("level")),
+            Token::Velocity => Some(alloc::string::String::from("velocity")),
+            Token::Pan => Some(alloc::string::String::from("pan")),
+            _ => None,
+        };
+        if let Some(part_clone) = param_name {
+            // Check if this could be a dotted continuation
+            // Heuristic: if the next thing after this ident is a number (the first keyframe),
+            // then this ident is the param part of a dotted target
+            let saved = self.pos;
+            self.advance();
+            if let Token::Number(_) | Token::Rest = self.peek() {
+                // This is the param part
+                target = alloc::format!("{}.{}", target, part_clone);
             } else {
-                break;
+                // Not a param part, restore
+                self.pos = saved;
             }
         }
 

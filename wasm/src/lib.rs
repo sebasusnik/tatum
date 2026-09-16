@@ -36,6 +36,13 @@ pub struct Synth {
     result_buf: Vec<u8>,
 }
 
+// Plain impl: wasm_bindgen exports the constructor, not this.
+impl Default for Synth {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[wasm_bindgen]
 impl Synth {
     #[wasm_bindgen(constructor)]
@@ -56,7 +63,10 @@ impl Synth {
     /// text is rejected here and in `synth check`. Value edits apply at once;
     /// anything else takes over on the next bar line, keeping every piece of
     /// state whose definition did not change. Not playing: replaced at once.
-    pub fn load_source(&mut self, source_ptr: *const u8, source_len: usize) -> *const u8 {
+    /// # Safety
+    /// `source_ptr`/`source_len` must describe valid UTF-8 inside this module's
+    /// memory. The JS glue hands over a slice it just wrote there.
+    pub unsafe fn load_source(&mut self, source_ptr: *const u8, source_len: usize) -> *const u8 {
         let source = unsafe {
             let slice = core::slice::from_raw_parts(source_ptr, source_len);
             core::str::from_utf8_unchecked(slice)
@@ -195,7 +205,10 @@ impl Synth {
     }
 
     /// Returns false if the instrument or parameter name does not exist.
-    pub fn set_module_param(&mut self, inst_idx: usize, name_ptr: *const u8, name_len: usize, value: f32) -> bool {
+    /// # Safety
+    /// `name_ptr`/`name_len` must describe valid UTF-8 inside this module's
+    /// memory. The JS glue hands over a slice it just wrote there.
+    pub unsafe fn set_module_param(&mut self, inst_idx: usize, name_ptr: *const u8, name_len: usize, value: f32) -> bool {
         let name = unsafe {
             let slice = core::slice::from_raw_parts(name_ptr, name_len);
             core::str::from_utf8_unchecked(slice)

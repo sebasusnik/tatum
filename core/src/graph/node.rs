@@ -297,7 +297,7 @@ impl ModLadder {
                 // Cheap: advance the LFO every sample, retune the filter every 8.
                 let v = self.lfo.next_sample();
                 self.lfo_tick = self.lfo_tick.wrapping_add(1);
-                if self.lfo_tick % 8 != 0 && !has_env {
+                if !self.lfo_tick.is_multiple_of(8) && !has_env {
                     return self.filter.process(input);
                 }
                 cutoff += v * self.lfo_depth;
@@ -359,7 +359,7 @@ impl ModBiquad {
                 // Cheap: advance the LFO every sample, retune the filter every 8.
                 let v = self.lfo.next_sample();
                 self.lfo_tick = self.lfo_tick.wrapping_add(1);
-                if self.lfo_tick % 8 != 0 && !has_env {
+                if !self.lfo_tick.is_multiple_of(8) && !has_env {
                     return self.filter.process(input);
                 }
                 cutoff += v * self.lfo_depth;
@@ -412,6 +412,9 @@ impl PitchOscState {
 
 /// Every DSP primitive and effect as a first-class node.
 /// No trait objects, no dynamic dispatch.
+// large_enum_variant: boxing the big variant would allocate per voice on every
+// note-on, which is the audio thread. Voices hold these inline by design.
+#[allow(clippy::large_enum_variant)]
 pub enum NodeKind {
     // ── Sources ──
     Osc(Oscillator),
@@ -467,14 +470,7 @@ impl NodeKind {
             NodeKind::Phaser(p) => p.process(inputs[0]),
             NodeKind::Vowel(v) => v.process(inputs[0]),
 
-            NodeKind::Mix => {
-                let n = input_count as usize;
-                let mut sum = 0.0;
-                for i in 0..n {
-                    sum += inputs[i];
-                }
-                sum
-            }
+            NodeKind::Mix => inputs[..input_count as usize].iter().sum(),
 
             NodeKind::Gain(g) => inputs[0] * *g,
             NodeKind::Vca => inputs[0] * inputs[1],
@@ -530,6 +526,9 @@ impl NodeKind {
             NodeKind::Delay(d) => d.process_stereo(l, r),
             NodeKind::Reverb(rv) => rv.process_stereo_in(l, r),
             NodeKind::Vowel(v) => v.process_stereo(l, r),
+            // approx_constant: the pan law is tuned at this precision; SQRT_2 is a
+            // different f32 and would shift every auto-panned gain.
+            #[allow(clippy::approx_constant)]
             NodeKind::AutoPan { lfo, depth, .. } => {
                 // Equal-power pan driven by the LFO: p in -1..1
                 let p = lfo.next_sample() * *depth;

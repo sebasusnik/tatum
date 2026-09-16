@@ -413,7 +413,7 @@ impl Clap {
 
         // Multi-trigger: 4 quick bursts then decay (909 style)
         let env = match self.stage {
-            0 | 1 | 2 | 3 => {
+            0..=3 => {
                 self.stage_counter += 1;
                 if self.stage_counter > 150 {
                     self.stage += 1;
@@ -657,6 +657,12 @@ pub struct BeatsModule {
     pub stutter_velocity: f32,
     pub stutter_remaining: u32,
     bpm: f32,
+}
+
+impl Default for BeatsModule {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BeatsModule {

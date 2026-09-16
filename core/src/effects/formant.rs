@@ -76,8 +76,8 @@ impl Formant {
     fn morph(&mut self) {
         // Triangle 0..1 between the two vowels
         let t = if self.phase < 0.5 { self.phase * 2.0 } else { 2.0 - self.phase * 2.0 };
-        let mut freqs = [0.0; 3];
-        for i in 0..3 { freqs[i] = self.from[i] + (self.to[i] - self.from[i]) * t; }
+        let freqs: [f32; 3] =
+            core::array::from_fn(|i| self.from[i] + (self.to[i] - self.from[i]) * t);
         self.left.tune(freqs);
         self.right.tune(freqs);
     }
@@ -86,7 +86,7 @@ impl Formant {
         if self.from != self.to {
             self.phase += self.phase_inc;
             if self.phase >= 1.0 { self.phase -= 1.0; }
-            if self.tick % 64 == 0 { self.morph(); }
+            if self.tick.is_multiple_of(64) { self.morph(); }
             self.tick = self.tick.wrapping_add(1);
         }
         let wl = self.left.process(l);

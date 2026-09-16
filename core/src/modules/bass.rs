@@ -71,6 +71,12 @@ pub struct BassModule {
     vibrato_onset: f32,
 }
 
+impl Default for BassModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BassModule {
     pub fn new() -> Self {
         let mut osc0 = Oscillator::new(Waveform::Saw, SAMPLE_RATE);

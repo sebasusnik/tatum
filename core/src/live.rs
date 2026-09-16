@@ -159,7 +159,7 @@ impl LivePlanner {
     /// the generation the player reports right now ([`LivePlayer::generation`]);
     /// it tells the planner whether a queued swap has landed.
     pub fn plan(&mut self, source: &str, playing: Generation) -> Result<Plan, DslError> {
-        if self.pending.as_ref().map_or(false, |p| p.generation == playing) {
+        if self.pending.as_ref().is_some_and(|p| p.generation == playing) {
             self.running = self.pending.take();
         }
         let ast = crate::dsl::parse(source).map_err(DslError::Parse)?;
@@ -317,12 +317,16 @@ pub enum Applied {
     Stale,
 }
 
+/// The inherit maps an engine carries, each tagged with the generation it was
+/// built for.
+type InheritMaps = Vec<(Generation, Inherit)>;
+
 /// An engine the player is done with. Drop it off the audio thread.
 pub struct Retired {
     pub engine: Box<SongEngine>,
     /// Never read: held so its memory is freed with the engine, off-thread.
     #[allow(dead_code)]
-    maps: Vec<(Generation, Inherit)>,
+    maps: InheritMaps,
 }
 
 /// Audio-thread half. Nothing in here allocates once constructed, except
@@ -331,10 +335,10 @@ pub struct Retired {
 pub struct LivePlayer {
     engine: Option<Box<SongEngine>>,
     generation: Generation,
-    pending: Option<(Box<SongEngine>, Generation, Vec<(Generation, Inherit)>)>,
+    pending: Option<(Box<SongEngine>, Generation, InheritMaps)>,
     /// The engine that just handed over, how far its fade-out has run, and
     /// the inherit maps of that handover, which retire with it.
-    fading: Option<(Box<SongEngine>, usize, Vec<(Generation, Inherit)>)>,
+    fading: Option<(Box<SongEngine>, usize, InheritMaps)>,
     retired: Vec<Retired>,
     swaps: u32,
     /// Swaps that found no inherit map for the running generation. Bookkeeping
@@ -365,7 +369,7 @@ impl LivePlayer {
     pub fn has_pending(&self) -> bool { self.pending.is_some() }
     pub fn engine(&self) -> Option<&SongEngine> { self.engine.as_deref() }
     pub fn engine_mut(&mut self) -> Option<&mut SongEngine> { self.engine.as_deref_mut() }
-    pub fn running(&self) -> bool { self.engine.as_ref().map_or(false, |e| e.running()) }
+    pub fn running(&self) -> bool { self.engine.as_ref().is_some_and(|e| e.running()) }
 
     /// Engines the player is done with, for dropping elsewhere.
     pub fn take_retired(&mut self) -> Option<Retired> { self.retired.pop() }

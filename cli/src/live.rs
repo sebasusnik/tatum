@@ -9,7 +9,7 @@
 
 use std::io::BufRead;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TryRecvError, TrySendError};
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -177,20 +177,15 @@ fn run(path: &str, watch: bool, device_name: Option<&str>) -> Result<(), String>
         move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
             let t0 = Instant::now();
             // Plans first, so an edit lands in this callback, not the next.
-            loop {
-                match plan_rx.try_recv() {
-                    Ok(plan) => {
-                        let applied = player.apply(plan);
-                        if applied == Applied::Loaded && !player.running() {
-                            // Nothing was playing (the arrangement had ended):
-                            // the new song starts from the top.
-                            player.start();
-                            was_running = true;
-                        }
-                        let _ = event_tx.try_send(Event::Applied(applied));
-                    }
-                    Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => break,
+            while let Ok(plan) = plan_rx.try_recv() {
+                let applied = player.apply(plan);
+                if applied == Applied::Loaded && !player.running() {
+                    // Nothing was playing (the arrangement had ended):
+                    // the new song starts from the top.
+                    player.start();
+                    was_running = true;
                 }
+                let _ = event_tx.try_send(Event::Applied(applied));
             }
             let mut l = [0.0f32; BLOCK_SIZE];
             let mut r = [0.0f32; BLOCK_SIZE];

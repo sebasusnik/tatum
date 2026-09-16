@@ -11,6 +11,12 @@ pub struct Chorus {
     pub mix: f32,
 }
 
+impl Default for Chorus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Chorus {
     pub fn new() -> Self {
         let mut lfo = Lfo::new(SAMPLE_RATE);

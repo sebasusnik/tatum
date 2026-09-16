@@ -98,7 +98,7 @@ impl Envelope {
             }
             EnvStage::Release => {
                 // Exponential decay to zero
-                self.level = self.level * self.release_coeff;
+                self.level *= self.release_coeff;
                 if self.level < 0.001 {
                     self.level = 0.0;
                     self.stage = EnvStage::Idle;

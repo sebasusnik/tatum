@@ -10,6 +10,12 @@ pub struct Bitcrusher {
     counter: f32,       // accumulator for rate reduction
 }
 
+impl Default for Bitcrusher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Bitcrusher {
     pub fn new() -> Self {
         Self {
@@ -23,15 +29,15 @@ impl Bitcrusher {
     }
 
     pub fn set_bit_depth(&mut self, bits: f32) {
-        self.bit_depth = if bits < 1.0 { 1.0 } else if bits > 16.0 { 16.0 } else { bits };
+        self.bit_depth = bits.clamp(1.0, 16.0);
     }
 
     pub fn set_rate_reduce(&mut self, rate: f32) {
-        self.rate_reduce = if rate < 0.0 { 0.0 } else if rate > 1.0 { 1.0 } else { rate };
+        self.rate_reduce = rate.clamp(0.0, 1.0);
     }
 
     pub fn set_mix(&mut self, mix: f32) {
-        self.mix = if mix < 0.0 { 0.0 } else if mix > 1.0 { 1.0 } else { mix };
+        self.mix = mix.clamp(0.0, 1.0);
     }
 
     /// Quantize a sample to N bits of depth.

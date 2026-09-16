@@ -232,7 +232,7 @@ pub fn suggest(kind: &str) -> Option<&'static str> {
     let mut best: Option<(usize, &'static str)> = None;
     for n in NODES {
         let d = crate::params::levenshtein(kind, n.name);
-        if best.map_or(true, |(bd, _)| d < bd) { best = Some((d, n.name)); }
+        if best.is_none_or(|(bd, _)| d < bd) { best = Some((d, n.name)); }
     }
     best.filter(|(d, _)| *d <= (kind.len() / 3).max(2)).map(|(_, n)| n)
 }

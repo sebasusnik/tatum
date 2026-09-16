@@ -46,8 +46,9 @@ impl GraphTemplate {
     /// Instantiate fresh runtime nodes for a voice.
     pub fn create_nodes(&self) -> [Option<NodeKind>; MAX_GRAPH_NODES] {
         let mut nodes: [Option<NodeKind>; MAX_GRAPH_NODES] = core::array::from_fn(|_| None);
-        for i in 0..self.node_count as usize {
-            nodes[i] = Some(self.specs[i].instantiate());
+        let n = self.node_count as usize;
+        for (node, spec) in nodes[..n].iter_mut().zip(self.specs[..n].iter()) {
+            *node = Some(spec.instantiate());
         }
         nodes
     }
@@ -57,6 +58,12 @@ impl GraphTemplate {
 pub struct Graph {
     pub nodes: [Option<NodeKind>; MAX_GRAPH_NODES],
     pub buffers: [[f32; BLOCK_SIZE]; MAX_GRAPH_NODES],
+}
+
+impl Default for Graph {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Graph {
@@ -91,10 +98,13 @@ impl Graph {
 
                 // Gather inputs
                 let mut input_vals = [0.0f32; MAX_NODE_INPUTS];
-                for inp in 0..input_count as usize {
-                    let edge = &template.edges[node_idx][inp];
+                let ic = input_count as usize;
+                for (val, edge) in input_vals[..ic]
+                    .iter_mut()
+                    .zip(template.edges[node_idx][..ic].iter())
+                {
                     if edge.is_connected() {
-                        input_vals[inp] = self.buffers[edge.src_node as usize][s];
+                        *val = self.buffers[edge.src_node as usize][s];
                     }
                 }
 
@@ -167,10 +177,8 @@ impl Graph {
     }
 
     pub fn reset(&mut self) {
-        for node in self.nodes.iter_mut() {
-            if let Some(ref mut n) = node {
-                n.reset();
-            }
+        for n in self.nodes.iter_mut().flatten() {
+            n.reset();
         }
     }
 }
@@ -183,6 +191,12 @@ pub struct GraphBuilder {
     input_counts: [u8; MAX_GRAPH_NODES],
     node_count: u8,
     output_node: Option<u8>,
+}
+
+impl Default for GraphBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GraphBuilder {
@@ -252,10 +266,10 @@ impl GraphBuilder {
 
         // Topological sort (Kahn's algorithm)
         let mut in_degree = [0u16; MAX_GRAPH_NODES];
-        for dst in 0..node_count as usize {
+        for (dst, degree) in in_degree[..node_count as usize].iter_mut().enumerate() {
             for inp in 0..self.input_counts[dst] as usize {
                 if self.edges[dst][inp].is_connected() {
-                    in_degree[dst] += 1;
+                    *degree += 1;
                 }
             }
         }
@@ -281,8 +295,8 @@ impl GraphBuilder {
         let mut q_head = 0usize;
         let mut q_tail = 0usize;
 
-        for i in 0..node_count as usize {
-            if in_degree[i] == 0 {
+        for (i, &degree) in in_degree[..node_count as usize].iter().enumerate() {
+            if degree == 0 {
                 queue[q_tail] = i as u8;
                 q_tail += 1;
             }
@@ -297,8 +311,8 @@ impl GraphBuilder {
             execution_order[exec_len as usize] = node;
             exec_len += 1;
 
-            for d in 0..dep_counts[node as usize] as usize {
-                let dep = dep_list[node as usize][d] as usize;
+            for &d in dep_list[node as usize][..dep_counts[node as usize] as usize].iter() {
+                let dep = d as usize;
                 in_degree[dep] -= 1;
                 if in_degree[dep] == 0 {
                     queue[q_tail] = dep as u8;

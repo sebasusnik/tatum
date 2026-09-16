@@ -34,6 +34,12 @@ pub struct ArpProcessor {
     active: bool,
 }
 
+impl Default for ArpProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ArpProcessor {
     pub fn new() -> Self {
         let samples_per_step = SAMPLE_RATE * 60.0 / 120.0 / 4.0;
@@ -90,12 +96,10 @@ impl ArpProcessor {
         let chord = harmony.chord_notes();
         let mut idx = 0;
         for octave in 0..self.octave_range {
-            for note_opt in &chord {
-                if let Some(note) = note_opt {
-                    if idx < 16 {
-                        self.arp_notes[idx] = note + octave * 12;
-                        idx += 1;
-                    }
+            for note in chord.iter().flatten() {
+                if idx < 16 {
+                    self.arp_notes[idx] = note + octave * 12;
+                    idx += 1;
                 }
             }
         }

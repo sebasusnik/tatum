@@ -47,7 +47,7 @@ fn param(m: &ModuleDef, name: &str) -> Option<f32> {
 fn has_intrinsic_modulation(m: &ModuleDef, track: &TrackDef) -> bool {
     param(m, "lfo_depth").unwrap_or(0.0) > 0.0
         || param(m, "vibrato_depth").unwrap_or(0.0) > 0.0
-        || track.arp.as_ref().map_or(false, |a| a.mode != "off")
+        || track.arp.as_ref().is_some_and(|a| a.mode != "off")
 }
 
 /// Scenes in which the track holds long notes with nothing moving the module.
@@ -57,7 +57,7 @@ fn static_scenes(song: &Song, m: &ModuleDef, track: &TrackDef) -> Vec<String> {
     for scene in &song.scenes {
         let Some(st) = scene.tracks.iter().find(|t| t.name == track.name) else { continue };
         if longest_hold(song, &st.play) < 8 { continue; }
-        let arped = st.arp.as_ref().map_or(false, |a| a.mode != "off");
+        let arped = st.arp.as_ref().is_some_and(|a| a.mode != "off");
         let automated = scene.automations.iter().any(|a| a.target.starts_with(&prefix) && !a.target.ends_with(".level"));
         if !arped && !automated {
             out.push(scene.name.clone());
@@ -151,7 +151,7 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
     }
 
     // ── no_limiter: master chain without a limiter ──
-    let has_limiter = song.master.as_ref().map_or(false, |m| m.chain.iter().any(|n| n.kind == "limiter"));
+    let has_limiter = song.master.as_ref().is_some_and(|m| m.chain.iter().any(|n| n.kind == "limiter"));
     if !has_limiter {
         out.push(lint(
             "no_limiter",
@@ -235,7 +235,7 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
         let tonal: Vec<&&TrackDef> = all_tracks.iter()
             .filter(|t| song.module_defs.iter().any(|m| m.name == t.using_instrument && m.module_type != "beats"))
             .collect();
-        let panned = tonal.iter().filter(|t| t.pan.map_or(false, |p| crate::math::abs(p) > 0.15)).count();
+        let panned = tonal.iter().filter(|t| t.pan.is_some_and(|p| crate::math::abs(p) > 0.15)).count();
         if tonal.len() >= 4 && panned * 3 < tonal.len() {
             out.push(lint(
                 "mono_mix",

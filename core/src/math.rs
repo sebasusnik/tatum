@@ -1,8 +1,8 @@
-pub const PI: f32 = 3.14159265358979323846;
-pub const TWO_PI: f32 = 6.28318530717958647692;
-pub const HALF_PI: f32 = 1.57079632679489661923;
-pub const LN2: f32 = 0.69314718055994530942;
-pub const INV_LN2: f32 = 1.44269504088896340736;
+pub const PI: f32 = core::f32::consts::PI;
+pub const TWO_PI: f32 = core::f32::consts::TAU;
+pub const HALF_PI: f32 = core::f32::consts::FRAC_PI_2;
+pub const LN2: f32 = core::f32::consts::LN_2;
+pub const INV_LN2: f32 = core::f32::consts::LOG2_E;
 
 #[inline]
 pub fn abs(x: f32) -> f32 {
@@ -38,7 +38,7 @@ const SIN_TABLE_SIZE: usize = 1024;
 
 const fn sin_for_table(phase: f64) -> f64 {
     // Reduce phase from [0, 2π) to [0, π/2] using symmetry
-    let pi = 3.14159265358979323846_f64;
+    let pi = core::f64::consts::PI;
     let half_pi = pi / 2.0;
 
     let mut x = phase;
@@ -68,7 +68,7 @@ const fn sin_for_table(phase: f64) -> f64 {
 }
 
 const fn generate_sin_table() -> [f32; SIN_TABLE_SIZE] {
-    let two_pi = 6.28318530717958647692_f64;
+    let two_pi = core::f64::consts::TAU;
     let mut table = [0.0_f32; SIN_TABLE_SIZE];
     let mut i = 0;
     while i < SIN_TABLE_SIZE {
@@ -129,7 +129,7 @@ pub fn exp(x: f32) -> f32 {
     let f = t - k;
 
     // 2^f polynomial for f in [0, 1)
-    let p = 1.0 + f * (0.6931472 + f * (0.2402265 + f * (0.0555041 + f * 0.0096139)));
+    let p = 1.0 + f * (core::f32::consts::LN_2 + f * (0.2402265 + f * (0.0555041 + f * 0.0096139)));
 
     // 2^k via bit manipulation
     let ki = k as i32;
@@ -205,13 +205,16 @@ pub fn pow(x: f32, y: f32) -> f32 {
 }
 
 // Semitone ratios for MIDI-to-frequency conversion (relative to C)
+// approx_constant: F# is 2^(6/12), and the table is that formula to six decimals
+// throughout; SQRT_2 is a different f32 and would detune one note out of twelve.
+#[allow(clippy::approx_constant)]
 const SEMITONE_RATIOS: [f32; 12] = [
     1.000000, // C
     1.059463, // C#
     1.122462, // D
     1.189207, // D#
     1.259921, // E
-    1.334840, // F
+    1.33484,  // F
     1.414214, // F#
     1.498307, // G
     1.587401, // G#

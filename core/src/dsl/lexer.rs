@@ -280,7 +280,7 @@ fn is_note_name(s: &str) -> bool {
 
     // First char must be A-G
     let first = chars[0].to_ascii_uppercase();
-    if first < 'A' || first > 'G' { return false; }
+    if !('A'..='G').contains(&first) { return false; }
 
     let mut i = 1;
     // Optional # or b

@@ -1,4 +1,5 @@
 extern crate alloc;
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use alloc::format;
@@ -131,7 +132,11 @@ pub struct CompiledMaster {
 
 /// A compiled instrument — either a graph template or a module preset.
 pub enum CompiledInstrumentKind {
-    Graph(GraphTemplate),
+    /// Boxed: the template is ~2 KB and every other variant is under 50, so
+    /// inline it made a Vec of mostly-module instruments carry the graph's
+    /// footprint each. Built on the control thread, so the allocation never
+    /// touches the audio path.
+    Graph(Box<GraphTemplate>),
     Bass(ModulePreset),
     Fm(FmPreset),
     Keys(ModulePreset),
@@ -212,7 +217,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     for inst_def in &song.instruments {
         match compile_instrument(inst_def, samples_per_bar) {
             Ok(template) => {
-                instruments.push(CompiledInstrumentKind::Graph(template));
+                instruments.push(CompiledInstrumentKind::Graph(Box::new(template)));
                 instrument_names.push(inst_def.name.clone());
             }
             Err(e) => errors.push(e),
@@ -1057,7 +1062,7 @@ fn compile_arp(track_name: &str, def: &ArpDef) -> Result<Option<ArpConfig>, Comp
         )));
     }
     let octaves = def.octaves.unwrap_or(1.0);
-    if octaves < 1.0 || octaves > 4.0 || octaves != math::floor(octaves) {
+    if !(1.0..=4.0).contains(&octaves) || octaves != math::floor(octaves) {
         return Err(CompileError::new(format!(
             "track '{}': arp octaves {} — expected 1, 2, 3 or 4", track_name, octaves
         )));
@@ -1111,25 +1116,21 @@ fn compile_scene(
                 scene.name, track_def.name
             )));
         }
-        match compile_track(track_def, inst_names, patterns, buses, defaults, samples_per_bar) {
-            Ok(t) => {
-                // A scene track's own `out > ...` parses and compiles and is
-                // then never applied: insert chains are built once per track
-                // and the engine does not rebuild them on a scene change.
-                // Restating the same chain is harmless; changing it is not, and
-                // it used to change nothing in silence.
-                if let Some(d) = defaults {
-                    if !track_def.routing.is_empty() && t.insert_fx != d.insert_fx {
-                        return Err(CompileError::new(format!(
-                            "scene '{}': track '{}' cannot change its `out > ...` chain. Insert chains are fixed per track for the whole song; move the chain to the top-level `track {}` block, or add a second track with the other chain and swap which one plays.",
-                            scene.name, track_def.name, track_def.name
-                        )));
-                    }
-                }
-                tracks.push(t)
+        let t = compile_track(track_def, inst_names, patterns, buses, defaults, samples_per_bar)?;
+        // A scene track's own `out > ...` parses and compiles and is
+        // then never applied: insert chains are built once per track
+        // and the engine does not rebuild them on a scene change.
+        // Restating the same chain is harmless; changing it is not, and
+        // it used to change nothing in silence.
+        if let Some(d) = defaults {
+            if !track_def.routing.is_empty() && t.insert_fx != d.insert_fx {
+                return Err(CompileError::new(format!(
+                    "scene '{}': track '{}' cannot change its `out > ...` chain. Insert chains are fixed per track for the whole song; move the chain to the top-level `track {}` block, or add a second track with the other chain and swap which one plays.",
+                    scene.name, track_def.name, track_def.name
+                )));
             }
-            Err(e) => return Err(e),
         }
+        tracks.push(t);
     }
 
     // Extract effect overrides from scene overrides
@@ -1285,23 +1286,19 @@ fn compile_module_def(mod_def: &ModuleDef) -> Result<CompiledInstrumentKind, Vec
 
     Ok(match kind {
         ModuleKind::Bass => {
-            let mut preset = ModulePreset::default();
-            preset.params = valid;
+            let preset = ModulePreset { params: valid };
             CompiledInstrumentKind::Bass(preset)
         }
         ModuleKind::Keys => {
-            let mut preset = ModulePreset::default();
-            preset.params = valid;
+            let preset = ModulePreset { params: valid };
             CompiledInstrumentKind::Keys(preset)
         }
         ModuleKind::Beats => {
-            let mut preset = ModulePreset::default();
-            preset.params = valid;
+            let preset = ModulePreset { params: valid };
             CompiledInstrumentKind::Beats(preset)
         }
         ModuleKind::Fm => {
-            let mut preset = FmPreset::default();
-            preset.params = valid;
+            let mut preset = FmPreset { params: valid, ..Default::default() };
             for env in &mod_def.op_envelopes {
                 preset.op_envelopes.push((env.op_index, (env.a, env.d, env.s, env.r)));
             }
@@ -1367,7 +1364,7 @@ fn validate_automations(song: &Song) -> Vec<CompileError> {
                         "scene '{}': automation — master has no parameter '{}' (expected {})",
                         scene.name, param, MASTER_AUTO_PARAMS.join(", ")
                     )));
-                } else if !song.master.as_ref().map_or(false, |m| m.chain.iter().any(|n| needed.contains(&n.kind.as_str()))) {
+                } else if !song.master.as_ref().is_some_and(|m| m.chain.iter().any(|n| needed.contains(&n.kind.as_str()))) {
                     errors.push(CompileError::new(format!(
                         "scene '{}': automation — `auto master {}` needs a {} node in the master chain",
                         scene.name, param, needed.join(" or ")

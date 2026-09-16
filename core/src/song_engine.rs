@@ -19,7 +19,20 @@ use crate::primitives::arp_processor::{ArpProcessor, ArpEvent};
 use crate::rng::Rng;
 use crate::{math, Module, BLOCK_SIZE, SAMPLE_RATE};
 
+/// What the current step is played with. Copied out of the engine so the track,
+/// instrument and rng borrows can all stay live across the call.
+#[derive(Clone, Copy)]
+struct StepTiming {
+    humanize_velocity: f32,
+    samples_per_step: f32,
+    step_duration: f32,
+}
+
 /// Wraps both graph-based instruments and real module instruments.
+// large_enum_variant: boxing would put a pointer chase in front of every
+// instrument on every sample, the engine's hottest loop, to save memory the
+// engine has already reserved off-thread.
+#[allow(clippy::large_enum_variant)]
 enum SongInstrument {
     Graph(Instrument),
     Bass(BassModule),
@@ -568,7 +581,7 @@ impl SongEngine {
             .map(|kind| {
                 match kind {
                     CompiledInstrumentKind::Graph(template) => {
-                        SongInstrument::Graph(Instrument::new(template))
+                        SongInstrument::Graph(Instrument::new(*template))
                     }
                     CompiledInstrumentKind::Bass(preset) => {
                         let mut m = BassModule::new();
@@ -688,10 +701,10 @@ impl SongEngine {
                 let name = &instrument_names[t.instrument_idx];
                 if name.contains("kick") { return true; }
                 // BeatsModule tracks contain kick internally
-                if t.instrument_idx < instruments.len() {
-                    if matches!(instruments[t.instrument_idx], SongInstrument::Beats(_)) {
-                        return true;
-                    }
+                if t.instrument_idx < instruments.len()
+                    && matches!(instruments[t.instrument_idx], SongInstrument::Beats(_))
+                {
+                    return true;
                 }
             }
             false
@@ -1144,7 +1157,7 @@ impl SongEngine {
         }
         // Swing: alternate long/short pairs (like classic drum machines)
         let pair_duration = self.samples_per_step * 2.0;
-        if step_index % 2 == 0 {
+        if step_index.is_multiple_of(2) {
             pair_duration * self.swing
         } else {
             pair_duration * (1.0 - self.swing)
@@ -1153,7 +1166,7 @@ impl SongEngine {
 
     /// Release all active notes on a track.
     #[inline]
-    fn release_track_notes(track: &mut TrackPlayback, instruments: &mut Vec<SongInstrument>) {
+    fn release_track_notes(track: &mut TrackPlayback, instruments: &mut [SongInstrument]) {
         if let Some(arp) = track.arp.as_mut() {
             if let Some(ArpEvent::NoteOff(n)) = arp.stop() {
                 if track.instrument_idx < instruments.len() {
@@ -1310,14 +1323,14 @@ impl SongEngine {
             for s in 0..len {
                 // Each source keeps its own envelope, so `sidechain from=bass`
                 // breathes with the bass while the drums still duck the pads.
-                for si in 0..track_count {
+                for (si, buf_l) in track_bufs_l[..track_count].iter().enumerate() {
                     if !self.tracks[si].is_sc_source || !self.tracks[si].active { continue; }
                     // A Beats track uses its kick envelope rather than the raw
                     // signal, so hats and snares do not duck the mix.
                     let level = if let SongInstrument::Beats(ref m) = self.instruments[self.tracks[si].instrument_idx] {
                         if s < m.kick_env.len() { m.kick_env[s] } else { 0.0 }
                     } else {
-                        math::abs(track_bufs_l[si][s])
+                        math::abs(buf_l[s])
                     };
                     let env = self.tracks[si].sc_env;
                     self.tracks[si].sc_env = if level > env {
@@ -1559,8 +1572,7 @@ impl SongEngine {
         // changes killed the note the last step had just started, every
         // arranged render stopped a sixteenth short, and a hot-swap keyed on
         // the bar counter landed a sixteenth before the downbeat.
-        if self.steps_per_bar > 0 {
-            let bar_of_step = self.global_step / self.steps_per_bar;
+        if let Some(bar_of_step) = self.global_step.checked_div(self.steps_per_bar) {
             if bar_of_step > self.current_bar {
                 self.current_bar = bar_of_step;
                 self.check_arrangement_advance();
@@ -1643,12 +1655,14 @@ impl SongEngine {
             if self.tracks[ti].arp.is_some() && !matches!(step, CompiledStep::Tie) {
                 let next_step_idx = (step_idx + 1) % pattern.steps.len();
                 let next_is_tie = matches!(pattern.steps[next_step_idx], CompiledStep::Tie);
-                let humanize = self.humanize_velocity;
-                let step_dur = self.current_step_duration;
-                let sps = self.samples_per_step;
+                let timing = StepTiming {
+                    humanize_velocity: self.humanize_velocity,
+                    samples_per_step: self.samples_per_step,
+                    step_duration: self.current_step_duration,
+                };
                 Self::advance_arp_track(
                     &mut self.tracks[ti], &mut self.instruments, &mut self.rng,
-                    humanize, sps, step_dur, step, next_is_tie,
+                    timing, step, next_is_tie,
                 );
                 self.tracks[ti].current_step += 1;
                 continue;
@@ -1770,11 +1784,11 @@ impl SongEngine {
                                 let inst_idx = self.tracks[ti].instrument_idx;
                                 if inst_idx < self.instruments.len() {
                                     self.instruments[inst_idx].stage_plock(plock.cutoff, plock.env_depth, plock.resonance);
-                                    for ni in 0..c {
-                                        let raw_vel = notes[ni].velocity * self.tracks[ti].velocity;
+                                    for (ni, n) in notes[..c].iter().enumerate() {
+                                        let raw_vel = n.velocity * self.tracks[ti].velocity;
                                         let vel = Self::humanize_vel(raw_vel, self.humanize_velocity, &mut self.rng);
-                                        self.instruments[inst_idx].note_on(notes[ni].midi_note, vel);
-                                        self.tracks[ti].current_notes[ni] = notes[ni].midi_note;
+                                        self.instruments[inst_idx].note_on(n.midi_note, vel);
+                                        self.tracks[ti].current_notes[ni] = n.midi_note;
                                     }
                                     self.tracks[ti].current_notes_count = count;
                                 }
@@ -1830,11 +1844,9 @@ impl SongEngine {
     /// and set the track gate that will eventually stop it.
     fn advance_arp_track(
         track: &mut TrackPlayback,
-        instruments: &mut Vec<SongInstrument>,
+        instruments: &mut [SongInstrument],
         rng: &mut Rng,
-        humanize_velocity: f32,
-        samples_per_step: f32,
-        step_duration: f32,
+        timing: StepTiming,
         step: CompiledStep,
         next_is_tie: bool,
     ) {
@@ -1871,12 +1883,10 @@ impl SongEngine {
 
         let same = count == track.current_notes_count as usize
             && (0..count).all(|i| track.current_notes[i] == notes[i]);
-        for i in 0..count {
-            track.current_notes[i] = notes[i];
-        }
+        track.current_notes[..count].copy_from_slice(&notes[..count]);
         track.current_notes_count = count as u8;
 
-        let vel = Self::humanize_vel(step_vel * track.velocity, humanize_velocity, rng);
+        let vel = Self::humanize_vel(step_vel * track.velocity, timing.humanize_velocity, rng);
 
         // Sorted ascending and expanded across octaves so "up" really goes up.
         // Fixed buffers: this runs on the audio thread, once per step.
@@ -1916,15 +1926,15 @@ impl SongEngine {
         }
 
         track.gate_samples_remaining = if next_is_tie {
-            samples_per_step * 2.0
+            timing.samples_per_step * 2.0
         } else {
-            step_duration * step_gate.unwrap_or(track.gate)
+            timing.step_duration * step_gate.unwrap_or(track.gate)
         };
     }
 
     /// True while a track's arpeggiator is running (for UI activity LEDs).
     pub fn track_arp_active(&self, idx: usize) -> bool {
-        self.tracks.get(idx).and_then(|t| t.arp.as_ref()).map_or(false, |a| a.is_active())
+        self.tracks.get(idx).and_then(|t| t.arp.as_ref()).is_some_and(|a| a.is_active())
     }
 
     fn check_arrangement_advance(&mut self) {
@@ -2240,7 +2250,7 @@ impl SongEngine {
         }
         let mut total = self.samples_until_step();
         let mut step = self.global_step;
-        while step % self.steps_per_bar != 0 {
+        while !step.is_multiple_of(self.steps_per_bar) {
             step += 1;
             total += self.effective_step_samples(step);
         }
@@ -2250,7 +2260,7 @@ impl SongEngine {
     /// Bar the next step to fire belongs to. On a bar line this is the bar
     /// about to start, while `current_bar` still reads the one that ended.
     pub fn bar_of_next_step(&self) -> usize {
-        if self.steps_per_bar == 0 { 0 } else { self.global_step / self.steps_per_bar }
+        self.global_step.checked_div(self.steps_per_bar).unwrap_or(0)
     }
 
     /// Position the engine as if it had just played through bar `bar - 1`
@@ -2298,7 +2308,7 @@ impl SongEngine {
         // instruments, before an instrument moves over with a note that no
         // track in the new engine would ever release.
         for j in 0..old.tracks.len() {
-            let continued = map.tracks.iter().any(|m| *m == Some(j));
+            let continued = map.tracks.contains(&Some(j));
             if !continued {
                 Self::release_track_notes(&mut old.tracks[j], &mut old.instruments);
                 old.tracks[j].gate_samples_remaining = 0.0;

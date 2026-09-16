@@ -1,0 +1,114 @@
+# What a pull request has to pass. Each step is a guarantee the repo already
+# relies on; the comments say which.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  # The workspace builds with zero warnings; keep it there.
+  RUSTFLAGS: -D warnings
+
+jobs:
+  test:
+    name: build, test, corpus, docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # cpal (synth play / watch) links against ALSA on Linux.
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
+      - name: No audio files in the repo
+        # Renders are build artifacts; 145 MB of them once rode into a PR.
+        run: |
+          if git ls-files '*.wav' | grep .; then
+            echo "::error::WAV files are build artifacts and must not be tracked"
+            exit 1
+          fi
+
+      - name: Build
+        run: cargo build --workspace --locked
+
+      - name: Test
+        # The suite includes the bar-timing, live-session and no-allocation
+        # tests; the counting allocator only proves anything when it runs.
+        run: cargo test --workspace --locked
+
+      - name: Every song in the corpus compiles
+        # Examples and dogfood are the spec by example: a DSL change that
+        # breaks one of them is a breaking change.
+        run: |
+          fails=0
+          for f in examples/*.synth dogfood/*.synth; do
+            if ! ./target/debug/synth check "$f" >/dev/null 2>&1; then
+              echo "::error file=$f::does not compile"
+              ./target/debug/synth check "$f" 2>&1 | head -20
+              fails=$((fails + 1))
+            fi
+          done
+          echo "$fails failures"
+          test "$fails" -eq 0
+
+      - name: docs/PARAMS.md is what `synth params` prints
+        # The reference is generated; a stale copy documents parameters that
+        # do not exist (it missed a range change for two weeks).
+        run: ./target/debug/synth params | diff - docs/PARAMS.md
+
+  wasm:
+    name: wasm32 build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      # The browser runs the same core; `no_std` is only proven by this target.
+      - run: cargo build -p synth-wasm --target wasm32-unknown-unknown --locked
+
+  web:
+    name: web build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      # `npm run build` runs wasm-pack, then tsc, then vite: the worklet's
+      # calls into the exported API are type-checked here.
+      - run: npm ci
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      # The workspace is at zero warnings. This step is what keeps it there;
+      # it used to count them into the run summary and pass regardless. The
+      # four allows left in the tree each say in a comment why the lint's
+      # suggestion is worse than the code.
+      - run: cargo clippy --workspace --locked -- -D warnings

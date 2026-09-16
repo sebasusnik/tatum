@@ -161,6 +161,12 @@ pub struct KeysModule {
     vibrato_onset: f32,
 }
 
+impl Default for KeysModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KeysModule {
     pub fn new() -> Self {
         Self {
@@ -193,10 +199,8 @@ impl KeysModule {
             }
             // Trigger chord notes
             let chord = harmony.chord_notes();
-            for note_opt in &chord {
-                if let Some(note) = note_opt {
-                    self.note_on(*note, 0.7);
-                }
+            for note in chord.iter().flatten() {
+                self.note_on(*note, 0.7);
             }
         }
     }
@@ -242,14 +246,7 @@ impl KeysModule {
             if found >= count {
                 break;
             }
-            let mut already_picked = false;
-            for k in 0..found {
-                if result[k] == idx {
-                    already_picked = true;
-                    break;
-                }
-            }
-            if !already_picked {
+            if !result[..found].contains(&idx) {
                 result[found] = idx;
                 found += 1;
             }
@@ -397,7 +394,6 @@ impl KeysModule {
 impl KeysModule {
     /// Process a stereo block with internal per-voice panning.
     pub fn process_block_stereo(&mut self, output_l: &mut [f32], output_r: &mut [f32]) {
-        let mut sample_counter = 0u32;
         let is_unison = self.voice_mode == VoiceMode::Unison;
 
         for i in 0..output_l.len() {
@@ -405,14 +401,15 @@ impl KeysModule {
             let mut amp_mod = 1.0;
 
             // Cutoff modulation: apply every 4 samples to reduce overhead
-            if self.lfo_router.target == LfoTarget::Cutoff && self.lfo_router.enabled {
-                if sample_counter % 4 == 0 {
-                    // Relative (octaves), like the bass: see LFO_CUTOFF_OCTAVES.
-                    let mod_cutoff = self.cutoff_base
-                        * crate::math::pow2(lfo_val * crate::modules::bass::LFO_CUTOFF_OCTAVES);
-                    for voice in &mut self.voices {
-                        voice.filter.set_cutoff(mod_cutoff);
-                    }
+            if self.lfo_router.target == LfoTarget::Cutoff
+                && self.lfo_router.enabled
+                && i.is_multiple_of(4)
+            {
+                // Relative (octaves), like the bass: see LFO_CUTOFF_OCTAVES.
+                let mod_cutoff = self.cutoff_base
+                    * crate::math::pow2(lfo_val * crate::modules::bass::LFO_CUTOFF_OCTAVES);
+                for voice in &mut self.voices {
+                    voice.filter.set_cutoff(mod_cutoff);
                 }
             }
 
@@ -486,8 +483,6 @@ impl KeysModule {
                 output_l[i] = chorused;
                 output_r[i] = chorused;
             }
-
-            sample_counter += 1;
         }
     }
 }
@@ -522,10 +517,10 @@ impl Module for KeysModule {
                 }
                 // Trigger all 8 voices with spread
                 let cents: [f32; 8] = [-12.0, -8.0, -5.0, -2.0, 2.0, 5.0, 8.0, 12.0];
-                for i in 0..MAX_VOICES {
+                for (i, &cent) in cents.iter().enumerate() {
                     self.voice_counter += 1;
                     self.voices[i].age = self.voice_counter;
-                    let freq_mult = math::pow2(cents[i] / 1200.0);
+                    let freq_mult = math::pow2(cent / 1200.0);
                     let pan = -1.0 + 2.0 * (i as f32) / 7.0;
                     self.voices[i].note_on(note, velocity, note, freq_mult, pan, false);
                 }

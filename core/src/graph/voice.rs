@@ -15,6 +15,12 @@ pub struct Voice {
     pub age: u32,
 }
 
+impl Default for Voice {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Voice {
     pub fn new() -> Self {
         Self {
@@ -229,10 +235,13 @@ impl Instrument {
                     let input_count = template.input_counts[node_idx];
 
                     let mut input_vals = [0.0f32; MAX_NODE_INPUTS];
-                    for inp in 0..input_count as usize {
-                        let edge = &template.edges[node_idx][inp];
+                    let ic = input_count as usize;
+                    for (val, edge) in input_vals[..ic]
+                        .iter_mut()
+                        .zip(template.edges[node_idx][..ic].iter())
+                    {
                         if edge.is_connected() {
-                            input_vals[inp] = self.node_bufs[edge.src_node as usize][s];
+                            *val = self.node_bufs[edge.src_node as usize][s];
                         }
                     }
 
@@ -245,8 +254,8 @@ impl Instrument {
             // Mix output into buffer
             let out_idx = template.output_node as usize;
             let vel = voice.velocity * template.output_gain;
-            for s in 0..len {
-                output[s] += self.node_bufs[out_idx][s] * vel;
+            for (o, &b) in output[..len].iter_mut().zip(self.node_bufs[out_idx][..len].iter()) {
+                *o += b * vel;
             }
 
             voice.age += 1;

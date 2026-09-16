@@ -102,8 +102,7 @@ impl FmVoice {
                 let op4 = self.ops[3].next_sample(0.0);
                 let op3 = self.ops[2].next_sample(op4 * mi * math::TWO_PI);
                 let op2 = self.ops[1].next_sample(op3 * mi * math::TWO_PI);
-                let op1 = self.ops[0].next_sample(op2 * mi * math::TWO_PI);
-                op1
+                self.ops[0].next_sample(op2 * mi * math::TWO_PI)
             }
             // Algorithm 5: (Op3 + Op4) -> Op2 -> Op1 -> Out
             // Dual modulators, complex textures
@@ -112,8 +111,7 @@ impl FmVoice {
                 let op4 = self.ops[3].next_sample(0.0);
                 let mod_sum = (op3 + op4) * mi * math::TWO_PI;
                 let op2 = self.ops[1].next_sample(mod_sum);
-                let op1 = self.ops[0].next_sample(op2 * mi * math::TWO_PI);
-                op1
+                self.ops[0].next_sample(op2 * mi * math::TWO_PI)
             }
             // Algorithm 6: (Op2 + Op3 + Op4) -> Op1 -> Out
             // Three modulators, one carrier — rich harmonics
@@ -122,8 +120,7 @@ impl FmVoice {
                 let op3 = self.ops[2].next_sample(0.0);
                 let op4 = self.ops[3].next_sample(0.0);
                 let mod_sum = (op2 + op3 + op4) * mi * math::TWO_PI;
-                let op1 = self.ops[0].next_sample(mod_sum);
-                op1
+                self.ops[0].next_sample(mod_sum)
             }
             // Algorithm 7: (Op2 -> Op1) -> Out + Op3 -> Out + Op4 -> Out
             // One stack + two carriers — DX7-like layered
@@ -202,6 +199,12 @@ pub struct FmModule {
     vibrato_depth: f32,
     vibrato_delay: f32,
     vibrato_onset: f32,
+}
+
+impl Default for FmModule {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FmModule {

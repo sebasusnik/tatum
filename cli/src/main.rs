@@ -220,8 +220,8 @@ fn cmd_render(args: &[String]) {
     let loudest_peak = (0..engine.track_count()).fold(0.0f32, |a, i| a.max(engine.track_peak(i)));
     if engine.track_count() > 0 && loudest > 0.0 {
         eprintln!("mix (post level/pan, pre master):");
-        eprintln!("  {:<12} {:>6} {:>8} {:>8} {:>8} {:>6}  {}",
-            "track", "peak", "rms", "rms dB", "peak dB", "crest", "band");
+        eprintln!("  {:<12} {:>6} {:>8} {:>8} {:>8} {:>6}  band",
+            "track", "peak", "rms", "rms dB", "peak dB", "crest");
         for i in 0..engine.track_count() {
             let rms = engine.track_rms(i);
             let peak = engine.track_peak(i);

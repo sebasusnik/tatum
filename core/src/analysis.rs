@@ -48,14 +48,14 @@ impl BandMeter {
     /// Feed one mono sample.
     pub fn push(&mut self, x: f32) {
         let mut below = [0.0f32; 4];
-        for edge in 0..4 {
+        for (edge, b) in below.iter_mut().enumerate() {
             let c = self.coeffs[edge];
             let mut v = x;
             for s in self.states[edge].iter_mut() {
                 *s = v * (1.0 - c) + *s * c;
                 v = *s;
             }
-            below[edge] = v;
+            *b = v;
         }
         let bands = [
             below[0],

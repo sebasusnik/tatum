@@ -1616,16 +1616,6 @@ fn zero_crossings(buf: &[f32]) -> u32 {
 
 #[test]
 fn test_vibrato_delayed_onset() {
-    fn zero_crossings(buf: &[f32]) -> u32 {
-        let mut count = 0u32;
-        for i in 1..buf.len() {
-            if (buf[i] > 0.0) != (buf[i - 1] > 0.0) {
-                count += 1;
-            }
-        }
-        count
-    }
-
     let mut bass = BassModule::new();
     bass.set_param(BassParam::Cutoff, 0.8);
     bass.set_param(BassParam::CutoffEnv, 0.0);
