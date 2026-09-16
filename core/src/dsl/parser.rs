@@ -174,6 +174,10 @@ impl Parser {
                 Token::Arrange => { self.advance(); self.parse_arrange(&mut song.arrangement); }
                 Token::Scene => { self.advance(); self.parse_scene(&mut song.scenes); }
                 // A bare identifier followed by { could be a bus chain or groove block
+                Token::Ident(ref name) if name == "gain_comp" => {
+                    self.advance();
+                    song.globals.gain_comp = self.expect_number().map(|v| v.clamp(0.0, 1.0));
+                }
                 Token::Ident(ref name) if name == "groove" => {
                     self.advance();
                     self.parse_groove(&mut song.grooves);
@@ -726,7 +730,7 @@ impl Parser {
                     };
                     current_row.push(Step::Chord(ChordStep { notes, velocity, plock }));
                 }
-                Token::Note(ref n) if note_is_chord_symbol(n) => {
+                Token::Note(ref n) if note_is_chord_symbol(n) || (self.peek_is_slash_next() && crate::dsl::chords::parse(n).is_some()) => {
                     let n = n.clone();
                     self.advance();
                     if let Some(step) = self.chord_symbol_step(&n) {
@@ -855,6 +859,11 @@ impl Parser {
 
         self.expect(&Token::RBrace);
         patterns.push(PatternDef { name, rows, lane_labels });
+    }
+
+    /// Is the token after the current one a `/`? (`E5/3` is a power chord, `E5` a note.)
+    fn peek_is_slash_next(&self) -> bool {
+        self.tokens.get(self.pos + 1).map_or(false, |s| matches!(s.token, Token::Slash))
     }
 
     /// After a chord symbol: optional `/octave`, `:velocity`, `(plocks)`.
@@ -1075,18 +1084,42 @@ impl Parser {
         Some(def)
     }
 
+    /// The next token, looking past newlines (without consuming them).
+    fn peek_past_newlines(&self) -> &Token {
+        let mut i = self.pos;
+        while i < self.tokens.len() && matches!(self.tokens[i].token, Token::Newline) {
+            i += 1;
+        }
+        &self.tokens[i.min(self.tokens.len() - 1)].token
+    }
+
     fn parse_routing_chain(&mut self, routing: &mut Vec<RoutingNode>) {
         // Consume "out"
         self.advance();
 
         loop {
+            // A chain may wrap: `out > a(..)\n    > b(..) > master`. Only swallow
+            // the newlines when a `>` really follows, so a chain that simply ends
+            // still hands the newline back to the track body.
+            if matches!(self.peek(), Token::Newline) && matches!(self.peek_past_newlines(), Token::Arrow) {
+                self.skip_newlines();
+            }
             if !matches!(self.peek(), Token::Arrow) { break; }
             self.advance(); // >
+            self.skip_newlines(); // `>` at end of line, node on the next
 
             let kind = match self.peek().clone() {
                 Token::Ident(ref name) => { let n = name.clone(); self.advance(); n }
                 Token::Master => { self.advance(); String::from("master") }
-                _ => break,
+                other => {
+                    let s = self.span();
+                    let (l, c) = (s.line, s.col);
+                    self.errors.push(ParseError {
+                        line: l, col: c,
+                        message: format!("routing: expected an effect or destination after '>', got {}", describe_token(&other)),
+                    });
+                    break;
+                }
             };
 
             let mut params = Vec::new();
@@ -1172,6 +1205,7 @@ impl Parser {
         loop {
             let key = match self.peek().clone() {
                 Token::Ident(ref k) => k.clone(),
+                Token::Sidechain => String::from("sidechain"),
                 _ => break,
             };
             let s = self.span();
@@ -1195,11 +1229,13 @@ impl Parser {
                 ("delay", "time") => globals.send_delay.time = num_value,
                 ("delay", "feedback") => globals.send_delay.feedback = num_value,
                 ("delay", "filter") => globals.send_delay.filter = num_value,
+                ("delay", "sidechain") => globals.send_delay.sidechain = num_value,
+                ("reverb", "sidechain") => globals.send_reverb.sidechain = num_value,
                 ("reverb", "size") => globals.send_reverb.size = num_value,
                 ("reverb", "damp") => globals.send_reverb.damp = num_value,
                 ("reverb", "predelay") => globals.send_reverb.predelay = num_value,
                 _ => bad = Some(format!(
-                    "{}: unknown option '{}' (delay: sync, time, feedback, filter; reverb: size, damp, predelay)",
+                    "{}: unknown option '{}' (delay: sync, time, feedback, filter, sidechain; reverb: size, damp, predelay, sidechain)",
                     which, key
                 )),
             }
@@ -1399,7 +1435,19 @@ impl Parser {
             self.skip_newlines();
             if self.at_block_end() { break; }
 
-            if let Token::Ident(ref key) = self.peek().clone() {
+            // Some parameter names are also keywords elsewhere in the language
+            // (`level`, `pan`, `velocity`, `mix`, `sidechain`, `swing`). Treat
+            // them as plain names inside a module block.
+            let keyword_param = match self.peek() {
+                Token::Level => Some("level"),
+                Token::Pan => Some("pan"),
+                Token::Velocity => Some("velocity"),
+                Token::Mix => Some("mix"),
+                Token::Sidechain => Some("sidechain"),
+                Token::Swing => Some("swing"),
+                _ => None,
+            };
+            if let Some(ref key) = self.peek().clone().into_ident_or(keyword_param) {
                 let key = key.clone();
                 let line = self.span().line;
                 self.advance();
@@ -1463,7 +1511,13 @@ impl Parser {
                     params.push(ModuleParam { name: key, value: val, line });
                 }
             } else {
-                self.advance();
+                let sp = self.span();
+                let (l, c) = (sp.line, sp.col);
+                self.errors.push(ParseError {
+                    line: l, col: c,
+                    message: format!("module '{}': unexpected {} (expected `name value`)", name, describe_token(self.peek())),
+                });
+                self.recover_to_line_end();
             }
         }
 
@@ -1611,6 +1665,17 @@ fn is_dsp_keyword(word: &str) -> bool {
         "compressor" | "limiter" |
         "tilt" | "eq"
     )
+}
+
+impl Token {
+    /// The token as a parameter name: identifiers as themselves, and the
+    /// listed keywords as their word.
+    fn into_ident_or(self, keyword: Option<&str>) -> Option<String> {
+        match self {
+            Token::Ident(s) => Some(s),
+            _ => keyword.map(String::from),
+        }
+    }
 }
 
 /// Human-readable token for error messages.

@@ -108,6 +108,8 @@ pub struct CompiledScene {
     pub tracks: Vec<CompiledTrack>,
     pub reverb_mix: Option<f32>,
     pub delay_mix: Option<f32>,
+    /// `reverb_freeze = 1` holds the global reverb tail for the scene.
+    pub reverb_freeze: Option<bool>,
     pub automations: Vec<CompiledAutomation>,
 }
 
@@ -182,6 +184,9 @@ pub struct CompiledSong {
     pub scenes: Vec<CompiledScene>,
     pub arrangement: Vec<(usize, u32)>, // (scene_idx, repeat_count)
     pub grooves: Vec<CompiledGroove>,
+    /// Insert chains on the global send returns: `reverb_return { in > ... > out }`.
+    pub reverb_return: Vec<NodeSpec>,
+    pub delay_return: Vec<NodeSpec>,
 }
 
 // ── Compiler ──
@@ -243,6 +248,26 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
             None => Vec::new(),
         };
         buses.push(CompiledBus { name: bus_def.name.clone(), fx_chain: chain });
+    }
+
+    // 3b. Return chains on the global sends, and chains that belong to nothing
+    let mut reverb_return = Vec::new();
+    let mut delay_return = Vec::new();
+    for bc in &song.bus_chains {
+        match bc.bus_name.as_str() {
+            "reverb_return" => match compile_fx_chain("reverb_return", &bc.chain) {
+                Ok(c) => reverb_return = c,
+                Err(e) => errors.push(e),
+            },
+            "delay_return" => match compile_fx_chain("delay_return", &bc.chain) {
+                Ok(c) => delay_return = c,
+                Err(e) => errors.push(e),
+            },
+            name if !song.buses.iter().any(|b| b.name == name) => errors.push(CompileError::new(format!(
+                "chain '{}' has no `bus {}` declaration (or use reverb_return / delay_return for the global sends)", name, name
+            ))),
+            _ => {}
+        }
     }
 
     // 4. Compile tracks
@@ -326,6 +351,8 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
         scenes,
         arrangement,
         grooves,
+        reverb_return,
+        delay_return,
     })
 }
 
@@ -1024,12 +1051,14 @@ fn compile_scene(
     // Extract effect overrides from scene overrides
     let mut reverb_mix = None;
     let mut delay_mix = None;
+    let mut reverb_freeze = None;
     for ovr in &scene.overrides {
         match ovr.target.as_str() {
             "reverb_mix" => reverb_mix = Some(ovr.value),
             "delay_mix" => delay_mix = Some(ovr.value),
+            "reverb_freeze" => reverb_freeze = Some(ovr.value >= 0.5),
             other => return Err(CompileError::new(format!(
-                "scene '{}': unknown override '{}' (expected reverb_mix or delay_mix)", scene.name, other
+                "scene '{}': unknown override '{}' (expected reverb_mix, delay_mix or reverb_freeze)", scene.name, other
             ))),
         }
     }
@@ -1048,6 +1077,7 @@ fn compile_scene(
         tracks,
         reverb_mix,
         delay_mix,
+        reverb_freeze,
         automations,
     })
 }
@@ -1233,7 +1263,7 @@ fn validate_automations(song: &Song) -> Vec<CompileError> {
     for scene in &song.scenes {
         for auto in &scene.automations {
             let target = auto.target.as_str();
-            if target == "reverb_mix" || target == "delay_mix" {
+            if target == "reverb_mix" || target == "delay_mix" || target == "reverb_freeze" {
                 continue;
             }
             let (name, param) = match target.find('.') {

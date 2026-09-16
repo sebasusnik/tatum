@@ -260,6 +260,8 @@ pub struct Reverb {
     room_size: f32,
     damping: f32,
     mix: f32,
+    /// Freeverb-style freeze: the tank recirculates forever and ignores new input.
+    frozen: bool,
 }
 
 impl Reverb {
@@ -287,6 +289,7 @@ impl Reverb {
             room_size: 0.6,
             damping: 0.5,
             mix: 0.2,
+            frozen: false,
         };
         rev.update_params();
         rev
@@ -310,9 +313,24 @@ impl Reverb {
         self.pre_delay.set_delay_ms(ms);
     }
 
+    /// Hold the current tail indefinitely (no decay, no new input).
+    pub fn set_freeze(&mut self, frozen: bool) {
+        if self.frozen != frozen {
+            self.frozen = frozen;
+            self.update_params();
+        }
+    }
+
+    pub fn is_frozen(&self) -> bool { self.frozen }
+
     fn update_params(&mut self) {
-        let feedback = self.room_size * 0.28 + 0.7;
-        let damp = self.damping * 0.4 + 0.1;
+        // size 0..1 → feedback 0.7..0.985. At 0.985 the tail is ~15 s; beyond
+        // that the combs ring and pile up into a roar under sustained input.
+        let (feedback, damp) = if self.frozen {
+            (1.0, 0.0)
+        } else {
+            (self.room_size * 0.285 + 0.7, self.damping * 0.4 + 0.1)
+        };
         for comb in &mut self.combs_l {
             comb.set_feedback(feedback);
             comb.set_damp(damp);
@@ -357,7 +375,7 @@ impl Reverb {
 
     /// Core stereo processing: advances state and returns raw reverb wet signal.
     fn process_stereo_in_core(&mut self, input_l: f32, input_r: f32) -> (f32, f32) {
-        let mono = (input_l + input_r) * 0.5;
+        let mono = if self.frozen { 0.0 } else { (input_l + input_r) * 0.5 };
         let pd = self.pre_delay.process(mono);
 
         // Early reflections (mono)
@@ -503,7 +521,8 @@ impl StaticAllpass {
 
     fn process(&mut self, input: f32) -> f32 {
         let buffered = self.buffer[self.pos];
-        let output = buffered - input * self.gain;
+        // Schroeder allpass: v = x + g*v_d ; y = -g*v + v_d = v_d*(1 - g²) - g*x
+        let output = buffered * (1.0 - self.gain * self.gain) - input * self.gain;
         self.buffer[self.pos] = input + buffered * self.gain;
         self.pos += 1;
         if self.pos >= self.buffer.len() {
@@ -564,7 +583,7 @@ impl ModAllpass {
         let read_pos_1 = if read_pos_0 == 0 { buf_len - 1 } else { read_pos_0 - 1 };
 
         let buffered = math::lerp(self.buffer[read_pos_0], self.buffer[read_pos_1], frac);
-        let output = buffered - input * self.gain;
+        let output = buffered * (1.0 - self.gain * self.gain) - input * self.gain;
         self.buffer[self.pos] = input + buffered * self.gain;
 
         self.pos += 1;
@@ -815,3 +834,4 @@ mod tests {
         assert!(found_non_zero, "ModCombFilter should produce non-zero output after impulse");
     }
 }
+

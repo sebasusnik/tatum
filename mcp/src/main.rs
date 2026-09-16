@@ -175,7 +175,7 @@ fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "synth_render",
-            "description": "Compile and render .synth source to a 16-bit stereo WAV file. Returns the file path plus a loudness report: overall peak and RMS, clipped sample count, and per arrangement section its scene name, bars, RMS, peak and dB. Use the report to check that builds rise, drops hit hardest and nothing clips. For quick level checks pass bars (e.g. 8) to render only the start; a full render is a few seconds per minute of audio.",
+            "description": "Compile and render .synth source to a 16-bit stereo WAV file. Returns the file path plus a mix report: overall peak, RMS and clipped samples; per arrangement section the RMS, peak, dB, crest factor and low/mid/high energy balance; per track its peak, RMS and dB below the loudest track; and hints about limiting, buried or silent tracks and boxy midrange. Use it to check that builds rise, drops hit hardest, nothing clips, and every track is audible. For quick level checks pass bars (e.g. 8) to render only the start.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -340,7 +340,31 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let steps_per_bar = song.globals.meter.0 as usize * 4;
 
     let mut engine = SongEngine::from_compiled(song);
+    engine.reset_meters();
     let (l, r) = engine.render(bars);
+    // Per-track levels: post level and pan, before the master chain.
+    let mut track_report = Vec::new();
+    let mut loudest = 0.0f32;
+    for i in 0..engine.track_count() {
+        loudest = loudest.max(engine.track_rms(i));
+    }
+    for i in 0..engine.track_count() {
+        let (p, rr) = (engine.track_peak(i), engine.track_rms(i));
+        track_report.push(json!({
+            "track": engine.track_name(i),
+            "peak": round3(p),
+            "rms": round3(rr),
+            "db": round1(20.0 * rr.max(1e-6).log10()),
+            "vs_loudest_db": round1(20.0 * (rr.max(1e-6) / loudest.max(1e-6)).log10()),
+        }));
+    }
+    let bad = l.iter().chain(r.iter()).filter(|v| !v.is_finite()).count();
+    if bad > 0 {
+        return Err(format!(
+            "render produced {} non-finite samples: an effect is unstable. Check reverb sizes, delay/phaser feedback and compressor makeup, then re-render.",
+            bad
+        ));
+    }
 
     // Output path
     let output = match args.get("output").and_then(Value::as_str) {
@@ -371,19 +395,64 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         let (rms, peak) = stats(&l[a..b], &r[a..b]);
         let at_ceiling = peak >= LIMITER_CEILING - 0.005;
         if at_ceiling { at_ceiling_sections.push(name.clone()); }
-        report.push(json!({ "scene": name, "bars": count, "rms": round3(rms), "peak": round3(peak), "db": round1(20.0 * rms.max(1e-6).log10()), "at_limiter_ceiling": at_ceiling }));
+        let (lo, mid, harsh, air) = balance(&l[a..b], &r[a..b]);
+        report.push(json!({
+            "scene": name, "bars": count,
+            "rms": round3(rms), "peak": round3(peak),
+            "db": round1(20.0 * rms.max(1e-6).log10()),
+            "crest": round1(peak / rms.max(1e-6)),
+            "balance_pct": { "low": lo, "mid": mid, "harsh": harsh, "air": air },
+            "at_limiter_ceiling": at_ceiling
+        }));
         bar_cursor += count;
     }
     let (rms, peak) = stats(&l, &r);
     let clipped = l.iter().chain(r.iter()).filter(|s| s.abs() >= 0.999).count();
-    let hint = if at_ceiling_sections.is_empty() {
-        Value::Null
-    } else {
-        json!(format!(
+    let mut hints: Vec<String> = Vec::new();
+    if !at_ceiling_sections.is_empty() {
+        hints.push(format!(
             "peak sits at the master limiter ceiling ({}) in: {}. The limiter is flattening dynamics there; lower track levels or the compressor makeup, or raise the sections that should be quieter instead.",
             LIMITER_CEILING, at_ceiling_sections.join(", ")
-        ))
-    };
+        ));
+    }
+    // Tracks buried more than 30 dB under the loudest are effectively inaudible;
+    // a chain that silently reroutes or a missing make-up gain looks like this.
+    let buried: Vec<String> = track_report.iter()
+        .filter(|t| t["vs_loudest_db"].as_f64().unwrap_or(0.0) < -30.0 && t["rms"].as_f64().unwrap_or(0.0) > 0.0)
+        .map(|t| t["track"].as_str().unwrap_or("").to_string())
+        .collect();
+    if !buried.is_empty() {
+        hints.push(format!(
+            "more than 30 dB below the loudest track, so effectively inaudible: {}. Raise their level, add gain() in their chain, or check that the chain reaches master.",
+            buried.join(", ")
+        ));
+    }
+    let silent: Vec<String> = track_report.iter()
+        .filter(|t| t["rms"].as_f64().unwrap_or(1.0) <= 0.0)
+        .map(|t| t["track"].as_str().unwrap_or("").to_string())
+        .collect();
+    if !silent.is_empty() {
+        hints.push(format!("silent for the whole render: {}. They play in no scene, or their pattern is all rests.", silent.join(", ")));
+    }
+    if let Some(w) = report.iter().find(|s| s["balance_pct"]["mid"].as_f64().unwrap_or(0.0) >= 70.0) {
+        hints.push(format!(
+            "scene '{}' is {}% midrange (250 Hz-2 kHz): it will sound boxy and small. Give the bass room below 250 Hz and let something live above 5 kHz.",
+            w["scene"].as_str().unwrap_or(""), w["balance_pct"]["mid"]
+        ));
+    }
+    if let Some(w) = report.iter().find(|s| s["balance_pct"]["harsh"].as_f64().unwrap_or(0.0) >= 20.0) {
+        hints.push(format!(
+            "scene '{}' puts {}% of its energy in 2-5 kHz, where the ear is most sensitive: it will sound fatiguing. Usual causes are distortion with no filter after it, bright hats, or a positive master tilt.",
+            w["scene"].as_str().unwrap_or(""), w["balance_pct"]["harsh"]
+        ));
+    }
+    if let Some(w) = report.iter().find(|s| s["balance_pct"]["low"].as_f64().unwrap_or(100.0) <= 15.0) {
+        hints.push(format!(
+            "scene '{}' has only {}% of its energy below 250 Hz: it will sound thin. Heavy distortion trades a fundamental for harmonics, so a distorted bass usually needs a clean sub layer under it.",
+            w["scene"].as_str().unwrap_or(""), w["balance_pct"]["low"]
+        ));
+    }
+    let hint = if hints.is_empty() { Value::Null } else { json!(hints.join(" | ")) };
 
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
@@ -393,9 +462,50 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         "peak": round3(peak),
         "rms": round3(rms),
         "clipped_samples": clipped,
+        "gain_compensation": round3(engine.gain_compensation()),
         "sections": report,
+        "tracks": track_report,
         "hint": hint
     })).unwrap())
+}
+
+/// Energy split into low (<250 Hz), mid (250 Hz..2 kHz), harsh (2..5 kHz,
+/// where the ear is most sensitive) and air (>5 kHz), as percentages.
+///
+/// Uses three cascaded one-pole sections per edge. A single pole rolls off so
+/// gently that midrange leaks into the "high" bucket and a dark mix reads as
+/// bright, which is worse than no number at all.
+fn balance(l: &[f32], r: &[f32]) -> (f64, f64, f64, f64) {
+    const POLES: usize = 3;
+    // Cascading N one-poles drags the overall -3 dB point down; scale each
+    // section up by 1/sqrt(2^(1/N) - 1) so the stated edge is the real one.
+    const CASCADE_FIX: f32 = 1.9615;
+    let coeff = |hz: f32| (-2.0 * core::f32::consts::PI * hz * CASCADE_FIX / SAMPLE_RATE).exp();
+    let (c_lo, c_mid, c_hi) = (coeff(250.0), coeff(2000.0), coeff(5000.0));
+    let (mut s_lo, mut s_mid, mut s_hi) = ([0.0f32; POLES], [0.0f32; POLES], [0.0f32; POLES]);
+    let cascade = |x: f32, state: &mut [f32; POLES], c: f32| {
+        let mut v = x;
+        for s in state.iter_mut() {
+            *s = v * (1.0 - c) + *s * c;
+            v = *s;
+        }
+        v
+    };
+    let (mut lo, mut mid, mut harsh, mut air) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+    for (a, b) in l.iter().zip(r) {
+        let x = (a + b) * 0.5;
+        let v_lo = cascade(x, &mut s_lo, c_lo);
+        let v_mid = cascade(x, &mut s_mid, c_mid);
+        let v_hi = cascade(x, &mut s_hi, c_hi);
+        lo += (v_lo * v_lo) as f64;
+        mid += ((v_mid - v_lo) * (v_mid - v_lo)) as f64;
+        harsh += ((v_hi - v_mid) * (v_hi - v_mid)) as f64;
+        air += ((x - v_hi) * (x - v_hi)) as f64;
+    }
+    let total = lo + mid + harsh + air;
+    if total <= 0.0 { return (0.0, 0.0, 0.0, 0.0); }
+    let pct = |v: f64| (v / total * 1000.0).round() / 10.0;
+    (pct(lo), pct(mid), pct(harsh), pct(air))
 }
 
 fn stats(l: &[f32], r: &[f32]) -> (f32, f32) {
@@ -544,5 +654,42 @@ mod tests {
         assert_eq!(slug_from_source("# Acid Arp — a showcase\ntempo 1"), "acid_arp");
         assert_eq!(slug_from_source("tempo 120"), "tempo_120");
         assert_eq!(slug_from_source(""), "song");
+    }
+}
+
+#[cfg(test)]
+mod band_tests {
+    use super::*;
+
+    fn tone(hz: f32, secs: f32) -> Vec<f32> {
+        (0..(SAMPLE_RATE * secs) as usize)
+            .map(|i| (i as f32 / SAMPLE_RATE * hz * core::f32::consts::TAU).sin() * 0.5)
+            .collect()
+    }
+
+    /// A pure tone must land in the band its frequency belongs to. Without the
+    /// cascade correction a 1 kHz tone leaked most of its energy into "air".
+    #[test]
+    fn each_band_catches_its_own_tone() {
+        let cases = [
+            (80.0, 0usize, "low"),
+            (1000.0, 1, "mid"),
+            (3000.0, 2, "harsh"),
+            (9000.0, 3, "air"),
+        ];
+        for (hz, idx, name) in cases {
+            let x = tone(hz, 1.0);
+            let (lo, mid, harsh, air) = balance(&x, &x);
+            let pct = [lo, mid, harsh, air];
+            // The bands overlap (one-pole cascades are gentle and 2-5 kHz is
+            // barely more than an octave wide), so the bar is that the right
+            // band dominates, not that it takes everything.
+            let winner = pct.iter().cloned().fold(f64::MIN, f64::max);
+            assert!(
+                (pct[idx] - winner).abs() < 1e-9 && pct[idx] > 50.0,
+                "a {} Hz tone should read mostly '{}', got low {} mid {} harsh {} air {}",
+                hz, name, lo, mid, harsh, air
+            );
+        }
     }
 }

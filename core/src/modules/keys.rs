@@ -303,7 +303,7 @@ impl KeysModule {
                 self.lfo_router.set_target(target);
             }
             KeysParam::LfoSync => {
-                let idx = (value * 10.0) as u8;
+                let idx = (value * 11.0) as u8;
                 let mode = match idx {
                     0 => LfoSyncMode::FreeHz,
                     1 => LfoSyncMode::Quarter,
@@ -315,6 +315,7 @@ impl KeysModule {
                     7 => LfoSyncMode::Bars2,
                     8 => LfoSyncMode::Bars4,
                     9 => LfoSyncMode::Bars8,
+                    10 => LfoSyncMode::Bars12,
                     _ => LfoSyncMode::Bars16,
                 };
                 self.lfo_router.lfo.set_sync_mode(mode);
@@ -406,7 +407,9 @@ impl KeysModule {
             // Cutoff modulation: apply every 4 samples to reduce overhead
             if self.lfo_router.target == LfoTarget::Cutoff && self.lfo_router.enabled {
                 if sample_counter % 4 == 0 {
-                    let mod_cutoff = self.cutoff_base + lfo_val * 5000.0;
+                    // Relative (octaves), like the bass: see LFO_CUTOFF_OCTAVES.
+                    let mod_cutoff = self.cutoff_base
+                        * crate::math::pow2(lfo_val * crate::modules::bass::LFO_CUTOFF_OCTAVES);
                     for voice in &mut self.voices {
                         voice.filter.set_cutoff(mod_cutoff);
                     }

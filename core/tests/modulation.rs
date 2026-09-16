@@ -64,8 +64,11 @@ fn module_lfo_can_sync_to_bars() {
     let src = "tempo 120\nscale A minor\nmodule keys pad { lfo_target cutoff lfo_depth 0.2 lfo_sync bars_2 }\npattern p { 1.3 .. .. .. }\ntrack t { play p using pad out > master }\nscene a { track t { play p using pad } }\narrange { a x1 }\n";
     let ast = dsl::parse(src).unwrap();
     let pad = ast.module_defs.iter().find(|m| m.name == "pad").unwrap();
+    // Don't hardcode the encoding: adding an option to the table shifts it.
+    // core/tests/mix.rs asserts the whole table round-trips.
     let sync = pad.params.iter().find(|p| p.name == "lfo_sync").unwrap();
-    assert!((sync.value - 0.7).abs() < 1e-6, "bars_2 is index 7 of 11 → 0.7, got {}", sync.value);
+    let spec = synth_core::params::lookup(synth_core::params::ModuleKind::Keys, "lfo_sync").unwrap();
+    assert_eq!(spec.choice_name(sync.value), Some("bars_2"), "encoded value must decode back to bars_2");
     assert!(compiler::compile(&ast).is_ok());
     let mut e = SongEngine::from_source(src).unwrap();
     let (l, _) = e.render(1);
@@ -105,4 +108,55 @@ fn vowel_filter_shapes_and_morphs() {
     let bad = BASE.replace("CHAIN", "vowel(bars=2)");
     let errs = match compiler::compile(&dsl::parse(&bad).unwrap()) { Err(e) => e, Ok(_) => panic!() };
     assert!(errs[0].message.contains("needs one or two vowels"), "{}", errs[0].message);
+}
+
+/// Energy above 5 kHz relative to the total, in dB. A filter LFO on a dark
+/// sound must not add broadband grit.
+fn hf_ratio_db(x: &[f32]) -> f32 {
+    let c = (-2.0 * std::f32::consts::PI * 5000.0 / synth_core::SAMPLE_RATE).exp();
+    let (mut lp, mut hi, mut tot) = (0.0f32, 0.0f64, 0.0f64);
+    for &v in x {
+        lp = v * (1.0 - c) + lp * c;
+        let h = v - lp;
+        hi += (h * h) as f64;
+        tot += (v * v) as f64;
+    }
+    20.0 * ((hi / tot.max(1e-12)).sqrt() as f32).log10()
+}
+
+#[test]
+fn cutoff_lfo_is_relative_and_does_not_rasp() {
+    use synth_core::Module;
+    use synth_core::modules::bass::{BassModule, BassParam};
+
+    let render = |depth: f32| {
+        let mut m = BassModule::new();
+        m.set_param(BassParam::Cutoff, 0.15);      // ~56 Hz: a dark drone
+        m.set_param(BassParam::Resonance, 0.78);
+        m.set_param(BassParam::CutoffEnv, 0.0);
+        m.set_param(BassParam::Osc1Wave, 1.0);
+        if depth > 0.0 {
+            m.set_param(BassParam::LfoTarget, 0.0); // cutoff
+            m.set_param(BassParam::LfoDepth, depth);
+            m.set_param(BassParam::LfoSync, 1.0);   // fast enough to sweep within the render
+        }
+        m.note_on(28, 0.8);
+        let mut out = vec![0.0f32; 44100 * 3];
+        let mut buf = [0.0f32; 128];
+        for ch in out.chunks_mut(128) {
+            let n = ch.len();
+            m.process_block(&mut buf[..n]);
+            ch.copy_from_slice(&buf[..n]);
+        }
+        out
+    };
+
+    let dry = hf_ratio_db(&render(0.0)[22050..]);
+    let wet = hf_ratio_db(&render(0.2)[22050..]);
+    let deep = hf_ratio_db(&render(0.5)[22050..]);
+    // An absolute Hz offset used to slam the 20 Hz floor and then sweep the
+    // whole spectrum, adding >10 dB of hiss. Relative modulation stays close.
+    assert!(wet - dry < 5.0, "cutoff LFO must not add grit: dry {:.1} dB, wet {:.1} dB", dry, wet);
+    assert!(deep - dry < 6.0, "even a deep sweep stays clean: dry {:.1} dB, deep {:.1} dB", dry, deep);
+    assert!(wet > dry, "the LFO still opens the filter: dry {:.1}, wet {:.1}", dry, wet);
 }

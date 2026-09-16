@@ -98,6 +98,13 @@ scene cloud_only {
     track rhodes { play rhodes_hits using rhodes }
 }
 
+# The cloud: freeze the reverb tail with the pad silent, only drums and sub on top.
+scene frozen {
+    reverb_freeze = 1
+    track sub    { play sub_line using sub }
+    track drums  { play amen_ish using kit }
+}
+
 scene full {
     track pad    { play voicings using cloud }
     track rhodes { play rhodes_hits using rhodes }
@@ -105,4 +112,4 @@ scene full {
     track drums  { play amen_ish using kit }
 }
 
-arrange { cloud_only x8  full x8 }
+arrange { cloud_only x6  frozen x4  full x8 }

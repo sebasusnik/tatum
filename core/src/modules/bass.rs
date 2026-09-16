@@ -11,6 +11,9 @@ fn semitone_ratio(semitones: i8) -> f32 {
     math::pow2(semitones as f32 / 12.0)
 }
 
+/// `lfo_depth 1.0` sweeps the cutoff this many octaves either way.
+pub const LFO_CUTOFF_OCTAVES: f32 = 4.0;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BassParam {
     Cutoff,
@@ -163,7 +166,7 @@ impl BassModule {
                 self.lfo_router.set_target(target);
             }
             BassParam::LfoSync => {
-                let idx = (value * 10.0) as u8;
+                let idx = (value * 11.0) as u8;
                 let mode = match idx {
                     0 => LfoSyncMode::FreeHz,
                     1 => LfoSyncMode::Quarter,
@@ -175,6 +178,7 @@ impl BassModule {
                     7 => LfoSyncMode::Bars2,
                     8 => LfoSyncMode::Bars4,
                     9 => LfoSyncMode::Bars8,
+                    10 => LfoSyncMode::Bars12,
                     _ => LfoSyncMode::Bars16,
                 };
                 self.lfo_router.lfo.set_sync_mode(mode);
@@ -239,12 +243,16 @@ impl Module for BassModule {
 
             // LFO modulation
             let lfo_val = self.lfo_router.next_sample();
-            let mut cutoff_mod = 0.0;
+            // Cutoff modulation is relative (in octaves), not an absolute Hz
+            // offset: an offset large enough to hear on a bright sound slams a
+            // dark one into the 20 Hz floor and then sweeps back up across the
+            // whole spectrum, which rasps.
+            let mut cutoff_mult = 1.0;
             let mut pitch_mult = 1.0;
             let mut amp_mod = 1.0;
 
             match self.lfo_router.target {
-                LfoTarget::Cutoff => cutoff_mod = lfo_val * 4000.0,
+                LfoTarget::Cutoff => cutoff_mult = math::pow2(lfo_val * LFO_CUTOFF_OCTAVES),
                 LfoTarget::Pitch => pitch_mult = math::pow2(lfo_val),
                 LfoTarget::Amplitude => amp_mod = 1.0 + lfo_val,
                 _ => {}
@@ -268,7 +276,7 @@ impl Module for BassModule {
                 pitch_mult *= math::pow2(vib / 12.0);
             }
 
-            self.filter.set_cutoff(cutoff + cutoff_mod + self.current_freq * self.keytrack);
+            self.filter.set_cutoff((cutoff + self.current_freq * self.keytrack) * cutoff_mult);
 
             let base = self.current_freq * pitch_mult * self.pitch_bend_ratio;
             self.oscs[0].set_frequency(base * ratio0);

@@ -28,6 +28,8 @@ pub struct Globals {
     pub swing: Option<f32>,              // 0.5 = straight, 0.67 = triplet feel
     pub humanize: Option<f32>,           // velocity humanization 0.0-1.0
     pub humanize_timing: Option<f32>,    // timing humanization 0.0-1.0
+    /// 1 = compensate level for the number of active tracks (default), 0 = off.
+    pub gain_comp: Option<f32>,
     pub send_delay: SendDelayDef,        // `delay sync=dotted_eighth feedback=0.45 filter=0.5`
     pub send_reverb: SendReverbDef,      // `reverb size=0.7 damp=0.4 predelay=20`
 }
@@ -39,6 +41,7 @@ pub struct SendDelayDef {
     pub time: Option<f32>,      // seconds, used when sync is free
     pub feedback: Option<f32>,
     pub filter: Option<f32>,
+    pub sidechain: Option<f32>, // duck the delay return against the kick
 }
 
 /// Global send reverb settings (top-level `reverb ...` line).
@@ -47,6 +50,7 @@ pub struct SendReverbDef {
     pub size: Option<f32>,
     pub damp: Option<f32>,
     pub predelay: Option<f32>,  // milliseconds
+    pub sidechain: Option<f32>, // duck the reverb return against the kick
 }
 
 impl Default for Globals {
@@ -59,6 +63,7 @@ impl Default for Globals {
             swing: None,
             humanize: None,
             humanize_timing: None,
+            gain_comp: None,
             send_delay: SendDelayDef::default(),
             send_reverb: SendReverbDef::default(),
         }

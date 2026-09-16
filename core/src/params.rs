@@ -158,7 +158,7 @@ pub fn choice_value(idx: usize, count: usize) -> f32 {
 // ── Shared choice tables ──
 
 pub const LFO_WAVEFORMS: &[&str] = &["sine", "triangle", "saw", "square", "sample_hold"];
-pub const LFO_SYNC: &[&str] = &["free", "quarter", "eighth", "sixteenth", "dotted_eighth", "triplet_eighth", "bar", "bars_2", "bars_4", "bars_8", "bars_16"];
+pub const LFO_SYNC: &[&str] = &["free", "quarter", "eighth", "sixteenth", "dotted_eighth", "triplet_eighth", "bar", "bars_2", "bars_4", "bars_8", "bars_12", "bars_16"];
 pub const OSC_WAVES: &[&str] = &["saw", "square"];
 pub const FM_ALGORITHMS: &[&str] = &[
     "serial3_plus_carrier",   // 0: Op3 -> Op2 -> Op1 -> Out (+ Op4 -> Out)
@@ -196,7 +196,7 @@ pub const BASS_PARAMS: &[ParamSpec] = &[
     spec!("sustain", ParamId::Bass(BassParam::Sustain), Range::Unit, 0.7, "Amp envelope sustain level"),
     spec!("release", ParamId::Bass(BassParam::Release), Range::Unit, 0.3, ENV_TIME_DOC),
     spec!("lfo_rate", ParamId::Bass(BassParam::LfoRate), Range::Unit, 0.0, "LFO rate 0.1..20Hz when lfo_sync is free"),
-    spec!("lfo_depth", ParamId::Bass(BassParam::LfoDepth), Range::Unit, 0.0, "LFO depth; 0 disables the LFO"),
+    spec!("lfo_depth", ParamId::Bass(BassParam::LfoDepth), Range::Unit, 0.0, "LFO depth; 0 disables the LFO. On cutoff it is relative: 1.0 sweeps ±4 octaves, so 0.1 is a gentle wobble"),
     spec!("lfo_waveform", ParamId::Bass(BassParam::LfoWaveform), Range::Choice(LFO_WAVEFORMS), 0.0, "LFO shape"),
     spec!("lfo_target", ParamId::Bass(BassParam::LfoTarget), Range::Choice(FILTER_LFO_TARGETS), 0.0, "What the LFO modulates"),
     spec!("lfo_sync", ParamId::Bass(BassParam::LfoSync), Range::Choice(LFO_SYNC), 0.0, "Free Hz, a tempo-synced subdivision, or a slow cycle over 1..16 bars"),
@@ -214,6 +214,7 @@ pub const BASS_PARAMS: &[ParamSpec] = &[
 // ── FM ──
 
 pub const FM_PARAMS: &[ParamSpec] = &[
+    spec!("level", ParamId::Fm(FmParam::Level), Range::Gain { max: 4.0 }, 1.0, "Module output gain. FM sums quieter than the other modules: try 2.0 to sit near keys at the same track level"),
     spec!("algorithm", ParamId::Fm(FmParam::Algorithm), Range::Choice(FM_ALGORITHMS), 0.0, "Operator routing"),
     spec!("mod_index", ParamId::Fm(FmParam::ModIndex), Range::Unit, 0.5, "Modulation index, exponential 0.1..4.0 (0.5 ≈ 0.63, 0.75 ≈ 1.6)"),
     spec!("feedback", ParamId::Fm(FmParam::Feedback), Range::Unit, 0.0, "Global operator feedback (scaled to 0..0.7)"),
@@ -270,7 +271,7 @@ pub const KEYS_PARAMS: &[ParamSpec] = &[
     spec!("sustain", ParamId::Keys(KeysParam::Sustain), Range::Unit, 0.7, "Amp envelope sustain level"),
     spec!("release", ParamId::Keys(KeysParam::Release), Range::Unit, 0.3, ENV_TIME_DOC),
     spec!("lfo_rate", ParamId::Keys(KeysParam::LfoRate), Range::Unit, 0.0, "LFO rate 0.1..20Hz when lfo_sync is free"),
-    spec!("lfo_depth", ParamId::Keys(KeysParam::LfoDepth), Range::Unit, 0.0, "LFO depth; 0 disables the LFO"),
+    spec!("lfo_depth", ParamId::Keys(KeysParam::LfoDepth), Range::Unit, 0.0, "LFO depth; 0 disables the LFO. On cutoff it is relative: 1.0 sweeps ±4 octaves, so 0.1 is a gentle wobble"),
     spec!("lfo_waveform", ParamId::Keys(KeysParam::LfoWaveform), Range::Choice(LFO_WAVEFORMS), 0.0, "LFO shape"),
     spec!("lfo_target", ParamId::Keys(KeysParam::LfoTarget), Range::Choice(FILTER_LFO_TARGETS), 0.0, "What the LFO modulates"),
     spec!("lfo_sync", ParamId::Keys(KeysParam::LfoSync), Range::Choice(LFO_SYNC), 0.0, "Free Hz or tempo-synced subdivision"),

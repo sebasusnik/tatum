@@ -20,12 +20,16 @@ scale A minor          # major | minor | dorian | phrygian | lydian | mixolydian
 swing 0.56             # 0.5 straight .. 0.75 hard shuffle
 humanize 0.05 timing 0.02
 sidechain 0.4
+gain_comp 1            # 1 = level is compensated for how many tracks a scene has
+                       # (1/sqrt(n), so a 2-track breakdown is ~4 dB louder than a
+                       # 5-track drop at the same levels). 0 = off, mix exactly as written.
 
 # Global send effects, fed by each track's delay_send / reverb_send
 delay sync=dotted_eighth feedback=0.45 filter=0.5   # sync: free | quarter | dotted_eighth |
                                                     #       eighth | sixteenth (default) | triplet_eighth
                                                     # time=0.3 (seconds) applies when sync=free
-reverb size=0.7 damp=0.4 predelay=20                # predelay in ms
+reverb size=0.7 damp=0.4 predelay=20 sidechain=0.5  # predelay in ms; size 1.0 is a ~15 s hall;
+                                                    # sidechain= ducks the return against the kick (delay too)
 ```
 
 ## Modules
@@ -40,7 +44,9 @@ module bass acid {
     osc1_wave saw            # saw | square
     lfo_target cutoff        # cutoff | pitch | amplitude
     lfo_sync bars_4          # free | quarter | eighth | sixteenth | dotted_eighth | triplet_eighth |
-                             # bar | bars_2 | bars_4 | bars_8 | bars_16 (slow, tempo-synced cycles)
+                             # bar | bars_2 | bars_4 | bars_8 | bars_12 | bars_16 (slow, tempo-synced)
+    lfo_depth 0.15           # on cutoff the sweep is relative: 1.0 is ±4 octaves,
+                             # so 0.1-0.2 is a wobble and 0.5 is a full filter sweep
 }
 
 module fm bell {
@@ -74,7 +80,7 @@ pattern riff { 1.2:0.9  -  ~5.2:0.8  ..  [1.3 3.3 5.3]:0.6  ..  ..  .. }
 | `..` | tie: hold the previous step; `..*15` writes fifteen ties, `-*8` eight rests |
 | `~note` | slide: glide into this note without retriggering the envelope (303 style). The previous note is held until the slide. Bass modules glide at their `glide` rate; other instruments fall back to a normal retrigger. |
 | `[a b c]` | chord, any notes or degrees |
-| `Fm9` `Dbmaj7/2` `C7:0.6` | chord symbol: root, optional `#`/`b`, quality, optional `/octave` (default 3), then `:velocity` and `(locks)` as usual. Qualities: maj, m, 7, maj7, m7, 9, maj9, m9, add9, madd9, 6, m6, sus2, sus4, 7sus4, dim, dim7, m7b5, aug, 11, m11, 13, maj13, m13, 5, mmaj7. A note token with octave 7 or above (`C7`, `Ab9`) is read as a chord. |
+| `Fm9` `Dbmaj7/2` `C7:0.6` | chord symbol: root, optional `#`/`b`, quality, optional `/octave` (default 3), then `:velocity` and `(locks)` as usual. Qualities: maj, m, 7, maj7, m7, 9, maj9, m9, add9, madd9, 6, m6, sus2, sus4, 7sus4, dim, dim7, m7b5, aug, 11, m11, 13, maj13, m13, 5, mmaj7. A note token with octave 7 or above (`C7`, `Ab9`) is read as a chord; for a power chord write `E5/3` (bare `E5` is the note). |
 | `1.2:0.8(cutoff=0.4, edepth=0.3, res=0.6, gate=0.5)` | per-step parameter lock (bass filter and gate) |
 
 Drum patterns use labeled lanes:
@@ -118,6 +124,26 @@ Track options:
 | `out > ... > master` or `> <bus>` | | `> master` | insert chain and destination |
 
 A scene track can set any of these, including adding an `arp` to a track that has none.
+
+A routing chain may wrap across lines as long as each continuation line starts with `>`:
+
+```
+track pad { play chords using cloud level 0.3 reverb_send 0.5
+            out > highpass(300, 0.3)
+                > lowpass(3000, 0.3, lfo_bars=16, lfo_depth=1200)
+                > autopan(0.4, bars=8) > master }
+```
+
+### Levels
+
+`synth render` and `synth_render` print a per-track report (peak, RMS, dB below the
+loudest track) plus the low/mid/high balance of each section. Read it before trusting a
+mix: a track more than 30 dB down is inaudible, a section above 80% midrange sounds boxy,
+and a section at the limiter ceiling has had its dynamics flattened.
+
+Modules do not all sum to the same level at the same track `level`: `fm` is quietest, so
+it has its own `level` parameter (default 1.0; `level 2.0` brings one voice near keys).
+Use `gain()` in a chain to trim a bus or a return.
 
 ### Arpeggiator
 
@@ -168,6 +194,14 @@ master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2
 Exact ranges and defaults for every node are in [PARAMS.md](PARAMS.md) under "effects and
 nodes" (`synth params fx`). Filter cutoffs are in Hz, not 0..1.
 
+The global send returns can carry their own insert chain, applied after the effect and
+before the master. This is where movement on the tail itself goes:
+
+```
+reverb_return { in > lowpass(1200, 0.3, lfo_bars=16, lfo_depth=800) > autopan(0.4, bars=8) > out }
+delay_return  { in > highpass(300, 0.3) > out }
+```
+
 Two ways to get ambience, usable together:
 
 - **Global sends**: every track has `delay_send` / `reverb_send` into the shared delay and
@@ -184,9 +218,11 @@ scene drop {
     tempo 128                            # optional per-scene tempo
     reverb_mix = 0.3                     # wet level of the global sends for this scene
     delay_mix = 0.2
+    reverb_freeze = 1                    # hold the reverb tail: no decay, no new input, for this scene
     auto acid cutoff 0.2 > 0.6 > 0.2     # linear (2 values) or triangle (3 values)
     auto drums level 1.0 > 0.0           # level fade: resolves a track name first, else an instrument name
     auto reverb_mix 0.1 > 0.5
+    auto reverb_freeze 0 > 1             # freezes once the lane crosses 0.5
     auto master tilt 0.4 > -0.2          # master chain sweeps: tilt, eq_low, eq_mid, eq_high, drive,
     auto master cutoff 20000 > 400       #   gain, cutoff, limiter, comp_threshold (the node must be in the chain)
     track drums { play beat using kit }
@@ -261,6 +297,17 @@ track pad { play voicings using cloud level 0.15 reverb_send 0.4 sidechain 0.5
             out > highpass(300, 0.4) > lowpass(3200, 0.3, lfo_bars=16, lfo_depth=1200) > autopan(0.3, bars=8) > master }
 ```
 
+**The resampled cloud, without resampling.** Play the voicings into a big reverb for a
+scene, then freeze it: the next scene keeps the tail as a texture with nothing feeding it.
+Put the slow movement and the ducking on the return, so the tail itself breathes:
+
+```
+reverb size=1.0 damp=0.3 sidechain=0.5
+reverb_return { in > highpass(250, 0.3) > lowpass(2500, 0.3, lfo_bars=16, lfo_depth=1200) > autopan(0.4, bars=8) > out }
+scene bloom  { track pad { play voicings using cloud } }
+scene frozen { reverb_freeze = 1  track drums { play brk using kit } }   # pad silent, cloud sustains
+```
+
 **A breakbeat kit.** Accents on the downbeats, ghosts between, probability on the extra
 hits, a roll into the drop, and a compressor on a drum bus:
 
@@ -277,4 +324,7 @@ track beat { play brk using kit out > drums }
 
 **Loudness shape.** Intro quietest, drop loudest, nothing at the limiter ceiling. Use the
 per-section report from `synth_render`; if a section sits at 0.95, lower what feeds it
-rather than pushing the others up.
+rather than pushing the others up. Two things that make section loudness non-obvious:
+the engine scales the mix by 1/sqrt(active tracks) in each scene (so fewer tracks are
+each louder), and sidechain only ducks in scenes that have a beats track (a breakdown
+without drums plays its pads at full level). Set levels per scene, not just per track.

@@ -196,8 +196,25 @@ fn cmd_render(args: &[String]) {
 
     eprintln!("rendering {} bars at {} BPM...", render_bars, engine.tempo());
 
+    engine.reset_meters();
     let (out_l, out_r) = engine.render(render_bars);
 
+    if out_l.iter().chain(out_r.iter()).any(|v| !v.is_finite()) {
+        eprintln!("error: render produced non-finite samples (an effect is unstable)");
+        process::exit(1);
+    }
+    // Mix report: per-track levels, so a buried or silent track is visible.
+    let loudest = (0..engine.track_count()).fold(0.0f32, |a, i| a.max(engine.track_rms(i)));
+    if engine.track_count() > 0 && loudest > 0.0 {
+        eprintln!("mix (post level/pan, pre master):");
+        for i in 0..engine.track_count() {
+            let rms = engine.track_rms(i);
+            let rel = 20.0 * (rms.max(1e-6) / loudest).log10();
+            let flag = if rms <= 0.0 { "  SILENT" } else if rel < -30.0 { "  buried" } else { "" };
+            eprintln!("  {:<12} peak {:.3}  rms {:.4}  {:+.1} dB vs loudest{}",
+                engine.track_name(i), engine.track_peak(i), rms, rel, flag);
+        }
+    }
     eprintln!("writing {} ({} samples, {:.1}s)...",
         output_path,
         out_l.len(),

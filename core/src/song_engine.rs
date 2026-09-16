@@ -237,6 +237,10 @@ struct TrackPlayback {
     // Arpeggiator: the pattern supplies held notes, the arp schedules them per sample
     arp: Option<ArpProcessor>,
     arp_cfg: Option<ArpConfig>,
+    // Metering: post-level, post-pan, pre-master. For mix reports.
+    meter_peak: f32,
+    meter_sum_sq: f64,
+    meter_samples: u64,
 }
 
 /// Build a fresh arp processor from compiled settings at the given tempo.
@@ -310,6 +314,10 @@ pub struct SongEngine {
 
     // Master FX chain
     master_fx: FxChain,
+    reverb_return: FxChain,
+    delay_return: FxChain,
+    reverb_sidechain: f32,
+    delay_sidechain: f32,
 
     // Timing
     tempo: f32,
@@ -328,6 +336,7 @@ pub struct SongEngine {
     master_level: f32,
 
     // Automatic gain compensation for track summing
+    gain_comp_amount: f32,   // 0 = off, 1 = full 1/sqrt(active_tracks)
     gain_comp_target: f32,   // 1.0 / sqrt(active_tracks), clamped [0.25, 1.0]
     gain_comp_current: f32,  // smoothed value (exponential approach to target)
 
@@ -372,6 +381,7 @@ enum AutoTarget {
     TrackLevel { track_idx: usize },
     ReverbMix,
     DelayMix,
+    ReverbFreeze,
 }
 
 /// Structured error from DSL parsing or compilation, preserving line/col info.
@@ -518,6 +528,10 @@ impl SongEngine {
 
         // Build master FX chain
         let master_fx = FxChain::new(&song.master.fx_chain);
+        let reverb_return = FxChain::new(&song.reverb_return);
+        let delay_return = FxChain::new(&song.delay_return);
+        let reverb_sidechain = song.globals.send_reverb.sidechain.unwrap_or(0.0);
+        let delay_sidechain = song.globals.send_delay.sidechain.unwrap_or(0.0);
 
         // Build track playback states from the compiled tracks
         let track_names: Vec<String> = song.tracks.iter().map(|t| t.name.clone()).collect();
@@ -550,6 +564,9 @@ impl SongEngine {
                     stereo_src,
                     arp: t.arp.map(|c| make_arp(&c, tempo)),
                     arp_cfg: t.arp,
+                    meter_peak: 0.0,
+                    meter_sum_sq: 0.0,
+                    meter_samples: 0,
                 }
             })
             .collect();
@@ -619,6 +636,10 @@ impl SongEngine {
             send_delay,
             send_reverb,
             master_fx,
+            reverb_return,
+            delay_return,
+            reverb_sidechain,
+            delay_sidechain,
             tempo,
             samples_per_step,
             sample_counter: 0.0,
@@ -629,6 +650,7 @@ impl SongEngine {
             humanize_timing,
             rng: Rng::new(7919),
             master_level: 0.8,
+            gain_comp_amount: song.globals.gain_comp.unwrap_or(1.0),
             gain_comp_target: 1.0,
             gain_comp_current: 1.0,
             sidechain_amount,
@@ -657,6 +679,8 @@ impl SongEngine {
         for t in self.tracks.iter_mut() { t.insert_fx.set_bpm(bpm); }
         for b in self.buses.iter_mut() { b.fx_chain.set_bpm(bpm); }
         self.master_fx.set_bpm(bpm);
+        self.reverb_return.set_bpm(bpm);
+        self.delay_return.set_bpm(bpm);
     }
 
     pub fn start(&mut self) {
@@ -721,6 +745,8 @@ impl SongEngine {
         if let Some(dmix) = scene.delay_mix {
             self.delay_wet_level = dmix;
         }
+        // Freeze is per scene: it holds only where asked for.
+        self.send_reverb.set_freeze(scene.reverb_freeze.unwrap_or(false));
 
         // Automation lanes are set up after the scene's tracks are activated
         // (targets resolve against the new layout, not the previous scene's).
@@ -795,18 +821,41 @@ impl SongEngine {
     /// Uses equal-power scaling: 1/sqrt(N), clamped to [0.25, 1.0].
     fn recompute_gain_comp(&mut self) {
         let n = self.tracks.iter().filter(|t| t.active).count();
-        self.gain_comp_target = if n <= 1 {
-            1.0
-        } else {
-            let raw = 1.0 / math::sqrt(n as f32);
-            if raw < 0.25 { 0.25 } else { raw }
-        };
+        let raw = if n <= 1 { 1.0 } else { (1.0 / math::sqrt(n as f32)).max(0.25) };
+        // `gain_comp 0` disables it: every scene is mixed exactly as written.
+        self.gain_comp_target = 1.0 + (raw - 1.0) * self.gain_comp_amount;
     }
+
+    // ── Metering (for mix reports) ──
+
+    /// Peak of a track after its level and pan, before the master chain.
+    pub fn track_peak(&self, idx: usize) -> f32 {
+        self.tracks.get(idx).map_or(0.0, |t| t.meter_peak)
+    }
+
+    /// RMS of a track after its level and pan, before the master chain.
+    pub fn track_rms(&self, idx: usize) -> f32 {
+        self.tracks.get(idx).map_or(0.0, |t| {
+            if t.meter_samples == 0 { 0.0 } else { math::sqrt((t.meter_sum_sq / t.meter_samples as f64) as f32) }
+        })
+    }
+
+    pub fn reset_meters(&mut self) {
+        for t in self.tracks.iter_mut() {
+            t.meter_peak = 0.0;
+            t.meter_sum_sq = 0.0;
+            t.meter_samples = 0;
+        }
+    }
+
+    /// Automatic gain compensation applied right now (1.0 = none).
+    pub fn gain_compensation(&self) -> f32 { self.gain_comp_current }
 
     /// Resolve an automation target string to an AutoTarget.
     fn resolve_auto_target(&self, target: &str) -> Option<AutoTarget> {
         match target {
             "reverb_mix" => Some(AutoTarget::ReverbMix),
+            "reverb_freeze" => Some(AutoTarget::ReverbFreeze),
             "delay_mix" => Some(AutoTarget::DelayMix),
             _ => {
                 // Check for "instrument.param" or "track.level"
@@ -1015,6 +1064,7 @@ impl SongEngine {
         // Sidechain ducking: use kick track to duck other tracks
         // Per-track sidechain_amount overrides the global amount when > 0.
         let has_any_sidechain = self.sidechain_amount > 0.0
+            || self.reverb_sidechain > 0.0 || self.delay_sidechain > 0.0
             || self.tracks.iter().any(|t| t.active && t.sidechain_amount > 0.0);
         if has_any_sidechain {
             if let Some(kick_idx) = self.kick_track_idx {
@@ -1076,6 +1126,10 @@ impl SongEngine {
                     track_bufs_l[ti][s] * gain * pan_l,
                     track_bufs_r[ti][s] * gain * pan_r,
                 );
+                let t = &mut self.tracks[ti];
+                t.meter_peak = t.meter_peak.max(sample_l.abs()).max(sample_r.abs());
+                t.meter_sum_sq += (sample_l * sample_l + sample_r * sample_r) as f64;
+                t.meter_samples += 2;
 
                 // Bus send (mono sum to bus)
                 if let Some((bus_idx, amount)) = self.tracks[ti].bus_send {
@@ -1116,17 +1170,32 @@ impl SongEngine {
         // Process global send effects (wet-only returns, scaled by wet levels)
         let dwet = self.delay_wet_level;
         let rwet = self.reverb_wet_level;
+        // Always tick the sends: their tails must ring out (and freeze must
+        // hold) after every track has gone silent.
+        let duck_delay = self.delay_sidechain;
+        let duck_reverb = self.reverb_sidechain;
+        let sc = self.sc_envelope;
         for s in 0..len {
-            if delay_in_l[s] != 0.0 || delay_in_r[s] != 0.0 {
-                let (dl, dr) = self.send_delay.process_stereo_wet(delay_in_l[s], delay_in_r[s]);
-                output_l[s] += dl * dwet;
-                output_r[s] += dr * dwet;
+            let (mut dl, mut dr) = self.send_delay.process_stereo_wet(delay_in_l[s], delay_in_r[s]);
+            if !self.delay_return.nodes.is_empty() {
+                (dl, dr) = self.delay_return.process_stereo(dl, dr);
             }
-            if reverb_in_l[s] != 0.0 || reverb_in_r[s] != 0.0 {
-                let (rl, rr) = self.send_reverb.process_stereo_in_wet(reverb_in_l[s], reverb_in_r[s]);
-                output_l[s] += rl * rwet;
-                output_r[s] += rr * rwet;
+            if duck_delay > 0.0 {
+                let g = 1.0 - duck_delay * sc;
+                dl *= g; dr *= g;
             }
+            output_l[s] += dl * dwet;
+            output_r[s] += dr * dwet;
+            let (mut rl, mut rr) = self.send_reverb.process_stereo_in_wet(reverb_in_l[s], reverb_in_r[s]);
+            if !self.reverb_return.nodes.is_empty() {
+                (rl, rr) = self.reverb_return.process_stereo(rl, rr);
+            }
+            if duck_reverb > 0.0 {
+                let g = 1.0 - duck_reverb * sc;
+                rl *= g; rr *= g;
+            }
+            output_l[s] += rl * rwet;
+            output_r[s] += rr * rwet;
         }
 
         // Apply master level + gain compensation + master FX chain
@@ -1177,6 +1246,7 @@ impl SongEngine {
                         }
                     }
                     AutoTarget::ReverbMix => self.reverb_wet_level = value,
+                    AutoTarget::ReverbFreeze => self.send_reverb.set_freeze(value >= 0.5),
                     AutoTarget::DelayMix => self.delay_wet_level = value,
                 }
             }
@@ -1637,6 +1707,8 @@ impl SongEngine {
         self.send_delay.reset();
         self.send_reverb.reset();
         self.master_fx.reset();
+        self.reverb_return.reset();
+        self.delay_return.reset();
         for track in self.tracks.iter_mut() {
             track.current_step = 0;
             track.current_notes_count = 0;

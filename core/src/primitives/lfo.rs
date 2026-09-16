@@ -23,6 +23,7 @@ pub enum LfoSyncMode {
     Bars2,
     Bars4,
     Bars8,
+    Bars12,
     Bars16,
 }
 
@@ -114,6 +115,7 @@ impl Lfo {
             LfoSyncMode::Bars2 => self.bpm / 60.0 / 8.0,
             LfoSyncMode::Bars4 => self.bpm / 60.0 / 16.0,
             LfoSyncMode::Bars8 => self.bpm / 60.0 / 32.0,
+            LfoSyncMode::Bars12 => self.bpm / 60.0 / 48.0,
             LfoSyncMode::Bars16 => self.bpm / 60.0 / 64.0,
         };
         self.phase_inc = freq / self.sample_rate;
