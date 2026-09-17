@@ -18,6 +18,7 @@ use synth_core::live::{Applied, LivePlanner, LivePlayer, Plan, Retired};
 use synth_core::{BLOCK_SIZE, SAMPLE_RATE};
 
 use crate::include::Source;
+use crate::resample::Resampler;
 
 /// What the audio thread tells the main thread.
 enum Event {
@@ -43,6 +44,7 @@ pub fn cmd(args: &[String], watch: bool) {
     let verb = if watch { "watch" } else { "play" };
     let mut path: Option<&str> = None;
     let mut device: Option<&str> = None;
+    let mut rate: Option<u32> = None;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -51,6 +53,14 @@ pub fn cmd(args: &[String], watch: bool) {
                 device = args.get(i).map(|s| s.as_str());
                 if device.is_none() {
                     eprintln!("error: --device needs a name");
+                    std::process::exit(1);
+                }
+            }
+            "--rate" => {
+                i += 1;
+                rate = args.get(i).and_then(|s| s.parse().ok());
+                if rate.is_none() {
+                    eprintln!("error: --rate needs a number in Hz (for example 48000)");
                     std::process::exit(1);
                 }
             }
@@ -71,7 +81,7 @@ pub fn cmd(args: &[String], watch: bool) {
         eprintln!("usage: synth {} <song.synth> [--device <name>]", verb);
         std::process::exit(1);
     };
-    if let Err(msg) = run(path, watch, device) {
+    if let Err(msg) = run(path, watch, device, rate) {
         eprintln!("error: {}", msg);
         std::process::exit(1);
     }
@@ -84,39 +94,51 @@ fn list_devices() {
         Ok(devices) => {
             for d in devices {
                 let name = d.description().map(|x| x.to_string()).unwrap_or_else(|_| "?".into());
-                let ok = supports_engine_rate(&d);
+                let note = match pick_config(&d, None) {
+                    Ok((_, rate)) if rate == SAMPLE_RATE as u32 => String::new(),
+                    Ok((_, rate)) => format!("  [resampled to {} Hz]", rate),
+                    Err(_) => "  [no stereo f32 output]".to_string(),
+                };
                 println!("{}{}{}", name,
-                    if Some(&name) == default.as_ref() { "  (default)" } else { "" },
-                    if ok { "" } else { "  [no 44.1 kHz stereo f32]" });
+                    if Some(&name) == default.as_ref() { "  (default)" } else { "" }, note);
             }
         }
         Err(e) => eprintln!("error: cannot list devices: {}", e),
     }
 }
 
-fn supports_engine_rate(device: &cpal::Device) -> bool {
-    engine_config(device).is_ok()
-}
-
-/// The engine renders 44.1 kHz stereo only; there is no resampler. Pick that
-/// exact configuration or say why not.
-fn engine_config(device: &cpal::Device) -> Result<cpal::StreamConfig, String> {
-    let rate = SAMPLE_RATE as u32;
-    let ranges = device.supported_output_configs().map_err(|e| e.to_string())?;
-    let mut seen = Vec::new();
-    for range in ranges {
-        seen.push(format!("{}ch {}-{} Hz {}", range.channels(), range.min_sample_rate(), range.max_sample_rate(), range.sample_format()));
-        if range.channels() == 2
-            && range.sample_format() == cpal::SampleFormat::F32
-            && range.min_sample_rate() <= rate
-            && range.max_sample_rate() >= rate
-        {
-            if let Some(cfg) = range.try_with_sample_rate(rate) {
-                return Ok(cfg.config());
-            }
+/// The engine renders 44.1 kHz stereo. Take that rate when the device offers
+/// it (no conversion, sample-exact), otherwise the device's own default rate
+/// if it comes in stereo f32, otherwise the highest stereo f32 rate it has;
+/// the output is resampled to it. Bluetooth headphones are the usual case:
+/// they offer 48 kHz and 24 kHz and nothing else.
+fn pick_config(device: &cpal::Device, forced: Option<u32>) -> Result<(cpal::StreamConfig, u32), String> {
+    let engine = SAMPLE_RATE as u32;
+    let ranges: Vec<_> = device.supported_output_configs().map_err(|e| e.to_string())?
+        .filter(|r| r.channels() == 2 && r.sample_format() == cpal::SampleFormat::F32)
+        .collect();
+    let at = |rate: u32| ranges.iter()
+        .find(|r| r.min_sample_rate() <= rate && r.max_sample_rate() >= rate)
+        .and_then(|r| (*r).try_with_sample_rate(rate))
+        .map(|c| (c.config(), rate));
+    // `--rate` forces the device rate, to hear the converter on a device
+    // that would not otherwise need it.
+    if let Some(rate) = forced {
+        return at(rate).ok_or_else(|| format!("the device does not offer {} Hz stereo f32", rate));
+    }
+    if let Some(found) = at(engine) {
+        return Ok(found);
+    }
+    if let Ok(default) = device.default_output_config() {
+        if let Some(found) = at(default.sample_rate()) {
+            return Ok(found);
         }
     }
-    Err(format!("no 44100 Hz stereo f32 output configuration (the engine renders at 44.1 kHz only). Offered: {}", seen.join(", ")))
+    let best = ranges.iter().map(|r| r.max_sample_rate()).filter(|&r| r <= 96_000).max();
+    match best.and_then(at) {
+        Some(found) => Ok(found),
+        None => Err("the device has no stereo f32 output configuration".to_string()),
+    }
 }
 
 fn open_device(wanted: Option<&str>) -> Result<cpal::Device, String> {
@@ -138,7 +160,7 @@ fn open_device(wanted: Option<&str>) -> Result<cpal::Device, String> {
     }
 }
 
-fn run(path: &str, watch: bool, device_name: Option<&str>) -> Result<(), String> {
+fn run(path: &str, watch: bool, device_name: Option<&str>, forced_rate: Option<u32>) -> Result<(), String> {
     let mut source = Source::load(std::path::Path::new(path))?;
     let mut planner = LivePlanner::new();
     let mut player = LivePlayer::new();
@@ -155,7 +177,9 @@ fn run(path: &str, watch: bool, device_name: Option<&str>) -> Result<(), String>
     };
 
     let device = open_device(device_name)?;
-    let config = engine_config(&device)?;
+    let (config, rate) = pick_config(&device, forced_rate)?;
+    // None at the engine's own rate: the samples reach the device untouched.
+    let mut resampler = if rate == SAMPLE_RATE as u32 { None } else { Some(Resampler::new(SAMPLE_RATE as u32, rate)) };
     let device_desc = device.description().map(|d| d.to_string()).unwrap_or_else(|_| "?".into());
 
     let (plan_tx, plan_rx): (SyncSender<Plan>, Receiver<Plan>) = sync_channel(4);
@@ -191,8 +215,25 @@ fn run(path: &str, watch: bool, device_name: Option<&str>) -> Result<(), String>
             let mut r = [0.0f32; BLOCK_SIZE];
             for chunk in data.chunks_mut(BLOCK_SIZE * 2) {
                 let frames = chunk.len() / 2;
-                if let Some(bar) = player.process(&mut l[..frames], &mut r[..frames]) {
-                    let _ = event_tx.try_send(Event::Swapped { bar });
+                match resampler.as_mut() {
+                    None => {
+                        if let Some(bar) = player.process(&mut l[..frames], &mut r[..frames]) {
+                            let _ = event_tx.try_send(Event::Swapped { bar });
+                        }
+                    }
+                    Some(rs) => {
+                        // Render engine blocks until the converter has enough
+                        // input for this chunk of device frames, then pull.
+                        while rs.needed(frames) > 0 && rs.can_push() {
+                            let mut bl = [0.0f32; BLOCK_SIZE];
+                            let mut br = [0.0f32; BLOCK_SIZE];
+                            if let Some(bar) = player.process(&mut bl, &mut br) {
+                                let _ = event_tx.try_send(Event::Swapped { bar });
+                            }
+                            rs.push(&bl, &br);
+                        }
+                        rs.pull(&mut l[..frames], &mut r[..frames]);
+                    }
                 }
                 for (i, frame) in chunk.chunks_mut(2).enumerate() {
                     frame[0] = l[i];
@@ -213,7 +254,7 @@ fn run(path: &str, watch: bool, device_name: Option<&str>) -> Result<(), String>
             stats_cb.frames.fetch_add((data.len() / 2) as u64, Ordering::Relaxed);
             let ns = t0.elapsed().as_nanos() as u64;
             stats_cb.worst_ns.fetch_max(ns, Ordering::Relaxed);
-            let budget_ns = (data.len() / 2) as u64 * 1_000_000_000 / SAMPLE_RATE as u64;
+            let budget_ns = (data.len() / 2) as u64 * 1_000_000_000 / rate as u64;
             if ns > budget_ns {
                 stats_cb.late.fetch_add(1, Ordering::Relaxed);
             }
@@ -223,7 +264,8 @@ fn run(path: &str, watch: bool, device_name: Option<&str>) -> Result<(), String>
     ).map_err(|e| format!("cannot open output stream: {}", e))?;
     stream.play().map_err(|e| format!("cannot start output stream: {}", e))?;
 
-    eprintln!("{} {} on {}", verb(watch), path, device_desc);
+    eprintln!("{} {} on {}{}", verb(watch), path, device_desc,
+        if rate == SAMPLE_RATE as u32 { String::new() } else { format!(" (resampled {} -> {} Hz)", SAMPLE_RATE as u32, rate) });
     eprintln!("  {} BPM, {} tracks, {}", tempo, tracks,
         if bars > 0 { format!("{} bars arranged", bars) } else { "no arrangement: loops until you stop it".to_string() });
     eprintln!("  {}q + Enter to quit", if watch { "save the file to re-evaluate it; " } else { "" });
@@ -305,9 +347,9 @@ fn run(path: &str, watch: bool, device_name: Option<&str>) -> Result<(), String>
     let frames = stats.frames.load(Ordering::Relaxed);
     let worst = stats.worst_ns.load(Ordering::Relaxed) as f64 / 1e6;
     let per_cb = if callbacks > 0 { frames as f64 / callbacks as f64 } else { 0.0 };
-    let budget = per_cb / SAMPLE_RATE as f64 * 1e3;
+    let budget = per_cb / rate as f64 * 1e3;
     eprintln!("played {:.1} s in {} callbacks of ~{:.0} frames ({:.2} ms each)",
-        frames as f64 / SAMPLE_RATE as f64, callbacks, per_cb, budget);
+        frames as f64 / rate as f64, callbacks, per_cb, budget);
     eprintln!("worst callback {:.3} ms of {:.2} ms budget ({:.0}%), {} late",
         worst, budget, if budget > 0.0 { worst / budget * 100.0 } else { 0.0 },
         stats.late.load(Ordering::Relaxed));

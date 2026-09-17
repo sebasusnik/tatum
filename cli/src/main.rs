@@ -1,5 +1,7 @@
 mod include;
 mod live;
+mod resample;
+
 
 use std::fs;
 use std::process;
@@ -34,8 +36,8 @@ USAGE:
     synth render <song.synth> [-o output.wav] [--bars N]
     synth check <song.synth>
     synth params [bass|fm|keys|beats|track|fx] [--json]
-    synth play <song.synth> [--device <name>]
-    synth watch <song.synth> [--device <name>]
+    synth play <song.synth> [--device <name>] [--rate <hz>]
+    synth watch <song.synth> [--device <name>] [--rate <hz>]
 
 COMMANDS:
     render    Parse, compile, and render a .synth file to WAV
@@ -45,7 +47,9 @@ COMMANDS:
     watch     Play, and re-evaluate the file every time it is saved: value edits
               apply at once, anything else takes over on the next bar; a save
               that does not compile is reported and the last good version keeps
-              playing. --list-devices shows the output devices.
+              playing. --list-devices shows the output devices. The engine runs
+              at 44.1 kHz; a device that only offers another rate (Bluetooth:
+              48 kHz) gets the output resampled. --rate forces the device rate.
     help      Show this help
 ");
 }
@@ -267,4 +271,37 @@ fn cmd_render(args: &[String]) {
 fn write_wav_stereo(path: &str, samples_l: &[f32], samples_r: &[f32], sample_rate: u32) {
     let bytes = synth_core::wav::encode_stereo_16(samples_l, samples_r, sample_rate);
     fs::write(path, bytes).expect("Failed to write WAV file");
+}
+
+/// A counting allocator for the tests of what runs in the audio callback.
+/// Counts per thread: tests run in parallel, and another test's `Vec` must
+/// not be charged to the one under measurement.
+#[cfg(test)]
+mod test_alloc {
+    use std::alloc::{GlobalAlloc, Layout, System};
+    use std::cell::Cell;
+
+    thread_local! {
+        pub static ALLOCS: Cell<usize> = const { Cell::new(0) };
+        pub static COUNTING: Cell<bool> = const { Cell::new(false) };
+    }
+
+    struct Counting;
+
+    unsafe impl GlobalAlloc for Counting {
+        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            COUNTING.with(|c| if c.get() { ALLOCS.with(|a| a.set(a.get() + 1)); });
+            unsafe { System.alloc(layout) }
+        }
+        unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+            unsafe { System.dealloc(ptr, layout) }
+        }
+        unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+            COUNTING.with(|c| if c.get() { ALLOCS.with(|a| a.set(a.get() + 1)); });
+            unsafe { System.realloc(ptr, layout, new_size) }
+        }
+    }
+
+    #[global_allocator]
+    static A: Counting = Counting;
 }

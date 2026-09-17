@@ -14,9 +14,10 @@ cargo run --release -p synth-cli -- play examples/acid_arp.synth
 cargo run --release -p synth-cli -- watch live.synth     # re-evaluates on every save
 ```
 
-`play` and `watch` open the default output device through cpal at 44.1 kHz (`--device
-<name>` picks another, `--list-devices` shows them) and print the worst callback time
-against the budget on exit. `watch` is the live set: value edits apply at once, anything
+`play` and `watch` open the default output device through cpal (`--device <name>` picks
+another, `--list-devices` shows them) and print the worst callback time against the
+budget on exit. The engine renders at 44.1 kHz; a device that only offers another rate,
+which is every Bluetooth headphone, gets the output resampled on the way out. `watch` is the live set: value edits apply at once, anything
 else takes over on the next bar keeping every tail and voice the edit did not touch, and
 a save that does not compile is reported while the last good version keeps playing.
 See "Livecoding semantics" in `docs/DSL.md` and the analysis in `docs/LIVE.md`.
