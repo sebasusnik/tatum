@@ -66,6 +66,21 @@ impl Parser {
         }
     }
 
+    /// A node label after `as`. Naming an autopan `pan` or a mixer `mix` is the
+    /// obvious thing to write, and those are keyword tokens, so a plain
+    /// identifier is too narrow here.
+    fn expect_node_label(&mut self) -> Option<String> {
+        self.skip_newlines();
+        let name = match self.peek() {
+            Token::Pan => "pan",
+            Token::Level => "level",
+            Token::Velocity => "velocity",
+            _ => return self.expect_ident(),
+        };
+        self.advance();
+        Some(String::from(name))
+    }
+
     fn expect_ident(&mut self) -> Option<String> {
         self.skip_newlines();
         match self.peek().clone() {
@@ -861,6 +876,69 @@ impl Parser {
                     };
                     current_row.push(Step::Chord(ChordStep { notes, velocity, plock }));
                 }
+                // `<B4 C#5 D5>` -- notes in sequence inside one step. The
+                // closing `>` lexes as Arrow; a routing chain never appears in
+                // a pattern body, so there is nothing to disambiguate.
+                Token::LAngle => {
+                    self.advance();
+                    let mut subs: Vec<NoteStep> = Vec::new();
+                    let mut slide_next = false;
+                    loop {
+                        match self.peek() {
+                            Token::Arrow => { self.advance(); break; }
+                            Token::RBrace | Token::Eof => break,
+                            Token::Tilde => { self.advance(); slide_next = true; }
+                            Token::Note(ref nn) => {
+                                let nn = nn.clone();
+                                self.advance();
+                                let velocity = if matches!(self.peek(), Token::Colon) {
+                                    self.advance();
+                                    self.expect_number()
+                                } else { None };
+                                subs.push(NoteStep {
+                                    note: NoteRef::Absolute(nn),
+                                    velocity,
+                                    plock: PLock::default(),
+                                    slide: core::mem::take(&mut slide_next),
+                                });
+                            }
+                            Token::Number(v) => {
+                                let v = *v;
+                                self.advance();
+                                let degree = math::floor(v) as u8;
+                                let octave = ((v - math::floor(v)) * 10.0 + 0.5) as u8;
+                                if (1..=7).contains(&degree) {
+                                    let velocity = if matches!(self.peek(), Token::Colon) {
+                                        self.advance();
+                                        self.expect_number()
+                                    } else { None };
+                                    subs.push(NoteStep {
+                                        note: NoteRef::Degree(degree, octave),
+                                        velocity,
+                                        plock: PLock::default(),
+                                        slide: core::mem::take(&mut slide_next),
+                                    });
+                                }
+                            }
+                            _ => { self.advance(); }
+                        }
+                    }
+                    let sp = self.span();
+                    if subs.is_empty() {
+                        self.errors.push(ParseError { line: sp.line, col: sp.col,
+                            message: String::from("subdivision group `<...>` is empty: it needs at least one note") });
+                    } else if subs.len() > crate::dsl::compiler::MAX_SUBDIV {
+                        self.errors.push(ParseError { line: sp.line, col: sp.col,
+                            message: format!("subdivision group has {} notes, the most one step can hold is {}",
+                                subs.len(), crate::dsl::compiler::MAX_SUBDIV) });
+                    } else {
+                        // the group inherits the pending `~` for its first note
+                        if core::mem::take(&mut pending_slide) {
+                            subs[0].slide = true;
+                        }
+                        current_row.push(Step::Subdiv(subs));
+                    }
+                }
                 Token::Note(ref n) if note_is_chord_symbol(n) || (self.peek_is_slash_next() && crate::dsl::chords::parse(n).is_some()) => {
                     let n = n.clone();
                     self.advance();
@@ -882,12 +960,26 @@ impl Parser {
                     } else {
                         PLock::default()
                     };
-                    current_row.push(Step::Note(NoteStep {
+                    // `A4*3` -- the same note three times inside the step. The
+                    // drum lanes already spell a roll this way; this is the same
+                    // idea for pitches, desugared into a subdivision group so the
+                    // engine only has to know about one thing.
+                    let ratchet = self.parse_ratchet_count();
+                    let base = NoteStep {
                         note: NoteRef::Absolute(n),
                         velocity,
                         plock,
                         slide: core::mem::take(&mut pending_slide),
-                    }));
+                    };
+                    if ratchet > 1 {
+                        let mut subs = vec![base];
+                        for _ in 1..ratchet {
+                            subs.push(NoteStep { slide: false, ..subs[0].clone() });
+                        }
+                        current_row.push(Step::Subdiv(subs));
+                    } else {
+                        current_row.push(Step::Note(base));
+                    }
                 }
                 // Scale degree: 1.3 = degree 1, octave 3
                 Token::Number(v) => {
@@ -1006,7 +1098,11 @@ impl Parser {
                 ),
             });
         }
-        patterns.push(PatternDef { name, rows, lane_labels });
+        let def = PatternDef { name, rows, lane_labels };
+        match patterns.iter().position(|p| p.name == def.name) {
+            Some(i) => patterns[i] = def,
+            None => patterns.push(def),
+        }
     }
 
     /// Is the token after the current one a `/`? (`E5/3` is a power chord, `E5` a note.)
@@ -1096,6 +1192,34 @@ impl Parser {
     }
 
     // ── Track ──
+
+    /// A redefinition only says what it changes; everything it leaves out
+    /// keeps the value the earlier definition gave it. This is the same rule a
+    /// scene track already follows, and without it a step of a live set that
+    /// wants to move one fader has to restate the track's whole chain -- and
+    /// then it owns that chain, so a later fix to the rig never reaches it.
+    /// `play`, `using` and the `out >` chain read as unset when absent.
+    fn merge_track(old: &TrackDef, new: TrackDef) -> TrackDef {
+        TrackDef {
+            name: new.name,
+            play: if new.play.is_empty() { old.play.clone() } else { new.play },
+            using_instrument: if new.using_instrument.is_empty() {
+                old.using_instrument.clone()
+            } else {
+                new.using_instrument
+            },
+            routing: if new.routing.is_empty() { old.routing.clone() } else { new.routing },
+            velocity: new.velocity.or(old.velocity),
+            level: new.level.or(old.level),
+            pan: new.pan.or(old.pan),
+            gate: new.gate.or(old.gate),
+            delay_send: new.delay_send.or(old.delay_send),
+            reverb_send: new.reverb_send.or(old.reverb_send),
+            sidechain: new.sidechain.or(old.sidechain),
+            sidechain_source: new.sidechain_source.or_else(|| old.sidechain_source.clone()),
+            arp: new.arp.or_else(|| old.arp.clone()),
+        }
+    }
 
     fn parse_track(&mut self, tracks: &mut Vec<TrackDef>) {
         let name = match self.expect_ident() {
@@ -1215,7 +1339,32 @@ impl Parser {
         }
 
         self.expect(&Token::RBrace);
-        tracks.push(track);
+        // A later definition of the same name REPLACES the earlier one, in
+        // place. In place matters: the order of these lists is the order the
+        // engine builds and mixes them, and a live swap inherits state by
+        // position as well as by name, so reordering on a redefinition would
+        // hand a voice's state to a different voice. This is what lets a file
+        // say `use "rig.synth"` and then override three tracks, instead of
+        // every step of a set carrying a copy of the whole rig.
+        match tracks.iter().position(|t| t.name == track.name) {
+            Some(i) => tracks[i] = Self::merge_track(&tracks[i], track),
+            None => tracks.push(track),
+        }
+    }
+
+    /// `*N` after a note: repeat it N times inside the step. Returns 1 when
+    /// there is no `*`, and clamps to what one step can hold.
+    fn parse_ratchet_count(&mut self) -> usize {
+        if !matches!(self.peek(), Token::Star) { return 1; }
+        self.advance();
+        match self.peek() {
+            Token::Number(v) => {
+                let n = *v as usize;
+                self.advance();
+                n.clamp(1, crate::dsl::compiler::MAX_SUBDIV)
+            }
+            _ => 1,
+        }
     }
 
     /// `arp <mode> [rate=N] [gate=F] [octaves=N]` — mode is up, down, updown or off.
@@ -1317,7 +1466,14 @@ impl Parser {
                 self.expect(&Token::RParen);
             }
 
-            routing.push(RoutingNode { kind, params });
+            let label = if matches!(self.peek(), Token::As) {
+                self.advance();
+                self.expect_node_label()
+            } else {
+                None
+            };
+
+            routing.push(RoutingNode { kind, params, label });
         }
     }
 
@@ -1487,14 +1643,24 @@ impl Parser {
                         self.parse_param_list_for(&mut params, &name);
                         self.expect(&Token::RParen);
                     }
-                    chain.push(ChainNode { kind: name, params });
+                    let label = if matches!(self.peek(), Token::As) {
+                        self.advance();
+                        self.expect_node_label()
+                    } else {
+                        None
+                    };
+                    chain.push(ChainNode { kind: name, params, label });
                 }
                 _ => { self.advance(); }
             }
         }
 
         self.expect(&Token::RBrace);
-        chains.push(BusChainDef { bus_name, chain });
+        let def = BusChainDef { bus_name, chain };
+        match chains.iter().position(|c| c.bus_name == def.bus_name) {
+            Some(i) => chains[i] = def,
+            None => chains.push(def),
+        }
     }
 
     // ── Master ──
@@ -1520,7 +1686,13 @@ impl Parser {
                         self.parse_param_list_for(&mut params, &name);
                         self.expect(&Token::RParen);
                     }
-                    chain.push(ChainNode { kind: name, params });
+                    let label = if matches!(self.peek(), Token::As) {
+                        self.advance();
+                        self.expect_node_label()
+                    } else {
+                        None
+                    };
+                    chain.push(ChainNode { kind: name, params, label });
                 }
                 _ => { self.advance(); }
             }
@@ -1728,7 +1900,23 @@ impl Parser {
         }
 
         self.expect(&Token::RBrace);
-        module_defs.push(ModuleDef { module_type, name, params, op_envelopes });
+        let def = ModuleDef { module_type, name, params, op_envelopes };
+        match module_defs.iter().position(|m| m.name == def.name) {
+            Some(i) => {
+                // Parameters the redefinition does not name keep their value.
+                let mut merged = module_defs[i].clone();
+                merged.module_type = def.module_type;
+                for np in def.params {
+                    match merged.params.iter_mut().find(|p| p.name == np.name) {
+                        Some(old) => old.value = np.value,
+                        None => merged.params.push(np),
+                    }
+                }
+                if !def.op_envelopes.is_empty() { merged.op_envelopes = def.op_envelopes; }
+                module_defs[i] = merged;
+            }
+            None => module_defs.push(def),
+        }
     }
 
     // ── Automation ──
@@ -1741,44 +1929,36 @@ impl Parser {
             None => return,
         };
 
-        // Check for dot-separated target: name.param (lexer doesn't handle dots in idents)
-        // The dot gets tokenized... actually the lexer eats '.' as part of numbers or Tie (..)
-        // We need to handle "ident . ident" → "ident.ident" by checking for Number(.) after ident
-        // Actually, looking at the lexer, a '.' followed by non-digit is skipped.
-        // Let's check if next token gives us continuation
-        // The lexer would have produced a number starting with . if followed by digits
-        // For "funk_bass.cutoff", the '.' is between two identifiers
-        // Since '.' isn't handled as a single char token, it gets skipped by the lexer
-        // The two parts "funk_bass" and "cutoff" come as separate Ident tokens
-        // But actually, looking at lexer, identifiers include _ but not .
-        // So "funk_bass.cutoff" → Ident("funk_bass"), then '.' gets skipped, then Ident("cutoff")
-        // We need to peek and see if there's an unexpected ident right after (the '.' was eaten)
-
-        // Workaround: if next token is an Ident and it's NOT a number/arrow, treat as continuation
-        // Actually let's just check if the raw source has a dot by looking at column positions
-        // Simplest approach: check if next token is an Ident that could be a param name
-        self.skip_newlines();
-        // Extract param name from Ident or keyword tokens (level, velocity, etc.)
-        let param_name = match self.peek().clone() {
-            Token::Ident(ref s) => Some(s.clone()),
-            Token::Level => Some(alloc::string::String::from("level")),
-            Token::Velocity => Some(alloc::string::String::from("velocity")),
-            Token::Pan => Some(alloc::string::String::from("pan")),
-            _ => None,
-        };
-        if let Some(part_clone) = param_name {
-            // Check if this could be a dotted continuation
-            // Heuristic: if the next thing after this ident is a number (the first keyframe),
-            // then this ident is the param part of a dotted target
+        // A dotted target arrives as separate Ident tokens: the lexer drops a
+        // `.` that sits between two identifiers, so `bass.lp wet` is three
+        // idents in a row. Collect them until the first keyframe number and
+        // rejoin, which handles `reverb_mix`, `tines.mod_index` and the
+        // three-part `<track>.<node>.wet` with the same rule.
+        loop {
+            self.skip_newlines();
+            let part = match self.peek().clone() {
+                Token::Ident(ref s) => s.clone(),
+                Token::Level => alloc::string::String::from("level"),
+                Token::Velocity => alloc::string::String::from("velocity"),
+                Token::Pan => alloc::string::String::from("pan"),
+                Token::Mix => alloc::string::String::from("mix"),
+                _ => break,
+            };
             let saved = self.pos;
             self.advance();
-            if let Token::Number(_) | Token::Rest = self.peek() {
-                // This is the param part
-                target = alloc::format!("{}.{}", target, part_clone);
-            } else {
-                // Not a param part, restore
+            // Only a part if a keyframe or another part follows it; otherwise
+            // it belongs to whatever comes next and we have to give it back.
+            let continues = matches!(
+                self.peek(),
+                Token::Number(_) | Token::Rest | Token::Ident(_)
+                    | Token::Level | Token::Velocity | Token::Pan | Token::Mix
+            );
+            if !continues {
                 self.pos = saved;
+                break;
             }
+            target = alloc::format!("{}.{}", target, part);
+            if matches!(self.peek(), Token::Number(_) | Token::Rest) { break; }
         }
 
         // Parse keyframes: val > val [> val]

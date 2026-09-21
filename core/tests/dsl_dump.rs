@@ -64,6 +64,15 @@ fn dump_funk_dsl_compiled() {
                     }
                     print!(")");
                 }
+                CompiledStep::Subdiv { notes, count, .. } => {
+                    print!("    [{:2}] Subdiv(", si);
+                    for (i, n) in notes.iter().take(*count as usize).enumerate() {
+                        if i > 0 { print!(" "); }
+                        print!("{}{}@{:.2}", if n.slide { "~" } else { "" },
+                               n.midi_note, n.velocity);
+                    }
+                    print!(")");
+                }
                 CompiledStep::DrumHit { velocity, plock, .. } => {
                     print!("    [{:2}] DrumHit(vel={:.2}", si, velocity);
                     if plock.cutoff.is_some() || plock.env_depth.is_some() || plock.resonance.is_some() || plock.gate.is_some() {

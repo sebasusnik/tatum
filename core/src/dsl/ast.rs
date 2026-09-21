@@ -164,6 +164,10 @@ pub enum Step {
     Note(NoteStep),
     Chord(ChordStep),
     DrumHit(DrumStep),
+    /// Several notes inside ONE step, evenly spaced: `<B4 C#5 D5>`. This is
+    /// how a pattern gets finer than a sixteenth without changing the clock.
+    /// `A4*3` parses to the same thing with the note repeated.
+    Subdiv(Vec<NoteStep>),
     Rest,
     Tie,
 }
@@ -233,6 +237,10 @@ pub struct ArpDef {
 pub struct RoutingNode {
     pub kind: String,         // "drive", "chorus", "master", bus name, etc
     pub params: Vec<Param>,
+    /// `> autowah(...) as wah`. Naming a node is what lets anything else refer
+    /// to it -- an `auto` sweep, or a person reading the chain. Counting
+    /// positions breaks the moment someone inserts a node earlier in the line.
+    pub label: Option<String>,
 }
 
 /// Bus FX chain definition.
@@ -246,6 +254,7 @@ pub struct BusChainDef {
 pub struct ChainNode {
     pub kind: String,
     pub params: Vec<Param>,
+    pub label: Option<String>,
 }
 
 /// Master FX chain definition.

@@ -1,0 +1,14 @@
+# set: bars=8 phase=main energy=8
+# set-note: `pluck` comes in on `pluck_b` at 0.12 with its `pan` full wet and `bass` swaps to the walking `bass_b`, everything else held — five voices, nothing out, the groove just got its hook.
+
+use "../../examples/rigs/proghouse_rig.synth"
+
+track drums { play beat_main level 0.480 }
+track sub { play sub_push level 0.136 out > lowpass(170hz, 0.02) as lp > saturate(0.25, wet=1.0) as drive > master }
+track bass { play bass_b level 0.182 }
+track pad { level 0.064 delay_send 0.12 out > highpass(200, 0.02) as hp > phaser(0.3, bars=12, wet=1.0) as ph > autopan(0.3, bars=10, wet=1.0) as pan > master }
+track pluck { play pluck_b level 0.084 out > highpass(400, 0.02) as hp > autopan(0.45, bars=7, wet=1.0) as pan > master }
+track rhodes { play chords_high level 0.000 delay_send 0.3 reverb_send 0.5 out > highpass(260, 0.02) as hp > vowel(o, a, bars=16, wet=1.0) as vox > lowpass(5khz, 0.02) as lp > master }
+track lead { play lead_b level 0.000 delay_send 0.45 reverb_send 0.5 out > highpass(300, 0.02) as hp > autowah(0.6, base=900hz, range=2800hz, peak=0.25, wet=1.0) as wah > lowpass(8khz, 0.02) as lp > master }
+track air { play air_lift level 0.000 out > highpass(1.4khz, 0.02) as hp > autopan(0.35, bars=14, wet=1.0) as pan > master }
+track sweep { play sweep_up reverb_send 0.4 out > gain(5) as up > bandpass(5600, 0.32, lfo_bars=8, lfo_depth=3600) as bp > lowpass(10khz, 0.02) as lp > master }

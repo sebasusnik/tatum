@@ -6,6 +6,10 @@ scale E minor
 sidechain 0.0
 swing 0.54
 humanize 0.20 timing 0.12
+# Full compensation (the default) made the 2-bar interlude the loudest thing in the
+# track and the 6-track verse the quietest. 0.35 keeps a little of it, so a thin
+# scene is not a hole, without flattening the arrangement.
+gain_comp 0.35
 
 groove primus_pocket {
     snare nudge 0.006
@@ -19,10 +23,14 @@ groove primus_pocket {
 
 # Slap bass — aggressive filter envelope, high resonance, percussive attack
 # The Claypool tone: bright slap transient, growly midrange, snappy release
+# The module's own filter envelope is fixed in the engine at 5 ms attack / 300 ms
+# decay to zero, whatever `decay` says, so the sweep always ends at the bare `cutoff`
+# and the note dies dark. Brightness has to come from the base cutoff and the autowah
+# on the track, not from this envelope.
 module bass slap {
-    cutoff 0.10
+    cutoff 420hz       # was 0.10 = 40 Hz: the filter sat below the fundamental
     cutoff_env 0.85
-    resonance 0.72
+    resonance 30%      # was 0.72; the ladder peak was parked in the mud
     glide 0.02
     keytrack 0.6
     osc1_wave saw
@@ -37,9 +45,9 @@ module bass slap {
 
 # Fingerstyle bass — rounder, deeper, for sustained lines
 module bass finger {
-    cutoff 0.18
+    cutoff 150hz       # was 0.18 = 71 Hz
     cutoff_env 0.45
-    resonance 0.40
+    resonance 30%
     glide 0.08
     keytrack 0.4
     osc1_wave saw
@@ -103,7 +111,7 @@ module fm scrape {
 
 # Sub layer — pure low end underneath the slap
 module bass sub {
-    cutoff 0.05
+    cutoff 100hz       # was 0.05 = 28 Hz, below the notes it was filtering
     cutoff_env 0.10
     resonance 0.15
     osc1_wave saw
@@ -127,15 +135,15 @@ module beats kit {
     snare_pitch 0.35
     snare_drive 0.70
     snare_snap 0.40
-    snare_pan 0.05
+    snare_pan 0.12
 
     hihat_level 0.40
     hihat_pitch 0.38
-    hihat_pan 0.28
+    hihat_pan 0.45
     hihat_decay 0.25
 
     clap_level 0.55
-    clap_pan -0.08
+    clap_pan -0.40
 }
 
 # ────────────────────────────────────────────────
@@ -194,14 +202,14 @@ pattern bass_drone {
 
 # Sub pattern — follows slap root notes
 pattern sub_follow {
-    E0:0.75  ..  -  E0:0.50
-    -        G0:0.60  ..  -
-    A0:0.70  ..  E0:0.45  -
-    -        B0:0.55  -  E0:0.60
+    E1:0.75  ..  -  E1:0.50
+    -        G1:0.60  ..  -
+    A1:0.70  ..  E1:0.45  -
+    -        B1:0.55  -  E1:0.60
 }
 
 pattern sub_hold {
-    E0:0.65 .. .. ..
+    E1:0.65 .. .. ..
     ..      .. .. ..
     ..      .. .. ..
     ..      .. .. ..
@@ -325,7 +333,7 @@ track drums {
     using kit
     velocity 1.0
     level 0.68
-    out > saturate(0.10) > eq(low=1.5, mid=1.5, high=1.6) > compressor(-10, ratio=3, attack=2, release=40, makeup=1.41) > master
+    out > saturate(0.10) > eq(low=0.5, mid=2.0, high=2.2) > compressor(-10, ratio=3, attack=8, release=40, makeup=3db) > master
 }
 
 track slap {
@@ -335,7 +343,12 @@ track slap {
     level 0.52
     gate 0.75
     delay_send 0.05
-    out > saturate(0.30) > eq(low=1.5, mid=2.5, high=2.0) > compressor(-8, ratio=3, attack=1, release=30, makeup=1.26) > master
+    # The snap of a slap bass lives at 2-3 kHz. saturate(0.30) is drive 0.3 on a 0..10
+    # scale, so it was doing almost nothing but costing crest; the autowah is what
+    # actually opens the top, and cutting 1 kHz keeps the extra brightness from
+    # reading as honk. Measured against the old chain: +6.7 dB at 2.5 kHz,
+    # -4.4 dB at 640 Hz, crest 11.8 -> 9.6.
+    out > autowah(0.9, base=450hz, range=4200hz, peak=0.35, attack=2, release=90) > eq(low=-1.5, mid=-1.0, high=3.0) > compressor(-8, ratio=3, attack=5, release=30, makeup=2db) > master
 }
 
 track finger {
@@ -351,7 +364,7 @@ track sub {
     play silence
     using sub
     velocity 1.0
-    level 0.14
+    level 0.20
     sidechain 0.15
     gate 0.85
     out > master
@@ -361,7 +374,8 @@ track guitar {
     play silence
     using guitar
     velocity 1.0
-    level 0.22
+    pan -0.62
+    level 0.28
     gate 0.35
     delay_send 0.20
     reverb_send 0.12
@@ -372,7 +386,8 @@ track clean {
     play silence
     using clean
     velocity 1.0
-    level 0.18
+    pan 0.58
+    level 0.22
     gate 0.12
     delay_send 0.30
     reverb_send 0.25
@@ -383,10 +398,10 @@ track scrape {
     play silence
     using scrape
     velocity 1.0
-    level 0.12
+    level 0.32
     reverb_send 0.40
     delay_send 0.20
-    out > master
+    out > highpass(180hz, 0.02) > autopan(0.55, bars=6) > master
 }
 
 # ────────────────────────────────────────────────
@@ -394,9 +409,9 @@ track scrape {
 # ────────────────────────────────────────────────
 
 master {
-    in > eq(low=2.2, mid=1.4, high=0.9)
-       > compressor(-6, ratio=3.0, attack=3, release=50, makeup=2.00)
-       > limiter
+    in > eq(low=-1.0, mid=2.0, high=1.5)
+       > compressor(-9, ratio=2.5, attack=12, release=90, makeup=5db)
+       > limiter(0.95)
        > out
 }
 
@@ -445,18 +460,20 @@ scene verse_a2 {
 
 # BREAKDOWN: halftime, scrape texture, finger bass
 scene breakdown {
-    track finger  { play finger_walk      using finger }
+    auto guitar mod_index 0.55 > 0.80 > 0.60
+    track finger  { play finger_walk      using finger level 0.30 }
     track drums   { play drums_breakdown  using kit }
     track scrape  { play scrape_texture   using scrape }
-    track guitar  { play guitar_dissonant using guitar }
+    track guitar  { play guitar_dissonant using guitar level 0.26 }
     track sub     { play sub_hold         using sub }
 }
 
 # INTERLUDE: weird noise, sparse
 scene interlude {
+    auto scrape mod_index 0.80 > 0.95 > 0.75
     track scrape  { play scrape_swell    using scrape }
-    track drums   { play drums_halftime  using kit }
-    track slap    { play bass_drone      using finger }
+    track drums   { play drums_halftime  using kit level 0.60 }
+    track slap    { play bass_drone      using finger level 0.24 }
 }
 
 # FILL 2

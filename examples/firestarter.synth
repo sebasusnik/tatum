@@ -403,6 +403,7 @@ track acid {
     velocity 1.0
     level 0.62
     gate 0.50
+    pan 0.30
     out > saturate(0.70) > eq(low=1.5, mid=2.5, high=2.0) > compressor(-10, ratio=4, attack=1, release=15, makeup=1.41) > master
 }
 
@@ -412,6 +413,7 @@ track filth {
     velocity 1.0
     level 0.55
     gate 0.60
+    pan -0.30
     out > saturate(0.65) > lowpass(1260) > master
 }
 
@@ -441,6 +443,7 @@ track stab {
     using stab
     velocity 1.0
     level 0.48
+    pan 0.35
     gate 0.06
     delay_send 0.20
     out > saturate(0.40) > master
@@ -451,7 +454,7 @@ track circuit {
     using circuit
     velocity 1.0
     level 0.38
-    pan -0.15
+    pan -0.35
     gate 0.05
     delay_send 0.25
     out > bitcrush(6, 0.4) > saturate(0.35) > master
@@ -462,7 +465,7 @@ track machine {
     using machine
     velocity 1.0
     level 0.18
-    pan -0.25
+    pan 0.25
     reverb_send 0.20
     delay_send 0.15
     out > saturate(0.20) > master
@@ -474,7 +477,7 @@ track doom {
     velocity 1.0
     level 0.18
     reverb_send 0.35
-    out > saturate(0.10) > master
+    out > saturate(0.10) > autopan(0.35, bars=8) > master
 }
 
 # ────────────────────────────────────────────────
@@ -482,9 +485,9 @@ track doom {
 # ────────────────────────────────────────────────
 
 master {
-    in > eq(low=2.8, mid=2.0, high=0.8)
+    in > eq(low=0.4, mid=2.0, high=0.8)
        > saturate(0.30)
-       > compressor(-10, ratio=5.0, attack=1, release=20, makeup=1.58)
+       > compressor(-10, ratio=5.0, attack=1, release=20, makeup=2.5)
        > limiter
        > out
 }
@@ -497,34 +500,34 @@ master {
 scene intro {
     track drums   { play beat_sparse    using iron }
     track doom    { play doom_drone     using doom }
-    track machine { play machine_grind  using machine }
+    track machine { play machine_grind  using machine pan 0.25 }
     track sub     { play sub_hold       using sub }
 }
 
 # BUILD: frantic arp rising, machine noise
 scene build1 {
     track drums   { play beat_build     using iron }
-    track circuit { play arp_rise       using circuit }
+    track circuit { play arp_rise       using circuit pan -0.35 }
     track doom    { play doom_drone     using doom }
-    track machine { play machine_chaos  using machine }
+    track machine { play machine_chaos  using machine pan 0.25 }
     track sub     { play sub_hold       using sub }
 }
 
 # DROP A: pounding kicks, acid, stabs — full rave assault
 scene drop_a {
     track drums   { play beat_pound     using iron }
-    track acid    { play acid_main      using acid }
+    track acid    { play acid_main      using acid pan 0.30 }
     track sub     { play sub_pulse      using sub }
-    track stab    { play stab_offbeat   using stab }
+    track stab    { play stab_offbeat   using stab pan 0.35 }
     track doom    { play doom_minor     using doom }
 }
 
 # DROP A2: add scream, more acid
 scene drop_a2 {
     track drums   { play beat_pound     using iron }
-    track acid    { play acid_frantic   using acid }
+    track acid    { play acid_frantic   using acid pan 0.30 }
     track sub     { play sub_pulse      using sub }
-    track stab    { play stab_machine   using stab }
+    track stab    { play stab_machine   using stab pan 0.35 }
     track scream  { play scream_main    using scream }
     track doom    { play doom_minor     using doom }
 }
@@ -532,54 +535,54 @@ scene drop_a2 {
 # STOMP: half-time, filth bass, menacing
 scene stomp {
     track drums   { play beat_stomp     using iron }
-    track filth   { play filth_machine  using filth }
+    track filth   { play filth_machine  using filth pan -0.30 }
     track sub     { play sub_hold       using sub }
-    track machine { play machine_grind  using machine }
+    track machine { play machine_grind  using machine pan 0.25 }
 }
 
 # BUILD 2: arp chaos into destruction
 scene build2 {
     track drums   { play beat_build     using iron }
-    track circuit { play arp_chaos      using circuit }
-    track filth   { play filth_grind    using filth }
-    track machine { play machine_chaos  using machine }
+    track circuit { play arp_chaos      using circuit pan -0.35 }
+    track filth   { play filth_grind    using filth pan -0.30 }
+    track machine { play machine_chaos  using machine pan 0.25 }
     track doom    { play doom_drone     using doom }
 }
 
 # DROP B: breakbeat, everything, industrial chaos
 scene drop_b {
     track drums   { play beat_break     using iron }
-    track acid    { play acid_frantic   using acid }
+    track acid    { play acid_frantic   using acid pan 0.30 }
     track sub     { play sub_pulse      using sub }
     track scream  { play scream_assault using scream }
-    track stab    { play stab_slam      using stab }
+    track stab    { play stab_slam      using stab pan 0.35 }
     track doom    { play doom_minor     using doom }
 }
 
 # DROP B2: full assault — double kicks, all elements, glitch arp
 scene drop_b2 {
     track drums   { play beat_assault   using iron }
-    track filth   { play filth_grind    using filth }
-    track acid    { play acid_pound     using acid }
+    track filth   { play filth_grind    using filth pan -0.30 }
+    track acid    { play acid_pound     using acid pan 0.30 }
     track sub     { play sub_pulse      using sub }
     track scream  { play scream_siren   using scream }
-    track circuit { play arp_stutter    using circuit }
-    track machine { play machine_chaos  using machine }
+    track circuit { play arp_stutter    using circuit pan -0.35 }
+    track machine { play machine_chaos  using machine pan 0.25 }
 }
 
 # BREAK: stripped, grinding, threatening
 scene break1 {
     track drums   { play beat_stomp     using iron }
-    track filth   { play filth_riff     using filth }
+    track filth   { play filth_riff     using filth pan -0.30 }
     track sub     { play sub_hold       using sub }
-    track machine { play machine_grind  using machine }
+    track machine { play machine_grind  using machine pan 0.25 }
 }
 
 # OUTRO: machine dying, sparse
 scene outro {
     track drums   { play beat_sparse    using iron }
     track doom    { play doom_drone     using doom }
-    track machine { play machine_grind  using machine }
+    track machine { play machine_grind  using machine pan 0.25 }
     track sub     { play sub_hold       using sub }
 }
 

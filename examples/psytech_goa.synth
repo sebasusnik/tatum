@@ -514,6 +514,11 @@ track acid {
     out > highpass(220hz, 0.02)
         > saturate(0.9)
         > eq(low=-6.0, mid=1.5, high=0.5)
+        # A resonance 87% squelch has a crest factor of 34: single-cycle spikes were
+        # what drove the master input to 1.19, so the master limiter was working for
+        # one track and everything else paid for it. Catching them here costs the
+        # acid 0.6 dB of RMS and gives the whole mix 1.8 dB of headroom.
+        > limiter(0.5)
         > lowpass(8khz, 0.02)
         > autopan(0.3, bars=4)
         > master
@@ -596,7 +601,7 @@ track riser {
 master {
     in > tilt(-0.02)
        > eq(low=-0.5, mid=-0.8, high=2.6)
-       > compressor(-9, ratio=2.5, attack=8, release=60, makeup=0.8)
+       > compressor(-9, ratio=2.5, attack=8, release=60, makeup=1.5db)
        > limiter(0.95)
        > out
 }
@@ -607,15 +612,16 @@ master {
 
 # 0. Four bars of air before anything hits, so the kick is an arrival.
 scene open {
-    auto murk cutoff 0.04 > 0.16
-    auto drums level 0.18 > 0.46
+    # 0.18 > 0.46 put these four bars 20 dB under the drops. Air, not silence.
+    auto murk cutoff 0.10 > 0.21
+    auto drums level 0.33 > 0.55
     track drums { play beat_open using kit level 0.492 }
     track murk { play murk_dark using murk level 0.1551 pan -0.45 }
 }
 
 # 1. Drums and atmosphere. No bass yet, so the roll lands as an event.
 scene intro {
-    auto drums level 0.3 > 0.537
+    auto drums level 0.44 > 0.62
     auto murk cutoff 0.088 > 0.246
     track drums { play beat_intro using kit level 0.5741 }
     track murk { play murk_dark using murk level 0.1551 pan -0.45 }
@@ -625,7 +631,7 @@ scene intro {
 # 2. Build: the roll enters stuttered, the acid opens, the riser climbs.
 scene build1 {
     auto squelch cutoff 0.271 > 0.634
-    auto riser level 0.01 > 0.16
+    auto riser level 0.05 > 0.42      # was 0.01 > 0.16: 29 dB under the mix, inaudible
     auto murk cutoff 0.246 > 0.327
     track drums { play beat_build using kit level 0.7118 }
     track bass { play bass_stut using roll level 0.7686 }
@@ -678,6 +684,9 @@ scene breakdown {
     auto squelch cutoff 0.593 > 0.36 > 0.534
     auto murk cutoff 0.161 > 0.37
     track drums { play beat_break using kit level 0.666 }
+    # No kick is the point, but with the bass gone too there was nothing at all
+    # under 200 Hz for eight bars and the section measured 13 dB below the drop.
+    track sub { play sub_hold using sub level 0.24 }
     track murk { play murk_lift using murk level 0.1551 pan -0.45 }
     track ghost { play ghost_hold using smear level 0.3406 pan 0.35 }
     track acid { play acid_ghost using squelch level 1.099 pan 0.12 }
@@ -688,7 +697,7 @@ scene breakdown {
 # 6. Second build: kick back, bass stutters, riser and acid climb together.
 scene build2 {
     auto squelch cutoff 0.333 > 0.705
-    auto riser level 0.02 > 0.2
+    auto riser level 0.06 > 0.5
     auto murk cutoff 0.37 > 0.272
     track drums { play beat_build using kit level 0.7118 }
     track bass { play bass_stut using roll level 1.195 }

@@ -48,6 +48,10 @@ pub enum Token {
     DrumAccent,        // X  (accent velocity 1.0)
     DrumGhost,         // o  (ghost note velocity 0.35)
     Rest,              // -
+    /// `<` opens a subdivision group: `<B4 C#5 D5>` splits one step into
+    /// three. The closing `>` lexes as Arrow, which never appears inside a
+    /// pattern body, so there is no ambiguity with a routing chain.
+    LAngle,
     Tilde,             // ~  (slide into this note)
     Tie,               // ..
 
@@ -131,6 +135,7 @@ pub fn tokenize(source: &str) -> Vec<Span> {
 
         // Single-char tokens
         match ch {
+            '<' => { tokens.push(Span { token: Token::LAngle, line, col: start_col }); i += 1; col += 1; continue; }
             '>' => { tokens.push(Span { token: Token::Arrow, line, col: start_col }); i += 1; col += 1; continue; }
             '=' => { tokens.push(Span { token: Token::Eq, line, col: start_col }); i += 1; col += 1; continue; }
             '*' => { tokens.push(Span { token: Token::Star, line, col: start_col }); i += 1; col += 1; continue; }

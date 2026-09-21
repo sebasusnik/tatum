@@ -19,6 +19,24 @@ use crate::SAMPLE_RATE;
 /// Maximum number of inputs a single node can accept.
 pub const MAX_NODE_INPUTS: usize = 8;
 
+/// One step of an FX chain: what to build, and how much of it to hear.
+///
+/// `wet` is the universal bypass. At 0 the engine skips the node's processing
+/// entirely rather than multiplying its output by zero, so a chain of effects
+/// that are switched off costs nothing -- the same reasoning as a muted track.
+/// At 1 the node replaces the signal; in between it is blended against the dry.
+/// It is deliberately separate from the `mix` some nodes declare, which is
+/// those nodes' own internal wet amount and has nothing to do with bypassing.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ChainStep {
+    pub spec: NodeSpec,
+    pub wet: f32,
+}
+
+impl ChainStep {
+    pub fn full(spec: NodeSpec) -> Self { Self { spec, wet: 1.0 } }
+}
+
 // ── NodeSpec: lightweight description for creating nodes ──
 
 /// Describes how to create a node. Stored in GraphTemplate.

@@ -31,8 +31,12 @@ module keys wash {
     voice_mode poly
     cutoff 1khz
     resonance 6%
-    detune 0.3
-    chorus_mix 0.4
+    detune 0.3          # free: detune doesn't drive roughness on its own
+    chorus_mix 0.08     # was 0.4 -- with detune 0.3 on a poly 3-note chord
+                        # that beat at f*0.038 (~16.7 Hz on the A4 in the
+                        # chord), squarely in the 15-70 Hz roughness band.
+                        # autopan(0.25, bars=8) on the track already carries
+                        # the width, so chorus only needs a trace of it.
     lfo_target cutoff
     lfo_waveform triangle
     lfo_sync free
@@ -82,24 +86,24 @@ master {
 }
 
 scene intro {
-    track wash { play wash_pad using wash }
-    track pluck { play chord_hold using pluck arp up rate=8 gate=0.7 octaves=1 }
+    track wash { play wash_pad using wash pan -0.4 }
+    track pluck { play chord_hold using pluck pan 0.35 arp up rate=8 gate=0.7 octaves=1 }
 }
 
 scene groove {
     auto acid cutoff 0.15 > 0.45
     track drums { play beat using kit }
     track acid  { play acid_line using acid }
-    track pluck { play chord_hold using pluck }
-    track wash { play wash_pad using wash }
+    track pluck { play chord_hold using pluck pan 0.35 }
+    track wash { play wash_pad using wash pan -0.4 }
 }
 
 scene peak {
     auto acid cutoff 0.45 > 0.7 > 0.35
     track drums { play beat using kit }
     track acid  { play acid_line using acid }
-    track pluck { play chord_hold using pluck arp updown rate=32 gate=0.4 octaves=3 }
-    track wash { play wash_pad using wash }
+    track pluck { play chord_hold using pluck pan 0.35 arp updown rate=32 gate=0.4 octaves=3 }
+    track wash { play wash_pad using wash pan -0.4 }
 }
 
 arrange { intro x2  groove x4  peak x4  groove x2 }

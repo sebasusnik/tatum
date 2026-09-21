@@ -1,0 +1,832 @@
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  neon_arterial.synth — "Neon Arterial"                               ║
+# ║  Synthwave / outrun. 104 BPM, F# minor, 4/4, 96 bars (~3:42).        ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+#
+# The harmony is the point. i - bVI - bIII - bVII is the synthwave default
+# and it is the most worn progression in popular music, so this song stays in
+# F# minor and borrows two chords from either side of it instead:
+#
+#   Gmaj7    the Neapolitan, bII, lifted from F# PHRYGIAN. A semitone ABOVE
+#            the tonic. And it contains F#, as its major seventh -- the most
+#            foreign chord in the song is holding the tonic inside it, which
+#            is why it aches instead of just sounding wrong.
+#   C#7      the dominant of F# HARMONIC MINOR, whose E# is the leading tone,
+#            a semitone BELOW the tonic.
+#
+# So the tonic is squeezed from both sides by a semitone, and the cadence
+# bII - V - i (Gmaj7 -> C#7 -> F#m9) is the Neapolitan cadence: 18th century
+# on paper, Carpenter and Vangelis in practice.
+#
+#   A (verse):  F#m9 -> Dmaj7 -> Gmaj7 -> C#7sus4       i - bVI - bII - V7sus
+#   B (chorus): Dmaj9 -> Gmaj7 -> C#7 -> F#m9           bVI - bII - V7 - i
+#
+# The pad plays these as written-out open voicings rather than chord symbols.
+# A symbol stacks root position inside one octave, which is muddy in this
+# register and generic in any: the voicings below spread across two, put the
+# colour tone on top and leave every root to the bass.
+#
+# The bass never plays the G. It takes B under it, so the chord sounds as
+# Gmaj7/B and the line walks F# - D - B - C# by steps and thirds instead of
+# leaping a tritone. That first-inversion Neapolitan is the textbook voicing
+# and it is the only reason the move sounds inevitable rather than pasted on.
+#
+# Two beats modules, not one. The kick and hats live on `drums` bone dry; the
+# snare gets its own track, its own bus and a plate with a fast compressor
+# behind it. That is the 80s gated snare: there is no gate node, but a reverb
+# at wet=0.5 into a 1 ms attack / 70 ms release compressor chops the tail the
+# same way, and keeping it off the kick is what stops the whole kit pumping.
+#
+# On brightness, learned the hard way on detroit.synth: 2-6 kHz is the harsh
+# band and 8 kHz up is the silky one. Air comes from the hats and the reverb
+# return, never from opening a pad's filter into 2-6 kHz. And `chorus_mix` on
+# a detuned poly chord buys stereo width and beating roughness in the same
+# knob, so the chorus stays low and `autopan` carries the width instead.
+#
+# Cutoff curves differ per module and the comments here are measured, not
+# guessed: keys is 200*100^x (0.34 ~ 960 Hz), bass is 20*1000^x (0.32 ~ 180 Hz).
+#
+# Arrangement (96 bars):
+#   intro  8   pad, bell and a filtered arp over whole-note bass, no kick
+#   verse  16  kick on 1 and 3, the bass picks up the eighth-note pulse
+#   pre    8   16th hats, the snare doubles up, filters open. One pass only.
+#   chorus 16  four on the floor, brass pulse, lead hook
+#   night  8   the kick goes, the bottom stays: a drop, not a hole
+#   solo   16  one guitar: bends, vibrato and swept triads, all the same
+#              voice -- `~` to bend, `<a b c>` to split a step into three
+#   chorus2 16 the payoff, everything in
+#   outro  8   the kit leaves, the pad fades
+
+tempo 104
+meter 4/4
+scale F# minor        # natural minor; the G natural and the E# are borrowed
+swing 0.5                 # synthwave is machine-straight; no shuffle
+humanize 0.03 timing 0.004
+sidechain 0.32 attack=2ms release=95ms
+gain_comp 0.45            # partly on: the intro and the breakdown run three
+                          # tracks against the chorus's eight, and without some
+                          # compensation that reads as a 12 dB hole, not a drop
+
+# Quarter-note delay on the lead is the outrun cliche and it is the right one.
+delay sync=quarter feedback=0.38 filter=0.5 sidechain=0.3
+
+# A big 80s plate, but not damped into a box: the tail is what reads as "open".
+reverb size=0.74 damp=0.28 predelay=24 sidechain=0.4
+
+reverb_return { in > highpass(280hz, 0.05)
+                   > lowpass(7khz, 0.06, lfo_bars=16, lfo_depth=1800)
+                   > autopan(0.30, bars=12)
+                   > out }
+
+delay_return  { in > highpass(420hz, 0.05) > lowpass(6khz, 0.05) > out }
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# The bed. Wide and warm, but chorus_mix stays at 12%: past ~30% a detuned
+# five-note chord beats hard enough to read as noise. autopan does the width.
+module keys bed {
+    voice_mode poly
+    detune 18%
+    chorus_mix 12%
+    cutoff 0.34                # ~960 Hz; swept per scene
+    resonance 10%
+    attack 180ms
+    decay 420ms
+    sustain 82%
+    release 900ms
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync bars_8
+    lfo_depth 9%
+    vibrato_rate 18%
+    vibrato_depth 2%
+}
+
+# The OB-X brass pulse. Shorter, brighter, and it carries the rhythm the pad
+# refuses to. Detune is free (it does not drive roughness); chorus is not.
+module keys brass {
+    voice_mode poly
+    detune 30%
+    chorus_mix 10%
+    cutoff 0.42                # ~2.1 kHz
+    resonance 14%
+    attack 14ms
+    decay 260ms
+    sustain 48%
+    release 220ms
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync bars_4
+    lfo_depth 7%
+}
+
+# Sixteenth arpeggio. Plucky, no sustain, so it reads as motion not as a chord.
+module keys arpeggio {
+    voice_mode poly
+    detune 8%
+    chorus_mix 0%              # the arp lifts these notes an octave and plays
+                               # them one at a time, so by ~830 Hz the chorus
+                               # beats at 31 Hz: roughness, and nothing
+                               # sounding underneath to bury it. autopan below
+                               # carries the width.
+    cutoff 0.42                # ~2.1 kHz
+    resonance 10%
+    attack 2ms
+    decay 150ms
+    sustain 12%
+    release 90ms
+}
+
+# The melody. `unison` stacks all eight voices on one note, which is what a
+# thick mono synthwave lead is; a chord must never reach this module.
+module keys lead {
+    voice_mode unison
+    detune 12%                 # not 22%: eight unison voices beat on detune
+    chorus_mix 6%              # measured: chorus_mix does nothing in unison mode
+    cutoff 0.50                # ~4 kHz, the top of the useful band
+    resonance 12%
+    attack 22ms
+    decay 300ms
+    sustain 74%
+    release 340ms
+    vibrato_rate 34%
+    vibrato_depth 5%
+    lfo_target cutoff
+    lfo_waveform sine
+    lfo_sync bars_4
+    lfo_depth 6%
+}
+
+# ── the solo voice ────────────────────────────────────────────────────────
+# A `bass` module, and that is not a workaround: `slide_to` is implemented
+# only for Bass (song_engine.rs:69), every other module returns false and the
+# caller falls back to a retrigger. So `~` -- the bend -- exists on this
+# module alone. Played three octaves up it is a lead, and the same module
+# carries the other half of the gesture: vibrato with a delayed onset, which
+# is what a guitarist does, the note landing plain and the vibrato blooming in.
+#
+# glide is the bend TIME, measured: rate is 0.0001 + value*0.05 per sample, so
+# 14% bends in 3 ms (a jump) and 0.9% takes about 100 ms, which is how long a
+# player takes to push a tone. The track must be gate 1.0 -- at 0.6 the note
+# releases before the slide arrives and it retriggers instead of bending.
+module bass sixstring {
+    cutoff 0.58                # ~2.9 kHz before the envelope
+    cutoff_env 30%
+    resonance 22%              # the vocal peak that makes a lead cut. Not 32%:
+                               # with keytrack the peak rides up with the note,
+                               # and by C#6 it was sitting in 2-6 kHz and screaming
+    keytrack 25%               # 45% dragged the resonant peak into the harsh band
+    glide 0.9%                 # ~100 ms for a whole-tone bend
+    osc1_wave saw
+    osc2_wave square
+    osc2_pitch 0st
+    osc3_pitch 0st
+    attack 14ms
+    decay 520ms
+    sustain 84%
+    release 320ms
+    vel_env 28%
+    vibrato_rate 58%           # ~5.9 Hz
+    vibrato_depth 42%          # up to half a semitone, so ~+-21 cents
+}
+
+# Driving eighth-note bass. osc3 an octave down is the sub, so the written
+# line can sit in octave 2 where the filter and the pattern read clearly.
+module bass engine {
+    cutoff 0.32                # ~180 Hz; swept per scene
+    cutoff_env 52%
+    resonance 20%
+    glide 3%
+    osc1_wave saw
+    osc2_wave square
+    osc2_pitch 0st
+    osc3_pitch -12st           # the sub
+    keytrack 28%
+    attack 2ms
+    decay 95ms
+    sustain 62%
+    release 45ms
+    vel_env 35%
+}
+
+# Kick and hats only. This module never sees the snare lane.
+module beats kit {
+    kick_level 100%
+    kick_decay 28%
+    kick_pitch 26%
+    kick_click 42%
+    kick_drive 34%
+    kick_pan 0%
+    hihat_level 72%
+    hihat_decay 30%
+    hihat_pitch 56%
+    hihat_pan 44%
+    clap_level 60%
+    clap_pan -22%
+}
+
+# The snare alone, so the plate behind it never touches the kick.
+module beats crack {
+    snare_level 115%
+    snare_decay 46%           # long on purpose: the bus compressor cuts it
+    snare_pitch 34%
+    snare_drive 38%
+    snare_snap 54%
+    snare_pan 0%
+}
+
+# Glassy accents over the breakdown and the last chorus.
+module fm bell {
+    level 2.2                  # fm sums quieter than keys at the same track level
+    algorithm dual_pairs
+    mod_index 22%
+    feedback 8%
+    chorus_mix 0%              # was 18% and it was the grit on the first note.
+                               # A chorus is a detuned delayed copy, so on a
+                               # tone this pure it beats against itself: taking
+                               # it out dropped the inharmonic content 10 dB
+                               # (-32.5 -> -42.4) and RAISED the peak 1.5 dB,
+                               # which is the cancellation it was causing. The
+                               # bell gets its space from pan, reverb and delay,
+                               # none of which smear the pitch.
+    op0_envelope 0.004 0.62 0.0 0.70
+    op1_envelope 0.002 0.40 0.0 0.35
+    vibrato_rate 22%
+    vibrato_depth 3%
+}
+
+# ────────────────────────────────────────────────
+# DRUMS — two bars each, kick and hats
+# ────────────────────────────────────────────────
+
+pattern dr_intro {
+    hat: - - x:0.22 -  - - x:0.22 -  - - x:0.22 -  - - x:0.22 -   - - x:0.22 -  - - x:0.22 -  - - x:0.22 -  - - x:0.26 -
+}
+
+pattern dr_verse {
+    kick: X - - -  - - - -  x:0.85 - - -  - - - -   X - - -  - - - -  x:0.85 - - -  - - x:0.45 -
+    hat:  - - x:0.34 -  - - x:0.34 -  - - x:0.34 -  - - x:0.34 -   - - x:0.34 -  - - x:0.34 -  - - x:0.34 -  - - x:0.38 -
+}
+
+pattern dr_pre {
+    kick: X - - -  - - - -  x:0.85 - - -  - - - -   X - - -  - - - -  x:0.85 - - -  - - x:0.5 -
+    hat:  x:0.30 x:0.20 x:0.30 x:0.20  x:0.30 x:0.20 x:0.30 x:0.20  x:0.30 x:0.20 x:0.30 x:0.20  x:0.30 x:0.20 x:0.30 x:0.20   x:0.30 x:0.22 x:0.32 x:0.22  x:0.30 x:0.22 x:0.32 x:0.22  x:0.32 x:0.24 x:0.34 x:0.24  x:0.34 x:0.26 x:0.38 x:0.30
+}
+
+pattern dr_chorus {
+    kick:    X - - -  x:0.8 - - -  X - - -  x:0.8 - - -   X - - -  x:0.8 - - -  X - - -  x:0.8 - - x:0.55
+    hat:     - - x:0.36 -  - - x:0.30 -  - - x:0.36 -  - - x:0.30 -   - - x:0.36 -  - - x:0.30 -  - - x:0.36 -  - - x:0.34 -
+    openhat: - - - -  - - - -  - - - -  - - x:0.34 -   - - - -  - - - -  - - - -  - - x:0.40 -
+}
+
+pattern dr_solo {
+    kick: X - - -  - - - -  x:0.85 - - -  - - - -   X - - -  - - - -  x:0.85 - - -  - - x:0.5 -
+    hat:  - - x:0.32 -  - - x:0.32 -  - - x:0.32 -  - - x:0.32 -   - - x:0.32 -  - - x:0.32 -  - - x:0.32 -  - - x:0.36 -
+}
+
+pattern dr_outro {
+    kick: X - - -  - - - -  - - - -  - - - -   x:0.7 - - -  - - - -  - - - -  - - - -
+    hat:  - - x:0.24 -  - - x:0.24 -  - - x:0.24 -  - - x:0.24 -   - - x:0.22 -  - - x:0.22 -  - - x:0.20 -  - - x:0.18 -
+}
+
+# ── the snare, its own track and its own plate ──
+
+pattern sn_verse {
+    snare: - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -
+}
+
+pattern sn_pre {
+    snare: - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - o  X - o x:0.6
+}
+
+pattern sn_chorus {
+    snare: - - - -  X - - -  - - - o  X - - -   - - - -  X - - -  - - - o  X - x:0.5 x:0.7
+}
+
+# ────────────────────────────────────────────────
+# CHORDS — eight bars, two bars a chord, held with ties
+# ────────────────────────────────────────────────
+
+# A: i - VI - III - VII. The sus4 on the E is what keeps it from resolving.
+pattern ch_verse {
+    [F#3 C#4 E4 A4 G#5]:0.60  ..*31
+    [F#3 A3 D4 C#5]:0.58      ..*31
+    [G3 D4 F#4 B4]:0.58       ..*31
+    [G#3 B3 F#4 C#5]:0.58     ..*31
+}
+
+# B: the same four, rotated. Opens on the VI so the phrase lands on the i.
+pattern ch_chorus {
+    [F#3 A3 D4 C#5 E5]:0.62   ..*31
+    [G3 D4 F#4 B4]:0.62       ..*31
+    [G#3 B3 E#4 C#5]:0.60     ..*31
+    [F#3 C#4 E4 A4 G#5]:0.62  ..*31
+}
+
+pattern ch_night {
+    [F#3 C#4 E4 A4 G#5]:0.55  ..*31
+    [G3 D4 F#4 B4]:0.55       ..*31
+    [F#3 A3 D4 C#5]:0.52      ..*31
+    [G#3 B3 F#4 C#5]:0.55     ..*31
+}
+
+pattern ch_hold {
+    [G3 D4 F#4 B4]:0.52       ..*31
+    [F#3 C#4 E4 A4 G#5]:0.54  ..*95
+}
+
+# ── the brass pulse: eighth notes, the rhythm the pad refuses to carry ──
+
+pattern br_chorus {
+    Dmaj9:0.72 .. - - Dmaj9:0.50 .. - -  Dmaj9:0.62 .. - - Dmaj9:0.50 .. - -
+    Dmaj9:0.68 .. - - Dmaj9:0.50 .. - -  Dmaj9:0.62 .. - - Dmaj9:0.54 .. - -
+    Gmaj7:0.74 .. - - Gmaj7:0.52 .. - -  Gmaj7:0.64 .. - - Gmaj7:0.52 .. - -
+    Gmaj7:0.70 .. - - Gmaj7:0.52 .. - -  Gmaj7:0.64 .. - - Gmaj7:0.56 .. - -
+    C#7:0.74 .. - - C#7:0.52 .. - -  C#7:0.64 .. - - C#7:0.52 .. - -
+    C#7:0.72 .. - - C#7:0.54 .. - -  C#7:0.66 .. - - C#7:0.60 .. - -
+    F#m9:0.72 .. - - F#m9:0.50 .. - -  F#m9:0.62 .. - - F#m9:0.50 .. - -
+    F#m9:0.68 .. - - F#m9:0.50 .. - -  F#m9:0.62 .. - - F#m9:0.58 .. - -
+}
+
+pattern br_pre {
+    C#7sus4:0.52 .. - - C#7sus4:0.40 .. - -  C#7sus4:0.48 .. - - C#7sus4:0.40 .. - -
+    C#7sus4:0.56 .. - - C#7sus4:0.44 .. - -  C#7sus4:0.52 .. - - C#7sus4:0.46 .. - -
+    C#7sus4:0.60 .. - - C#7sus4:0.48 .. - -  C#7sus4:0.56 .. - - C#7sus4:0.50 .. - -
+    C#7sus4:0.64 .. - - C#7sus4:0.52 .. - -  C#7sus4:0.60 .. - - C#7sus4:0.54 .. - -
+    C#7:0.68 .. - - C#7:0.54 .. - -  C#7:0.64 .. - - C#7:0.54 .. - -
+    C#7:0.72 .. - - C#7:0.58 .. - -  C#7:0.68 .. - - C#7:0.58 .. - -
+    C#7:0.78 .. - - C#7:0.62 .. - -  C#7:0.74 .. - - C#7:0.64 .. - -
+    C#7:0.86 .. - - C#7:0.70 .. - -  C#7:0.82 .. - - C#7:0.74 .. - -
+}
+
+# ── the arpeggio source: hold the chord, the arp does the rest ──
+
+pattern ar_verse {
+    F#m9:0.55     ..*31
+    Dmaj7:0.55    ..*31
+    Gmaj7:0.55    ..*31
+    C#7sus4:0.52  ..*31
+}
+
+pattern ar_chorus {
+    Dmaj9:0.58    ..*31
+    Gmaj7:0.58    ..*31
+    C#7:0.56      ..*31
+    F#m9:0.58     ..*31
+}
+
+# ────────────────────────────────────────────────
+# BASS — eighth notes, two bars a chord, octave jump on beat 4
+# ────────────────────────────────────────────────
+
+pattern bs_verse {
+    F#2:0.90 - F#2:0.65 - F#2:0.80 - F#2:0.65 -  F#2:0.85 - F#2:0.65 - F#3:0.75 - F#2:0.65 -
+    F#2:0.90 - F#2:0.65 - F#2:0.80 - F#2:0.65 -  F#2:0.85 - F#2:0.65 - F#3:0.75 - F#2:0.70 -
+    D2:0.90 - D2:0.65 - D2:0.80 - D2:0.65 -  D2:0.85 - D2:0.65 - D3:0.75 - D2:0.65 -
+    D2:0.90 - D2:0.65 - D2:0.80 - D2:0.65 -  D2:0.85 - D2:0.65 - D3:0.75 - D2:0.70 -
+    B1:0.90 - B1:0.65 - B1:0.80 - B1:0.65 -  B1:0.85 - B1:0.65 - B2:0.75 - B1:0.65 -
+    B1:0.90 - B1:0.65 - B1:0.80 - B1:0.65 -  B1:0.85 - B1:0.65 - B2:0.75 - B1:0.70 -
+    C#2:0.90 - C#2:0.65 - C#2:0.80 - C#2:0.65 -  C#2:0.85 - C#2:0.65 - C#3:0.75 - C#2:0.65 -
+    C#2:0.90 - C#2:0.65 - C#2:0.80 - C#2:0.65 -  C#2:0.85 - C#2:0.65 - C#3:0.75 - C#2:0.72 -
+}
+
+pattern bs_chorus {
+    D2:0.90 - D2:0.65 - D2:0.80 - D2:0.65 -  D2:0.85 - D2:0.65 - D3:0.75 - D2:0.65 -
+    D2:0.90 - D2:0.65 - D2:0.80 - D2:0.65 -  D2:0.85 - D2:0.65 - D3:0.75 - D2:0.78 -
+    B1:0.90 - B1:0.65 - B1:0.80 - B1:0.65 -  B1:0.85 - B1:0.65 - B2:0.75 - B1:0.65 -
+    B1:0.90 - B1:0.65 - B1:0.80 - B1:0.65 -  B1:0.85 - B1:0.65 - B2:0.75 - B1:0.78 -
+    C#2:0.90 - C#2:0.65 - C#2:0.80 - C#2:0.65 -  C#2:0.85 - C#2:0.65 - C#3:0.75 - C#2:0.65 -
+    C#2:0.90 - C#2:0.65 - C#2:0.80 - C#2:0.65 -  C#2:0.85 - C#2:0.65 - C#3:0.75 - C#2:0.80 -
+    F#2:0.90 - F#2:0.65 - F#2:0.80 - F#2:0.65 -  F#2:0.85 - F#2:0.65 - F#3:0.75 - F#2:0.65 -
+    F#2:0.90 - F#2:0.65 - F#2:0.80 - F#2:0.65 -  F#2:0.85 - F#2:0.65 - F#3:0.75 - F#2:0.82 -
+}
+
+pattern ch_pre {
+    [G#3 B3 F#4 C#5]:0.56  ..*63
+    [G#3 B3 E#4 C#5]:0.60  ..*63
+}
+
+pattern ar_pre {
+    C#7sus4:0.54  ..*63
+    C#7:0.56      ..*63
+}
+
+# The intro's bass walked the chords in a different order than the pad did.
+# This one follows ch_verse: F# - D - B - C#, the Neapolitan taking its B.
+pattern bs_hold {
+    F#1:0.70 ..*15
+    F#1:0.66 ..*15
+    D2:0.70  ..*15
+    D2:0.66  ..*15
+    B1:0.68  ..*15
+    B1:0.64  ..*15
+    C#2:0.72 ..*15
+    C#2:0.68 ..*15
+}
+
+# The breakdown keeps the bottom but drops the pulse: one note a bar.
+pattern bs_night {
+    F#1:0.70 ..*15
+    F#1:0.66 ..*15
+    B1:0.70  ..*15
+    B1:0.66  ..*15
+    D2:0.68  ..*15
+    D2:0.64  ..*15
+    C#2:0.72 ..*15
+    C#2:0.68 ..*15
+}
+
+# The pre sits on the dominant for eight bars and climbs in velocity.
+pattern bs_pre {
+    C#2:0.70 - C#2:0.54 - C#2:0.64 - C#2:0.54 -  C#2:0.68 - C#2:0.54 - C#3:0.60 - C#2:0.54 -
+    C#2:0.73 - C#2:0.56 - C#2:0.67 - C#2:0.56 -  C#2:0.71 - C#2:0.56 - C#3:0.63 - C#2:0.57 -
+    C#2:0.76 - C#2:0.58 - C#2:0.70 - C#2:0.58 -  C#2:0.74 - C#2:0.58 - C#3:0.66 - C#2:0.60 -
+    C#2:0.79 - C#2:0.61 - C#2:0.73 - C#2:0.61 -  C#2:0.77 - C#2:0.61 - C#3:0.69 - C#2:0.63 -
+    C#2:0.82 - C#2:0.64 - C#2:0.76 - C#2:0.64 -  C#2:0.80 - C#2:0.64 - C#3:0.72 - C#2:0.66 -
+    C#2:0.85 - C#2:0.67 - C#2:0.79 - C#2:0.67 -  C#2:0.83 - C#2:0.67 - C#3:0.75 - C#2:0.70 -
+    C#2:0.89 - C#2:0.71 - C#2:0.83 - C#2:0.71 -  C#2:0.87 - C#2:0.71 - C#3:0.80 - C#2:0.75 -
+    C#2:0.94 - C#2:0.76 - C#2:0.88 - C#2:0.78 -  C#2:0.92 - C#2:0.80 - C#3:0.86 - C#2:0.84 -
+}
+
+# ────────────────────────────────────────────────
+# LEAD — the hook, eight bars over the chorus changes
+# ────────────────────────────────────────────────
+
+pattern ld_hook {
+    -  -  -  -  A4:0.85 ..  ..  ..  ..  ..  C#5:0.70 ..  ..  ..  -  -
+    D5:0.90 ..  ..  ..  ..  ..  ..  ..  C#5:0.75 ..  ..  ..  ..  ..  ..  ..
+    -  -  -  -  F#4:0.88 ..  ..  ..  ..  ..  ..  ..  ..  ..  B4:0.70 ..
+    D5:0.90 ..  ..  ..  ..  ..  ..  ..  B4:0.75 ..  ..  ..  ..  ..  ..  ..
+    -  -  -  -  G#4:0.85 ..  ..  ..  ..  ..  E#4:0.74 ..  ..  ..  -  -
+    C#5:0.92 ..  ..  ..  ..  ..  ..  ..  B4:0.75 ..  ..  ..  ..  ..  ..  ..
+    -  -  -  -  C#5:0.88 ..  ..  ..  ..  ..  A4:0.72 ..  ..  ..  -  -
+    F#4:0.90 ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+}
+
+# Sixteen bars over two passes of F#m9 - Dmaj7 - Gmaj7 - C#7sus4.
+#
+# The fast writing is CASCADING TRIADS, not sweeps, and the difference is the
+# interval. A sweep runs adjacent chord tones, so it moves in thirds and
+# arrives as one smooth gesture. Skipping a string puts the next note a fourth
+# or more away, every note has to be attacked, and that is what makes it read
+# percussive instead of liquid. Every cell below is generated with a minimum
+# leap of five semitones, so none of them can quietly turn back into a sweep,
+# and the shape walks through the chord to cascade.
+#
+# Velocity carries the articulation: 0.90 on the picked note, 0.60 on the two
+# that follow. A real hammer-on would be `~`, and it is measured unusable at
+# this speed -- `glide` is one setting per module, tuned so a bend takes about
+# 100 ms, and over a 48 ms subnote it never arrives (370 -> 416 -> 459 Hz where
+# it should land on 554). Bends and hammer-ons want opposite glide rates and
+# there is only one knob, so the bends keep it.
+pattern ld_guitar {
+    -  -  -  -  A4:0.78 ..  ..  ..  ~B4:0.80 ..  ..  ..  ..  ..  -  -
+    ~A4:0.76 ..  ..  ..  ..  ..  F#4:0.72 ..  E4:0.70 ..  <F#4:0.80 A4:0.62> <C#5:0.84 E5:0.66> C#5:0.80 ..  ..  ..
+    -  -  D5:0.80 ..  C#5:0.74 ..  A4:0.72 ..  ~B4:0.78 ..  ..  ..  ..  ..  ..  ..
+    A4:0.74 ..  F#4:0.72 ..  <D4:0.82 A4:0.62> <F#4:0.84 D5:0.64> <A4:0.88 F#5:0.66 D6:0.68> A5:0.86 ..  ..  ..  ..  ..  ..  ..  ..
+    -  -  B4:0.76 ..  D5:0.80 ..  <G4:0.82 B4:0.64> <D5:0.86 G5:0.68> ~F#5:0.92 ..  ..  ..  ..  ..  ..  ..
+    ..  ..  ..  ..  ..  ..  ..  ..  E5:0.72 ..  ..  ..  D5:0.70 ..  -  -
+    -  -  -  -  B4:0.74 ..  ..  ..  ~G#4:0.72 ..  ..  ..  ..  ..  -  -
+    -  -  F#4:0.70 ..  G#4:0.72 ..  B4:0.76 ..  C#5:0.80 ..  ..  ..  -  -  -  -
+    F#4:0.80 ..  A4:0.76 ..  C#5:0.78 ..  E5:0.80 ..  <F#5:0.84 C#5:0.66> <A4:0.80 F#4:0.64> A4:0.78 ..  ..  ..  ..  ..
+    <C#5:0.80 E5:0.64> <F#5:0.84 A5:0.68> <C#5:0.82 A5:0.66 E5:0.70> <A5:0.88 E5:0.68 C#6:0.74> ~F#5:0.86 ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    ~A5:0.84 ..  ..  ..  <A5:0.82 D5:0.64 F#4:0.66> D5:0.80 ..  <F#4:0.82 A4:0.64> <D5:0.86 F#5:0.68> A5:0.84 ..  ..  ..  ..  ..  ..
+    <D5:0.84 A4:0.66 F#5:0.68> <A4:0.82 F#5:0.64 D6:0.70> <C#5:0.80 A5:0.62 D5:0.64 F#5:0.68> <A4:0.86 D5:0.68 F#5:0.72> ~A5:0.90 ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    B4:0.82 ..  D5:0.84 ..  <G4:0.80 D5:0.64 B5:0.70> ~E5:0.88 ..  ..  ~F#5:0.92 ..  ..  ..  ..  ..  ..  ..
+    ~A5:0.95 ..  ..  ..  ..  ..  ..  ..  ~F#5:0.86 ..  ..  ..  ..  ..  ..  ..
+    <F#5:0.88 C#5:0.66 G#4:0.68> <C#5:0.86 G#4:0.64 B3:0.66> <B4:0.82 F#4:0.62> G#4:0.78 ..  F#4:0.74 ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
+    -  -  -  -  <C#4:0.78 G#4:0.62 F#5:0.66> <F#4:0.82 C#5:0.66 B5:0.72> <G#4:0.86 F#5:0.70 C#6:0.78> <B4:0.90 F#5:0.74 C#6:0.80> C#6:0.95 ..  ..  ..  ..  ..  ..  ..
+}
+
+# ── the bell: four notes every eight bars, punctuation ──
+
+pattern bl_sparse {
+    -  -  -  -  -  -  -  -  -  -  -  -  C#6:0.50 -  -  -
+    -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+    -  -  -  -  -  -  -  -  -  -  -  -  F#5:0.48 -  -  -
+    -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+    -  -  -  -  -  -  -  -  -  -  -  -  E#5:0.48 -  -  -
+    -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+    -  -  -  -  -  -  -  -  -  -  -  -  A5:0.46 -  -  -
+    -  -  -  -  -  -  -  -  -  -  -  -  -  -  C#6:0.42 -
+}
+
+# ────────────────────────────────────────────────
+# BUSES
+# ────────────────────────────────────────────────
+
+bus kit
+kit { in > compressor(-10db, ratio=3.5, attack=12ms, release=80ms)
+         > saturate(0.6)
+         > eq(low=1.6, mid=-1.0, high=1.2)
+         > master }
+
+# The gated snare. There is no gate node, so: a plate at wet=0.5 for the tail,
+# then a fast compressor that slams it shut behind the hit.
+#
+# The threshold was -16 dB and measured transparent: this bus never gets near
+# that, so the compressor did nothing at all and the "gate" was a comment
+# rather than a sound. At -28 dB it engages and does what it was written for --
+# soloed, the snare's crest went 18.9 -> 22.6, which IS the tail being cut.
+bus snap
+snap { in > reverb(0.52, wet=0.50)
+          > compressor(-28db, ratio=8, attack=1ms, release=70ms, makeup=9.5db)
+          > eq(low=0.8, mid=-1.5, high=1.2)
+          > master }
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track drums {
+    play dr_verse
+    using kit
+    velocity 1.0
+    level 0.624
+    sidechain 0.0            # the kick must not duck itself
+    out > kit
+}
+
+track snare {
+    play sn_verse
+    using crack
+    velocity 1.0
+    level 0.368
+    sidechain 0.0
+    out > snap
+}
+
+track bass {
+    play bs_verse
+    using engine
+    velocity 0.92
+    level 0.405
+    gate 0.52
+    sidechain 0.50
+    out > saturate(0.7)
+        > highpass(30hz, 0.05)
+        > compressor(-18db, ratio=4, attack=3ms, release=85ms, makeup=6db)
+        > master
+}
+
+track pad {
+    play ch_verse
+    using bed
+    velocity 0.80
+    level 0.097
+    gate 1.0
+    pan -0.30
+    sidechain 0.45
+    delay_send 0.10
+    reverb_send 0.34
+    out > highpass(215hz, 0.05)
+        > lowpass(3.2khz, 0.05, lfo_bars=12, lfo_depth=900)
+        > eq(mid=-2.0)
+        > autopan(0.68, bars=10)      # the width the chorus is not allowed to give
+        > master
+}
+
+track brass {
+    play br_chorus
+    using brass
+    velocity 0.78
+    level 0.126
+    gate 0.42
+    pan 0.32
+    sidechain 0.40
+    delay_send 0.14
+    reverb_send 0.22
+    out > highpass(300hz, 0.05)
+        > lowpass(4.4khz, 0.05)
+        > eq(mid=-2.0, high=0.0)
+        > autopan(0.45, bars=7)
+        > master
+}
+
+track arp {
+    play ar_verse
+    using arpeggio
+    velocity 0.70
+    level 0.088
+    gate 0.55
+    pan 0.42
+    sidechain 0.38
+    delay_send 0.30
+    reverb_send 0.24
+    arp up rate=16 gate=0.55 octaves=2
+    out > highpass(420hz, 0.05)
+        > lowpass(5khz, 0.05)
+        > autopan(0.60, bars=9)
+        > master
+}
+
+track lead {
+    play ld_hook
+    using lead
+    velocity 0.85
+    level 0.162
+    gate 0.92
+    pan -0.14
+    sidechain 0.30
+    delay_send 0.38
+    reverb_send 0.26
+    out > highpass(260hz, 0.05)
+        > saturate(1.0)               # the only real saturator: a lead needs edge
+        > lowpass(5.5khz, 0.05)
+        > eq(mid=-1.5, high=0.5)
+        > master
+}
+
+track solo {
+    play ld_guitar
+    using sixstring
+    velocity 0.88
+    level 0.145
+    gate 1.0                   # not negotiable: below 1.0 the bends stop bending
+    pan 0.18
+    sidechain 0.30
+    delay_send 0.32
+    reverb_send 0.28
+    out > highpass(180hz, 0.05)
+        > saturate(1.3)               # overdrive, and the only heavy one here
+        > lowpass(3.8khz, 0.06)
+        > eq(mid=1.0, high=-1.5)      # the honk that cuts, no fizz above it
+        > autopan(0.28, bars=6)       # a lead stays near the middle, but only near
+        > master
+}
+
+track bell {
+    play bl_sparse
+    using bell
+    velocity 0.62
+    level 0.189
+    gate 0.90
+    pan 0.50
+    sidechain 0.25
+    delay_send 0.34
+    reverb_send 0.40
+    out > highpass(600hz, 0.05) > master
+}
+
+# ────────────────────────────────────────────────
+# MASTER
+# Everything on lands around 0.3 into this, so the limiter is a safety net
+# and not a mix decision. A section sitting at the ceiling means the section
+# is too loud, not that the limiter needs lowering.
+# ────────────────────────────────────────────────
+
+master {
+    in > eq(low=1.6, mid=-0.8, high=1.0)
+       > tilt(0.0)
+       > compressor(-6db, ratio=2.0, attack=18ms, release=140ms, makeup=5.5db)
+       > limiter(0.95)
+       > out
+}
+
+# ────────────────────────────────────────────────
+# SCENES
+# ────────────────────────────────────────────────
+
+# 1. INTRO (8) — the pad alone under a closed filter, the arp creeping in.
+scene intro {
+    reverb_mix = 0.34
+    delay_mix  = 0.18
+    auto bed cutoff 0.18 > 0.34
+    auto arpeggio cutoff 0.30 > 0.44
+    auto engine cutoff 0.22 > 0.28
+
+    track drums { play dr_intro using kit level 0.46 }
+    track pad   { play ch_verse using bed level 0.108 reverb_send 0.42 pan -0.30 }
+    track bass  { play bs_hold using engine level 0.24 velocity 0.62 gate 0.95 }
+    track arp   { play ar_verse using arpeggio level 0.075 pan 0.42 }
+    track bell  { play bl_sparse using bell level 0.25 reverb_send 0.48 delay_send 0.36 pan 0.50 }
+}
+
+# 2. VERSE (16) — kick on 1 and 3, the bass takes over, the snare lands.
+scene verse {
+    reverb_mix = 0.30
+    delay_mix  = 0.18
+    auto bed cutoff 0.30 > 0.38
+    auto engine cutoff 0.28 > 0.34
+
+    track drums { play dr_verse using kit level 0.541 }
+    track snare { play sn_verse using crack level 0.313 }
+    track bass  { play bs_verse using engine level 0.370 }
+    track pad   { play ch_verse using bed level 0.097 pan -0.30 }
+    track arp   { play ar_verse using arpeggio level 0.078 pan 0.42 }
+}
+
+# 3. PRE (8) — sixteenth hats, the brass arrives on the dominant, everything
+#    opens. One pass only: a build that repeats never arrives.
+scene pre {
+    reverb_mix = 0.28
+    delay_mix  = 0.20
+    auto bed cutoff 0.34 > 0.48
+    auto engine cutoff 0.30 > 0.44
+    auto brass cutoff 0.34 > 0.52
+    auto arpeggio cutoff 0.40 > 0.56
+
+    track drums { play dr_pre using kit level 0.582 }
+    track snare { play sn_pre using crack level 0.350 }
+    track bass  { play bs_pre using engine level 0.396 }
+    track pad   { play ch_pre using bed level 0.097 pan -0.30 }
+    track brass { play br_pre using brass level 0.109 pan 0.32 }
+    track arp   { play ar_pre using arpeggio level 0.088 pan 0.42 }
+}
+
+# 4. CHORUS (16) — four on the floor, the brass pulse, the hook.
+scene chorus {
+    reverb_mix = 0.26
+    delay_mix  = 0.22
+    auto bed cutoff 0.38 > 0.46 > 0.40
+    auto engine cutoff 0.34 > 0.40
+    auto lead cutoff 0.46 > 0.56 > 0.50
+
+    track drums { play dr_chorus using kit level 0.645 }
+    track snare { play sn_chorus using crack level 0.386 }
+    track bass  { play bs_chorus using engine level 0.414 }
+    track pad   { play ch_chorus using bed level 0.097 pan -0.30 }
+    track brass { play br_chorus using brass level 0.126 pan 0.32 }
+    track arp   { play ar_chorus using arpeggio level 0.082 pan 0.42 }
+    track lead  { play ld_hook using lead level 0.162 pan -0.14 }
+}
+
+# 5. NIGHT (8) — the floor drops away. Pad and bell only, the room wide open.
+scene night {
+    reverb_mix = 0.52
+    delay_mix  = 0.30
+    auto bed cutoff 0.26 > 0.44 > 0.30
+    auto reverb_mix 0.40 > 0.58
+    auto master tilt 0.0 > -0.10
+
+    track pad  { play ch_night using bed level 0.112 velocity 0.88 sidechain 0.0 reverb_send 0.48 delay_send 0.18 pan -0.30 }
+    track bass { play bs_night using engine level 0.26 velocity 0.70 sidechain 0.0 gate 0.95 }
+    track bell { play bl_sparse using bell level 0.34 sidechain 0.0 reverb_send 0.50 delay_send 0.40 pan 0.50 }
+    track arp  { play ar_verse using arpeggio level 0.080 sidechain 0.0 reverb_send 0.36 pan 0.42 }
+}
+
+# 6. SOLO (8) — the kit walks back in under the lead, no brass, no snare yet.
+scene solo {
+    reverb_mix = 0.32
+    delay_mix  = 0.26
+    auto master tilt -0.10 > 0.0
+    auto sixstring cutoff 0.50 > 0.64
+    auto engine cutoff 0.30 > 0.38
+
+    track drums { play dr_solo using kit level 0.520 }
+    track bass  { play bs_verse using engine level 0.378 }
+    track pad   { play ch_verse using bed level 0.097 pan -0.30 }
+    track arp   { play ar_verse using arpeggio level 0.086 pan 0.42 }
+    track solo  { play ld_guitar using sixstring level 0.145 pan 0.18 }
+}
+
+# 7. CHORUS 2 (16) — the payoff: everything at once, the bell over the top.
+scene chorus2 {
+    reverb_mix = 0.26
+    delay_mix  = 0.22
+    auto bed cutoff 0.40 > 0.48 > 0.42
+    auto engine cutoff 0.36 > 0.42
+    auto lead cutoff 0.50 > 0.60 > 0.54
+
+    track drums { play dr_chorus using kit level 0.686 }
+    track snare { play sn_chorus using crack level 0.405 }
+    track bass  { play bs_chorus using engine level 0.431 }
+    track pad   { play ch_chorus using bed level 0.097 pan -0.30 }
+    track brass { play br_chorus using brass level 0.134 pan 0.32 }
+    track arp   { play ar_chorus using arpeggio level 0.088 pan 0.42 }
+    track lead  { play ld_hook using lead level 0.171 pan -0.14 }
+    track bell  { play bl_sparse using bell level 0.197 pan 0.50 }
+}
+
+# 8. OUTRO (8) — the kit leaves first, then everything fades on the tonic.
+scene outro {
+    reverb_mix = 0.40
+    delay_mix  = 0.26
+    auto bed cutoff 0.40 > 0.18
+    auto master tilt 0.0 > -0.30
+    auto kit level 0.56 > 0.0
+    auto bed level 0.101 > 0.0
+    auto arpeggio level 0.072 > 0.0
+
+    track drums { play dr_outro using kit level 0.56 }
+    track pad   { play ch_hold using bed level 0.101 reverb_send 0.46 pan -0.30 }
+    track arp   { play ar_verse using arpeggio level 0.072 reverb_send 0.34 pan 0.42 }
+    track bell  { play bl_sparse using bell level 0.25 reverb_send 0.52 pan 0.50 }
+}
+
+# ────────────────────────────────────────────────
+# ARRANGEMENT — 96 bars
+# ────────────────────────────────────────────────
+
+arrange {
+    intro    x8
+    verse    x16
+    pre      x8
+    chorus   x16
+    night    x8
+    solo     x16
+    chorus2  x16
+    outro    x8
+}

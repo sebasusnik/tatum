@@ -1,0 +1,13 @@
+# set: bars=16 phase=release energy=7
+# set-note: The release — `drums` return on `beat_main` at 0.24 with `sub` on `sub_push` 0.17 and `bass` back on the off-beat `bass_a` 0.14, while `lead`, `air` and `sweep` all go out and `pad` holds `chords_low` with its `pan` full wet; four voices, fewer than the breakdown, and the pump against the four-on-the-floor is the whole pay-off.
+
+use "../../examples/rigs/proghouse_rig.synth"
+
+track drums { play beat_main level 0.480 }
+track sub { play sub_push level 0.136 out > lowpass(170hz, 0.02) as lp > saturate(0.25, wet=1.0) as drive > master }
+track bass { level 0.182 }
+track pad { level 0.064 delay_send 0.12 out > highpass(200, 0.02) as hp > phaser(0.3, bars=12, wet=1.0) as ph > autopan(0.3, bars=10, wet=1.0) as pan > master }
+track rhodes { play chords_high level 0.000 delay_send 0.3 reverb_send 0.5 out > highpass(260, 0.02) as hp > vowel(o, a, bars=16, wet=1.0) as vox > lowpass(5khz, 0.02) as lp > master }
+track lead { play lead_b level 0.000 delay_send 0.45 reverb_send 0.5 out > highpass(300, 0.02) as hp > autowah(0.6, base=900hz, range=2800hz, peak=0.25, wet=1.0) as wah > lowpass(8khz, 0.02) as lp > master }
+track air { play air_lift level 0.000 out > highpass(1.4khz, 0.02) as hp > autopan(0.35, bars=14, wet=1.0) as pan > master }
+track sweep { play sweep_up reverb_send 0.4 out > gain(5) as up > bandpass(5600, 0.32, lfo_bars=8, lfo_depth=3600) as bp > lowpass(10khz, 0.02) as lp > master }

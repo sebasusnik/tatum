@@ -3,20 +3,32 @@ web/node_modules/
 web/dist/
 web/src/wasm-pkg/
 
-# Test WAV output
-core/test_output/*.wav
-test_output/*.wav
-
 # macOS
 .DS_Store
-core/.DS_Store
 
-# Rendered example audio
-examples/*.wav
-
-# Dogfood renders
-dogfood/*.wav
-
-# Renders and DSP probes are artifacts, not source.
+# Renders are artifacts, not source. The .synth file is the master;
+# anything you can regenerate by running it does not belong here.
+*.wav
 test_output/
 core/test_output/
+
+# Agent scratch. The skills under .claude/skills/ ARE tracked.
+.claude/worktrees/
+.claude/settings.local.json
+
+# Sets that did not make the cut. They still play; they are just not
+# worth 3000 lines of near-duplicate text in the history.
+sets/scratch/
+
+# Planning and session notes. These are working documents -- they are written
+# by whoever is at the keyboard, they go stale between one session and the
+# next, and a diff of them says nothing about the code. The tracked
+# documentation is README.md and docs/, which describe what the thing does.
+BACKLOG.md
+IMPROVEMENTS.md
+PLAN.md
+PROMPT.md
+ROADMAP.md
+UX_PLAN.md
+web/DESIGN.md
+docs/mcp-dogfood/

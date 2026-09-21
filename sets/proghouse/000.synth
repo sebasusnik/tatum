@@ -1,0 +1,8 @@
+# set: bars=8 phase=intro energy=1
+# set-note: Opened bare — deep kick and hats under a low pad, sub pulled to silence, two voices and a lot of room left.
+
+use "../../examples/rigs/proghouse_rig.synth"
+
+track drums { level 0.360 }
+track sub { level 0.000 }
+track pad { level 0.056 out > highpass(200, 0.02) as hp > phaser(0.3, bars=12, wet=0.0) as ph > autopan(0.3, bars=10, wet=0.0) as pan > master }

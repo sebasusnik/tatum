@@ -208,6 +208,15 @@ impl Default for FmModule {
 }
 
 impl FmModule {
+
+    /// True when nothing is sounding and nothing is still releasing. A track
+    /// whose level is 0 and whose instrument is idle is skipped whole by the
+    /// song engine: no voices, no insert chain, no mix. That is what makes a
+    /// rig of muted voices waiting to be brought in affordable, since `level`
+    /// is a fast-path edit while scene membership is a structural one.
+    pub fn is_idle(&self) -> bool {
+        !self.voices.iter().any(|v| v.active)
+    }
     pub fn new() -> Self {
         Self {
             harmony: None,

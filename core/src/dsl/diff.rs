@@ -7,7 +7,7 @@ extern crate alloc;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use super::ast::Song;
+use super::ast::{Param, Song};
 use crate::params::{self, ModuleKind};
 
 /// A classified change between two Song ASTs.
@@ -45,8 +45,50 @@ pub enum DslChange {
         track_name: String,
         gate: f32,
     },
+    /// One node in a track's insert chain changed its dry/wet. Switching an
+    /// effect in or out is the one chain edit that does not need a swap: the
+    /// node is already built and already in the chain, only how much of it you
+    /// hear changes. Everything else about a chain is still structural.
+    TrackNodeWetChanged {
+        track_name: String,
+        node_index: usize,
+        wet: f32,
+    },
     /// Something structural changed — requires full hot-swap
     StructuralChange,
+}
+
+/// `Some(changed)` when two routing chains differ only in `wet=` values, with
+/// the index and new value of each node that moved. `None` when anything else
+/// differs, which means the chain has to be rebuilt.
+///
+/// A missing `wet=` is 1.0, so adding `wet=1` to a node is correctly seen as no
+/// change at all rather than as a new parameter.
+fn wet_only_routing_diff(
+    old: &[crate::dsl::ast::RoutingNode],
+    new: &[crate::dsl::ast::RoutingNode],
+) -> Option<Vec<(usize, f32)>> {
+    if old.len() != new.len() { return None; }
+    let wet_of = |n: &crate::dsl::ast::RoutingNode| {
+        n.params.iter().find_map(|p| match p {
+            Param::Named(name, v) if name == crate::nodes::WET => Some(*v),
+            _ => None,
+        }).unwrap_or(1.0)
+    };
+    let without_wet = |n: &crate::dsl::ast::RoutingNode| {
+        n.params.iter().filter(|p| !matches!(p, Param::Named(name, _) if name == crate::nodes::WET))
+            .cloned().collect::<Vec<_>>()
+    };
+    let mut moved = Vec::new();
+    for (i, (o, n)) in old.iter().zip(new.iter()).enumerate() {
+        // Renaming a node is not a wet change. Without this the rename would
+        // produce an empty change list and be dropped on the floor.
+        if o.kind != n.kind || o.label != n.label { return None; }
+        if without_wet(o) != without_wet(n) { return None; }
+        let (ow, nw) = (wet_of(o), wet_of(n));
+        if (ow - nw).abs() > f32::EPSILON { moved.push((i, nw)); }
+    }
+    Some(moved)
 }
 
 /// Compare two Song ASTs and return a list of classified changes.
@@ -160,9 +202,27 @@ pub fn diff(old: &Song, new: &Song) -> Vec<DslChange> {
             changes.push(DslChange::StructuralChange);
             return changes;
         }
-        // Routing, sends, sidechain, arp = structural
-        if old_track.routing != new_track.routing
-            || old_track.delay_send != new_track.delay_send
+        // Routing, sends, sidechain, arp = structural -- except when the only
+        // thing that moved is a `wet=`, which is a fader on a node that already
+        // exists and so applies inside the bar like a level.
+        if old_track.routing != new_track.routing {
+            match wet_only_routing_diff(&old_track.routing, &new_track.routing) {
+                Some(moved) => {
+                    for (node_index, wet) in moved {
+                        changes.push(DslChange::TrackNodeWetChanged {
+                            track_name: new_track.name.clone(),
+                            node_index,
+                            wet,
+                        });
+                    }
+                }
+                None => {
+                    changes.push(DslChange::StructuralChange);
+                    return changes;
+                }
+            }
+        }
+        if old_track.delay_send != new_track.delay_send
             || old_track.reverb_send != new_track.reverb_send
             || old_track.sidechain != new_track.sidechain
             || old_track.arp != new_track.arp

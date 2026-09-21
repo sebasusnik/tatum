@@ -9,7 +9,7 @@ use crate::dsl::error::{CompileError, CompileResult};
 use crate::params::{self, ModuleKind};
 use crate::math;
 use crate::graph::{GraphBuilder, GraphTemplate};
-use crate::graph::node::NodeSpec;
+use crate::graph::node::{ChainStep, NodeSpec};
 use crate::primitives::oscillator::Waveform;
 use crate::primitives::filter::FilterType;
 
@@ -26,6 +26,9 @@ pub struct StepPLock {
 
 /// Maximum notes in a single chord step.
 pub const MAX_CHORD_NOTES: usize = 8;
+/// How many notes one step can be split into. Eight inside a sixteenth at
+/// 120 BPM is 64 notes a second, well past anything playable.
+pub const MAX_SUBDIV: usize = 8;
 
 /// A note within a chord.
 #[derive(Clone, Copy, Debug, Default)]
@@ -34,11 +37,25 @@ pub struct ChordNote {
     pub velocity: f32,
 }
 
+/// One note inside a subdivided step. Carries its own velocity and slide so
+/// a fast run can shape itself, which is the whole point of writing it out
+/// instead of handing a chord to the arpeggiator.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SubNote {
+    pub midi_note: u8,
+    pub velocity: f32,
+    pub slide: bool,
+}
+
 /// A compiled step: either a note event, chord, or silence.
 #[derive(Clone, Copy, Debug)]
 pub enum CompiledStep {
     NoteOn { midi_note: u8, velocity: f32, plock: StepPLock, slide: bool },
     Chord { notes: [ChordNote; MAX_CHORD_NOTES], count: u8, plock: StepPLock },
+    /// `<B4 C#5 D5>`: notes played in sequence inside one step, evenly spaced
+    /// across whatever that step's real duration turns out to be, so swing and
+    /// humanize carry through instead of being bypassed.
+    Subdiv { notes: [SubNote; MAX_SUBDIV], count: u8, plock: StepPLock },
     DrumHit { velocity: f32, probability: f32, roll: u8, plock: StepPLock },
     Rest,
     Tie,
@@ -72,7 +89,10 @@ pub struct CompiledTrack {
     pub level: f32,         // output level 0.0-1.0 (default 0.8)
     pub pan: f32,           // stereo pan -1.0 (L) to 1.0 (R), 0.0 = center
     pub gate: f32,          // gate length as fraction of step (default 0.85)
-    pub insert_fx: Vec<NodeSpec>,
+    pub insert_fx: Vec<ChainStep>,
+    /// `as <name>` per insert node, so `auto <track>.<name> wet` can find it.
+    /// Parallel to `insert_fx`; `None` where a node was left unnamed.
+    pub insert_fx_labels: Vec<Option<String>>,
     pub bus_send: Option<(usize, f32)>, // (bus_idx, amount)
     pub to_master: bool,
     pub delay_send: f32,    // global delay send amount 0.0-1.0
@@ -101,7 +121,7 @@ pub struct ArpConfig {
 #[derive(Clone, Debug)]
 pub struct CompiledBus {
     pub name: String,
-    pub fx_chain: Vec<NodeSpec>,
+    pub fx_chain: Vec<ChainStep>,
 }
 
 /// A compiled scene snapshot.
@@ -127,7 +147,7 @@ pub struct CompiledAutomation {
 /// Master FX chain.
 #[derive(Clone, Debug)]
 pub struct CompiledMaster {
-    pub fx_chain: Vec<NodeSpec>,
+    pub fx_chain: Vec<ChainStep>,
 }
 
 /// A compiled instrument — either a graph template or a module preset.
@@ -194,8 +214,8 @@ pub struct CompiledSong {
     pub arrangement: Vec<(usize, u32)>, // (scene_idx, repeat_count)
     pub grooves: Vec<CompiledGroove>,
     /// Insert chains on the global send returns: `reverb_return { in > ... > out }`.
-    pub reverb_return: Vec<NodeSpec>,
-    pub delay_return: Vec<NodeSpec>,
+    pub reverb_return: Vec<ChainStep>,
+    pub delay_return: Vec<ChainStep>,
 }
 
 // ── Compiler ──
@@ -748,7 +768,7 @@ fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u
 // ── Note resolution ──
 
 /// Resolve a NoteRef (absolute or scale degree) to a MIDI note number.
-fn resolve_note(note: &crate::dsl::ast::NoteRef, scale_intervals: &[u8], root_midi: u8) -> u8 {
+pub fn resolve_note(note: &crate::dsl::ast::NoteRef, scale_intervals: &[u8], root_midi: u8) -> u8 {
     match note {
         crate::dsl::ast::NoteRef::Absolute(name) => note_name_to_midi(name),
         crate::dsl::ast::NoteRef::Midi(m) => *m,
@@ -765,7 +785,7 @@ fn resolve_note(note: &crate::dsl::ast::NoteRef, scale_intervals: &[u8], root_mi
 }
 
 /// Get scale intervals and root pitch class from the song's scale definition.
-fn scale_context(song: &Song) -> ([u8; 7], u8) {
+pub fn scale_context(song: &Song) -> ([u8; 7], u8) {
     if let Some(ref scale_def) = song.globals.scale {
         let intervals = match scale_def.kind.as_str() {
             "major" => [0, 2, 4, 5, 7, 9, 11],
@@ -812,6 +832,7 @@ fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> R
             }
             let steps: Vec<CompiledStep> = row.iter().map(|step| {
                 match step {
+                    Step::Subdiv(_) => CompiledStep::Rest,
                     Step::DrumHit(ds) => {
                         let plock = StepPLock {
                             cutoff: ds.plock.cutoff,
@@ -893,6 +914,24 @@ fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> R
                     };
                     steps.push(CompiledStep::Chord { notes: chord_notes, count: count as u8, plock });
                 }
+                Step::Subdiv(subs) => {
+                    let mut notes = [SubNote::default(); MAX_SUBDIV];
+                    let count = subs.len().min(MAX_SUBDIV);
+                    for (i, ns) in subs.iter().take(MAX_SUBDIV).enumerate() {
+                        notes[i] = SubNote {
+                            midi_note: resolve_note(&ns.note, scale_intervals, root_midi),
+                            velocity: ns.velocity.unwrap_or(0.8),
+                            slide: ns.slide,
+                        };
+                    }
+                    let plock = subs.first().map(|ns| StepPLock {
+                        cutoff: ns.plock.cutoff,
+                        env_depth: ns.plock.env_depth,
+                        resonance: ns.plock.resonance,
+                        gate: ns.plock.gate,
+                    }).unwrap_or_default();
+                    steps.push(CompiledStep::Subdiv { notes, count: count as u8, plock });
+                }
                 Step::DrumHit(ds) => {
                     let plock = StepPLock {
                         cutoff: ds.plock.cutoff,
@@ -942,7 +981,7 @@ fn drum_name_to_midi(name: &str) -> u8 {
 }
 
 /// Convert note name (e.g., "A1", "C#4") to MIDI note number.
-fn note_name_to_midi(name: &str) -> u8 {
+pub fn note_name_to_midi(name: &str) -> u8 {
     let chars: Vec<char> = name.chars().collect();
     if chars.is_empty() { return 60; } // default C4
 
@@ -1008,12 +1047,14 @@ fn compile_track(
     // Parse routing chain for insert FX and bus sends.
     // If scene track has no routing but a global default exists, inherit it.
     let mut insert_fx = Vec::new();
+    let mut insert_fx_labels: Vec<Option<String>> = Vec::new();
     let mut bus_send = None;
     let mut to_master = true;
 
     if track.routing.is_empty() {
         if let Some(d) = defaults {
             insert_fx = d.insert_fx.clone();
+            insert_fx_labels = d.insert_fx_labels.clone();
             bus_send = d.bus_send;
             to_master = d.to_master;
         }
@@ -1032,8 +1073,12 @@ fn compile_track(
                     alias: None,
                     params: rnode.params.clone(),
                 };
+                let wet = named_param(&rnode.params, crate::nodes::WET).unwrap_or(1.0);
                 match node_def_to_spec(&node, &mut noise_seed, &mut drift_seed, samples_per_bar) {
-                    Ok(spec) => insert_fx.push(spec),
+                    Ok(spec) => {
+                        insert_fx.push(ChainStep { spec, wet });
+                        insert_fx_labels.push(rnode.label.clone());
+                    }
                     Err(e) => return Err(CompileError::new(format!(
                         "track '{}': {} (or declare `bus {}` if it is a bus)", track.name, e.message, rnode.kind
                     ))),
@@ -1041,6 +1086,8 @@ fn compile_track(
             }
         }
     }
+
+    check_unique_labels(&format!("track '{}'", track.name), &insert_fx_labels)?;
 
     let delay_send = track.delay_send.unwrap_or_else(|| defaults.map(|d| d.delay_send).unwrap_or(0.0));
     let reverb_send = track.reverb_send.unwrap_or_else(|| defaults.map(|d| d.reverb_send).unwrap_or(0.0));
@@ -1059,6 +1106,7 @@ fn compile_track(
         pan,
         gate,
         insert_fx,
+        insert_fx_labels,
         bus_send,
         to_master,
         delay_send,
@@ -1109,7 +1157,23 @@ fn compile_arp(track_name: &str, def: &ArpDef) -> Result<Option<ArpConfig>, Comp
 
 // ── Bus/Master FX chain compilation ──
 
-fn compile_fx_chain(owner: &str, chain: &[ChainNode], samples_per_bar: f32) -> Result<Vec<NodeSpec>, CompileError> {
+/// Two nodes in one chain with the same name make `auto track.name wet` mean
+/// two things, so it is an error rather than a silent first-match-wins.
+fn check_unique_labels(owner: &str, labels: &[Option<String>]) -> Result<(), CompileError> {
+    for (i, l) in labels.iter().enumerate() {
+        let Some(name) = l else { continue };
+        if labels[..i].iter().flatten().any(|prev| prev == name) {
+            return Err(CompileError::new(format!(
+                "{}: two nodes are both named '{}'; a name has to pick out one node",
+                owner, name
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn compile_fx_chain(owner: &str, chain: &[ChainNode], samples_per_bar: f32) -> Result<Vec<ChainStep>, CompileError> {
+    check_unique_labels(owner, &chain.iter().map(|n| n.label.clone()).collect::<Vec<_>>())?;
     let mut specs = Vec::new();
     let mut noise_seed = 200u32;
     let mut drift_seed = 8000u32;
@@ -1120,8 +1184,9 @@ fn compile_fx_chain(owner: &str, chain: &[ChainNode], samples_per_bar: f32) -> R
             alias: None,
             params: node.params.clone(),
         };
+        let wet = named_param(&node.params, crate::nodes::WET).unwrap_or(1.0);
         match node_def_to_spec(&node_def, &mut noise_seed, &mut drift_seed, samples_per_bar) {
-            Ok(spec) => specs.push(spec),
+            Ok(spec) => specs.push(ChainStep { spec, wet }),
             Err(e) => return Err(CompileError::new(format!("{}: {}", owner, e.message))),
         }
     }
@@ -1403,6 +1468,42 @@ fn validate_automations(song: &Song) -> Vec<CompileError> {
                     )));
                 }
                 continue;
+            }
+            // `<track>.<node> wet`: sweeping an effect in or out over a scene.
+            // Checked here so a misspelled node name is an error at compile
+            // time rather than an automation that silently does nothing.
+            if let Some(node) = param.strip_suffix(".wet") {
+                // A scene track inherits the top-level chain when it does not
+                // write one, so an empty scene routing is not "no chain".
+                let routing = scene.tracks.iter()
+                    .find(|t| t.name == name && !t.routing.is_empty())
+                    .or_else(|| song.tracks.iter().find(|t| t.name == name))
+                    .map(|t| &t.routing);
+                match routing {
+                    Some(r) if r.iter().any(|n| n.label.as_deref() == Some(node)) => continue,
+                    Some(_) => {
+                        let named: Vec<&str> = routing.into_iter().flatten()
+                            .filter_map(|n| n.label.as_deref())
+                            .collect();
+                        errors.push(CompileError::new(format!(
+                            "scene '{}': automation target '{}' — track '{}' has no node named '{}'{}",
+                            scene.name, target, name, node,
+                            if named.is_empty() {
+                                String::from("; name one with `> effect(...) as <name>`")
+                            } else {
+                                format!(" (it has {})", named.join(", "))
+                            }
+                        )));
+                        continue;
+                    }
+                    None => {
+                        errors.push(CompileError::new(format!(
+                            "scene '{}': automation target '{}' — no track named '{}'",
+                            scene.name, target, name
+                        )));
+                        continue;
+                    }
+                }
             }
             let is_track = scene.tracks.iter().chain(song.tracks.iter()).any(|t| t.name == name);
             let module = song.module_defs.iter().find(|m| m.name == name);

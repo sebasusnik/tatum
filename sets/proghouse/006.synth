@@ -1,0 +1,11 @@
+# set: bars=8 phase=groove energy=6
+# set-note: Pure variation on the same five voices — drums to `beat_full`, bass to the syncopated `bass_b`, and the pluck's autopan opened to full so it starts swinging across the stereo field.
+
+use "../../examples/rigs/proghouse_rig.synth"
+
+track drums { play beat_full level 0.360 }
+track sub { level 0.120 }
+track pad { level 0.056 out > highpass(200, 0.02) as hp > phaser(0.3, bars=12, wet=1.0) as ph > autopan(0.3, bars=10, wet=0.0) as pan > master }
+track bass { play bass_b level 0.169 }
+track pluck { level 0.077 out > highpass(400, 0.02) as hp > autopan(0.45, bars=7, wet=1.0) as pan > master }
+track air { level 0.000 out > highpass(1.4khz, 0.02) as hp > autopan(0.35, bars=14, wet=1.0) as pan > master }

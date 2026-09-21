@@ -1,0 +1,12 @@
+# set: bars=8 phase=build energy=7
+# set-note: Eight bars of rising that refuse to resolve — `drums` swap to `beat_fill`, `bass`'s `lp` goes full wet to choke the mid bass out of the room, and `arp` swaps up to `arp_b`; no voice in, no voice out, and the next step is the landing.
+
+use "../../examples/rigs/proghouse_rig.synth"
+
+track drums { play beat_fill level 0.360 }
+track sub { level 0.120 }
+track pad { level 0.056 out > highpass(200, 0.02) as hp > phaser(0.3, bars=12, wet=1.0) as ph > autopan(0.3, bars=10, wet=0.0) as pan > master }
+track bass { play bass_b level 0.169 out > highpass(50hz, 0.02) as hp > saturate(0.4) as grind > eq(low=-1.0, mid=0.5, high=-1.5) as tone > lowpass(2.2khz, 0.02, wet=1.0) as lp > master }
+track pluck { level 0.000 out > highpass(400, 0.02) as hp > autopan(0.45, bars=7, wet=1.0) as pan > master }
+track arp { play arp_b level 0.072 }
+track air { level 0.000 out > highpass(1.4khz, 0.02) as hp > autopan(0.35, bars=14, wet=1.0) as pan > master }

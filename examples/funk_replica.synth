@@ -255,7 +255,7 @@ track arpsynth {
 # ────────────────────────────────────────────────
 
 master {
-    in > eq(low=4.0, mid=2.0, high=1.0) > compressor(-9.0, ratio=5.0, attack=8, release=80, makeup=4.00) > limiter > out
+    in > eq(low=2.0, mid=1.0, high=1.0) > compressor(-9.0, ratio=5.0, attack=8, release=80, makeup=12db) > limiter > out
 }
 
 # ────────────────────────────────────────────────
@@ -265,15 +265,18 @@ master {
 # INTRO (bars 1-4): drums + bass groove + pad harmony bed.
 # Reference Engine auto-triggers Am7 chord on keys via set_harmony → on_harmony_change.
 scene intro {
+    auto pad cutoff 0.15 > 0.20
+
     track drums { play drums_intro  using drums     velocity 1.0 level 0.2812 out > master }
     track bass  { play funk_bass    using funk_bass  velocity 1.0 level 0.2812 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
-    track pads  { play pad_harmony  using pad        velocity 1.0 level 0.1406 reverb_send 0.2 delay_send 0.1 out > master }
+    track pads  { play pad_harmony  using pad        velocity 1.0 level 0.1875 reverb_send 0.2 delay_send 0.1 out > master }
 }
 
 # VERSE 1 (bars 5-12): drums + bass + clav stabs + pad harmony bed.
 # Reference: wah base cutoff opens 0.08 → 0.14 over 8 bars.
 scene verse1 {
     auto funk_bass cutoff 0.08 > 0.14
+    auto pad cutoff 0.15 > 0.22
 
     track drums     { play drums_verse1 using drums     velocity 1.0 level 0.3749 out > master }
     track bass      { play funk_bass    using funk_bass velocity 1.0 level 0.3749 gate 0.65 delay_send 0.1 reverb_send 0.1 out > master }
@@ -292,7 +295,7 @@ scene bridge {
 
     track drums { play drums_bridge using drums     velocity 1.0 level 0.5 out > master }
     track bass  { play bass_hold    using funk_bass velocity 0.7 level 0.5 delay_send 0.18 reverb_send 0.2 out > master }
-    track pads  { play pad_am       using pad       velocity 1.0 level 0.25 reverb_send 0.25 delay_send 0.1 out > master }
+    track pads  { play pad_am       using pad       velocity 1.0 level 0.1875 reverb_send 0.25 delay_send 0.1 out > master }
 }
 
 # VERSE 2 (bars 17-24): peak funk. Full drums, chord progression bass, clav, arp.

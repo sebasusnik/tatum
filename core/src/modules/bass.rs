@@ -78,6 +78,15 @@ impl Default for BassModule {
 }
 
 impl BassModule {
+
+    /// True when nothing is sounding and nothing is still releasing. A track
+    /// whose level is 0 and whose instrument is idle is skipped whole by the
+    /// song engine: no voices, no insert chain, no mix. That is what makes a
+    /// rig of muted voices waiting to be brought in affordable, since `level`
+    /// is a fast-path edit while scene membership is a structural one.
+    pub fn is_idle(&self) -> bool {
+        self.amp_env.is_idle()
+    }
     pub fn new() -> Self {
         let mut osc0 = Oscillator::new(Waveform::Saw, SAMPLE_RATE);
         osc0.set_drift_seed(1337);

@@ -30,7 +30,7 @@ module beats breaks {
     kick_drive 0.40
 
     # Snare: sharp crack, gritty body, wire sizzle tail
-    snare_level 1.30
+    snare_level 0.85
     snare_decay 0.40
     snare_pitch 0.65
     snare_drive 0.65
@@ -85,7 +85,6 @@ module fm stab {
     algorithm additive
     mod_index 0.55
     feedback 0.25
-    chorus_mix 0.25
     op0_envelope 0.001 0.08 0.0 0.06
 }
 
@@ -109,9 +108,12 @@ module keys dreampad {
     voice_mode poly
     cutoff 0.25
     detune 0.07
-    chorus_mix 0.22
+    chorus_mix 0
     attack 0.4
     release 0.6
+    lfo_rate 0.08
+    lfo_depth 0.15
+    lfo_target cutoff
 }
 
 # FM lead — soulful melodic jungle lead
@@ -121,7 +123,6 @@ module fm psylead {
     feedback 0.20
     op0_envelope 0.003 0.15 0.20 0.12
     op1_ratio 0.06
-    chorus_mix 0.20
     lfo_rate 0.10
     lfo_depth 0.05
     lfo_target pitch
@@ -350,7 +351,7 @@ track stabs {
     gate 0.12
     delay_send 0.28
     reverb_send 0.40
-    out > chorus(0.20) > master
+    out > master
 }
 
 track psylead {
@@ -362,7 +363,7 @@ track psylead {
     gate 0.25
     delay_send 0.32
     reverb_send 0.45
-    out > chorus(0.15) > master
+    out > master
 }
 
 track pad {
@@ -372,7 +373,7 @@ track pad {
     level 0.28
     reverb_send 0.45
     delay_send 0.12
-    out > chorus(0.15) > master
+    out > autopan(0.3, bars=8) > master
 }
 
 track atmosphere {
@@ -392,7 +393,11 @@ track atmosphere {
 
 master {
     in > eq(low=3.0, mid=1.2, high=1.6)
-       > compressor(-10, ratio=3, attack=3, release=55, makeup=1.00)
+       # makeup was 1.00, i.e. 0 dB, and with the snare no longer overdriving
+       # the input the mix came out at 0.69 -- three decibels of the ceiling
+       # simply unused. Swept it: crest is flat at 10.55 all the way to 1.35
+       # and only starts to go at 1.5, so this is the free level.
+       > compressor(-10, ratio=3, attack=3, release=55, makeup=1.35)
        > limiter
        > out
 }

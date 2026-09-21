@@ -1,5 +1,7 @@
+mod audit;
 mod include;
 mod live;
+mod set;
 mod resample;
 
 
@@ -17,7 +19,9 @@ fn main() {
     match args[1].as_str() {
         "render" => cmd_render(&args[2..]),
         "check" => cmd_check(&args[2..]),
+        "audit" => audit::cmd(&args[2..]),
         "params" => cmd_params(&args[2..]),
+        "set" => set::cmd(&args[2..]),
         "play" => live::cmd(&args[2..], false),
         "watch" => live::cmd(&args[2..], true),
         "help" | "--help" | "-h" => print_usage(),
@@ -37,6 +41,8 @@ USAGE:
     synth check <song.synth>
     synth params [bass|fm|keys|beats|track|fx] [--json]
     synth play <song.synth> [--device <name>] [--rate <hz>]
+    synth set render <dir> [-o out.wav] | set check <dir> | set next <dir> <file>
+    synth audit <song.synth> [--bars N] [--json] [--strict]
     synth watch <song.synth> [--device <name>] [--rate <hz>]
 
 COMMANDS:
@@ -50,6 +56,21 @@ COMMANDS:
               playing. --list-devices shows the output devices. The engine runs
               at 44.1 kHz; a device that only offers another rate (Bluetooth:
               48 kHz) gets the output resampled. --rate forces the device rate.
+    audit     Render every tonal track on its own and dry, and report per
+              note how much of its energy is NOT at a harmonic of the note
+              the pattern asked for. Two comparisons come out of that: a note
+              against the other notes of the same voice, which finds one note
+              going wrong, and the same voice with and without one effect,
+              which finds an effect that dirties all of it. The absolute
+              number is a fingerprint of a timbre and means nothing next to
+              another track's. --bars limits how much is rendered, --json
+              prints the same numbers for a script, --strict exits 1 if
+              anything is reported.
+    set       A live set: a directory of numbered .synth files, each the whole
+              rig at a moment. `render` walks them with real hot swaps into one
+              continuous WAV; `check` validates every step and reports the arc;
+              `next` is the gate a proposed step has to pass. How long a step
+              holds travels in the file: `# set: bars=32 phase=build energy=5`.
     help      Show this help
 ");
 }
@@ -224,8 +245,8 @@ fn cmd_render(args: &[String]) {
     let loudest_peak = (0..engine.track_count()).fold(0.0f32, |a, i| a.max(engine.track_peak(i)));
     if engine.track_count() > 0 && loudest > 0.0 {
         eprintln!("mix (post level/pan, pre master):");
-        eprintln!("  {:<12} {:>6} {:>8} {:>8} {:>8} {:>6}  band",
-            "track", "peak", "rms", "rms dB", "peak dB", "crest");
+        eprintln!("  {:<12} {:>6} {:>8} {:>8} {:>8} {:>6} {:>6}  band",
+            "track", "peak", "rms", "rms dB", "peak dB", "crest", "width");
         for i in 0..engine.track_count() {
             let rms = engine.track_rms(i);
             let peak = engine.track_peak(i);
@@ -233,9 +254,10 @@ fn cmd_render(args: &[String]) {
             let rel_peak = 20.0 * (peak.max(1e-6) / loudest_peak.max(1e-6)).log10();
             let flag = if rms <= 0.0 { "  SILENT" } else if rel < -30.0 { "  buried" } else { "" };
             let band = engine.track_dominant_band(i).map_or("-", |b| synth_core::analysis::BAND_NAMES[b]);
-            eprintln!("  {:<12} {:>6.3} {:>8.4} {:>+8.1} {:>+8.1} {:>6.1}  {}{}",
+            eprintln!("  {:<12} {:>6.3} {:>8.4} {:>+8.1} {:>+8.1} {:>6.1} {:>5.0}%  {}{}",
                 engine.track_name(i), peak, rms, rel, rel_peak,
-                synth_core::analysis::crest(peak, rms), band, flag);
+                synth_core::analysis::crest(peak, rms),
+                engine.track_width(i) * 100.0, band, flag);
         }
         for i in 0..engine.bus_count() {
             let (p, rms) = (engine.bus_peak(i), engine.bus_rms(i));
@@ -243,6 +265,70 @@ fn cmd_render(args: &[String]) {
                 engine.bus_name(i), p, rms, "", "", synth_core::analysis::crest(p, rms));
         }
     }
+    // Where two tracks are in each other's way. Balance is visible in the
+    // table above; this is not. Two instruments in the same band cannot be
+    // told apart however well their levels are set, and reading a column of
+    // `mid` does not make that jump out.
+    {
+        use synth_core::analysis::BAND_NAMES;
+        let mut lines = Vec::new();
+        for (b, name) in BAND_NAMES.iter().enumerate() {
+            let mut here: Vec<(String, f32)> = (0..engine.track_count())
+                .filter(|i| engine.track_rms(*i) > 0.0)
+                .filter(|i| engine.track_dominant_band(*i) == Some(b))
+                .map(|i| {
+                    let db = 20.0 * (engine.track_rms(i).max(1e-6) / loudest).log10();
+                    (engine.track_name(i).to_string(), db)
+                })
+                .collect();
+            if here.len() < 2 { continue }
+            here.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+            // Within 6 dB is where one stops sitting clearly behind the other.
+            let close = here[0].1 - here[1].1 < 6.0;
+            let who: Vec<String> = here.iter().map(|(n, d)| format!("{n} {d:+.1}")).collect();
+            lines.push(format!("  {:<6} {}{}", name, who.join(", "),
+                if close { "   <-- within 6 dB of each other" } else { "" }));
+        }
+        if !lines.is_empty() {
+            eprintln!("sharing a band:");
+            for l in lines { eprintln!("{l}"); }
+        }
+    }
+
+    // The shape of the song. A drop that measures the same as the breakdown
+    // before it is flat however good the parts are, and nothing in the table
+    // above can show that -- it averages the whole render into one row.
+    {
+        let sections = engine.sections();
+        if sections.len() > 1 {
+            let beats_per_bar = engine.steps_per_bar() as f32 / 4.0;
+            let mut rows: Vec<(String, u32, f32)> = Vec::new();
+            let mut at = 0usize;
+            for (name, bars, bpm) in &sections {
+                let spb = (synth_core::SAMPLE_RATE * 60.0 / bpm * beats_per_bar) as usize;
+                let end = (at + spb * *bars as usize).min(out_l.len());
+                if at >= end { break }
+                let (_, rms) = synth_core::analysis::peak_rms(&out_l[at..end], &out_r[at..end]);
+                rows.push(((*name).to_string(), *bars, 20.0 * rms.max(1e-6).log10()));
+                at = end;
+            }
+            if rows.len() > 1 {
+                let hi = rows.iter().fold(f32::MIN, |a, r| a.max(r.2));
+                let lo = rows.iter().fold(f32::MAX, |a, r| a.min(r.2));
+                eprintln!("sections:");
+                for (name, bars, db) in &rows {
+                    let bar = "#".repeat((((db - lo) / (hi - lo).max(0.1)) * 24.0) as usize);
+                    eprintln!("  {:<12} {:>3} bars {:>7.1} dB  {}", name, bars, db, bar);
+                }
+                eprintln!("  arc: {:.1} dB between the quietest section and the loudest{}",
+                    hi - lo,
+                    if hi - lo < 3.0 { "  -- that is flat" } else { "" });
+                eprintln!("  (`width` above is how much of a track is NOT in the middle, full");
+                eprintln!("   band -- on a drum track the mono kick holds it near zero.)");
+            }
+        }
+    }
+
     // What the master chain costs in dynamics: raising the master gain looks
     // free on the peak meter because the limiter catches it, and the punch
     // leaves with the transients.

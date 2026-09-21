@@ -7,6 +7,30 @@ use crate::SAMPLE_RATE;
 /// same LFO: when the left tap is long the right one is short. A single line
 /// shared by both channels is not a chorus at all — with L == R it is a comb,
 /// nulls every 40 Hz at a 25 ms tap, and it leaves the two channels identical.
+/// Delay-line sweep, in samples, and how fast it sweeps.
+pub const DEPTH_SAMPLES: f32 = 220.0;
+pub const LFO_HZ: f32 = 1.2;
+
+/// How far the wet copy is detuned at the steepest point of the sweep.
+///
+/// Reading a delay line whose length is moving is a resampling: the copy comes
+/// out pitch-shifted by the rate of change, which is Doppler. With the values
+/// above that is about 3.8%, or 64 cents — a lot for a chorus, and the reason
+/// the wet copy beats audibly against the dry one.
+///
+/// The beat is at `f * detune`, so it scales with the note. Below a few
+/// hundred Hz it is width; by the time the note is around C5 the beat has
+/// crossed ~20 Hz and the ear stops hearing two tones and starts hearing
+/// roughness. `ROUGHNESS_ABOVE_HZ` is where that happens.
+pub fn max_detune_ratio() -> f32 {
+    DEPTH_SAMPLES * 2.0 * core::f32::consts::PI * LFO_HZ / SAMPLE_RATE
+}
+
+/// The lowest fundamental whose chorus beat lands in the roughness band.
+pub fn roughness_above_hz() -> f32 {
+    20.0 / max_detune_ratio()
+}
+
 pub struct Chorus {
     buffer: [f32; 4096],
     buffer_r: [f32; 4096],
@@ -26,7 +50,7 @@ impl Default for Chorus {
 impl Chorus {
     pub fn new() -> Self {
         let mut lfo = Lfo::new(SAMPLE_RATE);
-        lfo.set_rate(1.2);
+        lfo.set_rate(LFO_HZ);
         lfo.set_depth(1.0);
         Self {
             buffer: [0.0; 4096],
@@ -34,7 +58,7 @@ impl Chorus {
             write_pos: 0,
             lfo,
             base_delay: 1100.0, // ~25ms at 44100
-            depth: 220.0,       // ~5ms at 44100
+            depth: DEPTH_SAMPLES,
             mix: 0.3,
         }
     }

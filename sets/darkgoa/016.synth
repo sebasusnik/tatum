@@ -1,0 +1,214 @@
+# set: bars=16 phase=deeper energy=9
+# set-note: Same energy, new detail — clank to clank_busy, arp to arp_fifth, and spike's autopan switched in at wet=1.0; not one fader moved.
+# darkgoa_rig — a rig for dark psychedelic goa.
+#
+# The previous attempt at this came out as commercial trance, and the fault was
+# harmonic, not textural: it ran Am / F / C / G, a functional progression that
+# resolves and contains three major chords. That is the cheese. Goa does not do
+# that. It sits on a drone and moves MELODICALLY, in a mode, without resolving.
+#
+# So: E phrygian at 150, and the harmony is a two-chord oscillation, not a
+# progression — E for two bars, F for one, E for one. Root to flat second is
+# the signature interval of the whole genre and it is a minor second, which is
+# a clash, not a cadence. There are no major triads anywhere in this file. The
+# chords that exist are open fifths, root/flat-second clusters and tritones, so
+# nothing ever sounds sweet. The acid is the lead, not a supersaw.
+#
+# Ten voices, each with its own part and variants. Two levers apply inside the
+# bar with no swap and no voice restart:
+#   level 0 -> level 0.4     bring a voice in (muted tracks are skipped whole)
+#   wet=0   -> wet=1         switch an effect in (bypassed nodes are not processed)
+# Switching `play` is a swap, lands on the bar line, and is how the set moves.
+
+tempo 150
+meter 4/4
+scale E phrygian
+swing 0.5
+sidechain 0.62 attack=1ms release=75ms
+humanize 0.03 timing 0.007
+gain_comp 0
+
+# Dark and tight, not a cathedral. A long tail smears 16ths and makes it pretty.
+reverb size=0.5 damp=0.6 predelay=15 sidechain=0.6
+delay sync=sixteenth feedback=0.36 filter=0.55
+reverb_return { in > highpass(380, 0.02) > lowpass(4khz, 0.02, lfo_bars=12, lfo_depth=1400) > autopan(0.35, bars=8) > out }
+delay_return  { in > highpass(450, 0.02) > lowpass(7khz, 0.02) > out }
+
+# ──────────────────────────────── voices
+
+module beats kit {
+    kick_level 1.0  kick_decay 0.28  kick_pitch 0.46  kick_click 0.78  kick_drive 0.8
+    snare_level 0.42  snare_decay 0.1  snare_pitch 0.44  snare_snap 0.75  snare_pan -0.25
+    hihat_level 0.85  hihat_decay 0.2  hihat_pitch 0.72  hihat_pan 0.34
+    clap_level 0.6  clap_pan 0.15  crash_pan 0.3
+}
+
+module bass sub_osc {
+    cutoff 115hz  cutoff_env 0.04  resonance 8%
+    osc1_wave saw  osc2_pitch 0st  osc3_pitch 0st
+    attack 2ms  decay 120ms  sustain 0.86  release 40ms
+}
+
+module bass roll_osc {
+    cutoff 300hz  cutoff_env 0.46  resonance 55%  glide 0.02  keytrack 0.42
+    osc1_wave saw  osc2_wave square  osc2_pitch -12st  osc3_wave saw
+    attack 1ms  decay 68ms  sustain 0.2  release 25ms
+}
+
+# The acid IS the lead here. High resonance, deep envelope, hard drive.
+module bass acid_osc {
+    cutoff 520hz  cutoff_env 0.7  resonance 90%  glide 0.05  keytrack 0.55  vel_env 0.6
+    osc1_wave saw  osc2_wave saw  osc2_pitch 0.25st
+    attack 1ms  decay 80ms  sustain 0.15  release 25ms
+    lfo_target cutoff  lfo_waveform triangle  lfo_sync bars_2  lfo_depth 0.3
+}
+
+module bass acid2_osc {
+    cutoff 900hz  cutoff_env 0.62  resonance 85%  glide 0.09  keytrack 0.6  vel_env 0.5
+    osc1_wave square  osc2_wave saw  osc2_pitch -12.2st
+    attack 1ms  decay 60ms  sustain 0.12  release 20ms
+    lfo_target cutoff  lfo_waveform sample_hold  lfo_sync sixteenth  lfo_depth 0.18
+}
+
+# The arp: no triads. Open fifths, root/flat-second clusters, tritones.
+module keys arp_keys {
+    voice_mode poly  detune 0.18  chorus_mix 0.2  cutoff 0.5  resonance 0.35
+    attack 1ms  decay 0.28  sustain 0.15  release 0.22
+    lfo_target cutoff  lfo_waveform sample_hold  lfo_sync eighth  lfo_depth 0.2
+}
+
+# Metallic inharmonic percussion: the psychedelia lives here, not in melody.
+module fm clank_fm {
+    algorithm pair_plus_two  mod_index 0.92  feedback 0.58  waveform abs_sine
+    op0_ratio 0.41  op1_ratio 0.13  op2_ratio 0.27  op3_ratio 0.10
+    op0_envelope 0.001 0.16 0.0 0.1
+    op1_envelope 0.001 0.1 0.0 0.08
+    lfo_target mod_index  lfo_waveform sample_hold  lfo_sync bars_2  lfo_depth 0.25
+}
+
+module fm screech_fm {
+    algorithm additive  mod_index 0.85  feedback 0.5  waveform half_sine
+    op0_ratio 0.065  op1_ratio 0.35
+    op0_envelope 0.002 0.3 0.15 0.25
+    op1_envelope 0.001 0.2 0.1 0.18
+    lfo_target mod_index  lfo_waveform saw  lfo_sync bars_4  lfo_depth 0.35
+}
+
+# A drone, not a pad. Dark, filtered, no chord quality.
+module keys drone_keys {
+    voice_mode poly  detune 0.2  chorus_mix 0.15  cutoff 0.28  resonance 0.3
+    attack 0.75  decay 0.85  sustain 0.9  release 0.9
+    lfo_target cutoff  lfo_waveform triangle  lfo_sync bars_12  lfo_depth 0.2
+}
+
+module fm hiss_fm {
+    algorithm pair_plus_two  mod_index 0.6  feedback 0.38  waveform abs_sine
+    op0_ratio 0.49  op1_ratio 0.17  op2_ratio 0.35  op3_ratio 0.07
+    op0_envelope 0.001 1.7 0.28 1.3
+    op1_envelope 0.001 1.4 0.32 1.0
+    lfo_target mod_index  lfo_waveform triangle  lfo_sync bars_4  lfo_depth 0.3
+}
+
+# ──────────────────────────────── parts
+# Melodic patterns are 64 steps: four bars. The harmony is E E F E — the
+# phrygian oscillation. Two bars of root, one of the flat second, one back.
+
+pattern beat_intro  { kick: X - - - - - - - X - - - - - - -
+                      hat:  - - x - - - x - - - x - - - x - }
+pattern beat_main   { kick: X - - - X - - - X - - - X - - -
+                      hat:  - - x - - - x - - - x - o - x - }
+pattern beat_drive  { kick: X - - - X - - - X - - - X - - -
+                      hat:  x - x o x - x o x - x o x - x o
+                      clap: - - - - - - - - X - - - - - - - }
+pattern beat_brutal { kick: X - - - X - - - X - - - X - x -
+                      hat:  x o x o x o x o x o x o x o x o
+                      snare: - - - - - - - o - - - - - - - o
+                      clap: - - - - - - - - X - - - - - - - }
+pattern beat_fill   { kick: X - - - - - - - - - - - - - - -
+                      snare: - - x - x - x x X x X x X X X X
+                      hat:  x x - x - x - - - - - - - - - - }
+pattern beat_half   { kick: X - - - - - - - - - - - - - - -
+                      hat:  - - x - - - x - - - x - - - x - }
+
+pattern sub_hold  { E1:0.85 ..*31  F1:0.85 ..*15  E1:0.85 ..*15 }
+pattern sub_pulse { E1:0.85 .. .. -  - - - -  E1:0.8 .. .. -  - - - -
+                    E1:0.85 .. .. -  - - - -  E1:0.8 .. .. -  - - - -
+                    F1:0.85 .. .. -  - - - -  F1:0.8 .. .. -  - - - -
+                    E1:0.85 .. .. -  - - - -  E1:0.8 .. .. -  - - - - }
+
+# Never on the downbeat: the kick owns it.
+pattern roll_main   { - - E1:0.8 E1:0.7  - - E1:0.8 E1:0.7  - - E1:0.8 E1:0.7  - - E1:0.8 E1:0.7
+                      - - E1:0.8 E1:0.7  - - E1:0.8 E1:0.7  - - E1:0.8 E1:0.7  - - E1:0.8 E1:0.7
+                      - - F1:0.8 F1:0.7  - - F1:0.8 F1:0.7  - - F1:0.8 F1:0.7  - - F1:0.8 F1:0.7
+                      - - E1:0.8 E1:0.7  - - E1:0.8 E1:0.7  - - E1:0.8 E1:0.7  - - E1:0.8 E1:0.7 }
+pattern roll_stut   { - - E1:0.8 -  - E1:0.6 E1:0.8 E1:0.7  - - E1:0.8 -  - - E1:0.7 E1:0.8
+                      - - E1:0.8 -  - E1:0.6 E1:0.8 E1:0.7  - - E1:0.8 -  - E1:0.7 E1:0.8 -
+                      - - F1:0.8 -  - F1:0.6 F1:0.8 F1:0.7  - - F1:0.8 -  - - F1:0.7 F1:0.8
+                      - - E1:0.8 -  - E1:0.6 E1:0.8 E1:0.7  - - Bb1:0.7 -  - - E1:0.8 E1:0.7 }
+pattern roll_octave { - - E1:0.8 E2:0.6  - - E1:0.8 E2:0.6  - - E2:0.7 E1:0.8  - - E1:0.8 E2:0.6
+                      - - E1:0.8 E2:0.6  - - E1:0.8 E2:0.6  - - Bb1:0.7 E1:0.8  - - E1:0.8 E2:0.6
+                      - - F1:0.8 F2:0.6  - - F1:0.8 F2:0.6  - - F2:0.7 F1:0.8  - - F1:0.8 F2:0.6
+                      - - E1:0.8 E2:0.6  - - E1:0.8 E2:0.6  - - Bb1:0.7 E1:0.8  - - E1:0.8 E2:0.6 }
+
+# The acid line is the lead. Phrygian runs, the flat second everywhere, and
+# a tritone where a pop line would put a resolution.
+pattern acid_a { E2:0.8 - F2:0.5 -  - G2:0.6 - E2:0.5  - - Bb2:0.6 -  - F2:0.5 - -
+                 E2:0.8 - F2:0.5 -  - G2:0.6 - E2:0.5  - - D3:0.6 -  - C3:0.5 - -
+                 F2:0.8 - G2:0.5 -  - Bb2:0.6 - F2:0.5  - - C3:0.6 -  - G2:0.5 - -
+                 E2:0.8 - F2:0.5 -  - E2:0.6 - Bb2:0.5  - - F2:0.6 -  - E2:0.7 - - }
+pattern acid_b { E2:0.85 F2:0.4 G2:0.6 F2:0.4  E2:0.7 - Bb2:0.6 -  F2:0.7 E2:0.4 C3:0.6 -  Bb2:0.6 - F2:0.5 E2:0.6
+                 E2:0.85 F2:0.4 G2:0.6 F2:0.4  E2:0.7 - D3:0.6 -  C3:0.7 Bb2:0.4 G2:0.6 -  F2:0.6 - E2:0.5 F2:0.6
+                 F2:0.85 G2:0.4 Bb2:0.6 G2:0.4  F2:0.7 - C3:0.6 -  Bb2:0.7 G2:0.4 F2:0.6 -  C3:0.6 - G2:0.5 F2:0.6
+                 E2:0.85 F2:0.4 Bb2:0.6 F2:0.4  E2:0.7 - G2:0.6 -  Bb2:0.7 F2:0.4 E2:0.6 -  F2:0.6 - E2:0.5 - }
+pattern acid_hi { E3:0.8 - Bb3:0.6 -  F3:0.7 - E3:0.5 -  - G3:0.6 - Bb3:0.5  - F3:0.6 - -
+                  E3:0.8 - D4:0.6 -  C4:0.7 - Bb3:0.5 -  - G3:0.6 - F3:0.5  - E3:0.6 - -
+                  F3:0.8 - C4:0.6 -  Bb3:0.7 - G3:0.5 -  - F3:0.6 - C4:0.5  - Bb3:0.6 - -
+                  E3:0.8 - Bb3:0.6 -  F3:0.7 - E3:0.5 -  - Bb3:0.6 - F3:0.5  - E3:0.7 - - }
+pattern acid_ghost { E3:0.5 - - -  - - - -  - - Bb2:0.4 -  - - - -
+                     - - - -  - - - -  - - - -  - - - -
+                     F3:0.5 - - -  - - - -  - - C3:0.4 -  - - - -
+                     - - - -  - - - -  - - - -  - - - - }
+
+# The second acid: a squealing counter-line, higher and nastier.
+pattern screech_a { - - - -  Bb3:0.5 - - -  - - - -  - - F4:0.45 -
+                    - - - -  D4:0.5 - - -  - - - -  - - Bb3:0.45 -
+                    - - - -  C4:0.5 - - -  - - - -  - - G3:0.45 -
+                    - - - -  Bb3:0.5 - - -  - - - -  - - E4:0.5 - }
+pattern screech_b { Bb3:0.5 - F4:0.4 -  - E4:0.5 - Bb3:0.4  - - D4:0.5 -  F4:0.45 - - -
+                    C4:0.5 - G3:0.4 -  - Bb3:0.5 - F3:0.4  - - E4:0.5 -  Bb3:0.45 - - -
+                    F4:0.5 - C4:0.4 -  - G3:0.5 - Bb3:0.4  - - F4:0.5 -  C4:0.45 - - -
+                    E4:0.55 - Bb3:0.4 -  - F4:0.5 - E4:0.4  - - Bb3:0.5 -  E4:0.5 - - - }
+
+# No triads. Open fifths, the root/flat-second clash, and a tritone stack.
+pattern arp_fifth { [E3 B3 E4]:0.55 ..*31  [F3 C4 F4]:0.55 ..*15  [E3 B3 E4]:0.55 ..*15 }
+pattern arp_clash { [E3 F3 B3]:0.5 ..*31  [F3 Gb3 C4]:0.5 ..*15  [E3 F3 B3]:0.5 ..*15 }
+pattern arp_tri   { [E3 Bb3 D4]:0.5 ..*31  [F3 B3 Eb4]:0.5 ..*15  [E3 Bb3 D4]:0.5 ..*15 }
+
+pattern clank_a     { - - - Bb3:0.6  - - - -  - Db4:0.5 - -  - - - - }
+pattern clank_b     { - Bb3:0.6 - -  Db4:0.5 - - Bb3:0.4  - - Eb4:0.6 -  - Bb3:0.5 - - }
+pattern clank_busy  { Bb3:0.5 - Db4:0.4 -  Eb4:0.5 - Bb3:0.4 Db4:0.5  - Bb3:0.5 - Eb4:0.4  Db4:0.5 - Bb3:0.6 - }
+pattern clank_break { - - - -  - - - Bb3:0.7  - - - -  - - - - }
+
+pattern drone_low  { [E2 B2]:0.5 ..*31  [F2 C3]:0.5 ..*15  [E2 B2]:0.5 ..*15 }
+pattern drone_high { [E3 F3 B3]:0.42 ..*31  [F3 C4 Gb4]:0.42 ..*15  [E3 F3 B3]:0.42 ..*15 }
+
+pattern hiss_swell { E4:0.4 ..*31 }
+pattern hiss_up    { E4:0.5 ..*63 }
+
+# ──────────────────────────────── the rig
+#
+# Three voices in, seven waiting. Every chain on one line, every node named.
+
+track drums  { play beat_brutal using kit level 0.82 reverb_send 0.05 out > compressor(-12, ratio=4, attack=3, release=45, makeup=2db) as glue > saturate(0.55) as grit > eq(low=0.5, mid=-1.0, high=2.4) as tone > master }
+track sub    { play sub_hold using sub_osc level 0.61 sidechain 0.85 out > lowpass(185hz, 0.02) as lp > saturate(0.45, wet=1.0) as drive > master }
+track roll   { play roll_octave using roll_osc level 0.70 gate 0.3 sidechain 0.82 out > highpass(44hz, 0.02) as hp > saturate(1.2) as grind > eq(low=-2.0, mid=-0.5, high=-2.5) as tone > lowpass(2800, 0.02, wet=0.0) as lp > master }
+
+track acid    { play acid_hi using acid_osc level 0.64 pan 0.14 gate 0.4 sidechain 0.55 delay_send 0.24 reverb_send 0.08 out > highpass(200hz, 0.02) as hp > saturate(1.0) as grind > autowah(0.9, base=450hz, range=3400hz, peak=0.45, wet=1.0) as wah > limiter(0.5) as tame > autopan(0.3, bars=4, wet=0.0) as pan > master }
+track screech { play screech_b using acid2_osc level 0.48 pan -0.38 gate 0.25 sidechain 0.5 delay_send 0.3 reverb_send 0.14 out > highpass(500hz, 0.02) as hp > saturate(0.9) as grind > bitcrush(8, wet=1.0) as crush > autopan(0.5, bars=3, wet=1.0) as pan > master }
+track arp     { play arp_fifth using arp_keys level 0.40 pan -0.2 arp up rate=16 gate=0.4 octaves=2 sidechain 0.5 delay_send 0.3 reverb_send 0.18 out > highpass(280, 0.02) as hp > phaser(0.4, bars=6, wet=1.0) as ph > lowpass(6khz, 0.02, wet=0.0) as lp > master }
+track clank   { play clank_busy using clank_fm level 0.4 pan -0.6 gate 0.1 sidechain 0.5 delay_send 0.22 reverb_send 0.12 out > highpass(1.3khz, 0.02) as hp > bitcrush(7, wet=1.0) as crush > lowpass(7khz, 0.02) as lp > master }
+track spike   { play screech_b using screech_fm level 0.35 pan 0.55 gate 0.15 sidechain 0.5 delay_send 0.35 reverb_send 0.2 out > highpass(900, 0.02) as hp > autowah(0.85, base=1.2khz, range=5khz, peak=0.5, wet=1.0) as wah > autopan(0.6, bars=5, wet=1.0) as pan > master }
+track drone   { play drone_high using drone_keys level 0.40 pan -0.45 sidechain 0.55 reverb_send 0.4 delay_send 0.12 out > highpass(120hz, 0.02) as hp > eq(low=1.0, mid=-4.5, high=0.5) as tone > vowel(o, a, bars=14, wet=1.0) as vow > autopan(0.3, bars=9, wet=0.0) as pan > master }
+track hiss    { play hiss_up using hiss_fm level 0.42 pan 0.5 sidechain 0.5 reverb_send 0.25 delay_send 0.12 out > gain(6) as up > bandpass(5200, 0.35, lfo_bars=4, lfo_depth=2600) as bp > lowpass(11khz, 0.02) as lp > master }
+
+master { in > tilt(-0.03) > eq(low=-0.5, mid=-0.9, high=2.6) > compressor(-9, ratio=2.5, attack=8, release=60, makeup=1.5db) > limiter(0.95) > out }

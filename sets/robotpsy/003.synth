@@ -1,0 +1,12 @@
+# set: bars=32 phase=hypnosis energy=5
+# set-note: Nothing in and nothing out for thirty-two bars — seq_a holds untouched while pad swaps to play pad_high and voc opens its vowel node from wet=0.0 to wet=1.0, so the robot voice arrives without a new voice arriving.
+
+use "../../examples/rigs/robot_psy_rig.synth"
+
+track drums { play beat_open using kit level 0.22 reverb_send 0.04 out > compressor(-12, ratio=4, attack=3, release=45, makeup=2db) as glue > saturate(0.4) as grit > eq(low=0.5, mid=-0.8, high=2.0) as tone > master }
+
+track seq   { play seq_a using seq_osc level 0.18 pan 0.18 gate 0.45 sidechain 0.55 delay_send 0.3 reverb_send 0.12 out > highpass(260, 0.02) as hp > bitcrush(9, wet=0.0) as crush > autopan(0.35, bars=4, wet=0.0) as pan > master }
+
+track voc   { play voc_a using voc_keys level 0.10 pan 0.35 sidechain 0.5 delay_send 0.2 reverb_send 0.3 out > highpass(280, 0.02) as hp > vowel(a, o, bars=8, wet=1.0) as vox > autopan(0.3, bars=6, wet=0.0) as pan > master }
+
+track pad   { play pad_high using pad_keys level 0.12 pan -0.45 sidechain 0.5 reverb_send 0.35 delay_send 0.08 out > highpass(160hz, 0.02) as hp > eq(low=0.5, mid=-3.5, high=0.5) as tone > vowel(o, u, bars=16, wet=1.0) as vox > master }

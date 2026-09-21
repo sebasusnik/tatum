@@ -44,17 +44,18 @@ gain_comp 0.3            # mostly off: scene density should map to loudness
 # Dotted-eighth delay: the Detroit "echo that never quite lands on the beat".
 delay sync=dotted_eighth feedback=0.34 filter=0.55 sidechain=0.35
 
-# Medium room, not a cathedral. Damped so the chords stay warm, not glassy.
+# Medium room, not a cathedral. damp was 0.45 with the return lowpassed at
+# 3.4 kHz, which is a closed box; the tail is the strongest "open" cue there is.
 # predelay is in ms, but the global `reverb` line rejects a unit suffix.
-reverb size=0.62 damp=0.45 predelay=28 sidechain=0.45
+reverb size=0.62 damp=0.3 predelay=28 sidechain=0.45
 
 # Movement lives on the tail, not on what feeds it. Nothing destructive here.
 reverb_return { in > highpass(300hz, 0.05)
-                   > lowpass(3.4khz, 0.08, lfo_bars=16, lfo_depth=900)
+                   > lowpass(6.5khz, 0.08, lfo_bars=16, lfo_depth=1500)
                    > autopan(0.3, bars=8)
                    > out }
 
-delay_return  { in > highpass(420hz, 0.05) > lowpass(5khz, 0.05) > out }
+delay_return  { in > highpass(420hz, 0.05) > lowpass(8khz, 0.05) > out }
 
 # ────────────────────────────────────────────────
 # MODULES
@@ -67,8 +68,8 @@ module keys warmth {
     # note_on, so a five-note chord collapses to its top note. Poly + detune
     # + chorus is the only way to get a real 9th voicing out of `keys`.
     voice_mode poly
-    detune 24%
-    chorus_mix 38%
+    detune 16%
+    chorus_mix 16%            # was 38%; `autopan` below carries the width
     cutoff 0.30                # ~800 Hz; swept per scene, see the header note
     resonance 0.06             # Q = 0.5 + n*19.5, so 0.2 here was a 4.4-Q whistle
     attack 82ms                # soft, but the chord change is still audible
@@ -80,15 +81,15 @@ module keys warmth {
     lfo_sync bars_4
     lfo_depth 10%
     vibrato_rate 20%
-    vibrato_depth 3%
+    vibrato_depth 2%
 }
 
 # Octave-up layer. Poly, barely detuned, brighter, sits above the main voicing
 # and gets the phaser. This is the width.
 module keys shimmer {
     voice_mode poly
-    detune 11%
-    chorus_mix 50%
+    detune 6%
+    chorus_mix 14%            # was 50%: this, not detune, was the "noisy oscillation"
     cutoff 0.44                # ~2.9 kHz
     resonance 0.05
     attack 205ms               # later than `warmth`, so the chord blooms
@@ -100,7 +101,7 @@ module keys shimmer {
     lfo_sync bars_8
     lfo_depth 9%
     vibrato_rate 30%
-    vibrato_depth 4%
+    vibrato_depth 1%
 }
 
 # Offbeat stabs for the last sixteen bars only.
@@ -120,7 +121,7 @@ module keys stab {
 # not a texture.
 module keys under {
     voice_mode poly
-    detune 6%
+    detune 3%
     cutoff 0.10                # ~320 Hz; swept in the breakdown
     resonance 0.05
     attack 205ms
@@ -162,9 +163,9 @@ module beats nine {
     kick_pan 0%
     clap_level 72%
     clap_pan -14%
-    hihat_level 58%
-    hihat_decay 20%
-    hihat_pitch 36%
+    hihat_level 66%
+    hihat_decay 22%
+    hihat_pitch 44%
     hihat_pan 28%
 }
 
@@ -357,7 +358,7 @@ track chords {
     play ch_a
     using warmth
     velocity 0.80
-    level 0.25
+    level 0.17
     gate 1.0
     sidechain 0.42
     delay_send 0.14
@@ -365,7 +366,7 @@ track chords {
     out > highpass(190hz, 0.05)
         > lowpass(2.6khz, 0.05, lfo_bars=12, lfo_depth=700)
         > eq(mid=-1.5, high=0.8)      # leave the 1 kHz window to the stabs and the bell
-        > autopan(0.22, bars=8)
+        > autopan(0.65, bars=9)
         > master
 }
 
@@ -373,15 +374,17 @@ track shine {
     play ch_a_hi
     using shimmer
     velocity 0.70
-    level 0.23
+    level 0.14
     gate 1.0
     pan -0.38
     sidechain 0.38
     delay_send 0.20
     reverb_send 0.42
     out > highpass(750hz, 0.05)       # 750, not 620: it was masking `chords`
-        > phaser(0.28, bars=8, stages=4, feedback=0.18)
-        > eq(high=3.0)                # the only thing in the air band
+        > phaser(0.55, bars=8, stages=4, feedback=0.12)
+        > lowpass(2.8khz, 0.02)       # a lid on the 2-6 kHz whistle
+        > autopan(1.0, bars=12)      # the width the chorus used to provide
+        > eq(high=1.0)
         > master
 }
 
@@ -415,7 +418,7 @@ track under {
     play ch_low
     using under
     velocity 0.70
-    level 0.16
+    level 0.12
     gate 1.0
     sidechain 0.30
     reverb_send 0.12
@@ -427,7 +430,7 @@ track under {
 # ────────────────────────────────────────────────
 
 master {
-    in > eq(low=1.8, mid=0.0, high=1.0)
+    in > eq(low=1.8, mid=0.0, high=1.4)
        > tilt(0.0)
        > compressor(-7db, ratio=2.2, attack=18ms, release=140ms, makeup=4.23db)
        > limiter(0.95)
@@ -444,8 +447,8 @@ scene intro {
     delay_mix  = 0.14
     auto walker cutoff 0.20 > 0.30
 
-    track drums { play dr_intro using nine level 0.72 }
-    track bass  { play bs_intro using walker level 0.55 velocity 0.78 }
+    track drums { play dr_intro using nine level 0.52 }
+    track bass  { play bs_intro using walker level 0.40 velocity 0.78 }
 }
 
 # 2. PULSE (8) — clap on 2 and 4, the bass starts walking, the chords creep
@@ -456,9 +459,9 @@ scene pulse {
     auto warmth cutoff 0.16 > 0.32
     auto walker cutoff 0.28 > 0.34
 
-    track drums  { play dr_main using nine level 0.79 }
-    track bass   { play bs_a    using walker level 0.66 }
-    track chords { play ch_a    using warmth level 0.25 reverb_send 0.34 }
+    track drums  { play dr_main using nine level 0.65 }
+    track bass   { play bs_a    using walker level 0.54 }
+    track chords { play ch_a    using warmth level 0.15 reverb_send 0.34 }
 }
 
 # 3. LIFT (16) — cycle A wide open, shimmer layer above it. The filter
@@ -470,10 +473,10 @@ scene lift {
     auto shimmer cutoff 0.40 > 0.54 > 0.44
     auto walker cutoff 0.26 > 0.38
 
-    track drums  { play dr_main  using nine level 0.85 }
-    track bass   { play bs_a     using walker level 0.70 }
-    track chords { play ch_a     using warmth level 0.25 }
-    track shine { play ch_a_hi  using shimmer level 0.23 pan -0.38 }
+    track drums  { play dr_main  using nine level 0.78 }
+    track bass   { play bs_a     using walker level 0.64 }
+    track chords { play ch_a     using warmth level 0.16 }
+    track shine { play ch_a_hi  using shimmer level 0.13 pan -0.38 }
 }
 
 # 4. BRIDGE (16) — cycle B: four minor 9ths, no resolution. The kit picks up
@@ -486,10 +489,10 @@ scene bridge {
     auto walker cutoff_env 0.46 > 0.58
     auto master tilt 0.0 > -0.12
 
-    track drums  { play dr_full  using nine level 0.87 }
-    track bass   { play bs_b     using walker level 0.73 }
-    track chords { play ch_b     using warmth level 0.25 }
-    track shine { play ch_b_hi  using shimmer level 0.23 pan -0.38 }
+    track drums  { play dr_full  using nine level 0.84 }
+    track bass   { play bs_b     using walker level 0.71 }
+    track chords { play ch_b     using warmth level 0.16 }
+    track shine { play ch_b_hi  using shimmer level 0.14 pan -0.38 }
 }
 
 # 5. BREAKDOWN (16) — drums and bass gone. The chords carry it alone, the
@@ -506,10 +509,10 @@ scene breakdown {
     auto reverb_mix 0.38 > 0.58
     auto master tilt -0.12 > 0.06
 
-    track chords { play ch_a    using warmth  level 0.35 velocity 0.88 sidechain 0.0 reverb_send 0.44 delay_send 0.20 }
-    track shine { play ch_a_hi using shimmer level 0.31 velocity 0.80 sidechain 0.0 reverb_send 0.54 delay_send 0.28 pan -0.38 }
-    track under  { play ch_low  using under   level 0.16 velocity 0.72 sidechain 0.0 }
-    track chime { play bl_a    using bell    level 1.00 velocity 0.72 sidechain 0.0 reverb_send 0.46 delay_send 0.40 pan -0.50 }
+    track chords { play ch_a    using warmth  level 0.20 velocity 0.88 sidechain 0.0 reverb_send 0.44 delay_send 0.20 }
+    track shine { play ch_a_hi using shimmer level 0.17 velocity 0.80 sidechain 0.0 reverb_send 0.54 delay_send 0.28 pan -0.38 }
+    track under  { play ch_low  using under   level 0.14 velocity 0.72 sidechain 0.0 }
+    track chime { play bl_a    using bell    level 0.86 velocity 0.72 sidechain 0.0 reverb_send 0.46 delay_send 0.40 pan -0.50 }
 }
 
 # 6. REBUILD (8) — the kick and the hats come back first. No clap, no bass:
@@ -520,10 +523,10 @@ scene rebuild {
     auto warmth cutoff 0.28 > 0.44
     auto shimmer cutoff 0.40 > 0.50
 
-    track drums  { play dr_thin using nine level 0.80 }
-    track chords { play ch_a    using warmth  level 0.25 }
-    track shine { play ch_a_hi using shimmer level 0.23 pan -0.38 }
-    track chime { play bl_a    using bell    level 0.85 pan -0.50 }
+    track drums  { play dr_thin using nine level 0.69 }
+    track chords { play ch_a    using warmth  level 0.15 }
+    track shine { play ch_a_hi using shimmer level 0.13 pan -0.38 }
+    track chime { play bl_a    using bell    level 0.73 pan -0.50 }
 }
 
 # 7. PEAK (16) — the payoff. Full kit, bass walking cycle A, offbeat stabs
@@ -537,8 +540,8 @@ scene peak {
 
     track drums  { play dr_full  using nine    level 0.90 }
     track bass   { play bs_a     using walker  level 0.76 }
-    track chords { play ch_a     using warmth  level 0.25 }
-    track shine { play ch_a_hi  using shimmer level 0.23 pan -0.38 }
+    track chords { play ch_a     using warmth  level 0.17 }
+    track shine { play ch_a_hi  using shimmer level 0.14 pan -0.38 }
     track stabs { play st_a     using stab    level 0.26 pan 0.34 }
     track chime { play bl_a     using bell    level 0.85 pan -0.50 }
 }
@@ -555,8 +558,8 @@ scene outro {
     auto shimmer level 0.23 > 0.0
 
     track drums  { play dr_thin using nine    level 0.80 }
-    track chords { play ch_hold using warmth  level 0.25 reverb_send 0.40 }
-    track shine { play ch_hold using shimmer level 0.23 reverb_send 0.46 pan -0.38 }
+    track chords { play ch_hold using warmth  level 0.17 reverb_send 0.40 }
+    track shine { play ch_hold using shimmer level 0.14 reverb_send 0.46 pan -0.38 }
 }
 
 # ────────────────────────────────────────────────

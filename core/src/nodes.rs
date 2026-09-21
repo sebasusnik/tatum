@@ -241,6 +241,9 @@ pub const NODES: &[NodeDefSpec] = &[
         waveform: false, rhythm: false, in_chains: true, doc: "Plate reverb, wet only; use it on a bus." },
 ];
 
+/// The universal chain-node option: dry/wet, where 0 bypasses.
+pub const WET: &str = "wet";
+
 pub fn lookup(kind: &str) -> Option<&'static NodeDefSpec> {
     NODES.iter().find(|n| n.name == kind || n.aliases.contains(&kind))
 }
@@ -290,6 +293,18 @@ pub fn validate(kind: &str, params: &[Param]) -> Vec<String> {
                 }
                 positional_idx += 1;
             }
+            // `wet` is universal on anything that can sit in a chain: 0 bypasses
+            // the node and skips its processing, 1 is the node alone, and the
+            // values between blend it against the dry signal. It is the lever a
+            // live set uses to switch an effect in and out without a swap, so it
+            // has to exist on every node rather than the few that declare a
+            // `mix` of their own -- and it is a different thing from those, which
+            // are the node's internal wet amount.
+            Param::Named(name, v) if name == WET && spec.in_chains => {
+                if *v < 0.0 || *v > 1.0 {
+                    errors.push(format!("{}: wet = {} is out of range (0..1)", spec.name, v));
+                }
+            }
             Param::Named(name, v) => match spec.named.iter().find(|a| a.name == name) {
                 Some(arg) => {
                     if *v < arg.min || *v > arg.max {
@@ -326,6 +341,20 @@ pub fn markdown() -> String {
     out.push_str("Used in chains (`out > saturate(0.3) > master`, buses, `master { in > ... > out }`) and,\n");
     out.push_str("for sources and envelopes, inside `instrument { }` graphs. Positional arguments in order,\n");
     out.push_str("then `name=value` options. Unknown names and out-of-range values are compile errors.\n\n");
+    out.push('\n');
+    out.push_str("Two options apply to every node that can sit in a chain, on top of the ones\n");
+    out.push_str("listed below:\n\n");
+    out.push_str("- `wet=` 0..1 (default 1) — dry/wet. At 0 the node is **bypassed**: it is not\n");
+    out.push_str("  processed at all, so a chain of effects that are switched off costs nothing.\n");
+    out.push_str("  At 1 it replaces the signal, and in between it is blended against the dry.\n");
+    out.push_str("  Changing only `wet=` applies inside the bar with no hot-swap, so it is how a\n");
+    out.push_str("  live set switches an effect in and out without restarting the voices.\n");
+    out.push_str("  It is a different thing from the `mix` that `phaser` and `vowel` declare,\n");
+    out.push_str("  which is those nodes' own internal wet amount.\n");
+    out.push_str("- `as <name>` — name the node, after the closing parenthesis:\n");
+    out.push_str("  `> autowah(0.9, base=450hz) as wah`. A name is what `auto <track>.<name> wet`\n");
+    out.push_str("  points at, and it survives someone inserting another node earlier in the\n");
+    out.push_str("  chain, which a position does not. Two nodes in one chain cannot share a name.\n\n");
     out.push_str("| node | where | arguments | options | description |\n");
     out.push_str("|------|-------|-----------|---------|-------------|\n");
     for n in NODES {

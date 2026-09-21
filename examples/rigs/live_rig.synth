@@ -1,0 +1,80 @@
+# live_rig — a rig, not a song.
+#
+# Eight voices and their effect chains, all loaded, most of them switched off.
+# Nothing here is an arrangement: it is the instrument a live set plays. The set
+# happens by editing two kinds of number while `synth watch` is running, both of
+# which apply inside the bar with no hot-swap and no voice restart:
+#
+#   level 0 -> level 0.45     bring a voice in
+#   wet=0   -> wet=1          switch an effect in (and anything between)
+#
+# Both are cheap on purpose. A track at `level 0` fires no notes and, once its
+# tail has run out, is skipped whole -- no voices, no chain, no mix. A node at
+# `wet=0` is not processed at all. So the cost of this file is the cost of what
+# you can actually hear, and the six voices waiting are close to free:
+#
+#   everything off : 2.59 s to render 122 s of audio  (47x real time)
+#   everything on  : 6.37 s                           (19x real time)
+#
+# Its pattern keeps counting while a voice is muted, so bringing a fader up
+# drops that part onto the grid rather than wherever it happened to stop.
+#
+# Every effect is named with `as`, so a scene can sweep one instead of switching
+# it: `auto warm.ph wet 0 > 1` fades the phaser in over the scene. Names also
+# survive someone inserting a node earlier in the chain, which positions do not.
+
+tempo 126
+scale F minor
+gain_comp 0
+humanize 0.02 timing 0.01
+sidechain 0.4
+
+reverb size=0.7 damp=0.4 predelay=20
+delay sync=dotted_eighth feedback=0.4
+
+# ──────────────────────────────── voices
+
+module beats kit { kick_level 1.0 snare_level 0.7 hihat_level 0.5 hihat_pan 0.35 }
+module bass sub { cutoff 110hz sustain 0.9 }
+module bass reese { cutoff 480hz resonance 40% sustain 0.7 }
+module keys pad_warm { voice_mode poly cutoff 0.45 attack 0.8 release 0.9
+                       lfo_target cutoff lfo_sync bars_8 lfo_depth 0.1 }
+module keys pad_glass { voice_mode poly cutoff 0.65 detune 0.3 attack 0.9 release 1.0
+                        lfo_target cutoff lfo_sync bars_16 lfo_depth 0.12 }
+
+# The same instrument twice, voiced differently, so a set can cross from one to
+# the other with two faders instead of a swap.
+module fm rhodes_liquid { algorithm dual_pairs mod_index 0.28
+                          op0_ratio 0.032 op1_ratio 0.871 op2_ratio 0.032 op3_ratio 0.097
+                          chorus_mix 0.3 }
+module fm rhodes_hard { algorithm two_op mod_index 0.55 feedback 0.2
+                        op0_ratio 0.032 op1_ratio 0.871 }
+module fm bell { algorithm pair_plus_two mod_index 0.7 feedback 0.3
+                 op0_ratio 0.13 op1_ratio 0.29 op2_ratio 0.42 op3_ratio 0.16 }
+
+# ──────────────────────────────── parts
+
+pattern beat { kick:  X - - - - - x - X - - - - - - -
+               snare: - - - - X - - - - - - - X - - -
+               hat:   x - x - x - x - x - x - x - x - }
+pattern low   { F1:0.9 - - -  F1:0.6 - - -  Db1:0.9 - - -  Ab1:0.7 - - - }
+pattern chord { Fm9:0.6 ..*15  Dbmaj9:0.6 ..*15 }
+pattern stab  { F3:0.7 - - -  - - Ab3:0.6 -  - - - -  C4:0.6 - - - }
+
+# ──────────────────────────────── the rig
+#
+# Two voices in, six waiting. Every chain is written on one line: a track chain
+# split across lines used to be truncated silently, and while that is fixed, one
+# line is still how the rest of the corpus reads.
+
+track drums  { play beat using kit level 0.7 out > saturate(0.2) as grit > compressor(-10, ratio=3) as glue > master }
+track sub    { play low using sub level 0.5 out > lowpass(200, 0.1) as lp > saturate(0.3, wet=0.0) as drive > master }
+
+track reese  { play low using reese pan -0.25 level 0.0 reverb_send 0.1 out > autowah(0.8, base=400hz, range=2600hz, wet=0.0) as wah > chorus(0.3, wet=0.0) as cho > master }
+track warm   { play chord using pad_warm pan -0.45 level 0.0 reverb_send 0.4 out > lowpass(2400, 0.2) as lp > phaser(0.4, bars=8, wet=0.0) as ph > master }
+track glass  { play chord using pad_glass pan 0.45 level 0.0 reverb_send 0.5 out > highpass(400, 0.2) as hp > vowel(o, a, bars=12, wet=0.0) as vow > master }
+track liquid { play stab using rhodes_liquid pan 0.3 level 0.0 reverb_send 0.3 delay_send 0.3 out > autopan(0.4, bars=6, wet=0.0) as pan > master }
+track hard   { play stab using rhodes_hard pan -0.35 level 0.0 delay_send 0.2 out > saturate(0.5, wet=0.0) as drive > bitcrush(6, wet=0.0) as crush > master }
+track bell   { play stab using bell pan 0.5 level 0.0 reverb_send 0.6 out > autowah(0.9, base=900hz, range=4000hz, wet=0.0) as wah > master }
+
+master { in > eq(low=0.5, mid=0, high=0.8) > compressor(-8, ratio=2) > limiter(0.95) > out }

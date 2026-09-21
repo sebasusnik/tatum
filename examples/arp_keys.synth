@@ -15,7 +15,13 @@ scale C minor
 module keys pad {
     cutoff 0.6
     resonance 8%
-    chorus_mix 0.4
+    chorus_mix 0.0          # the arp lifts this chord an octave (octaves=2)
+                             # and plays it one note at a time, so the top
+                             # note reaches A#4 -> 932 Hz once lifted. A
+                             # chorus's ~3.8% detune beats there at 35 Hz,
+                             # which is roughness, not width, and there is
+                             # no chord sounding underneath to bury it.
+                             # autopan on the track carries the width instead.
     attack 0.01
     decay 0.2
     sustain 0.4
@@ -32,10 +38,20 @@ pattern cm7_hold {
 
 track keys {
     play cm7_hold using pad
-    level 0.85
+    level 0.55               # was 0.85: removing chorus_mix let the raw
+                              # (uncancelled) peaks through, so the level came
+                              # down to put the same ~0.45 peak into master
+                              # that the old chorused version had (measured:
+                              # 0.45 in -> 0.66 out, same as before the fix)
     arp updown rate=16 gate=0.5 octaves=2
     delay_send 0.25  reverb_send 0.30
-    out > master
+    out > autopan(0.75, bars=2) > master
+    # depth 0.75 over a 2-bar cycle (4 cycles across the 8-bar render):
+    # depth is what drives the width here, not the cycle length -- measured
+    # width above 300 Hz at depth 0.45 stayed ~9% whether the cycle was 1, 2
+    # or 8 bars, and only came back up to the pre-chorus ~18% by raising
+    # depth to 0.75. bars=2 keeps the movement audible rather than one slow
+    # sweep across the whole clip.
 }
 
 master { in > eq(low=1.5, mid=-1.0, high=0.5) > compressor(-10, ratio=2, makeup=4db) > limiter > out }

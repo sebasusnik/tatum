@@ -31,7 +31,7 @@ module bass drone {
     osc2_wave saw
     osc2_pitch 0.25
     osc3_wave square
-    osc3_pitch 0.75
+    osc3_pitch 7st   # the fifth of the power chord the patterns ask for
     attack 0.32
     decay 0.4
     sustain 0.95
@@ -144,16 +144,21 @@ module fm stab {
 # PATTERNS
 # ────────────────────────────────────────────────
 
-# Drone chords — one chord per scene, held with ties for the whole section.
-# NOTE: "E5" is NOT usable as a chord symbol here — the parser greedily reads
-# root+digit as an absolute note (E, octave 5) whenever the octave digit is
-# 0..6, so "E5" means the note E5, not the power-chord quality "5", and a
-# trailing "/octave" on it is a parse error ("unexpected slash"). Used
-# Esus4 for the drop instead: still a big, open, harder-edged voicing.
-pattern drone_em8    { E5/1:0.75   ..*127 }
-pattern drone_cm8    { C5/1:0.75   ..*127 }
-pattern drone_edrop12 { G5/1:0.78   ..*191 }
-pattern drone_em4    { E5/1:0.6    ..*63 }
+# Drone roots — one per scene, held with ties for the whole section.
+#
+# These used to read `E5/1`, written in the belief that the parser could not
+# take "5" as a power chord. It can: `E5/1` compiles to [E1, B1]. The drone
+# is a `bass`, which has one voice, so the chord arrived as two note-ons and
+# only the last survived -- the drone has been sitting on B this whole time,
+# a fifth above the sub, which plays E. `chord_into_mono_voice` covers `bass`
+# now and says so.
+#
+# The fifth comes from the oscillator instead, which is how a monosynth plays
+# a power chord anyway: `osc3_pitch 7st` on the module below.
+pattern drone_em8    { E1:0.75   ..*127 }
+pattern drone_cm8    { C1:0.75   ..*127 }
+pattern drone_edrop12 { G1:0.78   ..*191 }
+pattern drone_em4    { E1:0.6    ..*63 }
 
 pattern sub_em8      { E1:0.9  ..*127 }
 pattern sub_cm8      { C1:0.9  ..*127 }

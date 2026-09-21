@@ -1,0 +1,9 @@
+# set: bars=8 phase=intro energy=2
+# set-note: Brought `air` in quietly on `air_hold` with its autopan opened to full, so the top of the room starts drifting over the kick and pad — three voices, nothing out.
+
+use "../../examples/rigs/proghouse_rig.synth"
+
+track drums { level 0.360 }
+track sub { level 0.000 }
+track pad { level 0.056 out > highpass(200, 0.02) as hp > phaser(0.3, bars=12, wet=0.0) as ph > autopan(0.3, bars=10, wet=0.0) as pan > master }
+track air { level 0.070 out > highpass(1.4khz, 0.02) as hp > autopan(0.35, bars=14, wet=1.0) as pan > master }

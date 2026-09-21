@@ -1,0 +1,29 @@
+# The audit's fingerprint of three songs. A number here moving by more than
+# 1.5 dB means the engine changed how a voice sounds, which is either the point
+# of the commit or a bug in it.
+#
+# These are NOT comparable to each other: a saturated pad reads dirtier than a
+# bell however clean both are. Each one is only comparable to itself.
+#
+# Regenerate, and then READ THE DIFF:
+#   UPDATE_AUDIT_BASELINE=1 cargo test --release -p synth-cli --test audit_baseline
+#
+# song  track  median_db  [effect db]...
+examples/detroit.synth	bass	-12.24
+examples/detroit.synth	chime	-51.64
+examples/detroit.synth	chords	-3.93
+examples/detroit.synth	shine	-3.46
+examples/detroit.synth	under	-11.48
+examples/liquid_dnb.synth	air	-3.75
+examples/liquid_dnb.synth	glass	-10.82	chorus 11.63
+examples/liquid_dnb.synth	haze	-3.67
+examples/liquid_dnb.synth	lead	-20.62
+examples/liquid_dnb.synth	pad	-3.60
+examples/liquid_dnb.synth	sub	-13.96
+examples/neon_arterial.synth	arp	-24.47
+examples/neon_arterial.synth	bass	-12.71
+examples/neon_arterial.synth	bell	-49.87
+examples/neon_arterial.synth	brass	-3.42
+examples/neon_arterial.synth	lead	-28.71
+examples/neon_arterial.synth	pad	-4.00
+examples/neon_arterial.synth	solo	-13.53

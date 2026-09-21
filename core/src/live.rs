@@ -58,6 +58,9 @@ pub enum FastOp {
     TrackVelocity { track: usize, velocity: f32 },
     TrackGate { track: usize, gate: f32 },
     ModuleParam { instrument: usize, id: ParamId, value: f32 },
+    /// Switch one node of a track's insert chain in or out, or anywhere
+    /// between. The node is already built; only how much of it is heard moves.
+    NodeWet { track: usize, node: usize, wet: f32 },
 }
 
 /// What a new engine takes over from the one it replaces, by index in the new
@@ -247,6 +250,10 @@ fn resolve_fast(changes: &[DslChange], ast: &Song, compiled: &CompiledSong, inst
                 }
                 if !any { return None; }
                 continue;
+            }
+            DslChange::TrackNodeWetChanged { track_name, node_index, wet } => {
+                let t = track(track_name)?;
+                FastOp::NodeWet { track: t, node: *node_index, wet: *wet }
             }
             DslChange::StructuralChange => return None,
         };
@@ -535,6 +542,7 @@ fn apply_op(engine: &mut SongEngine, op: FastOp) {
         FastOp::Tempo(bpm) => engine.set_tempo(bpm),
         FastOp::Swing(s) => engine.set_swing(s),
         FastOp::Humanize { velocity, timing } => engine.set_humanize(velocity, timing),
+        FastOp::NodeWet { track, node, wet } => { engine.set_node_wet(track, node, wet); }
         FastOp::TrackLevel { track, level } => engine.set_track_level(track, level),
         FastOp::TrackPan { track, pan } => engine.set_track_pan(track, pan),
         FastOp::TrackVelocity { track, velocity } => engine.set_track_velocity(track, velocity),

@@ -1,0 +1,24 @@
+# set: bars=8 phase=machine energy=8
+# set-note: No voice change — robot swaps to robot_b and bleep to bleep_b, everything else including seq_a and beat_hard untouched.
+
+use "../../examples/rigs/robot_psy_rig.synth"
+
+track drums { play beat_hard using kit level 0.25 reverb_send 0.04 out > compressor(-12, ratio=4, attack=3, release=45, makeup=2db) as glue > saturate(0.4) as grit > eq(low=0.5, mid=-0.8, high=2.0) as tone > master }
+
+track sub   { play sub_hold using sub_osc level 0.20 sidechain 0.85 out > lowpass(180hz, 0.02) as lp > saturate(0.3, wet=0.0) as drive > master }
+
+track roll  { play roll_oct using roll_osc level 0.22 gate 0.3 sidechain 0.8 out > highpass(44hz, 0.02) as hp > saturate(0.7) as grind > eq(low=-1.5, mid=-0.5, high=-2.0) as tone > lowpass(2.6khz, 0.02, wet=0.0) as lp > master }
+
+track seq   { play seq_a using seq_osc level 0.24 pan 0.18 gate 0.45 sidechain 0.55 delay_send 0.3 reverb_send 0.12 out > highpass(260, 0.02) as hp > bitcrush(9, wet=0.0) as crush > autopan(0.35, bars=4, wet=0.0) as pan > master }
+
+track motif { play motif_a using motif_keys level 0.0 pan -0.3 sidechain 0.5 delay_send 0.35 reverb_send 0.25 out > highpass(300, 0.02) as hp > phaser(0.35, bars=8, wet=1.0) as ph > lowpass(7khz, 0.02) as lp > master }
+
+track voc   { play voc_b using voc_keys level 0.0 pan 0.35 sidechain 0.5 delay_send 0.2 reverb_send 0.3 out > highpass(280, 0.02) as hp > vowel(a, o, bars=8, wet=1.0) as vox > autopan(0.3, bars=6, wet=0.0) as pan > master }
+
+track bleep { play bleep_b using bleep_fm level 0.10 pan -0.5 gate 0.12 sidechain 0.5 delay_send 0.45 reverb_send 0.2 out > highpass(900, 0.02) as hp > autopan(0.6, bars=3, wet=1.0) as pan > master }
+
+track robot { play robot_b using robot_osc level 0.18 pan -0.12 gate 0.35 sidechain 0.55 delay_send 0.15 reverb_send 0.1 out > highpass(150hz, 0.02) as hp > saturate(0.5, wet=1.0) as drive > lowpass(4khz, 0.02) as lp > master }
+
+track pad   { play pad_high using pad_keys level 0.0 pan -0.45 sidechain 0.5 reverb_send 0.35 delay_send 0.08 out > highpass(160hz, 0.02) as hp > eq(low=0.5, mid=-3.5, high=0.5) as tone > vowel(o, u, bars=16, wet=1.0) as vox > master }
+
+track noise { play noise_up using noise_fm level 0.0 pan 0.5 sidechain 0.5 reverb_send 0.25 delay_send 0.1 out > gain(5) as up > bandpass(4800, 0.3, lfo_bars=4, lfo_depth=2200) as bp > lowpass(10khz, 0.02) as lp > master }

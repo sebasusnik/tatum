@@ -84,7 +84,7 @@ module fm glass {
     op1_ratio 0.194
     op0_envelope 0.002 0.5 0.0 0.6
     op1_envelope 0.001 0.8 0.0 0.4
-    chorus_mix 0.30
+    chorus_mix 0.0
     lfo_rate 0.03
     lfo_depth 0.02
     lfo_target mod_index
@@ -251,13 +251,6 @@ pattern bass_bridge {
     ..        ..  ..  ..
 }
 
-pattern bass_hold {
-    1.2:0.55  ..  ..  ..
-    ..        ..  ..  ..
-    ..        ..  ..  ..
-    ..        ..  ..  ..
-}
-
 # ── Sub ──
 
 pattern sub_main {
@@ -331,11 +324,16 @@ pattern silence {
 # TRACKS
 # ────────────────────────────────────────────────
 
+# Every track level here was raised by the same 1.57 factor. The mix was
+# handing the master 0.14 and coming out at 0.63, roughly 4 dB under the rest
+# of the repo -- and the master could not make it up, because its compressor
+# `makeup` was already 4.00, the top of the range. Scaling every track by one
+# factor fixes the level without moving a single balance inside the mix.
 track drums {
     play silence
     using tape
     velocity 1.0
-    level 0.62
+    level 0.973
     out > saturate(0.08) > compressor(-8, ratio=2.5, attack=5, release=60, makeup=1) > master
 }
 
@@ -343,7 +341,7 @@ track wash {
     play silence
     using wash
     velocity 1.0
-    level 0.20
+    level 0.314
     reverb_send 0.35
     delay_send 0.10
     out > chorus(0.20) > master
@@ -353,7 +351,7 @@ track shimmer {
     play silence
     using shimmer
     velocity 1.0
-    level 0.03464
+    level 0.314
     reverb_send 0.35
     delay_send 0.12
     out > chorus(0.15) > master
@@ -363,7 +361,7 @@ track bass {
     play silence
     using warmth
     velocity 1.0
-    level 0.35
+    level 0.549
     gate 0.80
     out > saturate(0.08) > lowpass(1000) > master
 }
@@ -372,7 +370,7 @@ track sub {
     play silence
     using pillow
     velocity 1.0
-    level 0.10
+    level 0.157
     gate 0.85
     out > master
 }
@@ -381,19 +379,19 @@ track glass {
     play silence
     using glass
     velocity 1.0
-    level 0.48
+    level 0.895
     pan -0.30
     gate 0.45
     delay_send 0.30
     reverb_send 0.50
-    out > chorus(0.18) > master
+    out > master
 }
 
 track melody {
     play silence
     using nostalgia
     velocity 1.0
-    level 0.42
+    level 0.659
     pan 0.25
     gate 0.45
     delay_send 0.12
@@ -418,9 +416,10 @@ master {
 
 # INTRO: wash pad fades in with shimmer, glass bells hint
 scene intro {
+    track drums   { play beat_intro    using tape }
     track wash    { play wash_Imaj7    using wash }
     track shimmer { play shimmer_high  using shimmer }
-    track glass   { play glass_sparse  using glass }
+    track glass   { play glass_sparse  using glass pan -0.30 }
 }
 
 # VERSE 1: soft beat enters, bass creeps in
@@ -430,7 +429,7 @@ scene verse1 {
     track shimmer { play shimmer_high  using shimmer }
     track bass    { play bass_verse    using warmth }
     track sub     { play sub_hold      using pillow }
-    track glass   { play glass_sparse  using glass }
+    track glass   { play glass_sparse  using glass pan -0.30 }
 }
 
 # VERSE 2: chord change, melody enters
@@ -440,8 +439,8 @@ scene verse2 {
     track shimmer { play shimmer_glow  using shimmer }
     track bass    { play bass_verse    using warmth }
     track sub     { play sub_hold      using pillow }
-    track glass   { play glass_melody  using glass }
-    track melody  { play melody_ghost  using nostalgia }
+    track glass   { play glass_melody  using glass pan -0.30 }
+    track melody  { play melody_ghost  using nostalgia pan 0.25 }
 }
 
 # DROP: full chillwave bliss — all elements, open hats
@@ -451,8 +450,8 @@ scene drop_a {
     track shimmer { play shimmer_high  using shimmer }
     track bass    { play bass_main     using warmth }
     track sub     { play sub_main      using pillow }
-    track glass   { play glass_melody  using glass }
-    track melody  { play melody_a      using nostalgia }
+    track glass   { play glass_melody  using glass pan -0.30 }
+    track melody  { play melody_a      using nostalgia pan 0.25 }
 }
 
 # DROP variation — different chord, clap instead of snare
@@ -462,8 +461,8 @@ scene drop_b {
     track shimmer { play shimmer_glow  using shimmer }
     track bass    { play bass_main     using warmth }
     track sub     { play sub_main      using pillow }
-    track glass   { play glass_high    using glass }
-    track melody  { play melody_b      using nostalgia }
+    track glass   { play glass_high    using glass pan -0.30 }
+    track melody  { play melody_b      using nostalgia pan 0.25 }
 }
 
 # BRIDGE: stripped back, minor feel, reflective
@@ -473,7 +472,7 @@ scene bridge {
     track shimmer { play shimmer_drift using shimmer }
     track bass    { play bass_bridge   using warmth }
     track sub     { play sub_hold      using pillow }
-    track melody  { play melody_ghost  using nostalgia }
+    track melody  { play melody_ghost  using nostalgia pan 0.25 }
 }
 
 # SWELL: Em9 tension, builds back
@@ -483,15 +482,15 @@ scene swell {
     track shimmer { play shimmer_drift using shimmer }
     track bass    { play bass_bridge   using warmth }
     track sub     { play sub_hold      using pillow }
-    track glass   { play glass_sparse  using glass }
+    track glass   { play glass_sparse  using glass pan -0.30 }
 }
 
 # OUTRO: wash fades, bells linger
 scene outro {
     track wash    { play wash_Imaj7    using wash }
     track shimmer { play shimmer_high  using shimmer }
-    track glass   { play glass_sparse  using glass }
-    track melody  { play melody_ghost  using nostalgia }
+    track glass   { play glass_sparse  using glass pan -0.30 }
+    track melody  { play melody_ghost  using nostalgia pan 0.25 }
 }
 
 # TAIL: just the wash

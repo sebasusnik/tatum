@@ -1,0 +1,224 @@
+# proghouse_rig — progressive house.
+#
+# The slowest and most patient thing in this repo: 124 BPM against psy's 150.
+# Everything about it is the opposite of the psy rigs next door.
+#
+# HARMONY. A minor, a four-bar cycle of Am9 / Fmaj9 / Dm11 / Esus4. The chords
+# are EXTENDED on purpose -- ninths, elevenths, a suspension that never
+# resolves. That is what separates this from cheese: trance stacks bare
+# triads, progressive house stacks sevenths and ninths and lets them hang. The
+# cycle ends on a sus4 so it loops without ever arriving.
+#
+# THE PUMP. `sidechain 0.55 release=220ms` is slow on purpose. In psy the duck
+# is a technical necessity that gets the bass out of the kick's way; here it is
+# the sound -- the pad breathing in and out against the four-on-the-floor is
+# half of what the genre is.
+#
+# THE DROP IS NOT A WALL. In psy the biggest moment is the densest. Here the
+# breakdown is the emotional peak and the drop after it is a RELEASE: fewer
+# voices, more groove, the pad breathing. A step that answers a long breakdown
+# by piling everything on has misread the genre.
+#
+# HEADROOM, as in every rig here. Levels are small; everything on lands near
+# 0.25 into the master, which multiplies by four. That is where the room to
+# move comes from, and `synth set next` rejects a step that hands the master
+# more than 1.0.
+#
+# Two levers apply inside the bar with no swap and no voice restart:
+#   level 0 -> level 0.2     bring a voice in (muted tracks are skipped whole)
+#   wet=0   -> wet=1         switch an effect in (bypassed nodes cost nothing)
+# Switching `play` is a swap, lands on the bar line, and is how the set moves.
+
+tempo 124
+meter 4/4
+scale A minor
+swing 0.52
+humanize 0.04 timing 0.012
+sidechain 0.55 attack=3ms release=220ms
+gain_comp 0
+
+# A big room, and the tail ducks with everything else so it breathes too.
+reverb size=0.78 damp=0.38 predelay=30 sidechain=0.5
+delay sync=dotted_eighth feedback=0.45 filter=0.5
+reverb_return { in > highpass(280, 0.02) > lowpass(6khz, 0.02, lfo_bars=16, lfo_depth=1600) > autopan(0.35, bars=12) > out }
+delay_return  { in > highpass(420, 0.02) > lowpass(7khz, 0.02) > out }
+
+# ──────────────────────────────── voices
+
+module beats kit {
+    kick_level 0.95  kick_decay 0.3  kick_pitch 0.3  kick_click 0.3  kick_drive 0.25
+    snare_level 0.0  snare_decay 0.2  snare_snap 0.5
+    hihat_level 0.55  hihat_decay 0.16  hihat_pitch 0.55  hihat_pan 0.3
+    clap_level 0.62  clap_pan -0.15
+}
+
+module bass sub_osc {
+    cutoff 105hz  cutoff_env 0.04  resonance 6%  glide 0.05
+    osc1_wave saw  osc2_pitch 0st  osc3_pitch 0st
+    attack 4ms  decay 200ms  sustain 0.9  release 80ms
+}
+
+# The syncopated mid bass: round, not aggressive, and it ducks hard.
+module bass mid_osc {
+    cutoff 400hz  cutoff_env 0.35  resonance 22%  glide 0.04  keytrack 0.4
+    osc1_wave saw  osc2_wave saw  osc2_pitch -12st  osc3_wave saw  osc3_pitch 0.1st
+    attack 3ms  decay 180ms  sustain 0.45  release 90ms
+    lfo_target cutoff  lfo_waveform sine  lfo_sync bars_8  lfo_depth 0.12
+}
+
+# The pad. Wide, warm, slow, and it is the thing you hear pumping.
+module keys pad_keys {
+    voice_mode poly  detune 0.16  chorus_mix 0.22  cutoff 0.34  resonance 0.1
+    attack 0.82  decay 0.9  sustain 0.92  release 1.0
+    lfo_target cutoff  lfo_waveform sine  lfo_sync bars_16  lfo_depth 0.16
+    vibrato_rate 0.25  vibrato_depth 0.02
+}
+
+# The pluck, through a dotted-eighth delay on its chain. The genre's signature.
+module fm pluck_fm {
+    algorithm two_op  mod_index 0.38  feedback 0.08  waveform sine
+    op0_ratio 0.032  op1_ratio 0.13
+    op0_envelope 0.001 0.22 0.0 0.18
+    op1_envelope 0.001 0.14 0.0 0.12
+    chorus_mix 0.32
+}
+
+# An electric-piano chord voice for the warmer sections.
+module fm rhodes_fm {
+    algorithm dual_pairs  mod_index 0.3  feedback 0.05  waveform sine
+    op0_ratio 0.032  op1_ratio 0.871  op2_ratio 0.032  op3_ratio 0.097
+    op0_envelope 0.08 0.5 0.35 0.6
+    op1_envelope 0.05 0.4 0.2 0.45
+    chorus_mix 0.35
+}
+
+# The lead: understated. It states a line and gets out of the way.
+module keys lead_keys {
+    voice_mode unison  detune 0.15  chorus_mix 0.28  cutoff 0.55  resonance 0.14
+    attack 25ms  decay 0.5  sustain 0.6  release 0.5
+    lfo_target cutoff  lfo_waveform sine  lfo_sync bars_8  lfo_depth 0.14
+    vibrato_rate 0.3  vibrato_depth 0.03
+}
+
+module keys arp_keys {
+    voice_mode poly  detune 0.12  chorus_mix 0.2  cutoff 0.52  resonance 0.16
+    attack 2ms  decay 0.3  sustain 0.2  release 0.28
+    lfo_target cutoff  lfo_waveform triangle  lfo_sync bars_12  lfo_depth 0.15
+}
+
+module fm air_fm {
+    algorithm dual_pairs  mod_index 0.22  feedback 0.03  waveform sine
+    op0_ratio 0.032  op1_ratio 0.55  op2_ratio 0.032  op3_ratio 0.29
+    op0_envelope 0.5 0.8 0.5 0.9
+    op1_envelope 0.4 0.6 0.4 0.7
+    chorus_mix 0.5
+    lfo_target mod_index  lfo_waveform sine  lfo_sync bars_16  lfo_depth 0.2
+}
+
+module fm sweep_fm {
+    algorithm pair_plus_two  mod_index 0.5  feedback 0.25  waveform abs_sine
+    op0_ratio 0.49  op1_ratio 0.17  op2_ratio 0.35  op3_ratio 0.07
+    op0_envelope 0.001 2.0 0.3 1.6
+    op1_envelope 0.001 1.7 0.35 1.3
+    lfo_target mod_index  lfo_waveform triangle  lfo_sync bars_8  lfo_depth 0.28
+}
+
+# ──────────────────────────────── parts
+# Melodic patterns are 64 steps: four bars, Am9 / Fmaj9 / Dm11 / Esus4.
+
+pattern beat_deep  { kick: X - - - X - - - X - - - X - - -
+                     hat:  - - x - - - x - - - x - - - x - }
+pattern beat_main  { kick: X - - - X - - - X - - - X - - -
+                     hat:  - - x - - - o - - - x - - - o -
+                     clap: - - - - X - - - - - - - X - - - }
+pattern beat_full  { kick: X - - - X - - - X - - - X - - -
+                     hat:  x - o - x - o - x - o - x - o x
+                     clap: - - - - X - - - - - - - X - - - }
+pattern beat_roll  { kick: X - - - X - - - X - - - X - - -
+                     hat:  x x o x x x o x x x o x x x o x
+                     clap: - - - - X - - - - - - - X - - x }
+pattern beat_fill  { kick: X - - - X - - - - - - - - - - -
+                     clap: - - - - X - - - X - X - X X X X
+                     hat:  x x x x x x x x - - - - - - - - }
+pattern beat_air   { hat:  - - x - - - x - - - x - - - x - }
+
+pattern sub_hold { A1:0.85 ..*15  F1:0.85 ..*15  D1:0.85 ..*15  E1:0.85 ..*15 }
+pattern sub_push { A1:0.85 .. .. -  - - A1:0.7 ..  - - - -  A1:0.8 .. - -
+                   F1:0.85 .. .. -  - - F1:0.7 ..  - - - -  F1:0.8 .. - -
+                   D1:0.85 .. .. -  - - D1:0.7 ..  - - - -  D1:0.8 .. - -
+                   E1:0.85 .. .. -  - - E1:0.7 ..  - - - -  E1:0.8 .. - - }
+
+# Off the downbeat, the way house bass sits.
+pattern bass_a { - - A2:0.7 -  - - A2:0.7 -  - - A2:0.7 -  - - A2:0.7 -
+                 - - F2:0.7 -  - - F2:0.7 -  - - F2:0.7 -  - - F2:0.7 -
+                 - - D2:0.7 -  - - D2:0.7 -  - - D2:0.7 -  - - D2:0.7 -
+                 - - E2:0.7 -  - - E2:0.7 -  - - E2:0.7 -  - - E2:0.7 - }
+pattern bass_b { - - A2:0.7 -  - A2:0.5 - -  - - A2:0.7 E2:0.5  - - A2:0.7 -
+                 - - F2:0.7 -  - F2:0.5 - -  - - F2:0.7 C3:0.5  - - F2:0.7 -
+                 - - D2:0.7 -  - D2:0.5 - -  - - D2:0.7 A2:0.5  - - D2:0.7 -
+                 - - E2:0.7 -  - E2:0.5 - -  - - E2:0.7 B2:0.5  - - E2:0.7 - }
+pattern bass_c { - - A2:0.7 A2:0.5  - - A2:0.7 -  - A2:0.5 - E3:0.6  - - A2:0.7 A2:0.5
+                 - - F2:0.7 F2:0.5  - - F2:0.7 -  - F2:0.5 - C3:0.6  - - F2:0.7 F2:0.5
+                 - - D2:0.7 D2:0.5  - - D2:0.7 -  - D2:0.5 - A2:0.6  - - D2:0.7 D2:0.5
+                 - - E2:0.7 E2:0.5  - - E2:0.7 -  - E2:0.5 - B2:0.6  - - E2:0.7 E2:0.5 }
+
+pattern chords_low  { Am9:0.55 ..*15  Fmaj9:0.55 ..*15  Dm11:0.55 ..*15  Esus4:0.55 ..*15 }
+pattern chords_high { Am9/4:0.5 ..*15  Fmaj9/4:0.5 ..*15  Dm11/4:0.5 ..*15  Esus4/4:0.5 ..*15 }
+pattern chords_stab { Am9:0.6 .. - -  - - - -  Am9:0.5 .. - -  - - - -
+                      Fmaj9:0.6 .. - -  - - - -  Fmaj9:0.5 .. - -  - - - -
+                      Dm11:0.6 .. - -  - - - -  Dm11:0.5 .. - -  - - - -
+                      Esus4:0.6 .. - -  - - - -  Esus4:0.5 .. - -  - - - - }
+
+pattern pluck_a { - - - A4:0.5  - - - -  - - E4:0.45 -  - - - -
+                  - - - C5:0.5  - - - -  - - A4:0.45 -  - - - -
+                  - - - D5:0.5  - - - -  - - A4:0.45 -  - - - -
+                  - - - B4:0.5  - - - -  - - E4:0.45 -  - - - - }
+pattern pluck_b { - A4:0.45 - E5:0.5  - - C5:0.4 -  - E4:0.45 - A4:0.5  - - G4:0.4 -
+                  - C5:0.45 - A4:0.5  - - E5:0.4 -  - A4:0.45 - C5:0.5  - - F4:0.4 -
+                  - D5:0.45 - A4:0.5  - - F5:0.4 -  - A4:0.45 - D5:0.5  - - C5:0.4 -
+                  - B4:0.45 - E5:0.5  - - A4:0.4 -  - E4:0.45 - B4:0.5  - - A4:0.4 - }
+
+pattern lead_a { A4:0.6 .. .. ..  - - - -  C5:0.55 .. .. ..  - - - -
+                 C5:0.6 .. .. ..  - - - -  A4:0.55 .. .. ..  - - - -
+                 D5:0.6 .. .. ..  - - - -  A4:0.55 .. .. ..  - - - -
+                 B4:0.6 .. .. ..  .. .. .. ..  - - - -  - - - - }
+pattern lead_b { E5:0.6 .. - C5:0.55  - - A4:0.5 ..  - - - -  C5:0.55 .. - -
+                 A4:0.6 .. - C5:0.55  - - E5:0.5 ..  - - - -  C5:0.55 .. - -
+                 D5:0.6 .. - A4:0.55  - - F5:0.5 ..  - - - -  A4:0.55 .. - -
+                 B4:0.6 .. - E5:0.55  - - B4:0.5 ..  .. .. - -  - - - - }
+
+pattern arp_a { A3:0.5 C4:0.45 E4:0.5 A4:0.45  E4:0.5 C4:0.45 A3:0.5 C4:0.45
+                A3:0.5 C4:0.45 E4:0.5 A4:0.45  E4:0.5 C4:0.45 A3:0.5 C4:0.45
+                F3:0.5 A3:0.45 C4:0.5 F4:0.45  C4:0.5 A3:0.45 F3:0.5 A3:0.45
+                D3:0.5 F3:0.45 A3:0.5 D4:0.45  A3:0.5 F3:0.45 D3:0.5 F3:0.45
+                E3:0.5 A3:0.45 B3:0.5 E4:0.45  B3:0.5 A3:0.45 E3:0.5 A3:0.45 }
+pattern arp_b { A4:0.45 E4:0.4 C4:0.45 E4:0.4  A4:0.45 E4:0.4 C4:0.45 E4:0.4
+                A4:0.45 E4:0.4 C4:0.45 E4:0.4  A4:0.45 E4:0.4 C4:0.45 E4:0.4
+                C5:0.45 A4:0.4 F4:0.45 A4:0.4  C5:0.45 A4:0.4 F4:0.45 A4:0.4
+                D5:0.45 A4:0.4 F4:0.45 A4:0.4  D5:0.45 A4:0.4 F4:0.45 A4:0.4
+                B4:0.45 E4:0.4 A4:0.45 E4:0.4  B4:0.45 E4:0.4 A4:0.45 E4:0.4 }
+
+pattern air_hold { [A4 E5 A5]:0.4 ..*31  [A4 F5 A5]:0.4 ..*31 }
+pattern air_lift { [E5 A5 C6]:0.35 ..*31  [F5 A5 C6]:0.35 ..*31 }
+
+pattern sweep_slow { A4:0.4 ..*31 }
+pattern sweep_up   { A4:0.5 ..*63 }
+
+# ──────────────────────────────── the rig
+#
+# Three voices in, seven waiting. Levels small; everything on lands near 0.25
+# into the master, which multiplies by four.
+
+track drums { play beat_deep using kit level 0.24 reverb_send 0.06 out > compressor(-11, ratio=3, attack=8, release=80, makeup=2db) as glue > saturate(0.2) as grit > eq(low=0.6, mid=-0.4, high=1.4) as tone > master }
+track sub   { play sub_hold using sub_osc level 0.16 sidechain 0.8 out > lowpass(170hz, 0.02) as lp > saturate(0.25, wet=0.0) as drive > master }
+track pad   { play chords_low using pad_keys level 0.15 pan -0.35 sidechain 0.7 reverb_send 0.45 delay_send 0.1 out > highpass(200, 0.02) as hp > lowpass(3khz, 0.1) as lp > eq(low=0.5, mid=-2.5, high=0) as tone > phaser(0.3, bars=12, wet=0.0) as ph > autopan(0.3, bars=10, wet=0.0) as pan > master }
+
+track bass   { play bass_a using mid_osc level 0.0 gate 0.5 sidechain 0.75 out > highpass(50hz, 0.02) as hp > saturate(0.4) as grind > eq(low=-1.0, mid=0.5, high=-1.5) as tone > lowpass(2.2khz, 0.02, wet=0.0) as lp > master }
+track pluck  { play pluck_a using pluck_fm level 0.0 pan 0.4 gate 0.25 sidechain 0.5 delay_send 0.55 reverb_send 0.3 out > highpass(400, 0.02) as hp > autopan(0.45, bars=7, wet=0.0) as pan > master }
+track rhodes { play chords_stab using rhodes_fm level 0.0 pan 0.25 gate 0.6 sidechain 0.6 delay_send 0.2 reverb_send 0.35 out > highpass(260, 0.02) as hp > vowel(o, a, bars=16, wet=0.0) as vox > lowpass(5khz, 0.02) as lp > master }
+track lead   { play lead_a using lead_keys level 0.0 pan 0.15 sidechain 0.5 delay_send 0.4 reverb_send 0.4 out > highpass(300, 0.02) as hp > autowah(0.6, base=900hz, range=2800hz, peak=0.25, wet=0.0) as wah > lowpass(8khz, 0.02) as lp > master }
+track arp    { play arp_a using arp_keys level 0.0 pan -0.28 sidechain 0.55 delay_send 0.35 reverb_send 0.25 out > highpass(320, 0.02) as hp > phaser(0.35, bars=8, wet=0.0) as ph > autopan(0.4, bars=6, wet=0.0) as pan > master }
+track air    { play air_hold using air_fm level 0.0 pan 0.45 sidechain 0.45 reverb_send 0.6 delay_send 0.15 out > highpass(1.4khz, 0.02) as hp > autopan(0.35, bars=14, wet=0.0) as pan > master }
+track sweep  { play sweep_slow using sweep_fm level 0.0 pan 0.0 sidechain 0.45 reverb_send 0.3 delay_send 0.12 out > gain(5) as up > bandpass(3500, 0.28, lfo_bars=8, lfo_depth=2400) as bp > lowpass(10khz, 0.02) as lp > master }
+
+master { in > tilt(0.02) > eq(low=0.8, mid=-0.4, high=1.4) > compressor(-6, ratio=2.0, attack=10, release=90, makeup=4.0) > limiter(0.95) > out }

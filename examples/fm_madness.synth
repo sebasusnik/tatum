@@ -21,7 +21,6 @@ module fm bell {
     op1_ratio 0.194
     op0_envelope 0.001 0.6 0.0 0.8
     op1_envelope 0.001 1.0 0.0 0.5
-    chorus_mix 0.30
     lfo_rate 0.04
     lfo_depth 0.02
     lfo_target mod_index
@@ -48,7 +47,7 @@ module fm scream {
 # Glitch percussion — ultra-short envelopes, weird ratios
 module fm glitch {
     algorithm dual_mod
-    mod_index 0.95
+    mod_index 0.65
     feedback 0.40
     waveform abs_sine
     op0_ratio 0.065
@@ -303,11 +302,11 @@ track bells {
     using bell
     pan 0.34
     velocity 1.0
-    level 0.28
+    level 0.18
     gate 0.50
     delay_send 0.35
     reverb_send 0.50
-    out > chorus(0.20) > master
+    out > autopan(0.35, bars=8) > master
 }
 
 track scream {

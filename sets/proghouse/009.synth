@@ -1,0 +1,13 @@
+# set: bars=16 phase=drop energy=8
+# set-note: It lands — `drums` to `beat_roll` at 0.26, `sub` to `sub_push` at 0.21 with its `drive` full wet, `bass` to `bass_c` at 0.19 with the `lp` bypassed so the mid bass is back in the room, `lead` in on `lead_a` at 0.15 and `arp` out to 0, with `pad` lifted to 0.24 so the floor carries the landing: five voices, more groove than wall.
+
+use "../../examples/rigs/proghouse_rig.synth"
+
+track drums { play beat_roll level 0.520 }
+track sub { play sub_push level 0.168 out > lowpass(170hz, 0.02) as lp > saturate(0.25, wet=1.0) as drive > master }
+track pad { level 0.096 out > highpass(200, 0.02) as hp > phaser(0.3, bars=12, wet=1.0) as ph > autopan(0.3, bars=10, wet=0.0) as pan > master }
+track bass { play bass_c level 0.247 }
+track pluck { level 0.000 out > highpass(400, 0.02) as hp > autopan(0.45, bars=7, wet=1.0) as pan > master }
+track lead { level 0.105 }
+track arp { play arp_b level 0.000 }
+track air { level 0.000 out > highpass(1.4khz, 0.02) as hp > autopan(0.35, bars=14, wet=1.0) as pan > master }

@@ -1,0 +1,202 @@
+# robot_psy_rig — Kraftwerk's head on hi-tech psytrance's engine room.
+#
+# The engine room is copied from examples/hitech_psy.synth: 152 BPM, E minor,
+# a hard clicky kick, a rolling bass that never lands on the downbeat, heavy
+# sidechain. What changes is everything above the waist.
+#
+# The Kraftwerk part is precision. `humanize 0` and `swing 0.5` are the whole
+# trick: no timing jitter, no velocity wobble, no shuffle. Every other rig in
+# this repo humanises by 2-3% because it makes things feel played; this one
+# must NOT feel played, it must feel switched on. The melodic voices are plain
+# squares and pulses with low resonance -- no screaming acid anywhere -- and
+# every motif is short and repeats, because repetition is the material and not
+# a shortcut. The psychedelia comes from hypnosis and modulation, not from
+# distortion.
+#
+# HEADROOM, learned the hard way. hitech_psy hands its master a peak of 0.18
+# and the master multiplies by four. That is why its arrangement has room to
+# move: the faders do the work, not the limiter. So every level here is small
+# on purpose. Everything on at once should land near 0.25 into the master. If
+# a step pushes that past 1.0 the limiter starts deciding how loud the set is
+# and every step comes out the same size -- `synth set next` rejects it.
+#
+# Two levers apply inside the bar with no swap and no voice restart:
+#   level 0 -> level 0.2     bring a voice in (muted tracks are skipped whole)
+#   wet=0   -> wet=1         switch an effect in (bypassed nodes cost nothing)
+# Switching `play` is a swap, lands on the bar line, and is how the set moves.
+
+tempo 152
+meter 4/4
+scale E minor
+swing 0.50
+humanize 0
+sidechain 0.65 attack=1ms release=80ms
+gain_comp 0
+
+# Dry and close. A long tail would smear the sequences, and the point of the
+# sequences is that you can hear every step of them.
+reverb size=0.38 damp=0.55 predelay=10 sidechain=0.6
+delay sync=eighth feedback=0.34 filter=0.5
+reverb_return { in > highpass(400, 0.02) > lowpass(5khz, 0.02, lfo_bars=16, lfo_depth=1200) > autopan(0.3, bars=8) > out }
+delay_return  { in > highpass(500, 0.02) > lowpass(6khz, 0.02) > out }
+
+# ──────────────────────────────── voices
+
+module beats kit {
+    kick_level 0.9  kick_click 0.7  kick_decay 0.1  kick_pitch 0.46  kick_drive 0.7
+    snare_level 0.4  snare_decay 0.1  snare_pitch 0.32  snare_drive 0.6  snare_snap 0.15
+    hihat_level 1.4  hihat_pitch 0.7  hihat_pan 0.22  hihat_decay 0.22
+    clap_level 0.65  clap_pan 0.0
+}
+
+module bass sub_osc {
+    cutoff 110hz  cutoff_env 0.04  resonance 6%
+    osc1_wave saw  osc2_pitch 0st  osc3_pitch 0st
+    attack 1ms  decay 120ms  sustain 0.9  release 30ms
+}
+
+module bass roll_osc {
+    cutoff 280hz  cutoff_env 0.42  resonance 40%  glide 0.02  keytrack 0.4
+    osc1_wave saw  osc2_wave square  osc2_pitch -12st  osc3_wave saw
+    attack 1ms  decay 60ms  sustain 0.18  release 20ms
+}
+
+# THE sequence. A plain square, almost no resonance, a hard short envelope:
+# the sound of a switch closing, not of a filter screaming.
+module bass seq_osc {
+    cutoff 1.1khz  cutoff_env 0.25  resonance 15%  glide 0.0  keytrack 0.3
+    osc1_wave square  osc2_wave square  osc2_pitch -12st
+    attack 1ms  decay 45ms  sustain 0.0  release 15ms
+}
+
+# The counter-line, an octave up and rounder.
+module keys motif_keys {
+    voice_mode unison  detune 0.08  chorus_mix 0.12  cutoff 0.5  resonance 0.1
+    attack 2ms  decay 0.35  sustain 0.3  release 0.25
+}
+
+# The robot voice: a square run through a vowel filter on the track chain.
+module keys voc_keys {
+    voice_mode unison  detune 0.05  chorus_mix 0.1  cutoff 0.55  resonance 0.12
+    attack 5ms  decay 0.4  sustain 0.65  release 0.35
+}
+
+# Machine blips. Clean two-operator FM, harmonic ratios only: no clang.
+module fm bleep_fm {
+    algorithm two_op  mod_index 0.28  feedback 0.0  waveform sine
+    op0_ratio 0.032  op1_ratio 0.13
+    op0_envelope 0.001 0.06 0.0 0.04
+    op1_envelope 0.001 0.04 0.0 0.03
+}
+
+# The low melodic line, doubled at the octave, the Trans-Europe engine.
+module bass robot_osc {
+    cutoff 700hz  cutoff_env 0.3  resonance 20%  glide 0.0  keytrack 0.35
+    osc1_wave square  osc2_wave saw  osc2_pitch 12st
+    attack 1ms  decay 90ms  sustain 0.25  release 25ms
+}
+
+# A cold held chord. Two notes, no third, so it stays neutral machinery.
+module keys pad_keys {
+    voice_mode poly  detune 0.12  chorus_mix 0.18  cutoff 0.3  resonance 0.12
+    attack 0.7  decay 0.85  sustain 0.9  release 0.9
+    lfo_target cutoff  lfo_waveform triangle  lfo_sync bars_16  lfo_depth 0.12
+}
+
+module fm noise_fm {
+    algorithm pair_plus_two  mod_index 0.55  feedback 0.3  waveform abs_sine
+    op0_ratio 0.49  op1_ratio 0.17  op2_ratio 0.35  op3_ratio 0.07
+    op0_envelope 0.001 1.6 0.25 1.2
+    op1_envelope 0.001 1.3 0.3 1.0
+    lfo_target mod_index  lfo_waveform triangle  lfo_sync bars_4  lfo_depth 0.25
+}
+
+# ──────────────────────────────── parts
+# Melodic patterns are 32 steps: two bars. Short motifs that repeat, which is
+# the point of the genre rather than a shortage of ideas.
+
+pattern beat_min    { kick: X - - - X - - - X - - - X - - -
+                      hat:  - - x - - - x - - - x - - - x - }
+pattern beat_open   { kick: X - - - X - - - X - - - X - - -
+                      hat:  x - o - x - o - x - o - x - o - }
+pattern beat_drive  { kick: X - - - X - - - X - - - X - - -
+                      hat:  x o x o x o x o x o x o x o x o
+                      clap: - - - - - - - - X - - - - - - - }
+pattern beat_hard   { kick: X - - - X - - - X - - - X - x -
+                      hat:  x o x o x o x o x o x o x o x o
+                      snare: - - - - - - - o - - - - - - - o
+                      clap: - - - - - - - - X - - - - - - - }
+pattern beat_fill   { kick: X - - - - - - - - - - - - - - -
+                      snare: - - x - x - x x X x X x X X X X
+                      hat:  x x - x - x - - - - - - - - - - }
+pattern beat_stop   { kick: X - - - - - - - - - - - - - - -
+                      hat:  - - x - - - x - - - x - - - x - }
+
+pattern sub_hold  { E1:0.85 ..*31 }
+pattern sub_pulse { E1:0.85 .. .. -  - - - -  E1:0.8 .. .. -  - - - -
+                    E1:0.85 .. .. -  - - - -  E1:0.8 .. .. -  - - - - }
+
+pattern roll_main { - - E1:0.8 E1:0.7  - - E1:0.8 E1:0.7  - - E1:0.8 E1:0.7  - - E1:0.8 E1:0.7
+                    - - E1:0.8 E1:0.7  - - E1:0.8 E1:0.7  - - E1:0.8 E1:0.7  - - E1:0.8 E1:0.7 }
+pattern roll_alt  { - - E1:0.8 -  - - E1:0.8 E1:0.7  - - E1:0.8 -  - - E1:0.7 E1:0.8
+                    - - D1:0.8 -  - - D1:0.8 D1:0.7  - - E1:0.8 -  - - E1:0.7 E1:0.8 }
+pattern roll_oct  { - - E1:0.8 E2:0.6  - - E1:0.8 E2:0.6  - - E2:0.7 E1:0.8  - - E1:0.8 E2:0.6
+                    - - E1:0.8 E2:0.6  - - E1:0.8 E2:0.6  - - E2:0.7 E1:0.8  - - E1:0.8 E2:0.6 }
+
+# Four notes, sixteen times. This is the whole idea: it does not develop.
+pattern seq_a { E3:0.7 B3:0.6 E4:0.65 B3:0.6  E3:0.7 B3:0.6 E4:0.65 B3:0.6
+                E3:0.7 B3:0.6 E4:0.65 B3:0.6  E3:0.7 B3:0.6 E4:0.65 B3:0.6
+                E3:0.7 B3:0.6 E4:0.65 B3:0.6  E3:0.7 B3:0.6 E4:0.65 B3:0.6
+                E3:0.7 B3:0.6 E4:0.65 B3:0.6  E3:0.7 B3:0.6 E4:0.65 B3:0.6 }
+pattern seq_b { E3:0.7 G3:0.6 B3:0.65 G3:0.6  E3:0.7 G3:0.6 B3:0.65 D4:0.6
+                E3:0.7 G3:0.6 B3:0.65 G3:0.6  E3:0.7 A3:0.6 B3:0.65 D4:0.6
+                E3:0.7 G3:0.6 B3:0.65 G3:0.6  E3:0.7 G3:0.6 B3:0.65 D4:0.6
+                E3:0.7 G3:0.6 B3:0.65 G3:0.6  E3:0.7 A3:0.6 D4:0.65 B3:0.6 }
+pattern seq_c { E4:0.7 - B3:0.6 -  E4:0.7 - D4:0.6 -  B3:0.7 - G3:0.6 -  A3:0.7 - B3:0.6 -
+                E4:0.7 - B3:0.6 -  E4:0.7 - D4:0.6 -  B3:0.7 - A3:0.6 -  G3:0.7 - E3:0.6 - }
+
+# The answer: slow, four notes, always the same.
+pattern motif_a { B4:0.6 .. .. ..  - - - -  G4:0.6 .. .. ..  - - - -
+                  A4:0.6 .. .. ..  - - - -  E4:0.6 .. .. ..  - - - - }
+pattern motif_b { E5:0.6 .. .. ..  - - - -  D5:0.6 .. .. ..  - - - -
+                  B4:0.6 .. .. ..  - - - -  G4:0.6 .. .. ..  - - - - }
+
+pattern voc_a { E3:0.6 .. .. .. .. .. .. ..  - - - - - - - -
+                G3:0.6 .. .. .. .. .. .. ..  - - - - - - - - }
+pattern voc_b { B3:0.6 .. .. .. .. .. .. ..  A3:0.6 .. .. .. .. .. .. ..
+                G3:0.6 .. .. .. .. .. .. ..  E3:0.6 .. .. .. .. .. .. .. }
+
+pattern bleep_a { - - - -  - - - E5:0.5  - - - -  - - - -
+                  - - - -  - - - B4:0.5  - - - -  - - - - }
+pattern bleep_b { E5:0.5 - - -  - - B4:0.4 -  - - - E5:0.45  - - - -
+                  D5:0.5 - - -  - - G4:0.4 -  - - - B4:0.45  - - - - }
+
+pattern robot_a { E2:0.7 - - -  B2:0.6 - - -  G2:0.65 - - -  A2:0.6 - - -
+                  E2:0.7 - - -  B2:0.6 - - -  D3:0.65 - - -  B2:0.6 - - - }
+pattern robot_b { E2:0.7 - E2:0.5 -  B2:0.6 - B2:0.45 -  G2:0.65 - G2:0.5 -  A2:0.6 - A2:0.45 -
+                  E2:0.7 - E2:0.5 -  B2:0.6 - B2:0.45 -  D3:0.65 - D3:0.5 -  B2:0.6 - B2:0.45 - }
+
+pattern pad_low  { [E2 B2]:0.5 ..*31 }
+pattern pad_high { [E3 B3 E4]:0.45 ..*31 }
+
+pattern noise_swell { E4:0.4 ..*31 }
+pattern noise_up    { E4:0.5 ..*63 }
+
+# ──────────────────────────────── the rig
+#
+# Levels are small on purpose: everything on lands near 0.25 into the master,
+# which multiplies by four. That is where the room to move comes from.
+
+track drums { play beat_min using kit level 0.22 reverb_send 0.04 out > compressor(-12, ratio=4, attack=3, release=45, makeup=2db) as glue > saturate(0.4) as grit > eq(low=0.5, mid=-0.8, high=2.0) as tone > master }
+track sub   { play sub_hold using sub_osc level 0.14 sidechain 0.85 out > lowpass(180hz, 0.02) as lp > saturate(0.3, wet=0.0) as drive > master }
+track roll  { play roll_main using roll_osc level 0.15 gate 0.3 sidechain 0.8 out > highpass(44hz, 0.02) as hp > saturate(0.7) as grind > eq(low=-1.5, mid=-0.5, high=-2.0) as tone > lowpass(2.6khz, 0.02, wet=0.0) as lp > master }
+
+track seq   { play seq_a using seq_osc level 0.0 pan 0.18 gate 0.45 sidechain 0.55 delay_send 0.3 reverb_send 0.12 out > highpass(260, 0.02) as hp > bitcrush(9, wet=0.0) as crush > autopan(0.35, bars=4, wet=0.0) as pan > master }
+track motif { play motif_a using motif_keys level 0.0 pan -0.3 sidechain 0.5 delay_send 0.35 reverb_send 0.25 out > highpass(300, 0.02) as hp > phaser(0.35, bars=8, wet=0.0) as ph > lowpass(7khz, 0.02) as lp > master }
+track voc   { play voc_a using voc_keys level 0.0 pan 0.35 sidechain 0.5 delay_send 0.2 reverb_send 0.3 out > highpass(280, 0.02) as hp > vowel(a, o, bars=8, wet=0.0) as vox > autopan(0.3, bars=6, wet=0.0) as pan > master }
+track bleep { play bleep_a using bleep_fm level 0.0 pan -0.5 gate 0.12 sidechain 0.5 delay_send 0.45 reverb_send 0.2 out > highpass(900, 0.02) as hp > autopan(0.6, bars=3, wet=0.0) as pan > master }
+track robot { play robot_a using robot_osc level 0.0 pan -0.12 gate 0.35 sidechain 0.55 delay_send 0.15 reverb_send 0.1 out > highpass(150hz, 0.02) as hp > saturate(0.5, wet=0.0) as drive > lowpass(4khz, 0.02) as lp > master }
+track pad   { play pad_low using pad_keys level 0.0 pan -0.45 sidechain 0.5 reverb_send 0.35 delay_send 0.08 out > highpass(160hz, 0.02) as hp > eq(low=0.5, mid=-3.5, high=0.5) as tone > vowel(o, u, bars=16, wet=0.0) as vox > master }
+track noise { play noise_swell using noise_fm level 0.0 pan 0.5 sidechain 0.5 reverb_send 0.25 delay_send 0.1 out > gain(5) as up > bandpass(4800, 0.3, lfo_bars=4, lfo_depth=2200) as bp > lowpass(10khz, 0.02) as lp > master }
+
+master { in > eq(low=1.0, mid=0.5, high=1.6) > compressor(-6, ratio=2.0, attack=5, release=50, makeup=4.0) > limiter(0.95) > out }

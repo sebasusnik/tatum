@@ -65,8 +65,8 @@ fn the_window_is_sized_from_the_song_tempo() {
     let src = song("capture(2) >");
     let ast = dsl::parse(&src).unwrap();
     let compiled = compiler::compile(&ast).unwrap_or_else(|e| panic!("{:?}", e));
-    let spec = compiled.tracks[0].insert_fx.iter().find_map(|s| match s {
-        synth_core::graph::node::NodeSpec::Capture { samples, .. } => Some(*samples),
+    let spec = compiled.tracks[0].insert_fx.iter().find_map(|s| match s.spec {
+        synth_core::graph::node::NodeSpec::Capture { samples, .. } => Some(samples),
         _ => None,
     }).expect("a capture node");
     // Two bars of 4/4 at 120 BPM is four seconds.

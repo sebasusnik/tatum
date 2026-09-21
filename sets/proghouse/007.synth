@@ -1,0 +1,12 @@
+# set: bars=8 phase=groove energy=6
+# set-note: A straight rotation at the same energy — `arp` takes over on `arp_a` at 0.12 exactly as `pluck` falls to 0, so five voices stay five and only the texture of the top line changes.
+
+use "../../examples/rigs/proghouse_rig.synth"
+
+track drums { play beat_full level 0.360 }
+track sub { level 0.120 }
+track pad { level 0.056 out > highpass(200, 0.02) as hp > phaser(0.3, bars=12, wet=1.0) as ph > autopan(0.3, bars=10, wet=0.0) as pan > master }
+track bass { play bass_b level 0.169 }
+track pluck { level 0.000 out > highpass(400, 0.02) as hp > autopan(0.45, bars=7, wet=1.0) as pan > master }
+track arp { level 0.072 }
+track air { level 0.000 out > highpass(1.4khz, 0.02) as hp > autopan(0.35, bars=14, wet=1.0) as pan > master }

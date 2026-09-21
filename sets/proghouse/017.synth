@@ -1,0 +1,14 @@
+# set: bars=16 phase=peak energy=9
+# set-note: The landing — `drums` hit `beat_roll` at 0.26, `sub` drives `sub_push` at 0.18, `bass` walks `bass_c` at 0.16, `lead` comes in on `lead_a` at 0.14 with its `wah` full wet and `pluck` goes out to 0; five voices, the loudest step in the set.
+
+use "../../examples/rigs/proghouse_rig.synth"
+
+track drums { play beat_roll level 0.520 }
+track sub { play sub_push level 0.144 out > lowpass(170hz, 0.02) as lp > saturate(0.25, wet=1.0) as drive > master }
+track bass { play bass_c level 0.208 }
+track pad { level 0.064 delay_send 0.12 out > highpass(200, 0.02) as hp > phaser(0.3, bars=12, wet=1.0) as ph > autopan(0.3, bars=10, wet=1.0) as pan > master }
+track pluck { play pluck_b level 0.000 out > highpass(400, 0.02) as hp > autopan(0.45, bars=7, wet=1.0) as pan > master }
+track rhodes { play chords_high level 0.000 delay_send 0.3 reverb_send 0.5 out > highpass(260, 0.02) as hp > vowel(o, a, bars=16, wet=1.0) as vox > lowpass(5khz, 0.02) as lp > master }
+track lead { level 0.098 delay_send 0.45 reverb_send 0.5 out > highpass(300, 0.02) as hp > autowah(0.6, base=900hz, range=2800hz, peak=0.25, wet=1.0) as wah > lowpass(8khz, 0.02) as lp > master }
+track air { play air_lift level 0.000 out > highpass(1.4khz, 0.02) as hp > autopan(0.35, bars=14, wet=1.0) as pan > master }
+track sweep { play sweep_up reverb_send 0.4 out > gain(5) as up > bandpass(5600, 0.32, lfo_bars=8, lfo_depth=3600) as bp > lowpass(10khz, 0.02) as lp > master }
