@@ -8,11 +8,11 @@
  *   - "step":        Current sequencer step (sent to main thread for UI sync)
  */
 
-class SynthProcessor extends AudioWorkletProcessor {
+class TatumProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.wasm = null;
-    this.synthPtr = 0;
+    this.tatumPtr = 0;
     this.ready = false;
     this.frameCount = 0;
     this.port.onmessage = (e) => this.handleMessage(e.data);
@@ -23,7 +23,7 @@ class SynthProcessor extends AudioWorkletProcessor {
       try {
         let wasm;
         const imports = {
-          "./synth_wasm_bg.js": {
+          "./tatum_wasm_bg.js": {
             __wbg___wbindgen_memory_edb3f01e3930bbf6: () => wasm.memory,
             __wbg___wbindgen_throw_6ddd609b62940d55: (ptr, len) => {
               const bytes = new Uint8Array(wasm.memory.buffer, ptr, len);
@@ -48,11 +48,11 @@ class SynthProcessor extends AudioWorkletProcessor {
         wasm = instance.exports;
         this.wasm = wasm;
         wasm.__wbindgen_start();
-        this.synthPtr = wasm.synth_new() >>> 0;
+        this.tatumPtr = wasm.tatum_new() >>> 0;
         this.ready = true;
         this.port.postMessage({ type: "ready" });
       } catch (err) {
-        console.error("[synth-processor] init failed:", err);
+        console.error("[tatum-processor] init failed:", err);
         this.port.postMessage({ type: "error", message: String(err) });
       }
       return;
@@ -70,8 +70,8 @@ class SynthProcessor extends AudioWorkletProcessor {
         new Uint8Array(this.wasm.memory.buffer, ptr, bytes.length).set(bytes);
 
         // Call load_source — parses, compiles, swaps engine on success
-        const resultPtr = this.wasm.synth_load_source(this.synthPtr, ptr, bytes.length) >>> 0;
-        const resultLen = this.wasm.synth_result_len(this.synthPtr) >>> 0;
+        const resultPtr = this.wasm.tatum_load_source(this.tatumPtr, ptr, bytes.length) >>> 0;
+        const resultLen = this.wasm.tatum_result_len(this.tatumPtr) >>> 0;
         const resultBytes = new Uint8Array(this.wasm.memory.buffer, resultPtr, resultLen);
         // Decode JSON manually (no TextDecoder in worklet)
         let resultJson = "";
@@ -90,47 +90,47 @@ class SynthProcessor extends AudioWorkletProcessor {
 
     // Transport: start / stop / reset
     if (msg.type === "transport") {
-      if (msg.action === "start") this.wasm.synth_start(this.synthPtr);
-      else if (msg.action === "stop") this.wasm.synth_stop(this.synthPtr);
-      else if (msg.action === "reset") this.wasm.synth_reset(this.synthPtr);
+      if (msg.action === "start") this.wasm.tatum_start(this.tatumPtr);
+      else if (msg.action === "stop") this.wasm.tatum_stop(this.tatumPtr);
+      else if (msg.action === "reset") this.wasm.tatum_reset(this.tatumPtr);
       return;
     }
 
     // Real-time track params (no recompile)
     if (msg.type === "set-track-level") {
-      this.wasm.synth_set_track_level(this.synthPtr, msg.idx, msg.value);
+      this.wasm.tatum_set_track_level(this.tatumPtr, msg.idx, msg.value);
       return;
     }
     if (msg.type === "set-track-pan") {
-      this.wasm.synth_set_track_pan(this.synthPtr, msg.idx, msg.value);
+      this.wasm.tatum_set_track_pan(this.tatumPtr, msg.idx, msg.value);
       return;
     }
 
     // Runtime mutations (no recompile)
     if (msg.type === "set-tempo") {
-      this.wasm.synth_set_tempo(this.synthPtr, msg.value);
+      this.wasm.tatum_set_tempo(this.tatumPtr, msg.value);
       return;
     }
     if (msg.type === "set-track-pattern") {
-      this.wasm.synth_set_track_pattern(this.synthPtr, msg.idx, msg.patternIdx);
+      this.wasm.tatum_set_track_pattern(this.tatumPtr, msg.idx, msg.patternIdx);
       return;
     }
     if (msg.type === "set-track-velocity") {
-      this.wasm.synth_set_track_velocity(this.synthPtr, msg.idx, msg.value);
+      this.wasm.tatum_set_track_velocity(this.tatumPtr, msg.idx, msg.value);
       return;
     }
     if (msg.type === "set-module-param") {
       const bytes = new Uint8Array(msg.nameBytes);
       const ptr = this.wasm.alloc(bytes.length) >>> 0;
       new Uint8Array(this.wasm.memory.buffer, ptr, bytes.length).set(bytes);
-      this.wasm.synth_set_module_param(this.synthPtr, msg.instIdx, ptr, bytes.length, msg.value);
+      this.wasm.tatum_set_module_param(this.tatumPtr, msg.instIdx, ptr, bytes.length, msg.value);
       return;
     }
 
     // Track info request
     if (msg.type === "get-track-info") {
-      const resultPtr = this.wasm.synth_track_info(this.synthPtr) >>> 0;
-      const resultLen = this.wasm.synth_result_len(this.synthPtr) >>> 0;
+      const resultPtr = this.wasm.tatum_track_info(this.tatumPtr) >>> 0;
+      const resultLen = this.wasm.tatum_result_len(this.tatumPtr) >>> 0;
       const resultBytes = new Uint8Array(this.wasm.memory.buffer, resultPtr, resultLen);
       let json = "";
       for (let i = 0; i < resultLen; i++) json += String.fromCharCode(resultBytes[i]);
@@ -150,7 +150,7 @@ class SynthProcessor extends AudioWorkletProcessor {
     const frames = left.length;
 
     try {
-      const ptr = this.wasm.synth_process(this.synthPtr, frames) >>> 0;
+      const ptr = this.wasm.tatum_process(this.tatumPtr, frames) >>> 0;
       const buf = this.wasm.memory.buffer;
       const mem = new Float32Array(buf, ptr, frames * 2);
 
@@ -169,7 +169,7 @@ class SynthProcessor extends AudioWorkletProcessor {
 
     this.frameCount++;
     if (this.frameCount % 8 === 0) {
-      const step = this.wasm.synth_current_step(this.synthPtr) >>> 0;
+      const step = this.wasm.tatum_current_step(this.tatumPtr) >>> 0;
       this.port.postMessage({ type: "step", step });
     }
 
@@ -177,4 +177,4 @@ class SynthProcessor extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor("synth-processor", SynthProcessor);
+registerProcessor("tatum-processor", TatumProcessor);

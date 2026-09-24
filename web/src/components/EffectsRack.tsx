@@ -1,5 +1,5 @@
 import Knob from "./Knob";
-import { fxParams, setFxParam, modules, setModuleParam } from "../stores/synth";
+import { fxParams, setFxParam, modules, setModuleParam } from "../stores/tatum";
 
 // ── Props for per-instance usage ────────────────────
 

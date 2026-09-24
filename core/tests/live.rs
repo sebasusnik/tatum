@@ -6,9 +6,9 @@
 //! downbeat firing twice, a reverb tail starting over or a random sequence
 //! rewinding.
 
-use synth_core::live::{Applied, LivePlanner, LivePlayer, Plan, FastOp};
-use synth_core::song_engine::{DslError, SongEngine};
-use synth_core::{BLOCK_SIZE, SAMPLE_RATE};
+use tatum_core::live::{Applied, LivePlanner, LivePlayer, Plan, FastOp};
+use tatum_core::song_engine::{DslError, SongEngine};
+use tatum_core::{BLOCK_SIZE, SAMPLE_RATE};
 
 const STEP: f32 = SAMPLE_RATE * 60.0 / 120.0 / 4.0;
 const BAR: usize = (STEP * 16.0) as usize;
@@ -222,7 +222,7 @@ fn the_fast_path_validates_like_check() {
         }
         other => panic!("expected a fast plan, got {}", other.describe()),
     }
-    // Out of range: the same error `synth check` gives, not a silent clamp.
+    // Out of range: the same error `tatum check` gives, not a silent clamp.
     let bad = LIVE.replace("cutoff 0.4", "cutoff 7.0");
     match planner.plan(&bad, player.generation()) {
         Err(DslError::Compile(errs)) => assert!(errs[0].message.contains("cutoff"), "{}", errs[0].message),

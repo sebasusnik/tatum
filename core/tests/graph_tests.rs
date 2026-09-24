@@ -1,12 +1,12 @@
 mod test_helpers;
 
-use synth_core::graph::node::NodeSpec;
-use synth_core::graph::GraphBuilder;
-use synth_core::graph::voice::Instrument;
-use synth_core::primitives::oscillator::Waveform;
-use synth_core::primitives::filter::FilterType;
+use tatum_core::graph::node::NodeSpec;
+use tatum_core::graph::GraphBuilder;
+use tatum_core::graph::voice::Instrument;
+use tatum_core::primitives::oscillator::Waveform;
+use tatum_core::primitives::filter::FilterType;
 use test_helpers::{output_path, write_wav};
-use synth_core::{BLOCK_SIZE, SAMPLE_RATE};
+use tatum_core::{BLOCK_SIZE, SAMPLE_RATE};
 
 /// Build a bass instrument graph:
 ///   osc saw(55) > ladder(900, 0.6) > VCA(audio, adsr) > out

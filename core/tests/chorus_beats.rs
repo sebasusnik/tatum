@@ -17,8 +17,8 @@
 //! stops hearing two tones and starts hearing roughness, and on a clean tone
 //! roughness is indistinguishable from distortion.
 
-use synth_core::dsl;
-use synth_core::effects::chorus;
+use tatum_core::dsl;
+use tatum_core::effects::chorus;
 
 fn lints(src: &str) -> Vec<String> {
     let song = dsl::parse(src).unwrap_or_else(|e| panic!("{e:?}"));

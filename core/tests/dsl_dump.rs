@@ -3,8 +3,8 @@
 //!
 //! Run: cargo test --test dsl_dump -- --nocapture
 
-use synth_core::dsl;
-use synth_core::dsl::compiler::{compile, CompiledStep};
+use tatum_core::dsl;
+use tatum_core::dsl::compiler::{compile, CompiledStep};
 
 const FUNK_SOURCE: &str = include_str!("../../examples/funk_replica.synth");
 

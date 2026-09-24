@@ -1,5 +1,5 @@
 import { Show } from "solid-js";
-import { FX_LABELS, type FxTypeId, FX_TYPE } from "../stores/synth";
+import { FX_LABELS, type FxTypeId, FX_TYPE } from "../stores/tatum";
 
 interface FxNodeProps {
   type: FxTypeId;

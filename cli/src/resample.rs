@@ -10,7 +10,7 @@
 //! from folding back at 24 kHz. Nothing here allocates after construction:
 //! it runs inside the audio callback.
 
-use synth_core::BLOCK_SIZE;
+use tatum_core::BLOCK_SIZE;
 
 const TAPS: usize = 64;
 const PHASES: usize = 512;

@@ -1,10 +1,10 @@
 [package]
-name = "synth-core"
+name = "tatum-core"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "synth_core"
+name = "tatum_core"
 
 [features]
 default = []

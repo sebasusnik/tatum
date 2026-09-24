@@ -28,7 +28,7 @@ export interface TrackInfoData {
 }
 export type TrackInfoCallback = (tracks: TrackInfoData[]) => void;
 
-export class SynthAudio {
+export class TatumAudio {
   private ctx: AudioContext | null = null;
   private node: AudioWorkletNode | null = null;
   private onStep: StepCallback | null = null;
@@ -49,9 +49,9 @@ export class SynthAudio {
       await this.ctx.resume();
     }
 
-    await this.ctx.audioWorklet.addModule("/synth-processor.js");
+    await this.ctx.audioWorklet.addModule("/tatum-processor.js");
 
-    this.node = new AudioWorkletNode(this.ctx, "synth-processor", {
+    this.node = new AudioWorkletNode(this.ctx, "tatum-processor", {
       numberOfInputs: 0,
       numberOfOutputs: 1,
       outputChannelCount: [2],
@@ -71,12 +71,12 @@ export class SynthAudio {
         } else if (msg.type === "track-info" && this.onTrackInfo) {
           this.onTrackInfo(msg.tracks);
         } else if (msg.type === "error") {
-          console.error("[synth-processor]", msg.message);
+          console.error("[tatum-processor]", msg.message);
         }
       };
     });
 
-    const wasmUrl = new URL("../wasm-pkg/synth_wasm_bg.wasm", import.meta.url).href;
+    const wasmUrl = new URL("../wasm-pkg/tatum_wasm_bg.wasm", import.meta.url).href;
     const wasmResponse = await fetch(wasmUrl);
     const wasmBytes = await wasmResponse.arrayBuffer();
     this.node.port.postMessage({ type: "init-wasm", bytes: wasmBytes }, [wasmBytes]);

@@ -6,7 +6,7 @@ import {
   tracksFx, masterFx,
   addTrackInsertFx, clearTrackInsertFx, toggleTrackInsertFx,
   addMasterInsertFx, clearMasterInsertFx, toggleMasterInsertFx,
-} from "../stores/synth";
+} from "../stores/tatum";
 
 interface FxChainStripProps {
   /** Track index (0-5) or "master" */

@@ -1,5 +1,5 @@
 import { type JSX } from "solid-js";
-import { FX_TYPE, FX_LABELS, type FxTypeId } from "../stores/synth";
+import { FX_TYPE, FX_LABELS, type FxTypeId } from "../stores/tatum";
 import {
   FilterBlock, SaturatorBlock, ChorusBlock, TiltEqBlock,
   CompBlock, DelayBlock, ReverbBlock, LimiterBlock,

@@ -601,30 +601,30 @@ dependencies = [
 ]
 
 [[package]]
-name = "synth-cli"
+name = "tatum-cli"
 version = "0.1.0"
 dependencies = [
  "cpal",
- "synth-core",
+ "tatum-core",
 ]
 
 [[package]]
-name = "synth-core"
+name = "tatum-core"
 version = "0.1.0"
 
 [[package]]
-name = "synth-mcp"
+name = "tatum-mcp"
 version = "0.1.0"
 dependencies = [
  "serde_json",
- "synth-core",
+ "tatum-core",
 ]
 
 [[package]]
-name = "synth-wasm"
+name = "tatum-wasm"
 version = "0.1.0"
 dependencies = [
- "synth-core",
+ "tatum-core",
  "wasm-bindgen",
 ]
 

@@ -8,7 +8,7 @@ import Mixer from "./components/Mixer";
 import TrackCard from "./components/TrackCard";
 import MasterPanel from "./components/MasterPanel";
 import DetailDrawer from "./components/DetailDrawer";
-import { togglePlayback, sendSource, dslErrors, dslSource, setDslSource, syncStoreFromDsl, dslScenes, trackInfos } from "./stores/synth";
+import { togglePlayback, sendSource, dslErrors, dslSource, setDslSource, syncStoreFromDsl, dslScenes, trackInfos } from "./stores/tatum";
 import CHILLWAVE_SOURCE from "../../examples/chillwave_dream.synth?raw";
 
 type ViewMode = "visual" | "code" | "split";

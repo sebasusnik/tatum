@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "synth": {
+    "tatum": {
       "command": "cargo",
-      "args": ["run", "-q", "--release", "-p", "synth-mcp"]
+      "args": ["run", "-q", "--release", "-p", "tatum-mcp"]
     }
   }
 }

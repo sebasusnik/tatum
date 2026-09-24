@@ -1,6 +1,6 @@
 //! Long reverb and freeze: the tail can be held as a texture.
 
-use synth_core::song_engine::SongEngine;
+use tatum_core::song_engine::SongEngine;
 
 const SONG: &str = r#"
 tempo 120
@@ -45,7 +45,7 @@ fn freeze_holds_the_tail() {
 
 #[test]
 fn freeze_lane_and_override_validate() {
-    use synth_core::dsl::{self, compiler};
+    use tatum_core::dsl::{self, compiler};
     let ok = SONG.replace("SIZE", "0.5").replace("FREEZE", "auto reverb_freeze 0 > 1");
     assert!(compiler::compile(&dsl::parse(&ok).unwrap()).is_ok());
     let bad = SONG.replace("SIZE", "0.5").replace("FREEZE", "reverb_frezze = 1");
@@ -85,7 +85,7 @@ fn bus_reverb_node_stays_bounded_on_sustained_input() {
 
 #[test]
 fn return_chain_and_send_sidechain_apply() {
-    use synth_core::dsl::{self, compiler};
+    use tatum_core::dsl::{self, compiler};
     let ast = dsl::parse(BUS_SONG).unwrap();
     assert_eq!(ast.globals.send_reverb.sidechain, Some(0.5));
     let song = compiler::compile(&ast).expect("compile");

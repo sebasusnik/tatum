@@ -10,7 +10,7 @@ import {
   type FxTypeId,
   MAX_INSERT_FX,
   MAX_MASTER_FX,
-} from "./synth";
+} from "./tatum";
 
 // ── Types ────────────────────────────────────────────
 

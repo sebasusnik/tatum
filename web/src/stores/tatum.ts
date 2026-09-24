@@ -1,7 +1,7 @@
 import { createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
-import { SynthAudio } from "../audio/SynthAudio";
-import type { DslError, DslResult } from "../audio/SynthAudio";
+import { TatumAudio } from "../audio/TatumAudio";
+import type { DslError, DslResult } from "../audio/TatumAudio";
 
 // ── FX types (mirrors core InsertFxType) ─────────────
 
@@ -601,14 +601,14 @@ export function getModuleNameForTrack(trackName: string): string {
 
 // ── Audio Bridge ─────────────────────────────────────
 
-let audio: SynthAudio | null = null;
+let audio: TatumAudio | null = null;
 let initPromise: Promise<void> | null = null;
 
 async function initAudio(): Promise<void> {
   if (audio?.ready) return;
   if (initPromise) return initPromise;
   initPromise = (async () => {
-    audio = new SynthAudio();
+    audio = new TatumAudio();
     await audio.init(
       (step) => setCurrentStep(step),
       (result: DslResult) => {
@@ -640,10 +640,10 @@ async function initAudio(): Promise<void> {
 export function sendSource(source: string): void {
   setDslSource(source);
   if (audio?.ready) {
-    console.log("[synth] sendSource → loadSource (audio ready)");
+    console.log("[tatum] sendSource → loadSource (audio ready)");
     audio.loadSource(source);
   } else {
-    console.log("[synth] sendSource → skipped (audio not ready)");
+    console.log("[tatum] sendSource → skipped (audio not ready)");
   }
 }
 
@@ -674,10 +674,10 @@ function persistGlobalAndRecompile(key: string, value: string): void {
   const re = new RegExp(`^(${key})\\s+.*$`, "m");
   const patched = source.replace(re, `$1 ${value}`);
   if (patched !== source) {
-    console.log(`[synth] persistGlobalAndRecompile: ${key} → ${value}, audio ready=${audio?.ready}`);
+    console.log(`[tatum] persistGlobalAndRecompile: ${key} → ${value}, audio ready=${audio?.ready}`);
     sendSource(patched);
   } else {
-    console.warn(`[synth] persistGlobalAndRecompile: regex did not match for key="${key}"`);
+    console.warn(`[tatum] persistGlobalAndRecompile: regex did not match for key="${key}"`);
   }
 }
 

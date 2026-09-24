@@ -2,7 +2,7 @@ import { For } from "solid-js";
 import {
   harmonyRoot, harmonyScale, harmonyDegree,
   setRoot, setScale, setDegree,
-} from "../stores/synth";
+} from "../stores/tatum";
 
 const ROOT_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const SCALE_NAMES = ["Major", "Minor", "Dorian", "Mixo", "PentMin"];

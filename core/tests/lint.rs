@@ -1,6 +1,6 @@
 //! Design lints: warnings for songs that compile but will sound flat.
 
-use synth_core::dsl::{self, compiler, lint};
+use tatum_core::dsl::{self, compiler, lint};
 
 const SONG: &str = r#"
 tempo 120

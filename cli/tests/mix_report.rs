@@ -1,4 +1,4 @@
-//! What `synth render` prints about a mix, beyond the levels.
+//! What `tatum render` prints about a mix, beyond the levels.
 //!
 //! The levels were already there, and they answer "is anything buried". Three
 //! things that decide whether a song sounds good were not, and all three were
@@ -12,7 +12,7 @@
 //!     is flat however good the parts are, and a table that averages the whole
 //!     render into one row per track cannot show that.
 //!
-//! None of this is what `synth audit` measures. The audit asks whether a voice
+//! None of this is what `tatum audit` measures. The audit asks whether a voice
 //! is dirty; a song can be perfectly clean and still sound wrong.
 
 use std::process::Command;
@@ -20,16 +20,16 @@ use std::process::Command;
 static NTH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 fn render(src: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("synth-mix-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("tatum-mix-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let nth = NTH.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let song = dir.join(format!("{nth}.synth"));
     let wav = dir.join(format!("{nth}.wav"));
     std::fs::write(&song, src).unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_synth"))
+    let out = Command::new(env!("CARGO_BIN_EXE_tatum"))
         .arg("render").arg(&song).arg("-o").arg(&wav)
         .output()
-        .expect("run synth render");
+        .expect("run tatum render");
     let _ = std::fs::remove_file(&song);
     let _ = std::fs::remove_file(&wav);
     // The report goes to stderr; stdout is for things a pipe would want.

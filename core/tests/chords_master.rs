@@ -1,8 +1,8 @@
 //! Chord symbols in patterns and `auto master <param>` automation.
 
-use synth_core::dsl::{self, compiler};
-use synth_core::dsl::ast::{Step, NoteRef};
-use synth_core::song_engine::SongEngine;
+use tatum_core::dsl::{self, compiler};
+use tatum_core::dsl::ast::{Step, NoteRef};
+use tatum_core::song_engine::SongEngine;
 
 const SONG: &str = r#"
 tempo 120

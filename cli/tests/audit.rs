@@ -1,4 +1,4 @@
-//! `synth audit` has to be able to say a voice is dirty, not only that it got
+//! `tatum audit` has to be able to say a voice is dirty, not only that it got
 //! dirtier than it was yesterday.
 //!
 //! The bug it is built around: an FM bell with 18% chorus, heard as a small
@@ -24,16 +24,16 @@ use std::process::Command;
 static NTH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 fn audit(src: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("synth-audit-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("tatum-audit-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let nth = NTH.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let path = dir.join(format!("{nth}.synth"));
     std::fs::write(&path, src).unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_synth"))
+    let out = Command::new(env!("CARGO_BIN_EXE_tatum"))
         .arg("audit")
         .arg(&path)
         .output()
-        .expect("run synth audit");
+        .expect("run tatum audit");
     let _ = std::fs::remove_file(&path);
     String::from_utf8_lossy(&out.stdout).into_owned()
 }

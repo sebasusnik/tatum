@@ -1,11 +1,11 @@
 //! Primus-inspired slap-funk test — percussive bass, angular FM guitar, busy drums.
 //!
-//! Run with: cargo test -p synth-core --test primus_mud -- --nocapture
+//! Run with: cargo test -p tatum-core --test primus_mud -- --nocapture
 //! Output:   core/test_output/primus_mud.wav
 
 mod test_helpers;
 
-use synth_core::song_engine::SongEngine;
+use tatum_core::song_engine::SongEngine;
 use test_helpers::{write_wav_stereo, output_path};
 
 #[test]

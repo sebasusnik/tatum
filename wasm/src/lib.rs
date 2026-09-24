@@ -1,14 +1,14 @@
 //! The browser shell. All livecoding logic (diff, fast path, bar-quantized
-//! swap with state inheritance) lives in `synth_core::live`, shared with the
+//! swap with state inheritance) lives in `tatum_core::live`, shared with the
 //! native CLI; this file only carries strings and buffers across the WASM
-//! boundary. The exported API is what `web/src/audio/synth-processor.js`
+//! boundary. The exported API is what `web/src/audio/tatum-processor.js`
 //! calls and does not change.
 
 extern crate alloc;
 
 use wasm_bindgen::prelude::*;
-use synth_core::live::{LivePlanner, LivePlayer};
-use synth_core::BLOCK_SIZE;
+use tatum_core::live::{LivePlanner, LivePlayer};
+use tatum_core::BLOCK_SIZE;
 
 #[wasm_bindgen]
 pub fn wasm_memory() -> JsValue {
@@ -27,9 +27,9 @@ pub fn alloc(len: usize) -> *mut u8 {
 
 static OK_JSON: &[u8] = br#"{"ok":true}"#;
 
-/// Main synth handle: a planner and a player on the worklet thread.
+/// Main engine handle: a planner and a player on the worklet thread.
 #[wasm_bindgen]
-pub struct Synth {
+pub struct Tatum {
     planner: LivePlanner,
     player: LivePlayer,
     out_buf: Vec<f32>,
@@ -37,14 +37,14 @@ pub struct Synth {
 }
 
 // Plain impl: wasm_bindgen exports the constructor, not this.
-impl Default for Synth {
+impl Default for Tatum {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[wasm_bindgen]
-impl Synth {
+impl Tatum {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
@@ -60,7 +60,7 @@ impl Synth {
     // ═══════════════════════════════════════════════════════
 
     /// Re-evaluate a .synth source. Always parsed and compiled, so the same
-    /// text is rejected here and in `synth check`. Value edits apply at once;
+    /// text is rejected here and in `tatum check`. Value edits apply at once;
     /// anything else takes over on the next bar line, keeping every piece of
     /// state whose definition did not change. Not playing: replaced at once.
     /// # Safety

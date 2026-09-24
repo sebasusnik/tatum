@@ -9,7 +9,7 @@ import {
   sends, setModuleSend, muted, soloed, toggleMute, toggleSolo,
   getModulePagesForTrack, getModuleNameForTrack, setModuleParamForTrack,
   getPatternForTrack,
-} from "../stores/synth";
+} from "../stores/tatum";
 
 const DRUM_LEVEL_IDS = [104, 105, 106, 107];
 const DRUM_PAN_IDS = [99, 100, 101, 102];

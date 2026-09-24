@@ -6,7 +6,7 @@
 # bell however clean both are. Each one is only comparable to itself.
 #
 # Regenerate, and then READ THE DIFF:
-#   UPDATE_AUDIT_BASELINE=1 cargo test --release -p synth-cli --test audit_baseline
+#   UPDATE_AUDIT_BASELINE=1 cargo test --release -p tatum-cli --test audit_baseline
 #
 # song  track  median_db  [effect db]...
 examples/detroit.synth	bass	-12.24

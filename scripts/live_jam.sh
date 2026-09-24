@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Plays a copy of examples/live_set.synth with `synth watch` and edits it
+# Plays a copy of examples/live_set.synth with `tatum watch` and edits it
 # every two seconds, the way the five-minute soak in docs/LIVE.md did:
 # kick level, bass cutoff, pad reverb send, and the bass line with its first
 # note doubled every other round. Ctrl-C stops it.
@@ -9,7 +9,7 @@
 
 set -e
 cd "$(dirname "$0")/.."
-cargo build -q --release -p synth-cli
+cargo build -q --release -p tatum-cli
 f=/tmp/live_jam.synth
 cp examples/live_set.synth $f
 edits=${1:-150}
@@ -28,4 +28,4 @@ edits=${1:-150}
   done
   sleep 3
   echo q
-) | ./target/release/synth watch $f
+) | ./target/release/tatum watch $f

@@ -5,7 +5,7 @@
 //! the song's opening tempo and every section after a tempo change lands in
 //! the wrong place, which would make the arc a measurement of the wrong audio.
 
-use synth_core::song_engine::SongEngine;
+use tatum_core::song_engine::SongEngine;
 
 const HEAD: &str = "\
 scale C minor

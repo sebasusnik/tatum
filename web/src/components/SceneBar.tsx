@@ -1,5 +1,5 @@
 import { For } from "solid-js";
-import { dslScenes, activeSceneName, switchScene } from "../stores/synth";
+import { dslScenes, activeSceneName, switchScene } from "../stores/tatum";
 
 export default function SceneBar() {
   return (

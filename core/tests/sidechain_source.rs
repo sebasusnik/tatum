@@ -2,8 +2,8 @@
 //! which is the only thing house and techno need and the wrong answer for a
 //! pad that should breathe with the bass.
 
-use synth_core::song_engine::SongEngine;
-use synth_core::dsl::{self, compiler};
+use tatum_core::song_engine::SongEngine;
+use tatum_core::dsl::{self, compiler};
 
 /// A kick on beats 1 and 3, a bass on 2 and 4, and a sustained pad. The two
 /// sources never hit together, so which one the pad ducks is visible in the
@@ -140,7 +140,7 @@ arrange {{ a x1 }}
         let mut engine = SongEngine::from_source(&src).unwrap_or_else(|e| panic!("{}", e));
         engine.start();
         let (l, _) = engine.render(1);
-        let sr = synth_core::SAMPLE_RATE as usize;
+        let sr = tatum_core::SAMPLE_RATE as usize;
         let win = sr / 20; // 50 ms
         (0..4).map(|i| l[i * win..(i + 1) * win].iter().fold(0.0f32, |m, v| m.max(v.abs()))).collect()
     }

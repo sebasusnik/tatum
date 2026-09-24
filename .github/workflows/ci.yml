@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # cpal (synth play / watch) links against ALSA on Linux.
+      # cpal (tatum play / watch) links against ALSA on Linux.
       - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
       - name: No audio files in the repo
@@ -45,9 +45,9 @@ jobs:
         run: |
           fails=0
           for f in examples/*.synth examples/rigs/*.synth; do
-            if ! ./target/debug/synth check "$f" >/dev/null 2>&1; then
+            if ! ./target/debug/tatum check "$f" >/dev/null 2>&1; then
               echo "::error file=$f::does not compile"
-              ./target/debug/synth check "$f" 2>&1 | head -20
+              ./target/debug/tatum check "$f" 2>&1 | head -20
               fails=$((fails + 1))
             fi
           done
@@ -61,13 +61,13 @@ jobs:
         run: cargo test --workspace --locked --release --test realtime_budget -- --nocapture
 
       - name: The engine has not started adding grit
-        # `synth audit` measures how much of a voice is not at a harmonic of
+        # `tatum audit` measures how much of a voice is not at a harmonic of
         # the note it was asked to play. Three songs have their numbers
         # checked in. Nothing else in the suite would notice a filter that
         # began ringing or a saturator that got hotter: the bit-identity
         # tests compare a render against the same code, and the lints read
         # text. Two and a half minutes, release only.
-        run: cargo test --locked --release -p synth-cli --test audit_baseline
+        run: cargo test --locked --release -p tatum-cli --test audit_baseline
 
       - name: Every set walks end to end
         # A set is a rig plus twenty overlays resolved through `use`. It
@@ -76,19 +76,19 @@ jobs:
         run: |
           fails=0
           for d in sets/*/; do
-            if ! ./target/debug/synth set check "$d" >/dev/null 2>&1; then
+            if ! ./target/debug/tatum set check "$d" >/dev/null 2>&1; then
               echo "::error::set $d does not check"
-              ./target/debug/synth set check "$d" 2>&1 | head -20
+              ./target/debug/tatum set check "$d" 2>&1 | head -20
               fails=$((fails + 1))
             fi
           done
           echo "$fails failures"
           test "$fails" -eq 0
 
-      - name: docs/PARAMS.md is what `synth params` prints
+      - name: docs/PARAMS.md is what `tatum params` prints
         # The reference is generated; a stale copy documents parameters that
         # do not exist (it missed a range change for two weeks).
-        run: ./target/debug/synth params | diff - docs/PARAMS.md
+        run: ./target/debug/tatum params | diff - docs/PARAMS.md
 
   wasm:
     name: wasm32 build
@@ -100,7 +100,7 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       # The browser runs the same core; `no_std` is only proven by this target.
-      - run: cargo build -p synth-wasm --target wasm32-unknown-unknown --locked
+      - run: cargo build -p tatum-wasm --target wasm32-unknown-unknown --locked
 
   web:
     name: web build

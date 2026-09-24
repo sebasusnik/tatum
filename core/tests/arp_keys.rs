@@ -4,11 +4,11 @@
 //! engine API, and checks it produces sane, audible output with the arp
 //! actually running.
 //!
-//! Run with: cargo test -p synth-core --test arp_keys -- --nocapture
+//! Run with: cargo test -p tatum-core --test arp_keys -- --nocapture
 
 mod test_helpers;
 
-use synth_core::song_engine::SongEngine;
+use tatum_core::song_engine::SongEngine;
 use test_helpers::{write_wav_stereo, output_path};
 
 #[test]

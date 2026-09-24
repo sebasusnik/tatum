@@ -1,4 +1,4 @@
-//! `synth-mcp` — a Model Context Protocol server over stdio.
+//! `tatum-mcp` — a Model Context Protocol server over stdio.
 //!
 //! Gives an AI author everything it needs to write valid `.synth` songs:
 //! the DSL reference, the parameter registry, the example library, a strict
@@ -9,25 +9,25 @@
 //! stderr only. Register in Claude Code with the repo's `.mcp.json`, or:
 //!
 //! ```text
-//! claude mcp add synth -- cargo run -q --release -p synth-mcp
+//! claude mcp add tatum -- cargo run -q --release -p tatum-mcp
 //! ```
 
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
-use synth_core::analysis::{self, BAND_NAMES};
-use synth_core::dsl::{self, compiler, lint};
-use synth_core::params::{self, ModuleKind};
-use synth_core::song_engine::{DslError, SongEngine};
-use synth_core::SAMPLE_RATE;
+use tatum_core::analysis::{self, BAND_NAMES};
+use tatum_core::dsl::{self, compiler, lint};
+use tatum_core::params::{self, ModuleKind};
+use tatum_core::song_engine::{DslError, SongEngine};
+use tatum_core::SAMPLE_RATE;
 
 const DSL_DOC: &str = include_str!("../../docs/DSL.md");
 
 /// The server compiles the docs, the parser and the registries in. A client
 /// that connected before the last build keeps talking to all of them, and
 /// nothing in the protocol says so: two agents spent most of a session writing
-/// what `synth_docs` told them to write and being told it was a syntax error.
+/// what `tatum_docs` told them to write and being told it was a syntax error.
 /// Every response carries this, and `staleness()` compares it against the
 /// source on disk.
 const BUILD_STAMP: &str = concat!(env!("CARGO_PKG_VERSION"), " built ", env!("SYNTH_BUILD_TIME"));
@@ -58,7 +58,7 @@ fn staleness() -> Option<String> {
     }
     if newest > built + 5 {
         Some(format!(
-            "this server was built before {} was last changed, so its parser, its docs and its parameter registry are all out of date. Restart the MCP connection (or rebuild with `cargo build --release -p synth-mcp`) before trusting anything below.",
+            "this server was built before {} was last changed, so its parser, its docs and its parameter registry are all out of date. Restart the MCP connection (or rebuild with `cargo build --release -p tatum-mcp`) before trusting anything below.",
             newest_name
         ))
     } else {
@@ -71,13 +71,13 @@ const MAX_RENDER_BARS: u32 = 512;
 const LIMITER_CEILING: f32 = 0.95;
 
 const INSTRUCTIONS: &str = "\
-synth-core writes music as `.synth` files: modules (instruments), patterns, tracks, \
-scenes and an arrangement. Workflow: read `synth_docs` once (it ends with sound-design \
-recipes), look at one example from `synth_examples` for the target genre, write the file, \
-run `synth_check` and fix every error it reports (they carry line numbers and suggestions), \
-act on its design warnings, then `synth_render` and read the per-section loudness report to \
-judge the arrangement. Parameter names and ranges come from `synth_params`; never invent a \
-parameter. Write values in their units where `synth_params` lists one — `cutoff 800hz`, \
+Tatum writes music as `.synth` files: modules (instruments), patterns, tracks, \
+scenes and an arrangement. Workflow: read `tatum_docs` once (it ends with sound-design \
+recipes), look at one example from `tatum_examples` for the target genre, write the file, \
+run `tatum_check` and fix every error it reports (they carry line numbers and suggestions), \
+act on its design warnings, then `tatum_render` and read the per-section loudness report to \
+judge the arrangement. Parameter names and ranges come from `tatum_params`; never invent a \
+parameter. Write values in their units where `tatum_params` lists one — `cutoff 800hz`, \
 `attack 20ms`, `osc2_pitch -12st`, `resonance 80%`, `makeup=6db` — rather than normalized \
 floats; a wrong unit is an error, a wrong float is not. A compressor's `makeup` is a linear \
 gain, so `makeup=4` is +12 dB: say `makeup=6db` if you mean decibels. Nothing that sustains \
@@ -123,7 +123,7 @@ impl Ctx {
             .unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples"));
         let render_dir = std::env::var("SYNTH_RENDER_DIR")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| std::env::temp_dir().join("synth-renders"));
+            .unwrap_or_else(|_| std::env::temp_dir().join("tatum-renders"));
         Self { examples_dir, render_dir }
     }
 }
@@ -177,7 +177,7 @@ fn initialize(params: &Value) -> Value {
             "tools": { "listChanged": false },
             "resources": { "subscribe": false, "listChanged": false }
         },
-        "serverInfo": { "name": "synth-mcp", "version": env!("CARGO_PKG_VERSION"), "build": BUILD_STAMP },
+        "serverInfo": { "name": "tatum-mcp", "version": env!("CARGO_PKG_VERSION"), "build": BUILD_STAMP },
         "instructions": match staleness() {
             Some(w) => format!("STALE SERVER: {}\n\n{}", w, INSTRUCTIONS),
             None => INSTRUCTIONS.to_string(),
@@ -190,12 +190,12 @@ fn initialize(params: &Value) -> Value {
 fn tool_definitions() -> Vec<Value> {
     vec![
         json!({
-            "name": "synth_docs",
+            "name": "tatum_docs",
             "description": "The .synth language reference: globals, modules, patterns (ties, slides, chords, drum lanes), tracks, arpeggiator, scenes, automation, arrangement and livecoding semantics. Read this once before writing a song.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         }),
         json!({
-            "name": "synth_params",
+            "name": "tatum_params",
             "description": "Parameter registry. module = bass|fm|keys|beats gives every valid module parameter with range, default, option names and meaning; module = track gives the track options (level, pan, gate, sends, sidechain, arp, out); module = fx gives every effect and graph node with its arguments and options. This is the only source of valid names.",
             "inputSchema": {
                 "type": "object",
@@ -207,7 +207,7 @@ fn tool_definitions() -> Vec<Value> {
             }
         }),
         json!({
-            "name": "synth_examples",
+            "name": "tatum_examples",
             "description": "Example songs. Without a name: the list of examples with their one-line description. With a name: the full .synth source, useful as a template for a genre.",
             "inputSchema": {
                 "type": "object",
@@ -216,7 +216,7 @@ fn tool_definitions() -> Vec<Value> {
             }
         }),
         json!({
-            "name": "synth_check",
+            "name": "tatum_check",
             "description": "Parse and compile .synth source without rendering. Returns ok=true with a summary (tempo, bars, duration, counts) plus design warnings (static_pad, dry_mix, no_sidechain, single_scene, no_limiter, unused_*) with a hint each, or ok=false with every error, each carrying a line number and often a suggestion. Fix all errors before rendering; treat warnings as things a producer would fix.",
             "inputSchema": {
                 "type": "object",
@@ -226,7 +226,7 @@ fn tool_definitions() -> Vec<Value> {
             }
         }),
         json!({
-            "name": "synth_render",
+            "name": "tatum_render",
             "description": "Compile and render .synth source to a 16-bit stereo WAV file. Returns the file path plus a mix report: overall peak, RMS and clipped samples; per arrangement section the RMS, peak, dB, crest factor and low/mid/high energy balance; per track its peak, RMS and dB below the loudest track; and hints about limiting, buried or silent tracks and boxy midrange. Use it to check that builds rise, drops hit hardest, nothing clips, and every track is audible. For quick level checks pass bars (e.g. 8) to render only the start.",
             "inputSchema": {
                 "type": "object",
@@ -246,14 +246,14 @@ fn call_tool(ctx: &Ctx, params: &Value) -> Result<Value, (i64, String)> {
     let name = params.get("name").and_then(Value::as_str).unwrap_or("");
     let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
     let outcome = match name {
-        "synth_docs" => Ok(match staleness() {
+        "tatum_docs" => Ok(match staleness() {
             Some(w) => format!("> **STALE SERVER.** {}\n\n{}", w, DSL_DOC),
             None => DSL_DOC.to_string(),
         }),
-        "synth_params" => tool_params(&args),
-        "synth_examples" => tool_examples(ctx, &args),
-        "synth_check" => tool_check(&args),
-        "synth_render" => tool_render(ctx, &args),
+        "tatum_params" => tool_params(&args),
+        "tatum_examples" => tool_examples(ctx, &args),
+        "tatum_check" => tool_check(&args),
+        "tatum_render" => tool_render(ctx, &args),
         other => return Err((-32602, format!("unknown tool: {}", other))),
     };
     Ok(match outcome {
@@ -271,8 +271,8 @@ fn tool_params(args: &Value) -> Result<String, String> {
     }
     if matches!(args.get("module").and_then(Value::as_str), Some("fx") | Some("nodes")) {
         return Ok(match args.get("format").and_then(Value::as_str) {
-            Some("json") => synth_core::nodes::json(),
-            _ => synth_core::nodes::markdown(),
+            Some("json") => tatum_core::nodes::json(),
+            _ => tatum_core::nodes::markdown(),
         });
     }
     let kinds: Vec<ModuleKind> = match args.get("module").and_then(Value::as_str) {
@@ -466,7 +466,7 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
             std::fs::create_dir_all(parent).map_err(|e| format!("cannot create {}: {}", parent.display(), e))?;
         }
     }
-    std::fs::write(&output, synth_core::wav::encode_stereo_16(&l, &r, SAMPLE_RATE as u32))
+    std::fs::write(&output, tatum_core::wav::encode_stereo_16(&l, &r, SAMPLE_RATE as u32))
         .map_err(|e| format!("cannot write {}: {}", output.display(), e))?;
 
     // Loudness report per section
@@ -697,11 +697,11 @@ fn slug_from_source(source: &str) -> String {
 
 fn resource_list(ctx: &Ctx) -> Vec<Value> {
     let mut out = vec![
-        json!({ "uri": "synth://docs/dsl", "name": "DSL reference", "mimeType": "text/markdown", "description": "The .synth language reference" }),
-        json!({ "uri": "synth://docs/params", "name": "Parameter registry", "mimeType": "text/markdown", "description": "Every module parameter with range, default and meaning" }),
+        json!({ "uri": "tatum://docs/dsl", "name": "DSL reference", "mimeType": "text/markdown", "description": "The .synth language reference" }),
+        json!({ "uri": "tatum://docs/params", "name": "Parameter registry", "mimeType": "text/markdown", "description": "Every module parameter with range, default and meaning" }),
     ];
     for (name, desc) in list_examples(ctx) {
-        out.push(json!({ "uri": format!("synth://examples/{}", name), "name": name, "mimeType": "text/plain", "description": desc }));
+        out.push(json!({ "uri": format!("tatum://examples/{}", name), "name": name, "mimeType": "text/plain", "description": desc }));
     }
     out
 }
@@ -709,9 +709,9 @@ fn resource_list(ctx: &Ctx) -> Vec<Value> {
 fn read_resource(ctx: &Ctx, params: &Value) -> Result<Value, (i64, String)> {
     let uri = params.get("uri").and_then(Value::as_str).unwrap_or("");
     let (mime, text) = match uri {
-        "synth://docs/dsl" => ("text/markdown", DSL_DOC.to_string()),
-        "synth://docs/params" => ("text/markdown", params::markdown(&ModuleKind::ALL) + &params::track_markdown() + &synth_core::nodes::markdown()),
-        _ => match uri.strip_prefix("synth://examples/") {
+        "tatum://docs/dsl" => ("text/markdown", DSL_DOC.to_string()),
+        "tatum://docs/params" => ("text/markdown", params::markdown(&ModuleKind::ALL) + &params::track_markdown() + &tatum_core::nodes::markdown()),
+        _ => match uri.strip_prefix("tatum://examples/") {
             Some(name) => ("text/plain", tool_examples(ctx, &json!({ "name": name })).map_err(|e| (-32002, e))?),
             None => return Err((-32002, format!("unknown resource: {}", uri))),
         },
@@ -726,7 +726,7 @@ mod tests {
     fn ctx() -> Ctx {
         Ctx {
             examples_dir: Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples"),
-            render_dir: std::env::temp_dir().join("synth-mcp-tests"),
+            render_dir: std::env::temp_dir().join("tatum-mcp-tests"),
         }
     }
 
@@ -739,10 +739,10 @@ mod tests {
         let c = ctx();
         let r = call(&c, json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": "2025-03-26" } }));
         assert_eq!(r["result"]["protocolVersion"], "2025-03-26");
-        assert_eq!(r["result"]["serverInfo"]["name"], "synth-mcp");
+        assert_eq!(r["result"]["serverInfo"]["name"], "tatum-mcp");
         let r = call(&c, json!({ "jsonrpc": "2.0", "id": "x", "method": "tools/list" }));
         let names: Vec<&str> = r["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
-        assert_eq!(names, vec!["synth_docs", "synth_params", "synth_examples", "synth_check", "synth_render"]);
+        assert_eq!(names, vec!["tatum_docs", "tatum_params", "tatum_examples", "tatum_check", "tatum_render"]);
         assert_eq!(r["id"], "x");
     }
 
@@ -763,7 +763,7 @@ mod tests {
     fn check_reports_errors_with_lines() {
         let c = ctx();
         let src = "tempo 120\nmodule bass b { cutof 0.3 }\n";
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": { "name": "synth_check", "arguments": { "source": src } } }));
+        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": { "name": "tatum_check", "arguments": { "source": src } } }));
         assert_eq!(r["result"]["isError"], true);
         let text = r["result"]["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("Did you mean 'cutoff'"), "{}", text);
@@ -774,7 +774,7 @@ mod tests {
     fn check_and_render_an_example() {
         let c = ctx();
         let src = std::fs::read_to_string(c.examples_dir.join("acid_arp.synth")).unwrap();
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": { "name": "synth_check", "arguments": { "source": src } } }));
+        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": { "name": "tatum_check", "arguments": { "source": src } } }));
         assert_eq!(r["result"]["isError"], false, "{}", r);
         let text = r["result"]["content"][0]["text"].as_str().unwrap();
         let v: Value = serde_json::from_str(text).unwrap();
@@ -782,7 +782,7 @@ mod tests {
         assert_eq!(v["summary"]["bars"], 12);
 
         let out = c.render_dir.join("acid_arp_test.wav");
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": { "name": "synth_render", "arguments": { "source": src, "output": out.to_str().unwrap(), "bars": 4 } } }));
+        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": { "name": "tatum_render", "arguments": { "source": src, "output": out.to_str().unwrap(), "bars": 4 } } }));
         assert_eq!(r["result"]["isError"], false, "{}", r);
         let v: Value = serde_json::from_str(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
         assert_eq!(v["bars"], 4);
@@ -797,14 +797,14 @@ mod tests {
     #[test]
     fn examples_and_resources() {
         let c = ctx();
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": { "name": "synth_examples", "arguments": {} } }));
+        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": { "name": "tatum_examples", "arguments": {} } }));
         let text = r["result"]["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("- acid_arp:"), "{}", text);
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 7, "method": "resources/read", "params": { "uri": "synth://examples/acid_arp" } }));
+        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 7, "method": "resources/read", "params": { "uri": "tatum://examples/acid_arp" } }));
         assert!(r["result"]["contents"][0]["text"].as_str().unwrap().contains("tempo 126"));
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 8, "method": "resources/read", "params": { "uri": "synth://docs/params" } }));
+        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 8, "method": "resources/read", "params": { "uri": "tatum://docs/params" } }));
         assert!(r["result"]["contents"][0]["text"].as_str().unwrap().contains("| `cutoff` |"));
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": { "name": "synth_examples", "arguments": { "name": "../secret" } } }));
+        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": { "name": "tatum_examples", "arguments": { "name": "../secret" } } }));
         assert_eq!(r["result"]["isError"], true);
     }
 

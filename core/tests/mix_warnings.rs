@@ -5,7 +5,7 @@
 //! somewhere else -- in the order of a chain, in the ceiling of a knob, in
 //! which side of a saturator a multiply lands on.
 
-use synth_core::dsl;
+use tatum_core::dsl;
 
 fn lints(src: &str) -> Vec<(String, String)> {
     let song = dsl::parse(src).unwrap_or_else(|e| panic!("{e:?}"));

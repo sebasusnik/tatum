@@ -5,11 +5,11 @@
 //! stereo and then downmixed. These are the numbers that would have caught
 //! each of them.
 
-use synth_core::analysis::stereo_width;
-use synth_core::graph::node::{FilterLfo, NodeSpec};
-use synth_core::primitives::filter::FilterType;
-use synth_core::song_engine::SongEngine;
-use synth_core::{BLOCK_SIZE, SAMPLE_RATE};
+use tatum_core::analysis::stereo_width;
+use tatum_core::graph::node::{FilterLfo, NodeSpec};
+use tatum_core::primitives::filter::FilterType;
+use tatum_core::song_engine::SongEngine;
+use tatum_core::{BLOCK_SIZE, SAMPLE_RATE};
 
 fn lowpass(cutoff: f32, resonance: f32) -> NodeSpec {
     NodeSpec::Biquad {
@@ -25,7 +25,7 @@ fn stereo_gain_at(spec: &NodeSpec, hz: f32) -> f32 {
     let n = SAMPLE_RATE as usize;
     let (mut in_sq, mut out_sq) = (0.0f64, 0.0f64);
     for i in 0..n {
-        let x = synth_core::math::sin(2.0 * synth_core::math::PI * hz * i as f32 / SAMPLE_RATE);
+        let x = tatum_core::math::sin(2.0 * tatum_core::math::PI * hz * i as f32 / SAMPLE_RATE);
         let (l, _r) = node.process_stereo(x, x);
         if i >= n / 2 {
             in_sq += (x * x) as f64;
@@ -115,13 +115,13 @@ fn autowah_opens_with_the_signal_and_closes_after_it() {
     let spec = NodeSpec::AutoWah { sens: 0.8, base: 300.0, range: 2500.0, q: 0.6,
         attack_ms: 8.0, release_ms: 200.0, mode: 0, down: false, wobble: 0.0, wobble_hz: 5.0 };
     let mut node = spec.instantiate();
-    let cutoff = |node: &synth_core::graph::node::NodeKind| match node {
-        synth_core::graph::node::NodeKind::AutoWah { cutoff, .. } => *cutoff,
+    let cutoff = |node: &tatum_core::graph::node::NodeKind| match node {
+        tatum_core::graph::node::NodeKind::AutoWah { cutoff, .. } => *cutoff,
         _ => unreachable!(),
     };
     let loud = (0.3 * SAMPLE_RATE) as usize;
     for i in 0..loud {
-        let x = 0.5 * synth_core::math::sin(2.0 * synth_core::math::PI * 220.0 * i as f32 / SAMPLE_RATE);
+        let x = 0.5 * tatum_core::math::sin(2.0 * tatum_core::math::PI * 220.0 * i as f32 / SAMPLE_RATE);
         node.process_stereo(x, x);
     }
     let open = cutoff(&node);

@@ -1,8 +1,8 @@
-//! `synth set` — a live set as a sequence of states.
+//! `tatum set` — a live set as a sequence of states.
 //!
 //! A set is a directory of numbered `.synth` files. Each one is the whole rig
 //! at a moment; the set is the walk from one to the next. The engine moves
-//! between them with the same hot swap `synth watch` uses, so a state that
+//! between them with the same hot swap `tatum watch` uses, so a state that
 //! kept a voice's name keeps that voice: nothing restarts at a transition.
 //!
 //! There is no manifest. How long a step lasts travels in the file, on a
@@ -18,9 +18,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use synth_core::live::{LivePlanner, LivePlayer, Plan};
-use synth_core::song_engine::SongEngine;
-use synth_core::{BLOCK_SIZE, SAMPLE_RATE};
+use tatum_core::live::{LivePlanner, LivePlayer, Plan};
+use tatum_core::song_engine::SongEngine;
+use tatum_core::{BLOCK_SIZE, SAMPLE_RATE};
 
 const DEFAULT_BARS: u32 = 32;
 
@@ -165,8 +165,8 @@ pub fn render_set(steps: &[Step]) -> Result<Rendered, String> {
     Ok(Rendered { l, r, applied })
 }
 
-fn describe(e: &synth_core::song_engine::DslError) -> String {
-    use synth_core::song_engine::DslError;
+fn describe(e: &tatum_core::song_engine::DslError) -> String {
+    use tatum_core::song_engine::DslError;
     match e {
         DslError::Parse(errs) => errs.iter().map(|x| format!("line {}: {}", x.line, x.message))
             .collect::<Vec<_>>().join("; "),
@@ -266,9 +266,9 @@ pub fn cmd(args: &[String]) {
         "next" => run(cmd_next(rest)),
         _ => {
             eprintln!("usage:");
-            eprintln!("    synth set render <dir> [-o out.wav] [--bars N]");
-            eprintln!("    synth set check  <dir> [--bars N] [--json]");
-            eprintln!("    synth set next   <dir> <candidate.synth> [--json]");
+            eprintln!("    tatum set render <dir> [-o out.wav] [--bars N]");
+            eprintln!("    tatum set check  <dir> [--bars N] [--json]");
+            eprintln!("    tatum set next   <dir> <candidate.synth> [--json]");
             eprintln!();
             eprintln!("A set is a directory of numbered .synth files, each the whole rig at a");
             eprintln!("moment. `render` walks them with real hot swaps. `check` validates the");
@@ -291,7 +291,7 @@ fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
 }
 
 fn cmd_render(args: &[String]) -> Result<(), String> {
-    let dir = args.first().ok_or("usage: synth set render <dir> [-o out.wav]")?;
+    let dir = args.first().ok_or("usage: tatum set render <dir> [-o out.wav]")?;
     let bars = flag(args, "--bars").and_then(|v| v.parse().ok()).unwrap_or(DEFAULT_BARS);
     let out = flag(args, "-o").unwrap_or("set.wav").to_string();
     let steps = load(Path::new(dir), bars)?;
@@ -305,14 +305,14 @@ fn cmd_render(args: &[String]) -> Result<(), String> {
         eprintln!("  {:>3}:{:02}  {:<14} {:>3} bars  {:<10} {}",
             (at / 60.0) as u32, (at % 60.0) as u32, step.name(), step.bars, step.phase, step.note);
     }
-    let bytes = synth_core::wav::encode_stereo_16(&rendered.l, &rendered.r, SAMPLE_RATE as u32);
+    let bytes = tatum_core::wav::encode_stereo_16(&rendered.l, &rendered.r, SAMPLE_RATE as u32);
     fs::write(&out, bytes).map_err(|e| format!("{}: {}", out, e))?;
     eprintln!("wrote {} ({:.0}:{:02.0})", out, secs / 60.0, secs % 60.0);
     Ok(())
 }
 
 fn cmd_check(args: &[String]) -> Result<(), String> {
-    let dir = args.first().ok_or("usage: synth set check <dir>")?;
+    let dir = args.first().ok_or("usage: tatum set check <dir>")?;
     let bars = flag(args, "--bars").and_then(|v| v.parse().ok()).unwrap_or(DEFAULT_BARS);
     let json = args.iter().any(|a| a == "--json");
     let steps = load(Path::new(dir), bars)?;
@@ -373,8 +373,8 @@ fn is_a_build(src: &str) -> bool {
 
 /// The gate. An agent proposes the next state; this says yes or no and why.
 fn cmd_next(args: &[String]) -> Result<(), String> {
-    let dir = args.first().ok_or("usage: synth set next <dir> <candidate.synth>")?;
-    let cand_path = args.get(1).ok_or("usage: synth set next <dir> <candidate.synth>")?;
+    let dir = args.first().ok_or("usage: tatum set next <dir> <candidate.synth>")?;
+    let cand_path = args.get(1).ok_or("usage: tatum set next <dir> <candidate.synth>")?;
     let json = args.iter().any(|a| a == "--json");
     let max_voices: Option<usize> = flag(args, "--max-voices").and_then(|v| v.parse().ok());
     let steps = load(Path::new(dir), DEFAULT_BARS)?;

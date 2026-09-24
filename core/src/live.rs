@@ -4,7 +4,7 @@
 //! the same one:
 //!
 //! - [`LivePlanner`] (control thread) takes the new source, always parses and
-//!   compiles it (so the live path validates exactly what `synth check`
+//!   compiles it (so the live path validates exactly what `tatum check`
 //!   validates), diffs it against what is playing, and returns a [`Plan`].
 //!   Anything the fast path cannot resolve becomes a swap; nothing is dropped.
 //! - [`LivePlayer`] (audio thread) applies plans and renders. A swap happens

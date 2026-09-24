@@ -3,7 +3,7 @@ import Knob from "./Knob";
 import {
   trackInfos,
   getModulePagesForTrack, getModuleNameForTrack, setModuleParamForTrack,
-} from "../stores/synth";
+} from "../stores/tatum";
 
 const KIND_COLORS: Record<string, string> = {
   bass: "#ff6b35", keys: "#00c9b1", fm: "#ffd23f", beats: "#ff5ea0",

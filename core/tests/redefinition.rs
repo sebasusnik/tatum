@@ -9,8 +9,8 @@
 //! With this, a step is `use "rig.synth"` and the handful of tracks it moves.
 //! The same set became 416 lines and renders byte-identical.
 
-use synth_core::dsl;
-use synth_core::song_engine::SongEngine;
+use tatum_core::dsl;
+use tatum_core::song_engine::SongEngine;
 
 const RIG: &str = r#"
 tempo 120
@@ -177,7 +177,7 @@ fn a_fix_to_the_rigs_chain_reaches_a_step_that_only_moved_a_fader() {
     let wet = song.tracks[0].routing.iter()
         .flat_map(|n| n.params.iter())
         .find_map(|p| match p {
-            synth_core::dsl::ast::Param::Named(n, v) if n == "wet" => Some(*v),
+            tatum_core::dsl::ast::Param::Named(n, v) if n == "wet" => Some(*v),
             _ => None,
         });
     assert_eq!(wet, Some(1.0), "the step inherited the rig's repaired chain");

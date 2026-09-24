@@ -2,12 +2,12 @@
 //! Renders metallic bells, screaming leads, glitch percussion, evolving pads,
 //! acid stabs, dissonant drones, and FM sub-kicks.
 //!
-//! Run with: cargo test -p synth-core --test fm_madness -- --nocapture
+//! Run with: cargo test -p tatum-core --test fm_madness -- --nocapture
 //! Output:   core/test_output/fm_madness.wav
 
 mod test_helpers;
 
-use synth_core::song_engine::SongEngine;
+use tatum_core::song_engine::SongEngine;
 use test_helpers::{write_wav_stereo, output_path};
 
 #[test]

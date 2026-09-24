@@ -1,4 +1,4 @@
-//! `synth audit` — render every tonal track on its own and listen to each
+//! `tatum audit` — render every tonal track on its own and listen to each
 //! note for the things that make a mix sound dirty.
 //!
 //! This exists because of a bug that took an hour to find by ear. An FM bell
@@ -53,10 +53,10 @@
 use std::collections::BTreeSet;
 use std::process;
 
-use synth_core::dsl;
-use synth_core::dsl::ast::{NoteRef, Song, Step};
-use synth_core::song_engine::SongEngine;
-use synth_core::SAMPLE_RATE;
+use tatum_core::dsl;
+use tatum_core::dsl::ast::{NoteRef, Song, Step};
+use tatum_core::song_engine::SongEngine;
+use tatum_core::SAMPLE_RATE;
 
 /// Radix-2 FFT, in place, on interleaved (re, im). Forty lines and no
 /// dependency, which `core`'s zero-dependency rule makes the right trade.
@@ -525,7 +525,7 @@ pub fn cmd(args: &[String]) {
         .map(|(_, a)| a)
         .find(|a| !a.starts_with("--"))
     else {
-        eprintln!("usage: synth audit <file.synth> [--bars N] [--json] [--strict]");
+        eprintln!("usage: tatum audit <file.synth> [--bars N] [--json] [--strict]");
         eprintln!("  --bars N  audit only the first N bars; a whole song is not needed to");
         eprintln!("            tell whether a voice is clean, and it is six times slower");
         eprintln!("  --json    the same numbers, for a script");

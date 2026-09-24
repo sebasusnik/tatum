@@ -6,7 +6,7 @@ import {
   sends, setModuleSend, muted, soloed, toggleMute, toggleSolo,
   getModulePagesForTrack, getModuleNameForTrack, setModuleParamForTrack,
   getPatternForTrack,
-} from "../stores/synth";
+} from "../stores/tatum";
 
 export default function KeysBlock(props: { trackName: string }) {
   const pages = createMemo(() => getModulePagesForTrack(props.trackName));

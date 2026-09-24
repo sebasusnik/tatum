@@ -1,12 +1,12 @@
 [package]
-name = "synth-cli"
+name = "tatum-cli"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "synth"
+name = "tatum"
 path = "src/main.rs"
 
 [dependencies]
 cpal = "0.18"
-synth-core = { path = "../core" }
+tatum-core = { path = "../core" }

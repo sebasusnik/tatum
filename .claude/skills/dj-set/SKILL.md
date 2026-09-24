@@ -137,7 +137,7 @@ eight, because a third voice playing a rhythm two others already play adds
 thickness and no power. Give each voice something of its own: a counter-line,
 an answer to the main part, a different subdivision.
 
-Check it: `synth check <rig>.synth`, and confirm it plays with headroom.
+Check it: `tatum check <rig>.synth`, and confirm it plays with headroom.
 
 ### 3. Plan the arc — one agent, once
 
@@ -249,7 +249,7 @@ Do not fan out.
 ### 5. The gate — every step, no exceptions
 
 ```
-synth set next sets/<name> <candidate>.synth --json
+tatum set next sets/<name> <candidate>.synth --json
 ```
 
 It answers with a verdict and why. It rejects a candidate that does not compile,
@@ -268,8 +268,8 @@ Only after the gate accepts, save it as `sets/<name>/NNN.synth`.
 ### 6. Finish
 
 ```
-synth set check  sets/<name>              # every step and every transition
-synth set render sets/<name> -o set.wav   # the whole thing, real hot swaps
+tatum set check  sets/<name>              # every step and every transition
+tatum set render sets/<name> -o set.wav   # the whole thing, real hot swaps
 ```
 
 Read the check table before declaring victory. The `rms dB` column is the arc:

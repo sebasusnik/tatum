@@ -5,7 +5,7 @@ import { EditorState, StateField, StateEffect } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
-import type { DslError } from "../audio/SynthAudio";
+import type { DslError } from "../audio/TatumAudio";
 
 interface CodeViewProps {
   onSource: (source: string) => void;
@@ -15,8 +15,8 @@ interface CodeViewProps {
   accentColor: string;
 }
 
-// Synth-themed dark highlighting
-const synthHighlight = HighlightStyle.define([
+// Tatum-themed dark highlighting
+const tatumHighlight = HighlightStyle.define([
   { tag: tags.keyword, color: "#ff6b35" },
   { tag: tags.string, color: "#00c9b1" },
   { tag: tags.number, color: "#ffd23f" },
@@ -49,7 +49,7 @@ const errorLineField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 });
 
-const synthTheme = EditorView.theme({
+const tatumTheme = EditorView.theme({
   "&": {
     backgroundColor: "#0d0d0f",
     color: "#c8c8cc",
@@ -133,8 +133,8 @@ export default function CodeView(props: CodeViewProps) {
         drawSelection(),
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
-        syntaxHighlighting(synthHighlight),
-        synthTheme,
+        syntaxHighlighting(tatumHighlight),
+        tatumTheme,
         errorLineField,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {

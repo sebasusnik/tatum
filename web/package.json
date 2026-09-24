@@ -1,10 +1,10 @@
 {
-  "name": "synth-web",
+  "name": "tatum-web",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build:wasm": "PATH=\"$HOME/.cargo/bin:$PATH\" wasm-pack build ../wasm --target web --out-dir ../web/src/wasm-pkg --out-name synth_wasm",
+    "build:wasm": "PATH=\"$HOME/.cargo/bin:$PATH\" wasm-pack build ../wasm --target web --out-dir ../web/src/wasm-pkg --out-name tatum_wasm",
     "dev": "npm run build:wasm && vite",
     "build": "npm run build:wasm && tsc -b && vite build",
     "preview": "vite preview"

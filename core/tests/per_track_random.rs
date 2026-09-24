@@ -14,7 +14,7 @@
 //! jitter, the same way renaming it already restarts its voices on a hot
 //! swap. A name is an identity here.
 
-use synth_core::song_engine::SongEngine;
+use tatum_core::song_engine::SongEngine;
 
 const BARS: usize = 4;
 

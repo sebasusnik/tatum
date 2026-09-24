@@ -1,8 +1,8 @@
 //! Strict parameter validation: unknown names, out-of-range values, symbolic
 //! choices and automation targets must fail loudly instead of being ignored.
 
-use synth_core::dsl::{self, compiler};
-use synth_core::song_engine::SongEngine;
+use tatum_core::dsl::{self, compiler};
+use tatum_core::song_engine::SongEngine;
 
 const BASE: &str = r#"
 tempo 120

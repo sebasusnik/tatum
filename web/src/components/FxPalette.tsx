@@ -1,5 +1,5 @@
 import { For } from "solid-js";
-import { FX_TYPE, FX_LABELS, fxPoolRemaining, type FxTypeId } from "../stores/synth";
+import { FX_TYPE, FX_LABELS, fxPoolRemaining, type FxTypeId } from "../stores/tatum";
 
 interface FxPaletteProps {
   onSelect: (fxType: FxTypeId) => void;

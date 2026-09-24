@@ -1,4 +1,4 @@
-# synth-core como sinte portable con superficie de livecoding
+# tatum-core como sinte portable con superficie de livecoding
 
 > Análisis independiente, 2026-09-15. Todo lo que afirma está medido en este
 > repo con una sonda temporal en release (reemplazada después por los tests
@@ -33,7 +33,7 @@
    `current_bar` cambiaba un 16avo antes del compás real, y eso ya afectaba a
    los 25 temas renderizados sin que nadie lo notara.
 
-5. **El primer paso es `synth play` y `synth watch`, pero no como lo pide el
+5. **El primer paso es `tatum play` y `tatum watch`, pero no como lo pide el
    roadmap.** La lógica de swap vive en `wasm/src/lib.rs`, no en el core. Si la
    CLI la copia, hay dos implementaciones de la parte más delicada del producto,
    que es exactamente lo que "Qué no hacer" prohíbe. El primer paso real es una
@@ -134,7 +134,7 @@ no la cola. Para dub o ambient, donde "la señal seca es casi incidental"
 
 En `load_source`, si el diff no es estructural, **el AST nuevo nunca se
 compila**. La validación de rango vive en `compile_module_def`, así que en el
-navegador `cutoff 7.0` se aplica clampeado en silencio mientras `synth check`
+navegador `cutoff 7.0` se aplica clampeado en silencio mientras `tatum check`
 lo rechaza. Es la misma clase de bug que la lista de no-ops silenciosos: el
 mismo texto significa dos cosas según el camino que tome. Compilar cuesta
 87 µs; no hay razón para no hacerlo siempre.
@@ -218,7 +218,7 @@ live no es sintaxis nueva, es no tener que escribir el rig ni el arreglo. Un
 nivel, qué filtro) ya se escribe en una línea por track.
 
 Lo que no es más corto de lo que parece: `play` sin arreglar el swap. Se
-puede tener `synth play` en una tarde con cpal, pero la pregunta real
+puede tener `tatum play` en una tarde con cpal, pero la pregunta real
 ("¿se sostiene media hora tocando?") la contesta el swap, no el `play`. Con el
 swap de hoy la respuesta es no: cada edición corta la cola, flamea el bombo y
 corre la grilla.
@@ -253,13 +253,13 @@ Dos objetos, porque en nativo viven en hilos distintos y en WASM en el mismo:
   Un `Fast` que llega con un `pending` encolado se aplica al `pending`, que es
   a quien corresponden sus índices.
 
-El WASM queda como una cáscara sobre los dos. La API de `Synth` no cambia.
+El WASM queda como una cáscara sobre los dos. La API de `Tatum` no cambia.
 
 ### CLI
 
 ```
-synth play  song.synth [--device <nombre>]     # toca hasta que termine el arreglo o 'q'
-synth watch song.synth [--device <nombre>]     # play + recarga al guardar; un error imprime y sigue sonando
+tatum play  song.synth [--device <nombre>]     # toca hasta que termine el arreglo o 'q'
+tatum watch song.synth [--device <nombre>]     # play + recarga al guardar; un error imprime y sigue sonando
 ```
 
 cpal 0.18 (verificado que compila y abre el dispositivo en esta máquina; el
@@ -287,7 +287,7 @@ esa es la medida de "se sostiene".
 
 1. Fix del compás con sus tests. Commit solo.
 2. `live.rs` con herencia y split exacto. WASM sobre él. Commit.
-3. `synth play` / `synth watch`. Commit.
+3. `tatum play` / `tatum watch`. Commit.
 4. Soak: `watch` con un script que edite el archivo cada dos segundos durante
    varios minutos, con auriculares. Peor bloque y swaps, en el commit.
 5. `use "rig.synth"`, lints que respeten el modo live, `docs/DSL.md`.
@@ -314,7 +314,7 @@ arriba, las dos por medición:
   idéntico bit a bit. Un crossfade tradicional habría hundido 12 ms de lo que
   no cambió.
 
-Soak: `synth watch` cinco minutos con auriculares y un script que guardaba
+Soak: `tatum watch` cinco minutos con auriculares y un script que guardaba
 cada dos segundos (valores, patrones, cada tanto un guardado inválido):
 
 ```

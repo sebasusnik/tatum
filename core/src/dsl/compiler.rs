@@ -1415,7 +1415,7 @@ fn unknown_param_message(kind: ModuleKind, module_name: &str, param: &str) -> St
         let names: Vec<&str> = others.iter().map(|k| k.as_str()).collect();
         return format!("{}. It exists on: {}", base, names.join(", "));
     }
-    format!("{}. Run `synth params {}` for the list", base, kind.as_str())
+    format!("{}. Run `tatum params {}` for the list", base, kind.as_str())
 }
 
 /// Master-chain parameters that `auto master <param>` can move.

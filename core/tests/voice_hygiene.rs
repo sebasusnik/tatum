@@ -9,9 +9,9 @@
 //! These are the assertions that would have caught them, applied to every voice.
 
 
-use synth_core::params::{self, ModuleKind};
-use synth_core::song_engine::SongEngine;
-use synth_core::SAMPLE_RATE;
+use tatum_core::params::{self, ModuleKind};
+use tatum_core::song_engine::SongEngine;
+use tatum_core::SAMPLE_RATE;
 
 const DRUM_LANES: [&str; 7] = ["kick", "snare", "hihat", "openhat", "clap", "tom", "crash"];
 const MODULES: [(&str, &str); 3] = [("bass", "1.2"), ("keys", "1.3"), ("fm", "1.3")];
@@ -60,7 +60,7 @@ fn energy_above(x: &[f32], hz: f32) -> f32 {
     const POLES: usize = 3;
     // Same cascade correction the band meter uses, which is calibrated for
     // three poles: 1 / sqrt(2^(1/3) - 1).
-    let c = synth_core::math::exp(-2.0 * synth_core::math::PI * hz * 1.9615 / SAMPLE_RATE);
+    let c = tatum_core::math::exp(-2.0 * tatum_core::math::PI * hz * 1.9615 / SAMPLE_RATE);
     let mut state = [0.0f32; POLES];
     let (mut high, mut total) = (0.0f64, 0.0f64);
     for v in x {
@@ -116,7 +116,7 @@ fn no_voice_leaves_a_dc_offset() {
 /// every option of every choice parameter is what catches that shape.
 #[test]
 fn no_choice_of_any_parameter_introduces_a_dc_offset() {
-    use synth_core::params::Range;
+    use tatum_core::params::Range;
     let mut offenders = Vec::new();
     for kind in ModuleKind::ALL {
         if kind == ModuleKind::Beats { continue; } // drums are one-shots, tested above

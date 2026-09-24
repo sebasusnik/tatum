@@ -1,4 +1,4 @@
-//! `synth play` and `synth watch`: the native live session.
+//! `tatum play` and `tatum watch`: the native live session.
 //!
 //! Three threads. The audio callback owns the `LivePlayer` and does nothing
 //! but apply plans it receives, render, and hand retired engines back. The
@@ -14,8 +14,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use synth_core::live::{Applied, LivePlanner, LivePlayer, Plan, Retired};
-use synth_core::{BLOCK_SIZE, SAMPLE_RATE};
+use tatum_core::live::{Applied, LivePlanner, LivePlayer, Plan, Retired};
+use tatum_core::{BLOCK_SIZE, SAMPLE_RATE};
 
 use crate::include::Source;
 use crate::resample::Resampler;
@@ -78,7 +78,7 @@ pub fn cmd(args: &[String], watch: bool) {
     }
     let Some(path) = path else {
         eprintln!("error: missing input file");
-        eprintln!("usage: synth {} <song.synth> [--device <name>]", verb);
+        eprintln!("usage: tatum {} <song.synth> [--device <name>]", verb);
         std::process::exit(1);
     };
     if let Err(msg) = run(path, watch, device, rate) {

@@ -1,8 +1,8 @@
 //! Scene binding by name, level automation, strict scene overrides and the
 //! global send-effect settings.
 
-use synth_core::dsl::{self, compiler};
-use synth_core::song_engine::SongEngine;
+use tatum_core::dsl::{self, compiler};
+use tatum_core::song_engine::SongEngine;
 
 const SONG: &str = r#"
 tempo 120

@@ -1,7 +1,7 @@
 import {
   playing, recording, bpm, setRecording,
   startPlayback, stopPlayback, adjustBpm, persistBpm,
-} from "../stores/synth";
+} from "../stores/tatum";
 
 export default function Transport() {
   let bpmDragging = false;
@@ -31,7 +31,7 @@ export default function Transport() {
 
   return (
     <div class="top-row">
-      <div class="logo">synth</div>
+      <div class="logo">tatum</div>
       <div class="transport">
         <button
           class="t-btn"

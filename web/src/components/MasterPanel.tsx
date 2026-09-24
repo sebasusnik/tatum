@@ -2,7 +2,7 @@ import Knob from "./Knob";
 import {
   masterLevel, setMasterLevelValue,
   fxParams, setFxParam,
-} from "../stores/synth";
+} from "../stores/tatum";
 
 // Convert 0-100 knob value to dB display: 50 = 0dB, 0 = -12dB, 100 = +12dB
 function toDB(v: number): string {

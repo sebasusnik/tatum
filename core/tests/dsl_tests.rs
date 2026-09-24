@@ -1,5 +1,5 @@
-use synth_core::dsl;
-use synth_core::dsl::compiler;
+use tatum_core::dsl;
+use tatum_core::dsl::compiler;
 
 const EXAMPLE_SONG: &str = r#"
 # ── Globals ──

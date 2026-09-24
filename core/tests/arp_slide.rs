@@ -1,9 +1,9 @@
 //! Arpeggiator and slide support in the DSL / SongEngine, plus the diff
 //! engine treating every unhandled edit as structural.
 
-use synth_core::dsl::{self, compiler, diff};
-use synth_core::dsl::ast::Step;
-use synth_core::song_engine::SongEngine;
+use tatum_core::dsl::{self, compiler, diff};
+use tatum_core::dsl::ast::Step;
+use tatum_core::song_engine::SongEngine;
 
 const SONG: &str = r#"
 tempo 120
@@ -36,7 +36,7 @@ scene a {
 arrange { a x2 }
 "#;
 
-fn compile_errors(src: &str) -> Vec<synth_core::dsl::error::CompileError> {
+fn compile_errors(src: &str) -> Vec<tatum_core::dsl::error::CompileError> {
     match compiler::compile(&dsl::parse(src).unwrap()) {
         Ok(_) => panic!("expected compile errors"),
         Err(errs) => errs,

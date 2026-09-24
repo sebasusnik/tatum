@@ -20,8 +20,8 @@
 //! numbers describe the runner.
 
 use std::time::Instant;
-use synth_core::song_engine::SongEngine;
-use synth_core::BLOCK_SIZE;
+use tatum_core::song_engine::SongEngine;
+use tatum_core::BLOCK_SIZE;
 
 fn report(name: &str, path: &str) -> f64 {
     let src = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{path}: {e}"));
@@ -29,8 +29,8 @@ fn report(name: &str, path: &str) -> f64 {
     e.start();
     let mut l = [0.0f32; BLOCK_SIZE];
     let mut r = [0.0f32; BLOCK_SIZE];
-    let budget_us = BLOCK_SIZE as f64 / synth_core::SAMPLE_RATE as f64 * 1e6;
-    let blocks = (synth_core::SAMPLE_RATE as f64 * 60.0 / BLOCK_SIZE as f64) as usize;
+    let budget_us = BLOCK_SIZE as f64 / tatum_core::SAMPLE_RATE as f64 * 1e6;
+    let blocks = (tatum_core::SAMPLE_RATE as f64 * 60.0 / BLOCK_SIZE as f64) as usize;
 
     let mut times = Vec::with_capacity(blocks);
     for _ in 0..blocks {

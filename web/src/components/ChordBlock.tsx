@@ -5,7 +5,7 @@ import PatternVis from "./PatternVis";
 import {
   getPatternForTrack, getModuleNameForTrack,
   dslSource, sendSource,
-} from "../stores/synth";
+} from "../stores/tatum";
 import {
   DEGREE_LABELS, getChordDisplayName,
   generateChordPatternBlock,

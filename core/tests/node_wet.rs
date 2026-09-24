@@ -10,8 +10,8 @@
 //! which is what makes it affordable to leave a full chain on every voice of a
 //! rig and switch the parts in as you go.
 
-use synth_core::live::{FastOp, LivePlanner, LivePlayer, Plan};
-use synth_core::song_engine::SongEngine;
+use tatum_core::live::{FastOp, LivePlanner, LivePlayer, Plan};
+use tatum_core::song_engine::SongEngine;
 
 const SONG: &str = r#"
 tempo 120
@@ -141,7 +141,7 @@ master { in > out }
     let _ = e.render(2);               // two bars bypassed: the note is long gone
     assert!(e.set_node_wet(0, 0, 1.0));
     // Bring it back one step before the next note and listen to the gap.
-    let sr = synth_core::SAMPLE_RATE as usize;
+    let sr = tatum_core::SAMPLE_RATE as usize;
     let mut l = vec![0.0f32; sr / 8];
     let mut r = vec![0.0f32; sr / 8];
     e.process_block_stereo(&mut l, &mut r);
@@ -156,7 +156,7 @@ master { in > out }
 // has to point at a node from outside. `as <name>` gives the node an identity
 // that survives someone inserting another node earlier in the chain.
 
-use synth_core::dsl::{self, compiler};
+use tatum_core::dsl::{self, compiler};
 
 fn compile_err(src: &str) -> String {
     let ast = dsl::parse(src).expect("parses");
@@ -188,7 +188,7 @@ arrange { a x4 }
 #[test]
 fn auto_can_sweep_a_named_nodes_wet_across_a_scene() {
     let l = render(NAMED, 4);
-    let sr = synth_core::SAMPLE_RATE as usize;
+    let sr = tatum_core::SAMPLE_RATE as usize;
     let bar = sr * 2;
     let bars: Vec<f32> = (0..4).map(|i| brightness_db(&l[i * bar..(i + 1) * bar])).collect();
     assert!(

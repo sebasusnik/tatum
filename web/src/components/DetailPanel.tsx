@@ -3,7 +3,7 @@ import Knob from "./Knob";
 import {
   mod, page, currentPage, setCurrentPage,
   pageCount, setParamValue, accentColor,
-} from "../stores/synth";
+} from "../stores/tatum";
 
 export default function DetailPanel() {
   return (

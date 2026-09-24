@@ -1,7 +1,7 @@
 //! Movement: filter LFOs on insert chains, bar-synced module LFOs, autopan.
 
-use synth_core::dsl::{self, compiler};
-use synth_core::song_engine::SongEngine;
+use tatum_core::dsl::{self, compiler};
+use tatum_core::song_engine::SongEngine;
 
 const BASE: &str = r#"
 tempo 120
@@ -67,7 +67,7 @@ fn module_lfo_can_sync_to_bars() {
     // Don't hardcode the encoding: adding an option to the table shifts it.
     // core/tests/mix.rs asserts the whole table round-trips.
     let sync = pad.params.iter().find(|p| p.name == "lfo_sync").unwrap();
-    let spec = synth_core::params::lookup(synth_core::params::ModuleKind::Keys, "lfo_sync").unwrap();
+    let spec = tatum_core::params::lookup(tatum_core::params::ModuleKind::Keys, "lfo_sync").unwrap();
     assert_eq!(spec.choice_name(sync.value), Some("bars_2"), "encoded value must decode back to bars_2");
     assert!(compiler::compile(&ast).is_ok());
     let mut e = SongEngine::from_source(src).unwrap();
@@ -113,7 +113,7 @@ fn vowel_filter_shapes_and_morphs() {
 /// Energy above 5 kHz relative to the total, in dB. A filter LFO on a dark
 /// sound must not add broadband grit.
 fn hf_ratio_db(x: &[f32]) -> f32 {
-    let c = (-2.0 * std::f32::consts::PI * 5000.0 / synth_core::SAMPLE_RATE).exp();
+    let c = (-2.0 * std::f32::consts::PI * 5000.0 / tatum_core::SAMPLE_RATE).exp();
     let (mut lp, mut hi, mut tot) = (0.0f32, 0.0f64, 0.0f64);
     for &v in x {
         lp = v * (1.0 - c) + lp * c;
@@ -126,8 +126,8 @@ fn hf_ratio_db(x: &[f32]) -> f32 {
 
 #[test]
 fn cutoff_lfo_is_relative_and_does_not_rasp() {
-    use synth_core::Module;
-    use synth_core::modules::bass::{BassModule, BassParam};
+    use tatum_core::Module;
+    use tatum_core::modules::bass::{BassModule, BassParam};
 
     let render = |depth: f32| {
         let mut m = BassModule::new();
@@ -166,7 +166,7 @@ fn cutoff_lfo_is_relative_and_does_not_rasp() {
 /// heard as stepping rather than as a sweep. It runs once per block now.
 #[test]
 fn an_auto_sweep_moves_smoothly_and_not_in_steps() {
-    use synth_core::song_engine::SongEngine;
+    use tatum_core::song_engine::SongEngine;
     let src = "tempo 120\nscale C major\n\
         module keys v { voice_mode poly cutoff 300hz resonance 45% attack 5ms sustain 1.0 }\n\
         pattern p { 1.4:0.9 ..*63 }\n\
@@ -181,7 +181,7 @@ fn an_auto_sweep_moves_smoothly_and_not_in_steps() {
     // The sweep raises the brightness monotonically. Sample the spectral
     // centroid in short windows: with per-step automation it climbs in a
     // staircase, so consecutive windows inside one step are identical.
-    let sr = synth_core::SAMPLE_RATE as usize;
+    let sr = tatum_core::SAMPLE_RATE as usize;
     let win = 1024;
     let centroid = |x: &[f32]| -> f32 {
         // Zero-crossing rate stands in for brightness and needs no FFT.

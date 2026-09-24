@@ -1,12 +1,12 @@
 //! Snare drum synthesis test — renders isolated snare hits to stereo WAV for audition.
 //!
-//! Run with: cargo test -p synth-core --test snare_test -- --nocapture
+//! Run with: cargo test -p tatum-core --test snare_test -- --nocapture
 //! Output:   core/test_output/test_snare_hits.wav
 
 mod test_helpers;
 
-use synth_core::{Module, SAMPLE_RATE, BLOCK_SIZE};
-use synth_core::modules::beats::{BeatsModule, BeatsParam};
+use tatum_core::{Module, SAMPLE_RATE, BLOCK_SIZE};
+use tatum_core::modules::beats::{BeatsModule, BeatsParam};
 use test_helpers::{write_wav_stereo, output_path};
 
 /// Render N stereo samples from a BeatsModule into L/R buffers.

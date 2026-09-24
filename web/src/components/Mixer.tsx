@@ -4,7 +4,7 @@ import {
   setTrackLevelRT,
   setTrackPanRT,
   persistTrackProp,
-} from "../stores/synth";
+} from "../stores/tatum";
 
 export default function Mixer() {
   return (

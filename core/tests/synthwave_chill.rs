@@ -1,11 +1,11 @@
 //! Synthwave Chill — DSL replica of song_synthwave_chill.rs.
 //!
-//! Run with: cargo test -p synth-core --test synthwave_chill -- --nocapture
+//! Run with: cargo test -p tatum-core --test synthwave_chill -- --nocapture
 //! Output:   core/test_output/synthwave_chill.wav
 
 mod test_helpers;
 
-use synth_core::song_engine::SongEngine;
+use tatum_core::song_engine::SongEngine;
 use test_helpers::{write_wav_stereo, output_path};
 
 #[test]

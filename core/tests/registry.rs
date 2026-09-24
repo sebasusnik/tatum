@@ -1,8 +1,8 @@
 //! The parameter registry is the single source of truth for validation, docs and
 //! the diff engine. These tests keep it honest against the modules themselves.
 
-use synth_core::params::{self, ModuleKind};
-use synth_core::song_engine::SongEngine;
+use tatum_core::params::{self, ModuleKind};
+use tatum_core::song_engine::SongEngine;
 
 /// A minimal song for one module kind, with `body` pasted into the module block.
 fn song(kind: ModuleKind, body: &str) -> String {
@@ -93,15 +93,15 @@ fn every_param_name_fits_where_automation_stores_it() {
     for kind in ModuleKind::ALL {
         for spec in params::specs(kind) {
             assert!(
-                spec.name.len() <= synth_core::song_engine::INLINE_NAME_CAP,
+                spec.name.len() <= tatum_core::song_engine::INLINE_NAME_CAP,
                 "'{}' is {} bytes; automation stores names inline in {}",
-                spec.name, spec.name.len(), synth_core::song_engine::INLINE_NAME_CAP
+                spec.name, spec.name.len(), tatum_core::song_engine::INLINE_NAME_CAP
             );
         }
     }
 }
 
-/// Every parameter must carry a description: `synth params` and the MCP docs are
+/// Every parameter must carry a description: `tatum params` and the MCP docs are
 /// generated from them, and an empty one is what the author reads.
 #[test]
 fn every_param_is_documented() {
@@ -136,8 +136,8 @@ fn documented_anchors_match_the_engine() {
     close(params::ENV_TIME.to_real(0.75), 300.0, "env time at 0.75");
     close(params::ENV_TIME.to_real(1.0), 2000.0, "env time at 1.0");
     // fm mod_index: "exponential 0.1..4.0 (0.5 ≈ 0.63, 0.75 ≈ 1.6)"
-    close(0.1 * synth_core::math::pow(40.0, 0.5), 0.63, "mod_index at 0.5");
-    close(0.1 * synth_core::math::pow(40.0, 0.75), 1.6, "mod_index at 0.75");
+    close(0.1 * tatum_core::math::pow(40.0, 0.5), 0.63, "mod_index at 0.5");
+    close(0.1 * tatum_core::math::pow(40.0, 0.75), 1.6, "mod_index at 0.75");
     // op ratio: "ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0"
     close(params::OP_RATIO.to_real(0.032), 1.0, "op ratio at 0.032");
     close(params::OP_RATIO.to_real(0.097), 2.0, "op ratio at 0.097");

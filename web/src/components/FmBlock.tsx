@@ -6,7 +6,7 @@ import {
   sends, setModuleSend, muted, soloed, toggleMute, toggleSolo,
   getModulePagesForTrack, getModuleNameForTrack, setModuleParamForTrack,
   getPatternForTrack,
-} from "../stores/synth";
+} from "../stores/tatum";
 
 const OP_LABELS = ["OP1", "OP2", "OP3", "OP4"];
 const OP_PAGES = [3, 4, 5, 6];

@@ -13,7 +13,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use synth_core::song_engine::DslError;
+use tatum_core::song_engine::DslError;
 
 pub struct Source {
     /// The combined text the core parses.
@@ -126,7 +126,7 @@ mod tests {
     use super::*;
 
     fn tmp(name: &str, body: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("synth-use-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("tatum-use-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let p = dir.join(name);
         fs::write(&p, body).unwrap();
@@ -147,7 +147,7 @@ mod tests {
         let (f, l) = src.locate(4);
         assert!(f.ends_with("perf.synth"));
         assert_eq!(l, 3);
-        assert!(synth_core::dsl::parse(&src.text).is_ok());
+        assert!(tatum_core::dsl::parse(&src.text).is_ok());
     }
 
     #[test]

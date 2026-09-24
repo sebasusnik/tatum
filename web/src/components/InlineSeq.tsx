@@ -1,5 +1,5 @@
 import { For, createSignal } from "solid-js";
-import type { MelodicPattern, MelodicId } from "../stores/synth";
+import type { MelodicPattern, MelodicId } from "../stores/tatum";
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 

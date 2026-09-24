@@ -2,7 +2,7 @@ import Knob from "./Knob";
 import {
   arpParams, setArpParam,
   muted, soloed, toggleMute, toggleSolo,
-} from "../stores/synth";
+} from "../stores/tatum";
 
 export default function ArpBlock() {
   const color = "#7dd3fc";

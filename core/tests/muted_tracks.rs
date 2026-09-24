@@ -11,7 +11,7 @@
 //! Muting now means the track fires no notes, and once its voices have run out
 //! it is skipped whole. The same three pads now render in 1.60 s against 1.61 s.
 
-use synth_core::song_engine::SongEngine;
+use tatum_core::song_engine::SongEngine;
 
 /// `pad_level` is the only thing that changes between renders.
 fn song(pad_level: &str, extra_track: bool) -> String {
@@ -97,7 +97,7 @@ master { in > out }
     let (l, _) = e.render(2);
 
     // The kick is on the downbeat of each bar. One bar at 120 BPM is 2 s.
-    let sr = synth_core::SAMPLE_RATE as usize;
+    let sr = tatum_core::SAMPLE_RATE as usize;
     let bar = sr * 2;
     let peak_at = |start: usize| l[start..start + sr / 20].iter().fold(0.0f32, |m, x| m.max(x.abs()));
     assert!(peak_at(0) > 0.05, "the kick should land on the downbeat after unmuting, got {:.4}", peak_at(0));
@@ -127,7 +127,7 @@ master {{ in > out }}
 "#);
     let ducked = render(&src("0.9"), 1);
     let flat = render(&src("0"), 1);
-    let sr = synth_core::SAMPLE_RATE as usize;
+    let sr = tatum_core::SAMPLE_RATE as usize;
     let head = |v: &[f32]| v[..sr / 40].iter().fold(0.0f32, |m, x| m.max(x.abs()));
     assert!(
         head(&ducked) < head(&flat) * 0.85,
@@ -162,7 +162,7 @@ fn muting_lets_the_tail_finish_before_the_track_is_dropped() {
     let _ = e.render(1);
     // The pad holds a chord with a 0.3 release. Drop the fader mid-note.
     e.set_track_level(1, 0.0);
-    let sr = synth_core::SAMPLE_RATE as usize;
+    let sr = tatum_core::SAMPLE_RATE as usize;
     let mut out_l = vec![0.0f32; sr / 100];
     let mut out_r = vec![0.0f32; sr / 100];
     e.process_block_stereo(&mut out_l, &mut out_r);
@@ -239,7 +239,7 @@ master { in > out }
     );
     // There is still a ceiling, so a typo cannot take the master out.
     let absurd = peak(40.0);
-    let ceiling = peak(synth_core::song_engine::MAX_TRACK_LEVEL);
+    let ceiling = peak(tatum_core::song_engine::MAX_TRACK_LEVEL);
     assert!(
         (absurd - ceiling).abs() < 1e-6,
         "level 40 should clamp to the ceiling, got {absurd:.4} against {ceiling:.4}"

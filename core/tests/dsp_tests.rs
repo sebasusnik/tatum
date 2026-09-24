@@ -2,23 +2,23 @@
 //! (no song engine). Song-level behaviour is covered by the .synth tests.
 //! Run with: `cargo test --test dsp_tests`
 
-use synth_core::modules::bass::BassModule;
-use synth_core::modules::fm::FmModule;
-use synth_core::modules::keys::KeysModule;
-use synth_core::modules::beats::BeatsModule;
-use synth_core::harmony::{HarmonyContext, Scale, Progressions};
-use synth_core::modules::bass::BassParam;
-use synth_core::modules::fm::FmParam;
-use synth_core::modules::keys::KeysParam;
-use synth_core::effects::reverb::{Reverb, DattorroReverb};
-use synth_core::effects::delay::{Delay, DelaySync};
-use synth_core::effects::limiter::Limiter;
-use synth_core::effects::compressor::Compressor;
-use synth_core::effects::eq::{TiltEq, ThreeBandEq};
-use synth_core::effects::saturator::Saturator;
-use synth_core::primitives::envelope::EnvStage;
-use synth_core::primitives::fm_operator::FmWaveform;
-use synth_core::{Module, SAMPLE_RATE, BLOCK_SIZE};
+use tatum_core::modules::bass::BassModule;
+use tatum_core::modules::fm::FmModule;
+use tatum_core::modules::keys::KeysModule;
+use tatum_core::modules::beats::BeatsModule;
+use tatum_core::harmony::{HarmonyContext, Scale, Progressions};
+use tatum_core::modules::bass::BassParam;
+use tatum_core::modules::fm::FmParam;
+use tatum_core::modules::keys::KeysParam;
+use tatum_core::effects::reverb::{Reverb, DattorroReverb};
+use tatum_core::effects::delay::{Delay, DelaySync};
+use tatum_core::effects::limiter::Limiter;
+use tatum_core::effects::compressor::Compressor;
+use tatum_core::effects::eq::{TiltEq, ThreeBandEq};
+use tatum_core::effects::saturator::Saturator;
+use tatum_core::primitives::envelope::EnvStage;
+use tatum_core::primitives::fm_operator::FmWaveform;
+use tatum_core::{Module, SAMPLE_RATE, BLOCK_SIZE};
 
 use std::f32::consts::TAU;
 
@@ -1637,7 +1637,7 @@ fn test_vibrato_delayed_onset() {
     // noise, and passed by luck. The interval between successive upward
     // crossings of the fundamental is the pitch itself, sample by sample.
     let mut low = 0.0f32;
-    let c = synth_core::math::exp(-2.0 * synth_core::math::PI * 300.0 / SAMPLE_RATE);
+    let c = tatum_core::math::exp(-2.0 * tatum_core::math::PI * 300.0 / SAMPLE_RATE);
     let filtered: Vec<f32> = samples.iter().map(|v| { low = v * (1.0 - c) + low * c; low }).collect();
 
     /// Spread of the period, as a fraction of its mean, over a span.
@@ -1656,7 +1656,7 @@ fn test_vibrato_delayed_onset() {
         let mean = periods.iter().sum::<f32>() / periods.len() as f32;
         if mean <= 0.0 { return 0.0; }
         let var = periods.iter().map(|p| (p - mean) * (p - mean)).sum::<f32>() / periods.len() as f32;
-        synth_core::math::sqrt(var) / mean
+        tatum_core::math::sqrt(var) / mean
     }
 
     let early = period_spread(&filtered[(SAMPLE_RATE * 0.05) as usize..(SAMPLE_RATE * 0.25) as usize]);

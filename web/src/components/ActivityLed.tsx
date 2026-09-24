@@ -1,6 +1,6 @@
 import { createSignal, createEffect } from "solid-js";
-import type { ParsedPattern } from "../stores/synth";
-import { currentStep, playing } from "../stores/synth";
+import type { ParsedPattern } from "../stores/tatum";
+import { currentStep, playing } from "../stores/tatum";
 
 interface Props {
   pattern: ParsedPattern | null;

@@ -3,8 +3,8 @@ import {
   masterLevel, setMasterLevelValue,
   sidechainAmount, setSidechainValue,
   moduleLevels, setModuleLevel,
-} from "../stores/synth";
-import type { ModuleId } from "../stores/synth";
+} from "../stores/tatum";
+import type { ModuleId } from "../stores/tatum";
 
 const MIX_CHANNELS: { id: ModuleId; label: string; color: string }[] = [
   { id: "bass", label: "Bass", color: "#ff6b35" },

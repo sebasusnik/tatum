@@ -25,7 +25,7 @@ import {
   trackInfos,
   type FxTypeId,
   type TrackInfo,
-} from "../stores/synth";
+} from "../stores/tatum";
 
 // ── Types ────────────────────────────────────────────
 

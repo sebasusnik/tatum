@@ -10,9 +10,9 @@
 //! and every subnote carries its own velocity and its own `~`, so a run can
 //! shape itself and end on a bend.
 
-use synth_core::dsl;
-use synth_core::dsl::compiler::{CompiledStep, MAX_SUBDIV};
-use synth_core::song_engine::SongEngine;
+use tatum_core::dsl;
+use tatum_core::dsl::compiler::{CompiledStep, MAX_SUBDIV};
+use tatum_core::song_engine::SongEngine;
 
 const HEAD: &str = r#"
 tempo 120

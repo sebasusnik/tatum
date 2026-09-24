@@ -34,8 +34,8 @@ unsafe impl GlobalAlloc for Counting {
 #[global_allocator]
 static A: Counting = Counting;
 
-use synth_core::song_engine::SongEngine;
-use synth_core::BLOCK_SIZE;
+use tatum_core::song_engine::SongEngine;
+use tatum_core::BLOCK_SIZE;
 
 /// Drums with a nudge, an arpeggiated chord track, two buses, a capture window,
 /// both sends and three scenes with automation: every path that used to
@@ -114,7 +114,7 @@ fn rendering_blocks_never_allocates() {
 /// Every engine is built outside the count, as the control thread does.
 #[test]
 fn live_swap_never_allocates() {
-    use synth_core::live::{Applied, LivePlanner, LivePlayer};
+    use tatum_core::live::{Applied, LivePlanner, LivePlayer};
 
     let mut planner = LivePlanner::new();
     let mut player = LivePlayer::new();

@@ -34,16 +34,16 @@ fn main() {
 }
 
 fn print_usage() {
-    eprintln!("synth - DSL-powered synthesizer
+    eprintln!("tatum - DSL-powered synthesizer
 
 USAGE:
-    synth render <song.synth> [-o output.wav] [--bars N]
-    synth check <song.synth>
-    synth params [bass|fm|keys|beats|track|fx] [--json]
-    synth play <song.synth> [--device <name>] [--rate <hz>]
-    synth set render <dir> [-o out.wav] | set check <dir> | set next <dir> <file>
-    synth audit <song.synth> [--bars N] [--json] [--strict]
-    synth watch <song.synth> [--device <name>] [--rate <hz>]
+    tatum render <song.synth> [-o output.wav] [--bars N]
+    tatum check <song.synth>
+    tatum params [bass|fm|keys|beats|track|fx] [--json]
+    tatum play <song.synth> [--device <name>] [--rate <hz>]
+    tatum set render <dir> [-o out.wav] | set check <dir> | set next <dir> <file>
+    tatum audit <song.synth> [--bars N] [--json] [--strict]
+    tatum watch <song.synth> [--device <name>] [--rate <hz>]
 
 COMMANDS:
     render    Parse, compile, and render a .synth file to WAV
@@ -76,11 +76,11 @@ COMMANDS:
 }
 
 fn cmd_params(args: &[String]) {
-    use synth_core::params::{self, ModuleKind};
+    use tatum_core::params::{self, ModuleKind};
 
     let json = args.iter().any(|a| a == "--json");
     if args.iter().any(|a| a == "fx" || a == "nodes") {
-        if json { print!("{}", synth_core::nodes::json()); } else { print!("{}", synth_core::nodes::markdown()); }
+        if json { print!("{}", tatum_core::nodes::json()); } else { print!("{}", tatum_core::nodes::markdown()); }
         return;
     }
     if args.iter().any(|a| a == "track") {
@@ -103,7 +103,7 @@ fn cmd_params(args: &[String]) {
         print!("{}", params::markdown(&kinds));
         if args.iter().all(|a| a.starts_with("--")) {
             print!("{}", params::track_markdown());
-            print!("{}", synth_core::nodes::markdown());
+            print!("{}", tatum_core::nodes::markdown());
         }
     }
 }
@@ -111,7 +111,7 @@ fn cmd_params(args: &[String]) {
 fn cmd_check(args: &[String]) {
     if args.is_empty() {
         eprintln!("error: missing input file");
-        eprintln!("usage: synth check <song.synth>");
+        eprintln!("usage: tatum check <song.synth>");
         process::exit(1);
     }
 
@@ -128,19 +128,19 @@ fn cmd_check(args: &[String]) {
     }
 
     // Parse
-    let ast = match synth_core::dsl::parse(&source.text) {
+    let ast = match tatum_core::dsl::parse(&source.text) {
         Ok(ast) => {
             eprintln!("  parse OK");
             ast
         }
         Err(errs) => {
-            source.print_errors(&synth_core::song_engine::DslError::Parse(errs));
+            source.print_errors(&tatum_core::song_engine::DslError::Parse(errs));
             process::exit(1);
         }
     };
 
     // Compile
-    match synth_core::dsl::compiler::compile(&ast) {
+    match tatum_core::dsl::compiler::compile(&ast) {
         Ok(compiled) => {
             eprintln!("  compile OK");
             eprintln!("  {} instruments, {} patterns, {} tracks, {} buses",
@@ -156,7 +156,7 @@ fn cmd_check(args: &[String]) {
                 );
             }
             eprintln!("  tempo: {} BPM", compiled.globals.tempo);
-            let lints = synth_core::dsl::lint::lint_song(&ast);
+            let lints = tatum_core::dsl::lint::lint_song(&ast);
             if !lints.is_empty() {
                 eprintln!("design warnings:");
                 for l in &lints {
@@ -165,7 +165,7 @@ fn cmd_check(args: &[String]) {
             }
         }
         Err(errs) => {
-            source.print_errors(&synth_core::song_engine::DslError::Compile(errs));
+            source.print_errors(&tatum_core::song_engine::DslError::Compile(errs));
             process::exit(1);
         }
     }
@@ -176,7 +176,7 @@ fn cmd_check(args: &[String]) {
 fn cmd_render(args: &[String]) {
     if args.is_empty() {
         eprintln!("error: missing input file");
-        eprintln!("usage: synth render <song.synth> [-o output.wav] [--bars N]");
+        eprintln!("usage: tatum render <song.synth> [-o output.wav] [--bars N]");
         process::exit(1);
     }
 
@@ -215,7 +215,7 @@ fn cmd_render(args: &[String]) {
 
     eprintln!("loading {}...", path);
 
-    let mut engine = match synth_core::song_engine::SongEngine::try_from_source(&source.text) {
+    let mut engine = match tatum_core::song_engine::SongEngine::try_from_source(&source.text) {
         Ok(e) => e,
         Err(err) => {
             source.print_errors(&err);
@@ -253,16 +253,16 @@ fn cmd_render(args: &[String]) {
             let rel = 20.0 * (rms.max(1e-6) / loudest).log10();
             let rel_peak = 20.0 * (peak.max(1e-6) / loudest_peak.max(1e-6)).log10();
             let flag = if rms <= 0.0 { "  SILENT" } else if rel < -30.0 { "  buried" } else { "" };
-            let band = engine.track_dominant_band(i).map_or("-", |b| synth_core::analysis::BAND_NAMES[b]);
+            let band = engine.track_dominant_band(i).map_or("-", |b| tatum_core::analysis::BAND_NAMES[b]);
             eprintln!("  {:<12} {:>6.3} {:>8.4} {:>+8.1} {:>+8.1} {:>6.1} {:>5.0}%  {}{}",
                 engine.track_name(i), peak, rms, rel, rel_peak,
-                synth_core::analysis::crest(peak, rms),
+                tatum_core::analysis::crest(peak, rms),
                 engine.track_width(i) * 100.0, band, flag);
         }
         for i in 0..engine.bus_count() {
             let (p, rms) = (engine.bus_peak(i), engine.bus_rms(i));
             eprintln!("  bus {:<8} {:>6.3} {:>8.4} {:>8} {:>8} {:>6.1}",
-                engine.bus_name(i), p, rms, "", "", synth_core::analysis::crest(p, rms));
+                engine.bus_name(i), p, rms, "", "", tatum_core::analysis::crest(p, rms));
         }
     }
     // Where two tracks are in each other's way. Balance is visible in the
@@ -270,7 +270,7 @@ fn cmd_render(args: &[String]) {
     // told apart however well their levels are set, and reading a column of
     // `mid` does not make that jump out.
     {
-        use synth_core::analysis::BAND_NAMES;
+        use tatum_core::analysis::BAND_NAMES;
         let mut lines = Vec::new();
         for (b, name) in BAND_NAMES.iter().enumerate() {
             let mut here: Vec<(String, f32)> = (0..engine.track_count())
@@ -305,10 +305,10 @@ fn cmd_render(args: &[String]) {
             let mut rows: Vec<(String, u32, f32)> = Vec::new();
             let mut at = 0usize;
             for (name, bars, bpm) in &sections {
-                let spb = (synth_core::SAMPLE_RATE * 60.0 / bpm * beats_per_bar) as usize;
+                let spb = (tatum_core::SAMPLE_RATE * 60.0 / bpm * beats_per_bar) as usize;
                 let end = (at + spb * *bars as usize).min(out_l.len());
                 if at >= end { break }
-                let (_, rms) = synth_core::analysis::peak_rms(&out_l[at..end], &out_r[at..end]);
+                let (_, rms) = tatum_core::analysis::peak_rms(&out_l[at..end], &out_r[at..end]);
                 rows.push(((*name).to_string(), *bars, 20.0 * rms.max(1e-6).log10()));
                 at = end;
             }
@@ -333,10 +333,10 @@ fn cmd_render(args: &[String]) {
     // free on the peak meter because the limiter catches it, and the punch
     // leaves with the transients.
     let (in_peak, in_rms) = engine.master_input_peak_rms();
-    let (out_peak, out_rms) = synth_core::analysis::peak_rms(&out_l, &out_r);
+    let (out_peak, out_rms) = tatum_core::analysis::peak_rms(&out_l, &out_r);
     let (crest_in, crest_out) = (
-        synth_core::analysis::crest(in_peak, in_rms),
-        synth_core::analysis::crest(out_peak, out_rms),
+        tatum_core::analysis::crest(in_peak, in_rms),
+        tatum_core::analysis::crest(out_peak, out_rms),
     );
     if crest_in > 0.0 {
         let change = 20.0 * (crest_out / crest_in).log10();
@@ -355,7 +355,7 @@ fn cmd_render(args: &[String]) {
 }
 
 fn write_wav_stereo(path: &str, samples_l: &[f32], samples_r: &[f32], sample_rate: u32) {
-    let bytes = synth_core::wav::encode_stereo_16(samples_l, samples_r, sample_rate);
+    let bytes = tatum_core::wav::encode_stereo_16(samples_l, samples_r, sample_rate);
     fs::write(path, bytes).expect("Failed to write WAV file");
 }
 

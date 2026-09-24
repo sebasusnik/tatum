@@ -1,6 +1,6 @@
 mod test_helpers;
 
-use synth_core::song_engine::SongEngine;
+use tatum_core::song_engine::SongEngine;
 
 const EXAMPLE_SONG: &str = r#"
 # ── Globals ──

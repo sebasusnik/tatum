@@ -2,9 +2,9 @@
 //! gain compensation, and the choice-name round trip that keeps `lfo_sync`
 //! honest when options are added.
 
-use synth_core::dsl::{self, compiler};
-use synth_core::params::{self, ModuleKind};
-use synth_core::song_engine::SongEngine;
+use tatum_core::dsl::{self, compiler};
+use tatum_core::params::{self, ModuleKind};
+use tatum_core::song_engine::SongEngine;
 
 const SONG: &str = r#"
 tempo 120
@@ -91,7 +91,7 @@ fn every_choice_name_decodes_to_its_own_index() {
     // the module decode tables in step with the registry.
     for kind in ModuleKind::ALL {
         for spec in params::specs(kind) {
-            if let synth_core::params::Range::Choice(names) = spec.range {
+            if let tatum_core::params::Range::Choice(names) = spec.range {
                 for (i, name) in names.iter().enumerate() {
                     let v = spec.value_from_name(name).expect("resolves");
                     assert_eq!(spec.choice_name(v), Some(*name), "{:?}.{} option {} ({})", kind, spec.name, i, name);
@@ -134,8 +134,8 @@ fn registry_defaults_match_what_a_fresh_module_does() {
     // The diff engine restores the registry default when a param line is
     // deleted, so a registry default that differs from the module's own
     // constructor would change the sound on an unrelated edit.
-    use synth_core::Module;
-    use synth_core::modules::fm::{FmModule, FmParam};
+    use tatum_core::Module;
+    use tatum_core::modules::fm::{FmModule, FmParam};
     let spec = params::lookup(ModuleKind::Fm, "level").unwrap();
     let render = |set_default: bool| {
         let mut m = FmModule::new();
@@ -161,8 +161,8 @@ fn registry_defaults_match_what_a_fresh_module_does() {
 /// every one of the thirteen read `makeup` as dB when it is a linear gain.
 #[test]
 fn no_example_lets_the_master_chain_eat_its_transients() {
-    use synth_core::analysis;
-    use synth_core::song_engine::SongEngine;
+    use tatum_core::analysis;
+    use tatum_core::song_engine::SongEngine;
 
     let mut offenders = Vec::new();
     for entry in std::fs::read_dir("../examples").unwrap() {

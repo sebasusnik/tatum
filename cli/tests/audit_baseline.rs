@@ -69,11 +69,11 @@ fn text(line: &str, key: &str) -> Option<String> {
 fn measure() -> BTreeMap<Key, Entry> {
     let mut out = BTreeMap::new();
     for song in SONGS {
-        let res = Command::new(env!("CARGO_BIN_EXE_synth"))
+        let res = Command::new(env!("CARGO_BIN_EXE_tatum"))
             .current_dir(root())
             .args(["audit", song, "--json"])
             .output()
-            .expect("run synth audit");
+            .expect("run tatum audit");
         let stdout = String::from_utf8_lossy(&res.stdout);
         assert!(
             stdout.contains("\"tracks\""),
@@ -110,7 +110,7 @@ fn write_baseline(m: &BTreeMap<Key, Entry>) -> String {
          # bell however clean both are. Each one is only comparable to itself.\n\
          #\n\
          # Regenerate, and then READ THE DIFF:\n\
-         #   UPDATE_AUDIT_BASELINE=1 cargo test --release -p synth-cli --test audit_baseline\n\
+         #   UPDATE_AUDIT_BASELINE=1 cargo test --release -p tatum-cli --test audit_baseline\n\
          #\n\
          # song  track  median_db  [effect db]...\n",
     );
@@ -207,7 +207,7 @@ fn the_corpus_still_measures_the_way_it_did() {
         moved.is_empty(),
         "the audit measures these differently now:\n  {}\n\n\
          If the commit meant to change how they sound, regenerate and read the diff:\n  \
-         UPDATE_AUDIT_BASELINE=1 cargo test --release -p synth-cli --test audit_baseline",
+         UPDATE_AUDIT_BASELINE=1 cargo test --release -p tatum-cli --test audit_baseline",
         moved.join("\n  ")
     );
 }

@@ -3,8 +3,8 @@
 //! unit must be an error, not a number that happens to land in range —
 //! `makeup=4` meaning +12 dB got past validation in all fourteen uses.
 
-use synth_core::dsl;
-use synth_core::params::{self, ModuleKind};
+use tatum_core::dsl;
+use tatum_core::params::{self, ModuleKind};
 
 fn param(src: &str, module: &str, name: &str) -> f32 {
     let ast = dsl::parse(src).unwrap_or_else(|e| panic!("{:?}", e));

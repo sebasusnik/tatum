@@ -5,8 +5,8 @@
 //! early. Nothing in the suite noticed, because every test checked that
 //! something sounded and none checked when. These check when.
 
-use synth_core::song_engine::SongEngine;
-use synth_core::SAMPLE_RATE;
+use tatum_core::song_engine::SongEngine;
+use tatum_core::SAMPLE_RATE;
 
 const RIG: &str = r#"
 tempo 120

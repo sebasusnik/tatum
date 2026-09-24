@@ -1,11 +1,11 @@
 //! Techno Robot — DSL replica of `song_techno_robot.rs`.
 //!
-//! Run with: cargo test -p synth-core --test techno_robot -- --nocapture
+//! Run with: cargo test -p tatum-core --test techno_robot -- --nocapture
 //! Output:   core/test_output/techno_robot.wav
 
 mod test_helpers;
 
-use synth_core::song_engine::SongEngine;
+use tatum_core::song_engine::SongEngine;
 use test_helpers::{write_wav_stereo, output_path};
 
 /// Section map of the arrangement, in bars: (name, start_bar, end_bar).

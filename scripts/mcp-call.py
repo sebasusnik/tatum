@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Call one synth-mcp tool over stdio and print its text result.
+"""Call one tatum-mcp tool over stdio and print its text result.
 
 Usage:
-  scripts/mcp-call.py synth_docs
-  scripts/mcp-call.py synth_params '{"module":"fm"}'
-  scripts/mcp-call.py synth_examples '{"name":"acid_arp"}'
-  scripts/mcp-call.py synth_check --source-file song.synth
-  scripts/mcp-call.py synth_render --source-file song.synth '{"output":"out.wav"}'
+  scripts/mcp-call.py tatum_docs
+  scripts/mcp-call.py tatum_params '{"module":"fm"}'
+  scripts/mcp-call.py tatum_examples '{"name":"acid_arp"}'
+  scripts/mcp-call.py tatum_check --source-file song.synth
+  scripts/mcp-call.py tatum_render --source-file song.synth '{"output":"out.wav"}'
 """
 import json, os, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BIN = os.path.join(ROOT, "target", "release", "synth-mcp")
+BIN = os.path.join(ROOT, "target", "release", "tatum-mcp")
 
 def main():
     args = sys.argv[1:]

@@ -1,9 +1,9 @@
-use synth_core::modules::bass::{BassModule, BassParam};
-use synth_core::modules::fm::{FmModule, FmParam};
-use synth_core::modules::keys::{KeysModule, KeysParam};
-use synth_core::modules::beats::{BeatsModule, BeatsParam};
-use synth_core::{Module, SAMPLE_RATE, BLOCK_SIZE};
-use synth_core::math;
+use tatum_core::modules::bass::{BassModule, BassParam};
+use tatum_core::modules::fm::{FmModule, FmParam};
+use tatum_core::modules::keys::{KeysModule, KeysParam};
+use tatum_core::modules::beats::{BeatsModule, BeatsParam};
+use tatum_core::{Module, SAMPLE_RATE, BLOCK_SIZE};
+use tatum_core::math;
 
 fn analyze(name: &str, samples: &[f32]) {
     let max_val = samples.iter().fold(0.0f32, |a, &b| a.max(math::abs(b)));
