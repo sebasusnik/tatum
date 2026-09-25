@@ -354,6 +354,93 @@ When the source is re-evaluated while playing (`tatum watch`, or the browser):
 - Two saves inside one bar are fine: a value edit made while a swap is queued lands on
   the engine that takes over.
 
+## MIDI: knobs, keys and pads
+
+A `midi` block puts a controller onto the song: its knobs and faders, its keys and its
+pads. `tatum play` and `tatum watch` read every MIDI input (`--midi <name>` picks one,
+`--list-midi` shows them), except ports that speak Mackie Control (MCU, HUI or DAW in
+the name), where a note is a transport button rather than music.
+
+### Knobs and faders
+
+A knob moves its target at once, with no save and no swap:
+
+```
+midi {
+    cc 74 > acid cutoff        # <module> <param>
+    cc 71 > acid resonance
+    cc 7  > pad level          # <track> level, or every track that plays <module>
+    cc 10 > pad pan
+    cc 20 > bass lp wet        # <track> <node> wet: an effect switched in and out
+    cc 21 > pad voice_mode     # a choice steps through its options
+    cc 22 > reverb_mix         # also delay_mix, and reverb_freeze on a pad
+    cc 74 > pad level          # one controller can move several things
+}
+```
+
+The target is written the way `auto` writes one, and resolves the same way: a name that
+is a track wins over a module of the same name, and a module parameter reaches every
+track that plays the module. A target that does not exist is a compile error on its
+line, so `tatum check` catches a knob that would do nothing on stage.
+
+The knob's travel is the parameter's own range from the registry: a 0..1 parameter
+spans it, pan runs from hard left to hard right, a choice gives each option an equal
+stretch, and a gain spans up to its maximum. A **track `level` is the exception**: the
+top of a fader is `level 1.0`, not the +12 dB a level can be written up to, so full
+travel is as loud as the file would have it at full. While a knob turns, the terminal
+shows what it reads in its units (`acid cutoff 1.2khz`, `pad level -6.0 dB`). A knob
+that nothing is mapped to shows its number instead (`cc 74 = 90 (not mapped)`), which
+is how you find what your controller sends.
+
+Knobs and the text share the values:
+
+- **The last hand wins.** A save keeps every knob where it was left, including one
+  that rebuilds the engine. Editing a knob's target in the text is the exception: the
+  edit plays, until the knob is touched again.
+- **The first touch jumps.** A knob whose physical position does not match the sound
+  moves the sound to where the knob is.
+- **A scene's `auto` beats a knob** on the same target while the scene plays, because
+  the sweep writes its value continuously.
+
+### Keys and pads
+
+```
+midi {
+    keys > solo                # the keyboard plays track solo
+    cc 1 > lead vibrato_depth  # the mod strip is a knob like any other
+    pad 36 > kick kick         # <track> <drum>
+    pad 37 > perc snare
+}
+```
+
+The keys play a track's instrument: its sound, its insert chain and its fader. A track
+at `level 0` does not sound what you play, the same as it does not sound its pattern.
+Give the track a pattern of rests (`pattern rest { -*16 }`) and only the keys play it;
+give it a real one and you play over it. A `bass` module plays one note at a time and
+slides between held keys at its `glide` rate; letting go of the newest key falls back
+to the one still held under it, the way a monosynth answers a keyboard. `keys` and
+`fm` modules play chords.
+
+The pitch strip bends whatever the keys play, up to two semitones each way. The mod
+strip sends controller 1, so `cc 1 > ...` puts it on anything a knob can move.
+
+A pad hits one drum of a `beats` track: `kick`, `snare`, `clap`, `hat`, `openhat`,
+`tom`, `tom2`, `tom3` or `crash`, as loud as it is struck. It sounds at once, not
+snapped to the grid.
+
+Pads and the low keys send the same note numbers. What tells them apart is the
+channel: pads send on channel 10, the drum channel of General MIDI, and everything
+else is keys. A pad or a key that nothing is mapped to shows its number while you play
+(`pad 44 (not mapped)`).
+
+### Everything else
+
+`render` ignores the block, so a song with a `midi` block renders exactly as one
+without. Remapping while watching takes effect on save, without rebuilding anything.
+A later `midi` block replaces what an earlier one said about the same knob, the keys
+or the same pad, and leaves the rest, so a set step that `use`s a rig can remap one
+of its knobs.
+
 ## Redefinition
 
 A later definition of the same name replaces the earlier one, in place. This

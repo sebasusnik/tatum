@@ -217,6 +217,7 @@ impl Parser {
             scenes: Vec::new(),
             arrangement: Vec::new(),
             grooves: Vec::new(),
+            midi: Vec::new(),
         };
 
         loop {
@@ -245,6 +246,11 @@ impl Parser {
                 Token::Ident(ref name) if name == "groove" => {
                     self.advance();
                     self.parse_groove(&mut song.grooves);
+                }
+                // `midi {` would otherwise read as a bus chain named midi.
+                Token::Ident(ref name) if name == "midi" && matches!(self.peek_ahead(1), Token::LBrace) => {
+                    self.advance();
+                    self.parse_midi(&mut song.midi);
                 }
                 // `delay key=value ...` / `reverb key=value ...` configure the global sends.
                 // `reverb {` is still a bus chain, so only take this path on `ident =`.
@@ -1530,6 +1536,104 @@ impl Parser {
 
         self.expect(&Token::RBrace);
         grooves.push(GrooveDef { name, lanes });
+    }
+
+    // ── MIDI ──
+    // midi {
+    //     cc 74 > acid cutoff      a knob or a fader
+    //     keys > solo              the keyboard plays a track
+    //     pad 36 > kick kick       a pad hits one drum of a track
+    // }
+
+    /// A later block replaces what an earlier one said about the same knob,
+    /// the keys or the same pad, and leaves the rest alone -- the redefinition
+    /// rule the rest of the language follows, so a set step can remap one
+    /// knob of the rig it `use`s. Inside one block, a source named twice
+    /// moves both targets.
+    fn parse_midi(&mut self, maps: &mut Vec<MidiMapDef>) {
+        if !self.expect(&Token::LBrace) { return; }
+        let mut block: Vec<MidiMapDef> = Vec::new();
+        loop {
+            self.skip_newlines();
+            if self.at_block_end() { break; }
+            let line = self.span().line;
+            let word = match self.peek() {
+                Token::Ident(w) if w == "cc" || w == "keys" || w == "pad" => w.clone(),
+                other => {
+                    let s = self.span().clone();
+                    self.errors.push(ParseError {
+                        line: s.line, col: s.col,
+                        message: format!(
+                            "midi: expected `cc <number> > <target>`, `keys > <track>` or `pad <note> > <track> <drum>`, got {}",
+                            describe_token(other)),
+                    });
+                    self.recover_to_line_end();
+                    continue;
+                }
+            };
+            self.advance();
+            let source = if word == "keys" {
+                MidiSource::Keys
+            } else {
+                let what = if word == "cc" { "a controller number" } else { "a pad's note" };
+                match self.peek().clone() {
+                    Token::Number(n) if (0.0..=127.0).contains(&n) && (n as u8) as f32 == n => {
+                        self.advance();
+                        if word == "cc" { MidiSource::Cc(n as u8) } else { MidiSource::Pad(n as u8) }
+                    }
+                    other => {
+                        let s = self.span().clone();
+                        self.errors.push(ParseError {
+                            line: s.line, col: s.col,
+                            message: format!("midi: {} is a whole number from 0 to 127, got {}", what, describe_token(&other)),
+                        });
+                        self.recover_to_line_end();
+                        continue;
+                    }
+                }
+            };
+            if !self.expect(&Token::Arrow) {
+                self.recover_to_line_end();
+                continue;
+            }
+            // The target runs to the end of the line, in the words `auto`
+            // takes. The start of another mapping ends it, so several can
+            // share a line.
+            let mut words: Vec<String> = Vec::new();
+            loop {
+                let word = match self.peek() {
+                    Token::Ident(w) if (w == "cc" || w == "pad") && matches!(self.peek_ahead(1), Token::Number(_)) => break,
+                    Token::Ident(w) if w == "keys" && matches!(self.peek_ahead(1), Token::Arrow) => break,
+                    Token::Ident(w) => w.clone(),
+                    Token::Level => String::from("level"),
+                    Token::Pan => String::from("pan"),
+                    Token::Velocity => String::from("velocity"),
+                    Token::Mix => String::from("mix"),
+                    Token::Master => String::from("master"),
+                    _ => break,
+                };
+                self.advance();
+                words.push(word);
+            }
+            if words.is_empty() {
+                let s = self.span().clone();
+                let example = match source {
+                    MidiSource::Cc(_) => "`acid cutoff` or `pad level`",
+                    MidiSource::Keys => "a track, like `solo`",
+                    MidiSource::Pad(_) => "a track and a drum, like `kick kick`",
+                };
+                self.errors.push(ParseError {
+                    line: s.line, col: s.col,
+                    message: format!("midi: {} needs a target after `>`: {}", word, example),
+                });
+                self.recover_to_line_end();
+                continue;
+            }
+            block.push(MidiMapDef { source, target: words.join("."), line });
+        }
+        self.expect(&Token::RBrace);
+        maps.retain(|m| !block.iter().any(|b| b.source == m.source));
+        maps.extend(block);
     }
 
     // ── Bus chain ──

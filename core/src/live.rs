@@ -33,9 +33,13 @@ use alloc::vec::Vec;
 use crate::dsl::ast::{ChainNode, Song};
 use crate::dsl::compiler::CompiledSong;
 use crate::dsl::diff::{self, DslChange};
+use crate::midi;
 use crate::params::{self, ModuleKind, ParamId};
 use crate::song_engine::{DslError, SongEngine};
 use crate::BLOCK_SIZE;
+
+/// How far the pitch strip bends the keys, each way.
+pub const BEND_SEMITONES: f32 = 2.0;
 
 /// Length of the fade-out applied to what the old engine still owns after a
 /// swap. About 12 ms: long enough to hide a cut voice, short enough not to
@@ -61,6 +65,18 @@ pub enum FastOp {
     /// Switch one node of a track's insert chain in or out, or anywhere
     /// between. The node is already built; only how much of it is heard moves.
     NodeWet { track: usize, node: usize, wet: f32 },
+    /// Wet level of the global returns, 0..1. Only a knob sends these: in the
+    /// text they are per-scene values, which a swap carries.
+    ReverbMix(f32),
+    DelayMix(f32),
+    ReverbFreeze(bool),
+    /// A note from the keyboard or a pad, on the instrument a track plays.
+    /// Only ever sent as [`Plan::Play`].
+    NoteOn { track: usize, note: u8, velocity: f32 },
+    NoteOff { track: usize, note: u8 },
+    /// The pitch strip: every note on the instrument, by `ratio` of its
+    /// frequency.
+    PitchBend { instrument: usize, ratio: f32 },
 }
 
 /// What a new engine takes over from the one it replaces, by index in the new
@@ -109,6 +125,18 @@ pub enum Plan {
         generation: Generation,
         inherit: Vec<(Generation, Inherit)>,
     },
+    /// One value from a knob, for the engine of generation `base`: the one
+    /// playing or the one queued behind it. A single op and no `Vec`, because
+    /// a knob sends these many times a second and whatever the plan owns is
+    /// freed on the audio thread.
+    Control { base: Generation, op: FastOp },
+    /// A note, for the engine of generation `base` if and only if it is the
+    /// one playing when the plan lands. The planner sends one per engine it
+    /// knows of, resolved against each, so whichever is playing takes it --
+    /// even when a swap lands between the key going down and the plan
+    /// arriving -- and a queued engine never holds a note that would start
+    /// sounding at the bar line.
+    Play { base: Generation, op: FastOp },
 }
 
 impl Plan {
@@ -117,8 +145,20 @@ impl Plan {
             Plan::Unchanged => "unchanged",
             Plan::Fast { .. } => "fast",
             Plan::Swap { .. } => "swap",
+            Plan::Control { .. } => "control",
+            Plan::Play { .. } => "play",
         }
     }
+}
+
+/// What turning one knob asks of the player, and what to show for it.
+pub struct KnobTurn {
+    /// One per operation per engine: the one playing, and the one queued to
+    /// take over at the next bar if there is one, so the value survives it.
+    pub plans: Vec<Plan>,
+    /// `acid cutoff 1.2khz`, one per line in the `midi` block that names the
+    /// controller. Empty when nothing is mapped to it.
+    pub readings: Vec<String>,
 }
 
 /// A song the planner knows the player has (or will have) an engine for.
@@ -133,18 +173,55 @@ struct Known {
     track_instruments: Vec<usize>,
     tracks: Vec<String>,
     buses: Vec<String>,
+    /// The `as` names in each track's insert chain.
+    track_nodes: Vec<Vec<Option<String>>>,
+    /// The `midi` block resolved against this engine. Re-resolved whenever
+    /// the text changes, which needs only the names above, so remapping a
+    /// knob takes effect at once instead of waiting for a swap.
+    controls: midi::Controls,
 }
 
 impl Known {
     fn new(generation: Generation, ast: Song, engine: &SongEngine) -> Self {
-        Self {
+        let mut known = Self {
             generation,
             ast,
             instruments: (0..engine.instrument_count()).map(|i| String::from(engine.instrument_name(i))).collect(),
             track_instruments: (0..engine.track_count()).map(|i| engine.track_instrument(i).unwrap_or(usize::MAX)).collect(),
             tracks: (0..engine.track_count()).map(|i| String::from(engine.track_name(i))).collect(),
             buses: (0..engine.bus_count()).map(|i| String::from(engine.bus_name(i))).collect(),
-        }
+            track_nodes: (0..engine.track_count())
+                .map(|i| engine.track_node_labels(i).map(|l| l.map(String::from)).collect())
+                .collect(),
+            controls: midi::Controls::default(),
+        };
+        known.resolve_controls();
+        known
+    }
+
+    fn set_ast(&mut self, ast: Song) {
+        self.ast = ast;
+        self.resolve_controls();
+    }
+
+    fn resolve_controls(&mut self) {
+        let names = midi::Names {
+            instruments: &self.instruments,
+            tracks: &self.tracks,
+            track_instruments: &self.track_instruments,
+            track_nodes: &self.track_nodes,
+        };
+        self.controls = midi::resolve_all(&self.ast, &names);
+    }
+
+    /// Everything controller `cc` does to this engine at `value`.
+    fn knob_ops(&self, cc: u8, value: u8) -> impl Iterator<Item = FastOp> + '_ {
+        self.controls.knobs.iter().filter(move |k| k.cc == cc).flat_map(move |k| k.ops(value))
+    }
+
+    /// The pitch strip at `ratio`, on every instrument the keys play.
+    fn bend_ops(&self, ratio: f32) -> impl Iterator<Item = FastOp> + '_ {
+        self.controls.keys.iter().map(move |k| FastOp::PitchBend { instrument: k.instrument, ratio })
     }
 }
 
@@ -153,6 +230,17 @@ pub struct LivePlanner {
     running: Option<Known>,
     pending: Option<Known>,
     next_generation: Generation,
+    /// Where each knob that has been turned was left, by controller number.
+    /// The last hand wins: a save that rebuilds the engine keeps these, and
+    /// editing a knob's target in the text drops it, so the edit plays.
+    knob_values: Vec<(u8, u8)>,
+    /// Keys held down, oldest first, with the velocity each was struck at.
+    /// A mono instrument plays the newest; letting it go falls back to the
+    /// one before it, which is how a monosynth answers a keyboard.
+    held: Vec<(u8, f32)>,
+    /// Where the pitch strip is, as a frequency ratio. Kept like a knob
+    /// value, so an engine built mid-bend starts bent.
+    bend: f32,
 }
 
 impl Default for LivePlanner {
@@ -161,18 +249,162 @@ impl Default for LivePlanner {
 
 impl LivePlanner {
     pub fn new() -> Self {
-        Self { running: None, pending: None, next_generation: 1 }
+        Self {
+            running: None,
+            pending: None,
+            next_generation: 1,
+            knob_values: Vec::new(),
+            held: Vec::new(),
+            bend: 1.0,
+        }
+    }
+
+    /// A queued swap that the player reports as landed becomes what runs.
+    fn catch_up(&mut self, playing: Generation) {
+        if self.pending.as_ref().is_some_and(|p| p.generation == playing) {
+            self.running = self.pending.take();
+        }
+    }
+
+    /// Whether the song being played maps any controller.
+    pub fn has_knobs(&self) -> bool {
+        self.pending.as_ref().or(self.running.as_ref()).is_some_and(|k| !k.ast.midi.is_empty())
+    }
+
+    /// The engines a live event is resolved against: the one playing and
+    /// the one queued behind it.
+    fn known(&self) -> impl Iterator<Item = &Known> {
+        self.running.iter().chain(self.pending.iter())
+    }
+
+    /// A key on the keyboard went down (`velocity` above zero) or up. `None`
+    /// when the song maps no keys.
+    pub fn key(&mut self, note: u8, velocity: u8, playing: Generation) -> Option<Vec<Plan>> {
+        self.catch_up(playing);
+        if self.known().all(|k| k.controls.keys.is_empty()) {
+            return None;
+        }
+        let velocity = velocity.min(127) as f32 / 127.0;
+        // Where the mono instruments were before this key, and after it.
+        let before = self.held.last().copied();
+        self.held.retain(|(n, _)| *n != note);
+        if velocity > 0.0 {
+            self.held.push((note, velocity));
+        }
+        let after = self.held.last().copied();
+
+        let mut plans = Vec::new();
+        for known in self.known() {
+            for keys in &known.controls.keys {
+                let track = keys.track;
+                let mut play = |op| plans.push(Plan::Play { base: known.generation, op });
+                if !keys.mono {
+                    play(if velocity > 0.0 {
+                        FastOp::NoteOn { track, note, velocity }
+                    } else {
+                        FastOp::NoteOff { track, note }
+                    });
+                    continue;
+                }
+                match (before, after) {
+                    // The key that sounds did not change: a key under it
+                    // went up, or went down under a newer one. Nothing.
+                    (b, a) if b.map(|x| x.0) == a.map(|x| x.0) => {}
+                    // A newer key, or back to the one before: the bass
+                    // glides there if a note is still sounding.
+                    (_, Some((n, v))) => play(FastOp::NoteOn { track, note: n, velocity: v }),
+                    (Some((n, _)), None) => play(FastOp::NoteOff { track, note: n }),
+                    (None, None) => {}
+                }
+            }
+        }
+        Some(plans)
+    }
+
+    /// A pad on the drum channel was hit. `None` when nothing is mapped to
+    /// it. Pads only strike: a drum is a hit, not a held note.
+    pub fn pad(&mut self, note: u8, velocity: u8, playing: Generation) -> Option<Vec<Plan>> {
+        self.catch_up(playing);
+        if !self.known().any(|k| k.controls.pads.iter().any(|p| p.note == note)) {
+            return None;
+        }
+        let velocity = velocity.min(127) as f32 / 127.0;
+        let mut plans = Vec::new();
+        if velocity > 0.0 {
+            for known in self.known() {
+                for pad in known.controls.pads.iter().filter(|p| p.note == note) {
+                    plans.push(Plan::Play {
+                        base: known.generation,
+                        op: FastOp::NoteOn { track: pad.track, note: pad.drum, velocity },
+                    });
+                }
+            }
+        }
+        Some(plans)
+    }
+
+    /// The pitch strip moved to `value`, 14 bits with 8192 at rest. It bends
+    /// the keys by up to two semitones either way. Sent like a knob, to the
+    /// engine playing and the one queued, since it is a position rather than
+    /// an event.
+    pub fn bend(&mut self, value: u16, playing: Generation) -> Vec<Plan> {
+        self.catch_up(playing);
+        let semitones = (value.min(16383) as f32 - 8192.0) / 8192.0 * BEND_SEMITONES;
+        self.bend = crate::math::pow(2.0, semitones / 12.0);
+        let mut plans = Vec::new();
+        for known in self.known() {
+            for op in known.bend_ops(self.bend) {
+                plans.push(Plan::Control { base: known.generation, op });
+            }
+        }
+        plans
+    }
+
+    /// Controller `cc` moved to `value` (0..127). Returns a plan per
+    /// operation for the engine that plays and for the one queued behind it,
+    /// and what the knob now reads. A controller nothing is mapped to returns
+    /// nothing and is not remembered.
+    pub fn knob(&mut self, cc: u8, value: u8, playing: Generation) -> KnobTurn {
+        self.catch_up(playing);
+        let mut turn = KnobTurn { plans: Vec::new(), readings: Vec::new() };
+        let Some(latest) = self.pending.as_ref().or(self.running.as_ref()) else { return turn };
+        turn.readings = latest.controls.knobs.iter()
+            .filter(|k| k.cc == cc && !k.moves.is_empty())
+            .map(|k| k.reading(value))
+            .collect();
+        if turn.readings.is_empty() {
+            return turn;
+        }
+        for known in self.known() {
+            for op in known.knob_ops(cc, value) {
+                turn.plans.push(Plan::Control { base: known.generation, op });
+            }
+        }
+        match self.knob_values.iter_mut().find(|(c, _)| *c == cc) {
+            Some(slot) => slot.1 = value,
+            None => self.knob_values.push((cc, value)),
+        }
+        turn
+    }
+
+    /// Forget the knobs whose target the text now writes differently.
+    fn forget_edited_knobs(&mut self, new: &Song) {
+        let Some(latest) = self.pending.as_ref().or(self.running.as_ref()) else { return };
+        let edited: Vec<u8> = latest.controls.knobs.iter()
+            .filter(|k| midi::text_value(&latest.ast, &k.target) != midi::text_value(new, &k.target))
+            .map(|k| k.cc)
+            .collect();
+        self.knob_values.retain(|(cc, _)| !edited.contains(cc));
     }
 
     /// Plan how to get the player from what it has to `source`. `playing` is
     /// the generation the player reports right now ([`LivePlayer::generation`]);
     /// it tells the planner whether a queued swap has landed.
     pub fn plan(&mut self, source: &str, playing: Generation) -> Result<Plan, DslError> {
-        if self.pending.as_ref().is_some_and(|p| p.generation == playing) {
-            self.running = self.pending.take();
-        }
+        self.catch_up(playing);
         let ast = crate::dsl::parse(source).map_err(DslError::Parse)?;
         let compiled = crate::dsl::compiler::compile(&ast).map_err(DslError::Compile)?;
+        self.forget_edited_knobs(&ast);
 
         let latest = self.pending.as_mut().or(self.running.as_mut());
         if let Some(latest) = latest {
@@ -182,7 +414,7 @@ impl LivePlanner {
             let changes = diff::diff(&latest.ast, &ast);
             if !diff::has_structural_change(&changes) {
                 if let Some(ops) = resolve_fast(&changes, &ast, &compiled, &latest.instruments) {
-                    latest.ast = ast;
+                    latest.set_ast(ast);
                     return Ok(Plan::Fast { base: latest.generation, ops });
                 }
             }
@@ -190,8 +422,18 @@ impl LivePlanner {
 
         let generation = self.next_generation;
         self.next_generation += 1;
-        let engine = Box::new(SongEngine::from_compiled(compiled));
+        let mut engine = Box::new(SongEngine::from_compiled(compiled));
         let known = Known::new(generation, ast, &engine);
+        // The new engine starts where the knobs were left, not where the
+        // text puts them, so a save does not undo what the hands did.
+        for &(cc, value) in &self.knob_values {
+            for op in known.knob_ops(cc, value) {
+                apply_op(&mut engine, op);
+            }
+        }
+        for op in known.bend_ops(self.bend) {
+            apply_op(&mut engine, op);
+        }
         let mut inherit = Vec::with_capacity(2);
         for old in self.running.iter().chain(self.pending.iter()) {
             inherit.push((old.generation, inherit_map(old, &known)));
@@ -349,6 +591,11 @@ pub enum Applied {
     /// The plan was made against an engine the player no longer has. The
     /// caller re-plans; this is never silently dropped.
     Stale,
+    /// A knob value, applied. One against an engine that has since been
+    /// replaced lands here too and is dropped on purpose: the planner puts
+    /// every knob's value into each engine it builds, so there is nothing to
+    /// lose.
+    Control,
 }
 
 /// The inherit maps an engine carries, each tagged with the generation it was
@@ -434,6 +681,24 @@ impl LivePlayer {
                     }
                     None => Applied::Stale,
                 }
+            }
+            Plan::Control { base, op } => {
+                let target = if self.generation == base {
+                    self.engine.as_deref_mut()
+                } else {
+                    match self.pending.as_mut() {
+                        Some((e, g, _)) if *g == base => Some(e.as_mut()),
+                        _ => None,
+                    }
+                };
+                if let Some(engine) = target { apply_op(engine, op); }
+                Applied::Control
+            }
+            Plan::Play { base, op } => {
+                if base == self.generation {
+                    if let Some(engine) = self.engine.as_deref_mut() { apply_op(engine, op); }
+                }
+                Applied::Control
             }
             Plan::Swap { engine, generation, inherit } => {
                 if let Some((e, _, m)) = self.pending.take() {
@@ -550,5 +815,11 @@ fn apply_op(engine: &mut SongEngine, op: FastOp) {
         FastOp::ModuleParam { instrument, id, value } => {
             engine.set_module_param_id(instrument, id, value);
         }
+        FastOp::ReverbMix(mix) => engine.set_reverb_mix(mix),
+        FastOp::DelayMix(mix) => engine.set_delay_mix(mix),
+        FastOp::ReverbFreeze(on) => engine.set_reverb_freeze(on),
+        FastOp::NoteOn { track, note, velocity } => engine.live_note_on(track, note, velocity),
+        FastOp::NoteOff { track, note } => engine.live_note_off(track, note),
+        FastOp::PitchBend { instrument, ratio } => engine.set_pitch_bend(instrument, ratio),
     }
 }

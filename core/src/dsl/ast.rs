@@ -17,6 +17,33 @@ pub struct Song {
     pub scenes: Vec<SceneDef>,
     pub arrangement: Vec<ArrangeEntry>,
     pub grooves: Vec<GrooveDef>,
+    /// `midi { cc 74 > acid cutoff }`: which controller moves what. Read by a
+    /// live session and ignored by a render.
+    pub midi: Vec<MidiMapDef>,
+}
+
+/// One line of a `midi { }` block. The target is stored joined with dots, the
+/// way an `auto` target is: `acid.cutoff`, `pad.level`, `warm.ph.wet`,
+/// `reverb_mix` for a knob, a track name for the keys, `kick.kick` for a pad.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MidiMapDef {
+    pub source: MidiSource,
+    pub target: String,
+    /// Source line, for compile errors.
+    pub line: usize,
+}
+
+/// What on the controller a `midi` line listens to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MidiSource {
+    /// `cc 74 > acid cutoff`: a knob or a fader.
+    Cc(u8),
+    /// `keys > solo`: every note that is not on the drum channel, and the
+    /// pitch bend with them.
+    Keys,
+    /// `pad 36 > kick kick`: one note on the drum channel, channel 10, which
+    /// is where General MIDI puts drums and where pads send.
+    Pad(u8),
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -71,6 +71,17 @@ impl SongInstrument {
         }
     }
 
+    /// Bend every note the instrument plays by `ratio` of its frequency. A
+    /// graph instrument or a drum kit has nothing to bend.
+    fn set_pitch_bend(&mut self, ratio: f32) {
+        match self {
+            Self::Bass(m) => m.pitch_bend_ratio = ratio,
+            Self::Fm(m) => m.pitch_bend_ratio = ratio,
+            Self::Keys(m) => m.pitch_bend_ratio = ratio,
+            Self::Graph(_) | Self::Beats(_) => {}
+        }
+    }
+
     fn note_off(&mut self, note: u8) {
         match self {
             Self::Graph(inst) => inst.note_off(note),
@@ -2582,6 +2593,58 @@ impl SongEngine {
     pub fn set_node_wet(&mut self, track_idx: usize, node_idx: usize, wet: f32) -> bool {
         self.tracks.get_mut(track_idx)
             .is_some_and(|t| t.insert_fx.set_wet(node_idx, wet))
+    }
+
+    /// The `as` name of each node in a track's insert chain, in chain order;
+    /// `None` for a node nobody named.
+    pub fn track_node_labels(&self, track_idx: usize) -> impl Iterator<Item = Option<&str>> {
+        self.tracks.get(track_idx).into_iter()
+            .flat_map(|t| t.fx_labels.iter().map(|l| l.as_ref().map(|l| l.as_str())))
+    }
+
+    /// A note played from outside the pattern -- a key, a pad -- on the
+    /// instrument track `track_idx` plays. A muted track does not sound it,
+    /// the same as its own pattern: bring the fader up to hear what you play.
+    pub fn live_note_on(&mut self, track_idx: usize, note: u8, velocity: f32) {
+        if track_idx >= self.tracks.len() { return; }
+        let inst = self.trigger_instrument(track_idx);
+        if let Some(i) = self.instruments.get_mut(inst) {
+            i.note_on(note, velocity.clamp(0.0, 1.0));
+        }
+    }
+
+    /// Release a note played with [`Self::live_note_on`]. Reaches the
+    /// instrument even on a muted track, so a note held while the fader
+    /// came down still lets go.
+    pub fn live_note_off(&mut self, track_idx: usize, note: u8) {
+        let Some(inst) = self.tracks.get(track_idx).map(|t| t.instrument_idx) else { return };
+        if let Some(i) = self.instruments.get_mut(inst) {
+            i.note_off(note);
+        }
+    }
+
+    /// Bend instrument `inst_idx` by `ratio` of its frequency (1.0 is none).
+    pub fn set_pitch_bend(&mut self, inst_idx: usize, ratio: f32) {
+        if let Some(i) = self.instruments.get_mut(inst_idx) {
+            i.set_pitch_bend(ratio);
+        }
+    }
+
+    /// Wet level of the global reverb return, 0..1 of what `reverb` sets up.
+    /// The same value `reverb_mix =` and `auto reverb_mix` write, so a scene
+    /// that sets it takes over again when it starts.
+    pub fn set_reverb_mix(&mut self, mix: f32) {
+        self.reverb_wet_level = mix.clamp(0.0, 1.0);
+    }
+
+    /// Wet level of the global delay return, like [`Self::set_reverb_mix`].
+    pub fn set_delay_mix(&mut self, mix: f32) {
+        self.delay_wet_level = mix.clamp(0.0, 1.0);
+    }
+
+    /// Hold the reverb tail: no decay and no new input while frozen.
+    pub fn set_reverb_freeze(&mut self, frozen: bool) {
+        self.send_reverb.set_freeze(frozen);
     }
 
     pub fn set_track_gate(&mut self, track_idx: usize, gate: f32) {

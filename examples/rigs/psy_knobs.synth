@@ -1,0 +1,264 @@
+# psy_knobs — the hitech_psy rig as an instrument for a KeyLab Essential 49 mk3
+#
+# A beat and a rolling bass that loop for as long as you play. The acid line,
+# the sub and the psychedelic texture are loaded and waiting at the bottom of
+# their faders: push one up and it comes in on the grid.
+#
+#   tatum watch examples/rigs/psy_knobs.synth
+#
+# The keys play a solo on the acid sound: one note at a time, sliding when you
+# hold one key and press the next. The pitch strip bends it, the mod strip
+# gives it vibrato. The pads play drums on top of the beat:
+#
+#   top row       open hat   tom        tom 2      crash
+#   bottom row    kick       clap       snare      hat
+#
+#   knobs, left to right              faders, left to right
+#     bass filter                       kick
+#     bass resonance                    clap
+#     bass squelch (filter envelope)    hats
+#     bass length                       bass
+#     bass echo, in and out             sub           (starts down)
+#     acid filter (line and solo)       acid line     (starts down)
+#     kick length                       psyche        (starts down)
+#     hat length                        reverb amount
+#     acid resonance (line and solo)    echo amount
+#
+# A knob or fader jumps the sound to where it physically is the first time you
+# touch it. The knobs are endless and the KeyLab counts them from zero when it
+# powers up, so a knob nobody has turned yet starts from the bottom. Saving the
+# file keeps everything where your hands left it.
+#
+# The numbers below are what this KeyLab sent, read off its MIDI port with the
+# knobs and faders taken left to right.
+
+tempo 155
+meter 4/4
+scale E minor
+sidechain 0.65
+humanize 0.02 timing 0.005
+
+reverb size=0.6 damp=0.4 predelay=20
+delay sync=dotted_eighth feedback=0.4 filter=0.5
+
+# ── Sounds, from hitech_psy ─────────────────────────────────────────────────
+
+module bass psy {
+    cutoff 0.08
+    cutoff_env 0.75
+    resonance 0.62
+    glide 0.02
+    keytrack 0.5
+    osc1_wave saw
+    osc2_pitch 0.506
+    attack 0.0
+    decay 0.06
+    sustain 0.35
+    release 0.02
+}
+
+module bass sub {
+    cutoff 0.04
+    cutoff_env 0.05
+    resonance 0.08
+    osc1_wave saw
+    osc2_pitch 0.50
+    attack 0.001
+    decay 0.12
+    sustain 0.92
+    release 0.03
+}
+
+module bass acid_lead {
+    cutoff 0.08
+    cutoff_env 0.80
+    resonance 0.75
+    glide 0.04
+    keytrack 0.6
+    osc1_wave saw
+    osc2_pitch 0.507
+    attack 0.001
+    decay 0.08
+    sustain 0.30
+    release 0.03
+    lfo_rate 0.06
+    lfo_depth 0.12
+    lfo_target cutoff
+}
+
+# The solo: the acid sound with vibrato for the mod strip, which the acid line
+# does not have, so bending the solo leaves the line alone.
+module bass solo_lead {
+    cutoff 0.08
+    cutoff_env 0.80
+    resonance 0.75
+    glide 0.05
+    keytrack 0.6
+    osc1_wave saw
+    osc2_pitch 0.507
+    attack 0.001
+    decay 0.08
+    sustain 0.30
+    release 0.03
+    lfo_rate 0.06
+    lfo_depth 0.12
+    lfo_target cutoff
+    vibrato_rate 5.5hz
+    vibrato_depth 0
+}
+
+module fm psyche {
+    algorithm pair_plus_two
+    mod_index 0.65
+    feedback 0.48
+    waveform sine
+    op0_ratio 0.065
+    op1_ratio 0.042
+    op2_ratio 0.13
+    op3_ratio 0.097
+    op0_envelope 0.5 0.6 0.40 0.8
+    op1_envelope 0.3 0.4 0.50 0.6
+    op2_envelope 0.4 0.5 0.45 0.7
+    op3_envelope 0.2 0.3 0.55 0.5
+    op0_feedback 0.40
+    op2_feedback 0.45
+    lfo_rate 0.08
+    lfo_depth 0.22
+    lfo_target mod_index
+    lfo_waveform triangle
+}
+
+module beats psy_kit {
+    kick_level 0.9
+    kick_click 0.70
+    kick_decay 0.10
+    kick_pitch 0.46
+    kick_drive 0.70
+    snare_level 0.40
+    snare_decay 0.10
+    snare_pitch 0.32
+    snare_drive 0.60
+    snare_snap 0.15
+    hihat_level 1.6
+    hihat_pitch 0.70
+    hihat_pan 0.22
+    hihat_decay 0.22
+    clap_level 0.70
+}
+
+# ── Parts ───────────────────────────────────────────────────────────────────
+
+pattern kicks { kick: X - - -  X - - -  X - - -  X - - - }
+pattern claps { clap: - - - -  X - - -  - - - -  X - - - }
+pattern hats {
+    hat:     x:0.68 x:0.34 x:0.77 x:0.51  -  x:0.59 x:0.34 x:0.68  x:0.68 x:0.34 x:0.77 x:0.51  -  x:0.59 x:0.34 x:0.68
+    openhat: -      -      -      -       -  -      x:0.51 -       -      -      -      -       -  -      x:0.51 -
+}
+
+# The psy roll: silent where the kick lands, three sixteenths after it, and a
+# step down to the fifth at the end of the bar.
+pattern roll {
+    -  1.1:0.80  1.1:0.55  1.1:0.62
+    -  1.1:0.78  1.1:0.52  1.1:0.60
+    -  1.1:0.80  1.1:0.55  1.1:0.62
+    -  1.1:0.78  1.1:0.52  5.0:0.64
+}
+
+pattern sub_pulse {
+    1.0:0.78  ..  -  -
+    -         -   ..  -
+    1.0:0.72  ..  -  -
+    -         -   -  -
+}
+
+pattern acid_riff {
+    1.2:0.70  -  1.2:0.45  -
+    5.1:0.62  -  -         -
+    1.2:0.65  -  1.2:0.42  -
+    5.1:0.58  -  -         -
+}
+
+# Nothing: the keys and the pads play these tracks.
+pattern rest { -*16 }
+
+pattern psyche_swirl {
+    [1.2 5.2]:0.28  ..*15
+}
+
+# ── Tracks ──────────────────────────────────────────────────────────────────
+
+# The kit is three tracks, one fader each, glued back together by the chain
+# the whole kit had in hitech_psy.
+bus drums
+drums { in > saturate(0.18) > eq(low=1.0, mid=0.5, high=2.6)
+           > compressor(-8, ratio=4, attack=1, release=15, makeup=1) > master }
+
+track kick  { play kicks using psy_kit velocity 1.0 level 0.69 out > drums }
+track clap  { play claps using psy_kit velocity 1.0 level 0.69 reverb_send 0.15 out > drums }
+track hats  { play hats using psy_kit velocity 1.0 level 0.69 pan 0.12 delay_send 0.06 out > drums }
+# The pads' snare, toms and crash.
+track perc  { play rest using psy_kit velocity 1.0 level 0.69 out > drums }
+
+track bass  { play roll using psy velocity 1.0 level 0.58 gate 0.30 sidechain 0.25
+              out > saturate(0.35) > eq(low=1.0, mid=1.4, high=0.90)
+                  > compressor(-10, ratio=3, attack=1, release=12, makeup=1)
+                  > delay(1/8, 0.35, wet=0) as echo > master }
+
+# The keyboard's.
+track solo  { play rest using solo_lead level 0.5 pan -0.1 sidechain 0.15 delay_send 0.25 reverb_send 0.12
+              out > saturate(0.18) > eq(low=0.6, mid=1.2, high=1.1) > master }
+
+# Waiting at the bottom of their faders.
+track sub    { play sub_pulse using sub level 0 sidechain 0.60 gate 0.90 out > lowpass(350) > master }
+track acid   { play acid_riff using acid_lead level 0 gate 0.45 pan 0.18 delay_send 0.20 reverb_send 0.10
+               out > saturate(0.18) > eq(low=0.6, mid=1.2, high=1.1) > master }
+track psyche { play psyche_swirl using psyche level 0 pan 0.34 delay_send 0.18 reverb_send 0.30 out > master }
+
+master {
+    in > eq(low=1.1, mid=1.0, high=0.95)
+       > compressor(-6, ratio=2.0, attack=5, release=50, makeup=4.00)
+       > limiter
+       > out
+}
+
+# ── The KeyLab ──────────────────────────────────────────────────────────────
+
+midi {
+    # knobs
+    cc 74 > psy cutoff
+    cc 71 > psy resonance
+    cc 76 > psy cutoff_env
+    cc 77 > psy decay
+    cc 93 > bass echo wet
+    cc 18 > acid_lead cutoff
+    cc 18 > solo_lead cutoff
+    cc 19 > psy_kit kick_decay
+    cc 16 > psy_kit hihat_decay
+    cc 17 > acid_lead resonance
+    cc 17 > solo_lead resonance
+
+    # faders
+    cc 73 > kick level
+    cc 75 > clap level
+    cc 79 > hats level
+    cc 72 > bass level
+    cc 80 > sub level
+    cc 81 > acid level
+    cc 82 > psyche level
+    cc 83 > reverb_mix
+    cc 85 > delay_mix
+
+    # keys and strips
+    keys > solo
+    cc 1  > solo_lead vibrato_depth
+
+    # pads: bottom row, then top row
+    pad 36 > kick kick
+    pad 37 > clap clap
+    pad 38 > perc snare
+    pad 39 > hats hat
+    pad 40 > hats openhat
+    pad 41 > perc tom
+    pad 42 > perc tom2
+    pad 43 > perc crash
+}

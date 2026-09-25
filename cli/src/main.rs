@@ -1,6 +1,7 @@
 mod audit;
 mod include;
 mod live;
+mod midi;
 mod set;
 mod resample;
 
@@ -40,10 +41,10 @@ USAGE:
     tatum render <song.synth> [-o output.wav] [--bars N]
     tatum check <song.synth>
     tatum params [bass|fm|keys|beats|track|fx] [--json]
-    tatum play <song.synth> [--device <name>] [--rate <hz>]
+    tatum play <song.synth> [--device <name>] [--rate <hz>] [--midi <name>]
     tatum set render <dir> [-o out.wav] | set check <dir> | set next <dir> <file>
     tatum audit <song.synth> [--bars N] [--json] [--strict]
-    tatum watch <song.synth> [--device <name>] [--rate <hz>]
+    tatum watch <song.synth> [--device <name>] [--rate <hz>] [--midi <name>]
 
 COMMANDS:
     render    Parse, compile, and render a .synth file to WAV
@@ -56,6 +57,10 @@ COMMANDS:
               playing. --list-devices shows the output devices. The engine runs
               at 44.1 kHz; a device that only offers another rate (Bluetooth:
               48 kHz) gets the output resampled. --rate forces the device rate.
+              A MIDI controller plays the song through its `midi {{ }}` block:
+              knobs and faders on parameters, the keys on a track, the pads on
+              drums. Every MIDI input is read unless --midi names one;
+              --list-midi shows them.
     audit     Render every tonal track on its own and dry, and report per
               note how much of its energy is NOT at a harmonic of the note
               the pattern asked for. Two comparisons come out of that: a note

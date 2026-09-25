@@ -9,4 +9,5 @@ path = "src/main.rs"
 
 [dependencies]
 cpal = "0.18"
+midir = "0.11.0"
 tatum-core = { path = "../core" }
