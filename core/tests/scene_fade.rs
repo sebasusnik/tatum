@@ -1,8 +1,11 @@
-//! A track the next scene drops fades out over 10 ms instead of stopping dead.
+//! A track the next scene drops fades out over 10 ms instead of stopping dead,
+//! and one it keeps glides to its new level rather than jumping.
 //!
 //! Stopping dead cut the wave to zero wherever it was in its cycle, and that
 //! step is a click: `tatum debug` found one on nearly every section change of
-//! `hitech_psy`, on every pad, drone and lead that did not carry over.
+//! `hitech_psy`, on every pad, drone and lead that did not carry over. A
+//! level, pan or send that jumped was the same step, smaller, and it was
+//! the only click left in `detroit`.
 
 use tatum_core::song_engine::SongEngine;
 
@@ -43,4 +46,39 @@ fn a_dropped_track_fades_instead_of_stopping_dead() {
     // Over about ten milliseconds, starting on the bar line.
     let bar = l.len() / 2;
     assert!(end > bar + 300 && end < bar + 600, "faded from {bar} to {end}");
+}
+
+const REBALANCED: &str = r#"
+tempo 120
+scale C major
+gain_comp 0
+
+module keys pad { cutoff 0.8 sustain 1.0 attack 1ms release 0.8 }
+
+pattern hold { 1.3 .. .. ..  .. .. .. ..  .. .. .. ..  .. .. .. .. }
+
+track pad { play hold using pad out > master }
+
+scene loud  { track pad { play hold using pad level 1.0 } }
+scene quiet { track pad { play hold using pad level 0.2 } }
+arrange { loud x1 quiet x1 }
+"#;
+
+/// How loud `l` is against `reference` over `from..to`.
+fn against(l: &[f32], reference: &[f32], from: usize, to: usize) -> f32 {
+    let sum = |x: &[f32]| x[from..to].iter().map(|v| v.abs()).sum::<f32>();
+    sum(l) / sum(reference)
+}
+
+#[test]
+fn a_kept_track_glides_to_its_new_level() {
+    let (l, _) = SongEngine::from_source(REBALANCED).unwrap().render(2);
+    // The same song with the level left where it was.
+    let steady = REBALANCED.replace("level 0.2", "level 1.0");
+    let (reference, _) = SongEngine::from_source(&steady).unwrap().render(2);
+    let bar = l.len() / 2;
+    let start = against(&l, &reference, bar, bar + 16);
+    assert!(start > 0.8, "the level fell to {start:.2} on the first samples of the new scene");
+    let later = against(&l, &reference, bar + 2000, bar + 4000);
+    assert!((later - 0.2).abs() < 0.01, "the level arrived at {later:.3}, not 0.2");
 }

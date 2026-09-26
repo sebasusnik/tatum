@@ -341,6 +341,10 @@ struct TrackPlayback {
     /// This track's own envelope, maintained only when something ducks against it.
     sc_env: f32,
     is_sc_source: bool,
+    /// Level, pan and sends as they are heard, gliding to the values above.
+    heard: Heard,
+    /// The sidechain amount as heard, gliding to what the scene asks for.
+    heard_duck: f32,
     /// Every random draw this track makes: velocity humanization and the
     /// probability gate on its drum hits.
     ///
@@ -525,6 +529,9 @@ pub struct SongEngine {
     // Scene effect overrides
     reverb_wet_level: f32,
     delay_wet_level: f32,
+    /// The wet levels as heard, gliding like a track's level does.
+    reverb_wet_heard: f32,
+    delay_wet_heard: f32,
 
     // Automation state
     active_automations: Vec<ActiveAutomation>,
@@ -612,6 +619,61 @@ const SCENE_FADE: u32 = 441;
 impl TrackPlayback {
     /// Playing, or on its way out after a scene dropped it.
     fn sounding(&self) -> bool { self.active || self.leaving > 0 }
+
+    /// Level, pan and sends as the track has them set.
+    fn target(&self) -> Heard {
+        Heard {
+            left: self.level * self.pan_l,
+            right: self.level * self.pan_r,
+            delay: self.delay_send,
+            reverb: self.reverb_send,
+        }
+    }
+}
+
+/// How fast a mix setting follows a change: a 3 ms time constant, so it is
+/// there within 15 ms. A scene that changed a track's level, pan or send, or
+/// the reverb's wet level, used to jump on the first sample of the new
+/// section, and the step in gain was a click `tatum debug` found on the
+/// section changes of every song that rebalanced between them. Level
+/// automation, written once per block, stepped the same way.
+const GLIDE: f32 = 1.0 / 132.0;
+
+/// Move `now` one sample closer to `to`.
+fn glide(now: &mut f32, to: f32) -> f32 {
+    *now += (to - *now) * GLIDE;
+    *now
+}
+
+/// Close enough to its target to stop gliding. Without the snap the gap
+/// shrinks into denormals, which are slow.
+fn settle(now: &mut f32, to: f32) {
+    if (to - *now).abs() < 1e-6 { *now = to; }
+}
+
+/// A track's gains into the mix: level times pan for each side, and its sends.
+#[derive(Clone, Copy, Default)]
+struct Heard {
+    left: f32,
+    right: f32,
+    delay: f32,
+    reverb: f32,
+}
+
+impl Heard {
+    fn glide(&mut self, to: &Heard) {
+        glide(&mut self.left, to.left);
+        glide(&mut self.right, to.right);
+        glide(&mut self.delay, to.delay);
+        glide(&mut self.reverb, to.reverb);
+    }
+
+    fn settle(&mut self, to: &Heard) {
+        settle(&mut self.left, to.left);
+        settle(&mut self.right, to.right);
+        settle(&mut self.delay, to.delay);
+        settle(&mut self.reverb, to.reverb);
+    }
 }
 
 /// The arpeggiator holds at most this many notes (chord notes x octaves).
@@ -951,6 +1013,13 @@ impl SongEngine {
                     sc_source: None,
                     sc_env: 0.0,
                     is_sc_source: false,
+                    heard: Heard {
+                        left: t.level * pan_l,
+                        right: t.level * pan_r,
+                        delay: t.delay_send,
+                        reverb: t.reverb_send,
+                    },
+                    heard_duck: 0.0,
                 }
             })
             .collect();
@@ -1047,6 +1116,8 @@ impl SongEngine {
             kick_track_idx,
             reverb_wet_level: 1.0,
             delay_wet_level: 1.0,
+            reverb_wet_heard: 1.0,
+            delay_wet_heard: 1.0,
             // Sized for the busiest scene so the first scene change, which
             // happens on the audio thread, does not grow it.
             active_automations: Vec::with_capacity(
@@ -1115,6 +1186,7 @@ impl SongEngine {
         }
         // Snap gain compensation so the first block starts at the correct level
         self.gain_comp_current = self.gain_comp_target;
+        self.snap_mix();
 
         for track in self.tracks.iter_mut() {
             track.current_step = 0;
@@ -1180,6 +1252,7 @@ impl SongEngine {
 
         // Activate scene tracks: each scene track reconfigures the top-level
         // track slot with the same name (never by position).
+        let global_duck = self.sidechain_amount;
         for st in scene.tracks.iter() {
             if let Some(i) = self.track_names.iter().position(|n| n == &st.name) {
                 // The scene names a module; this track's own copy of it plays.
@@ -1188,6 +1261,9 @@ impl SongEngine {
                     .copied()
                     .unwrap_or(st.instrument_idx);
                 let tp = &mut self.tracks[i];
+                // Only a track that was already sounding glides to its new
+                // settings; one coming in from silence starts at them.
+                let arriving = !tp.sounding();
                 tp.instrument_idx = inst_idx;
                 tp.pattern_idx = st.pattern_idx;
                 tp.velocity = st.velocity;
@@ -1208,6 +1284,10 @@ impl SongEngine {
                 tp.gate_samples_remaining = 0.0;
                 tp.arp_cfg = st.arp;
                 tp.arp = st.arp.map(|c| make_arp(&c, tempo));
+                if arriving {
+                    tp.heard = tp.target();
+                    tp.heard_duck = if tp.sidechain_amount > 0.0 { tp.sidechain_amount } else { global_duck };
+                }
             }
         }
 
@@ -1688,7 +1768,7 @@ impl SongEngine {
         // Per-track sidechain_amount overrides the global amount when > 0.
         let has_any_sidechain = self.sidechain_amount > 0.0
             || self.reverb_sidechain > 0.0 || self.delay_sidechain > 0.0
-            || self.tracks.iter().any(|t| t.active && t.sidechain_amount > 0.0);
+            || self.tracks.iter().any(|t| t.active && (t.sidechain_amount > 0.0 || t.heard_duck > 0.0));
         let (sc_attack, sc_release) = (self.sc_attack_coeff, self.sc_release_coeff);
         if has_any_sidechain {
             for s in 0..len {
@@ -1715,17 +1795,22 @@ impl SongEngine {
                 for ti in 0..track_count {
                     if !self.tracks[ti].active { continue; }
                     let Some(si) = self.tracks[ti].sc_source else { continue };
-                    let amount = if self.tracks[ti].sidechain_amount > 0.0 {
+                    let target = if self.tracks[ti].sidechain_amount > 0.0 {
                         self.tracks[ti].sidechain_amount
                     } else {
                         self.sidechain_amount
                     };
+                    let amount = glide(&mut self.tracks[ti].heard_duck, target);
                     if amount > 0.0 {
                         let duck = 1.0 - amount * self.tracks[si].sc_env;
                         track_bufs_l[ti][s] *= duck;
                         track_bufs_r[ti][s] *= duck;
                     }
                 }
+            }
+            for t in self.tracks.iter_mut() {
+                let target = if t.sidechain_amount > 0.0 { t.sidechain_amount } else { self.sidechain_amount };
+                if t.sc_source.is_none() { t.heard_duck = target } else { settle(&mut t.heard_duck, target) }
             }
         }
 
@@ -1766,26 +1851,23 @@ impl SongEngine {
                     track_bufs_r[ti][s] *= g;
                 }
             }
-            let gain = self.tracks[ti].level;
-            let pan_l = self.tracks[ti].pan_l;
-            let pan_r = self.tracks[ti].pan_r;
-            let d_send = self.tracks[ti].delay_send;
-            let r_send = self.tracks[ti].reverb_send;
-            if let Some(t) = taps.as_deref_mut() {
-                let (dry, wet) = (&mut t.dry[ti], &mut t.tracks[ti]);
-                for s in 0..len {
-                    dry.l[s] *= gain * pan_l;
-                    dry.r[s] *= gain * pan_r;
-                    wet.l[s] = track_bufs_l[ti][s] * gain * pan_l;
-                    wet.r[s] = track_bufs_r[ti][s] * gain * pan_r;
-                }
-            }
+            let target = self.tracks[ti].target();
+            let mut heard = self.tracks[ti].heard;
+            let mut tap = taps.as_deref_mut().map(|t| (&mut t.dry[ti], &mut t.tracks[ti]));
             for s in 0..len {
+                heard.glide(&target);
+                let (gain_l, gain_r, d_send, r_send) = (heard.left, heard.right, heard.delay, heard.reverb);
+                if let Some((dry, wet)) = tap.as_mut() {
+                    dry.l[s] *= gain_l;
+                    dry.r[s] *= gain_r;
+                    wet.l[s] = track_bufs_l[ti][s] * gain_l;
+                    wet.r[s] = track_bufs_r[ti][s] * gain_r;
+                }
                 // Both channels always: mono sources were copied to R before the
                 // insert chain, and stereo inserts (autopan, chorus) rely on R.
                 let (sample_l, sample_r) = (
-                    track_bufs_l[ti][s] * gain * pan_l,
-                    track_bufs_r[ti][s] * gain * pan_r,
+                    track_bufs_l[ti][s] * gain_l,
+                    track_bufs_r[ti][s] * gain_r,
                 );
                 let t = &mut self.tracks[ti];
                 t.meter_peak = t.meter_peak.max(sample_l.abs()).max(sample_r.abs());
@@ -1822,6 +1904,8 @@ impl SongEngine {
                     output_r[s] += sample_r;
                 }
             }
+            heard.settle(&target);
+            self.tracks[ti].heard = heard;
         }
 
         // Process bus FX chains and mix into master
@@ -1847,14 +1931,15 @@ impl SongEngine {
         }
 
         // Process global send effects (wet-only returns, scaled by wet levels)
-        let dwet = self.delay_wet_level;
-        let rwet = self.reverb_wet_level;
+        let (dwet_to, rwet_to) = (self.delay_wet_level, self.reverb_wet_level);
         // Always tick the sends: their tails must ring out (and freeze must
         // hold) after every track has gone silent.
         let duck_delay = self.delay_sidechain;
         let duck_reverb = self.reverb_sidechain;
         let sc = self.sc_envelope;
         for s in 0..len {
+            let dwet = glide(&mut self.delay_wet_heard, dwet_to);
+            let rwet = glide(&mut self.reverb_wet_heard, rwet_to);
             let (mut dl, mut dr) = self.send_delay.process_stereo_wet(delay_in_l[s], delay_in_r[s]);
             if !self.delay_return.nodes.is_empty() {
                 (dl, dr) = self.delay_return.process_stereo(dl, dr);
@@ -1884,6 +1969,8 @@ impl SongEngine {
                 t.reverb.r[s] = rr * rwet;
             }
         }
+        settle(&mut self.delay_wet_heard, dwet_to);
+        settle(&mut self.reverb_wet_heard, rwet_to);
 
         // Apply master level + gain compensation + master FX chain
         // Smoothing: ~5ms exponential approach to avoid clicks on scene transitions
@@ -2587,6 +2674,18 @@ impl SongEngine {
             track.current_notes_count = 0;
             track.gate_samples_remaining = 0.0;
         }
+        self.snap_mix();
+    }
+
+    /// Put every glide where it is going. Starting, or jumping to a bar, is
+    /// not a change anyone should hear arrive.
+    fn snap_mix(&mut self) {
+        for t in self.tracks.iter_mut() {
+            t.heard = t.target();
+            t.heard_duck = if t.sidechain_amount > 0.0 { t.sidechain_amount } else { self.sidechain_amount };
+        }
+        self.reverb_wet_heard = self.reverb_wet_level;
+        self.delay_wet_heard = self.delay_wet_level;
     }
 
     pub fn global_step(&self) -> usize { self.global_step }
@@ -2647,6 +2746,7 @@ impl SongEngine {
         self.current_bar = bar;
         self.global_step = bar * self.steps_per_bar;
         self.gain_comp_current = self.gain_comp_target;
+        self.snap_mix();
 
         for track in self.tracks.iter_mut() {
             track.current_step = 0;

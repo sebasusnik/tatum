@@ -306,6 +306,12 @@ top level is a compile error, and so is an unknown override. Tracks the scene do
 mention are silent for its duration. `auto` runs over the scene's whole length in the
 arrangement and its targets are validated: the module and parameter must exist.
 
+On a scene change, a track the new scene drops fades out over 10 ms. A track it keeps
+glides to its new level, pan, sends and sidechain amount, and so do `reverb_mix` and
+`delay_mix`, arriving within about 15 ms. The same glide smooths `auto ... level` and a
+fader moved live. A rebalance between sections is heard as a change of balance, not a
+click on the bar line.
+
 ## Livecoding semantics
 
 A song without `scene` and `arrange` is a live set: its tracks loop for as long as it
