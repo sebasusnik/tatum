@@ -202,6 +202,7 @@ pub struct CompiledGroove {
     pub lanes: Vec<CompiledGrooveLane>,
 }
 
+#[derive(Clone)]
 pub struct CompiledSong {
     pub globals: Globals,
     pub instruments: Vec<CompiledInstrumentKind>,

@@ -44,6 +44,8 @@ struct Stats {
 }
 
 pub fn cmd(args: &[String], watch: bool) {
+    let mut args = args.to_vec();
+    let isolation = crate::debug::take_isolation(&mut args);
     let verb = if watch { "watch" } else { "play" };
     let mut path: Option<&str> = None;
     let mut device: Option<&str> = None;
@@ -97,7 +99,7 @@ pub fn cmd(args: &[String], watch: bool) {
         eprintln!("usage: tatum {} <song.synth> [--device <name>] [--midi <name>]", verb);
         std::process::exit(1);
     };
-    if let Err(msg) = run(path, watch, device, rate, midi) {
+    if let Err(msg) = run(path, watch, device, rate, midi, isolation) {
         eprintln!("error: {}", msg);
         std::process::exit(1);
     }
@@ -176,9 +178,22 @@ fn open_device(wanted: Option<&str>) -> Result<cpal::Device, String> {
     }
 }
 
-fn run(path: &str, watch: bool, device_name: Option<&str>, forced_rate: Option<u32>, midi_name: Option<&str>) -> Result<(), String> {
+fn run(
+    path: &str,
+    watch: bool,
+    device_name: Option<&str>,
+    forced_rate: Option<u32>,
+    midi_name: Option<&str>,
+    isolation: tatum_core::dsl::isolate::Isolation,
+) -> Result<(), String> {
     let mut source = Source::load(std::path::Path::new(path))?;
+    if !isolation.is_empty() {
+        // Checked once, so a misspelt name stops here instead of silencing
+        // everything. Later saves keep the same names.
+        crate::debug::compile_or_exit(&source, &isolation);
+    }
     let mut planner = LivePlanner::new();
+    planner.isolate(isolation);
     let mut player = LivePlayer::new();
     match planner.plan(&source.text, player.generation()) {
         Ok(plan) => { player.apply(plan); }

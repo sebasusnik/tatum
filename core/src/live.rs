@@ -241,6 +241,8 @@ pub struct LivePlanner {
     /// Where the pitch strip is, as a frequency ratio. Kept like a knob
     /// value, so an engine built mid-bend starts bent.
     bend: f32,
+    /// `--solo`/`--mute`, applied to every version of the file as it is read.
+    isolation: crate::dsl::isolate::Isolation,
 }
 
 impl Default for LivePlanner {
@@ -256,6 +258,7 @@ impl LivePlanner {
             knob_values: Vec::new(),
             held: Vec::new(),
             bend: 1.0,
+            isolation: Default::default(),
         }
     }
 
@@ -397,12 +400,20 @@ impl LivePlanner {
         self.knob_values.retain(|(cc, _)| !edited.contains(cc));
     }
 
+    /// Keep these tracks out of everything planned from now on. Set it before
+    /// the first `plan`: it is part of what the file means, so changing it
+    /// later shows up as an edit on the next save.
+    pub fn isolate(&mut self, isolation: crate::dsl::isolate::Isolation) {
+        self.isolation = isolation;
+    }
+
     /// Plan how to get the player from what it has to `source`. `playing` is
     /// the generation the player reports right now ([`LivePlayer::generation`]);
     /// it tells the planner whether a queued swap has landed.
     pub fn plan(&mut self, source: &str, playing: Generation) -> Result<Plan, DslError> {
         self.catch_up(playing);
-        let ast = crate::dsl::parse(source).map_err(DslError::Parse)?;
+        let mut ast = crate::dsl::parse(source).map_err(DslError::Parse)?;
+        self.isolation.apply(&mut ast);
         let compiled = crate::dsl::compiler::compile(&ast).map_err(DslError::Compile)?;
         self.forget_edited_knobs(&ast);
 

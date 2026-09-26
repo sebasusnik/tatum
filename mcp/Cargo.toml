@@ -11,4 +11,5 @@ path = "src/main.rs"
 
 [dependencies]
 tatum-core = { path = "../core" }
+tatum-debug = { path = "../debug" }
 serde_json = "1"

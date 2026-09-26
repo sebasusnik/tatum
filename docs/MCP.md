@@ -12,6 +12,7 @@ songs with the compiler in the loop. Transport is stdio; nothing is sent anywher
 | `tatum_examples` | `name?` | the example list, or one example's source |
 | `tatum_check` | `source` | `ok` plus a summary, or every error with line, column and suggestion |
 | `tatum_render` | `source`, `output?`, `bars?` | the WAV path plus the mix report below |
+| `tatum_debug` | `source`, `solo?`, `mute?`, `bars?` (`"17-24"`), `dry?`, `output?` | the `tatum debug` report and the path of `sheet.png`, every part's spectrogram stacked over the mix, to open and look at; the report names a `zoom.*.png` close-up for the worst moment of each part |
 
 ### The mix report
 

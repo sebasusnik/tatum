@@ -84,7 +84,10 @@ gain, so `makeup=4` is +12 dB: say `makeup=6db` if you mean decibels. Nothing th
 should stay static: pads and leads get an LFO on the filter, vibrato, an `auto` sweep or an \
 arp, plus sends and sidechain against the kick. On `keys`, only `voice_mode poly` holds a chord: \
 unison, octave and fifth stack their voices on one note, so a chord sent to them plays its last \
-note alone.";
+note alone. When something sounds wrong -- a noise, a click, a part you cannot place -- run \
+`tatum_debug`: it renders every track, bus and send return apart and returns a report of clicks \
+and parts that do not go quiet between notes, with the bar of each, plus the path of a PNG \
+with every part's spectrogram stacked over the mix. Open that picture to see where it is.";
 
 fn main() {
     let ctx = Ctx::from_env();
@@ -239,6 +242,23 @@ fn tool_definitions() -> Vec<Value> {
                 "additionalProperties": false
             }
         }),
+        json!({
+            "name": "tatum_debug",
+            "description": "Take a song apart to find where a problem is. One render with every track, bus and send return kept apart, as each sits in the mix. Writes to a directory: sheet.png (every part's spectrogram stacked on one time axis over the mix, bar and section lines, clicks marked in cyan, parts that do not go quiet between notes marked in yellow), one PNG and WAV per part, report.txt. Also zoom.<part>.click.png / zoom.<part>.not-quiet.png: the worst moment of a part up close, 80 ms of wave (a click is a visible step) over half a second of spectrum. Returns the report: per part its peak and level, the clicks (sudden corners in the wave that are not a note starting) with the bar of the loudest and how many fall on a section change, the gaps where a track should have gone quiet and did not (hiss or a tone), the mix per section (each part's level against the loudest track, buried tracks, and pairs of parts level with each other on top of the same frequency range for most of a section, with the range and the sections; sheet.png has a matching crowded strip), parts with a lot of energy below 25 Hz (a note pitched too low, an FM ratio under 1) or, on tonal tracks, above 16 kHz (aliasing, clipping), and parts with DC. Open sheet.png with your image reader to look. Use solo/mute to isolate, bars to zoom in on a passage (the picture gets finer), dry to add each track before its insert chain.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "source": { "type": "string", "description": "Full .synth source text" },
+                    "solo": { "type": "array", "items": { "type": "string" }, "description": "Keep only these tracks (the kick still drives the sidechain)." },
+                    "mute": { "type": "array", "items": { "type": "string" }, "description": "Take these tracks out." },
+                    "bars": { "type": "string", "description": "\"16\" for the first 16 bars, \"17-24\" for bars 17 to 24. Default: the whole song." },
+                    "dry": { "type": "boolean", "description": "Also keep each track before its insert chain." },
+                    "output": { "type": "string", "description": "Directory to write into. Default: <render dir>/debug/<song name>." }
+                },
+                "required": ["source"],
+                "additionalProperties": false
+            }
+        }),
     ]
 }
 
@@ -254,6 +274,7 @@ fn call_tool(ctx: &Ctx, params: &Value) -> Result<Value, (i64, String)> {
         "tatum_examples" => tool_examples(ctx, &args),
         "tatum_check" => tool_check(&args),
         "tatum_render" => tool_render(ctx, &args),
+        "tatum_debug" => tool_debug(ctx, &args),
         other => return Err((-32602, format!("unknown tool: {}", other))),
     };
     Ok(match outcome {
@@ -385,6 +406,33 @@ fn pretty(json_text: &str) -> String {
     serde_json::from_str::<Value>(json_text)
         .map(|v| serde_json::to_string_pretty(&v).unwrap())
         .unwrap_or_else(|_| json_text.to_string())
+}
+
+fn tool_debug(ctx: &Ctx, args: &Value) -> Result<String, String> {
+    let source = args.get("source").and_then(Value::as_str).ok_or("missing 'source'")?;
+    let names = |key: &str| -> Vec<String> {
+        args.get(key).and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect())
+            .unwrap_or_default()
+    };
+    let isolation = tatum_debug::Isolation { solo: names("solo"), mute: names("mute") };
+    let song = tatum_core::dsl::isolate::compile(source, &isolation).map_err(|e| pretty(&e.to_json()))?;
+    let slug = slug_from_source(source);
+    let dir = args.get("output").and_then(Value::as_str).map(PathBuf::from)
+        .unwrap_or_else(|| ctx.render_dir.join("debug").join(&slug));
+    let mut opts = tatum_debug::Options::new(dir);
+    opts.dry = args.get("dry").and_then(Value::as_bool).unwrap_or(false);
+    if let Some(b) = args.get("bars") {
+        let text = b.as_str().map(String::from).or_else(|| b.as_u64().map(|n| n.to_string())).unwrap_or_default();
+        let range = match text.split_once('-') {
+            Some((a, b)) => a.trim().parse().ok().zip(b.trim().parse().ok()),
+            None => text.trim().parse().ok().map(|n| (1, n)),
+        };
+        opts.bars = Some(range.filter(|(a, b): &(u32, u32)| *a >= 1 && b >= a)
+            .ok_or("bars: a count (\"16\") or a range (\"17-24\")")?);
+    }
+    let outcome = tatum_debug::run(song, &slug, &isolation, &opts)?;
+    Ok(format!("{}\nsheet: {}\n", outcome.report, outcome.sheet.display()))
 }
 
 fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
@@ -742,7 +790,7 @@ mod tests {
         assert_eq!(r["result"]["serverInfo"]["name"], "tatum-mcp");
         let r = call(&c, json!({ "jsonrpc": "2.0", "id": "x", "method": "tools/list" }));
         let names: Vec<&str> = r["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
-        assert_eq!(names, vec!["tatum_docs", "tatum_params", "tatum_examples", "tatum_check", "tatum_render"]);
+        assert_eq!(names, vec!["tatum_docs", "tatum_params", "tatum_examples", "tatum_check", "tatum_render", "tatum_debug"]);
         assert_eq!(r["id"], "x");
     }
 
@@ -792,6 +840,26 @@ mod tests {
         assert_eq!(sections[0]["bars"], 2);
         assert_eq!(sections[1]["scene"], "groove");
         assert!(out.exists());
+    }
+
+    #[test]
+    fn debug_takes_an_example_apart() {
+        let c = ctx();
+        let src = std::fs::read_to_string(c.examples_dir.join("acid_arp.synth")).unwrap();
+        let dir = c.render_dir.join("debug_test");
+        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": { "name": "tatum_debug",
+            "arguments": { "source": src, "output": dir.to_str().unwrap(), "bars": "3-4", "mute": ["drums"] } } }));
+        assert_eq!(r["result"]["isError"], false, "{}", r);
+        let text = r["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("bars 3-4 of 12") && text.contains("muted: drums"), "{}", text);
+        assert!(text.contains("silent, left out: drums"), "{}", text);
+        assert!(text.contains("levels by section") && text.contains("in each other's way"), "{}", text);
+        assert!(dir.join("sheet.png").exists() && dir.join("mix.wav").exists());
+
+        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 11, "method": "tools/call", "params": { "name": "tatum_debug",
+            "arguments": { "source": src, "solo": ["nope"] } } }));
+        assert_eq!(r["result"]["isError"], true);
+        assert!(r["result"]["content"][0]["text"].as_str().unwrap().contains("no track named nope"));
     }
 
     #[test]

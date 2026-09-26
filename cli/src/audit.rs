@@ -40,8 +40,9 @@
 //!     energy is huge is usually just a quiet window; chasing that cost a
 //!     round of edits before the absolute numbers showed it was nothing.
 //!
-//! The FFT below is hand-written because `core` carries no dependencies and
-//! forty lines is cheaper than taking one. Goertzel was tried first — the
+//! The FFT (in `tatum-debug`, shared with `debug`) is hand-written because
+//! `core` carries no dependencies and forty lines is cheaper than taking one.
+//! Goertzel was tried first — the
 //! harmonic frequencies are known in advance, so in principle only those bins
 //! are needed — and it failed: normalising one bin against total power needs
 //! Parseval over the whole spectrum anyway, and every track came back at
@@ -57,51 +58,7 @@ use tatum_core::dsl;
 use tatum_core::dsl::ast::{NoteRef, Song, Step};
 use tatum_core::song_engine::SongEngine;
 use tatum_core::SAMPLE_RATE;
-
-/// Radix-2 FFT, in place, on interleaved (re, im). Forty lines and no
-/// dependency, which `core`'s zero-dependency rule makes the right trade.
-fn fft(re: &mut [f64], im: &mut [f64]) {
-    let n = re.len();
-    debug_assert!(n.is_power_of_two());
-    let mut j = 0usize;
-    for i in 1..n {
-        let mut bit = n >> 1;
-        while j & bit != 0 {
-            j ^= bit;
-            bit >>= 1;
-        }
-        j |= bit;
-        if i < j {
-            re.swap(i, j);
-            im.swap(i, j);
-        }
-    }
-    let mut len = 2;
-    while len <= n {
-        let ang = -2.0 * std::f64::consts::PI / len as f64;
-        let (wr, wi) = (ang.cos(), ang.sin());
-        let mut i = 0;
-        while i < n {
-            let (mut cr, mut ci) = (1.0f64, 0.0f64);
-            for k in 0..len / 2 {
-                let (ur, ui) = (re[i + k], im[i + k]);
-                let (vr, vi) = (
-                    re[i + k + len / 2] * cr - im[i + k + len / 2] * ci,
-                    re[i + k + len / 2] * ci + im[i + k + len / 2] * cr,
-                );
-                re[i + k] = ur + vr;
-                im[i + k] = ui + vi;
-                re[i + k + len / 2] = ur - vr;
-                im[i + k + len / 2] = ui - vi;
-                let nr = cr * wr - ci * wi;
-                ci = cr * wi + ci * wr;
-                cr = nr;
-            }
-            i += len;
-        }
-        len <<= 1;
-    }
-}
+use tatum_debug::fft::fft;
 
 /// How much of this window is NOT at a harmonic of `f0`, in dB.
 ///

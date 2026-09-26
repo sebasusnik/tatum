@@ -100,7 +100,10 @@ impl Source {
             }
             DslError::Compile(errs) => {
                 eprintln!("{}: compile errors:", root);
-                for e in errs { eprintln!("  {}: {}", self.where_is(e.line), e.message); }
+                for e in errs {
+                    // Line 0: an error about the song as a whole, not a place in it.
+                    if e.line == 0 { eprintln!("  {}", e.message) } else { eprintln!("  {}: {}", self.where_is(e.line), e.message) }
+                }
             }
         }
     }

@@ -6,6 +6,7 @@ pub mod compiler;
 pub mod diff;
 pub mod lint;
 pub mod chords;
+pub mod isolate;
 
 use ast::Song;
 use error::ParseResult;

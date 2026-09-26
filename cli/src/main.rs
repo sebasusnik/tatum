@@ -1,4 +1,5 @@
 mod audit;
+mod debug;
 mod include;
 mod live;
 mod midi;
@@ -21,6 +22,7 @@ fn main() {
         "render" => cmd_render(&args[2..]),
         "check" => cmd_check(&args[2..]),
         "audit" => audit::cmd(&args[2..]),
+        "debug" => debug::cmd(&args[2..]),
         "params" => cmd_params(&args[2..]),
         "set" => set::cmd(&args[2..]),
         "play" => live::cmd(&args[2..], false),
@@ -38,12 +40,13 @@ fn print_usage() {
     eprintln!("tatum - DSL-powered synthesizer
 
 USAGE:
-    tatum render <song.synth> [-o output.wav] [--bars N]
+    tatum render <song.synth> [-o output.wav] [--bars N] [--solo a,b] [--mute c]
     tatum check <song.synth>
     tatum params [bass|fm|keys|beats|track|fx] [--json]
     tatum play <song.synth> [--device <name>] [--rate <hz>] [--midi <name>]
     tatum set render <dir> [-o out.wav] | set check <dir> | set next <dir> <file>
     tatum audit <song.synth> [--bars N] [--json] [--strict]
+    tatum debug <song.synth> [--bars N | A-B] [--dry] [-o dir] [--solo a,b] [--mute c]
     tatum watch <song.synth> [--device <name>] [--rate <hz>] [--midi <name>]
 
 COMMANDS:
@@ -71,12 +74,29 @@ COMMANDS:
               another track's. --bars limits how much is rendered, --json
               prints the same numbers for a script, --strict exits 1 if
               anything is reported.
+    debug     Render once with every part kept apart, as it sits in the mix,
+              and write into test_output/debug/<song>/ (or -o): a WAV and a
+              spectrogram per track, bus and send return; sheet.png with all
+              of them stacked on one time axis over the mix; report.txt, which
+              lists clicks (and which fall on a section change), tracks that
+              do not go quiet between notes, energy below 25 Hz and fizz above
+              16 kHz, with the bar each happens at, plus the mix per section:
+              each part's level against the loudest, and which parts sit level
+              with each other on top of the same range (sheet.png shows the
+              same as a crowded strip); and zoom.*.png, the worst moment of
+              each part up close, wave and spectrum. --bars 17-24
+              zooms in; --dry adds each track before its insert chain.
     set       A live set: a directory of numbered .synth files, each the whole
               rig at a moment. `render` walks them with real hot swaps into one
               continuous WAV; `check` validates every step and reports the arc;
               `next` is the gate a proposed step has to pass. How long a step
               holds travels in the file: `# set: bars=32 phase=build energy=5`.
     help      Show this help
+
+    render, play, watch and debug take --solo and --mute with track names
+    (comma-separated, or the flag repeated). A muted track is taken to level 0
+    everywhere, level automation included; a muted kick still drives the
+    sidechain, so what is left pumps the way it does in the mix.
 ");
 }
 
@@ -179,6 +199,8 @@ fn cmd_check(args: &[String]) {
 }
 
 fn cmd_render(args: &[String]) {
+    let mut args = args.to_vec();
+    let isolation = debug::take_isolation(&mut args);
     if args.is_empty() {
         eprintln!("error: missing input file");
         eprintln!("usage: tatum render <song.synth> [-o output.wav] [--bars N]");
@@ -220,13 +242,9 @@ fn cmd_render(args: &[String]) {
 
     eprintln!("loading {}...", path);
 
-    let mut engine = match tatum_core::song_engine::SongEngine::try_from_source(&source.text) {
-        Ok(e) => e,
-        Err(err) => {
-            source.print_errors(&err);
-            process::exit(1);
-        }
-    };
+    let mut engine = tatum_core::song_engine::SongEngine::from_compiled(
+        debug::compile_or_exit(&source, &isolation),
+    );
 
     let render_bars = bars.unwrap_or_else(|| {
         let arr = engine.arrangement_bars();

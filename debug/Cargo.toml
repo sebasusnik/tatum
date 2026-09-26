@@ -1,0 +1,9 @@
+[package]
+name = "tatum-debug"
+version = "0.1.0"
+edition = "2021"
+description = "tatum debug: every part of a song on its own, as audio, spectrograms and a report of what is wrong with it"
+
+[dependencies]
+tatum-core = { path = "../core" }
+png = "0.18"

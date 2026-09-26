@@ -546,7 +546,52 @@ pub struct SongEngine {
     /// ringing is skipped whole. Allocated once, like the buffers above.
     track_silent: Vec<bool>,
 
+    /// What `tatum debug` listens to: every part of the last block on its own.
+    /// `None` unless asked for; see [`Taps`].
+    taps: Option<Box<Taps>>,
+
     running: bool,
+}
+
+/// One block of one signal, both channels.
+#[derive(Clone)]
+pub struct TapBlock {
+    pub l: [f32; BLOCK_SIZE],
+    pub r: [f32; BLOCK_SIZE],
+}
+
+impl TapBlock {
+    const SILENT: TapBlock = TapBlock { l: [0.0; BLOCK_SIZE], r: [0.0; BLOCK_SIZE] };
+
+    fn clear(&mut self, len: usize) {
+        self.l[..len].fill(0.0);
+        self.r[..len].fill(0.0);
+    }
+}
+
+/// Every part of the mix of the last block, kept apart: what each track sends
+/// on after its level and pan, the same track before its insert chain, each
+/// bus after its chain, and the two send returns. The tracks that reach
+/// master, the buses and the returns add up to the mix before the master
+/// level and chain, so a stem is the part as it sits in the mix -- sidechain, bus compression
+/// and all -- not a separate render of it alone.
+///
+/// For offline renders only. The buffers are allocated when the taps are
+/// switched on and the block writes into them in place, but it is still work
+/// the live audio thread has no use for.
+pub struct Taps {
+    /// Samples of the last block, the length every slice below is valid for.
+    pub len: usize,
+    pub tracks: Vec<TapBlock>,
+    /// The instrument alone, before the track's insert chain, at the track's
+    /// level and pan so it can be laid next to `tracks`.
+    pub dry: Vec<TapBlock>,
+    pub buses: Vec<TapBlock>,
+    pub delay: TapBlock,
+    pub reverb: TapBlock,
+    /// Whether the track had a note held at the end of the block. Between
+    /// notes a track should fall silent; this is how the report knows when.
+    pub held: Vec<bool>,
 }
 
 /// The arpeggiator holds at most this many notes (chord notes x octaves).
@@ -1002,6 +1047,7 @@ impl SongEngine {
             track_silent: vec![false; track_buf_count],
             track_bufs_l: vec![[0.0f32; BLOCK_SIZE]; track_buf_count],
             track_bufs_r: vec![[0.0f32; BLOCK_SIZE]; track_buf_count],
+            taps: None,
             running: false,
         };
         engine.retune_fx(tempo);
@@ -1255,6 +1301,27 @@ impl SongEngine {
         self.master_in_samples = 0;
     }
 
+    /// Keep every part of each block apart, for `tatum debug`. See [`Taps`].
+    pub fn set_taps(&mut self, on: bool) {
+        self.taps = on.then(|| Box::new(Taps {
+            len: 0,
+            tracks: vec![TapBlock::SILENT; self.tracks.len()],
+            dry: vec![TapBlock::SILENT; self.tracks.len()],
+            buses: vec![TapBlock::SILENT; self.buses.len()],
+            delay: TapBlock::SILENT,
+            reverb: TapBlock::SILENT,
+            held: vec![false; self.tracks.len()],
+        }));
+    }
+
+    /// The parts of the last block, if [`set_taps`](Self::set_taps) is on.
+    pub fn taps(&self) -> Option<&Taps> { self.taps.as_deref() }
+
+    /// Whether a track goes straight to master, rather than only into a bus.
+    pub fn track_to_master(&self, idx: usize) -> bool {
+        self.tracks.get(idx).is_some_and(|t| t.to_master)
+    }
+
     /// Turn on per-track band analysis. Off by default: it costs nine one-pole
     /// sections per track per sample, which a live audio thread should not pay.
     pub fn set_band_metering(&mut self, on: bool) {
@@ -1440,6 +1507,15 @@ impl SongEngine {
         if !self.running {
             return;
         }
+        let mut taps = self.taps.take();
+        if let Some(t) = taps.as_deref_mut() {
+            t.len = len;
+            for b in t.tracks.iter_mut().chain(t.dry.iter_mut()).chain(t.buses.iter_mut()) {
+                b.clear(len);
+            }
+            t.delay.clear(len);
+            t.reverb.clear(len);
+        }
 
         // Per-track instrument render buffers (L and R), borrowed from the engine so
         // the block allocates nothing. Instruments write the whole slice they are
@@ -1565,6 +1641,10 @@ impl SongEngine {
                     // Mono instrument rendered into L; copy to R
                     track_bufs_r[ti][..len].copy_from_slice(&track_bufs_l[ti][..len]);
                 }
+                if let Some(t) = taps.as_deref_mut() {
+                    t.dry[ti].l[..len].copy_from_slice(&track_bufs_l[ti][..len]);
+                    t.dry[ti].r[..len].copy_from_slice(&track_bufs_r[ti][..len]);
+                }
             }
         }
 
@@ -1648,6 +1728,15 @@ impl SongEngine {
             let pan_r = self.tracks[ti].pan_r;
             let d_send = self.tracks[ti].delay_send;
             let r_send = self.tracks[ti].reverb_send;
+            if let Some(t) = taps.as_deref_mut() {
+                let (dry, wet) = (&mut t.dry[ti], &mut t.tracks[ti]);
+                for s in 0..len {
+                    dry.l[s] *= gain * pan_l;
+                    dry.r[s] *= gain * pan_r;
+                    wet.l[s] = track_bufs_l[ti][s] * gain * pan_l;
+                    wet.r[s] = track_bufs_r[ti][s] * gain * pan_r;
+                }
+            }
             for s in 0..len {
                 // Both channels always: mono sources were copied to R before the
                 // insert chain, and stereo inserts (autopan, chorus) rely on R.
@@ -1698,9 +1787,14 @@ impl SongEngine {
         // and made `capture(start=N)` count processed samples rather than bars,
         // so its window landed on the wrong music. The global sends have always
         // been ticked unconditionally for the same reason.
-        for bus in self.buses.iter_mut() {
+        for (bi, bus) in self.buses.iter_mut().enumerate() {
+            let mut tap = taps.as_deref_mut().and_then(|t| t.buses.get_mut(bi));
             for s in 0..len {
                 let (pl, pr) = bus.fx_chain.process_stereo(bus.buffer[s], bus.buffer_r[s]);
+                if let Some(b) = tap.as_deref_mut() {
+                    b.l[s] = pl;
+                    b.r[s] = pr;
+                }
                 bus.meter_peak = bus.meter_peak.max(math::abs(pl)).max(math::abs(pr));
                 bus.meter_sum_sq += ((pl * pl + pr * pr) * 0.5) as f64;
                 bus.meter_samples += 1;
@@ -1728,6 +1822,10 @@ impl SongEngine {
             }
             output_l[s] += dl * dwet;
             output_r[s] += dr * dwet;
+            if let Some(t) = taps.as_deref_mut() {
+                t.delay.l[s] = dl * dwet;
+                t.delay.r[s] = dr * dwet;
+            }
             let (mut rl, mut rr) = self.send_reverb.process_stereo_in_wet(reverb_in_l[s], reverb_in_r[s]);
             if !self.reverb_return.nodes.is_empty() {
                 (rl, rr) = self.reverb_return.process_stereo(rl, rr);
@@ -1738,6 +1836,10 @@ impl SongEngine {
             }
             output_l[s] += rl * rwet;
             output_r[s] += rr * rwet;
+            if let Some(t) = taps.as_deref_mut() {
+                t.reverb.l[s] = rl * rwet;
+                t.reverb.r[s] = rr * rwet;
+            }
         }
 
         // Apply master level + gain compensation + master FX chain
@@ -1772,6 +1874,12 @@ impl SongEngine {
 
         self.track_bufs_l = track_bufs_l;
         self.track_bufs_r = track_bufs_r;
+        if let Some(t) = taps.as_deref_mut() {
+            for (h, tr) in t.held.iter_mut().zip(self.tracks.iter()) {
+                *h = tr.active && (tr.current_notes_count > 0 || tr.gate_samples_remaining > 0.0);
+            }
+        }
+        self.taps = taps;
     }
 
     /// Schedule a nudged hit. If the queue is full the hit fires now rather than
