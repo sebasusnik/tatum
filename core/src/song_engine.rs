@@ -315,6 +315,11 @@ struct TrackPlayback {
     current_notes_count: u8,
     gate_samples_remaining: f32,
     active: bool,
+    /// Samples left of the fade a track gets when a scene drops it. Until
+    /// this ran out the track stopped the instant the scene changed, cutting
+    /// its wave to zero mid-cycle, and that was the loudest click in most
+    /// arranged songs: `tatum debug` found it on every section change.
+    leaving: u32,
     stereo_src: bool,        // true if instrument produces native stereo (BeatsModule)
     // Arpeggiator: the pattern supplies held notes, the arp schedules them per sample
     arp: Option<ArpProcessor>,
@@ -360,8 +365,15 @@ fn seed_from_name(name: &str) -> u32 {
     if h == 0 { 1 } else { h }
 }
 
-/// Share of a new peak the follower takes in one sample. The 0.005 ms default
-/// reproduces the 0.99 that used to be hardcoded, which is effectively instant.
+/// Share of a new peak the follower takes in one sample.
+///
+/// The default used to be 0.005 ms, which reproduced an old hardcoded 0.99:
+/// effectively instant. An instant duck halves a sustained pad inside six
+/// samples, and that step is a click on every kick -- `tatum debug` counted
+/// fifty on one drone. One millisecond is too short to hear as a softer pump
+/// and long enough to take the corner off.
+const DEFAULT_SC_ATTACK_MS: f32 = 1.0;
+
 fn attack_alpha(ms: f32) -> f32 {
     let samples = (ms * 0.001 * SAMPLE_RATE).max(0.001);
     1.0 - math::exp(-1.0 / samples)
@@ -592,6 +604,14 @@ pub struct Taps {
     /// Whether the track had a note held at the end of the block. Between
     /// notes a track should fall silent; this is how the report knows when.
     pub held: Vec<bool>,
+}
+
+/// How long a track the new scene drops takes to fade out: 10 ms.
+const SCENE_FADE: u32 = 441;
+
+impl TrackPlayback {
+    /// Playing, or on its way out after a scene dropped it.
+    fn sounding(&self) -> bool { self.active || self.leaving > 0 }
 }
 
 /// The arpeggiator holds at most this many notes (chord notes x octaves).
@@ -918,6 +938,7 @@ impl SongEngine {
                     current_notes_count: 0,
                     gate_samples_remaining: 0.0,
                     active: true,
+                    leaving: 0,
                     stereo_src,
                     arp: t.arp.map(|c| make_arp(&c, tempo)),
                     arp_cfg: t.arp,
@@ -1020,7 +1041,7 @@ impl SongEngine {
             sidechain_amount,
             sc_envelope: 0.0,
             global_sc_source: song.globals.sidechain_source.clone(),
-            sc_attack_coeff: attack_alpha(song.globals.sidechain_attack_ms.unwrap_or(0.005)),
+            sc_attack_coeff: attack_alpha(song.globals.sidechain_attack_ms.unwrap_or(DEFAULT_SC_ATTACK_MS)),
             sc_release_coeff: release_coeff(song.globals.sidechain_release_ms.unwrap_or(4.5)),
             global_sc_idx: None,
             kick_track_idx,
@@ -1149,8 +1170,11 @@ impl SongEngine {
             }
         }
 
-        // Reset to make scene tracks the active set
+        // Reset to make scene tracks the active set. A track the new scene
+        // does not name fades out rather than stopping dead; one it does name
+        // is simply active again below.
         for track in self.tracks.iter_mut() {
+            if track.active { track.leaving = SCENE_FADE; }
             track.active = false;
         }
 
@@ -1178,6 +1202,7 @@ impl SongEngine {
                 tp.stereo_src = inst_idx < self.instruments.len()
                     && matches!(self.instruments[inst_idx], SongInstrument::Beats(_));
                 tp.active = true;
+                tp.leaving = 0;
                 tp.current_step = 0;
                 tp.current_notes_count = 0;
                 tp.gate_samples_remaining = 0.0;
@@ -1632,7 +1657,7 @@ impl SongEngine {
 
         // Render each track's instrument (stereo-aware)
         for ti in 0..track_count {
-            if !self.tracks[ti].active || self.track_silent[ti] { continue; }
+            if !self.tracks[ti].sounding() || self.track_silent[ti] { continue; }
             let inst_idx = self.tracks[ti].instrument_idx;
             if inst_idx < self.instruments.len() {
                 let is_stereo = self.instruments[inst_idx]
@@ -1650,7 +1675,7 @@ impl SongEngine {
 
         // Apply insert FX per track (mono processing applied to both channels)
         for ti in 0..track_count {
-            if !self.tracks[ti].active || self.track_silent[ti] { continue; }
+            if !self.tracks[ti].sounding() || self.track_silent[ti] { continue; }
             if self.tracks[ti].insert_fx.nodes.is_empty() { continue; }
             for s in 0..len {
                 let (fl, fr) = self.tracks[ti].insert_fx.process_stereo(track_bufs_l[ti][s], track_bufs_r[ti][s]);
@@ -1722,7 +1747,25 @@ impl SongEngine {
 
         let band_metering = self.band_metering;
         for ti in 0..track_count {
-            if !self.tracks[ti].active || self.track_silent[ti] { continue; }
+            if !self.tracks[ti].sounding() || self.track_silent[ti] { continue; }
+            // A leaving track fades over the block from where it is; the
+            // fade is linear, which over ten milliseconds is inaudible as a
+            // shape and only removes the corner.
+            let (fade_from, fade_step) = match self.tracks[ti].leaving {
+                0 => (1.0, 0.0),
+                left => {
+                    let n = left.min(len as u32);
+                    self.tracks[ti].leaving -= n;
+                    (left as f32 / SCENE_FADE as f32, 1.0 / SCENE_FADE as f32)
+                }
+            };
+            if fade_step > 0.0 {
+                for s in 0..len {
+                    let g = (fade_from - s as f32 * fade_step).max(0.0);
+                    track_bufs_l[ti][s] *= g;
+                    track_bufs_r[ti][s] *= g;
+                }
+            }
             let gain = self.tracks[ti].level;
             let pan_l = self.tracks[ti].pan_l;
             let pan_r = self.tracks[ti].pan_r;

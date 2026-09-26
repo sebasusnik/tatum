@@ -198,7 +198,12 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
         let k = held_log.partition_point(|(e, _)| *e <= s);
         held_log.get(k).is_some_and(|(_, h)| h[ti])
     };
-    let scans: Vec<Vec<Click>> = parts.iter().map(|p| listen::clicks(&p.frames)).collect();
+    // Not the mix: every click in it is in a part, where it can be told apart
+    // from what surrounds it, and in the mix a drum hit landing on a loud bar
+    // looks like one.
+    let scans: Vec<Vec<Click>> = parts.iter()
+        .map(|p| if p.source == Source::Mix { Vec::new() } else { listen::clicks(&p.frames) })
+        .collect();
     let floors: Vec<Vec<Floor>> = parts.iter().map(|p| match p.source {
         Source::Track(ti) | Source::Dry(ti) if p.tonal => {
             listen::floors(&p.frames, &|f| held(ti, f))

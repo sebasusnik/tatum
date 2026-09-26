@@ -9,21 +9,22 @@
 #   UPDATE_AUDIT_BASELINE=1 cargo test --release -p tatum-cli --test audit_baseline
 #
 # song  track  median_db  [effect db]...
-examples/detroit.synth	bass	-12.24
-examples/detroit.synth	chime	-51.64
-examples/detroit.synth	chords	-3.93
+examples/detroit.synth	bass	-12.25
+examples/detroit.synth	chime	-51.63
+examples/detroit.synth	chords	-3.95
 examples/detroit.synth	shine	-3.46
-examples/detroit.synth	under	-11.48
+examples/detroit.synth	under	-10.89
 examples/liquid_dnb.synth	air	-3.75
-examples/liquid_dnb.synth	glass	-10.82	chorus 11.63
-examples/liquid_dnb.synth	haze	-3.67
-examples/liquid_dnb.synth	lead	-20.62
-examples/liquid_dnb.synth	pad	-3.60
-examples/liquid_dnb.synth	sub	-13.96
+examples/liquid_dnb.synth	glass	-10.93	chorus 11.55
+examples/liquid_dnb.synth	haze	-3.64
+examples/liquid_dnb.synth	lead	-21.24
+examples/liquid_dnb.synth	pad	-3.65
+examples/liquid_dnb.synth	rhodes	-3.59
+examples/liquid_dnb.synth	sub	-13.95
 examples/neon_arterial.synth	arp	-24.47
 examples/neon_arterial.synth	bass	-12.71
-examples/neon_arterial.synth	bell	-49.87
-examples/neon_arterial.synth	brass	-3.42
-examples/neon_arterial.synth	lead	-28.71
-examples/neon_arterial.synth	pad	-4.00
-examples/neon_arterial.synth	solo	-13.53
+examples/neon_arterial.synth	bell	-49.63
+examples/neon_arterial.synth	brass	-3.45
+examples/neon_arterial.synth	lead	-30.03
+examples/neon_arterial.synth	pad	-3.98
+examples/neon_arterial.synth	solo	-13.44

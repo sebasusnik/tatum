@@ -61,9 +61,13 @@ impl FmOperator {
     pub fn note_on(&mut self, freq: f32) {
         self.base_freq = freq;
         self.osc.set_frequency(freq * self.ratio);
-        self.osc.reset();
+        // From silence only, as in `keys`: resetting the phase of an operator
+        // that is still sounding is a step in the wave, heard as a click.
+        if self.env.is_idle() {
+            self.osc.reset();
+            self.prev_output = 0.0;
+        }
         self.env.gate_on();
-        self.prev_output = 0.0;
     }
 
     pub fn note_off(&mut self) {

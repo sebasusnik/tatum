@@ -107,8 +107,8 @@ fn scene_change_does_not_cut_the_last_step_of_the_previous_scene() {
             step, frac * 100.0, reference * 100.0);
     }
     // And scene b really is silent: the pad did not leak past the bar line
-    // beyond its 5 ms release.
-    let release = (0.005 * SAMPLE_RATE) as usize + 100;
+    // beyond the 10 ms fade a track gets when a scene drops it.
+    let release = (0.010 * SAMPLE_RATE) as usize + 100;
     let tail = &l[BAR as usize + release..(BAR * 2.0) as usize];
     assert!(tail.iter().all(|v| v.abs() < 0.005), "scene b is not silent");
 }

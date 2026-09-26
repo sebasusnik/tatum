@@ -62,6 +62,15 @@ impl KeysVoice {
 
     fn note_on(&mut self, note: u8, velocity: f32, root_note: u8, freq_mult: f32, pan: f32, ring_mod: bool) {
         let freq = math::midi_to_freq(note) * freq_mult;
+        // Restart the oscillators only from silence. A voice taken over while
+        // it still sounds -- stolen in its release, or retriggered -- keeps
+        // its phase: jumping it to zero cut the wave mid-cycle, and a held
+        // chord that retriggered every bar clicked every bar (`tatum debug`
+        // counted 50 on one pad).
+        if !self.active {
+            self.osc1.reset();
+            self.osc2.reset();
+        }
         self.note = note;
         self.root_note = root_note;
         self.active = true;
@@ -70,8 +79,6 @@ impl KeysVoice {
         self.ring_mod = ring_mod;
         self.osc1.set_frequency(freq * (1.0 - self.detune));
         self.osc2.set_frequency(freq * (1.0 + self.detune));
-        self.osc1.reset();
-        self.osc2.reset();
         self.env.gate_on();
         let _ = velocity;
     }

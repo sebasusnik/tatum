@@ -721,7 +721,8 @@ track wash { sidechain 0.5 from=bass out > master }   # breathes with the bass
 ```
 
 `attack=` and `release=` shape the envelope every source follows, in
-milliseconds. The release is what decides whether a duck reads as a gap or as a
+milliseconds. The attack defaults to 1 ms: an instant duck is a step in every
+sustained track, heard as a click on each kick. The release is what decides whether a duck reads as a gap or as a
 pump: the default 4.5 ms lets the bass back inside the kick, while 70-150 ms
 makes the two read as one instrument.
 
