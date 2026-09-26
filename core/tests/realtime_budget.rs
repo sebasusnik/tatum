@@ -54,7 +54,8 @@ fn report(name: &str, path: &str) -> f64 {
 /// would actually play with (`cargo run --release -- play`), so under
 /// `cargo test` this measures a machine nobody uses. Ignoring it in debug is
 /// not weakening the check, it is pointing it at the build the claim is
-/// about. CI runs it with `--release`.
+/// about. CI runs it in the `ci` profile: release without fat LTO, which
+/// renders just as fast.
 #[test]
 #[cfg_attr(
     debug_assertions,

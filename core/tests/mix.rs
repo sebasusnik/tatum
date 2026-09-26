@@ -165,6 +165,7 @@ fn no_example_lets_the_master_chain_eat_its_transients() {
     use tatum_core::song_engine::SongEngine;
 
     let mut offenders = Vec::new();
+    let mut broken = Vec::new();
     for entry in std::fs::read_dir("../examples").unwrap() {
         let path = entry.unwrap().path();
         if path.extension().and_then(|e| e.to_str()) != Some("synth") { continue; }
@@ -174,6 +175,17 @@ fn no_example_lets_the_master_chain_eat_its_transients() {
         // Eight bars is enough to catch a chain that is crushing everything.
         let (l, r) = engine.render(8);
         let (out_peak, out_rms) = analysis::peak_rms(&l, &r);
+        // The same eight bars stand in for the whole-song renders, which only
+        // run with `--ignored`: every example makes a sound, and none of it
+        // is NaN or past full scale.
+        let name = path.file_stem().unwrap().to_string_lossy().to_string();
+        if l.iter().chain(&r).any(|x| !x.is_finite()) {
+            broken.push(format!("{name}: NaN or infinity in the output"));
+        } else if out_peak <= 0.01 {
+            broken.push(format!("{name}: silent (peak {out_peak:.4})"));
+        } else if out_peak > 1.0 {
+            broken.push(format!("{name}: clips (peak {out_peak:.3})"));
+        }
         let (in_peak, in_rms) = engine.master_input_peak_rms();
         let (ci, co) = (analysis::crest(in_peak, in_rms), analysis::crest(out_peak, out_rms));
         if ci <= 0.0 || co <= 0.0 { continue; }
@@ -183,5 +195,6 @@ fn no_example_lets_the_master_chain_eat_its_transients() {
                 path.file_stem().unwrap().to_string_lossy(), -change_db, ci, co));
         }
     }
+    assert!(broken.is_empty(), "the first eight bars are wrong in:\n  {}", broken.join("\n  "));
     assert!(offenders.is_empty(), "the master chain is doing the mixing in:\n  {}", offenders.join("\n  "));
 }

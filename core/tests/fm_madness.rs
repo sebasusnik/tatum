@@ -11,6 +11,7 @@ use tatum_core::song_engine::SongEngine;
 use test_helpers::{write_wav_stereo, output_path};
 
 #[test]
+#[ignore = "a whole song, rendered to listen to: cargo test --release -- --ignored"]
 fn test_fm_madness() {
     const SOURCE: &str = include_str!("../../examples/fm_madness.synth");
     let mut engine = SongEngine::from_source(SOURCE).expect("should load fm_madness");

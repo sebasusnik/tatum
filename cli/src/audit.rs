@@ -471,6 +471,102 @@ fn measure(mono: &[f32], peak: f32, cands: &[f32], spb: f32) -> Vec<Note> {
     notes
 }
 
+/// What one track's audit found. At most one of `row` and `skipped` is set;
+/// `unjudged` can come with a row.
+#[derive(Default)]
+struct Track {
+    row: Option<Row>,
+    findings: Vec<Finding>,
+    skipped: Option<usize>,
+    unjudged: Option<&'static str>,
+}
+
+fn audit_track(song: &Song, name: &str, bars: u32, spb: f32) -> Track {
+    let mut out = Track::default();
+    let cands = written_notes(song, name);
+    if cands.is_empty() { return out }
+    let run = |off: Option<Suspect>| -> Option<(Vec<Note>, f32)> {
+        let solo = solo_without(song, name, off);
+        let compiled = dsl::compiler::compile(&solo).ok()?;
+        let mut eng = SongEngine::from_compiled(compiled);
+        eng.start();
+        let (l, r) = eng.render(bars);
+        let mono: Vec<f32> = l.iter().zip(&r).map(|(a, b)| (a + b) * 0.5).collect();
+        let peak = mono.iter().fold(0.0f32, |a, v| a.max(v.abs()));
+        if peak < 1e-4 { return None }
+        Some((measure(&mono, peak, &cands, spb), peak))
+    };
+    let blind = cannot_judge_notes(song, name);
+    let Some((notes, peak)) = run(None) else { return out };
+    // Under a handful of notes there is no "its own voice" to compare to.
+    // A voice can also land here by being too dirty to measure at all --
+    // a supersaw or a heavily chorused pad has most of its energy off the
+    // harmonics by design, so every window fails the pitch test and the
+    // model simply does not describe it. Saying so is better than
+    // producing a number.
+    if notes.len() < 8 {
+        match blind {
+            // The reason it cannot be checked note by note is usually
+            // also the reason there are so few notes to check.
+            Some(why) => out.unjudged = Some(why),
+            None => out.skipped = Some(notes.len()),
+        }
+        return out;
+    }
+    let mut all: Vec<f64> = notes.iter().map(|n| n.db).collect();
+    let med = median(&mut all);
+
+    // Switching the suspect off and measuring the same voice again is the
+    // one comparison that is both absolute and meaningful: it is the same
+    // timbre either way, so the difference is caused by the thing that
+    // was removed. It is also what would have found the bell bug in one
+    // run -- that chorus does not make one note dirty, it raises the
+    // whole voice's floor by 17 dB, and the ear notices on the first note
+    // because a clean bell is where there is nothing to hide behind.
+    let mut blame = Vec::new();
+    for suspect in [Suspect::Chorus, Suspect::Drive] {
+        if !has_suspect(song, name, suspect) { continue }
+        let Some((clean, _)) = run(Some(suspect)) else { continue };
+        if clean.len() < 8 { continue }
+        let mut c: Vec<f64> = clean.iter().map(|n| n.db).collect();
+        let delta = med - median(&mut c);
+        if delta >= BLAME_DB {
+            blame.push((suspect, delta));
+        }
+    }
+    // A voice written to leave the written pitch cannot be judged by how
+    // far it is from the written pitch. Half a semitone of vibrato at
+    // C#6 moves the eighth harmonic 107 Hz, well outside the harmonic
+    // band, so a guitar solo with bends reads as the dirtiest thing in
+    // the song and always will. The comparison below it is unaffected:
+    // the vibrato is in both renders, so whatever the difference is, the
+    // vibrato is not it.
+    out.unjudged = blind;
+    for note in &notes {
+        let margin = note.db - med;
+        if blind.is_some() { break }
+        // Below this the harmonics are closer together than the +/-45 Hz
+        // band they are measured in, so the bands overlap and the number
+        // is arithmetic rather than sound. A sub at D1 has its harmonics
+        // 37 Hz apart.
+        if note.hz < MIN_PITCH_HZ { continue }
+        if margin >= OUTLIER_DB && note.windows >= MIN_STEPS_TO_REPORT {
+            out.findings.push(Finding {
+                track: name.to_string(),
+                bar: note.bar,
+                note: hz_name(note.hz),
+                steps: note.windows,
+                db: note.db,
+                margin,
+                median: med,
+            });
+        }
+    }
+    let worst = notes.into_iter().max_by(|a, b| a.db.partial_cmp(&b.db).unwrap()).unwrap();
+    out.row = Some(Row { track: name.to_string(), notes: all.len(), median_db: med, worst, peak, blame });
+    out
+}
+
 pub fn cmd(args: &[String]) {
     let strict = args.iter().any(|a| a == "--strict");
     let json = args.iter().any(|a| a == "--json");
@@ -522,95 +618,24 @@ pub fn cmd(args: &[String]) {
     if !json {
         eprintln!("auditing {} tonal tracks over {bars} bars...", names.len());
     }
+    // Every track is its own render of its own solo song, so they run side
+    // by side; merged in track order, the report is the same as one after
+    // the other.
+    let tracks: Vec<Track> = std::thread::scope(|s| {
+        let running: Vec<_> = names.iter()
+            .map(|name| s.spawn(|| audit_track(&song, name, bars, spb)))
+            .collect();
+        running.into_iter().map(|t| t.join().expect("audit thread")).collect()
+    });
     let mut rows: Vec<Row> = Vec::new();
     let mut findings: Vec<Finding> = Vec::new();
     let mut skipped: Vec<(String, usize)> = Vec::new();
     let mut unjudged: Vec<(String, &'static str)> = Vec::new();
-
-    for name in &names {
-        let cands = written_notes(&song, name);
-        if cands.is_empty() { continue }
-        let run = |off: Option<Suspect>| -> Option<(Vec<Note>, f32)> {
-            let solo = solo_without(&song, name, off);
-            let compiled = dsl::compiler::compile(&solo).ok()?;
-            let mut eng = SongEngine::from_compiled(compiled);
-            eng.start();
-            let (l, r) = eng.render(bars);
-            let mono: Vec<f32> = l.iter().zip(&r).map(|(a, b)| (a + b) * 0.5).collect();
-            let peak = mono.iter().fold(0.0f32, |a, v| a.max(v.abs()));
-            if peak < 1e-4 { return None }
-            Some((measure(&mono, peak, &cands, spb), peak))
-        };
-        let blind = cannot_judge_notes(&song, name);
-        let Some((notes, peak)) = run(None) else { continue };
-        // Under a handful of notes there is no "its own voice" to compare to.
-        // A voice can also land here by being too dirty to measure at all --
-        // a supersaw or a heavily chorused pad has most of its energy off the
-        // harmonics by design, so every window fails the pitch test and the
-        // model simply does not describe it. Saying so is better than
-        // producing a number.
-        if notes.len() < 8 {
-            match blind {
-                // The reason it cannot be checked note by note is usually
-                // also the reason there are so few notes to check.
-                Some(why) => unjudged.push((name.clone(), why)),
-                None => skipped.push((name.clone(), notes.len())),
-            }
-            continue;
-        }
-        let mut all: Vec<f64> = notes.iter().map(|n| n.db).collect();
-        let med = median(&mut all);
-
-        // Switching the suspect off and measuring the same voice again is the
-        // one comparison that is both absolute and meaningful: it is the same
-        // timbre either way, so the difference is caused by the thing that
-        // was removed. It is also what would have found the bell bug in one
-        // run -- that chorus does not make one note dirty, it raises the
-        // whole voice's floor by 17 dB, and the ear notices on the first note
-        // because a clean bell is where there is nothing to hide behind.
-        let mut blame = Vec::new();
-        for suspect in [Suspect::Chorus, Suspect::Drive] {
-            if !has_suspect(&song, name, suspect) { continue }
-            let Some((clean, _)) = run(Some(suspect)) else { continue };
-            if clean.len() < 8 { continue }
-            let mut c: Vec<f64> = clean.iter().map(|n| n.db).collect();
-            let delta = med - median(&mut c);
-            if delta >= BLAME_DB {
-                blame.push((suspect, delta));
-            }
-        }
-        // A voice written to leave the written pitch cannot be judged by how
-        // far it is from the written pitch. Half a semitone of vibrato at
-        // C#6 moves the eighth harmonic 107 Hz, well outside the harmonic
-        // band, so a guitar solo with bends reads as the dirtiest thing in
-        // the song and always will. The comparison below it is unaffected:
-        // the vibrato is in both renders, so whatever the difference is, the
-        // vibrato is not it.
-        if let Some(why) = blind {
-            unjudged.push((name.clone(), why));
-        }
-        for note in &notes {
-            let margin = note.db - med;
-            if blind.is_some() { break }
-            // Below this the harmonics are closer together than the +/-45 Hz
-            // band they are measured in, so the bands overlap and the number
-            // is arithmetic rather than sound. A sub at D1 has its harmonics
-            // 37 Hz apart.
-            if note.hz < MIN_PITCH_HZ { continue }
-            if margin >= OUTLIER_DB && note.windows >= MIN_STEPS_TO_REPORT {
-                findings.push(Finding {
-                    track: name.clone(),
-                    bar: note.bar,
-                    note: hz_name(note.hz),
-                    steps: note.windows,
-                    db: note.db,
-                    margin,
-                    median: med,
-                });
-            }
-        }
-        let worst = notes.into_iter().max_by(|a, b| a.db.partial_cmp(&b.db).unwrap()).unwrap();
-        rows.push(Row { track: name.clone(), notes: all.len(), median_db: med, worst, peak, blame });
+    for (name, t) in names.iter().zip(tracks) {
+        if let Some(n) = t.skipped { skipped.push((name.clone(), n)) }
+        if let Some(why) = t.unjudged { unjudged.push((name.clone(), why)) }
+        findings.extend(t.findings);
+        rows.extend(t.row);
     }
 
     // By name, NOT by score. The absolute number is not comparable between

@@ -22,10 +22,11 @@
 //! being read.
 //!
 //! Release only: the audit renders every track twice and a debug build is
-//! five times slower. CI runs it with `--release`.
+//! five times slower. CI runs it in the `ci` profile (release without fat
+//! LTO).
 
 use std::collections::BTreeMap;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 const SONGS: &[&str] = &[
     "examples/detroit.synth",
@@ -66,14 +67,25 @@ fn text(line: &str, key: &str) -> Option<String> {
     Some(rest[..rest.find('"')?].to_string())
 }
 
-fn measure() -> BTreeMap<Key, Entry> {
+fn measure(songs: &[&str]) -> BTreeMap<Key, Entry> {
     let mut out = BTreeMap::new();
-    for song in SONGS {
-        let res = Command::new(env!("CARGO_BIN_EXE_tatum"))
-            .current_dir(root())
-            .args(["audit", song, "--json"])
-            .output()
-            .expect("run tatum audit");
+    // All at once: one after the other they took as long as the rest of the
+    // suite together. Each audit also renders its tracks side by side, so
+    // this keeps every core busy until the last song is done.
+    let running: Vec<_> = songs
+        .iter()
+        .map(|song| {
+            Command::new(env!("CARGO_BIN_EXE_tatum"))
+                .current_dir(root())
+                .args(["audit", song, "--json"])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .expect("run tatum audit")
+        })
+        .collect();
+    for (song, child) in songs.iter().zip(running) {
+        let res = child.wait_with_output().expect("wait for tatum audit");
         let stdout = String::from_utf8_lossy(&res.stdout);
         assert!(
             stdout.contains("\"tracks\""),
@@ -144,21 +156,15 @@ fn read_baseline(text: &str) -> BTreeMap<Key, Entry> {
     out
 }
 
-#[test]
-#[cfg_attr(
-    debug_assertions,
-    ignore = "release only: the audit renders every track twice and debug is ~5x slower"
-)]
-fn the_corpus_still_measures_the_way_it_did() {
-    let now = measure();
-
-    if std::env::var("UPDATE_AUDIT_BASELINE").is_ok() {
-        std::fs::write(BASELINE, write_baseline(&now)).unwrap();
-        eprintln!("wrote {BASELINE} -- read the diff before committing it");
-        return;
-    }
-
-    let was = read_baseline(&std::fs::read_to_string(BASELINE).expect("audit_baseline.txt"));
+/// One song against its lines in the baseline. A test per song so that CI
+/// can give each its own runner; locally they run side by side anyway.
+fn check(song: &str) {
+    // Regenerating is `baseline_is_rewritten_when_asked`'s job: it needs all
+    // three songs to write one file.
+    if std::env::var("UPDATE_AUDIT_BASELINE").is_ok() { return }
+    let now = measure(&[song]);
+    let mut was = read_baseline(&std::fs::read_to_string(BASELINE).expect("audit_baseline.txt"));
+    was.retain(|(s, _), _| s == song);
     let mut moved = Vec::new();
 
     for (key, old) in &was {
@@ -210,4 +216,43 @@ fn the_corpus_still_measures_the_way_it_did() {
          UPDATE_AUDIT_BASELINE=1 cargo test --release -p tatum-cli --test audit_baseline",
         moved.join("\n  ")
     );
+}
+
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "release only: the audit renders every track twice and debug is ~5x slower"
+)]
+fn detroit_still_measures_the_way_it_did() {
+    check("examples/detroit.synth");
+}
+
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "release only: the audit renders every track twice and debug is ~5x slower"
+)]
+fn liquid_dnb_still_measures_the_way_it_did() {
+    check("examples/liquid_dnb.synth");
+}
+
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "release only: the audit renders every track twice and debug is ~5x slower"
+)]
+fn neon_arterial_still_measures_the_way_it_did() {
+    check("examples/neon_arterial.synth");
+}
+
+/// Does nothing unless `UPDATE_AUDIT_BASELINE` is set.
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "release only: the audit renders every track twice and debug is ~5x slower"
+)]
+fn baseline_is_rewritten_when_asked() {
+    if std::env::var("UPDATE_AUDIT_BASELINE").is_err() { return }
+    std::fs::write(BASELINE, write_baseline(&measure(SONGS))).unwrap();
+    eprintln!("wrote {BASELINE} -- read the diff before committing it");
 }

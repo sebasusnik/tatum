@@ -31,6 +31,7 @@ fn peak(samples: &[f32]) -> f32 {
 }
 
 #[test]
+#[ignore = "a whole song, rendered to listen to: cargo test --release -- --ignored"]
 fn test_techno_robot() {
     const SOURCE: &str = include_str!("../../examples/techno_robot.synth");
     let mut engine = SongEngine::from_source(SOURCE).expect("should load techno_robot");

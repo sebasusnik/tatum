@@ -9,6 +9,7 @@ use tatum_core::song_engine::SongEngine;
 use test_helpers::{write_wav_stereo, output_path};
 
 #[test]
+#[ignore = "a whole song, rendered to listen to: cargo test --release -- --ignored"]
 fn test_synthwave_chill_dsl() {
     const SOURCE: &str = include_str!("../../examples/synthwave_chill.synth");
     let mut engine = SongEngine::from_source(SOURCE).expect("should load synthwave_chill");

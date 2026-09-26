@@ -7,6 +7,11 @@ on:
     branches: [main]
   pull_request:
 
+# A new push makes the run for the one before it worthless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
   # The workspace builds with zero warnings; keep it there.
@@ -20,6 +25,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
       # cpal (tatum play / watch) links against ALSA on Linux.
       - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
@@ -31,13 +39,30 @@ jobs:
             exit 1
           fi
 
+      # Release speed, everything. The suite is DSP, and unoptimized DSP is
+      # about five times slower: in debug the tests took twelve minutes, and
+      # the callback-budget and audit tests needed release anyway, so they
+      # built the workspace a second time. One build now serves all of it.
+      # The `ci` profile is release without fat LTO (see Cargo.toml).
       - name: Build
-        run: cargo build --workspace --locked
+        run: cargo build --workspace --locked --profile ci
 
       - name: Test
         # The suite includes the bar-timing, live-session and no-allocation
         # tests; the counting allocator only proves anything when it runs.
-        run: cargo test --workspace --locked
+        # nextest runs every test binary at once; `cargo test` runs the fifty
+        # of them one after another, and a handful of full-song renders set
+        # the pace. There are no doctests for it to miss. `audit_baseline` has
+        # jobs of its own, below. The whole-song renders are `#[ignore]`d:
+        # they write WAVs to listen to, and what they check in CI -- sound,
+        # no NaN, no clipping -- `mix.rs` checks on eight bars of every
+        # example.
+        run: cargo nextest run --workspace --locked --cargo-profile ci -E 'not binary(realtime_budget) and not binary(audit_baseline)'
+
+      - name: The engine still fits in an audio callback
+        # Alone, and after the rest: the budget is a timing, and with the
+        # whole suite rendering on the other cores it would measure them.
+        run: cargo nextest run --workspace --locked --cargo-profile ci -E 'binary(realtime_budget)' --no-capture
 
       - name: Every song in the corpus compiles
         # The corpus is the spec by example: a DSL change that breaks one of
@@ -45,29 +70,14 @@ jobs:
         run: |
           fails=0
           for f in examples/*.synth examples/rigs/*.synth; do
-            if ! ./target/debug/tatum check "$f" >/dev/null 2>&1; then
+            if ! ./target/ci/tatum check "$f" >/dev/null 2>&1; then
               echo "::error file=$f::does not compile"
-              ./target/debug/tatum check "$f" 2>&1 | head -20
+              ./target/ci/tatum check "$f" 2>&1 | head -20
               fails=$((fails + 1))
             fi
           done
           echo "$fails failures"
           test "$fails" -eq 0
-
-      - name: The engine still fits in an audio callback
-        # Release only, and on purpose: the callback budget is a claim about
-        # the build you would play with. A debug build is five times slower
-        # and this would only measure that.
-        run: cargo test --workspace --locked --release --test realtime_budget -- --nocapture
-
-      - name: The engine has not started adding grit
-        # `tatum audit` measures how much of a voice is not at a harmonic of
-        # the note it was asked to play. Three songs have their numbers
-        # checked in. Nothing else in the suite would notice a filter that
-        # began ringing or a saturator that got hotter: the bit-identity
-        # tests compare a render against the same code, and the lints read
-        # text. Two and a half minutes, release only.
-        run: cargo test --locked --release -p tatum-cli --test audit_baseline
 
       - name: Every set walks end to end
         # A set is a rig plus twenty overlays resolved through `use`. It
@@ -76,9 +86,9 @@ jobs:
         run: |
           fails=0
           for d in sets/*/; do
-            if ! ./target/debug/tatum set check "$d" >/dev/null 2>&1; then
+            if ! ./target/ci/tatum set check "$d" >/dev/null 2>&1; then
               echo "::error::set $d does not check"
-              ./target/debug/tatum set check "$d" 2>&1 | head -20
+              ./target/ci/tatum set check "$d" 2>&1 | head -20
               fails=$((fails + 1))
             fi
           done
@@ -88,7 +98,30 @@ jobs:
       - name: docs/PARAMS.md is what `tatum params` prints
         # The reference is generated; a stale copy documents parameters that
         # do not exist (it missed a range change for two weeks).
-        run: ./target/debug/tatum params | diff - docs/PARAMS.md
+        run: ./target/ci/tatum params | diff - docs/PARAMS.md
+
+  audit:
+    name: audit baseline (${{ matrix.song }})
+    # `tatum audit` measures how much of each voice is not at a harmonic of
+    # its note, and three songs have their numbers checked in -- nothing else
+    # would notice a filter that began ringing or a saturator that got
+    # hotter. It is as much CPU as the rest of the suite together, and a
+    # runner for a private repo has two cores, so each song gets a runner of
+    # its own instead of sharing them with the other tests.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        song: [detroit, liquid_dnb, neon_arterial]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - run: cargo nextest run -p tatum-cli --locked --cargo-profile ci -E 'binary(audit_baseline) and test(${{ matrix.song }})'
 
   wasm:
     name: wasm32 build

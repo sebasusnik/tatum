@@ -5,3 +5,12 @@ resolver = "2"
 [profile.release]
 opt-level = "s"
 lto = true
+
+# What CI builds and tests with: release speed without release's link time.
+# Fat LTO links each of the fifty test binaries whole-program, 390 CPU-seconds
+# against 60, and the renders run no faster for it (the audit output is
+# byte-identical, and so is its time).
+[profile.ci]
+inherits = "release"
+opt-level = 3
+lto = false

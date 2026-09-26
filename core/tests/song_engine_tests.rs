@@ -229,6 +229,7 @@ track lead {
 }
 
 #[test]
+#[ignore = "a whole song, rendered to listen to: cargo test --release -- --ignored"]
 fn test_funk_replica_render() {
     const FUNK_SOURCE: &str = include_str!("../../examples/funk_replica.synth");
     let mut engine = SongEngine::from_source(FUNK_SOURCE).expect("should load funk_replica");
@@ -249,6 +250,7 @@ fn test_funk_replica_render() {
 }
 
 #[test]
+#[ignore = "a whole song, rendered to listen to: cargo test --release -- --ignored"]
 fn test_deephouse_render() {
     const SOURCE: &str = include_str!("../../examples/deephouse.synth");
     let mut engine = SongEngine::from_source(SOURCE).expect("should load deephouse");

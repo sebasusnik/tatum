@@ -12,6 +12,7 @@ use tatum_core::song_engine::SongEngine;
 use test_helpers::{write_wav_stereo, output_path};
 
 #[test]
+#[ignore = "a whole song, rendered to listen to: cargo test --release -- --ignored"]
 fn test_arp_keys_dsl() {
     const SOURCE: &str = include_str!("../../examples/arp_keys.synth");
     let mut engine = SongEngine::from_source(SOURCE).expect("should load arp_keys");
