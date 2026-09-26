@@ -42,6 +42,17 @@ pub fn compile_or_exit(source: &Source, iso: &Isolation) -> tatum_core::dsl::com
     }
 }
 
+/// The engine's output gain for the song, measured whole, or exit.
+pub fn output_gain_or_exit(source: &Source) -> f32 {
+    match isolate::output_gain(&source.text) {
+        Ok(g) => g,
+        Err(err) => {
+            source.print_errors(&err);
+            process::exit(1);
+        }
+    }
+}
+
 const USAGE: &str = "usage: tatum debug <song.synth> [--solo a,b] [--mute c] [--bars N | --bars A-B] [--dry] [-o dir]";
 
 pub fn cmd(args: &[String]) {
@@ -91,6 +102,7 @@ pub fn cmd(args: &[String]) {
     let mut opts = Options::new(out.unwrap_or_else(|| PathBuf::from("test_output/debug").join(&stem)));
     opts.dry = dry;
     opts.bars = bars;
+    opts.gain = output_gain_or_exit(&source);
     eprintln!("rendering {path} with every part kept apart...");
     match tatum_debug::run(song, &stem, &iso, &opts) {
         Ok(outcome) => print!("{}", outcome.report),

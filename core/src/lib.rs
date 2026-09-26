@@ -21,6 +21,7 @@ pub mod params;
 pub mod wav;
 pub mod analysis;
 pub mod nodes;
+pub mod output;
 
 #[cfg(test)]
 pub mod test_utils;

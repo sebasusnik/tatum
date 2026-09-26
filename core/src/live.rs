@@ -243,6 +243,9 @@ pub struct LivePlanner {
     bend: f32,
     /// `--solo`/`--mute`, applied to every version of the file as it is read.
     isolation: crate::dsl::isolate::Isolation,
+    /// The output gain measured when the song was loaded. Edits keep it: a
+    /// song that re-levelled itself on every save would move under the hands.
+    output_gain: Option<f32>,
 }
 
 impl Default for LivePlanner {
@@ -258,6 +261,7 @@ impl LivePlanner {
             knob_values: Vec::new(),
             held: Vec::new(),
             bend: 1.0,
+            output_gain: None,
             isolation: Default::default(),
         }
     }
@@ -431,9 +435,25 @@ impl LivePlanner {
             }
         }
 
+        // Measured on the whole song, not what `--solo` leaves of it, so a
+        // soloed track plays as loud as it sits in the mix.
+        let gain = match self.output_gain {
+            Some(g) => g,
+            None => {
+                let lufs = if self.isolation.is_empty() {
+                    SongEngine::loudness(&compiled)
+                } else {
+                    let full = crate::dsl::parse(source).map_err(DslError::Parse)
+                        .and_then(|a| crate::dsl::compiler::compile(&a).map_err(DslError::Compile))?;
+                    SongEngine::loudness(&full)
+                };
+                *self.output_gain.insert(crate::output::gain_for(lufs))
+            }
+        };
         let generation = self.next_generation;
         self.next_generation += 1;
         let mut engine = Box::new(SongEngine::from_compiled(compiled));
+        engine.set_output_gain(gain);
         let known = Known::new(generation, ast, &engine);
         // The new engine starts where the knobs were left, not where the
         // text puts them, so a save does not undo what the hands did.

@@ -26,8 +26,12 @@ where the time actually goes:
   while peaking above it — plus `crest` and the band the track mostly occupies.
 - `buses`: the same after each bus chain, so a track that meters fine but
   arrives quiet at master is visible.
-- `master`: crest factor entering and leaving the master chain. A large drop
-  means the limiter is eating the transients rather than the mix getting louder.
+- `master`: crest factor entering the master chain and leaving the engine. A
+  large drop means the master chain or the output limiter is eating the
+  transients.
+- `output_gain_db`: what the engine added or took off to bring the song to
+  -18 LUFS. Every song plays at that loudness whatever its mix, so this is not
+  a number to chase.
 - `hint`: plain-language warnings — tracks buried or silent, boxy midrange,
   fatiguing 2-5 kHz, thin low end, two tracks masking each other in the same
   band, and crest lost to limiting.

@@ -37,7 +37,6 @@ drums { in > compressor(-8, ratio=4) > master }
 track kick { play beat using kit level 0.8 out > drums }
 track bass { play line using low level 0.6 delay_send 0.3 out > master }
 track pad  { play hold using pad level 0.5 reverb_send 0.7 delay_send 0.5 out > master }
-master { in > limiter > out }
 "#;
 
 /// The same material arranged: two scenes, an automation sweep, a swap that
@@ -54,8 +53,11 @@ fn with_unused_pattern(src: &str) -> String {
     format!("{}\npattern unused {{ 1.1 - - - }}\n", src)
 }
 
+/// A live session levels the song once, when it loads it; straight through,
+/// the same song gets the same gain.
 fn render_straight(src: &str, bars: usize) -> (Vec<f32>, Vec<f32>) {
     let mut e = SongEngine::from_source(src).unwrap();
+    e.set_output_gain(tatum_core::dsl::isolate::output_gain(src).unwrap());
     e.start();
     e.render_steps(bars * 16)
 }
@@ -321,7 +323,11 @@ fn two_tracks_on_one_module_both_keep_their_voices_across_a_swap() {
     player.apply(planner.plan(src, player.generation()).unwrap());
     player.start();
     assert_eq!(player.apply(planner.plan(&cut, player.generation()).unwrap()), Applied::Fast);
-    let (expected, _) = render_straight(&cut, 1);
+    // At the gain the session measured when it loaded `src`: edits keep it.
+    let mut e = SongEngine::from_source(&cut).unwrap();
+    e.set_output_gain(tatum_core::dsl::isolate::output_gain(src).unwrap());
+    e.start();
+    let (expected, _) = e.render_steps(16);
     let mut got = vec![0.0f32; BAR];
     let mut scratch = vec![0.0f32; BAR];
     let mut pos = 0;

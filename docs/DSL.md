@@ -208,6 +208,16 @@ loudest track) plus the low/mid/high balance of each section. Read it before tru
 mix: a track more than 30 dB down is inaudible, a section above 80% midrange sounds boxy,
 and a section at the limiter ceiling has had its dynamics flattened.
 
+**How loud the song is, is not the song's to set.** The engine ends every song in an
+output stage after the master chain: a gain that brings it to -18 LUFS, the loudness
+every song plays at, and a limiter that keeps its true peak (the wave between the
+samples too) under -1 dB. The song is measured once, whole, when it is rendered or
+loaded; `--solo` and `--mute` keep the gain of the whole song, and a live edit keeps
+the gain measured at load, so the level never moves under you. What a song mixes is
+its balance: the levels of its tracks against each other, and its sections against each
+other. A mix made quieter or louder comes out the same, so chasing loudness with
+`makeup` or track levels only pushes the limiter.
+
 Modules do not all sum to the same level at the same track `level`: `fm` is quietest, so
 it has its own `level` parameter (default 1.0; `level 2.0` brings one voice near keys).
 Use `gain()` in a chain to trim a bus or a return.
@@ -237,7 +247,7 @@ drums { in > compressor(-8, ratio=4, attack=8, release=60) > saturate(0.1) > mas
 
 track kick  { play beat using kit out > drums }                 # route into the bus
 track bass  { play riff using acid out > saturate(0.4) > master } # inline inserts
-master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2, release=40, makeup=3) > limiter > out }
+master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2, release=40, makeup=3) > out }
 ```
 
 | effect | arguments | notes |
@@ -254,7 +264,7 @@ master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2
 | `chorus(mix)` | 0..1 | |
 | `bitcrush(bits, rate)` | bits, sample-rate reduction 0..1 | |
 | `compressor(threshold_db, ratio=, attack=, release=, makeup=)` | dB, ratio, ms, ms, gain | |
-| `limiter(threshold)` | 0..1, default 0.95 | lookahead peak limiter; a section whose peak sits at the threshold is being flattened, so lower what feeds it |
+| `limiter(threshold)` | 0..1, default 0.95 | lookahead peak limiter, for one spiky track or bus. On the master it is left out (with a `master_limiter` warning): the engine limits every song itself, after levelling it |
 | `eq(low=, mid=, high=)` | dB per band (200Hz, 1kHz, 8kHz) | |
 | `tilt(amount)` | -1..1, negative = darker | one-knob tilt EQ |
 | `delay(1/8, feedback)` | note division, 0..1 | tempo-synced delay inside a chain |
@@ -293,7 +303,7 @@ scene drop {
     auto reverb_mix 0.1 > 0.5
     auto reverb_freeze 0 > 1             # freezes once the lane crosses 0.5
     auto master tilt 0.4 > -0.2          # master chain sweeps: tilt, eq_low, eq_mid, eq_high, drive,
-    auto master cutoff 20000 > 400       #   gain, cutoff, limiter, comp_threshold (the node must be in the chain)
+    auto master cutoff 20000 > 400       #   gain, cutoff, comp_threshold (the node must be in the chain)
     track drums { play beat using kit }
     track acid  { play riff using acid }
 }
@@ -553,8 +563,9 @@ track beat { play brk using kit out > drums }
 ```
 
 **Loudness shape.** Intro quietest, drop loudest, nothing at the limiter ceiling. Use the
-per-section report from `tatum_render`; if a section sits at 0.95, lower what feeds it
-rather than pushing the others up. Two things that make section loudness non-obvious:
+per-section report from `tatum_render`; if a section sits at the ceiling (`at_limiter_ceiling`),
+its peaks are too tall for its loudness: tame what spikes rather than pushing the others up.
+The song as a whole is levelled by the engine, so only the shape is yours. Two things that make section loudness non-obvious:
 the engine scales the mix by 1/sqrt(active tracks) in each scene (so fewer tracks are
 each louder), and sidechain only ducks in scenes that have a beats track (a breakdown
 without drums plays its pads at full level). Set levels per scene, not just per track.
@@ -782,7 +793,7 @@ never moves" instead of only "this parses". Each one came from a real session.
 | `no_sidechain` | drums and tonal tracks with no ducking anywhere | the kick has to fight through the mix |
 | `sidechain_without_kick` | a scene ducks tracks but has no beats track | those tracks play unducked, so a breakdown can end up louder than the drop |
 | `single_scene` | more than 8 bars in one scene | no arrangement shape |
-| `no_limiter` | the master chain has no `limiter` | peaks clip instead of being caught |
+| `master_limiter` | the master chain has a `limiter` | it is left out: the engine limits every song on its true peak, after the gain that levels it, so a limiter before that gain would limit a level that is about to change |
 | `chorus_beats` | a voice whose notes are **all** above ~530 Hz goes through `chorus_mix`, counting the octaves an `arp` lifts them by | a chorus reads a delay line whose length is moving, which resamples: the copy comes out detuned by about ±3.8%, and it then beats against the dry signal at `f × 0.038`. That is 3 Hz on a low E and 42 Hz on a C#6, and past about 20 Hz the ear stops hearing two tones and starts hearing roughness — which on a clean tone is indistinguishable from distortion. Chord tops are exempt, because the beat is buried under the notes below them — but **not** when an `arp` is playing them, since an arp sounds them one at a time and there is nothing underneath. A non-poly `keys` voice is exempt too: its chorus never runs |
 | `unused_module` / `unused_pattern` | defined but never played | usually a typo in a `using` or `play` name. A file with no `arrange` is a rig rather than a song, so three or more unplayed patterns come as one line: there they are the palette, not a mistake |
 | `bass_into_compressor` | the master chain boosts `eq(low=)` by 3 dB or more **before** a `compressor` | below 200 Hz a mix is mostly kick, so the shelf feeds the compressor's detector the kick and the compressor ducks the whole song once a beat. It sounds like a compressor working, which is why nobody goes looking. Move the `eq` after the `compressor` |

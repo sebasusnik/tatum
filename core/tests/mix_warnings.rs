@@ -42,14 +42,14 @@ fn song(master: &str) -> String {
 /// working, which is exactly why nobody goes looking.
 #[test]
 fn a_low_shelf_in_front_of_the_compressor_is_flagged() {
-    let out = codes(&song("in > eq(low=3.5) > compressor(-8, ratio=3) > limiter > out"), "bass_into_compressor");
+    let out = codes(&song("in > eq(low=3.5) > compressor(-8, ratio=3) > out"), "bass_into_compressor");
     assert_eq!(out.len(), 1, "{out:?}");
     assert!(out[0].contains("+3.5"), "say how much: {}", out[0]);
 }
 
 #[test]
 fn the_same_shelf_after_the_compressor_is_fine() {
-    assert!(codes(&song("in > compressor(-8, ratio=3) > eq(low=3.5) > limiter > out"), "bass_into_compressor").is_empty());
+    assert!(codes(&song("in > compressor(-8, ratio=3) > eq(low=3.5) > out"), "bass_into_compressor").is_empty());
 }
 
 /// A gentle shelf moves the detector by less than the kick's own variation
@@ -57,18 +57,18 @@ fn the_same_shelf_after_the_compressor_is_fine() {
 /// shelves in the 1 to 2 dB range that sound fine.
 #[test]
 fn a_gentle_shelf_is_not_worth_a_warning() {
-    assert!(codes(&song("in > eq(low=2.0) > compressor(-8, ratio=3) > limiter > out"), "bass_into_compressor").is_empty());
+    assert!(codes(&song("in > eq(low=2.0) > compressor(-8, ratio=3) > out"), "bass_into_compressor").is_empty());
 }
 
 #[test]
 fn a_shelf_with_no_compressor_after_it_is_fine() {
-    assert!(codes(&song("in > eq(low=6.0) > limiter > out"), "bass_into_compressor").is_empty());
+    assert!(codes(&song("in > eq(low=6.0) > out"), "bass_into_compressor").is_empty());
 }
 
 /// Cutting the lows is the opposite move and is never this problem.
 #[test]
 fn a_low_cut_is_not_a_low_boost() {
-    assert!(codes(&song("in > eq(low=-4.0) > compressor(-8, ratio=3) > limiter > out"), "bass_into_compressor").is_empty());
+    assert!(codes(&song("in > eq(low=-4.0) > compressor(-8, ratio=3) > out"), "bass_into_compressor").is_empty());
 }
 
 // ── makeup_at_the_ceiling ────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ fn a_low_cut_is_not_a_low_boost() {
 /// reflex when a mix is still quiet is to ask for more.
 #[test]
 fn makeup_at_its_maximum_is_flagged() {
-    assert_eq!(codes(&song("in > compressor(-8, ratio=3, makeup=4.0) > limiter > out"), "makeup_at_the_ceiling").len(), 1);
+    assert_eq!(codes(&song("in > compressor(-8, ratio=3, makeup=4.0) > out"), "makeup_at_the_ceiling").len(), 1);
 }
 
 /// The same request written in dB. It resolves to a hair under 4.0 through
@@ -85,20 +85,20 @@ fn makeup_at_its_maximum_is_flagged() {
 /// worse than no lint at all.
 #[test]
 fn the_decibel_spelling_of_the_ceiling_counts_too() {
-    let out = codes(&song("in > compressor(-8, ratio=3, makeup=12db) > limiter > out"), "makeup_at_the_ceiling");
+    let out = codes(&song("in > compressor(-8, ratio=3, makeup=12db) > out"), "makeup_at_the_ceiling");
     assert_eq!(out.len(), 1, "12 dB is 4.0 linear: {out:?}");
 }
 
 #[test]
 fn ordinary_makeup_is_fine() {
-    assert!(codes(&song("in > compressor(-8, ratio=3, makeup=6db) > limiter > out"), "makeup_at_the_ceiling").is_empty());
+    assert!(codes(&song("in > compressor(-8, ratio=3, makeup=6db) > out"), "makeup_at_the_ceiling").is_empty());
 }
 
 /// A compressor on a bus has the same ceiling.
 #[test]
 fn a_bus_compressor_counts() {
     let src = format!(
-        "{}bus drums\ndrums {{ in > compressor(-20, ratio=8, makeup=4.0) > master }}\nmaster {{ in > limiter > out }}\n",
+        "{}bus drums\ndrums {{ in > compressor(-20, ratio=8, makeup=4.0) > master }}\nmaster {{ in > out }}\n",
         HEAD.replace("out > master }\ntrack bass", "out > drums }\ntrack bass")
     );
     assert_eq!(codes(&src, "makeup_at_the_ceiling").len(), 1);
@@ -113,7 +113,7 @@ fn a_bus_compressor_counts() {
 #[test]
 fn a_drum_level_above_one_is_flagged() {
     let src = HEAD.replace("module beats kit { }", "module beats kit { snare_level 1.4 }")
-        + "master { in > limiter > out }\n";
+        + "master { in > out }\n";
     let out = codes(&src, "drum_level_past_full_scale");
     assert_eq!(out.len(), 1, "{out:?}");
     assert!(out[0].contains("snare_level"), "name the knob: {}", out[0]);
@@ -122,7 +122,7 @@ fn a_drum_level_above_one_is_flagged() {
 #[test]
 fn a_drum_level_at_or_below_one_is_fine() {
     let src = HEAD.replace("module beats kit { }", "module beats kit { snare_level 1.0 kick_level 0.8 }")
-        + "master { in > limiter > out }\n";
+        + "master { in > out }\n";
     assert!(codes(&src, "drum_level_past_full_scale").is_empty());
 }
 
@@ -131,7 +131,7 @@ fn a_drum_level_at_or_below_one_is_fine() {
 #[test]
 fn the_modules_own_level_is_a_different_knob() {
     let src = HEAD.replace("module beats kit { }", "module beats kit { level 1.6 }")
-        + "master { in > limiter > out }\n";
+        + "master { in > out }\n";
     assert!(codes(&src, "drum_level_past_full_scale").is_empty());
 }
 
@@ -146,7 +146,7 @@ fn a_rig_full_of_alternates_gets_one_line_not_eighteen() {
         "{HEAD}pattern beat_b {{ kick: X - X - X - X - X - X - X - X - }}\n\
          pattern beat_c {{ kick: X X - - X X - - X X - - X X - - }}\n\
          pattern line_b {{ 1.1 - - - 1.5 - - - 1.1 - - - 1.5 - - - }}\n\
-         master {{ in > limiter > out }}\n"
+         master {{ in > out }}\n"
     );
     let out = codes(&src, "unused_pattern");
     assert_eq!(out.len(), 1, "one summary, not one per pattern: {out:?}");
@@ -157,7 +157,7 @@ fn a_rig_full_of_alternates_gets_one_line_not_eighteen() {
 /// One forgotten pattern is still a forgotten pattern, and gets pointed at.
 #[test]
 fn a_single_unplayed_pattern_is_still_named_on_its_own() {
-    let src = format!("{HEAD}pattern forgotten {{ 1.1 - - - }}\nmaster {{ in > limiter > out }}\n");
+    let src = format!("{HEAD}pattern forgotten {{ 1.1 - - - }}\nmaster {{ in > out }}\n");
     let out = codes(&src, "unused_pattern");
     assert_eq!(out.len(), 1);
     assert!(out[0].contains("'forgotten'"), "{}", out[0]);
@@ -178,7 +178,7 @@ scale E minor
 module bass drone { cutoff 0.4 }
 pattern d { [E1 B1]:0.8 ..*15 }
 track drone { play d using drone out > master }
-master { in > limiter > out }
+master { in > out }
 ";
     let out = codes(src, "chord_into_mono_voice");
     assert_eq!(out.len(), 1, "{out:?}");
@@ -195,7 +195,7 @@ scale E minor
 module bass drone { cutoff 0.4 }
 pattern d { E5/1:0.8 ..*15 }
 track drone { play d using drone out > master }
-master { in > limiter > out }
+master { in > out }
 ";
     assert_eq!(codes(src, "chord_into_mono_voice").len(), 1, "`E5/1` is [E1, B1]");
 }
@@ -211,7 +211,7 @@ scale E minor
 module bass lead { cutoff 0.4 }
 pattern d { [E1 G1 B1]:0.8 ..*15 }
 track lead { play d using lead arp up rate=16 octaves=2 out > master }
-master { in > limiter > out }
+master { in > out }
 ";
     assert!(codes(src, "chord_into_mono_voice").is_empty());
 }
@@ -226,7 +226,7 @@ scale E minor
 module bass lead { cutoff 0.4 }
 pattern d { [E1 G1 B1]:0.8 ..*15 }
 track lead { play d using lead arp off out > master }
-master { in > limiter > out }
+master { in > out }
 ";
     assert_eq!(codes(src, "chord_into_mono_voice").len(), 1);
 }
@@ -241,7 +241,7 @@ scale E minor
 module fm stab { level 2.0 }
 pattern d { [E3 G3 B3]:0.8 ..*15 }
 track stab { play d using stab out > master }
-master { in > limiter > out }
+master { in > out }
 ";
     assert!(codes(src, "chord_into_mono_voice").is_empty());
 }
@@ -263,7 +263,7 @@ scene a { track drone { play d using drone } track drums { play beat using kit }
 scene b { track drone { play d using drone } track drums { play beat using kit } }
 scene c { track drone { play d using drone } track drums { play beat using kit } }
 arrange { a x4 b x4 c x4 }
-master { in > limiter > out }
+master { in > out }
 ";
     assert_eq!(codes(src, "chord_into_mono_voice").len(), 1);
 }

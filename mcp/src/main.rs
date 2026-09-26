@@ -67,8 +67,9 @@ fn staleness() -> Option<String> {
 }
 const PROTOCOL_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18"];
 const MAX_RENDER_BARS: u32 = 512;
-/// Default threshold of the `limiter` node; a section peaking here is being limited.
-const LIMITER_CEILING: f32 = 0.95;
+/// Where the engine's output limiter holds the peak, less the margin it keeps
+/// and a little more: a section whose sample peak reaches this is being limited.
+const LIMITER_CEILING: f32 = 0.85;
 
 const INSTRUCTIONS: &str = "\
 Tatum writes music as `.synth` files: modules (instruments), patterns, tracks, \
@@ -76,7 +77,9 @@ scenes and an arrangement. Workflow: read `tatum_docs` once (it ends with sound-
 recipes), look at one example from `tatum_examples` for the target genre, write the file, \
 run `tatum_check` and fix every error it reports (they carry line numbers and suggestions), \
 act on its design warnings, then `tatum_render` and read the per-section loudness report to \
-judge the arrangement. Parameter names and ranges come from `tatum_params`; never invent a \
+judge the arrangement. The engine brings every song to -18 LUFS and limits its true peak \
+at -1 dB after the master chain, so the master is for colour, not loudness: no `limiter` \
+on it, and no makeup gain to make the song louder. Parameter names and ranges come from `tatum_params`; never invent a \
 parameter. Write values in their units where `tatum_params` lists one — `cutoff 800hz`, \
 `attack 20ms`, `osc2_pitch -12st`, `resonance 80%`, `makeup=6db` — rather than normalized \
 floats; a wrong unit is an error, a wrong float is not. A compressor's `makeup` is a linear \
@@ -220,7 +223,7 @@ fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "tatum_check",
-            "description": "Parse and compile .synth source without rendering. Returns ok=true with a summary (tempo, bars, duration, counts) plus design warnings (static_pad, dry_mix, no_sidechain, single_scene, no_limiter, unused_*) with a hint each, or ok=false with every error, each carrying a line number and often a suggestion. Fix all errors before rendering; treat warnings as things a producer would fix.",
+            "description": "Parse and compile .synth source without rendering. Returns ok=true with a summary (tempo, bars, duration, counts) plus design warnings (static_pad, dry_mix, no_sidechain, single_scene, master_limiter, unused_*) with a hint each, or ok=false with every error, each carrying a line number and often a suggestion. Fix all errors before rendering; treat warnings as things a producer would fix.",
             "inputSchema": {
                 "type": "object",
                 "properties": { "source": { "type": "string", "description": "Full .synth source text" } },
@@ -421,6 +424,7 @@ fn tool_debug(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let dir = args.get("output").and_then(Value::as_str).map(PathBuf::from)
         .unwrap_or_else(|| ctx.render_dir.join("debug").join(&slug));
     let mut opts = tatum_debug::Options::new(dir);
+    opts.gain = tatum_core::dsl::isolate::output_gain(source).map_err(|e| pretty(&e.to_json()))?;
     opts.dry = args.get("dry").and_then(Value::as_bool).unwrap_or(false);
     if let Some(b) = args.get("bars") {
         let text = b.as_str().map(String::from).or_else(|| b.as_u64().map(|n| n.to_string())).unwrap_or_default();
@@ -450,7 +454,7 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let tempo = song.globals.tempo;
     let steps_per_bar = song.globals.meter.0 as usize * 4;
 
-    let mut engine = SongEngine::from_compiled(song);
+    let mut engine = SongEngine::normalized(song);
     engine.set_band_metering(true);
     engine.reset_meters();
     let (l, r) = engine.render(bars);
@@ -546,8 +550,8 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let mut hints: Vec<String> = Vec::new();
     if !at_ceiling_sections.is_empty() {
         hints.push(format!(
-            "peak sits at the master limiter ceiling ({}) in: {}. The limiter is flattening dynamics there; lower track levels or the compressor makeup, or raise the sections that should be quieter instead.",
-            LIMITER_CEILING, at_ceiling_sections.join(", ")
+            "peak sits at the output limiter's ceiling in: {}. The engine brings every song to {} LUFS, and these sections have peaks too tall for that loudness, so the limiter is flattening them. Tame what spikes (a kick level, a resonant squelch, a compressor on the one track) rather than the whole mix.",
+            at_ceiling_sections.join(", "), tatum_core::output::TARGET_LUFS
         ));
     }
     // Tracks buried more than 30 dB under the loudest are effectively inaudible;
@@ -631,7 +635,7 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let crest_loss = if crest_in > 0.0 { 20.0 * (crest_out / crest_in).log10() } else { 0.0 };
     if crest_loss < -3.0 {
         hints.push(format!(
-            "the master chain removed {:.1} dB of crest factor ({:.1} in, {:.1} out): it is eating the transients rather than making the mix louder. Lower the compressor makeup (it is a linear gain, so 2 is +6 dB) or the track levels instead of pushing into the limiter.",
+            "the master chain and the output limiter removed {:.1} dB of crest factor ({:.1} in, {:.1} out): they are eating the transients. Loudness is not the master chain's job, the engine levels every song; lower the compressor makeup (it is a linear gain, so 2 is +6 dB) or the ratio.",
             -crest_loss, crest_in, crest_out
         ));
     }
@@ -697,6 +701,7 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         "rms": round3(rms),
         "clipped_samples": clipped,
         "gain_compensation": round3(engine.gain_compensation()),
+        "output_gain_db": round1(20.0 * engine.output_gain().max(1e-6).log10()),
         "master": {
             "peak_in": round3(in_peak),
             "rms_in": round3(in_rms),

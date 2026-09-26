@@ -155,4 +155,4 @@ track lead  { play lead_a using lead_fm level 0.0 pan -0.2 sidechain 0.5 delay_s
 track murk  { play murk_low using murk_pad level 0.0 pan -0.45 sidechain 0.55 reverb_send 0.4 delay_send 0.12 out > highpass(110hz, 0.02) as hp > eq(low=1.5, mid=-4.0, high=0.5) as tone > vowel(o, a, bars=12, wet=0.0) as vow > autopan(0.3, bars=8, wet=0.0) as pan > master }
 track hiss  { play hiss_swell using hiss_fm level 0.0 pan 0.5 sidechain 0.5 reverb_send 0.22 delay_send 0.1 out > gain(6) as up > bandpass(5000, 0.35, lfo_bars=4, lfo_depth=2000) as bp > lowpass(10khz, 0.02) as lp > master }
 
-master { in > tilt(-0.02) > eq(low=-0.5, mid=-0.8, high=2.6) > compressor(-9, ratio=2.5, attack=8, release=60, makeup=1.5db) > limiter(0.95) > out }
+master { in > tilt(-0.02) > eq(low=-0.5, mid=-0.8, high=2.6) > compressor(-9, ratio=2.5, attack=8, release=60, makeup=1.5db) > out }

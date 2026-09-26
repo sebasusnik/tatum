@@ -42,11 +42,14 @@ pub struct Options {
     pub out_dir: PathBuf,
     /// Width of the time axis in pixels.
     pub width: usize,
+    /// The engine's output gain; see `tatum_core::dsl::isolate::output_gain`.
+    /// The parts are taken before it, the mix after.
+    pub gain: f32,
 }
 
 impl Options {
     pub fn new(out_dir: PathBuf) -> Options {
-        Options { dry: false, bars: None, out_dir, width: 1400 }
+        Options { dry: false, bars: None, out_dir, width: 1400, gain: 1.0 }
     }
 }
 
@@ -156,6 +159,7 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
     // moments the report points at.
     let again = song.clone();
     let mut engine = SongEngine::from_compiled(song);
+    engine.set_output_gain(opts.gain);
     let clock = Clock::new(&engine);
     let (first, last) = match opts.bars {
         Some((a, b)) => (a.clamp(1, clock.bars()), b.clamp(a.max(1), clock.bars())),
@@ -248,6 +252,7 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
     }
     if !zooms.is_empty() {
         let mut engine = SongEngine::from_compiled(again);
+        engine.set_output_gain(opts.gain);
         let last_end = zooms.iter().map(|z| z.centre + ZOOM_SPECTRUM / 2).max().unwrap_or(0).min(end);
         play(&mut engine, last_end, |pos, chunk, taps, bl, br| {
             for z in zooms.iter_mut() {

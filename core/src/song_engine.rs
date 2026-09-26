@@ -16,6 +16,7 @@ use crate::modules::fm::FmModule;
 use crate::modules::keys::KeysModule;
 use crate::params::{self, ParamId, ModuleKind};
 use crate::primitives::arp_processor::{ArpProcessor, ArpEvent};
+use crate::output::{Loudness, OutputStage};
 use crate::rng::Rng;
 use crate::{math, Module, BLOCK_SIZE, SAMPLE_RATE};
 
@@ -482,6 +483,8 @@ pub struct SongEngine {
 
     // Master FX chain
     master_fx: FxChain,
+    /// Loudness and the true-peak ceiling, after the master chain: see `output`.
+    output: OutputStage,
     reverb_return: FxChain,
     delay_return: FxChain,
     reverb_sidechain: f32,
@@ -1090,6 +1093,7 @@ impl SongEngine {
             send_delay,
             send_reverb,
             master_fx,
+            output: OutputStage::new(),
             reverb_return,
             delay_return,
             reverb_sidechain,
@@ -1482,6 +1486,46 @@ impl SongEngine {
 
     /// Automatic gain compensation applied right now (1.0 = none).
     pub fn gain_compensation(&self) -> f32 { self.gain_comp_current }
+
+    /// An engine for `song` at the loudness every song plays at. It renders
+    /// the song once first to measure it, which takes a fraction of its length.
+    pub fn normalized(song: CompiledSong) -> Self {
+        let lufs = Self::loudness(&song);
+        let mut engine = Self::from_compiled(song);
+        engine.output.gain = crate::output::gain_for(lufs);
+        engine
+    }
+
+    /// Integrated loudness of `song` as it leaves its master chain, in LUFS:
+    /// the whole arrangement, or four bars of a song without one. `None` when
+    /// it is silent.
+    pub fn loudness(song: &CompiledSong) -> Option<f32> {
+        let mut engine = Self::from_compiled(song.clone());
+        engine.output.bypass = true;
+        let bars = match engine.arrangement_bars() { 0 => 4, n => n };
+        let total = (bars as f32 * engine.steps_per_bar as f32 * engine.samples_per_step) as usize;
+        engine.start();
+        let mut meter = Loudness::new();
+        let (mut l, mut r) = ([0.0f32; BLOCK_SIZE], [0.0f32; BLOCK_SIZE]);
+        let mut done = 0;
+        while done < total && engine.running {
+            let n = (total - done).min(BLOCK_SIZE);
+            engine.process_block_stereo(&mut l[..n], &mut r[..n]);
+            for i in 0..n {
+                meter.push(l[i], r[i]);
+            }
+            done += n;
+        }
+        meter.lufs()
+    }
+
+    /// The gain the output stage puts on the song, linear. 1.0 until the
+    /// engine is normalized.
+    pub fn output_gain(&self) -> f32 { self.output.gain }
+
+    /// Put the output stage at a gain measured elsewhere: a live session keeps
+    /// the one it measured when the song was loaded.
+    pub fn set_output_gain(&mut self, gain: f32) { self.output.gain = gain; }
 
     /// How many tracks the last rendered block skipped whole: muted, nothing
     /// left ringing, and not feeding the sidechain. Skipping is audio-neutral
@@ -2000,6 +2044,10 @@ impl SongEngine {
                 self.master_in_sum_sq += (output_l[s] * output_l[s] + output_r[s] * output_r[s]) as f64;
                 self.master_in_samples += 2;
             }
+        }
+
+        for s in 0..len {
+            (output_l[s], output_r[s]) = self.output.process(output_l[s], output_r[s]);
         }
 
         self.track_bufs_l = track_bufs_l;
@@ -2667,6 +2715,7 @@ impl SongEngine {
         self.send_delay.reset();
         self.send_reverb.reset();
         self.master_fx.reset();
+        self.output.reset();
         self.reverb_return.reset();
         self.delay_return.reset();
         for track in self.tracks.iter_mut() {
@@ -3100,6 +3149,10 @@ impl SongEngine {
             core::mem::swap(&mut self.master_fx, &mut old.master_fx);
             self.master_fx.set_bpm(self.tempo);
         }
+        // The output stage always carries over: an edit does not re-measure
+        // the song, so the level does not move while it is being played, and
+        // the limiter's look-ahead holds the old engine's last 1.7 ms.
+        core::mem::swap(&mut self.output, &mut old.output);
         // Smoothed and random state continues regardless of what changed: a
         // gain ramp restarting or the humanize sequence rewinding is audible.
         core::mem::swap(&mut self.timing_rng, &mut old.timing_rng);

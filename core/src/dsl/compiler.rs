@@ -356,9 +356,12 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
         }
     }
 
-    // 5. Compile master
+    // 5. Compile master. A `limiter` in it is left out: the engine's output
+    // stage limits every song on its true peak, after it and after the gain
+    // that levels the song, so one here could only limit a level that is
+    // about to change.
     let master = match &song.master {
-        Some(m) => match compile_fx_chain("master", &m.chain, samples_per_bar) {
+        Some(m) => match compile_fx_chain("master", &without_limiter(&m.chain), samples_per_bar) {
             Ok(c) => CompiledMaster { fx_chain: c },
             Err(e) => { errors.push(e); CompiledMaster { fx_chain: Vec::new() } }
         },
@@ -1429,8 +1432,14 @@ fn unknown_param_message(kind: ModuleKind, module_name: &str, param: &str) -> St
     format!("{}. Run `tatum params {}` for the list", base, kind.as_str())
 }
 
+/// The master chain as it is built: without the `limiter` the engine
+/// replaces with its own.
+fn without_limiter(chain: &[ChainNode]) -> Vec<ChainNode> {
+    chain.iter().filter(|n| n.kind != "limiter").cloned().collect()
+}
+
 /// Master-chain parameters that `auto master <param>` can move.
-pub const MASTER_AUTO_PARAMS: &[&str] = &["tilt", "eq_low", "eq_mid", "eq_high", "drive", "gain", "cutoff", "limiter", "comp_threshold"];
+pub const MASTER_AUTO_PARAMS: &[&str] = &["tilt", "eq_low", "eq_mid", "eq_high", "drive", "gain", "cutoff", "comp_threshold"];
 
 /// Node kinds that carry a given master automation parameter.
 pub fn master_auto_node_kinds(param: &str) -> &'static [&'static str] {
@@ -1440,7 +1449,6 @@ pub fn master_auto_node_kinds(param: &str) -> &'static [&'static str] {
         "drive" => &["saturate", "drive"],
         "gain" => &["gain"],
         "cutoff" => &["lowpass", "highpass", "bandpass", "ladder"],
-        "limiter" => &["limiter"],
         "comp_threshold" => &["compressor"],
         _ => &[],
     }

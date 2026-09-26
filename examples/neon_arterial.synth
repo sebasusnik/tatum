@@ -672,16 +672,14 @@ track bell {
 
 # ────────────────────────────────────────────────
 # MASTER
-# Everything on lands around 0.3 into this, so the limiter is a safety net
-# and not a mix decision. A section sitting at the ceiling means the section
-# is too loud, not that the limiter needs lowering.
+# Everything on lands around 0.3 into this. The engine levels the song and
+# limits it after the chain, so this is colour, not loudness.
 # ────────────────────────────────────────────────
 
 master {
     in > eq(low=1.6, mid=-0.8, high=1.0)
        > tilt(0.0)
        > compressor(-6db, ratio=2.0, attack=18ms, release=140ms, makeup=5.5db)
-       > limiter(0.95)
        > out
 }
 

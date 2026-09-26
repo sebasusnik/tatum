@@ -245,6 +245,7 @@ fn cmd_render(args: &[String]) {
     let mut engine = tatum_core::song_engine::SongEngine::from_compiled(
         debug::compile_or_exit(&source, &isolation),
     );
+    engine.set_output_gain(debug::output_gain_or_exit(&source));
 
     let render_bars = bars.unwrap_or_else(|| {
         let arr = engine.arrangement_bars();

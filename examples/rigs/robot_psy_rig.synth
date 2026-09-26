@@ -199,4 +199,4 @@ track robot { play robot_a using robot_osc level 0.0 pan -0.12 gate 0.35 sidecha
 track pad   { play pad_low using pad_keys level 0.0 pan -0.45 sidechain 0.5 reverb_send 0.35 delay_send 0.08 out > highpass(160hz, 0.02) as hp > eq(low=0.5, mid=-3.5, high=0.5) as tone > vowel(o, u, bars=16, wet=0.0) as vox > master }
 track noise { play noise_swell using noise_fm level 0.0 pan 0.5 sidechain 0.5 reverb_send 0.25 delay_send 0.1 out > gain(5) as up > bandpass(4800, 0.3, lfo_bars=4, lfo_depth=2200) as bp > lowpass(10khz, 0.02) as lp > master }
 
-master { in > eq(low=1.0, mid=0.5, high=1.6) > compressor(-6, ratio=2.0, attack=5, release=50, makeup=4.0) > limiter(0.95) > out }
+master { in > eq(low=1.0, mid=0.5, high=1.6) > compressor(-6, ratio=2.0, attack=5, release=50, makeup=4.0) > out }

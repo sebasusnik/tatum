@@ -251,11 +251,11 @@ track arpsynth {
 }
 
 # ────────────────────────────────────────────────
-# MASTER (matching reference: eq, compressor, limiter)
+# MASTER (matching reference: eq, compressor; the engine limits after it)
 # ────────────────────────────────────────────────
 
 master {
-    in > eq(low=2.0, mid=1.0, high=1.0) > compressor(-9.0, ratio=5.0, attack=8, release=80, makeup=12db) > limiter > out
+    in > eq(low=2.0, mid=1.0, high=1.0) > compressor(-9.0, ratio=5.0, attack=8, release=80, makeup=12db) > out
 }
 
 # ────────────────────────────────────────────────

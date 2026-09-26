@@ -488,7 +488,6 @@ master {
     in > eq(low=0.4, mid=2.0, high=0.8)
        > saturate(0.30)
        > compressor(-10, ratio=5.0, attack=1, release=20, makeup=2.5)
-       > limiter
        > out
 }
 

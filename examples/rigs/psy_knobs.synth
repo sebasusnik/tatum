@@ -217,7 +217,6 @@ track psyche { play psyche_swirl using psyche level 0 pan 0.34 delay_send 0.18 r
 master {
     in > eq(low=1.1, mid=1.0, high=0.95)
        > compressor(-6, ratio=2.0, attack=5, release=50, makeup=4.00)
-       > limiter
        > out
 }
 

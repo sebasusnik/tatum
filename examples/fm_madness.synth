@@ -379,7 +379,6 @@ track subkick {
 master {
     in > eq(low=1.5, mid=1.0, high=1.5)
        > compressor(-5, ratio=2, attack=8, release=80, makeup=3.68)
-       > limiter
        > out
 }
 

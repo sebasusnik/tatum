@@ -82,7 +82,7 @@ track pluck { play chord_hold using pluck level 0.38 pan 0.35 delay_send 0.3 rev
 track wash  { play wash_pad using wash level 0.25 pan -0.4 reverb_send 0.5 out > autopan(0.25, bars=8) > master }
 
 master {
-    in > eq(low=2.0, mid=-1.5, high=1.2) > compressor(-10, ratio=4, attack=2, release=40, makeup=2.80) > limiter > out
+    in > eq(low=2.0, mid=-1.5, high=1.2) > compressor(-10, ratio=4, attack=2, release=40, makeup=2.80) > out
 }
 
 scene intro {

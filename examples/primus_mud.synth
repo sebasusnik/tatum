@@ -411,7 +411,6 @@ track scrape {
 master {
     in > eq(low=-1.0, mid=2.0, high=1.5)
        > compressor(-9, ratio=2.5, attack=12, release=90, makeup=5db)
-       > limiter(0.95)
        > out
 }
 

@@ -25,7 +25,6 @@ track drums {{ play beat using kit out > master }}
 track bass  {{ play bassline using low out > master }}
 track pad   {{ play hold using pad {} out > master }}
 
-master {{ in > limiter > out }}
 scene a {{
     track drums {{ play beat using kit }}
     track bass  {{ play bassline using low }}
@@ -133,7 +132,6 @@ pattern beat {{ kick: X - - -  - - - -  - - - -  - - - - }}
 pattern hold {{ [1.3 3.3 5.3] ..*15 }}
 track drums {{ play beat using kit level 0.0 out > master }}
 track pad {{ play hold using pad out > master }}
-master {{ in > limiter > out }}
 scene a {{ track drums {{ play beat using kit level 0.0 }} track pad {{ play hold using pad }} }}
 arrange {{ a x1 }}
 "#, shape);

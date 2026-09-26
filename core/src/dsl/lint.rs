@@ -290,13 +290,13 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
         ));
     }
 
-    // ── no_limiter: master chain without a limiter ──
+    // ── master_limiter: a limiter the engine leaves out ──
     let has_limiter = song.master.as_ref().is_some_and(|m| m.chain.iter().any(|n| n.kind == "limiter"));
-    if !has_limiter {
+    if has_limiter {
         out.push(lint(
-            "no_limiter",
-            String::from("master chain has no limiter"),
-            "End the master chain with `limiter` to catch peaks: `master { in > eq(...) > compressor(...) > limiter > out }`.",
+            "master_limiter",
+            String::from("the master chain has a limiter, which is left out"),
+            "Every song ends in the engine's own limiter, after the gain that brings it to the same loudness as every other song, and it keeps the true peak under -1 dB. Take `limiter` off the master; a compressor or saturation there still shapes the sound.",
         ));
     }
 

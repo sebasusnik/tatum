@@ -197,7 +197,7 @@ pub const NODES: &[NodeDefSpec] = &[
         doc: "Record a window of this chain and loop it back, stretched or reversed. Passes the signal through until the window is full." },
     NodeDefSpec { name: "limiter", aliases: &[], category: Category::Effect,
         positional: &[arg!("threshold", 0.1, 1.0, 0.95, "output ceiling")], named: &[],
-        waveform: false, rhythm: false, in_chains: true, doc: "Lookahead peak limiter; put it last on the master." },
+        waveform: false, rhythm: false, in_chains: true, doc: "Lookahead peak limiter, for one track or bus; on the master it is left out, the engine limits every song itself." },
     NodeDefSpec { name: "tilt", aliases: &[], category: Category::Effect,
         positional: &[arg!("amount", -1.0, 1.0, 0.0, "negative = darker, positive = brighter")], named: &[],
         waveform: false, rhythm: false, in_chains: true, doc: "One-knob tilt EQ around 1 kHz." },

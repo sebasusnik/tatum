@@ -398,7 +398,6 @@ master {
        # simply unused. Swept it: crest is flat at 10.55 all the way to 1.35
        # and only starts to go at 1.5, so this is the free level.
        > compressor(-10, ratio=3, attack=3, release=55, makeup=1.35)
-       > limiter
        > out
 }
 

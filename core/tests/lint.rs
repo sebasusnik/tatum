@@ -12,7 +12,7 @@ pattern hold { [1.3 3.3 5.3] .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. }
 pattern beat { kick: X - - - X - - - X - - - X - - - }
 track pad   { play hold using pad reverb_send 0.3 out > master }
 track drums { play beat using kit out > master }
-master { in > limiter > out }
+master { in > eq(low=1.0) > out }
 scene a { track pad { play hold using pad } track drums { play beat using kit } }
 scene b { track pad { play hold using pad } }
 arrange { a x4 b x4 }
@@ -52,8 +52,10 @@ fn mix_and_arrangement_lints() {
     assert!(lints(&dry).contains(&"dry_mix"));
     let no_sc = SONG.replace("sidechain 0.3\n", "");
     assert!(lints(&no_sc).contains(&"no_sidechain"));
-    let no_lim = SONG.replace("master { in > limiter > out }\n", "");
-    assert!(lints(&no_lim).contains(&"no_limiter"));
+    // The engine limits every song itself, so a master limiter is left out.
+    let limited = SONG.replace("eq(low=1.0) > out", "eq(low=1.0) > limiter > out");
+    assert!(lints(&limited).contains(&"master_limiter"));
+    assert!(!lints(SONG).contains(&"master_limiter"));
     let flat = SONG.replace("scene b { track pad { play hold using pad } }\n", "").replace("arrange { a x4 b x4 }", "arrange { a x16 }");
     assert!(lints(&flat).contains(&"single_scene"));
     let unused = SONG.replace("module beats kit { kick_level 1.0 }", "module beats kit { kick_level 1.0 }\nmodule fm spare { }\npattern spare_p { 1.1 - - - }");

@@ -6,6 +6,7 @@
 
 use tatum_core::dsl::isolate::{self, Isolation};
 use tatum_core::song_engine::SongEngine;
+use tatum_core::output::OUTPUT_DELAY;
 use tatum_core::BLOCK_SIZE;
 
 const SONG: &str = r#"
@@ -91,14 +92,15 @@ fn peak(x: &[f32]) -> f32 { x.iter().fold(0.0, |a, v| a.max(v.abs())) }
 #[test]
 fn the_parts_add_up_to_the_mix() {
     // No master chain and no gain compensation: what enters master comes out,
-    // at the engine's fixed master level.
+    // at the engine's fixed master level, OUTPUT_DELAY samples later (this
+    // song stays under the output limiter's ceiling).
     const MASTER_LEVEL: f32 = 0.8;
     let p = render(&Isolation::default(), 1);
     let mut worst = 0.0f32;
-    for s in 0..p.out.len() {
+    for s in 0..p.out.len() - OUTPUT_DELAY {
         // drums and pad go to master; bass only through its bus
         let sum = p.track("drums")[s] + p.track("pad")[s] + p.buses[0][s] + p.returns[s];
-        worst = worst.max((sum * MASTER_LEVEL - p.out[s]).abs());
+        worst = worst.max((sum * MASTER_LEVEL - p.out[s + OUTPUT_DELAY]).abs());
     }
     assert!(peak(&p.out) > 0.05);
     assert!(worst < 1e-5, "the parts miss the mix by {worst}");

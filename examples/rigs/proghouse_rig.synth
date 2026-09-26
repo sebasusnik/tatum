@@ -221,4 +221,4 @@ track arp    { play arp_a using arp_keys level 0.0 pan -0.28 sidechain 0.55 dela
 track air    { play air_hold using air_fm level 0.0 pan 0.45 sidechain 0.45 reverb_send 0.6 delay_send 0.15 out > highpass(1.4khz, 0.02) as hp > autopan(0.35, bars=14, wet=0.0) as pan > master }
 track sweep  { play sweep_slow using sweep_fm level 0.0 pan 0.0 sidechain 0.45 reverb_send 0.3 delay_send 0.12 out > gain(5) as up > bandpass(3500, 0.28, lfo_bars=8, lfo_depth=2400) as bp > lowpass(10khz, 0.02) as lp > master }
 
-master { in > tilt(0.02) > eq(low=0.8, mid=-0.4, high=1.4) > compressor(-6, ratio=2.0, attack=10, release=90, makeup=4.0) > limiter(0.95) > out }
+master { in > tilt(0.02) > eq(low=0.8, mid=-0.4, high=1.4) > compressor(-6, ratio=2.0, attack=10, release=90, makeup=4.0) > out }

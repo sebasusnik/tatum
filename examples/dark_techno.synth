@@ -315,7 +315,6 @@ master {
     in > tilt(-0.08)
        > eq(low=1.0, mid=-1.5, high=1.0)
        > compressor(-10, ratio=3.0, attack=15, release=110, makeup=0.874)
-       > limiter
        > out
 }
 

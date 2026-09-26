@@ -74,6 +74,14 @@ pub fn compile(source: &str, isolation: &Isolation) -> Result<CompiledSong, DslE
     compiler::compile(&ast).map_err(DslError::Compile)
 }
 
+/// The output gain for `source`, measured on the whole song whatever is
+/// isolated from it: a soloed track plays as loud as it sits in the mix, not
+/// levelled up to where the whole song would be.
+pub fn output_gain(source: &str) -> Result<f32, DslError> {
+    let full = compile(source, &Isolation::default())?;
+    Ok(crate::output::gain_for(crate::song_engine::SongEngine::loudness(&full)))
+}
+
 /// Every track name in the song, top level and scenes, first appearance order.
 pub fn track_names(song: &Song) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();

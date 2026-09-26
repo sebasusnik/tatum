@@ -77,4 +77,4 @@ track liquid { play stab using rhodes_liquid pan 0.3 level 0.0 reverb_send 0.3 d
 track hard   { play stab using rhodes_hard pan -0.35 level 0.0 delay_send 0.2 out > saturate(0.5, wet=0.0) as drive > bitcrush(6, wet=0.0) as crush > master }
 track bell   { play stab using bell pan 0.5 level 0.0 reverb_send 0.6 out > autowah(0.9, base=900hz, range=4000hz, wet=0.0) as wah > master }
 
-master { in > eq(low=0.5, mid=0, high=0.8) > compressor(-8, ratio=2) > limiter(0.95) > out }
+master { in > eq(low=0.5, mid=0, high=0.8) > compressor(-8, ratio=2) > out }

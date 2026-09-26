@@ -209,4 +209,4 @@ track spike   { play screech_b using screech_fm level 0.0 pan 0.55 gate 0.15 sid
 track drone   { play drone_low using drone_keys level 0.0 pan -0.45 sidechain 0.55 reverb_send 0.4 delay_send 0.12 out > highpass(120hz, 0.02) as hp > eq(low=1.0, mid=-4.5, high=0.5) as tone > vowel(o, a, bars=14, wet=0.0) as vow > autopan(0.3, bars=9, wet=0.0) as pan > master }
 track hiss    { play hiss_swell using hiss_fm level 0.0 pan 0.5 sidechain 0.5 reverb_send 0.25 delay_send 0.12 out > gain(6) as up > bandpass(5200, 0.35, lfo_bars=4, lfo_depth=2600) as bp > lowpass(11khz, 0.02) as lp > master }
 
-master { in > tilt(-0.03) > eq(low=-0.5, mid=-0.9, high=2.6) > compressor(-9, ratio=2.5, attack=8, release=60, makeup=1.5db) > limiter(0.95) > out }
+master { in > tilt(-0.03) > eq(low=-0.5, mid=-0.9, high=2.6) > compressor(-9, ratio=2.5, attack=8, release=60, makeup=1.5db) > out }

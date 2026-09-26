@@ -240,15 +240,14 @@ track bells {
 
 # ────────────────────────────────────────────────
 # MASTER
-# Engine master chain order: TiltEq, ThreeBandEq, Compressor, Limiter.
-# tilt 0.15, eq low +3 / mid 0 / high -1, compressor + limiter at defaults.
+# Engine master chain order: TiltEq, ThreeBandEq, Compressor; the engine's
+# own output stage limits after it. tilt 0.15, eq low +3 / mid 0 / high -1.
 # ────────────────────────────────────────────────
 
 master {
     in > tilt(0.15)
        > eq(low=3.0, mid=0.0, high=-1.0)
        > compressor(-3.0, ratio=3.0, attack=20, release=100, makeup=1.00)
-       > limiter
        > out
 }
 

@@ -843,7 +843,6 @@ track dialup {
 master {
     in > eq(low=1.1, mid=1.0, high=0.95)
        > compressor(-6, ratio=2.0, attack=5, release=50, makeup=4.00)
-       > limiter
        > out
 }
 

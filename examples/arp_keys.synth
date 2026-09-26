@@ -54,7 +54,7 @@ track keys {
     # sweep across the whole clip.
 }
 
-master { in > eq(low=1.5, mid=-1.0, high=0.5) > compressor(-10, ratio=2, makeup=4db) > limiter > out }
+master { in > eq(low=1.5, mid=-1.0, high=0.5) > compressor(-10, ratio=2, makeup=4db) > out }
 
 scene main {
     track keys { play cm7_hold using pad }
