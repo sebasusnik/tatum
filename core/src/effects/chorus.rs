@@ -63,10 +63,6 @@ impl Chorus {
         }
     }
 
-    fn read_buffer(&self, offset: usize) -> f32 {
-        Self::tap(&self.buffer, self.write_pos, offset)
-    }
-
     #[inline]
     fn tap(buf: &[f32; 4096], write_pos: usize, offset: usize) -> f32 {
         if write_pos >= offset {
@@ -77,14 +73,20 @@ impl Chorus {
     }
 
     /// Cubic Hermite (Catmull-Rom) read of `buf` at a fractional delay.
+    ///
+    /// The four points run in the direction the delay grows: from the tap at
+    /// `delay_int` towards the older one at `delay_int + 1`. They used to run
+    /// the other way, towards the newer sample, so each time the delay crossed
+    /// a whole sample the read jumped two samples back; at the sweep's speed
+    /// that is hundreds of steps a second, and they sound like a bitcrusher.
     #[inline]
     fn read_interp(buf: &[f32; 4096], write_pos: usize, delay: f32) -> f32 {
         let delay_int = delay as usize;
         let delay_frac = delay - delay_int as f32;
-        let s0 = Self::tap(buf, write_pos, delay_int + 1);
+        let s0 = Self::tap(buf, write_pos, delay_int.saturating_sub(1));
         let s1 = Self::tap(buf, write_pos, delay_int);
-        let s2 = Self::tap(buf, write_pos, if delay_int > 0 { delay_int - 1 } else { 0 });
-        let s3 = Self::tap(buf, write_pos, if delay_int > 1 { delay_int - 2 } else { 0 });
+        let s2 = Self::tap(buf, write_pos, delay_int + 1);
+        let s3 = Self::tap(buf, write_pos, delay_int + 2);
         let t = delay_frac;
         let t2 = t * t;
         let t3 = t2 * t;
@@ -120,23 +122,7 @@ impl Chorus {
 
         let lfo_val = self.lfo.next_sample();
         let delay = self.base_delay + lfo_val * self.depth;
-        let delay_int = delay as usize;
-        let delay_frac = delay - delay_int as f32;
-
-        // Cubic Hermite (Catmull-Rom) interpolation: 4 samples
-        let s0 = self.read_buffer(delay_int + 1);
-        let s1 = self.read_buffer(delay_int);
-        let s2 = self.read_buffer(if delay_int > 0 { delay_int - 1 } else { 0 });
-        let s3 = self.read_buffer(if delay_int > 1 { delay_int - 2 } else { 0 });
-
-        let t = delay_frac;
-        let t2 = t * t;
-        let t3 = t2 * t;
-
-        let delayed = s1
-            + 0.5 * t * (s2 - s0)
-            + t2 * (s0 - 2.5 * s1 + 2.0 * s2 - 0.5 * s3)
-            + t3 * (-0.5 * s0 + 1.5 * s1 - 1.5 * s2 + 0.5 * s3);
+        let delayed = Self::read_interp(&self.buffer, self.write_pos, delay);
 
         self.write_pos = (self.write_pos + 1) % self.buffer.len();
 
