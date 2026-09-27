@@ -11,11 +11,11 @@
 #
 # Faders, left to right                 Knobs, left to right
 #   1 drums (kick, rim, clap)             1 dub chord: opens and throws into the echo
-#   2 hats                                2 walking bass: filter, squelch, bite
+#   2 hats                                2 the bass playing: walker or 303
 #   3 wind                                3 Detroit chords: open
 #   4 sub                                 4 lead: filter and resonance
 #   5 dub chord                           5 tension: brighter master, more wind
-#   6 walking bass                        6 reverb amount
+#   6 walking bass / 303                  6 reverb amount
 #   7 Detroit chords                      7 kick length
 #   8 echo amount                         8 hat length
 #   9 DJ filter: centre open, down dark, up thin
@@ -230,6 +230,130 @@ module bass lead {
     vel_env 35%
 }
 
+# ── From hitech_psy: the acid stretch ──
+
+# The 303: one saw into a resonant filter that a big envelope snaps open on
+# every note, slides where the pattern writes `~`. A slow LFO opens and closes
+# it over 16 bars so it breathes with no hand on it; knob 2 sets where.
+module bass squelch {
+    cutoff 340hz
+    cutoff_env 3.4khz
+    resonance 70%
+    glide 14%
+    osc1_wave saw
+    osc2_wave saw
+    osc2_pitch 0.1st
+    keytrack 30%
+    attack 1ms
+    decay 170ms
+    sustain 18%
+    release 30ms
+    vel_env 55%
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync bars_16
+    lfo_depth 16%
+}
+
+# The rolling bass: short, round, three sixteenths after every kick.
+module bass roller {
+    cutoff 130hz
+    cutoff_env 700hz
+    resonance 28%
+    glide 2%
+    osc1_wave saw
+    osc2_wave square
+    osc2_pitch -12st
+    keytrack 20%
+    attack 1ms
+    decay 95ms
+    sustain 12%
+    release 18ms
+}
+
+# The weird ones, each for a moment and not a bed.
+module fm metal {
+    algorithm pair_plus_two
+    mod_index 0.95
+    feedback 0.70
+    waveform abs_sine
+    op0_ratio 6.235x
+    op1_ratio 2.205x
+    op2_ratio 4.065x
+    op3_ratio 1.585x
+    op0_envelope 0.001 0.08 0.0 0.10
+    op1_envelope 0.001 0.12 0.0 0.15
+    op2_envelope 0.001 0.06 0.0 0.08
+    op3_envelope 0.001 0.10 0.0 0.12
+    op0_feedback 0.65
+    op1_feedback 0.55
+    op2_feedback 0.70
+}
+
+# A modem shaking hands.
+module fm dialup {
+    algorithm pair_plus_two
+    mod_index 0.92
+    feedback 0.70
+    waveform sine
+    op0_ratio 5.925x
+    op1_ratio 1.895x
+    op2_ratio 3.91x
+    op3_ratio 2.67x
+    op0_envelope 0.001 0.03 0.0 0.02
+    op1_envelope 0.001 0.04 0.0 0.03
+    op2_envelope 0.001 0.02 0.0 0.02
+    op3_envelope 0.001 0.05 0.0 0.04
+    op0_feedback 0.45
+    op1_feedback 0.55
+    op2_feedback 0.40
+    lfo_rate 2.488hz
+    lfo_depth 0.25
+    lfo_target mod_index
+    lfo_waveform square
+}
+
+module fm siren {
+    algorithm dual_pairs
+    mod_index 0.60
+    feedback 0.25
+    waveform sine
+    op0_ratio 2.515x
+    op1_ratio 1.5075x
+    op0_envelope 0.3 0.5 0.50 0.6
+    op1_envelope 0.2 0.4 0.60 0.5
+    vibrato_rate 4.3hz
+    vibrato_depth 0.15
+    lfo_rate 1.692hz
+    lfo_depth 0.18
+    lfo_target mod_index
+    lfo_waveform sine
+}
+
+# Noise with a pitch somewhere in it: the air before a peak.
+module fm air {
+    algorithm pair_plus_two
+    mod_index 1.0
+    feedback 1.0
+    waveform abs_sine
+    op0_ratio 7.785x
+    op1_ratio 2.515x
+    op2_ratio 5.305x
+    op3_ratio 1.43x
+    op0_envelope 0.001 2.0 0.15 1.5
+    op1_envelope 0.001 1.8 0.20 1.3
+    op2_envelope 0.001 1.6 0.18 1.2
+    op3_envelope 0.001 2.2 0.12 1.8
+    op0_feedback 0.90
+    op1_feedback 0.85
+    op2_feedback 0.88
+    op3_feedback 0.80
+    lfo_target mod_index
+    lfo_waveform triangle
+    lfo_sync bars_8
+    lfo_depth 22%
+}
+
 # ════════════════════════════════════════════════════════
 # PATTERNS
 # ════════════════════════════════════════════════════════
@@ -350,6 +474,72 @@ pattern bl_a {
     -  -  -  -    -  -  -  -    -  -  -  -    C5:0.50  -  -  -
     -  -  -  -    -  -  -  -    -  -  -  -    -  -  Eb5:0.40 -
 }
+
+# ── The acid stretch ──
+
+pattern kick_roll { kick: X - - -  X - - -  X - - -  X - - - }
+pattern kick_peak {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap:  - - - -  x:0.8 - - -  - - - -  x:0.8 - - -   - - - -  x:0.8 - - -  - - - -  x:0.85 - - -
+    snare: - - - x:0.2  - - - -  - - x:0.18 -  - - - x:0.22   - - - x:0.2  - - - -  - - x:0.18 -  - x:0.2 - x:0.26
+}
+pattern hat_16 {
+    hat:     x:0.55 x:0.28 x:0.66 x:0.3  x:0.55 x:0.28 x:0.66 x:0.3  x:0.55 x:0.28 x:0.66 x:0.3  x:0.55 x:0.28 x:0.66 x:0.34
+    openhat: - - - -  - - - -  - - - -  - - x:0.4 -
+}
+pattern hat_16_open {
+    hat:     x:0.58 x:0.3 x:0.7 x:0.32  x:0.58 x:0.3 x:0.7 x:0.32  x:0.58 x:0.3 x:0.7 x:0.32  x:0.58 x:0.3 x:0.7 x:0.36
+    openhat: - - x:0.44 -  - - x:0.4 -  - - x:0.44 -  - - x:0.46 -
+}
+
+# The 303. `~` slides into the note without a new attack.
+pattern acid_low {
+    F3:0.9  -  F3:0.5  -    F4:0.7  -  F3:0.5  -    F3:0.9  -  Ab3:0.6  -    F3:0.7  ~Eb3:0.6  -  F3:0.5
+    F3:0.9  -  F3:0.5  -    F4:0.7  -  F3:0.5  -    F3:0.9  -  C4:0.6   -    Bb3:0.7 ~Ab3:0.6  -  F3:0.5
+}
+pattern acid_riff {
+    F3:0.95 ~F3:0.6  F4:0.8  -        F3:0.7  Eb4:0.75  -  ~F4:0.7    F3:0.9  -  C4:0.75  F3:0.5     Ab3:0.8  -  ~Bb3:0.7  F3:0.6
+    F3:0.95 -        F4:0.8  ~Eb4:0.7 -       C4:0.75   F3:0.6  -     Db4:0.8 -  ~C4:0.7  F3:0.6     F3:0.9   Ab3:0.6  -  ~C4:0.75
+}
+pattern acid_peak {
+    F3:0.95 F3:0.5  F4:0.85 ~Eb4:0.7  F3:0.6  C4:0.8  F3:0.5  ~F4:0.75    F3:0.9  Ab3:0.6  C4:0.8  ~Db4:0.7   F3:0.6  F4:0.85  -  ~Eb4:0.7
+    F3:0.95 F3:0.5  Ab3:0.8 ~Bb3:0.7  F3:0.6  Eb4:0.8 F3:0.5  ~F4:0.75    Db4:0.9 ~C4:0.7  F3:0.6 Ab3:0.7     F3:0.6  C4:0.85  F4:0.7 ~Eb4:0.75
+}
+
+# Rolling: the kick on one, the bass on the three sixteenths after it.
+pattern roll_f {
+    -  F1:0.78  F1:0.5  F1:0.64    -  F1:0.78  F1:0.5  F1:0.64    -  F1:0.78  F1:0.5  F1:0.64    -  F1:0.78  F1:0.5  F1:0.64
+}
+pattern roll_move {
+    -  F1:0.78  F1:0.5  F1:0.64    -  F1:0.78  F1:0.5  F1:0.64    -  F1:0.78  F1:0.5  F1:0.64    -  F1:0.78  F1:0.5  F1:0.64
+    -  F1:0.78  F1:0.5  F1:0.64    -  F1:0.78  F1:0.5  F1:0.64    -  F1:0.78  F1:0.5  F1:0.64    -  Ab1:0.78 Ab1:0.5 C2:0.66
+}
+pattern roll_stutter {
+    -  F1:0.8  F1:0.8  -    -  F1:0.8  F1:0.8  -    -  F1:0.8  F1:0.8  -    -  F1:0.8  F1:0.8  F1:0.5
+}
+pattern roll_peak {
+    -  F1:0.78  F1:0.5  F1:0.64    -  F1:0.78  F1:0.5  F1:0.64    -  F1:0.78  F1:0.5  F1:0.64    -  F1:0.78  F1:0.5  F1:0.64
+    -  F1:0.78  F1:0.5  F1:0.64    -  F1:0.78  F1:0.5  F1:0.64    -  F1:0.78  F1:0.5  F1:0.64    -  F1:0.78  Ab1:0.5  C2:0.66
+    -  Bb1:0.78  Bb1:0.5  Bb1:0.64    -  Bb1:0.78  Bb1:0.5  Bb1:0.64    -  Bb1:0.78  Bb1:0.5  Bb1:0.64    -  Bb1:0.78  Bb1:0.5  Bb1:0.64
+    -  Bb1:0.78  Bb1:0.5  Bb1:0.64    -  Bb1:0.78  Bb1:0.5  Bb1:0.64    -  Bb1:0.78  Bb1:0.5  Bb1:0.64    -  Bb1:0.78  Db2:0.5  F1:0.66
+    -  Eb2:0.78  Eb2:0.5  Eb2:0.64    -  Eb2:0.78  Eb2:0.5  Eb2:0.64    -  Eb2:0.78  Eb2:0.5  Eb2:0.64    -  Eb2:0.78  Eb2:0.5  Eb2:0.64
+    -  Eb2:0.78  Eb2:0.5  Eb2:0.64    -  Eb2:0.78  Eb2:0.5  Eb2:0.64    -  Eb2:0.78  Eb2:0.5  Eb2:0.64    -  Eb2:0.78  G1:0.5  Bb1:0.66
+    -  Ab1:0.78  Ab1:0.5  Ab1:0.64    -  Ab1:0.78  Ab1:0.5  Ab1:0.64    -  Ab1:0.78  Ab1:0.5  Ab1:0.64    -  Ab1:0.78  Ab1:0.5  Ab1:0.64
+    -  Ab1:0.78  Ab1:0.5  Ab1:0.64    -  Ab1:0.78  Ab1:0.5  Ab1:0.64    -  Ab1:0.78  Ab1:0.5  Ab1:0.64    -  Ab1:0.78  C2:0.5  Eb2:0.66
+}
+
+pattern metal_hit {
+    F4:0.55  -  -  -    -  -  -  F4:0.38    -  -  -  -    F4:0.48  -  -  -
+    -  -  -  -          -  -  -  -          -  -  -  -    -  -  -  -
+}
+pattern metal_stutter {
+    F4:0.52  F4:0.3  -  F4:0.38    -  -  -  -    F4:0.48  F4:0.28  -  F4:0.35    -  -  -  F4:0.4
+}
+pattern dialup_scatter {
+    3.5:0.38  -  7.3:0.30  -    -  5.4:0.35  -  2.4:0.28    6.3:0.32  -  -  4.5:0.30    -  1.4:0.35  -  -
+}
+pattern siren_hold { F3:0.5 ..*63 }
+pattern air_hold { F3:0.5 ..*63 }
 
 # ════════════════════════════════════════════════════════
 # BUSES
@@ -488,6 +678,74 @@ track lead {
     out > highpass(120hz, 0.05) > saturate(0.3) > master
 }
 
+# ── The acid stretch ──
+
+track acid {
+    play rest
+    using squelch
+    level 0
+    gate 0.55
+    pan 0.12
+    sidechain 0.35
+    delay_send 0.12
+    reverb_send 0.06
+    out > saturate(0.45)
+        > highpass(90hz, 0.05)
+        > eq(low=0.6, mid=1.2, high=1.1)
+        > master
+}
+
+track roll {
+    play rest
+    using roller
+    level 0
+    gate 0.5
+    sidechain 0.6
+    out > saturate(0.3) > highpass(30hz, 0.05) > lowpass(900hz, 0.05) > master
+}
+
+track metal {
+    play rest
+    using metal
+    level 0
+    gate 0.08
+    pan 0.35
+    delay_send 0.2
+    reverb_send 0.1
+    # abs_sine carries DC, and the feedback turns it into rumble.
+    out > highpass(150hz, 0.1) > saturate(0.3) > lowpass(12khz, 0.1) > master
+}
+
+track chirp {
+    play rest
+    using dialup
+    level 0
+    gate 0.04
+    pan 0.45
+    delay_send 0.22
+    reverb_send 0.08
+    out > highpass(200hz, 0.1) > saturate(0.25) > master
+}
+
+track siren {
+    play rest
+    using siren
+    level 0
+    pan -0.38
+    delay_send 0.15
+    reverb_send 0.2
+    out > highpass(200hz, 0.1) > master
+}
+
+track air {
+    play rest
+    using air
+    level 0
+    pan 0.1
+    reverb_send 0.25
+    out > highpass(300hz, 0.1) > lowpass(4khz, 0.1) > master
+}
+
 # ════════════════════════════════════════════════════════
 # MASTER — glue, and the DJ filter pair the ninth fader sweeps
 # ════════════════════════════════════════════════════════
@@ -513,6 +771,7 @@ midi {
     cc 72 > sub level 0..0.8
     cc 80 > stab level 0..0.45
     cc 81 > bass level 0..0.9
+    cc 81 > acid level 0..0.7
     cc 82 > chords level 0..0.3
     cc 83 > delay_mix
     cc 85 > master dj cutoff 150hz..20khz..20khz
@@ -524,6 +783,8 @@ midi {
     cc 71 > walker cutoff 120hz..900hz
     cc 71 > walker cutoff_env 20%..75%
     cc 71 > walker resonance 10%..45%
+    cc 71 > squelch cutoff 110hz..1.4khz
+    cc 71 > squelch resonance 60%..88%
     cc 76 > warmth cutoff 400hz..3khz
     cc 77 > lead cutoff 500hz..5khz
     cc 77 > lead resonance 20%..60%
