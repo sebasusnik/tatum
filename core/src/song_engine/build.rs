@@ -363,6 +363,7 @@ impl SongEngine {
             master_level: 0.8,
             sidechain_amount,
             sc_envelope: 0.0,
+            sc_curve: [0.0; BLOCK_SIZE],
             global_sc_source: song.globals.sidechain_source.clone(),
             sc_attack_coeff: attack_alpha(song.globals.sidechain_attack_ms.unwrap_or(DEFAULT_SC_ATTACK_MS)),
             sc_release_coeff: release_coeff(song.globals.sidechain_release_ms.unwrap_or(4.5)),

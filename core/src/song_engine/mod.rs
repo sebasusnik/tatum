@@ -105,6 +105,11 @@ pub struct SongEngine {
     // Sidechain compression
     sidechain_amount: f32,
     sc_envelope: f32,
+    /// The send envelope at every sample of the block being rendered. The
+    /// returns duck by it sample by sample; taking one value per block made
+    /// their gain step every 128 samples when the kick hit, and that step
+    /// is a click on a reverb tail.
+    sc_curve: [f32; BLOCK_SIZE],
     kick_track_idx: Option<usize>,
     /// Song-wide `sidechain ... from=`; `None` falls back to the kick track.
     global_sc_source: Option<String>,

@@ -219,6 +219,7 @@ impl SongEngine {
                 }
                 // The sends follow the kick, or the song's named source.
                 self.sc_envelope = self.global_sc_idx.map_or(0.0, |si| self.tracks[si].sc_env);
+                self.sc_curve[s] = self.sc_envelope;
                 for ti in 0..track_count {
                     if !self.tracks[ti].active {
                         continue;
@@ -241,6 +242,8 @@ impl SongEngine {
                     settle(&mut t.heard_duck, target)
                 }
             }
+        } else {
+            self.sc_curve[..len].fill(self.sc_envelope);
         }
 
         // Clear bus buffers
@@ -364,8 +367,8 @@ impl SongEngine {
         // hold) after every track has gone silent.
         let duck_delay = self.delay_sidechain;
         let duck_reverb = self.reverb_sidechain;
-        let sc = self.sc_envelope;
         for s in 0..len {
+            let sc = self.sc_curve[s];
             let dwet = glide(&mut self.delay_wet_heard, dwet_to);
             let rwet = glide(&mut self.reverb_wet_heard, rwet_to);
             let (mut dl, mut dr) = self.send_delay.process_stereo_wet(delay_in_l[s], delay_in_r[s]);
