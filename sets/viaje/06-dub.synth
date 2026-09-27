@@ -1,0 +1,11 @@
+# set: bars=32 phase=dub energy=5
+# set-note: El cambio de acorde (Fm9 a Dbmaj9) dos veces por frase, el eco empujado, toms que caen en el eco: el momento en que el eco manda.
+use "_rig.synth"
+
+track bed   { play hiss_swell level 0.3 }
+track stab  { play stab_dub8 level 0.28 delay_send 0.75 }
+track beat  { play kick_dub8 level 0.78 }
+track hats  { play hat_dub8 level 1.1 }
+track sub   { play sub_dub8 level 0.55 }
+track perc  { play perc_dub8 level 0.5 }
+track throw { play throw_dub8 level 0.2 }

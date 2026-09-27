@@ -1,8 +1,9 @@
-# set: bars=16 phase=pulso energy=2
-# set-note: Entran el bombo y un sub largo. Todavía nada para tararear.
+# set: bars=32 phase=pulso energy=2
+# set-note: Entran el bombo y un sub largo. Cada ocho compases el bombo respira y un tom o un rim caen en el eco.
 use "_rig.synth"
 
-track bed  { level 0.5 }
+track bed  { play hiss_swell level 0.5 }
 track stab { play stab_ghost level 0.14 velocity 0.6 }
-track beat { play kick_four level 0.6 }
+track beat { play kick_four8 level 0.6 }
 track sub  { play sub_long level 0.4 }
+track perc { play perc_sparse8 level 0.5 }

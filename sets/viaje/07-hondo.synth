@@ -1,0 +1,13 @@
+# set: bars=32 phase=hondo energy=5
+# set-note: Aparece una campana con tres notas que el eco multiplica: el gancho del dub. El acorde se abre un poco y el eco se retira para dejarle lugar.
+use "_rig.synth"
+
+module keys chord { cutoff 2.1khz }
+
+track bed   { play hiss_swell level 0.28 }
+track stab  { play stab_dub8 level 0.27 delay_send 0.5 }
+track beat  { play kick_dub8 level 0.8 }
+track hats  { play hat_dub8 level 1.12 }
+track sub   { play sub_dub8 level 0.55 }
+track perc  { play perc_dub8 level 0.45 }
+track chime { play motif_dub level 0.55 delay_send 0.6 }

@@ -1,0 +1,12 @@
+# set: bars=16 phase=corte energy=3
+# set-note: El primer corte: se va el bombo, el acorde se abre y queda flotando con el viento; en los últimos cuatro compases el bombo vuelve de a un golpe.
+use "_rig.synth"
+
+module keys chord { cutoff 2.6khz }
+
+track bed   { play hiss_swell level 0.5 }
+track stab  { play stab_half8 level 0.3 delay_send 0.55 }
+track beat  { play kick_back16 level 0.76 }
+track hats  { play hat_ghost8 level 0.6 }
+track sub   { play sub_long level 0.46 }
+track throw { play throw8 level 0.2 }

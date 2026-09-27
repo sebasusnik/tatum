@@ -475,6 +475,148 @@ pattern bl_a {
     -  -  -  -    -  -  -  -    -  -  -  -    -  -  Eb5:0.40 -
 }
 
+# ── The dub block, in 8-bar phrases: something turns at the end of every one ──
+
+# Four on the floor; bar 8 leaves its last beat out.
+pattern kick_four8 {
+    kick: X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  - - - -
+}
+
+# The dub groove in 8-bar phrases: the rim answers on 4 and turns on 8.
+pattern kick_dub8 {
+    kick:  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  x - - -  X - - -  - - - -
+    snare: - - - -  - - - -  - - - -  - - - -  - - - -  - - o -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - o -  - - - -  - - o:0.25 -  - - - -  - - - -  - - - -  - - - -  - - - -  - - o -  - - - -  - - - -  - - - -  - - - -  - - - o?0.5  - - - -  - - - -  - - o -  - - - -  - x:0.4 - o
+}
+
+# Offbeat hats; ghost sixteenths come and go, an open hat closes the phrase.
+pattern hat_dub8 {
+    hat:     - - o -  - - x:0.55 -  - - o -  - - x:0.55 -  - - o -  - - x:0.55 o?0.3  - - o -  - - x:0.55 -  - - o -  - - x:0.55 -  - - o -  - - x:0.55 -  - - o -  - - x:0.55 -  - - o -  - - x:0.55 o?0.5  - - o -  - - x:0.55 -  - - o -  - - x:0.55 -  - - o -  - - x:0.55 o?0.3  - - o o?0.3  - - x:0.55 -  - - o -  - - x:0.55 -  - - o -  - - x:0.55 -  - - o -  - - x:0.55 -  - - o -  - - x:0.55 o
+    openhat: - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.45 -
+}
+
+# Ghost hats, not quite the same twice.
+pattern hat_ghost8 {
+    hat: - - - -  - - o -  - - - -  - - - -  - - - -  - - o -  - - - -  - - o?0.4 -  - - - -  - - o -  - - - -  - - - -  - - - -  - - o -  - - o?0.5 -  - - - -  - - - -  - - o -  - - - -  - - - -  - - - -  - - o -  - - - -  - - o?0.4 -  - - - -  - - o -  - - - -  - - - -  - - - -  - - o -  - - o?0.5 -  - - - -
+}
+
+# Into the echo: a tom at the end of bar 4, a rim at the end of the phrase.
+pattern perc_sparse8 {
+    snare: - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.5 -  - - - -
+    tom:   - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.45 -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -
+}
+
+# More of it for the dub: toms falling across the phrase.
+pattern perc_dub8 {
+    snare: - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.45 -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - o?0.5  - - - -  - - x:0.5 -  - - - -
+    tom:   - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.4 -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.45 -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -
+    tom2:  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - x:0.4 - x:0.5
+}
+
+# The break: twelve bars without the kick, then it comes back a beat at a time.
+pattern kick_back16 {
+    kick: - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  x:0.6 - - -  - - - -  - - - -  - - - -  x:0.7 - - -  - - - -  x:0.6 - - -  - - - -  x:0.8 - - -  - - - -  x:0.7 - - -  x:0.6 - - -  X - - -  x - - -  X - - -  x:0.8 - x:0.5 -
+}
+
+# The chord at half time; bar 4 answers late, bar 8 leaves room.
+pattern stab_half8 {
+    - - Fm9:0.68 -  - - - -  - - Fm9:0.52 -  - - - -
+    - - Fm9:0.64 -  - - - -  - - - -  - - - -
+    - - Fm9:0.68 -  - - - -  - - Fm9:0.5 -  - - - -
+    - - Fm9:0.62 -  - - - Fm9:0.4  - - - -  - - - -
+    - - Fm9:0.68 -  - - - -  - - Fm9:0.52 -  - - - -
+    - - Fm9:0.64 -  - - - -  - - - -  - - - -
+    - - Fm9:0.68 -  - - - -  - - Fm9:0.5 -  - - - -
+    - - Fm9:0.6 -  - - - -  - - - -  - - - -
+}
+
+# Every offbeat; bar 4 pushes a hit late, bar 8 plays one and lets the throw answer.
+pattern stab_full8 {
+    - - Fm9:0.72 -  - - Fm9:0.55 -  - - Fm9:0.66 -  - - Fm9:0.5 -
+    - - Fm9:0.7 -  - - Fm9:0.5 -  - - Fm9:0.64 -  - - Fm9:0.46 -
+    - - Fm9:0.72 -  - - Fm9:0.55 -  - - Fm9:0.66 -  - - Fm9:0.5 -
+    - - Fm9:0.7 -  - - Fm9:0.5 -  - - - Fm9:0.6  - - - -
+    - - Fm9:0.72 -  - - Fm9:0.55 -  - - Fm9:0.66 -  - - Fm9:0.5 -
+    - - Fm9:0.7 -  - - Fm9:0.5 -  - - Fm9:0.64 -  - - Fm9:0.46 -
+    - - Fm9:0.72 -  - - Fm9:0.55 -  - - Fm9:0.66 -  - - Fm9:0.5 -
+    - - Fm9:0.7 -  - - - -  - - - -  - - - -
+}
+
+# The one chord change, Fm9 to Dbmaj9, now twice a phrase.
+pattern stab_dub8 {
+    - - Fm9:0.7 -  - - Fm9:0.5 -  - - Fm9:0.64 -  - - Fm9:0.46 -
+    - - Fm9:0.7 -  - - Fm9:0.5 -  - - Fm9:0.64 -  - - Fm9:0.46 -
+    - - Fm9:0.7 -  - - Fm9:0.5 -  - - Fm9:0.64 -  - - - -
+    - - Dbmaj9:0.66 -  - - Dbmaj9:0.5 -  - - Dbmaj9:0.6 -  - - Dbmaj9:0.44 -
+    - - Fm9:0.7 -  - - Fm9:0.5 -  - - Fm9:0.64 -  - - Fm9:0.46 -
+    - - Fm9:0.7 -  - - Fm9:0.5 -  - - - Fm9:0.6  - - - -
+    - - Dbmaj9:0.66 -  - - Dbmaj9:0.5 -  - - Dbmaj9:0.6 -  - - Dbmaj9:0.44 -
+    - - Dbmaj9:0.66 -  - - - -  - - Dbmaj9:0.5 -  - - - -
+}
+
+# One chord at the end of the phrase, thrown into the echo.
+pattern throw8 {
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - Fm9:0.7 -  - - - -
+}
+
+# Two throws a phrase in the dub.
+pattern throw_dub8 {
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - Fm9:0.6 -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - Dbmaj9:0.7 -  - - - -
+}
+
+# The sub on the root, stepping up to Ab once a phrase.
+pattern sub_f8 {
+    F1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.8 .. .. ..  .. .. .. ..  - - Ab1:0.6 ..  - - - -
+    F1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+}
+
+# Under the chord change, walking back up through Eb.
+pattern sub_dub8 {
+    F1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    Db1:0.75 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    Db1:0.75 .. .. ..  .. .. .. ..  - - - -  - - - -
+    Db1:0.75 .. .. ..  - - - -  Eb1:0.6 .. .. ..  - - - -
+}
+
+# The wind, struck again every 8 bars: it swells at each phrase.
+pattern hiss_swell { C3:0.7 ..*111 -*16 }
+
+# The dub's hook: a few bell notes, the echo does the rest.
+pattern motif_dub {
+    - - Ab4:0.5 -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - G4:0.42 -  - - - -  - - F4:0.46 -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - Ab4:0.5 -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - C5:0.44 -  - - - -  - - Bb4:0.4 -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+}
+
+
 # ── The acid stretch ──
 
 pattern kick_roll { kick: X - - -  X - - -  X - - -  X - - - }
@@ -744,6 +886,33 @@ track air {
     pan 0.1
     reverb_send 0.25
     out > highpass(300hz, 0.1) > lowpass(4khz, 0.1) > master
+}
+
+# ── The dub block ──
+
+# Rim and toms that live in the echo: a few hits a phrase, the repeats do the rest.
+track perc {
+    play rest
+    using kit
+    level 0
+    pan 0.22
+    sidechain 0.0
+    delay_send 0.7
+    reverb_send 0.25
+    out > highpass(180hz, 0.1) > drums
+}
+
+# One chord thrown into the echo at the end of a phrase.
+track throw {
+    play rest
+    using chord
+    level 0
+    gate 0.2
+    pan 0.2
+    delay_send 0.95
+    reverb_send 0.4
+    sidechain 0.3
+    out > highpass(300hz, 0.15) > lowpass(3khz, 0.12) > master
 }
 
 # ════════════════════════════════════════════════════════

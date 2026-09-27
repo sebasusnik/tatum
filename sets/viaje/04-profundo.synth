@@ -1,9 +1,11 @@
 # set: bars=32 phase=profundo energy=4
-# set-note: El acorde en cada contratiempo, el rim, los hats completos. El groove dub entero.
+# set-note: El groove dub entero en frases de ocho: el rim contesta, un acorde se corre, y al final de cada frase un acorde tirado al eco.
 use "_rig.synth"
 
-track bed  { level 0.32 }
-track stab { play stab_full level 0.25 delay_send 0.45 }
-track beat { play kick_rim level 0.76 }
-track hats { play hat_dub level 0.8 }
-track sub  { play sub_f level 0.54 }
+track bed   { play hiss_swell level 0.32 }
+track stab  { play stab_full8 level 0.25 delay_send 0.4 }
+track beat  { play kick_dub8 level 0.76 }
+track hats  { play hat_dub8 level 1.1 }
+track sub   { play sub_f8 level 0.54 }
+track perc  { play perc_sparse8 level 0.5 }
+track throw { play throw8 level 0.2 }
