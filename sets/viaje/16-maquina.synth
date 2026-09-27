@@ -1,0 +1,12 @@
+# set: bars=32 phase=maquina energy=7
+# set-note: El bajo rueda, entra el clap con un redoble al final de cada frase y los hats a 16 que se callan en el último tiempo. El riff del 303 se abre dos veces y contesta con repiques; un golpe de metal suelto.
+use "_rig.synth"
+tempo 132
+
+module beats kit { kick_decay 30% kick_pitch 0.86x kick_click 42% kick_drive 45% hihat_level 72% }
+
+track beat   { play kick_acidclap8 level 1.16 }
+track hats   { play hat_16_8 level 1.1 }
+track roll   { play roll_move level 0.69 }
+track acid   { play acid_riff16 level 0.6 }
+track metal  { play metal_hit level 1.1 }

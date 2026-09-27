@@ -57,6 +57,12 @@ pub struct BassModule {
     vel_env: f32, // velocity-to-filter-envelope scaling (0=none, 1=full)
     // State
     velocity: f32,
+    /// The velocity the voice plays at, gliding to `velocity` over a few ms.
+    /// A slide or a legato note keeps the envelope running, so a new
+    /// velocity taken at once is a step in level and in filter depth: a click
+    /// on every accent change in a 303 line.
+    vel_now: f32,
+    vel_coef: f32,
     // LFO
     lfo_router: ModulationRouter,
     // Pitch bend (set by engine)
@@ -113,6 +119,8 @@ impl BassModule {
             keytrack: 0.0,
             vel_env: 0.0,
             velocity: 1.0,
+            vel_now: 1.0,
+            vel_coef: 1.0 - math::exp(-1.0 / (0.003 * SAMPLE_RATE)),
             lfo_router: ModulationRouter::new(SAMPLE_RATE, 5001),
             pitch_bend_ratio: 1.0,
             vibrato_phase: 0.0,
@@ -238,9 +246,10 @@ impl Module for BassModule {
                 self.current_freq += (self.target_freq - self.current_freq) * self.glide_rate;
             }
 
+            self.vel_now += (self.velocity - self.vel_now) * self.vel_coef;
             let env_val = self.filter_env.next_sample();
             // Scale filter envelope by velocity when vel_env > 0
-            let env_scale = 1.0 - self.vel_env + self.vel_env * self.velocity;
+            let env_scale = 1.0 - self.vel_env + self.vel_env * self.vel_now;
             let cutoff = self.cutoff_base + self.cutoff_env_amount * env_val * env_scale;
 
             // LFO modulation
@@ -286,7 +295,7 @@ impl Module for BassModule {
             let filtered = self.filter.process(raw);
             let amp = self.amp_env.next_sample();
 
-            *sample = filtered * amp * self.velocity * amp_mod * 1.8;
+            *sample = filtered * amp * self.vel_now * amp_mod * 1.8;
         }
     }
 
@@ -302,8 +311,11 @@ impl Module for BassModule {
             // Filter envelope always retriggered for expression (classic acid behavior).
             self.filter_env.gate_on();
         } else {
-            // First note or note after release: snap frequency, retrigger both envelopes.
+            // First note or note after release: snap frequency and velocity,
+            // retrigger both envelopes. The amp envelope starts from silence,
+            // so the velocity can too.
             self.current_freq = self.target_freq;
+            self.vel_now = velocity;
             for i in 0..3 {
                 self.oscs[i].set_frequency(self.current_freq * semitone_ratio(self.osc_pitch_offsets[i]));
             }
@@ -328,6 +340,7 @@ impl Module for BassModule {
         self.current_freq = 110.0;
         self.target_freq = 110.0;
         self.velocity = 1.0;
+        self.vel_now = 1.0;
         self.lfo_router.reset();
         self.pitch_bend_ratio = 1.0;
         self.vibrato_phase = 0.0;
