@@ -475,6 +475,86 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
         }
     }
 
+    // ── plock_ignored: filter locks on a module that drops them ──
+    //
+    // `(cutoff=, edepth=, res=)` reach a `bass` module and instrument graphs,
+    // and `keys` takes cutoff and resonance per voice; `fm` has no filter and
+    // a kit none per drum, so they play the note and drop the lock without a
+    // word, as `keys` does with `edepth` (it has no filter envelope).
+    // A dark techno hook moved from `bass` to `fm` kept twenty of them in its
+    // patterns, written as if they shaped every note, and none did anything.
+    // `gate=` is the sequencer's and works everywhere, so it is not counted.
+    // One warning per track: a track that plays four patterns through
+    // its scenes gets one line listing them, not four copies of the hint.
+    let mut tracks_done: Vec<&str> = Vec::new();
+    for track in &all_tracks {
+        if tracks_done.contains(&track.name.as_str()) {
+            continue;
+        }
+        tracks_done.push(&track.name);
+        let (mut total, mut cutoff, mut edepth, mut res) = (0usize, false, false, false);
+        let mut per_pattern: Vec<(&str, usize)> = Vec::new();
+        let mut module: Option<&ModuleDef> = None;
+        for t in all_tracks.iter().filter(|t| t.name == track.name) {
+            let Some(m) = song.module_defs.iter().find(|m| m.name == t.using_instrument) else { continue };
+            // `keys` takes cutoff and resonance per voice but has no filter
+            // envelope, so only `edepth` is lost on it.
+            let keys = m.module_type == "keys";
+            if !matches!(m.module_type.as_str(), "fm" | "keys" | "beats") {
+                continue;
+            }
+            if per_pattern.iter().any(|(n, _)| *n == t.play) {
+                continue;
+            }
+            let Some(pat) = song.patterns.iter().find(|p| p.name == t.play) else { continue };
+            let mut count = 0usize;
+            let mut note = |p: &super::ast::PLock| {
+                let (c, e, r) = (p.cutoff.is_some() && !keys, p.env_depth.is_some(), p.resonance.is_some() && !keys);
+                if c || e || r {
+                    count += 1;
+                    cutoff |= c;
+                    edepth |= e;
+                    res |= r;
+                }
+            };
+            for step in pat.rows.iter().flatten() {
+                match step {
+                    Step::Note(n) => note(&n.plock),
+                    Step::Chord(c) => note(&c.plock),
+                    Step::DrumHit(d) => note(&d.plock),
+                    Step::Subdiv(ns) => ns.iter().for_each(|n| note(&n.plock)),
+                    Step::Rest | Step::Tie => {}
+                }
+            }
+            if count > 0 {
+                per_pattern.push((&t.play, count));
+                total += count;
+                module = Some(m);
+            }
+        }
+        let Some(m) = module else { continue };
+        let which: Vec<&str> = [(cutoff, "cutoff"), (edepth, "edepth"), (res, "res")]
+            .into_iter()
+            .filter(|(on, _)| *on)
+            .map(|(_, n)| n)
+            .collect();
+        let where_: Vec<String> = per_pattern.iter().map(|(n, c)| format!("'{n}' ({c})")).collect();
+        out.push(lint(
+            "plock_ignored",
+            format!(
+                "track '{}' has {} filter lock{} ({}) in {} through module '{}', a `{}` module, which ignores them",
+                track.name,
+                total,
+                if total == 1 { "" } else { "s" },
+                which.join(", "),
+                where_.join(", "),
+                m.name,
+                m.module_type
+            ),
+            "Filter locks reach `bass`, `keys` (cutoff and res, not edepth: it has no filter envelope) and instrument graphs; `fm` and `beats` drop them without a sound. `gate=` works everywhere. On `fm` the note's velocity already sets its brightness; for a sweep use `auto <module> mod_index a > b`, or play the part on a `bass` or `keys` module.",
+        ));
+    }
+
     // ── mono_mix: everything in the same place in the stereo field ──
     //
     // Twenty-one of the twenty-five songs in this repo measured under 2% wide.

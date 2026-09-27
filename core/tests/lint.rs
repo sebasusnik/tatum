@@ -140,3 +140,51 @@ fn a_knob_position_on_a_parameter_with_a_unit_is_flagged() {
     // A parameter without a unit is fine as a number.
     assert!(!lints(&SONG.replace("cutoff 1khz", "cutoff 1khz resonance 0.3")).contains(&"bare_number"));
 }
+
+const LOCKS: &str = r#"
+tempo 120
+module MODTYPE lead { }
+pattern line { C3:0.9(cutoff=0.4) - C3:0.8(res=0.6) - C3:0.9(gate=0.3) - - - }
+track lead { play line using lead pan 0.3 reverb_send 0.2 out > master }
+"#;
+
+fn lock_lints(module_type: &str) -> Vec<String> {
+    let src = LOCKS.replace("MODTYPE", module_type);
+    let ast = dsl::parse(&src).expect("parse");
+    compiler::compile(&ast).expect("compile");
+    lint::lint_song(&ast).into_iter().filter(|l| l.code == "plock_ignored").map(|l| l.message).collect()
+}
+
+#[test]
+fn filter_locks_on_a_module_that_drops_them_are_flagged() {
+    let found = lock_lints("fm");
+    assert_eq!(found.len(), 1, "{found:?}");
+    // Two steps carry filter locks; the gate lock is not counted.
+    assert!(found[0].contains("2 filter locks (cutoff, res) in 'line' (2)"), "{}", found[0]);
+}
+
+/// `keys` takes cutoff and resonance per voice; only `edepth` is lost on it.
+#[test]
+fn keys_is_flagged_only_for_the_envelope_it_does_not_have() {
+    assert!(lock_lints("keys").is_empty());
+    let src = LOCKS.replace("MODTYPE", "keys").replace("C3:0.8(res=0.6)", "C3:0.8(edepth=0.6)");
+    let ast = dsl::parse(&src).expect("parse");
+    compiler::compile(&ast).expect("compile");
+    let found: Vec<_> = lint::lint_song(&ast).into_iter().filter(|l| l.code == "plock_ignored").collect();
+    assert_eq!(found.len(), 1);
+    assert!(found[0].message.contains("1 filter lock (edepth)"), "{}", found[0].message);
+}
+
+#[test]
+fn filter_locks_on_a_bass_are_not_flagged() {
+    assert!(lock_lints("bass").is_empty());
+}
+
+#[test]
+fn a_gate_lock_alone_is_not_flagged() {
+    let src =
+        LOCKS.replace("MODTYPE", "fm").replace("C3:0.9(cutoff=0.4) - C3:0.8(res=0.6)", "C3:0.9(gate=0.5) - C3:0.8");
+    let ast = dsl::parse(&src).expect("parse");
+    compiler::compile(&ast).expect("compile");
+    assert!(lint::lint_song(&ast).iter().all(|l| l.code != "plock_ignored"));
+}
