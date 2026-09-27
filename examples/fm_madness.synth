@@ -294,7 +294,7 @@ track drums {
     using kit
     velocity 1.0
     level 0.65
-    out > compressor(-10, ratio=3, attack=2, release=40, makeup=1.41) > master
+    out > compressor(-10, ratio=3, attack=2, release=40, makeup=2.98db) > master
 }
 
 track bells {
@@ -381,7 +381,7 @@ track subkick {
 # master chain is fed as it was; scenes with fewer tracks now play as written.
 master {
     in > gain(0.354) > eq(low=1.5, mid=1.0, high=1.5)
-       > compressor(-5, ratio=2, attack=8, release=80, makeup=3.68)
+       > compressor(-5, ratio=2, attack=8, release=80, makeup=11.32db)
        > out
 }
 

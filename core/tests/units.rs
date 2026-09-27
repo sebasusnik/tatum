@@ -137,3 +137,13 @@ fn a_negative_quantity_keeps_its_unit() {
     }).expect("mid");
     assert!((mid + 3.0).abs() < 0.01, "an eq band is already in dB, so -3db is -3: got {}", mid);
 }
+
+/// A bare number for makeup was read as a linear gain, which nobody meant:
+/// it is an error now, and the error says what the number used to do.
+#[test]
+fn makeup_without_decibels_is_an_error_that_translates_it() {
+    let src = song("").replace("out > master", "out > compressor(-8, makeup=4) > master");
+    let errs = errors(&src);
+    assert_eq!(errs.len(), 1, "{errs:?}");
+    assert!(errs[0].contains("makeup=12.0db") && errs[0].contains("makeup=4db"), "{}", errs[0]);
+}

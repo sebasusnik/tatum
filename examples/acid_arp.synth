@@ -85,7 +85,7 @@ track wash  { play wash_pad using wash level 0.25 pan -0.4 reverb_send 0.5 out >
 # song's fullest scene when it scaled every scene by 1/sqrt(its tracks). The
 # master chain is fed as it was; scenes with fewer tracks now play as written.
 master {
-    in > gain(0.5) > eq(low=2.0, mid=-1.5, high=1.2) > compressor(-10, ratio=4, attack=2, release=40, makeup=2.80) > out
+    in > gain(0.5) > eq(low=2.0, mid=-1.5, high=1.2) > compressor(-10, ratio=4, attack=2, release=40, makeup=8.94db) > out
 }
 
 scene intro {

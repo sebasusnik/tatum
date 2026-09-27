@@ -73,11 +73,11 @@ fn a_low_cut_is_not_a_low_boost() {
 
 // ── makeup_at_the_ceiling ────────────────────────────────────────────────────
 
-/// `makeup` stops at 4.0 linear. Asking for more does nothing, and the
-/// reflex when a mix is still quiet is to ask for more.
+/// `makeup` stops at +12 dB. Asking for more does nothing, and the reflex
+/// when a mix is still quiet is to ask for more.
 #[test]
 fn makeup_at_its_maximum_is_flagged() {
-    assert_eq!(codes(&song("in > compressor(-8, ratio=3, makeup=4.0) > out"), "makeup_at_the_ceiling").len(), 1);
+    assert_eq!(codes(&song("in > compressor(-8, ratio=3, makeup=12db) > out"), "makeup_at_the_ceiling").len(), 1);
 }
 
 /// The same request written in dB. It resolves to a hair under 4.0 through
@@ -98,7 +98,7 @@ fn ordinary_makeup_is_fine() {
 #[test]
 fn a_bus_compressor_counts() {
     let src = format!(
-        "{}bus drums\ndrums {{ in > compressor(-20, ratio=8, makeup=4.0) > master }}\nmaster {{ in > out }}\n",
+        "{}bus drums\ndrums {{ in > compressor(-20, ratio=8, makeup=12db) > master }}\nmaster {{ in > out }}\n",
         HEAD.replace("out > master }\ntrack bass", "out > drums }\ntrack bass")
     );
     assert_eq!(codes(&src, "makeup_at_the_ceiling").len(), 1);

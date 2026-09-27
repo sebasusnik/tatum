@@ -192,7 +192,7 @@ listed below:
 | `saturate` / `drive` | chain, graph | `drive` 0..10 (default 1) | none | tanh soft clipping. |
 | `chorus` | chain, graph | `mix` 0..1 (default 0.3) | none | Stereo chorus. |
 | `bitcrush` | chain, graph | `bits` 1..16 (default 8); `rate` 0..1 (default 0) | none | Bit and sample-rate reduction. |
-| `compressor` | chain, graph | `threshold` -60..0 (default -3) | `ratio=` 1..20 (default 3), n:1; `attack=` 0..500 (default 20), ms; `release=` 1..2000 (default 100), ms; `makeup=` 0..4 (default 1), linear gain after compression; 2 = +6 dB | Feed-forward compressor. |
+| `compressor` | chain, graph | `threshold` -60..0 (default -3) | `ratio=` 1..20 (default 3), n:1; `attack=` 0..500 (default 20), ms; `release=` 1..2000 (default 100), ms; `makeup=` 0..4 (default 1), linear gain after compression, written in dB: makeup=6db, up to +12 dB | Feed-forward compressor. |
 | `capture` | chain, graph | `bars` 0.25..16 (default 2) | `start=` 0..512 (default 0), bar the recording starts on; `speed=` 0.05..4 (default 1), playback rate; 0.5 is half speed and an octave down; `reverse=` 0..1 (default 0), 1 plays the window backwards; `mix=` 0..1 (default 1), wet amount against the live signal | Record a window of this chain and loop it back, stretched or reversed. Passes the signal through until the window is full. |
 | `limiter` | chain, graph | `threshold` 0.1..1 (default 0.95) | none | Lookahead peak limiter, for one track or bus; on the master it is left out, the engine limits every song itself. |
 | `tilt` | chain, graph | `amount` -1..1 (default 0) | none | One-knob tilt EQ around 1 kHz. |

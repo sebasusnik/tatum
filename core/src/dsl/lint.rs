@@ -441,18 +441,16 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
         for node in master.chain.iter().chain(song.bus_chains.iter().flat_map(|b| b.chain.iter())) {
             if node.kind != "compressor" { continue }
             let makeup = chain_arg(&node.params, "makeup").unwrap_or(1.0);
-            // Within 5% of the registry's maximum, not at it. `makeup=12db`
-            // and `makeup=4.0` are the same request written two ways, and the
-            // dB one comes back a hair under 4.0 through `pow`; a lint that
-            // fired on one spelling and not the other would be worse than no
-            // lint. Reading the ceiling from the registry also means the
-            // check follows if the range ever moves.
+            // Within 5% of the registry's maximum, not at it: `makeup=12db`
+            // comes back a hair under 4.0 through `pow`. Reading the ceiling
+            // from the registry also means the check follows if the range
+            // ever moves.
             let ceiling = crate::nodes::arg_at("compressor", Some("makeup"), 0)
                 .map_or(4.0, |a| a.max);
             if makeup >= ceiling * 0.95 {
                 out.push(lint(
                     "makeup_at_the_ceiling",
-                    format!("a compressor asks for makeup={makeup:.2} (+{:.0} dB), which is the maximum", 20.0 * crate::math::log10(makeup)),
+                    format!("a compressor asks for makeup={:.0}db, which is the maximum", 20.0 * crate::math::log10(makeup)),
                     "The knob stops here, so turning it further does nothing. Raise the track levels feeding it instead -- `level` goes to 4.0 too -- and leave makeup for matching the level the compression took away.",
                 ));
             }

@@ -275,7 +275,7 @@ track drums {
     velocity 1.0
     level 0.84
     reverb_send 0.06
-    out > compressor(-14, ratio=4, attack=3, release=70, makeup=1.5)
+    out > compressor(-14, ratio=4, attack=3, release=70, makeup=3.52db)
         > saturate(0.55)
         > eq(low=2.5, mid=-1.0, high=0.5)
         > master
@@ -313,7 +313,7 @@ track stab {
 master {
     in > tilt(-0.08)
        > eq(low=1.0, mid=-1.5, high=1.0)
-       > compressor(-10, ratio=3.0, attack=15, release=110, makeup=0.874)
+       > compressor(-10, ratio=3.0, attack=15, release=110, makeup=-1.17db)
        > out
 }
 

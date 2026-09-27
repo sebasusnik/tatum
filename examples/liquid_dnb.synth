@@ -385,7 +385,7 @@ pattern silence {
 # ────────────────────────────────────────────────
 
 bus drums
-drums { in > eq(low=2.0, mid=-1.0, high=2.0) > compressor(-7, ratio=2, attack=25, release=130, makeup=1.4) > master }
+drums { in > eq(low=2.0, mid=-1.0, high=2.0) > compressor(-7, ratio=2, attack=25, release=130, makeup=2.92db) > master }
 
 # La nube. El acorde entra y sale solo su cola: el nodo `reverb` es wet only,
 # asi que lo que llega a master no tiene nada del ataque. Eso es lo que la
@@ -542,7 +542,7 @@ track air {
 master {
     in > gain(0.354) > eq(low=1.5, mid=-0.5, high=1.5)
        > tilt(0.0)
-       > compressor(-6, ratio=1.5, attack=45, release=220, makeup=1.49)
+       > compressor(-6, ratio=1.5, attack=45, release=220, makeup=3.46db)
        > out
 }
 

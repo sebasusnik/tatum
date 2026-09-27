@@ -82,8 +82,8 @@ at -1 dB after the master chain, so the master is for colour, not loudness: no `
 on it, and no makeup gain to make the song louder. Parameter names and ranges come from `tatum_params`; never invent a \
 parameter. Write values in their units where `tatum_params` lists one — `cutoff 800hz`, \
 `attack 20ms`, `osc2_pitch -12st`, `resonance 80%`, `makeup=6db` — rather than normalized \
-floats; a wrong unit is an error, a wrong float is not. A compressor's `makeup` is a linear \
-gain, so `makeup=4` is +12 dB: say `makeup=6db` if you mean decibels. Nothing that sustains \
+floats; a wrong unit is an error, a wrong float is not. A compressor's `makeup` only takes \
+decibels (`makeup=3db`); a bare number is an error. Nothing that sustains \
 should stay static: pads and leads get an LFO on the filter, vibrato, an `auto` sweep or an \
 arp, plus sends and sidechain against the kick. On `keys`, only `voice_mode poly` holds a chord: \
 unison, octave and fifth stack their voices on one note, so a chord sent to them plays its last \
@@ -635,7 +635,7 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let crest_loss = if crest_in > 0.0 { 20.0 * (crest_out / crest_in).log10() } else { 0.0 };
     if crest_loss < -3.0 {
         hints.push(format!(
-            "the master chain and the output limiter removed {:.1} dB of crest factor ({:.1} in, {:.1} out): they are eating the transients. Loudness is not the master chain's job, the engine levels every song; lower the compressor makeup (it is a linear gain, so 2 is +6 dB) or the ratio.",
+            "the master chain and the output limiter removed {:.1} dB of crest factor ({:.1} in, {:.1} out): they are eating the transients. Loudness is not the master chain's job, the engine levels every song; lower the compressor makeup or the ratio.",
             -crest_loss, crest_in, crest_out
         ));
     }

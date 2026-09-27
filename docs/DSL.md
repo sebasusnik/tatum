@@ -69,9 +69,10 @@ Units are as precise as you write them; a resonant filter can hear the differenc
 between `91.4hz` and `91.37hz`, so keep a digit more than feels necessary when you
 are matching an existing sound.
 
-The one to remember: a compressor's `makeup` is a **linear gain**, so `makeup=4`
-is +12 dB, not +4. Every example in this repo got that wrong until it was
-measured. Write `makeup=6db`.
+A compressor's `makeup` takes decibels and only decibels: `makeup=6db`. A bare
+number is an error, because it used to be read as a linear gain -- `makeup=4`
+was +12 dB, not +4 -- and every example in this repo got that wrong until it
+was measured. The error says what the old number meant in dB.
 
 ```
 module bass acid {
@@ -244,7 +245,7 @@ drums { in > compressor(-8, ratio=4, attack=8, release=60) > saturate(0.1) > mas
 
 track kick  { play beat using kit out > drums }                 # route into the bus
 track bass  { play riff using acid out > saturate(0.4) > master } # inline inserts
-master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2, release=40, makeup=3) > out }
+master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2, release=40, makeup=9.5db) > out }
 ```
 
 | effect | arguments | notes |
@@ -260,7 +261,7 @@ master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2
 | `vowel(a, o, bars=, mix=)` | vowels a e i o u, bars, 0..1 | formant filter; one vowel holds, two morph: `vowel(a, o, bars=2)` |
 | `chorus(mix)` | 0..1 | |
 | `bitcrush(bits, rate)` | bits, sample-rate reduction 0..1 | |
-| `compressor(threshold_db, ratio=, attack=, release=, makeup=)` | dB, ratio, ms, ms, gain | |
+| `compressor(threshold_db, ratio=, attack=, release=, makeup=)` | dB, ratio, ms, ms, dB | `makeup` must carry `db`, up to `12db` |
 | `limiter(threshold)` | 0..1, default 0.95 | lookahead peak limiter, for one spiky track or bus. On the master it is left out (with a `master_limiter` warning): the engine limits every song itself, after levelling it |
 | `eq(low=, mid=, high=)` | dB per band (200Hz, 1kHz, 8kHz) | |
 | `tilt(amount)` | -1..1, negative = darker | one-knob tilt EQ |

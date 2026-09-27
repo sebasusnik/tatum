@@ -167,7 +167,25 @@ impl Parser {
                 }
             };
         }
-        self.parse_expr_value()
+        let (line, col) = { let sp = self.span(); (sp.line, sp.col) };
+        let value = self.parse_expr_value();
+        // A compressor's makeup is a linear gain inside, and a bare number
+        // there was read as one: `makeup=4` is +12 dB. Every use in the corpus
+        // once wrote it meaning decibels, so it takes decibels, said as such.
+        if kind == "compressor" && name == "makeup" {
+            if let Some(v) = value.filter(|v| *v > 0.0) {
+                let db = 20.0 * crate::math::log10(v);
+                self.errors.push(ParseError { line, col, message: format!(
+                    "makeup takes decibels: write `makeup={db:.1}db` for what `makeup={v}` did (a gain of {v}), or `makeup={v}db` if you meant {v} dB"
+                ) });
+            } else {
+                self.errors.push(ParseError { line, col, message: String::from(
+                    "makeup takes decibels, like `makeup=3db`"
+                ) });
+            }
+            return None;
+        }
+        value
     }
 
     fn resolve_arg_quantity(&self, kind: &str, name: Option<&str>, index: usize, raw: f32, suffix: &str)

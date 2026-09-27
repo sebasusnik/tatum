@@ -334,7 +334,7 @@ track drums {
     using tape
     velocity 1.0
     level 0.973
-    out > saturate(0.08) > compressor(-8, ratio=2.5, attack=5, release=60, makeup=1) > master
+    out > saturate(0.08) > compressor(-8, ratio=2.5, attack=5, release=60, makeup=0db) > master
 }
 
 track wash {
@@ -408,7 +408,7 @@ track melody {
 # master chain is fed as it was; scenes with fewer tracks now play as written.
 master {
     in > gain(0.378) > eq(low=1.2, mid=1.0, high=1.0)
-       > compressor(-4, ratio=1.8, attack=10, release=90, makeup=4.00)
+       > compressor(-4, ratio=1.8, attack=10, release=90, makeup=12.04db)
        > out
 }
 

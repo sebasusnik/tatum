@@ -191,7 +191,7 @@ pattern psyche_swirl {
 # the whole kit had in hitech_psy.
 bus drums
 drums { in > saturate(0.18) > eq(low=1.0, mid=0.5, high=2.6)
-           > compressor(-8, ratio=4, attack=1, release=15, makeup=1) > master }
+           > compressor(-8, ratio=4, attack=1, release=15, makeup=0db) > master }
 
 track kick  { play kicks using psy_kit velocity 1.0 level 0.69 out > drums }
 track clap  { play claps using psy_kit velocity 1.0 level 0.69 reverb_send 0.15 out > drums }
@@ -201,7 +201,7 @@ track perc  { play rest using psy_kit velocity 1.0 level 0.69 out > drums }
 
 track bass  { play roll using psy velocity 1.0 level 0.58 gate 0.30 sidechain 0.25
               out > saturate(0.35) > eq(low=1.0, mid=1.4, high=0.90)
-                  > compressor(-10, ratio=3, attack=1, release=12, makeup=1)
+                  > compressor(-10, ratio=3, attack=1, release=12, makeup=0db)
                   > delay(1/8, 0.35, wet=0) as echo > master }
 
 # The keyboard's.
@@ -216,7 +216,7 @@ track psyche { play psyche_swirl using psyche level 0 pan 0.34 delay_send 0.18 r
 
 master {
     in > eq(low=1.1, mid=1.0, high=0.95)
-       > compressor(-6, ratio=2.0, attack=5, release=50, makeup=4.00)
+       > compressor(-6, ratio=2.0, attack=5, release=50, makeup=12.04db)
        > out
 }
 

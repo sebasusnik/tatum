@@ -675,7 +675,7 @@ track drums {
     using psy_kit
     velocity 1.0
     level 0.69
-    out > saturate(0.18) > eq(low=1.0, mid=0.5, high=2.6) > compressor(-8, ratio=4, attack=1, release=15, makeup=1) > master
+    out > saturate(0.18) > eq(low=1.0, mid=0.5, high=2.6) > compressor(-8, ratio=4, attack=1, release=15, makeup=0db) > master
 }
 
 # Bass — distorted, aggressive, tight gate
@@ -686,7 +686,7 @@ track bass {
     level 0.58
     gate 0.30
     sidechain 0.25
-    out > saturate(0.35) > eq(low=1.0, mid=1.4, high=0.90) > compressor(-10, ratio=3, attack=1, release=12, makeup=1) > master
+    out > saturate(0.35) > eq(low=1.0, mid=1.4, high=0.90) > compressor(-10, ratio=3, attack=1, release=12, makeup=0db) > master
 }
 
 # Acid — dry and upfront, slight pan, minimal reverb
@@ -845,7 +845,7 @@ track dialup {
 # master chain is fed as it was; scenes with fewer tracks now play as written.
 master {
     in > gain(0.289) > eq(low=1.1, mid=1.0, high=0.95)
-       > compressor(-6, ratio=2.0, attack=5, release=50, makeup=4.00)
+       > compressor(-6, ratio=2.0, attack=5, release=50, makeup=12.04db)
        > out
 }
 

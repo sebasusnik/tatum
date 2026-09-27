@@ -183,7 +183,7 @@ pub const NODES: &[NodeDefSpec] = &[
         waveform: false, rhythm: false, in_chains: true, doc: "Bit and sample-rate reduction." },
     NodeDefSpec { name: "compressor", aliases: &[], category: Category::Effect,
         positional: &[arg!("threshold", -60.0, 0.0, -3.0, "dB")],
-        named: &[arg!("ratio", 1.0, 20.0, 3.0, "n:1"), arg!("attack", 0.0, 500.0, 20.0, "ms"), arg!("release", 1.0, 2000.0, 100.0, "ms"), arg!("makeup", 0.0, 4.0, 1.0, "linear gain after compression; 2 = +6 dB")],
+        named: &[arg!("ratio", 1.0, 20.0, 3.0, "n:1"), arg!("attack", 0.0, 500.0, 20.0, "ms"), arg!("release", 1.0, 2000.0, 100.0, "ms"), arg!("makeup", 0.0, 4.0, 1.0, "linear gain after compression, written in dB: makeup=6db, up to +12 dB")],
         waveform: false, rhythm: false, in_chains: true, doc: "Feed-forward compressor." },
     NodeDefSpec { name: "capture", aliases: &[], category: Category::Effect,
         positional: &[arg!("bars", 0.25, 16.0, 2.0, "bars of audio to record")],

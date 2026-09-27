@@ -216,7 +216,7 @@ track pad {
 master {
     in > gain(0.447) > tilt(0.20)
        > eq(mid=1.0, high=-1.8)
-       > compressor(-3.0, ratio=3.0, attack=20, release=100, makeup=1.4)
+       > compressor(-3.0, ratio=3.0, attack=20, release=100, makeup=2.92db)
        > out
 }
 
