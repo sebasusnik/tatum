@@ -1,7 +1,8 @@
 target/
-web/node_modules/
-web/dist/
-web/src/wasm-pkg/
+
+# The web UI was an experiment and is being rewritten outside this tree. The
+# worklet that drove the engine from it is kept in wasm/examples/worklet/.
+web/
 
 # macOS
 .DS_Store
@@ -30,5 +31,4 @@ PLAN.md
 PROMPT.md
 ROADMAP.md
 UX_PLAN.md
-web/DESIGN.md
 docs/mcp-dogfood/

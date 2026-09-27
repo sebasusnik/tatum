@@ -1,7 +1,7 @@
 //! The browser shell. All livecoding logic (diff, fast path, bar-quantized
 //! swap with state inheritance) lives in `tatum_core::live`, shared with the
 //! native CLI; this file only carries strings and buffers across the WASM
-//! boundary. The exported API is what `web/src/audio/tatum-processor.js`
+//! boundary. The exported API is what `examples/worklet/tatum-processor.js`
 //! calls and does not change.
 
 extern crate alloc;

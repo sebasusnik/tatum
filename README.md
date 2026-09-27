@@ -48,7 +48,9 @@ all take `--solo` and `--mute` with track names; a muted kick still drives the s
 - `sets/`: live sets. A directory of numbered `.synth` files, each the whole rig at a
   moment, walked with real hot swaps by `tatum set render`.
 
-Workspace: `core` (engine, DSL, registry), `cli`, `wasm`, `mcp`, `web` (Solid.js livecoding UI).
+Workspace: `core` (engine, DSL, registry), `cli`, `debug` (the analysis behind `tatum
+debug`), `mcp`, `wasm` (browser bindings; `wasm/examples/worklet/` runs them in an
+AudioWorklet).
 
 ## License
 
