@@ -39,7 +39,10 @@ sidechain 0.42 attack=2ms release=130ms
 
 # The sends are half the instrument in dub: a dark dotted-eighth echo that
 # loses its top on every repeat, and a big room that breathes with the kick.
-delay sync=dotted_eighth feedback=0.68 filter=0.3 sidechain=0.35
+# The echo is short-lived on purpose (feedback 0.55, not dub_techno's 0.74):
+# over most of an hour a long one wears the ear out. The `dub` step is where
+# it gets pushed.
+delay sync=dotted_eighth feedback=0.55 filter=0.3 sidechain=0.35
 reverb size=0.82 damp=0.45 predelay=32 sidechain=0.5
 
 delay_return {
@@ -383,7 +386,7 @@ track stab {
     gate 0.16
     velocity 0.75
     pan -0.12
-    delay_send 0.85
+    delay_send 0.5
     reverb_send 0.60
     sidechain 0.5
     out > highpass(300hz, 0.15)

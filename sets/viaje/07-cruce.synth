@@ -1,0 +1,13 @@
+# set: bars=16 phase=cruce energy=5
+# set-note: El cruce. Entran el clap, el bajo que camina y los acordes de Detroit bajitos; el bombo todavía es el de dub y el acorde dub se despide con sus últimos ecos.
+use "_rig.synth"
+tempo 126
+
+track bed    { level 0.22 }
+track stab   { play stab_ghost level 0.14 delay_send 0.3 }
+track beat   { play kick_clap level 0.82 }
+track hats   { play hat_off level 0.8 }
+track sub    { play sub_f level 0.22 }
+track under  { play ch_low level 0.12 }
+track bass   { play bs_a level 0.72 }
+track chords { play ch_a level 0.14 }

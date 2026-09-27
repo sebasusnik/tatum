@@ -1,9 +1,9 @@
 # set: bars=32 phase=dub energy=5
-# set-note: El único cambio de acorde (Fm9 a Dbmaj9) y el eco empujado.
+# set-note: El único cambio de acorde (Fm9 a Dbmaj9) y el eco empujado: el único momento en que el eco manda.
 use "_rig.synth"
 
 track bed  { level 0.3 }
-track stab { play stab_dub level 0.3 delay_send 0.95 }
+track stab { play stab_dub level 0.28 delay_send 0.8 }
 track beat { play kick_dub level 0.78 }
 track hats { play hat_dub level 0.8 }
 track sub  { play sub_dub level 0.55 }

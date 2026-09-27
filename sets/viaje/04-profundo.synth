@@ -3,7 +3,7 @@
 use "_rig.synth"
 
 track bed  { level 0.32 }
-track stab { play stab_full level 0.29 }
+track stab { play stab_full level 0.25 delay_send 0.45 }
 track beat { play kick_rim level 0.76 }
 track hats { play hat_dub level 0.8 }
 track sub  { play sub_f level 0.54 }
