@@ -1,55 +1,55 @@
-# Dark Techno — F minor, 132 BPM, robotic
-# Few elements, each one exact. A dry kick with no room at all; an FM bass
-# that rolls the three sixteenths after every kick; a machine that bleeps a
-# sixteen-step code; a metal knock on a five-step cycle sliding against it;
-# and, only at the peak, a robot voice made of formants. No melody, no pad.
-# Nothing breathes that should not: no reverb on the kick, a short and light
-# sidechain, and the reverb tails are never ducked, so nothing comes and goes.
-tempo 132
+# Dark Techno — F minor, 137 BPM, robotic
+# One protagonist carries it: a metallic FM pluck that opens the song and
+# turns into something else section by section -- its motif, then ratchets
+# and octave leaps, then relentless sixteenths at the peak, then almost
+# nothing -- its brightness drawn by each scene, touched by a vowel filter
+# and a bitcrush where the scene says. Around it the detail: a shaker whose
+# ghosts come and go, a metal click on a 3-3-2, a ride, and air under it
+# all. Under that a kick with a long body and no room, an FM bass on the
+# off-beats, and a fill every eight bars. A light saturator on the master
+# warms the peak without flattening it.
+tempo 137
 meter 4/4
 scale F minor
 swing 0.5
 humanize 0.0 timing 0.0
-sidechain 0.25 attack=1ms release=60ms
+sidechain 0.3 attack=1ms release=70ms
 
-delay sync=eighth feedback=0.3 filter=0.4
-reverb size=0.35 damp=0.6 predelay=10 sidechain=0
+delay sync=dotted_eighth feedback=0.35 filter=0.4
+reverb size=0.4 damp=0.6 predelay=10 sidechain=0
 
 reverb_return { in > highpass(500hz, 0.05) > lowpass(6khz, 0.05) > out }
-delay_return  { in > highpass(600hz, 0.05) > lowpass(5khz, 0.05) > out }
+delay_return  { in > highpass(500hz, 0.05) > lowpass(5khz, 0.05) > autopan(0.5, bars=2) > out }
 
 # ────────────────────────────────────────────────
 # MODULES
 # ────────────────────────────────────────────────
 
-# The kick: a long tonal body and no room. The body is the kick's own tail,
-# tuned low, about 210 ms to -40 dB; there is no reverb on it, so nothing
-# comes and goes. Barely driven: the weight is the tail, not the distortion.
-# The rim is the snare cut to a click; the hats are short and bright
+# The kick: a long tonal body and no room, barely driven. Toms for the fills,
+# a rim cut from the snare, hats that can stutter
 module beats machine {
     kick_level 1.0
     kick_decay 55%
     kick_pitch 0.78x
-    kick_click 35%
-    kick_drive 30%
-    hihat_level 0.55
-    hihat_decay 10%
+    kick_click 40%
+    kick_drive 35%
+    hihat_level 0.6
+    hihat_decay 12%
     hihat_pitch 1.5x
     hihat_pan 0.15
-    clap_level 0.5
+    clap_level 0.6
     clap_pan 0.0
-    snare_level 0.5
-    snare_decay 5%
-    snare_pitch 1.6x
-    snare_snap 30%
-    snare_pan -0.2
+    snare_level 0.55
+    snare_decay 8%
+    snare_pitch 1.4x
+    snare_snap 50%
+    snare_pan -0.15
+    tom_pan -0.35
     stutter_drum hihat
     stutter_rate 0%
 }
 
-# Bass: FM, one carrier and one modulator at the same ratio -- a saw-like
-# tone whose brightness is the modulator's envelope, so each note is a
-# pluck. One oscillator path, so its level never wanders over the song
+# Bass: FM, the modulator's envelope is the pluck. One path, a steady level
 module fm roller {
     algorithm two_op
     level 2.0
@@ -58,51 +58,107 @@ module fm roller {
     waveform sine
     op0_ratio 1x
     op1_ratio 1x
-    op0_envelope 0.002 0.18 0.3 0.05
-    op1_envelope 0.001 0.06 0.1 0.04
+    op0_envelope 0.002 0.16 0.25 0.05
+    op1_envelope 0.001 0.05 0.1 0.04
 }
 
-# Machine: a square-ish FM bleep, hard and short
-module fm bleep {
+# The hook: an FM pluck. An inharmonic modulator (1.41) gives each note a
+# metallic attack that decays into a warm body; the scenes move its
+# brightness through the modulation index rather than a resonant filter
+module fm hook {
+    algorithm two_op
+    level 2.0
+    mod_index 45%
+    feedback 12%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1.41x
+    op0_envelope 0.001 0.28 0.0 0.12
+    op1_envelope 0.001 0.07 0.05 0.05
+    vibrato_rate 5hz
+    vibrato_depth 2%
+}
+
+# Stab: struck metal in a chord, answering the hook at the peak
+module fm stab {
+    algorithm dual_pairs
+    level 1.8
+    mod_index 75%
+    feedback 25%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 3.41x
+    op2_ratio 1x
+    op3_ratio 5.07x
+    op0_envelope 0.001 0.18 0.0 0.1
+    op1_envelope 0.001 0.1 0.0 0.06
+    op2_envelope 0.001 0.14 0.0 0.08
+    op3_envelope 0.001 0.06 0.0 0.04
+}
+
+# Click: a tiny metal tick, high and short
+module fm click {
     algorithm two_op
     level 1.6
     mod_index 70%
-    feedback 15%
-    waveform quarter_sine
+    feedback 25%
+    waveform sine
     op0_ratio 1x
-    op1_ratio 2x
-    op0_envelope 0.001 0.06 0.0 0.03
-    op1_envelope 0.001 0.04 0.0 0.02
+    op1_ratio 3.73x
+    op0_envelope 0.001 0.035 0.0 0.02
+    op1_envelope 0.001 0.02 0.0 0.01
 }
 
-# Knock: struck metal, inharmonic, very short
-module fm knock {
+# Shaker: a burst of FM noise, cut short and bright
+module fm shaker {
+    algorithm pair_plus_two
+    level 1.2
+    mod_index 100%
+    feedback 100%
+    waveform sine
+    op0_ratio 7.1x
+    op1_ratio 5.3x
+    op2_ratio 9.7x
+    op3_ratio 2.51x
+    op0_envelope 0.002 0.045 0.0 0.03
+    op1_envelope 0.002 0.045 0.0 0.03
+    op2_envelope 0.002 0.045 0.0 0.03
+    op3_envelope 0.002 0.045 0.0 0.03
+    op0_feedback 90%
+}
+
+# Ride: inharmonic, a long shimmering tail
+module fm ride {
     algorithm two_op
-    level 1.8
-    mod_index 75%
+    level 1.4
+    mod_index 65%
     feedback 20%
     waveform sine
     op0_ratio 1x
-    op1_ratio 2.76x
-    op0_envelope 0.001 0.09 0.0 0.05
-    op1_envelope 0.001 0.05 0.0 0.03
+    op1_ratio 4.27x
+    op0_envelope 0.001 0.6 0.0 0.4
+    op1_envelope 0.001 0.25 0.0 0.2
 }
 
-# Voice: a buzz with the vowel filter racing through its formants, a
-# machine trying to speak
-module fm buzz {
-    algorithm two_op
-    level 1.6
-    mod_index 60%
-    feedback 50%
+# Whisper: noise shaped by formants, a breath rather than a robot
+module fm whisper {
+    algorithm pair_plus_two
+    level 1.0
+    mod_index 100%
+    feedback 100%
     waveform sine
-    op0_ratio 1x
-    op1_ratio 1x
-    op0_envelope 0.005 0.15 0.5 0.06
-    op1_envelope 0.005 0.15 0.5 0.06
+    op0_ratio 5.3x
+    op1_ratio 2.51x
+    op2_ratio 7.1x
+    op3_ratio 1.43x
+    op0_envelope 0.08 0.3 0.4 0.2
+    op1_envelope 0.08 0.3 0.4 0.2
+    op2_envelope 0.08 0.3 0.4 0.2
+    op3_envelope 0.08 0.3 0.4 0.2
+    op0_feedback 90%
 }
 
-# Static: filtered feedback noise, only for the break
+# Static: filtered feedback noise -- the air under the mix, and the break
 module fm static {
     algorithm pair_plus_two
     level 1.0
@@ -125,26 +181,40 @@ module fm static {
 }
 
 # ────────────────────────────────────────────────
-# DRUMS
+# DRUMS: eight-bar phrases, a fill closing each
 # ────────────────────────────────────────────────
 
 pattern beat_intro {
-    kick:    X - - -  X - - -  X - - -  X - - -
-    hat:     - - x -  - - x -  - - x -  - - x -
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:     - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  x x x x  - - - -
+    snare:   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  x x X X
 }
 
-pattern beat_main {
-    kick:    X - - -  X - - -  X - - -  X - - -
-    hat:     o o x o  o o x o  o o x o  o o x o
-    snare:   - - - -  - - - x  - - - -  - - x -
+pattern beat_drive {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:     x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x x x x  - - - -
+    openhat: - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -
+    snare:   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  x x X X
+    tom:     - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  x - - -  - - - -
+    tom2:    - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - x -  - - - -
+    tom3:    - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - x  - - - -
 }
 
 pattern beat_peak {
-    kick:    X - - -  X - - -  X - - -  X - - -
-    clap:    - - - -  X - - -  - - - -  X - - -
-    hat:     o o x o  o o x o  o o x o  o o x o
-    openhat: - - x -  - - x -  - - x -  - - x -
-    snare:   - - - -  - - - x  - - - -  - - x -
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:     x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x x x x  - - - -
+    openhat: - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -
+    clap:    - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -
+    snare:   - - - x  - - x -  - - - x  - - x -   - - - x  - - x -  - - - x  - - x -   - - - x  - - x -  - - - x  - - x -   - - - x  - - x -  - - - x  - - x -   - - - x  - - x -  - - - x  - - x -   - - - x  - - x -  - - - x  - - x -   - - - x  - - x -  - - - x  - - x -   - - - x  - - x -  x x x x  X X X X
+    tom:     - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  x - - -  - - - -
+    tom2:    - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - x -  - - - -
+    tom3:    - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - x  - - - -
+}
+
+pattern beat_rise {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  - - - -
+    hat:     x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o
+    snare:   o - - -  o - - -  o - - -  o - - -   o - - -  o - - -  o - - -  o - - -   o - o -  o - o -  o - o -  o - o -   x - o -  x - o -  x - o -  x - o -   x o x o  x o x o  x o x o  x o x o   x o x o  x o x o  x o x o  x o x o   x x x x  x x x x  x x x x  x x x x   X*2 X*2 X*2 X*2  X*2 X*2 X*2 X*2  X*3 X*3 X*3 X*3  X*4 X*4 - -
 }
 
 pattern beat_break {
@@ -153,30 +223,76 @@ pattern beat_break {
 }
 
 # ────────────────────────────────────────────────
-# BASS AND MACHINES
+# THE HOOK, FOUR WAYS
 # ────────────────────────────────────────────────
 
-# On the off-beats, out of the kick's body: kick and bass take turns
-# instead of sitting on each other. A sixteenth pickup every other bar
+# A: the motif; in FM the velocity is the brightness, so the accents shape it
+pattern hook_a {
+    F2:0.9 - F2:0.5 F3:0.8   - F2:0.6 - Ab2:0.8   F2:0.9 - C3:0.7 -   ~Bb2:0.8 - F2:0.5 -
+    F2:0.9 - F2:0.5 F3:0.8   - F2:0.6 - Ab2:0.8   Eb3:0.9 - ~C3:0.7 -   F2:0.8 F2:0.5 ~Gb2:0.9 -
+}
+
+# B: ratchets and octave leaps
+pattern hook_b {
+    F2:0.9 F3:0.8*2 - F2:0.6   F3:0.9 - ~Ab3:0.8 F2:0.5   F2:0.9 - C4:0.8 ~Bb3:0.7   F2:0.9*3 - F3:0.8 -
+    F2:0.9 F3:0.8*2 - F2:0.6   F3:0.9 - ~Ab3:0.8 F2:0.5   Eb4:1.0 ~C4:0.8 - Gb3:0.9*4   F2:0.9 - ~F3:1.0 -
+}
+
+# C: the peak, every sixteenth
+pattern hook_c {
+    F2:0.9 F3:0.6 F2:0.7 Ab3:0.8   F2:0.9 F3:0.6 C4:0.8 F2:0.6   F2:0.9 F3:0.6 F2:0.7 Bb3:0.8   F2:0.9 Gb3:0.9*2 F3:0.7 C4:0.9
+    F2:0.9 F3:0.6 F2:0.7 Ab3:0.8   F2:0.9 F3:0.6 C4:0.8 F2:0.6   Eb4:1.0*3 ~C4:0.9 F3:0.7 Ab3:0.8   F2:0.9 Gb3:1.0*4 ~F3:0.9 F2:0.8
+}
+
+# D: what is left of it
+pattern hook_d {
+    F2:0.9 - - -   - - F3:0.7 -   - - F2:0.8 -   - - - -
+    F2:0.9 - - -   - - F3:0.7 -   - - ~Gb2:0.8 -   - - - -
+}
+
+# ────────────────────────────────────────────────
+# LOW END, METAL, VOICE
+# ────────────────────────────────────────────────
+
 pattern roll {
     - - F1:0.9 -   - - F1:0.8 -   - - F1:0.9 -   - - F1:0.8 -
     - - F1:0.9 -   - - F1:0.8 -   - - F1:0.9 -   - - F1:0.8 Ab1:0.6
 }
 
-# A sixteen-step code on the tones of F minor
-pattern code {
-    F4:0.9 - - C5:0.6   - Ab4:0.7 - -   F4:0.9 - Eb5:0.6 -   - C5:0.7 - F4:0.5
+pattern stabs {
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - [F3 C4 Gb4]:0.9 -  - - - -  - - [F3 C4 Gb4]:0.7 -
 }
 
-# Five steps against sixteen: it lands somewhere else every bar
-pattern knock_5 {
-    C4:0.9 - - F3:0.6 -
+# Click on a 3-3-2, ghost notes coming and going over four bars
+pattern clicks {
+    F6:0.8 - - F6:0.6 - - F6:0.8 - - F6:0.43 - F6:0.7 - F6:0.37 - -
+    F6:0.8 - - F6:0.6 - - F6:0.8 - - - - F6:0.7 - - - -
+    F6:0.8 - - F6:0.6 - - F6:0.8 - - - - F6:0.7 - - - -
+    F6:0.8 - - F6:0.6 - - F6:0.8 - - F6:0.36 - F6:0.7 - F6:0.43 - -
+}
+
+# Shaker: four bars of sixteenths, accents fixed, ghosts coming and going
+pattern shake {
+    C6:0.50 C6:0.33 C6:0.76 C6:0.27 C6:0.46 C6:0.21 C6:0.82 C6:0.22 C6:0.51 - C6:0.77 C6:0.33 C6:0.59 C6:0.28 C6:0.90 C6:0.37
+    C6:0.49 C6:0.22 C6:0.80 - C6:0.48 C6:0.33 C6:0.81 C6:0.21 C6:0.46 C6:0.34 C6:0.81 C6:0.32 C6:0.52 C6:0.36 C6:0.85 C6:0.31
+    C6:0.53 - C6:0.86 C6:0.40 C6:0.47 C6:0.35 C6:0.77 C6:0.21 C6:0.55 - C6:0.84 - C6:0.50 - C6:0.84 C6:0.29
+    C6:0.58 - C6:0.82 - C6:0.46 - C6:0.85 - C6:0.57 C6:0.28 C6:0.85 C6:0.29 C6:0.48 C6:0.21 C6:0.87 C6:0.25
+}
+
+pattern ride_off {
+    - - F5:0.6 -   - - F5:0.5 -   - - F5:0.6 -   - - F5:0.5 -
 }
 
 # The voice: three syllables every eight bars
 pattern speak {
-    - - - -  - - - -  C3:0.9 C3:0.7 - C3:0.9  - - - -
+    - - - -  - - - -  C4:0.9 .. D4:0.7 ..  - - - -
     -*112
+}
+
+# In the cut: the voice every bar
+pattern speak_cut {
+    - - - -  - - - -  C4:0.9 .. D4:0.7 ..  - - - -
 }
 
 pattern static_bed {
@@ -188,7 +304,7 @@ pattern static_bed {
 # ────────────────────────────────────────────────
 
 track drums {
-    play beat_main
+    play beat_drive
     using machine
     level 0.8
     velocity 1.0
@@ -205,39 +321,89 @@ track bass {
     out > highpass(30hz, 0.05) > saturate(0.5) > lowpass(3khz, 0.05) > master
 }
 
-track bleep {
-    play code
-    using bleep
-    level 0.5
+track hook {
+    play hook_a
+    using hook
+    level 0.22
     velocity 1.0
-    gate 0.4
-    pan 0.25
-    delay_send 0.15
-    reverb_send 0.08
-    out > highpass(300hz, 0.05) > bitcrush(10, 0.2, wet=0.35) > master
+    gate 0.7
+    pan 0.1
+    delay_send 0.2
+    reverb_send 0.1
+    sidechain 0.3
+    out > highpass(120hz, 0.05)
+        > vowel(a, e, bars=2, wet=0) as talk
+        > bitcrush(10, 0.2, wet=0) as crush
+        > panenv(0.45, release=250) > phaser(0.15, bars=8)
+        > lowpass(9khz, 0.05) > master
 }
 
-track knock {
-    play knock_5
-    using knock
-    level 0.2
+track stab {
+    play stabs
+    using stab
+    level 0.15
     velocity 1.0
-    gate 0.3
+    gate 0.4
     pan -0.3
-    reverb_send 0.12
-    out > highpass(150hz, 0.05) > master
+    delay_send 0.25
+    reverb_send 0.15
+    out > highpass(250hz, 0.05) > master
+}
+
+track click {
+    play clicks
+    using click
+    level 0.14
+    velocity 1.0
+    gate 0.2
+    pan -0.4
+    reverb_send 0.15
+    delay_send 0.1
+    out > highpass(2khz, 0.05) > lowpass(12khz, 0.05) > master
+}
+
+track shaker {
+    play shake
+    using shaker
+    level 0.08
+    velocity 1.0
+    gate 0.2
+    pan 0.3
+    reverb_send 0.08
+    out > highpass(6khz, 0.05) > lowpass(14khz, 0.05) > autopan(0.4, hz=0.3) > master
+}
+
+track ride {
+    play ride_off
+    using ride
+    level 0.07
+    velocity 1.0
+    gate 0.5
+    pan -0.25
+    reverb_send 0.15
+    out > highpass(3khz, 0.05) > lowpass(12khz, 0.05) > master
+}
+
+track air {
+    play static_bed
+    using static
+    level 0.035
+    velocity 1.0
+    reverb_send 0.3
+    sidechain 0.6
+    out > highpass(800hz, 0.05) > lowpass(3500hz, 0.05, lfo_bars=16, lfo_depth=1500) > autopan(0.5, bars=16) > master
 }
 
 track voice {
     play speak
-    using buzz
-    level 0.55
+    using whisper
+    level 0.7
     velocity 1.0
-    gate 0.8
-    pan 0.05
-    delay_send 0.2
-    reverb_send 0.1
-    out > highpass(200hz, 0.05) > vowel(o, i, hz=6, mix=1) > saturate(0.8) > master
+    gate 0.9
+    pan -0.1
+    delay_send 0.25
+    reverb_send 0.3
+    out > highpass(600hz, 0.05) > vowel(o, u, hz=3, mix=0.9) > lowpass(5khz, 0.05) > master
 }
 
 track static {
@@ -250,79 +416,142 @@ track static {
 }
 
 master {
-    in > lowpass(20000, 0.05) > eq(low=1, high=0.5) > out
+    in > lowpass(20000, 0.05) > saturate(0.3) > eq(low=1, high=0.5) > out
 }
 
 # ────────────────────────────────────────────────
 # SCENES
 # ────────────────────────────────────────────────
 
+# The hook is there from the first bar, closed and far away
 scene intro {
+    auto master drive 0.11 > 0.17
+    auto hook mod_index 0.2 > 0.2 > 0.28 > 0.3
     track drums { play beat_intro using machine }
+    track hook  { play hook_d using hook pan 0.1 }
 }
 
-# The roller enters dark and brightens over sixteen bars
-scene bass {
-    auto roller mod_index 0.2 > 0.45
-    track drums { play beat_main using machine }
+scene drive {
+    auto master drive 0.14 > 0.19
+    auto hook mod_index 0.3 > 0.35 > 0.42 > 0.38 > 0.45
+    track drums { play beat_drive using machine }
     track bass  { play roll using roller }
+    track hook  { play hook_a using hook pan 0.1 }
+    track click { play clicks using click pan -0.4 }
+    track shaker { play shake using shaker pan 0.3 }
+    track air { play static_bed using static }
 }
 
-scene machine {
-    auto roller mod_index 0.45 > 0.55 > 0.45
-    track drums { play beat_main using machine }
+# The hook starts to talk
+scene hook {
+    auto master drive 0.19 > 0.22
+    auto hook mod_index 0.4 > 0.5 > 0.45 > 0.55 > 0.5
+    auto hook.talk wet 0.00 > 0.00 > 0.16 > 0.32 > 0.20
+    track drums { play beat_drive using machine }
     track bass  { play roll using roller }
-    track bleep { play code using bleep pan 0.25 }
-    track knock { play knock_5 using knock pan -0.3 }
+    track hook  { play hook_b using hook pan 0.1 }
+    track click { play clicks using click pan -0.4 }
+    track shaker { play shake using shaker pan 0.3 }
+    track air { play static_bed using static }
 }
 
-# No kick. The roller keeps turning under the static and the code
+# Four bars: the drums and the bass drop out, the hook and the voice alone
+scene cut {
+    auto hook.talk wet 0.40 > 0.40
+    auto hook mod_index 0.5 > 0.3
+    track hook  { play hook_b using hook pan 0.1 }
+    track voice { play speak_cut using whisper pan -0.1 }
+}
+
+scene slam {
+    auto master drive 0.22 > 0.28
+    auto hook.talk wet 0.12 > 0.00 > 0.08 > 0.00
+    auto hook mod_index 0.5 > 0.6 > 0.55 > 0.62
+    track drums { play beat_peak using machine }
+    track bass  { play roll using roller }
+    track hook  { play hook_b using hook pan 0.1 }
+    track click { play clicks using click pan -0.4 }
+    track stab  { play stabs using stab pan -0.3 }
+    track shaker { play shake using shaker pan 0.3 }
+    track ride { play ride_off using ride pan -0.25 }
+    track air { play static_bed using static }
+}
+
+# No kick: the hook talks slowly over the static and the voice
 scene break {
-    auto roller mod_index 0.45 > 0.2
+    reverb_mix = 0.5
+    auto master drive 0.17 > 0.17
+    auto hook.talk wet 0.40 > 0.40
+    auto hook mod_index 0.4 > 0.25 > 0.35 > 0.2
     track drums  { play beat_break using machine }
     track bass   { play roll using roller }
-    track bleep  { play code using bleep pan 0.25 }
+    track hook   { play hook_d using hook pan 0.1 }
+    track voice  { play speak using whisper pan -0.1 }
     track static { play static_bed using static }
 }
 
-# The kick returns and the hats stutter faster into the peak
-scene rebuild {
+# Eight bars: the roll folds in, the hats stutter, the hook rises into the crush
+scene rise {
+    auto master drive 0.17 > 0.28
     auto machine stutter_rate 0.1 > 0.8
-    auto roller mod_index 0.2 > 0.55
-    track drums { play beat_main using machine }
-    track bass  { play roll using roller }
-    track bleep { play code using bleep pan 0.25 }
+    auto hook mod_index 0.25 > 0.65
+    auto hook.crush wet 0.00 > 0.30
+    auto hook.talk wet 0.00 > 0.00
+    track drums  { play beat_rise using machine }
+    track bass   { play roll using roller }
+    track hook   { play hook_b using hook pan 0.1 }
+    track static { play static_bed using static }
+    track shaker { play shake using shaker pan 0.3 }
 }
 
 scene peak {
+    auto master drive 0.28 > 0.30 > 0.28
     auto machine stutter_rate 0 > 0
-    auto roller mod_index 0.55 > 0.65 > 0.55
+    auto hook mod_index 0.58 > 0.68 > 0.6 > 0.7 > 0.62
+    auto hook.crush wet 0.20 > 0.05 > 0.25 > 0.05 > 0.30 > 0.10
+    auto hook.talk wet 0.00 > 0.00 > 0.20 > 0.00 > 0.00
     track drums { play beat_peak using machine }
     track bass  { play roll using roller }
-    track bleep { play code using bleep pan 0.25 }
-    track knock { play knock_5 using knock pan -0.3 }
-    track voice { play speak using buzz pan 0.05 }
+    track hook  { play hook_c using hook pan 0.1 }
+    track stab  { play stabs using stab pan -0.3 }
+    track click { play clicks using click pan -0.4 }
+    track voice { play speak using whisper pan -0.1 }
+    track shaker { play shake using shaker pan 0.3 }
+    track ride { play ride_off using ride pan -0.25 }
+    track air { play static_bed using static }
 }
 
-scene strip {
-    auto roller mod_index 0.55 > 0.3
-    track drums { play beat_main using machine }
+# What is left: the hook reduced to a few notes, the drums still going
+scene mutate {
+    auto master drive 0.25 > 0.17
+    auto hook.crush wet 0.15 > 0.00
+    auto hook mod_index 0.55 > 0.35
+    track drums { play beat_drive using machine }
     track bass  { play roll using roller }
-    track knock { play knock_5 using knock pan -0.3 }
+    track hook  { play hook_d using hook pan 0.1 }
+    track click { play clicks using click pan -0.4 }
+    track shaker { play shake using shaker pan 0.3 }
+    track air { play static_bed using static }
 }
 
 scene outro {
+    auto master drive 0.17 > 0.11
+    auto hook mod_index 0.35 > 0.15
     track drums { play beat_intro using machine }
     track bass  { play roll using roller level 0.0 }
+    track hook  { play hook_d using hook pan 0.1 }
+    track air { play static_bed using static }
 }
 
 arrange {
     intro x16
-    bass x16
-    machine x32
+    drive x16
+    hook x16
+    cut x4
+    slam x16
     break x16
-    rebuild x8
+    rise x8
     peak x32
-    strip x16
+    mutate x16
     outro x16
 }
