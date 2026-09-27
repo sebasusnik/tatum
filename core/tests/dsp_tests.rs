@@ -1667,3 +1667,28 @@ fn test_vibrato_delayed_onset() {
         late
     );
 }
+
+/// A slide keeps the envelope running, so the new velocity has to glide in:
+/// taken at once it is a step in level, a click on every accent change in a
+/// 303 line. Two voices play the same note and slide onto it again, one at a
+/// new velocity: their ratio is the velocity the first one plays at.
+#[test]
+fn a_slide_glides_to_its_velocity() {
+    let (mut a, mut b) = (BassModule::new(), BassModule::new());
+    for m in [&mut a, &mut b] {
+        m.set_param(BassParam::Sustain, 1.0);
+        m.note_on(45, 1.0);
+        let mut warm = vec![0.0f32; 4800];
+        m.process_block(&mut warm);
+    }
+    a.slide_to(45, 0.25);
+    b.slide_to(45, 1.0);
+    let (mut oa, mut ob) = (vec![0.0f32; 4800], vec![0.0f32; 4800]);
+    a.process_block(&mut oa);
+    b.process_block(&mut ob);
+    let ratio = |from: usize| {
+        (from..from + 200).find(|&i| ob[i].abs() > 0.02).map(|i| oa[i] / ob[i]).expect("the voice is sounding")
+    };
+    assert!(ratio(0) > 0.9, "the new velocity arrived at once: {}", ratio(0));
+    assert!((ratio(2400) - 0.25).abs() < 0.02, "the velocity never arrived: {}", ratio(2400));
+}
