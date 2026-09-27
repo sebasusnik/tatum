@@ -2,6 +2,9 @@
 name = "tatum-core"
 version = "0.1.0"
 edition = "2021"
+description = "The tatum engine: the .synth language, its compiler, and a no_std synthesizer that plays it"
+license.workspace = true
+repository.workspace = true
 
 [lib]
 name = "tatum_core"

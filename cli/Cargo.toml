@@ -2,6 +2,9 @@
 name = "tatum-cli"
 version = "0.1.0"
 edition = "2021"
+description = "tatum: check, play, watch, render and debug .synth songs from the terminal"
+license.workspace = true
+repository.workspace = true
 
 [[bin]]
 name = "tatum"

@@ -2,6 +2,8 @@
 name = "tatum-mcp"
 version = "0.1.0"
 edition = "2021"
+license.workspace = true
+repository.workspace = true
 description = "MCP server exposing the tatum-core DSL: docs, parameter registry, check and render"
 build = "build.rs"
 
