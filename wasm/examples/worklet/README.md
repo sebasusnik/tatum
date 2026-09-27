@@ -11,7 +11,9 @@ of the WASM crate in a browser. The UI itself is gone.
   loads the worklet, fetches the `.wasm` and sends its bytes over.
 
 Build the module with `wasm-pack build wasm --target web` and serve
-`tatum_wasm_bg.wasm` next to the page.
+`tatum_wasm_bg.wasm` next to the page. The release profile optimizes for
+speed; the `wasm` profile (`--profile wasm`) makes the module about 40%
+smaller if the download matters more than CPU headroom in the worklet.
 
 Known shortcomings, to fix when the UI is rewritten:
 

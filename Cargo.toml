@@ -6,9 +6,19 @@ resolver = "2"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/sebasusnik/tatum"
 
+# The engine runs in real time, so a release build is built for speed:
+# `opt-level = "s"` rendered hitech_psy 5% slower (17.0 s against 17.9),
+# byte for byte the same audio.
 [profile.release]
-opt-level = "s"
+opt-level = 3
 lto = true
+
+# For a browser bundle where download size matters more than headroom:
+# `cargo build -p tatum-wasm --target wasm32-unknown-unknown --profile wasm`.
+# The module comes out at 486 KB against 784 KB.
+[profile.wasm]
+inherits = "release"
+opt-level = "s"
 
 # What CI builds and tests with: release speed without release's link time.
 # Fat LTO links each of the fifty test binaries whole-program, 390 CPU-seconds
