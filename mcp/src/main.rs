@@ -14,7 +14,7 @@
 
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use tatum_core::analysis::{self, BAND_NAMES};
 use tatum_core::dsl::{self, compiler, lint};
@@ -134,6 +134,21 @@ impl Ctx {
     }
 }
 
+/// Where a tool may write: `name`, inside the render directory. The server runs
+/// with the user's permissions and whoever calls it is a model, so an output
+/// is a name, not a path: nothing absolute and no `..` out of the directory.
+fn in_render_dir(ctx: &Ctx, name: &str) -> Result<PathBuf, String> {
+    let rel = Path::new(name);
+    let plain = rel.components().all(|c| matches!(c, Component::Normal(_)));
+    if name.is_empty() || !plain {
+        return Err(format!(
+            "output: a name inside the render directory ({}), like \"song.wav\" or \"drafts/v2.wav\"; absolute paths and '..' are not allowed",
+            ctx.render_dir.display()
+        ));
+    }
+    Ok(ctx.render_dir.join(rel))
+}
+
 // ── JSON-RPC plumbing ──
 
 fn handle_message(ctx: &Ctx, msg: &Value) -> Option<Value> {
@@ -238,7 +253,7 @@ fn tool_definitions() -> Vec<Value> {
                 "type": "object",
                 "properties": {
                     "source": { "type": "string", "description": "Full .synth source text" },
-                    "output": { "type": "string", "description": "Path for the WAV file. Default: a file in the render directory, name derived from the first comment line or 'song'." },
+                    "output": { "type": "string", "description": "File name for the WAV, inside the render directory (\"song.wav\", \"drafts/v2.wav\"); no absolute paths or '..'. Default: a name derived from the first comment line or 'song'." },
                     "bars": { "type": "integer", "minimum": 1, "maximum": MAX_RENDER_BARS, "description": "Render only the first N bars (default: the whole arrangement)." }
                 },
                 "required": ["source"],
@@ -256,7 +271,7 @@ fn tool_definitions() -> Vec<Value> {
                     "mute": { "type": "array", "items": { "type": "string" }, "description": "Take these tracks out." },
                     "bars": { "type": "string", "description": "\"16\" for the first 16 bars, \"17-24\" for bars 17 to 24. Default: the whole song." },
                     "dry": { "type": "boolean", "description": "Also keep each track before its insert chain." },
-                    "output": { "type": "string", "description": "Directory to write into. Default: <render dir>/debug/<song name>." }
+                    "output": { "type": "string", "description": "Directory to write into, inside the render directory (\"debug/take2\"); no absolute paths or '..'. Default: debug/<song name>." }
                 },
                 "required": ["source"],
                 "additionalProperties": false
@@ -421,8 +436,10 @@ fn tool_debug(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let isolation = tatum_debug::Isolation { solo: names("solo"), mute: names("mute") };
     let song = tatum_core::dsl::isolate::compile(source, &isolation).map_err(|e| pretty(&e.to_json()))?;
     let slug = slug_from_source(source);
-    let dir = args.get("output").and_then(Value::as_str).map(PathBuf::from)
-        .unwrap_or_else(|| ctx.render_dir.join("debug").join(&slug));
+    let dir = match args.get("output").and_then(Value::as_str) {
+        Some(name) => in_render_dir(ctx, name)?,
+        None => ctx.render_dir.join("debug").join(&slug),
+    };
     let mut opts = tatum_debug::Options::new(dir);
     opts.gain = tatum_core::dsl::isolate::output_gain(source).map_err(|e| pretty(&e.to_json()))?;
     opts.dry = args.get("dry").and_then(Value::as_bool).unwrap_or(false);
@@ -509,16 +526,14 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
 
     // Output path
     let output = match args.get("output").and_then(Value::as_str) {
-        Some(p) => PathBuf::from(p),
-        None => {
-            std::fs::create_dir_all(&ctx.render_dir).map_err(|e| format!("cannot create {}: {}", ctx.render_dir.display(), e))?;
-            ctx.render_dir.join(format!("{}.wav", slug_from_source(source)))
-        }
+        Some(name) => in_render_dir(ctx, name)?,
+        None => ctx.render_dir.join(format!("{}.wav", slug_from_source(source))),
     };
+    if output.extension().and_then(|e| e.to_str()) != Some("wav") {
+        return Err(format!("output: a .wav file name, not {}", output.display()));
+    }
     if let Some(parent) = output.parent() {
-        if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent).map_err(|e| format!("cannot create {}: {}", parent.display(), e))?;
-        }
+        std::fs::create_dir_all(parent).map_err(|e| format!("cannot create {}: {}", parent.display(), e))?;
     }
     std::fs::write(&output, tatum_core::wav::encode_stereo_16(&l, &r, SAMPLE_RATE as u32))
         .map_err(|e| format!("cannot write {}: {}", output.display(), e))?;
@@ -843,7 +858,7 @@ mod tests {
         assert_eq!(v["summary"]["bars"], 12);
 
         let out = c.render_dir.join("acid_arp_test.wav");
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": { "name": "tatum_render", "arguments": { "source": src, "output": out.to_str().unwrap(), "bars": 4 } } }));
+        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": { "name": "tatum_render", "arguments": { "source": src, "output": "acid_arp_test.wav", "bars": 4 } } }));
         assert_eq!(r["result"]["isError"], false, "{}", r);
         let v: Value = serde_json::from_str(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
         assert_eq!(v["bars"], 4);
@@ -856,12 +871,41 @@ mod tests {
     }
 
     #[test]
+    fn tools_write_only_inside_the_render_directory() {
+        let c = ctx();
+        let src = std::fs::read_to_string(c.examples_dir.join("acid_arp.synth")).unwrap();
+        let outside = std::env::temp_dir().join("tatum-mcp-escape.wav");
+        let _ = std::fs::remove_file(&outside);
+        for (tool, output) in [
+            ("tatum_render", outside.to_str().unwrap()),
+            ("tatum_render", "../tatum-mcp-escape.wav"),
+            ("tatum_render", "drafts/../../tatum-mcp-escape.wav"),
+            ("tatum_render", "song.txt"),
+            ("tatum_render", ""),
+            ("tatum_debug", std::env::temp_dir().to_str().unwrap()),
+            ("tatum_debug", "../escape"),
+        ] {
+            let r = call(&c, json!({ "jsonrpc": "2.0", "id": 12, "method": "tools/call", "params": { "name": tool,
+                "arguments": { "source": src, "output": output, "bars": 1 } } }));
+            assert_eq!(r["result"]["isError"], true, "{} wrote to {:?}: {}", tool, output, r);
+            assert!(r["result"]["content"][0]["text"].as_str().unwrap().starts_with("output:"), "{}", r);
+        }
+        assert!(!outside.exists());
+        assert!(!std::env::temp_dir().join("escape").exists());
+
+        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 13, "method": "tools/call", "params": { "name": "tatum_render",
+            "arguments": { "source": src, "output": "drafts/v2.wav", "bars": 1 } } }));
+        assert_eq!(r["result"]["isError"], false, "{}", r);
+        assert!(c.render_dir.join("drafts/v2.wav").exists());
+    }
+
+    #[test]
     fn debug_takes_an_example_apart() {
         let c = ctx();
         let src = std::fs::read_to_string(c.examples_dir.join("acid_arp.synth")).unwrap();
         let dir = c.render_dir.join("debug_test");
         let r = call(&c, json!({ "jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": { "name": "tatum_debug",
-            "arguments": { "source": src, "output": dir.to_str().unwrap(), "bars": "3-4", "mute": ["drums"] } } }));
+            "arguments": { "source": src, "output": "debug_test", "bars": "3-4", "mute": ["drums"] } } }));
         assert_eq!(r["result"]["isError"], false, "{}", r);
         let text = r["result"]["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("bars 3-4 of 12") && text.contains("muted: drums"), "{}", text);

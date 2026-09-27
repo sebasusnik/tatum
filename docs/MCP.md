@@ -60,8 +60,10 @@ claude mcp add tatum -- /path/to/tatum/target/release/tatum-mcp
 Environment variables:
 
 - `SYNTH_EXAMPLES_DIR`: where `tatum_examples` looks (default: the repo's `examples/`).
-- `SYNTH_RENDER_DIR`: where `tatum_render` writes when no `output` is given
-  (default: `<tmp>/tatum-renders`).
+- `SYNTH_RENDER_DIR`: where `tatum_render` and `tatum_debug` write (default:
+  `<tmp>/tatum-renders`). Their `output` is a name inside it (`song.wav`,
+  `drafts/v2.wav`, `debug/take2`); absolute paths and `..` are refused, so a
+  model calling the server cannot write anywhere else on the machine.
 
 ## Claude Desktop
 
