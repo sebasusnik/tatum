@@ -23,8 +23,6 @@ pub mod analysis;
 pub mod nodes;
 pub mod output;
 
-#[cfg(test)]
-pub mod test_utils;
 
 pub const SAMPLE_RATE: f32 = 44100.0;
 pub const BLOCK_SIZE: usize = 128;

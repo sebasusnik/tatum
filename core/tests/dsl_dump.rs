@@ -1,5 +1,5 @@
 //! Dump the compiled DSL output for funk_replica.synth
-//! to compare with what song_funk_envelope_filter.rs does directly.
+//! to see what the compiler makes of a whole song.
 //!
 //! Run: cargo test --test dsl_dump -- --nocapture
 

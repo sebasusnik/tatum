@@ -1040,8 +1040,19 @@ fn drum_name_to_midi(name: &str) -> u8 {
     }
 }
 
-/// Convert note name (e.g., "A1", "C#4") to MIDI note number.
+/// Convert note name (e.g., "A1", "C#4") to MIDI note number. The parser has
+/// already refused names outside MIDI (`note_in_midi_range`); anything else is
+/// held to 0..127.
 pub fn note_name_to_midi(name: &str) -> u8 {
+    note_name_midi(name).clamp(0, 127) as u8
+}
+
+/// Whether a note name lands on a MIDI note: C-1 up to G9.
+pub fn note_in_midi_range(name: &str) -> bool {
+    (0..=127).contains(&note_name_midi(name))
+}
+
+fn note_name_midi(name: &str) -> i32 {
     let chars: Vec<char> = name.chars().collect();
     if chars.is_empty() { return 60; } // default C4
 
@@ -1059,24 +1070,25 @@ pub fn note_name_to_midi(name: &str) -> u8 {
     let mut i = 1;
     let accidental = if i < chars.len() && chars[i] == '#' {
         i += 1;
-        1i8
+        1
     } else if i < chars.len() && chars[i] == 'b' {
         i += 1;
-        -1i8
+        -1
     } else {
         0
     };
 
-    let octave: i8 = if i < chars.len() {
+    // The lexer only makes a note of digits here; a run of them too long for
+    // an i32 is out of range like any other.
+    let octave: i32 = if i < chars.len() {
         let oct_str: String = chars[i..].iter().collect();
-        oct_str.parse().unwrap_or(4)
+        oct_str.parse().unwrap_or(i32::MAX / 24)
     } else {
         4
     };
 
     // MIDI: C4 = 60
-    let midi = (octave as i16 + 1) * 12 + base as i16 + accidental as i16;
-    midi.clamp(0, 127) as u8
+    (octave + 1) * 12 + base + accidental
 }
 
 // ── Track compilation ──

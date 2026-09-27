@@ -3,7 +3,6 @@ use crate::primitives::oscillator::{Oscillator, Waveform};
 use crate::primitives::envelope::Envelope;
 use crate::primitives::filter::LadderFilter;
 use crate::primitives::lfo::{LfoWaveform, LfoSyncMode, LfoTarget, ModulationRouter};
-use crate::harmony::HarmonyContext;
 use crate::{Module, SAMPLE_RATE};
 
 #[inline]
@@ -41,7 +40,6 @@ pub enum BassParam {
 }
 
 pub struct BassModule {
-    pub harmony: Option<HarmonyContext>,
     oscs: [Oscillator; 3],
     osc_pitch_offsets: [i8; 3],
     amp_env: Envelope,
@@ -102,7 +100,6 @@ impl BassModule {
         filter_env.set_adsr(0.005, 0.3, 0.0, 0.1);
 
         Self {
-            harmony: Some(HarmonyContext::new(45, crate::harmony::Scale::Minor)), // A2
             oscs: [osc0, osc1, osc2],
             osc_pitch_offsets: [0, 0, 0],
             amp_env,
@@ -124,15 +121,6 @@ impl BassModule {
             vibrato_depth: 0.0,
             vibrato_delay: 0.3,
             vibrato_onset: 0.0,
-        }
-    }
-
-    /// React to a harmony change: play the chord's bass note one octave below.
-    pub fn on_harmony_change(&mut self) {
-        if let Some(ref harmony) = self.harmony {
-            let bass_note = harmony.bass_note();
-            let note = if bass_note >= 12 { bass_note - 12 } else { bass_note };
-            self.note_on(note, 0.9);
         }
     }
 

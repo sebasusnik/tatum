@@ -1,4 +1,5 @@
-# Funk Envelope Filter — DSL replica of song_funk_envelope_filter.rs
+# Funk Envelope Filter — an envelope-filter funk bass, first written as a Rust
+# demo and replicated here in the DSL
 # 112 BPM, A minor, 32 bars
 # Section map: intro(4) verse1(8) bridge(4) verse2(8) outro(8)
 

@@ -102,8 +102,7 @@ pattern bass_hold {
 }
 
 # Arp source material: C#m7 held for the bar; the arp walks it at 16ths
-# over two octaves (49 52 56 59 / 61 64 68 71), exactly like the reference
-# ArpProcessor::rebuild_notes_from_harmony with octave_range = 2.
+# over two octaves (49 52 56 59 / 61 64 68 71).
 pattern arp_chord {
     [1.3 3.3 5.3 7.3]:1.0 .. .. ..
     ..                    .. .. ..

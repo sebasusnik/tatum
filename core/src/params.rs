@@ -730,18 +730,7 @@ pub fn track_json() -> String {
 
 // ── Reference generation (shared by the CLI and the MCP server) ──
 
-fn json_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            _ => out.push(c),
-        }
-    }
-    out
-}
+use crate::dsl::error::json_escape;
 
 /// Markdown reference for the given module kinds.
 pub fn markdown(kinds: &[ModuleKind]) -> String {

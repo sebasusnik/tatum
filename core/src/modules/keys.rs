@@ -4,7 +4,6 @@ use crate::primitives::envelope::{Envelope, EnvStage};
 use crate::primitives::filter::{BiquadFilter, FilterType};
 use crate::primitives::lfo::{LfoWaveform, LfoSyncMode, LfoTarget, ModulationRouter};
 use crate::effects::chorus::Chorus;
-use crate::harmony::HarmonyContext;
 use crate::{Module, MAX_VOICES, SAMPLE_RATE};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -148,7 +147,6 @@ pub enum KeysParam {
 }
 
 pub struct KeysModule {
-    pub harmony: Option<HarmonyContext>,
     pub voices: [KeysVoice; MAX_VOICES],
     voice_counter: u32,
     chorus: Chorus,
@@ -186,7 +184,6 @@ impl KeysModule {
     }
     pub fn new() -> Self {
         Self {
-            harmony: Some(HarmonyContext::new(57, crate::harmony::Scale::Minor)),
             voices: core::array::from_fn(|i| KeysVoice::new(i as u32)),
             voice_counter: 0,
             chorus: Chorus::new(),
@@ -201,23 +198,6 @@ impl KeysModule {
             vibrato_depth: 0.0,
             vibrato_delay: 0.3,
             vibrato_onset: 0.0,
-        }
-    }
-
-    /// React to a harmony change: release all active voices, then trigger the chord.
-    pub fn on_harmony_change(&mut self) {
-        if let Some(ref harmony) = self.harmony {
-            // Release all active voices
-            for voice in &mut self.voices {
-                if voice.active {
-                    voice.note_off();
-                }
-            }
-            // Trigger chord notes
-            let chord = harmony.chord_notes();
-            for note in chord.iter().flatten() {
-                self.note_on(*note, 0.7);
-            }
         }
     }
 

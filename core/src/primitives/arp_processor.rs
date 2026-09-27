@@ -1,4 +1,3 @@
-use crate::harmony::HarmonyContext;
 use crate::math;
 use crate::SAMPLE_RATE;
 
@@ -91,22 +90,7 @@ impl ArpProcessor {
         None
     }
 
-    /// Rebuild note list from harmony context.
-    pub fn rebuild_notes_from_harmony(&mut self, harmony: &HarmonyContext) {
-        let chord = harmony.chord_notes();
-        let mut idx = 0;
-        for octave in 0..self.octave_range {
-            for note in chord.iter().flatten() {
-                if idx < 16 {
-                    self.arp_notes[idx] = note + octave * 12;
-                    idx += 1;
-                }
-            }
-        }
-        self.num_notes = idx;
-    }
-
-    /// Set notes directly (for non-harmony use cases, e.g. held notes).
+    /// Set the notes to walk: the chord the track is holding.
     pub fn set_notes(&mut self, notes: &[u8]) {
         let count = notes.len().min(16);
         self.arp_notes[..count].copy_from_slice(&notes[..count]);

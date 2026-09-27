@@ -635,7 +635,6 @@ pub enum BeatsParam {
 }
 
 pub struct BeatsModule {
-    pub harmony: Option<crate::harmony::HarmonyContext>, // always None
     pub kick_env: [f32; BLOCK_SIZE],
     kick: Kick,
     snare: Snare,
@@ -723,7 +722,6 @@ impl BeatsModule {
 
     pub fn new() -> Self {
         Self {
-            harmony: None,
             kick_env: [0.0; BLOCK_SIZE],
             kick: Kick::new(),
             snare: Snare::new(),

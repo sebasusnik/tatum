@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 
 use crate::analysis::BandMeter;
 use crate::dsl::compiler::{self, *};
-use crate::dsl::error::{ParseError, CompileError};
+pub use crate::dsl::error::DslError;
 use crate::effects::delay::{Delay, DelaySync};
 use crate::effects::reverb::Reverb;
 use crate::graph::node::{ChainStep, NodeKind};
@@ -751,57 +751,6 @@ enum AutoTarget {
     ReverbMix,
     DelayMix,
     ReverbFreeze,
-}
-
-/// Structured error from DSL parsing or compilation, preserving line/col info.
-#[derive(Debug, Clone)]
-pub enum DslError {
-    Parse(Vec<ParseError>),
-    Compile(Vec<CompileError>),
-}
-
-impl DslError {
-    /// Serialize to a JSON string for WASM → JS communication.
-    pub fn to_json(&self) -> String {
-        let mut out = String::from(r#"{"ok":false,"errors":["#);
-        match self {
-            DslError::Parse(errs) => {
-                for (i, e) in errs.iter().enumerate() {
-                    if i > 0 { out.push(','); }
-                    out.push_str(&alloc::format!(
-                        r#"{{"line":{},"col":{},"msg":"{}"}}"#,
-                        e.line, e.col, json_escape(&e.message),
-                    ));
-                }
-            }
-            DslError::Compile(errs) => {
-                for (i, e) in errs.iter().enumerate() {
-                    if i > 0 { out.push(','); }
-                    out.push_str(&alloc::format!(
-                        r#"{{"line":{},"col":0,"msg":"{}"}}"#,
-                        e.line, json_escape(&e.message),
-                    ));
-                }
-            }
-        }
-        out.push_str("]}");
-        out
-    }
-}
-
-fn json_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str(r#"\""#),
-            '\\' => out.push_str(r"\\"),
-            '\n' => out.push_str(r"\n"),
-            '\r' => out.push_str(r"\r"),
-            '\t' => out.push_str(r"\t"),
-            _ => out.push(c),
-        }
-    }
-    out
 }
 
 impl SongEngine {

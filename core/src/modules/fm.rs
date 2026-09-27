@@ -174,7 +174,6 @@ pub enum FmParam {
 }
 
 pub struct FmModule {
-    pub harmony: Option<crate::harmony::HarmonyContext>, // always None for FM
     voices: [FmVoice; MAX_VOICES],
     voice_counter: u32,
     algorithm: u8,
@@ -219,7 +218,6 @@ impl FmModule {
     }
     pub fn new() -> Self {
         Self {
-            harmony: None,
             voices: core::array::from_fn(|_| FmVoice::new()),
             voice_counter: 0,
             algorithm: 0,

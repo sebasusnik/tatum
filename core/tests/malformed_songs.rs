@@ -119,3 +119,13 @@ fn a_song_built_without_the_parser_is_clamped_by_the_engine() {
     let (l, _) = engine.render(1);
     assert!(!l.is_empty() && l.iter().all(|s| s.is_finite()));
 }
+
+#[test]
+fn a_note_past_the_top_of_midi_is_an_error() {
+    // `C999` used to play as C4.
+    let src = "tempo 120\nmodule bass xx { cutoff 1khz }\npattern p { C999 - G9 - [C4 G#9] - <C4 D77> - }\ntrack tr { play p using xx out > master }\n";
+    let errs = parse_errors(src);
+    assert_eq!(errs.len(), 3, "{:?}", errs);
+    assert!(errs.iter().all(|e| e.starts_with("line 3:") && e.contains("above what MIDI can play")), "{:?}", errs);
+    assert!(errs[0].contains("C999") && errs[1].contains("G#9") && errs[2].contains("D77"), "{:?}", errs);
+}

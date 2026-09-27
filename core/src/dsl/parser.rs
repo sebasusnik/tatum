@@ -319,6 +319,18 @@ impl Parser {
         Some(n)
     }
 
+    /// A note name past the top of MIDI (G9) is an error at the note;
+    /// `C999` used to play as C4.
+    fn check_note_range(&mut self, name: &str) {
+        if !crate::dsl::compiler::note_in_midi_range(name) {
+            let (line, col) = { let s = self.span(); (s.line, s.col) };
+            self.errors.push(ParseError {
+                line, col,
+                message: format!("note {} is above what MIDI can play (G9 is the top)", name),
+            });
+        }
+    }
+
     fn expect_tempo(&mut self) -> Option<f32> {
         self.expect_number_in("tempo", 20.0, 999.0, "beats per minute")
     }
@@ -897,6 +909,7 @@ impl Parser {
                             Token::Eof => break,
                             Token::Note(ref n) => {
                                 let n = n.clone();
+                                self.check_note_range(&n);
                                 self.advance();
                                 let vel = if matches!(self.peek(), Token::Colon) {
                                     self.advance();
@@ -962,6 +975,7 @@ impl Parser {
                             Token::Tilde => { self.advance(); slide_next = true; }
                             Token::Note(ref nn) => {
                                 let nn = nn.clone();
+                                self.check_note_range(&nn);
                                 self.advance();
                                 let velocity = if matches!(self.peek(), Token::Colon) {
                                     self.advance();
@@ -1020,6 +1034,7 @@ impl Parser {
                 }
                 Token::Note(ref n) => {
                     let n = n.clone();
+                    self.check_note_range(&n);
                     self.advance();
                     let velocity = if matches!(self.peek(), Token::Colon) {
                         self.advance();
