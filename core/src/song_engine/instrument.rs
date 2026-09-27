@@ -175,6 +175,11 @@ impl SongInstrument {
         }
     }
 
+    /// The registry id of a named parameter, for a built-in module.
+    pub(super) fn param_id(&self, name: &str) -> Option<ParamId> {
+        params::lookup(self.module_kind()?, name).map(|s| s.id)
+    }
+
     /// Registry kind for built-in modules; None for graph instruments.
     fn module_kind(&self) -> Option<ModuleKind> {
         match self {

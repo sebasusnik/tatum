@@ -35,6 +35,7 @@ impl SongEngine {
             let (scene_idx, _) = self.arrangement[0];
             self.apply_scene(scene_idx);
         }
+        self.reassert_held();
         self.snap_mix();
 
         for track in self.tracks.iter_mut() {
@@ -214,6 +215,7 @@ impl SongEngine {
 
         self.current_bar = bar;
         self.global_step = bar * self.steps_per_bar;
+        self.reassert_held();
         self.snap_mix();
 
         for track in self.tracks.iter_mut() {

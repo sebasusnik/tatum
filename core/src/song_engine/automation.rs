@@ -136,6 +136,9 @@ impl SongEngine {
         let progress = ((self.scene_step as f32 + within_step) / self.scene_total_steps as f32).clamp(0.0, 1.0);
         let lanes = core::mem::take(&mut self.active_automations);
         for auto_lane in &lanes {
+            if self.holds_auto(&auto_lane.target) {
+                continue;
+            }
             let keyframes = &self.scenes[auto_lane.scene_idx].automations[auto_lane.auto_idx].keyframes;
             let value = interpolate_automation(keyframes, progress);
             match &auto_lane.target {

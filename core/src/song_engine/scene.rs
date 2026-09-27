@@ -206,6 +206,7 @@ impl SongEngine {
             if self.arrangement_idx < self.arrangement.len() {
                 let (scene_idx, _) = self.arrangement[self.arrangement_idx];
                 self.apply_scene(scene_idx);
+                self.reassert_held();
             } else {
                 // Arrangement finished
                 self.running = false;

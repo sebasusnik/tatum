@@ -25,6 +25,7 @@ mod build;
 mod bus;
 mod control;
 mod fx_chain;
+mod held;
 mod handover;
 mod instrument;
 mod meters;
@@ -130,6 +131,9 @@ pub struct SongEngine {
 
     // Automation state
     active_automations: Vec<ActiveAutomation>,
+    /// What the hands hold: see `held.rs`.
+    held: [crate::live::FastOp; held::MAX_HELD],
+    held_count: usize,
     scene_step: usize,
     scene_total_steps: usize,
 

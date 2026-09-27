@@ -417,3 +417,97 @@ fn the_pitch_strip_bends_the_keys_two_semitones_either_way() {
     assert!((ratio(planner.bend(0, g)) - 2f32.powf(-2.0 / 12.0)).abs() < 1e-3);
     assert!((ratio(planner.bend(8192, g)) - 1.0).abs() < 1e-6, "at rest is no bend");
 }
+
+/// Render until the player has swapped in the engine it was handed, then a
+/// little more.
+fn play_through_swap(player: &mut LivePlayer) {
+    let (mut l, mut r) = ([0.0f32; BLOCK_SIZE], [0.0f32; BLOCK_SIZE]);
+    for _ in 0..4000 {
+        if player.process(&mut l, &mut r).is_some() {
+            break;
+        }
+    }
+    for _ in 0..8 {
+        player.process(&mut l, &mut r);
+    }
+}
+
+fn play_blocks(player: &mut LivePlayer, n: usize) {
+    let (mut l, mut r) = ([0.0f32; BLOCK_SIZE], [0.0f32; BLOCK_SIZE]);
+    for _ in 0..n {
+        player.process(&mut l, &mut r);
+    }
+}
+
+fn apply_all(player: &mut LivePlayer, plans: Vec<Plan>) {
+    for p in plans {
+        player.apply(p);
+    }
+}
+
+#[test]
+fn a_rebuild_while_playing_keeps_the_reverb_knob() {
+    // The new engine used to start from the bar with both returns reset to
+    // full, whatever the knob said.
+    let src = song();
+    let (mut planner, mut player) = session(&src);
+    player.start();
+    play_blocks(&mut player, 16);
+    let g = player.generation();
+    apply_all(&mut player, planner.knob(22, 20, g).plans);
+    let edited = format!("{}\npattern unused {{ 1.1 - - - }}\n", src);
+    player.apply(planner.plan(&edited, player.generation()).unwrap());
+    play_through_swap(&mut player);
+    assert_eq!(player.swaps(), 1);
+    let mix = player.engine().unwrap().reverb_mix();
+    assert!((mix - 20.0 / 127.0).abs() < 1e-3, "reverb_mix is {mix}");
+}
+
+/// Two one-bar scenes that both write the bass level, the second with an
+/// `auto` lane on it.
+const SCENES: &str = r#"
+scene a { track bass { play line using acid level 0.7 } track stabs { play chords using pad } }
+scene b {
+    auto bass level 0.2 > 0.9
+    track bass { play line using acid level 0.8 }
+    track stabs { play chords using pad }
+}
+arrange { a x1 b x2 }
+"#;
+
+#[test]
+fn a_scene_that_starts_does_not_move_a_held_fader() {
+    let src = format!("{}{}", song(), SCENES);
+    let (mut planner, mut player) = session(&src);
+    player.start();
+    play_blocks(&mut player, 4);
+    let g = player.generation();
+    apply_all(&mut player, planner.knob(30, 0, g).plans);
+    // Into scene b, which writes 0.8 and sweeps 0.2 -> 0.9.
+    let bar = (44100.0 * 60.0 / 124.0 * 4.0) as usize / BLOCK_SIZE;
+    play_blocks(&mut player, bar + bar / 2);
+    let engine = player.engine().unwrap();
+    assert_eq!(engine.current_bar(), 1, "should be halfway through scene b");
+    assert_eq!(engine.track_level(track(engine, "bass")), 0.0, "the scene or its auto lane moved the fader");
+}
+
+#[test]
+fn a_value_written_in_the_text_lets_go_of_the_fader() {
+    let src = format!("{}{}", song(), SCENES).replace("arrange { a x1 b x2 }", "arrange { a x4 }");
+    let (mut planner, mut player) = session(&src);
+    player.start();
+    play_blocks(&mut player, 4);
+    let g = player.generation();
+    apply_all(&mut player, planner.knob(30, 0, g).plans);
+    // A fast edit of exactly what the fader holds.
+    let edited =
+        src.replace("track bass  { play line using acid level 0.7", "track bass  { play line using acid level 0.5");
+    assert_ne!(edited, src);
+    assert_eq!(player.apply(planner.plan(&edited, player.generation()).unwrap()), tatum_core::live::Applied::Fast);
+    // The scene restarts every bar; the fader would put 0 back if still held.
+    let bar = (44100.0 * 60.0 / 124.0 * 4.0) as usize / BLOCK_SIZE;
+    play_blocks(&mut player, bar * 2);
+    let engine = player.engine().unwrap();
+    assert!(engine.held().is_empty(), "{:?}", engine.held());
+    assert!(engine.track_level(track(engine, "bass")) > 0.0);
+}

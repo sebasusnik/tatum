@@ -500,7 +500,7 @@ impl LivePlanner {
         // text puts them, so a save does not undo what the hands did.
         for &(cc, value) in &self.knob_values {
             for op in known.knob_ops(cc, value) {
-                apply_op(&mut engine, op);
+                engine.hold(op);
             }
         }
         for op in known.bend_ops(self.bend) {
@@ -801,8 +801,10 @@ impl LivePlayer {
                 };
                 let applied = match target {
                     Some(engine) => {
+                        // A value from the text: it lets go of whatever a
+                        // knob held on the same target, so the edit plays.
                         for op in &ops {
-                            apply_op(engine, *op);
+                            engine.release(*op);
                         }
                         Applied::Fast
                     }
@@ -822,8 +824,9 @@ impl LivePlayer {
                         _ => None,
                     }
                 };
+                // A knob: held, so a scene or a restart does not move it back.
                 if let Some(engine) = target {
-                    apply_op(engine, op);
+                    engine.hold(op);
                 }
                 Applied::Control
             }
@@ -947,7 +950,7 @@ impl LivePlayer {
     }
 }
 
-fn apply_op(engine: &mut SongEngine, op: FastOp) {
+pub(crate) fn apply_op(engine: &mut SongEngine, op: FastOp) {
     match op {
         FastOp::Tempo(bpm) => engine.set_tempo(bpm),
         FastOp::Swing(s) => engine.set_swing(s),

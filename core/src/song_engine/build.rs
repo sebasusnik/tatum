@@ -375,6 +375,8 @@ impl SongEngine {
             delay_wet_heard: 1.0,
             // Sized for the busiest scene so the first scene change, which
             // happens on the audio thread, does not grow it.
+            held: [crate::live::FastOp::Tempo(0.0); super::held::MAX_HELD],
+            held_count: 0,
             active_automations: Vec::with_capacity(song.scenes.iter().map(|s| s.automations.len()).max().unwrap_or(0)),
             scene_step: 0,
             scene_total_steps: 0,

@@ -418,13 +418,14 @@ is how you find what your controller sends.
 
 Knobs and the text share the values:
 
-- **The last hand wins.** A save keeps every knob where it was left, including one
-  that rebuilds the engine. Editing a knob's target in the text is the exception: the
-  edit plays, until the knob is touched again.
+- **The last hand wins.** A knob that has been moved holds its target: a save keeps
+  it, including one that rebuilds the engine, and so does a scene that starts and
+  writes its own `level` or `reverb_mix`. Editing a knob's target in the text is the
+  exception: the edit plays, until the knob is touched again.
+- **A knob beats a scene's `auto`** on the same target: once it has been touched, the
+  sweep leaves that target alone. Until then the sweep plays as written.
 - **The first touch jumps.** A knob whose physical position does not match the sound
   moves the sound to where the knob is.
-- **A scene's `auto` beats a knob** on the same target while the scene plays, because
-  the sweep writes its value continuously.
 
 ### Keys and pads
 

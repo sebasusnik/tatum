@@ -272,6 +272,16 @@ impl SongEngine {
         self.humanize_timing = timing.clamp(0.0, 1.0);
     }
 
+    /// How much of the reverb return is heard, 0..1: a scene's
+    /// `reverb_mix`, or where a knob left it.
+    pub fn reverb_mix(&self) -> f32 {
+        self.reverb_wet_level
+    }
+
+    pub fn delay_mix(&self) -> f32 {
+        self.delay_wet_level
+    }
+
     pub fn swing(&self) -> f32 {
         self.swing
     }
