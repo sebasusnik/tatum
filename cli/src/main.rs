@@ -5,6 +5,8 @@ mod include;
 mod live;
 mod midi;
 mod set;
+mod setnav;
+mod keys;
 mod resample;
 
 use std::fs;

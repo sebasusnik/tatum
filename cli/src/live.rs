@@ -43,6 +43,10 @@ struct Stats {
     /// Callbacks that took longer than the audio they produced.
     late: AtomicU64,
     frames: AtomicU64,
+    /// The bar the engine is in, and its tempo as f32 bits, for a set to
+    /// time its moves on.
+    bar: AtomicU64,
+    tempo: AtomicU64,
 }
 
 pub fn cmd(args: &[String], watch: bool) {
@@ -101,7 +105,7 @@ pub fn cmd(args: &[String], watch: bool) {
         eprintln!("usage: tatum {} <song.synth> [--device <name>] [--midi <name>]", verb);
         std::process::exit(1);
     };
-    if let Err(msg) = run(path, watch, device, rate, midi, isolation) {
+    if let Err(msg) = run(path, watch, device, rate, midi, isolation, None) {
         eprintln!("error: {}", msg);
         std::process::exit(1);
     }
@@ -184,13 +188,16 @@ fn open_device(wanted: Option<&str>) -> Result<cpal::Device, String> {
     }
 }
 
-fn run(
+/// The live session. With `set`, `path` is its first step, the file watched
+/// is whichever step plays, and the keys and pads move through the steps.
+pub fn run(
     path: &str,
     watch: bool,
     device_name: Option<&str>,
     forced_rate: Option<u32>,
     midi_name: Option<&str>,
     isolation: tatum_core::dsl::isolate::Isolation,
+    mut set: Option<crate::setnav::SetNav>,
 ) -> Result<(), String> {
     let mut source = Source::load(std::path::Path::new(path))?;
     if !isolation.is_empty() {
@@ -232,6 +239,8 @@ fn run(
         worst_ns: AtomicU64::new(0),
         late: AtomicU64::new(0),
         frames: AtomicU64::new(0),
+        bar: AtomicU64::new(0),
+        tempo: AtomicU64::new(tempo.to_bits() as u64),
     });
     let stats_cb = Arc::clone(&stats);
 
@@ -297,6 +306,10 @@ fn run(
                     let _ = event_tx.try_send(Event::Finished);
                 }
                 stats_cb.generation.store(player.generation(), Ordering::Relaxed);
+                if let Some(e) = player.engine() {
+                    stats_cb.bar.store(e.current_bar() as u64, Ordering::Relaxed);
+                    stats_cb.tempo.store(e.tempo().to_bits() as u64, Ordering::Relaxed);
+                }
                 stats_cb.callbacks.fetch_add(1, Ordering::Relaxed);
                 stats_cb.frames.fetch_add((data.len() / 2) as u64, Ordering::Relaxed);
                 let ns = t0.elapsed().as_nanos() as u64;
@@ -342,11 +355,29 @@ fn run(
     } else if inputs.names.is_empty() && planner.has_knobs() {
         eprintln!("  midi: no input found; the knobs in this song are waiting for one");
     }
-    eprintln!("  {}q + Enter to quit", if watch { "save the file to re-evaluate it; " } else { "" });
+    let (key_tx, key_rx) = channel::<crate::keys::Key>();
+    let _keys = match &set {
+        Some(nav) => {
+            eprintln!("  steps, {} bars to a phrase; a move lands on the next phrase line:", nav.phrase);
+            for i in 0..nav.steps.len() {
+                eprintln!("    {}", nav.describe(i));
+            }
+            eprintln!("  space or → next, ← back, 1-9 a step, q quit; save the playing step to re-evaluate it");
+            Some(crate::keys::spawn(key_tx))
+        }
+        None => {
+            eprintln!("  {}q + Enter to quit", if watch { "save the file to re-evaluate it; " } else { "" });
+            None
+        }
+    };
 
-    // stdin reader: `q` quits.
+    // stdin reader: `q` quits. A set reads single keys instead.
     let (quit_tx, quit_rx) = sync_channel::<()>(1);
+    let lines = set.is_none();
     std::thread::spawn(move || {
+        if !lines {
+            return;
+        }
         let stdin = std::io::stdin();
         for line in stdin.lock().lines() {
             match line {
@@ -392,9 +423,25 @@ fn run(
                 Midi::Note { channel, note, velocity } => {
                     let generation = stats.generation.load(Ordering::Relaxed);
                     let pad = channel == DRUM_CHANNEL;
-                    if pad && velocity > 0 && planner.pad_navigation(note).is_some() {
-                        readings.push(format!("pad {}: moves through a set, in `tatum set play`", note));
-                        continue;
+                    if pad && velocity > 0 {
+                        if let Some(action) = planner.pad_navigation(note) {
+                            match set.as_mut() {
+                                Some(nav) => {
+                                    let m = match action {
+                                        tatum_core::midi::PadAction::Prev => crate::setnav::Move::Prev,
+                                        tatum_core::midi::PadAction::Step(n) => crate::setnav::Move::To(n),
+                                        _ => crate::setnav::Move::Next,
+                                    };
+                                    let bar = stats.bar.load(Ordering::Relaxed) as usize;
+                                    status.close();
+                                    eprintln!("[{:7.2}s] {}", started.elapsed().as_secs_f32(), nav.ask(m, bar));
+                                }
+                                None => {
+                                    readings.push(format!("pad {}: moves through a set, in `tatum set play`", note))
+                                }
+                            }
+                            continue;
+                        }
                     }
                     let plans = if pad {
                         planner.pad(note, velocity, generation)
@@ -468,6 +515,56 @@ fn run(
         }
         next_poll = Instant::now() + poll_every;
 
+        if let Some(nav) = set.as_mut() {
+            let mut quit = false;
+            while let Ok(key) = key_rx.try_recv() {
+                let bar = stats.bar.load(Ordering::Relaxed) as usize;
+                let m = match key {
+                    crate::keys::Key::Quit => {
+                        quit = true;
+                        break;
+                    }
+                    crate::keys::Key::Next => crate::setnav::Move::Next,
+                    crate::keys::Key::Prev => crate::setnav::Move::Prev,
+                    crate::keys::Key::Step(n) => crate::setnav::Move::To(n),
+                };
+                status.close();
+                eprintln!("[{:7.2}s] {}", started.elapsed().as_secs_f32(), nav.ask(m, bar));
+            }
+            if quit {
+                break;
+            }
+            let bar = stats.bar.load(Ordering::Relaxed) as usize;
+            let tempo = f32::from_bits(stats.tempo.load(Ordering::Relaxed) as u32);
+            let generation = stats.generation.load(Ordering::Relaxed);
+            let before = nav.current;
+            let (plans, said) = nav.tick(bar, tempo, generation, started.elapsed().as_secs_f32(), &mut planner);
+            for plan in plans {
+                if plan_tx.send(plan).is_err() {
+                    break;
+                }
+            }
+            for line in said {
+                status.close();
+                eprintln!("[{:7.2}s] {}", started.elapsed().as_secs_f32(), line);
+            }
+            if nav.current != before {
+                if let Ok(s) = Source::load(&nav.path()) {
+                    source = s;
+                    last_mtime = source.newest_mtime();
+                }
+            }
+            if let Some((step, bars)) = nav.waiting(bar) {
+                status.show(&format!(
+                    "bar {} · next {} in {} bar{}",
+                    bar + 1,
+                    nav.describe(step),
+                    bars,
+                    if bars == 1 { "" } else { "s" }
+                ));
+            }
+        }
+
         // Everything the callback retired is freed here.
         while let Ok(_retired) = retired_rx.try_recv() {}
         while let Ok(ev) = event_rx.try_recv() {
@@ -485,7 +582,19 @@ fn run(
                 Event::Applied(Applied::Stale) => eprintln!("[{:7.2}s] BUG: plan was stale, edit lost; save again", t),
                 Event::Swapped { bar } => {
                     swaps += 1;
-                    eprintln!("[{:7.2}s] swapped at bar {}", t, bar);
+                    let landed = set.as_mut().and_then(|nav| nav.landed(stats.generation.load(Ordering::Relaxed), t));
+                    match landed {
+                        Some(line) => {
+                            eprintln!("[{:7.2}s] bar {}: {}", t, bar + 1, line);
+                            if let Some(nav) = set.as_ref() {
+                                if let Ok(s) = Source::load(&nav.path()) {
+                                    source = s;
+                                    last_mtime = source.newest_mtime();
+                                }
+                            }
+                        }
+                        None => eprintln!("[{:7.2}s] swapped at bar {}", t, bar),
+                    }
                 }
                 Event::Finished => {
                     finished = true;
@@ -513,7 +622,8 @@ fn run(
         last_mtime = now;
         // Editors write through a temporary file: a file missing for a tick
         // is retried, not reported. A `use` that no longer resolves is.
-        let new_source = match Source::load(std::path::Path::new(path)) {
+        let watched = set.as_ref().map(|n| n.path()).unwrap_or_else(|| std::path::PathBuf::from(path));
+        let new_source = match Source::load(&watched) {
             Ok(s) => s,
             Err(e) if e.starts_with("cannot read") && !e.contains(':') => continue,
             Err(e) => {

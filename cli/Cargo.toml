@@ -15,3 +15,6 @@ cpal = "0.18"
 midir = "0.11.0"
 tatum-core = { path = "../core" }
 tatum-debug = { path = "../debug" }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

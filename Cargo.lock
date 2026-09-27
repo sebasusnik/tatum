@@ -905,6 +905,7 @@ name = "tatum-cli"
 version = "0.1.0"
 dependencies = [
  "cpal",
+ "libc",
  "midir",
  "tatum-core",
  "tatum-debug",

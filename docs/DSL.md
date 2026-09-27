@@ -524,6 +524,31 @@ A later `midi` block replaces what an earlier one said about the same knob, the 
 or the same pad, and leaves the rest, so a set step that `use`s a rig can remap one
 of its knobs.
 
+## Playing a set live
+
+A set is a directory of numbered `.synth` files, each the whole rig at one moment
+(`sets/` has three). `tatum set play <dir>` plays it with a controller in hand:
+
+```
+tatum set play sets/mine --phrase 8 --ramp 4 --midi keylab
+```
+
+It starts on the first step. The space bar (or `n`, or →) asks for the next one, ←
+for the one before, a digit for a step by number, and a pad does the same with
+`pad 48 > next`, `prev` or `step 3`. What was asked for does not come in at once: it
+lands on the next phrase line, the next bar that is a multiple of `--phrase` (8 by
+default), so the set keeps its phrasing whoever is at the controls. The status line
+counts down the bars to it. Asking for the step that plays cancels the move.
+
+A step that needs a new engine is built in the last bar of the phrase and handed over
+on the line, the way a save is: what the two steps share keeps playing and what leaves
+rings out. A step that only changes values is sent on the line itself. A step at another
+tempo starts at the tempo that was playing and ramps to its own over `--ramp` bars (4
+by default; 0 jumps). Knobs, toggled tracks and held pads carry from step to step.
+
+The file of the step playing is watched like `tatum watch` watches one: save it and the
+edit plays. `q` or Ctrl-C quits and leaves the terminal as it was.
+
 ## Redefinition
 
 A later definition of the same name replaces the earlier one, in place. This

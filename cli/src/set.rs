@@ -281,16 +281,19 @@ pub fn cmd(args: &[String]) {
         "render" => run(cmd_render(rest)),
         "check" => run(cmd_check(rest)),
         "next" => run(cmd_next(rest)),
+        "play" => run(cmd_play(rest)),
         _ => {
             eprintln!("usage:");
             eprintln!("    tatum set render <dir> [-o out.wav] [--bars N]");
             eprintln!("    tatum set check  <dir> [--bars N] [--json]");
             eprintln!("    tatum set next   <dir> <candidate.synth> [--json]");
+            eprintln!("    tatum set play   <dir> [--phrase 8] [--ramp 4] [--device <name>] [--midi <name>]");
             eprintln!();
             eprintln!("A set is a directory of numbered .synth files, each the whole rig at a");
             eprintln!("moment. `render` walks them with real hot swaps. `check` validates the");
             eprintln!("whole set. `next` validates one proposed step against the last one, which");
-            eprintln!("is the gate an agent writing a set has to pass.");
+            eprintln!("is the gate an agent writing a set has to pass. `play` plays it live: the");
+            eprintln!("space bar or a pad moves to the next step on the next phrase line.");
             std::process::exit(2);
         }
     }
@@ -305,6 +308,54 @@ fn run(r: Result<(), String>) {
 
 fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).map(|s| s.as_str())
+}
+
+/// Play a set live. Steps move on a key or a pad, landing on the next
+/// multiple of `--phrase` bars; a tempo change between steps ramps over
+/// `--ramp` bars (0 jumps).
+fn cmd_play(args: &[String]) -> Result<(), String> {
+    let (mut dir, mut phrase, mut ramp) = (None, 8usize, 4.0f32);
+    let (mut device, mut rate, mut midi) = (None, None, None);
+    let mut i = 0;
+    while i < args.len() {
+        let value = |i: usize| args.get(i + 1).map(|s| s.as_str());
+        match args[i].as_str() {
+            "--phrase" => {
+                phrase = value(i)
+                    .and_then(|v| v.parse().ok())
+                    .filter(|&n| n > 0)
+                    .ok_or("--phrase needs a number of bars")?;
+                i += 1;
+            }
+            "--ramp" => {
+                ramp = value(i)
+                    .and_then(|v| v.parse().ok())
+                    .filter(|&n: &f32| n >= 0.0)
+                    .ok_or("--ramp needs a number of bars")?;
+                i += 1;
+            }
+            "--device" | "-d" => {
+                device = Some(value(i).ok_or("--device needs a name")?);
+                i += 1;
+            }
+            "--rate" => {
+                rate = Some(value(i).and_then(|v| v.parse().ok()).ok_or("--rate needs a number in Hz")?);
+                i += 1;
+            }
+            "--midi" => {
+                midi = Some(value(i).ok_or("--midi needs part of an input's name")?);
+                i += 1;
+            }
+            other if other.starts_with('-') => return Err(format!("unknown flag '{}'", other)),
+            other => dir = Some(other),
+        }
+        i += 1;
+    }
+    let dir = dir.ok_or("usage: tatum set play <dir> [--phrase 8] [--ramp 4]")?;
+    let steps = load(Path::new(dir), DEFAULT_BARS)?;
+    let first = steps[0].path.to_string_lossy().into_owned();
+    let nav = crate::setnav::SetNav::new(steps, phrase, ramp);
+    crate::live::run(&first, true, device, rate, midi, Default::default(), Some(nav))
 }
 
 fn cmd_render(args: &[String]) -> Result<(), String> {
