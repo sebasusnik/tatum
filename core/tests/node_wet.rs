@@ -144,7 +144,9 @@ master { in > out }
     let mut l = vec![0.0f32; sr / 8];
     let mut r = vec![0.0f32; sr / 8];
     e.process_block_stereo(&mut l, &mut r);
-    let peak = l.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+    // The first 10 ms are the bass's own release finishing, dry: the test
+    // listens to the gap after it, where only a stale echo could be.
+    let peak = l[sr / 100..].iter().fold(0.0f32, |m, v| m.max(v.abs()));
     assert!(peak < 0.01, "an old echo came back out of the bypass: peak {peak:.4}");
 }
 

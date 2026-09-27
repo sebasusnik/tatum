@@ -6,8 +6,8 @@ use crate::primitives::lfo::{LfoWaveform, LfoSyncMode, LfoTarget, ModulationRout
 use crate::{Module, SAMPLE_RATE};
 
 #[inline]
-fn semitone_ratio(semitones: i8) -> f32 {
-    math::pow2(semitones as f32 / 12.0)
+fn semitone_ratio(semitones: f32) -> f32 {
+    math::pow2(semitones / 12.0)
 }
 
 /// `lfo_depth 1.0` sweeps the cutoff this many octaves either way.
@@ -41,7 +41,11 @@ pub enum BassParam {
 
 pub struct BassModule {
     oscs: [Oscillator; 3],
-    osc_pitch_offsets: [i8; 3],
+    /// Semitones, fractions included: `osc2_pitch 0.3st` is a detune. These
+    /// used to be whole semitones cut with `as i8`, which dropped every
+    /// fraction and truncated toward zero -- `0.288st` played at 0 and
+    /// `11.92st` at 11, a major seventh instead of the octave.
+    osc_pitch_offsets: [f32; 3],
     amp_env: Envelope,
     filter_env: Envelope,
     filter: LadderFilter,
@@ -106,7 +110,7 @@ impl BassModule {
 
         Self {
             oscs: [osc0, osc1, osc2],
-            osc_pitch_offsets: [0, 0, 0],
+            osc_pitch_offsets: [0.0, 0.0, 0.0],
             amp_env,
             filter_env,
             filter: LadderFilter::new(SAMPLE_RATE),
@@ -194,11 +198,11 @@ impl BassModule {
                 self.lfo_router.lfo.set_sync_mode(mode);
             }
             BassParam::Osc2Pitch => {
-                self.osc_pitch_offsets[1] = ((value * 48.0) - 24.0) as i8;
+                self.osc_pitch_offsets[1] = (value * 48.0) - 24.0;
                 self.oscs[1].set_frequency(self.current_freq * semitone_ratio(self.osc_pitch_offsets[1]));
             }
             BassParam::Osc3Pitch => {
-                self.osc_pitch_offsets[2] = ((value * 48.0) - 24.0) as i8;
+                self.osc_pitch_offsets[2] = (value * 48.0) - 24.0;
                 self.oscs[2].set_frequency(self.current_freq * semitone_ratio(self.osc_pitch_offsets[2]));
             }
             BassParam::Osc1Wave => {
@@ -316,7 +320,19 @@ impl Module for BassModule {
             // so the velocity can too.
             self.current_freq = self.target_freq;
             self.vel_now = velocity;
+            // From silence the oscillators start together. Each drifts by a few
+            // cents on its own, and the phase between two of them at the same
+            // pitch is the sum of that drift: a walk with nothing pulling it
+            // back. Left free over a song, two unison oscillators moved slowly
+            // from adding up to cancelling and the bass wandered by several dB
+            // (a sub lost 4.6 dB over 128 bars). Restarting them only from
+            // silence keeps the drift inside each note, and a voice still
+            // sounding keeps its phase, so nothing clicks -- as `keys` does.
+            let from_silence = self.amp_env.is_idle();
             for i in 0..3 {
+                if from_silence {
+                    self.oscs[i].reset_phase();
+                }
                 self.oscs[i].set_frequency(self.current_freq * semitone_ratio(self.osc_pitch_offsets[i]));
             }
             self.amp_env.gate_on();

@@ -181,4 +181,10 @@ impl Oscillator {
         self.drift_value = 0.0;
         self.drift_counter = 0;
     }
+
+    /// Back to the start of the cycle, keeping the drift where it is: the
+    /// pitch carries on moving as it was, only the phase lines up.
+    pub fn reset_phase(&mut self) {
+        self.phase = 0.0;
+    }
 }
