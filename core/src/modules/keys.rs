@@ -28,6 +28,11 @@ pub struct KeysVoice {
     pan: f32,
     freq_mult: f32,
     pub ring_mod: bool,
+    /// A per-step lock from the pattern: this voice's own cutoff (Hz) and
+    /// resonance, held for the note it was struck with. `None` follows the
+    /// module.
+    cutoff_lock: Option<f32>,
+    res_lock: Option<f32>,
 }
 
 impl KeysVoice {
@@ -56,6 +61,8 @@ impl KeysVoice {
             pan: 0.0,
             freq_mult: 1.0,
             ring_mod: false,
+            cutoff_lock: None,
+            res_lock: None,
         }
     }
 
@@ -121,6 +128,8 @@ impl KeysVoice {
         self.root_note = 0;
         self.pan = 0.0;
         self.freq_mult = 1.0;
+        self.cutoff_lock = None;
+        self.res_lock = None;
         self.ring_mod = false;
     }
 }
@@ -155,6 +164,10 @@ pub struct KeysModule {
     lfo_router: ModulationRouter,
     cutoff_base: f32,
     resonance: f32,
+    /// Filter locks staged by the sequencer for the notes of the next step,
+    /// already in Hz and 0..1. Restaged, or cleared, on every step.
+    staged_cutoff: Option<f32>,
+    staged_resonance: Option<f32>,
     voice_mode: VoiceMode,
     // Pitch bend (set by engine)
     pub pitch_bend_ratio: f32,
@@ -190,6 +203,8 @@ impl KeysModule {
             lfo_router: ModulationRouter::new(SAMPLE_RATE, 5002),
             cutoff_base: 3000.0,
             resonance: 0.2,
+            staged_cutoff: None,
+            staged_resonance: None,
             voice_mode: VoiceMode::Poly,
             pitch_bend_ratio: 1.0,
             vibrato_phase: 0.0,
@@ -257,7 +272,11 @@ impl KeysModule {
                 let freq = crate::params::KEYS_CUTOFF.to_real(value);
                 self.cutoff_base = freq;
                 for voice in &mut self.voices {
-                    voice.filter.set_params(FilterType::LowPass, freq, self.resonance);
+                    voice.filter.set_params(
+                        FilterType::LowPass,
+                        voice.cutoff_lock.unwrap_or(freq),
+                        voice.res_lock.unwrap_or(self.resonance),
+                    );
                 }
             }
             KeysParam::Detune => {
@@ -350,7 +369,11 @@ impl KeysModule {
             KeysParam::Resonance => {
                 self.resonance = value;
                 for voice in &mut self.voices {
-                    voice.filter.set_params(FilterType::LowPass, self.cutoff_base, self.resonance);
+                    voice.filter.set_params(
+                        FilterType::LowPass,
+                        voice.cutoff_lock.unwrap_or(self.cutoff_base),
+                        voice.res_lock.unwrap_or(self.resonance),
+                    );
                 }
             }
         }
@@ -358,6 +381,28 @@ impl KeysModule {
 
     pub fn set_bpm(&mut self, bpm: f32) {
         self.lfo_router.set_bpm(bpm);
+    }
+
+    /// Stage the filter locks of the next step, as normalized 0..1 values the
+    /// way a pattern writes them. `keys` has no filter envelope, so an
+    /// `edepth=` lock has nothing to reach and is not taken here.
+    pub fn stage_plock(&mut self, cutoff: Option<f32>, resonance: Option<f32>) {
+        self.staged_cutoff = cutoff.map(|v| crate::params::KEYS_CUTOFF.to_real(v));
+        self.staged_resonance = resonance;
+    }
+
+    /// Give a voice just struck the staged locks. A voice that had none and
+    /// gets none is left alone, so a song without locks renders exactly as it
+    /// did before locks reached `keys`.
+    fn apply_locks(&mut self, idx: usize) {
+        let (cut, res) = (self.staged_cutoff, self.staged_resonance);
+        let v = &mut self.voices[idx];
+        if cut.is_none() && res.is_none() && v.cutoff_lock.is_none() && v.res_lock.is_none() {
+            return;
+        }
+        v.cutoff_lock = cut;
+        v.res_lock = res;
+        v.filter.set_params(FilterType::LowPass, cut.unwrap_or(self.cutoff_base), res.unwrap_or(self.resonance));
     }
 
     fn find_voice(&self) -> usize {
@@ -406,10 +451,9 @@ impl KeysModule {
             // Cutoff modulation: apply every 4 samples to reduce overhead
             if self.lfo_router.target == LfoTarget::Cutoff && self.lfo_router.enabled && i.is_multiple_of(4) {
                 // Relative (octaves), like the bass: see LFO_CUTOFF_OCTAVES.
-                let mod_cutoff =
-                    self.cutoff_base * crate::math::pow2(lfo_val * crate::modules::bass::LFO_CUTOFF_OCTAVES);
+                let ratio = crate::math::pow2(lfo_val * crate::modules::bass::LFO_CUTOFF_OCTAVES);
                 for voice in &mut self.voices {
-                    voice.filter.set_cutoff(mod_cutoff);
+                    voice.filter.set_cutoff(voice.cutoff_lock.unwrap_or(self.cutoff_base) * ratio);
                 }
             }
 
@@ -503,6 +547,7 @@ impl Module for KeysModule {
                 self.voice_counter += 1;
                 self.voices[idx].age = self.voice_counter;
                 self.voices[idx].note_on(note, velocity, note, 1.0, 0.0, false);
+                self.apply_locks(idx);
             }
             VoiceMode::Unison => {
                 // Release all active voices first
@@ -519,6 +564,7 @@ impl Module for KeysModule {
                     let freq_mult = math::pow2(cent / 1200.0);
                     let pan = -1.0 + 2.0 * (i as f32) / 7.0;
                     self.voices[i].note_on(note, velocity, note, freq_mult, pan, false);
+                    self.apply_locks(i);
                 }
             }
             VoiceMode::Octave => {
@@ -531,6 +577,7 @@ impl Module for KeysModule {
                     self.voice_counter += 1;
                     self.voices[idx].age = self.voice_counter;
                     self.voices[idx].note_on(notes[k], velocity, note, mults[k], 0.0, false);
+                    self.apply_locks(idx);
                 }
             }
             VoiceMode::Fifth => {
@@ -542,6 +589,7 @@ impl Module for KeysModule {
                     self.voice_counter += 1;
                     self.voices[idx].age = self.voice_counter;
                     self.voices[idx].note_on(notes[k], velocity, note, 1.0, 0.0, false);
+                    self.apply_locks(idx);
                 }
             }
             VoiceMode::RingMod => {
@@ -549,6 +597,7 @@ impl Module for KeysModule {
                 self.voice_counter += 1;
                 self.voices[idx].age = self.voice_counter;
                 self.voices[idx].note_on(note, velocity, note, 1.0, 0.0, true);
+                self.apply_locks(idx);
             }
         }
     }
