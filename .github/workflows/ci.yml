@@ -5,7 +5,13 @@ name: CI
 on:
   push:
     branches: [main]
+  # Only a pull request into main is checked. A stack of PRs, each on top of
+  # the one before, used to run the whole suite on every one of them and again
+  # after every rebase: 99 runs in one day, and the month's minutes gone. The
+  # one that targets main is the one that is about to land, and the others
+  # are checked when their turn comes.
   pull_request:
+    branches: [main]
 
 # A new push makes the run for the one before it worthless.
 concurrency:
@@ -108,6 +114,12 @@ jobs:
     # hotter. It is as much CPU as the rest of the suite together, and a
     # runner for a private repo has two cores, so each song gets a runner of
     # its own instead of sharing them with the other tests.
+    #
+    # It runs on main after a merge, not on pull requests: it is half the
+    # minutes of every run, and what it guards (the audit numbers of three
+    # songs) moves only when a sound changes, which the listening samples
+    # and the rest of the suite already catch before a merge.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
