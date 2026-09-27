@@ -161,9 +161,18 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
     let mut engine = SongEngine::from_compiled(song);
     engine.set_output_gain(opts.gain);
     let clock = Clock::new(&engine);
+    let bars = clock.bars();
+    if bars == 0 {
+        return Err("nothing to take apart: the arrangement is empty".into());
+    }
+    // A range that runs past the end stops at the end; one that starts past
+    // it has nothing in it.
     let (first, last) = match opts.bars {
-        Some((a, b)) => (a.clamp(1, clock.bars()), b.clamp(a.max(1), clock.bars())),
-        None => (1, clock.bars()),
+        Some((a, _)) if a > bars => {
+            return Err(format!("bars {}: the song has {} bars", a, bars));
+        }
+        Some((a, b)) => (a.max(1), b.clamp(a.max(1), bars)),
+        None => (1, bars),
     };
     let start = clock.bar_starts[first as usize - 1];
     let end = clock.bar_starts[last as usize];
@@ -229,7 +238,7 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
     let mut zooms: Vec<Zoom> = Vec::new();
     for (i, p) in parts.iter().enumerate() {
         if p.source == Source::Mix { continue }
-        if let Some(c) = scans[i].iter().max_by(|a, b| a.db.partial_cmp(&b.db).unwrap()) {
+        if let Some(c) = scans[i].iter().max_by(|a, b| a.db.total_cmp(&b.db)) {
             zooms.push(Zoom::new(Zoom {
                 part: i,
                 centre: start + c.frame * FRAME + FRAME / 2,
@@ -239,7 +248,7 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
                 ..Default::default()
             }));
         }
-        if let Some(f) = floors[i].iter().max_by(|a, b| a.db.partial_cmp(&b.db).unwrap()) {
+        if let Some(f) = floors[i].iter().max_by(|a, b| a.db.total_cmp(&b.db)) {
             let mid = (f.start + f.end) / 2;
             zooms.push(Zoom::new(Zoom {
                 part: i,
@@ -364,7 +373,7 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
             .map(|&i| (parts[i].label.as_str(), parts[i].frames.db(f0, f1), matches!(parts[i].source, Source::Track(_))))
             .filter(|(_, db, _)| *db > PLAYING_DB)
             .collect();
-        here.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        here.sort_by(|a, b| b.1.total_cmp(&a.1));
         let top = here.iter().filter(|h| h.2).map(|h| h.1).fold(f32::MIN, f32::max);
         let list: Vec<String> = here.iter().map(|(n, db, track)| {
             let rel = db - top;
@@ -393,7 +402,7 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
         if scan.is_empty() { continue }
         any = true;
         let mut worst: Vec<&Click> = scan.iter().collect();
-        worst.sort_by(|a, b| b.db.partial_cmp(&a.db).unwrap());
+        worst.sort_by(|a, b| b.db.total_cmp(&a.db));
         let shown: Vec<String> = worst.iter().take(3)
             .map(|c| format!("{} at {:.0} dB", at(c.frame), c.db)).collect();
         let changes = scan.iter().filter(|c| at_change(c.frame)).count();
@@ -411,7 +420,7 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
     for (i, (p, fl)) in parts.iter().zip(&floors).enumerate() {
         if fl.is_empty() { continue }
         any = true;
-        let worst = fl.iter().max_by(|a, b| a.db.partial_cmp(&b.db).unwrap()).unwrap();
+        let worst = fl.iter().max_by(|a, b| a.db.total_cmp(&b.db)).unwrap();
         let under = listen::playing_db(&p.frames) - worst.db;
         let what = floor_character(&parts[i], worst, hop);
         let places: Vec<String> = fl.iter().take(3).map(|f| at(f.start)).collect();
@@ -519,7 +528,7 @@ impl Listener {
                 let Source::Track(ti) = p.source else { return None };
                 if !p.tonal { return None }
                 let fl = listen::floors(&p.frames, &|f| held(ti, f));
-                let worst = fl.iter().max_by(|a, b| a.db.partial_cmp(&b.db).unwrap())?;
+                let worst = fl.iter().max_by(|a, b| a.db.total_cmp(&b.db))?;
                 Some(format!("{} at {}, {:.0} dB, {}", p.label, at(worst.start), worst.db, floor_character(p, worst, LISTEN_HOP)))
             })
             .collect();

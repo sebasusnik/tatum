@@ -240,7 +240,7 @@ pub fn floors(f: &Frames, held: &dyn Fn(usize) -> bool) -> Vec<Floor> {
 pub fn playing_db(f: &Frames) -> f32 {
     let mut p: Vec<f32> = f.power.iter().copied().filter(|&v| v > 1e-12).collect();
     if p.is_empty() { return -200.0 }
-    p.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    p.sort_by(|a, b| a.total_cmp(b));
     10.0 * p[p.len() * 9 / 10].log10()
 }
 

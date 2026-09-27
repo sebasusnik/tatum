@@ -300,17 +300,54 @@ impl Parser {
 
     // ── Globals ──
 
+    /// A number that has to fall inside `lo..=hi`, or an error at the number
+    /// saying what the span is and why. The engine's runtime setters clamp to
+    /// the same spans; a file that asks for more is told so rather than being
+    /// quietly played at something else (a tempo of 0 used to hang a render,
+    /// a meter of 0/4 rendered nothing).
+    fn expect_number_in(&mut self, what: &str, lo: f32, hi: f32, meaning: &str) -> Option<f32> {
+        self.skip_newlines();
+        let (line, col) = { let s = self.span(); (s.line, s.col) };
+        let n = self.expect_number()?;
+        if !(lo..=hi).contains(&n) {
+            self.errors.push(ParseError {
+                line, col,
+                message: format!("{} {} is outside {}..{} ({})", what, n, lo, hi, meaning),
+            });
+            return None;
+        }
+        Some(n)
+    }
+
+    fn expect_tempo(&mut self) -> Option<f32> {
+        self.expect_number_in("tempo", 20.0, 999.0, "beats per minute")
+    }
+
     fn parse_tempo(&mut self, globals: &mut Globals) {
-        if let Some(n) = self.expect_number() {
+        if let Some(n) = self.expect_tempo() {
             globals.tempo = n;
         }
     }
 
     fn parse_meter(&mut self, globals: &mut Globals) {
-        if let Some(num) = self.expect_number() {
-            self.expect(&Token::Slash);
-            if let Some(den) = self.expect_number() {
-                globals.meter = (num as u8, den as u8);
+        let num = self.expect_number_in("meter", 1.0, 16.0, "beats in a bar");
+        self.expect(&Token::Slash);
+        self.skip_newlines();
+        let (line, col) = { let s = self.span(); (s.line, s.col) };
+        let den = self.expect_number();
+        if let Some(den) = den {
+            if den != 4.0 {
+                self.errors.push(ParseError {
+                    line, col,
+                    message: format!("meter /{}: only /4 is supported -- a beat is four sixteenth steps. Write 7/8 as 7/4 at half the tempo, or 6/8 as 3/4 with swing", den),
+                });
+            }
+        }
+        if let (Some(num), Some(4.0)) = (num, den) {
+            if num != (num as u8) as f32 {
+                self.errors.push(ParseError { line, col, message: format!("meter {}/4: a whole number of beats", num) });
+            } else {
+                globals.meter = (num as u8, 4);
             }
         }
     }
@@ -390,7 +427,7 @@ impl Parser {
     }
 
     fn parse_swing(&mut self, globals: &mut Globals) {
-        if let Some(n) = self.expect_number() {
+        if let Some(n) = self.expect_number_in("swing", 0.5, 0.75, "0.5 is straight, 0.75 a hard shuffle") {
             globals.swing = Some(n);
         }
     }
@@ -398,16 +435,20 @@ impl Parser {
     fn parse_humanize(&mut self, globals: &mut Globals) {
         // humanize 0.5           → velocity humanization only
         // humanize 0.5 timing 0.3 → velocity + timing humanization
-        if let Some(n) = self.expect_number() {
-            globals.humanize = Some(n);
-            // Check for optional "timing" sub-keyword
-            self.skip_newlines();
-            if let Token::Ident(ref w) = self.peek().clone() {
-                if w == "timing" {
-                    self.advance();
-                    if let Some(t) = self.expect_number() {
-                        globals.humanize_timing = Some(t);
-                    }
+        let before = self.errors.len();
+        let n = self.expect_number_in("humanize", 0.0, 1.0, "how much velocity varies");
+        if n.is_none() && self.errors.len() == before {
+            return;
+        }
+        globals.humanize = n;
+        // Check for optional "timing" sub-keyword; read it even after a
+        // velocity out of range, so the one mistake is the one error.
+        self.skip_newlines();
+        if let Token::Ident(ref w) = self.peek().clone() {
+            if w == "timing" {
+                self.advance();
+                if let Some(t) = self.expect_number_in("humanize timing", 0.0, 1.0, "how much the step clock wanders") {
+                    globals.humanize_timing = Some(t);
                 }
             }
         }
@@ -424,6 +465,7 @@ impl Parser {
     // ── Instrument ──
 
     fn parse_instrument(&mut self, instruments: &mut Vec<InstrumentDef>) {
+        let line = Line(self.span().line);
         let name = match self.expect_ident() {
             Some(n) => n,
             None => return,
@@ -432,6 +474,7 @@ impl Parser {
 
         let mut inst = InstrumentDef {
             name,
+            line,
             gain: None,
             nodes: Vec::new(),
             connections: Vec::new(),
@@ -471,6 +514,8 @@ impl Parser {
         //   - A reference to existing node (identifier)
         //   - An inline node definition: kind(params) as alias
         let mut chain: Vec<ChainElement> = Vec::new();
+        self.skip_newlines();
+        let line = Line(self.span().line);
 
         loop {
             self.skip_newlines();
@@ -503,6 +548,7 @@ impl Parser {
                         inst.connections.push(ConnectionDef {
                             from: prev.clone(),
                             to: name.clone(),
+                            line,
                         });
                     }
                     prev_name = Some(name);
@@ -512,6 +558,7 @@ impl Parser {
                         inst.connections.push(ConnectionDef {
                             from: prev.clone(),
                             to: name.clone(),
+                            line,
                         });
                     }
                     prev_name = Some(name);
@@ -560,6 +607,7 @@ impl Parser {
     }
 
     fn parse_inline_node_def(&mut self, kind: String) -> ChainElement {
+        let line = Line(self.span().line);
         self.advance(); // consume the keyword
 
         let mut params = Vec::new();
@@ -591,7 +639,7 @@ impl Parser {
             None
         };
 
-        let node_def = NodeDef { kind, alias, params };
+        let node_def = NodeDef { kind, alias, params, line };
         ChainElement::NodeDef(node_def)
     }
 
@@ -1858,7 +1906,7 @@ impl Parser {
                 }
                 Token::Tempo => {
                     self.advance();
-                    if let Some(t) = self.expect_number() {
+                    if let Some(t) = self.expect_tempo() {
                         scene.tempo = Some(t);
                     }
                 }

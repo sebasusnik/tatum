@@ -15,11 +15,11 @@ tatum params --json             # machine-readable registry (for tools and agent
 ## Globals
 
 ```
-tempo 124
-meter 4/4
+tempo 124              # 20 .. 999
+meter 4/4              # 1/4 .. 16/4: beats in a bar, each four sixteenth steps
 scale A minor          # major | minor | dorian | phrygian | lydian | mixolydian | locrian
 swing 0.56             # 0.5 straight .. 0.75 hard shuffle
-humanize 0.05 timing 0.02   # velocity jitter, and jitter on the step clock
+humanize 0.05 timing 0.02   # velocity jitter, and jitter on the step clock; each 0 .. 1
 sidechain 0.4
 
 # Global send effects, fed by each track's delay_send / reverb_send
@@ -29,6 +29,9 @@ delay sync=dotted_eighth feedback=0.45 filter=0.5   # sync: free | quarter | dot
 reverb size=0.7 damp=0.4 predelay=20 sidechain=0.5  # predelay in ms; size 1.0 is a ~15 s hall;
                                                     # sidechain= ducks the return against the kick (delay too)
 ```
+
+A value outside those spans is an error at its line (a scene's `tempo` too),
+not something the engine quietly plays as the nearest thing.
 
 `humanize` spreads velocity; `timing` nudges the step clock, which is one clock
 for the whole song, so the band rushes and drags together rather than each part

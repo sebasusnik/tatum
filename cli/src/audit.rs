@@ -132,7 +132,7 @@ fn detect(x: &[f32], candidates: &[f32]) -> Option<f32> {
     candidates
         .iter()
         .map(|f| (*f, power(*f as f64) + 0.5 * power(*f as f64 * 2.0)))
-        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+        .max_by(|a, b| a.1.total_cmp(&b.1))
         .map(|(f, _)| f)
 }
 
@@ -383,7 +383,7 @@ struct Row {
 }
 
 fn median(xs: &mut [f64]) -> f64 {
-    xs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    xs.sort_by(|a, b| a.total_cmp(b));
     xs[xs.len() / 2]
 }
 
@@ -562,7 +562,7 @@ fn audit_track(song: &Song, name: &str, bars: u32, spb: f32) -> Track {
             });
         }
     }
-    let worst = notes.into_iter().max_by(|a, b| a.db.partial_cmp(&b.db).unwrap()).unwrap();
+    let worst = notes.into_iter().max_by(|a, b| a.db.total_cmp(&b.db)).unwrap();
     out.row = Some(Row { track: name.to_string(), notes: all.len(), median_db: med, worst, peak, blame });
     out
 }
@@ -644,7 +644,7 @@ pub fn cmd(args: &[String]) {
     // one. What IS comparable is a note against the other notes of the same
     // voice, which is what the findings below are.
     rows.sort_by(|a, b| a.track.cmp(&b.track));
-    findings.sort_by(|a, b| b.margin.partial_cmp(&a.margin).unwrap());
+    findings.sort_by(|a, b| b.margin.total_cmp(&a.margin));
     let blamed: Vec<&Row> = rows.iter().filter(|r| !r.blame.is_empty()).collect();
 
     if json {

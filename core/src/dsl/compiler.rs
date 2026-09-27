@@ -8,7 +8,7 @@ use crate::dsl::ast::*;
 use crate::dsl::error::{CompileError, CompileResult};
 use crate::params::{self, ModuleKind};
 use crate::math;
-use crate::graph::{GraphBuilder, GraphTemplate};
+use crate::graph::{GraphBuilder, GraphError, GraphTemplate};
 use crate::graph::node::{ChainStep, NodeSpec};
 use crate::primitives::oscillator::Waveform;
 use crate::primitives::filter::FilterType;
@@ -242,7 +242,13 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
                 instruments.push(CompiledInstrumentKind::Graph(Box::new(template)));
                 instrument_names.push(inst_def.name.clone());
             }
-            Err(e) => errors.push(e),
+            Err(e) => {
+                errors.push(e);
+                // Keep the name, as for modules below: one broken instrument
+                // is one error, not one more for every track that plays it.
+                instruments.push(CompiledInstrumentKind::Bass(ModulePreset::default()));
+                instrument_names.push(inst_def.name.clone());
+            }
         }
     }
 
@@ -443,6 +449,10 @@ fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> Result<Grap
     let mut name_to_idx: Vec<(String, u8)> = Vec::new();
     let mut noise_seed = 42u32;
     let mut osc_drift_seed = 1000u32; // unique drift seed per oscillator
+    let full = |line: Line| CompileError::at(line.0, format!(
+        "instrument '{}': more than {} nodes (an envelope counts twice, it brings its own VCA); split it into two instruments, or share a filter through `mix`",
+        inst.name, crate::graph::MAX_GRAPH_NODES
+    ));
 
     // First pass: ensure built-in nodes exist
     // "out" and "mix" are always available as implicit nodes
@@ -468,13 +478,14 @@ fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> Result<Grap
 
     // Create implicit "mix" node if referenced
     if has_mix {
-        let idx = builder.add_node(NodeSpec::Mix);
+        let idx = builder.try_add_node(NodeSpec::Mix).map_err(|_| full(inst.line))?;
         name_to_idx.push((String::from("mix"), idx));
     }
 
     // Create explicit nodes
     for node_def in &inst.nodes {
-        let spec = node_def_to_spec(node_def, &mut noise_seed, &mut osc_drift_seed, samples_per_bar)?;
+        let spec = node_def_to_spec(node_def, &mut noise_seed, &mut osc_drift_seed, samples_per_bar)
+            .map_err(|e| if e.line == 0 { CompileError::at(node_def.line.0, e.message) } else { e })?;
 
         if matches!(spec, NodeSpec::Env { .. }) {
             // Envelope+VCA pattern: an envelope in a signal chain means
@@ -485,14 +496,14 @@ fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> Result<Grap
             //   - `filter > amp` connects filter → VCA input 1 (audio)
             //   - Env is auto-wired to VCA input 0 (envelope curve)
             //   - VCA output = envelope * audio
-            let env_idx = builder.add_node(spec);
-            let vca_idx = builder.add_node(NodeSpec::Vca);
-            builder.connect(env_idx, vca_idx); // env → VCA input 0
+            let env_idx = builder.try_add_node(spec).map_err(|_| full(node_def.line))?;
+            let vca_idx = builder.try_add_node(NodeSpec::Vca).map_err(|_| full(node_def.line))?;
+            builder.connect(env_idx, vca_idx); // env → VCA input 0, its first
             if let Some(ref alias) = node_def.alias {
                 name_to_idx.push((alias.clone(), vca_idx));
             }
         } else {
-            let idx = builder.add_node(spec);
+            let idx = builder.try_add_node(spec).map_err(|_| full(node_def.line))?;
             if let Some(ref alias) = node_def.alias {
                 name_to_idx.push((alias.clone(), idx));
             }
@@ -500,23 +511,58 @@ fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> Result<Grap
     }
 
     // Create "out" as Output node
-    let out_idx = builder.add_node(NodeSpec::Output);
+    let out_idx = builder.try_add_node(NodeSpec::Output).map_err(|_| full(inst.line))?;
     name_to_idx.push((String::from("out"), out_idx));
 
     // Second pass: create connections
     for conn in &inst.connections {
         let from_idx = find_node(&name_to_idx, &conn.from)
-            .ok_or_else(|| CompileError { line: 0,
-                message: format!("instrument '{}': unknown node '{}'", inst.name, conn.from),
-            })?;
+            .ok_or_else(|| CompileError::at(conn.line.0,
+                format!("instrument '{}': unknown node '{}'", inst.name, conn.from),
+            ))?;
         let to_idx = find_node(&name_to_idx, &conn.to)
-            .ok_or_else(|| CompileError { line: 0,
-                message: format!("instrument '{}': unknown node '{}'", inst.name, conn.to),
-            })?;
-        builder.connect(from_idx, to_idx);
+            .ok_or_else(|| CompileError::at(conn.line.0,
+                format!("instrument '{}': unknown node '{}'", inst.name, conn.to),
+            ))?;
+        builder.try_connect(from_idx, to_idx).map_err(|_| CompileError::at(conn.line.0, format!(
+            "instrument '{}': more than {} connections into '{}'; gather them in a `mix` first",
+            inst.name, crate::graph::node::MAX_NODE_INPUTS, conn.to
+        )))?;
     }
 
-    let mut template = builder.build();
+    let mut template = builder.try_build().map_err(|e| match e {
+        GraphError::Cycle { stuck } => {
+            // `stuck` is the loop and everything downstream of it. Peel off
+            // the nodes that feed no other stuck node until only the loop is
+            // left, so the message names the nodes to rewire and not `out`.
+            let edges: Vec<(u8, u8)> = inst.connections.iter()
+                .filter_map(|c| Some((find_node(&name_to_idx, &c.from)?, find_node(&name_to_idx, &c.to)?)))
+                .collect();
+            let mut stuck = stuck;
+            loop {
+                let tail = (0..32u8).find(|&i| stuck & (1 << i) != 0
+                    && !edges.iter().any(|&(a, b)| a == i && stuck & (1 << b) != 0));
+                match tail {
+                    Some(i) => stuck &= !(1 << i),
+                    None => break,
+                }
+            }
+            let names: Vec<&str> = name_to_idx.iter()
+                .filter(|(n, i)| stuck & (1 << i) != 0 && !n.starts_with("_anon_"))
+                .map(|(n, _)| n.as_str())
+                .collect();
+            // The first connection between two stuck nodes is where the loop
+            // shows in the file.
+            let line = inst.connections.iter()
+                .find(|c| [&c.from, &c.to].iter().all(|n| find_node(&name_to_idx, n).is_some_and(|i| stuck & (1 << i) != 0)))
+                .map_or(inst.line, |c| c.line);
+            CompileError::at(line.0, format!(
+                "instrument '{}': the connections loop back on themselves ({} feed each other); a node cannot take its own output as input",
+                inst.name, names.join(", ")
+            ))
+        }
+        _ => CompileError::at(inst.line.0, format!("instrument '{}': {:?}", inst.name, e)),
+    })?;
     template.output_gain = inst.gain.unwrap_or(1.0);
     Ok(template)
 }
@@ -1086,6 +1132,7 @@ fn compile_track(
                     kind: rnode.kind.clone(),
                     alias: None,
                     params: rnode.params.clone(),
+                    line: Line::default(),
                 };
                 let wet = named_param(&rnode.params, crate::nodes::WET).unwrap_or(1.0);
                 match node_def_to_spec(&node, &mut noise_seed, &mut drift_seed, samples_per_bar) {
@@ -1197,6 +1244,7 @@ fn compile_fx_chain(owner: &str, chain: &[ChainNode], samples_per_bar: f32) -> R
             kind: node.kind.clone(),
             alias: None,
             params: node.params.clone(),
+            line: Line::default(),
         };
         let wet = named_param(&node.params, crate::nodes::WET).unwrap_or(1.0);
         match node_def_to_spec(&node_def, &mut noise_seed, &mut drift_seed, samples_per_bar) {

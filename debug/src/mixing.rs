@@ -87,7 +87,7 @@ pub fn clashes(levels: &[Vec<[f32; 8]>], sections: &[(usize, usize)]) -> Vec<Cla
         }
     }
     // Worst first: the one that holds for the most time over the song.
-    out.sort_by(|x, y| weight(y).partial_cmp(&weight(x)).unwrap());
+    out.sort_by(|x, y| weight(y).total_cmp(&weight(x)));
     out
 }
 

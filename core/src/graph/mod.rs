@@ -6,6 +6,24 @@ use crate::BLOCK_SIZE;
 
 /// Maximum nodes in a single instrument graph.
 pub const MAX_GRAPH_NODES: usize = 32;
+// `GraphError::Cycle` keeps one bit per node.
+const _: () = assert!(MAX_GRAPH_NODES <= 32);
+
+/// Why an instrument graph cannot be built. The compiler turns each into an
+/// error at the line that caused it; the panicking builder methods are for
+/// graphs written in code, where any of these is a bug.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GraphError {
+    /// More than `MAX_GRAPH_NODES` nodes.
+    TooManyNodes,
+    /// More than `MAX_NODE_INPUTS` connections into this node.
+    TooManyInputs { node: u8 },
+    /// Some nodes feed themselves through the others. Bit `i` is set for
+    /// each node that could not be ordered: the loop and whatever it feeds.
+    Cycle { stuck: u32 },
+    /// No `out` node.
+    NoOutput,
+}
 
 /// An edge: source node index. Port is always 0 (mono).
 #[derive(Clone, Copy)]
@@ -213,28 +231,51 @@ impl GraphBuilder {
 
     /// Add a node, returns its index.
     pub fn add_node(&mut self, spec: NodeSpec) -> u8 {
+        self.try_add_node(spec).expect("graph full")
+    }
+
+    /// Add a node, or say the graph is full.
+    pub fn try_add_node(&mut self, spec: NodeSpec) -> Result<u8, GraphError> {
         let idx = self.node_count;
-        assert!((idx as usize) < MAX_GRAPH_NODES, "graph full");
+        if idx as usize >= MAX_GRAPH_NODES {
+            return Err(GraphError::TooManyNodes);
+        }
         if matches!(spec, NodeSpec::Output) {
             self.output_node = Some(idx);
         }
         self.specs[idx as usize] = spec;
         self.node_count += 1;
-        idx
+        Ok(idx)
     }
 
     /// Connect src output -> dst's next available input.
     pub fn connect(&mut self, src: u8, dst: u8) {
+        self.try_connect(src, dst).expect("too many inputs on a node")
+    }
+
+    /// Connect, or say `dst` has no input left.
+    pub fn try_connect(&mut self, src: u8, dst: u8) -> Result<(), GraphError> {
         let d = dst as usize;
         let inp = self.input_counts[d] as usize;
-        assert!(inp < MAX_NODE_INPUTS, "too many inputs on node {}", dst);
+        if inp >= MAX_NODE_INPUTS {
+            return Err(GraphError::TooManyInputs { node: dst });
+        }
         self.edges[d][inp] = Edge { src_node: src };
         self.input_counts[d] += 1;
+        Ok(())
     }
 
     /// Build the GraphTemplate with topological sort.
     pub fn build(self) -> GraphTemplate {
-        let output_node = self.output_node.expect("graph must have an Output node");
+        match self.try_build() {
+            Ok(t) => t,
+            Err(e) => panic!("cannot build graph: {:?}", e),
+        }
+    }
+
+    /// Build, or say why the graph cannot run: no output, or a loop.
+    pub fn try_build(self) -> Result<GraphTemplate, GraphError> {
+        let output_node = self.output_node.ok_or(GraphError::NoOutput)?;
         let node_count = self.node_count;
 
         // Identify osc/env/filter nodes
@@ -322,13 +363,16 @@ impl GraphBuilder {
             }
         }
 
-        assert_eq!(
-            exec_len, node_count,
-            "graph has a cycle! processed {} of {} nodes",
-            exec_len, node_count
-        );
+        if exec_len != node_count {
+            // One bit per node; there is at least the output, and at most 32.
+            let mut stuck = u32::MAX >> (32 - node_count as u32);
+            for &n in &execution_order[..exec_len as usize] {
+                stuck &= !(1 << n);
+            }
+            return Err(GraphError::Cycle { stuck });
+        }
 
-        GraphTemplate {
+        Ok(GraphTemplate {
             specs: self.specs,
             node_count,
             edges: self.edges,
@@ -344,6 +388,6 @@ impl GraphBuilder {
             filter_nodes,
             filter_count,
             output_gain: 1.0,
-        }
+        })
     }
 }

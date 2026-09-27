@@ -834,7 +834,10 @@ impl SongEngine {
     /// Create from an already-compiled song.
     pub fn from_compiled(song: CompiledSong) -> Self {
         // Build instruments from compiled instrument kinds
-        let tempo = song.globals.tempo;
+        // The parser refuses anything outside these spans; a song built
+        // some other way is held to the same ones the setters use, so a
+        // tempo of 0 cannot make a step infinitely long.
+        let tempo = song.globals.tempo.clamp(20.0, 999.0);
         let mut instruments: Vec<SongInstrument> = song.instruments
             .iter()
             .map(|kind| Self::build_instrument(kind, tempo))
@@ -1028,7 +1031,7 @@ impl SongEngine {
             })
             .collect();
 
-        let meter = song.globals.meter;
+        let meter = (song.globals.meter.0.clamp(1, 16), song.globals.meter.1);
         let sidechain_amount = song.globals.sidechain;
         let steps_per_bar = (meter.0 as usize) * 4; // 4 steps per beat (16th notes)
         let samples_per_step = SAMPLE_RATE * 60.0 / tempo / 4.0; // 16th note duration
@@ -1077,9 +1080,9 @@ impl SongEngine {
         }
 
         // Parse swing/humanize from globals
-        let swing = song.globals.swing.unwrap_or(0.5);
-        let humanize_velocity = song.globals.humanize.unwrap_or(0.0);
-        let humanize_timing = song.globals.humanize_timing.unwrap_or(0.0);
+        let swing = song.globals.swing.unwrap_or(0.5).clamp(0.5, 0.75);
+        let humanize_velocity = song.globals.humanize.unwrap_or(0.0).clamp(0.0, 1.0);
+        let humanize_timing = song.globals.humanize_timing.unwrap_or(0.0).clamp(0.0, 1.0);
 
         let track_buf_count = tracks.len();
         let mut engine = Self {
@@ -1199,6 +1202,7 @@ impl SongEngine {
 
         // Update tempo if scene overrides it
         if let Some(t) = self.scenes[scene_idx].tempo {
+            let t = t.clamp(20.0, 999.0);
             self.tempo = t;
             self.samples_per_step = SAMPLE_RATE * 60.0 / t / 4.0;
             // Update BPM on module instruments
@@ -2642,7 +2646,7 @@ impl SongEngine {
         let mut out = Vec::new();
         for (i, repeat) in &self.arrangement {
             let Some(scene) = self.scenes.get(*i) else { continue };
-            if let Some(t) = scene.tempo { bpm = t; }
+            if let Some(t) = scene.tempo { bpm = t.clamp(20.0, 999.0); }
             out.push((scene.name.as_str(), *repeat, bpm));
         }
         out

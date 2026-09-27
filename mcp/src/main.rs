@@ -67,6 +67,11 @@ fn staleness() -> Option<String> {
 }
 const PROTOCOL_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18"];
 const MAX_RENDER_BARS: u32 = 512;
+/// The longest song the server renders. Bars alone do not bound it: 512 bars
+/// of 16/4 at 20 BPM are seven hours, and a render holds all of it in memory.
+/// The level is measured over the whole song even when `bars` asks for less,
+/// so the whole song is what counts.
+const MAX_RENDER_MINUTES: f32 = 20.0;
 /// Where the engine's output limiter holds the peak, less the margin it keeps
 /// and a little more: a section whose sample peak reaches this is being limited.
 const LIMITER_CEILING: f32 = 0.85;
@@ -435,6 +440,7 @@ fn tool_debug(ctx: &Ctx, args: &Value) -> Result<String, String> {
     };
     let isolation = tatum_debug::Isolation { solo: names("solo"), mute: names("mute") };
     let song = tatum_core::dsl::isolate::compile(source, &isolation).map_err(|e| pretty(&e.to_json()))?;
+    short_enough(&song)?;
     let slug = slug_from_source(source);
     let dir = match args.get("output").and_then(Value::as_str) {
         Some(name) => in_render_dir(ctx, name)?,
@@ -456,6 +462,22 @@ fn tool_debug(ctx: &Ctx, args: &Value) -> Result<String, String> {
     Ok(format!("{}\nsheet: {}\n", outcome.report, outcome.sheet.display()))
 }
 
+/// Refuse a song longer than `MAX_RENDER_MINUTES`, before rendering any of it.
+fn short_enough(song: &tatum_core::dsl::compiler::CompiledSong) -> Result<(), String> {
+    let mut bpm = song.globals.tempo;
+    let seconds: f32 = song.arrangement.iter().map(|(si, r)| {
+        if let Some(t) = song.scenes.get(*si).and_then(|s| s.tempo) { bpm = t; }
+        *r as f32 * song.globals.meter.0 as f32 * 60.0 / bpm
+    }).sum();
+    if seconds > MAX_RENDER_MINUTES * 60.0 {
+        return Err(format!(
+            "the song is {:.0} minutes long; the server renders up to {} minutes. Shorten the arrangement or raise the tempo.",
+            seconds / 60.0, MAX_RENDER_MINUTES
+        ));
+    }
+    Ok(())
+}
+
 fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let source = args.get("source").and_then(Value::as_str).ok_or("missing 'source'")?;
     let song = compile_source(source).map_err(|e| pretty(&e))?;
@@ -467,6 +489,7 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     if total_bars == 0 {
         return Err("nothing to render: the arrangement is empty (add `arrange { scene xN }`)".into());
     }
+    short_enough(&song)?;
     let bars = args.get("bars").and_then(Value::as_u64).map(|b| b as u32).unwrap_or(total_bars).min(total_bars).min(MAX_RENDER_BARS);
     let tempo = song.globals.tempo;
     let steps_per_bar = song.globals.meter.0 as usize * 4;
@@ -897,6 +920,16 @@ mod tests {
             "arguments": { "source": src, "output": "drafts/v2.wav", "bars": 1 } } }));
         assert_eq!(r["result"]["isError"], false, "{}", r);
         assert!(c.render_dir.join("drafts/v2.wav").exists());
+    }
+
+    #[test]
+    fn a_song_too_long_to_hold_is_refused_before_rendering() {
+        let c = ctx();
+        let src = "tempo 20\nmeter 16/4\nmodule bass b { cutoff 1khz }\npattern p { 1.1 - - - }\ntrack t { play p using b out > master }\nscene a { track t { play p using b } }\narrange { a x512 }\n";
+        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 14, "method": "tools/call", "params": { "name": "tatum_render",
+            "arguments": { "source": src, "bars": 1 } } }));
+        assert_eq!(r["result"]["isError"], true, "{}", r);
+        assert!(r["result"]["content"][0]["text"].as_str().unwrap().contains("minutes long"), "{}", r);
     }
 
     #[test]

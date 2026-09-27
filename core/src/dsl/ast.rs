@@ -121,9 +121,24 @@ pub struct BusDef {
 #[derive(Debug, Clone, PartialEq)]
 pub struct InstrumentDef {
     pub name: String,
+    /// Where `instrument <name> {` is.
+    pub line: Line,
     pub gain: Option<f32>,
     pub nodes: Vec<NodeDef>,
     pub connections: Vec<ConnectionDef>,
+}
+
+/// Where something was written, for error messages. Two definitions that
+/// differ only in where they sit are the same definition, so equality ignores
+/// it: the live diff must not take an instrument that moved down the file for
+/// one that changed.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Line(pub usize);
+
+impl PartialEq for Line {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
 }
 
 /// A node in an instrument graph.
@@ -132,6 +147,7 @@ pub struct NodeDef {
     pub kind: String,           // "osc", "lowpass", "adsr", "noise", "mix", etc
     pub alias: Option<String>,  // "as osc1"
     pub params: Vec<Param>,     // positional + named params
+    pub line: Line,
 }
 
 /// A connection between nodes: a > b > c
@@ -139,6 +155,7 @@ pub struct NodeDef {
 pub struct ConnectionDef {
     pub from: String,  // node alias or "in"
     pub to: String,    // node alias or "out" / "mix" / "master"
+    pub line: Line,
 }
 
 /// Parameter value in a node definition.
