@@ -1,9 +1,10 @@
-# set: bars=16 phase=entra energy=3
-# set-note: El acorde se acerca a medio tiempo, aparecen hats fantasma.
+# set: bars=32 phase=entra energy=3
+# set-note: El acorde se acerca a medio tiempo y contesta a destiempo en el compás 4; hats fantasma que nunca son iguales; el sub sube una vez por frase.
 use "_rig.synth"
 
-track bed  { level 0.44 }
-track stab { play stab_half level 0.22 delay_send 0.4 }
-track beat { play kick_four level 0.7 }
-track hats { play hat_ghost level 0.7 }
-track sub  { play sub_f level 0.48 }
+track bed  { play hiss_swell level 0.44 }
+track stab { play stab_half8 level 0.22 delay_send 0.4 }
+track beat { play kick_four8 level 0.7 }
+track hats { play hat_ghost8 level 0.95 }
+track sub  { play sub_f8 level 0.48 }
+track perc { play perc_sparse8 level 0.5 }
