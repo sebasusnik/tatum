@@ -10,7 +10,6 @@ use crate::dsl::ast::Globals;
 use crate::graph::GraphTemplate;
 use crate::graph::node::ChainStep;
 
-
 // ── Compiled output types ──
 
 /// Per-step parameter lock data (compiled, Copy-able).
@@ -48,13 +47,31 @@ pub struct SubNote {
 /// A compiled step: either a note event, chord, or silence.
 #[derive(Clone, Copy, Debug)]
 pub enum CompiledStep {
-    NoteOn { midi_note: u8, velocity: f32, plock: StepPLock, slide: bool },
-    Chord { notes: [ChordNote; MAX_CHORD_NOTES], count: u8, plock: StepPLock },
+    NoteOn {
+        midi_note: u8,
+        velocity: f32,
+        plock: StepPLock,
+        slide: bool,
+    },
+    Chord {
+        notes: [ChordNote; MAX_CHORD_NOTES],
+        count: u8,
+        plock: StepPLock,
+    },
     /// `<B4 C#5 D5>`: notes played in sequence inside one step, evenly spaced
     /// across whatever that step's real duration turns out to be, so swing and
     /// humanize carry through instead of being bypassed.
-    Subdiv { notes: [SubNote; MAX_SUBDIV], count: u8, plock: StepPLock },
-    DrumHit { velocity: f32, probability: f32, roll: u8, plock: StepPLock },
+    Subdiv {
+        notes: [SubNote; MAX_SUBDIV],
+        count: u8,
+        plock: StepPLock,
+    },
+    DrumHit {
+        velocity: f32,
+        probability: f32,
+        roll: u8,
+        plock: StepPLock,
+    },
     Rest,
     Tie,
 }
@@ -64,8 +81,8 @@ pub enum CompiledStep {
 pub struct CompiledLane {
     pub midi_note: u8,
     pub steps: Vec<CompiledStep>,
-    pub swing_override: Option<f32>,  // per-lane swing from groove block
-    pub nudge: f32,                   // per-lane timing offset from groove block
+    pub swing_override: Option<f32>, // per-lane swing from groove block
+    pub nudge: f32,                  // per-lane timing offset from groove block
 }
 
 /// A compiled pattern: flat array of steps.
@@ -74,7 +91,7 @@ pub struct CompiledPattern {
     pub name: String,
     pub steps: Vec<CompiledStep>,
     pub steps_per_row: usize,
-    pub lanes: Vec<CompiledLane>,  // empty = sequential, non-empty = parallel drum pattern
+    pub lanes: Vec<CompiledLane>, // empty = sequential, non-empty = parallel drum pattern
 }
 
 /// A compiled track.
@@ -84,17 +101,17 @@ pub struct CompiledTrack {
     pub instrument_idx: usize,
     pub pattern_idx: usize,
     pub velocity: f32,
-    pub level: f32,         // output level 0.0-1.0 (default 0.8)
-    pub pan: f32,           // stereo pan -1.0 (L) to 1.0 (R), 0.0 = center
-    pub gate: f32,          // gate length as fraction of step (default 0.85)
+    pub level: f32, // output level 0.0-1.0 (default 0.8)
+    pub pan: f32,   // stereo pan -1.0 (L) to 1.0 (R), 0.0 = center
+    pub gate: f32,  // gate length as fraction of step (default 0.85)
     pub insert_fx: Vec<ChainStep>,
     /// `as <name>` per insert node, so `auto <track>.<name> wet` can find it.
     /// Parallel to `insert_fx`; `None` where a node was left unnamed.
     pub insert_fx_labels: Vec<Option<String>>,
     pub bus_send: Option<(usize, f32)>, // (bus_idx, amount)
     pub to_master: bool,
-    pub delay_send: f32,    // global delay send amount 0.0-1.0
-    pub reverb_send: f32,   // global reverb send amount 0.0-1.0
+    pub delay_send: f32,        // global delay send amount 0.0-1.0
+    pub reverb_send: f32,       // global reverb send amount 0.0-1.0
     pub sidechain: Option<f32>, // per-track sidechain override (None = use global)
     /// Track whose level ducks this one. `None` = whatever the song's global
     /// source is, which is the kick unless `sidechain ... from=` says otherwise.

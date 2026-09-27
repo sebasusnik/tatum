@@ -35,14 +35,17 @@ impl Source {
     fn expand(&mut self, path: &Path, stack: &mut Vec<PathBuf>) -> Result<(), String> {
         let canonical = fs::canonicalize(path).map_err(|e| format!("cannot read '{}': {}", path.display(), e))?;
         if stack.contains(&canonical) {
-            let chain: Vec<String> = stack.iter().chain(std::iter::once(&canonical))
-                .map(|p| p.display().to_string()).collect();
+            let chain: Vec<String> =
+                stack.iter().chain(std::iter::once(&canonical)).map(|p| p.display().to_string()).collect();
             return Err(format!("`use` cycle: {}", chain.join(" -> ")));
         }
         let text = fs::read_to_string(&canonical).map_err(|e| format!("cannot read '{}': {}", path.display(), e))?;
         let file_idx = match self.files.iter().position(|f| *f == canonical) {
             Some(i) => i,
-            None => { self.files.push(canonical.clone()); self.files.len() - 1 }
+            None => {
+                self.files.push(canonical.clone());
+                self.files.len() - 1
+            }
         };
         stack.push(canonical.clone());
         let dir = canonical.parent().map(Path::to_path_buf).unwrap_or_default();
@@ -50,9 +53,7 @@ impl Source {
             match use_target(line) {
                 Some(Ok(target)) => {
                     let child = dir.join(target);
-                    self.expand(&child, stack).map_err(|e| {
-                        format!("{}:{}: {}", canonical.display(), i + 1, e)
-                    })?;
+                    self.expand(&child, stack).map_err(|e| format!("{}:{}: {}", canonical.display(), i + 1, e))?;
                 }
                 Some(Err(msg)) => return Err(format!("{}:{}: {}", canonical.display(), i + 1, msg)),
                 None => {
@@ -96,13 +97,19 @@ impl Source {
         match err {
             DslError::Parse(errs) => {
                 eprintln!("{}: parse errors:", root);
-                for e in errs { eprintln!("  {}: {}", self.where_is(e.line), e.message); }
+                for e in errs {
+                    eprintln!("  {}: {}", self.where_is(e.line), e.message);
+                }
             }
             DslError::Compile(errs) => {
                 eprintln!("{}: compile errors:", root);
                 for e in errs {
                     // Line 0: an error about the song as a whole, not a place in it.
-                    if e.line == 0 { eprintln!("  {}", e.message) } else { eprintln!("  {}: {}", self.where_is(e.line), e.message) }
+                    if e.line == 0 {
+                        eprintln!("  {}", e.message)
+                    } else {
+                        eprintln!("  {}: {}", self.where_is(e.line), e.message)
+                    }
                 }
             }
         }
@@ -114,7 +121,9 @@ impl Source {
 fn use_target(line: &str) -> Option<Result<String, String>> {
     let t = line.trim();
     let rest = t.strip_prefix("use")?;
-    if !rest.starts_with(char::is_whitespace) { return None; }
+    if !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
     let rest = rest.trim();
     let rest = rest.split("//").next().unwrap_or("").trim();
     let target = rest.strip_prefix('"').and_then(|r| r.strip_suffix('"')).unwrap_or(rest);

@@ -21,19 +21,17 @@ impl Parser {
             Some(n) => n,
             None => return,
         };
-        if !self.expect(&Token::LBrace) { return; }
+        if !self.expect(&Token::LBrace) {
+            return;
+        }
 
-        let mut inst = InstrumentDef {
-            name,
-            line,
-            gain: None,
-            nodes: Vec::new(),
-            connections: Vec::new(),
-        };
+        let mut inst = InstrumentDef { name, line, gain: None, nodes: Vec::new(), connections: Vec::new() };
 
         loop {
             self.skip_newlines();
-            if self.at_block_end() { break; }
+            if self.at_block_end() {
+                break;
+            }
 
             // Check for instrument-level "gain <number>" property
             if let Token::Ident(ref word) = self.peek().clone() {
@@ -70,7 +68,9 @@ impl Parser {
 
         loop {
             self.skip_newlines();
-            if self.at_block_end() || matches!(self.peek(), Token::Newline) { break; }
+            if self.at_block_end() || matches!(self.peek(), Token::Newline) {
+                break;
+            }
 
             let elem = self.parse_chain_element();
             chain.push(elem);
@@ -96,21 +96,13 @@ impl Parser {
                     let name = node_def.alias.clone().unwrap();
                     inst.nodes.push(node_def);
                     if let Some(ref prev) = prev_name {
-                        inst.connections.push(ConnectionDef {
-                            from: prev.clone(),
-                            to: name.clone(),
-                            line,
-                        });
+                        inst.connections.push(ConnectionDef { from: prev.clone(), to: name.clone(), line });
                     }
                     prev_name = Some(name);
                 }
                 ChainElement::Ref(name) => {
                     if let Some(ref prev) = prev_name {
-                        inst.connections.push(ConnectionDef {
-                            from: prev.clone(),
-                            to: name.clone(),
-                            line,
-                        });
+                        inst.connections.push(ConnectionDef { from: prev.clone(), to: name.clone(), line });
                     }
                     prev_name = Some(name);
                 }
@@ -121,14 +113,23 @@ impl Parser {
     fn parse_chain_element(&mut self) -> ChainElement {
         match self.peek().clone() {
             // Special built-in nodes
-            Token::Out => { self.advance(); ChainElement::Ref(String::from("out")) }
-            Token::In => { self.advance(); ChainElement::Ref(String::from("in")) }
+            Token::Out => {
+                self.advance();
+                ChainElement::Ref(String::from("out"))
+            }
+            Token::In => {
+                self.advance();
+                ChainElement::Ref(String::from("in"))
+            }
             Token::Mix => {
                 self.advance();
                 // "mix" could be a reference or a node def (if followed by params)
                 ChainElement::Ref(String::from("mix"))
             }
-            Token::Master => { self.advance(); ChainElement::Ref(String::from("master")) }
+            Token::Master => {
+                self.advance();
+                ChainElement::Ref(String::from("master"))
+            }
 
             // Identifier: could be a reference to existing node, or a DSP keyword
             Token::Ident(ref word) => {
@@ -148,7 +149,8 @@ impl Parser {
             _ => {
                 let s = self.span().clone();
                 self.errors.push(ParseError {
-                    line: s.line, col: s.col,
+                    line: s.line,
+                    col: s.col,
                     message: format!("expected node or identifier in chain, got {:?}", s.token),
                 });
                 self.advance();
@@ -198,7 +200,9 @@ impl Parser {
         let mut positional = 0usize;
         loop {
             self.skip_newlines();
-            if matches!(self.peek(), Token::RParen | Token::Eof) { break; }
+            if matches!(self.peek(), Token::RParen | Token::Eof) {
+                break;
+            }
 
             // Keywords that are also option names (`mix=0.5`, `level=`)
             let keyword_name = match self.peek() {
@@ -239,8 +243,12 @@ impl Parser {
                         let s = self.span();
                         let (l, c) = (s.line, s.col);
                         self.errors.push(ParseError {
-                            line: l, col: c,
-                            message: format!("unexpected '{}' in arguments (use name=value, a number, or a waveform word)", name),
+                            line: l,
+                            col: c,
+                            message: format!(
+                                "unexpected '{}' in arguments (use name=value, a number, or a waveform word)",
+                                name
+                            ),
                         });
                         self.advance();
                     }
@@ -253,8 +261,11 @@ impl Parser {
                 let s = self.span();
                 let (l, c) = (s.line, s.col);
                 self.errors.push(ParseError {
-                    line: l, col: c,
-                    message: String::from("unexpected 'x' in arguments (use name=value, a number, a waveform word or a vowel)"),
+                    line: l,
+                    col: c,
+                    message: String::from(
+                        "unexpected 'x' in arguments (use name=value, a number, a waveform word or a vowel)",
+                    ),
                 });
                 self.advance();
             } else if let Token::Quantity(raw, suffix) = self.peek().clone() {
@@ -266,7 +277,9 @@ impl Parser {
                     Err(message) => self.errors.push(ParseError { line: l, col: c, message }),
                 }
                 positional += 1;
-                if matches!(self.peek(), Token::Comma) { self.advance(); }
+                if matches!(self.peek(), Token::Comma) {
+                    self.advance();
+                }
                 continue;
             } else if let Token::Number(_) = self.peek() {
                 positional += 1;
@@ -280,10 +293,7 @@ impl Parser {
                     // Expression: n * m
                     self.advance();
                     let m = self.expect_number().unwrap_or(1.0);
-                    params.push(Param::Expr(Expr::Mul(
-                        Box::new(Expr::Num(n)),
-                        Box::new(Expr::Num(m)),
-                    )));
+                    params.push(Param::Expr(Expr::Mul(Box::new(Expr::Num(n)), Box::new(Expr::Num(m)))));
                 } else {
                     params.push(Param::Float(n));
                 }
@@ -326,15 +336,31 @@ enum ChainElement {
 
 /// Check if a word is a DSP keyword (node type that can be instantiated).
 fn is_dsp_keyword(word: &str) -> bool {
-    matches!(word,
-        "osc" | "fixosc" | "pitch_osc" | "noise" | "lfo" |
-        "adsr" | "perc" |
-        "lowpass" | "highpass" | "bandpass" | "ladder" |
-        "gain" |
-        "saturate" | "drive" | "chorus" | "bitcrush" | "tapestop" |
-        "delay" | "reverb" |
-        "compressor" | "limiter" |
-        "tilt" | "eq"
+    matches!(
+        word,
+        "osc"
+            | "fixosc"
+            | "pitch_osc"
+            | "noise"
+            | "lfo"
+            | "adsr"
+            | "perc"
+            | "lowpass"
+            | "highpass"
+            | "bandpass"
+            | "ladder"
+            | "gain"
+            | "saturate"
+            | "drive"
+            | "chorus"
+            | "bitcrush"
+            | "tapestop"
+            | "delay"
+            | "reverb"
+            | "compressor"
+            | "limiter"
+            | "tilt"
+            | "eq"
     )
 }
 

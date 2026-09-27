@@ -19,7 +19,9 @@ fn render(chain: &str) -> (Vec<f32>, Vec<f32>) {
     e.render(2)
 }
 
-fn rms(x: &[f32]) -> f32 { (x.iter().map(|v| v * v).sum::<f32>() / x.len().max(1) as f32).sqrt() }
+fn rms(x: &[f32]) -> f32 {
+    (x.iter().map(|v| v * v).sum::<f32>() / x.len().max(1) as f32).sqrt()
+}
 
 #[test]
 fn filter_lfo_moves_the_cutoff() {
@@ -39,7 +41,10 @@ fn filter_lfo_moves_the_cutoff() {
 #[test]
 fn filter_lfo_arguments_are_validated() {
     let src = BASE.replace("CHAIN", "lowpass(600, 0.7, lfo_bar=1)");
-    let errs = match compiler::compile(&dsl::parse(&src).unwrap()) { Err(e) => e, Ok(_) => panic!("expected error") };
+    let errs = match compiler::compile(&dsl::parse(&src).unwrap()) {
+        Err(e) => e,
+        Ok(_) => panic!("expected error"),
+    };
     assert!(errs[0].message.contains("unknown option 'lfo_bar'"), "{}", errs[0].message);
 }
 
@@ -106,7 +111,10 @@ fn vowel_filter_shapes_and_morphs() {
     // `mix` is a keyword elsewhere but a valid option here
     assert!(SongEngine::from_source(&BASE.replace("CHAIN", "vowel(a, o, bars=2, mix=0.5)")).is_ok());
     let bad = BASE.replace("CHAIN", "vowel(bars=2)");
-    let errs = match compiler::compile(&dsl::parse(&bad).unwrap()) { Err(e) => e, Ok(_) => panic!() };
+    let errs = match compiler::compile(&dsl::parse(&bad).unwrap()) {
+        Err(e) => e,
+        Ok(_) => panic!(),
+    };
     assert!(errs[0].message.contains("needs one or two vowels"), "{}", errs[0].message);
 }
 
@@ -131,14 +139,14 @@ fn cutoff_lfo_is_relative_and_does_not_rasp() {
 
     let render = |depth: f32| {
         let mut m = BassModule::new();
-        m.set_param(BassParam::Cutoff, 0.15);      // ~56 Hz: a dark drone
+        m.set_param(BassParam::Cutoff, 0.15); // ~56 Hz: a dark drone
         m.set_param(BassParam::Resonance, 0.78);
         m.set_param(BassParam::CutoffEnv, 0.0);
         m.set_param(BassParam::Osc1Wave, 1.0);
         if depth > 0.0 {
             m.set_param(BassParam::LfoTarget, 0.0); // cutoff
             m.set_param(BassParam::LfoDepth, depth);
-            m.set_param(BassParam::LfoSync, 1.0);   // fast enough to sweep within the render
+            m.set_param(BassParam::LfoSync, 1.0); // fast enough to sweep within the render
         }
         m.note_on(28, 0.8);
         let mut out = vec![0.0f32; 44100 * 3];
@@ -189,13 +197,14 @@ fn an_auto_sweep_moves_smoothly_and_not_in_steps() {
         n as f32 / x.len() as f32
     };
     let step = sr * 60 / 120 / 4; // one sixteenth
-    // Two windows inside the same step, away from note events.
+                                  // Two windows inside the same step, away from note events.
     let a = sr + step / 4;
     let b = sr + step * 3 / 4;
     let (ca, cb) = (centroid(&l[a..a + win]), centroid(&l[b..b + win]));
     assert!(
         (ca - cb).abs() > 1e-6,
         "brightness is identical at two points inside one step ({} vs {}), so the sweep is still quantised to steps",
-        ca, cb
+        ca,
+        cb
     );
 }

@@ -11,7 +11,8 @@ fn heard(src: &str) -> Vec<String> {
 }
 
 fn song(bass: &str) -> String {
-    format!(r#"
+    format!(
+        r#"
 tempo 120
 scale A minor
 module bass low {{ cutoff 0.5 sustain 0.9 }}
@@ -19,7 +20,8 @@ pattern line {{ {bass}:0.9 .. .. ..  .. .. .. ..  .. .. .. ..  .. .. .. .. }}
 track bass {{ play line using low level 0.5 out > master }}
 scene a {{ track bass {{ play line using low }} }}
 arrange {{ a x2 }}
-"#)
+"#
+    )
 }
 
 #[test]

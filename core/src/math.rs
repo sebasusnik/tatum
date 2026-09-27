@@ -6,7 +6,11 @@ pub const INV_LN2: f32 = core::f32::consts::LOG2_E;
 
 #[inline]
 pub fn abs(x: f32) -> f32 {
-    if x < 0.0 { -x } else { x }
+    if x < 0.0 {
+        -x
+    } else {
+        x
+    }
 }
 
 #[inline]
@@ -24,7 +28,11 @@ pub fn clamp(x: f32, min: f32, max: f32) -> f32 {
 pub fn floor(x: f32) -> f32 {
     let i = x as i32;
     let fi = i as f32;
-    if x < fi { fi - 1.0 } else { fi }
+    if x < fi {
+        fi - 1.0
+    } else {
+        fi
+    }
 }
 
 #[inline]
@@ -61,8 +69,7 @@ const fn sin_for_table(phase: f64) -> f64 {
     let x11 = x9 * x2;
     let x13 = x11 * x2;
 
-    let result = x - x3 / 6.0 + x5 / 120.0 - x7 / 5040.0 + x9 / 362880.0
-        - x11 / 39916800.0 + x13 / 6227020800.0;
+    let result = x - x3 / 6.0 + x5 / 120.0 - x7 / 5040.0 + x9 / 362880.0 - x11 / 39916800.0 + x13 / 6227020800.0;
 
     sign * result
 }
@@ -231,11 +238,7 @@ pub fn midi_to_freq(note: u8) -> f32 {
     // Reference: C0 = MIDI 12, freq ≈ 16.3516 Hz
     // freq = 440 * 2^((note - 69) / 12)
     let diff = n - 69;
-    let octaves = if diff >= 0 {
-        diff / 12
-    } else {
-        (diff - 11) / 12
-    };
+    let octaves = if diff >= 0 { diff / 12 } else { (diff - 11) / 12 };
     let semitones = (diff - octaves * 12) as usize;
 
     let mut freq = 440.0 * SEMITONE_RATIOS[semitones];
@@ -280,20 +283,14 @@ mod tests {
             (HALF_PI, 1.0),
             (PI, 0.0),
             (-HALF_PI, -1.0),
-            (PI / 6.0, 0.5),                   // sin(30°)
-            (PI / 4.0, 0.7071067811865476),     // sin(45°)
-            (PI / 3.0, 0.8660254037844386),     // sin(60°)
-            (3.0 * PI, 0.0),                    // sin(3π)
+            (PI / 6.0, 0.5),                // sin(30°)
+            (PI / 4.0, 0.7071067811865476), // sin(45°)
+            (PI / 3.0, 0.8660254037844386), // sin(60°)
+            (3.0 * PI, 0.0),                // sin(3π)
         ];
         for (x, expected) in test_cases {
             let result = sin(x);
-            assert!(
-                abs(result - expected) < 0.001,
-                "sin({}) = {}, expected {}",
-                x,
-                result,
-                expected
-            );
+            assert!(abs(result - expected) < 0.001, "sin({}) = {}, expected {}", x, result, expected);
         }
         // Negative input
         let r = sin(-PI);
@@ -301,12 +298,7 @@ mod tests {
         // Large input
         let r = sin(100.0);
         let expected = -0.5063656411097588_f32; // sin(100) reference
-        assert!(
-            abs(r - expected) < 0.001,
-            "sin(100) = {}, expected {}",
-            r,
-            expected
-        );
+        assert!(abs(r - expected) < 0.001, "sin(100) = {}, expected {}", r, expected);
     }
 
     #[test]
@@ -321,10 +313,17 @@ mod tests {
                 let pi = core::f64::consts::PI;
                 let half_pi = pi / 2.0;
                 let mut a = xd % (2.0 * pi);
-                if a < 0.0 { a += 2.0 * pi; }
+                if a < 0.0 {
+                    a += 2.0 * pi;
+                }
                 let mut s = 1.0_f64;
-                if a > pi { s = -1.0; a -= pi; }
-                if a > half_pi { a = pi - a; }
+                if a > pi {
+                    s = -1.0;
+                    a -= pi;
+                }
+                if a > half_pi {
+                    a = pi - a;
+                }
                 let a2 = a * a;
                 let a3 = a2 * a;
                 let a5 = a3 * a2;
@@ -332,16 +331,9 @@ mod tests {
                 let a9 = a7 * a2;
                 let a11 = a9 * a2;
                 let a13 = a11 * a2;
-                s * (a - a3 / 6.0 + a5 / 120.0 - a7 / 5040.0 + a9 / 362880.0
-                    - a11 / 39916800.0 + a13 / 6227020800.0)
+                s * (a - a3 / 6.0 + a5 / 120.0 - a7 / 5040.0 + a9 / 362880.0 - a11 / 39916800.0 + a13 / 6227020800.0)
             } as f32;
-            assert!(
-                abs(result - reference) < 0.001,
-                "sin({}) = {}, reference {}",
-                x,
-                result,
-                reference
-            );
+            assert!(abs(result - reference) < 0.001, "sin({}) = {}, reference {}", x, result, reference);
         }
     }
 
@@ -364,13 +356,7 @@ mod tests {
             let ax = if x < 0.0 { -x } else { x };
             if ax <= 0.1 {
                 // Absolute error for small values
-                assert!(
-                    (result - reference).abs() < 0.001,
-                    "tanh({}) = {}, reference {}",
-                    x,
-                    result,
-                    reference
-                );
+                assert!((result - reference).abs() < 0.001, "tanh({}) = {}, reference {}", x, result, reference);
             } else {
                 // Relative error for larger values
                 let rel_err = ((result - reference) / reference).abs();
@@ -389,25 +375,13 @@ mod tests {
     #[test]
     fn test_midi_to_freq() {
         let a4 = midi_to_freq(69);
-        assert!(
-            abs(a4 - 440.0) < 0.01,
-            "A4 should be 440Hz, got {}",
-            a4
-        );
+        assert!(abs(a4 - 440.0) < 0.01, "A4 should be 440Hz, got {}", a4);
 
         let a3 = midi_to_freq(57);
-        assert!(
-            abs(a3 - 220.0) < 0.5,
-            "A3 should be 220Hz, got {}",
-            a3
-        );
+        assert!(abs(a3 - 220.0) < 0.5, "A3 should be 220Hz, got {}", a3);
 
         let a2 = midi_to_freq(45);
-        assert!(
-            abs(a2 - 110.0) < 0.5,
-            "A2 should be 110Hz, got {}",
-            a2
-        );
+        assert!(abs(a2 - 110.0) < 0.5, "A2 should be 110Hz, got {}", a2);
     }
 
     #[test]
@@ -416,11 +390,7 @@ mod tests {
         assert!(abs(e0 - 1.0) < 0.01, "exp(0) should be 1, got {}", e0);
 
         let e1 = exp(1.0);
-        assert!(
-            abs(e1 - 2.71828) < 0.05,
-            "exp(1) should be ~2.718, got {}",
-            e1
-        );
+        assert!(abs(e1 - 2.71828) < 0.05, "exp(1) should be ~2.718, got {}", e1);
     }
 
     #[test]
@@ -429,10 +399,6 @@ mod tests {
         assert!(abs(s4 - 2.0) < 0.01, "sqrt(4) should be 2, got {}", s4);
 
         let s2 = sqrt(2.0);
-        assert!(
-            abs(s2 - 1.41421) < 0.01,
-            "sqrt(2) should be ~1.414, got {}",
-            s2
-        );
+        assert!(abs(s2 - 1.41421) < 0.01, "sqrt(2) should be ~1.414, got {}", s2);
     }
 }

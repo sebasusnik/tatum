@@ -30,20 +30,12 @@ struct PreDelay {
 
 impl PreDelay {
     fn new() -> Self {
-        Self {
-            buffer: [0.0; PRE_DELAY_MAX_SAMPLES],
-            pos: 0,
-            delay_samples: 0,
-        }
+        Self { buffer: [0.0; PRE_DELAY_MAX_SAMPLES], pos: 0, delay_samples: 0 }
     }
 
     fn set_delay_ms(&mut self, ms: f32) {
         let samples = (ms * 44.1) as usize;
-        self.delay_samples = if samples >= PRE_DELAY_MAX_SAMPLES {
-            PRE_DELAY_MAX_SAMPLES - 1
-        } else {
-            samples
-        };
+        self.delay_samples = if samples >= PRE_DELAY_MAX_SAMPLES { PRE_DELAY_MAX_SAMPLES - 1 } else { samples };
     }
 
     fn process(&mut self, input: f32) -> f32 {
@@ -92,10 +84,7 @@ struct EarlyReflections {
 
 impl EarlyReflections {
     fn new() -> Self {
-        Self {
-            buffer: [0.0; ER_BUFFER_SIZE],
-            pos: 0,
-        }
+        Self { buffer: [0.0; ER_BUFFER_SIZE], pos: 0 }
     }
 
     fn process(&mut self, input: f32) -> f32 {
@@ -169,11 +158,7 @@ impl ModCombFilter {
         let buf_len = self.buffer.len();
 
         // Read with linear interpolation
-        let read_pos_0 = if self.pos >= delay_int {
-            self.pos - delay_int
-        } else {
-            buf_len - (delay_int - self.pos)
-        };
+        let read_pos_0 = if self.pos >= delay_int { self.pos - delay_int } else { buf_len - (delay_int - self.pos) };
         let read_pos_1 = if read_pos_0 == 0 { buf_len - 1 } else { read_pos_0 - 1 };
 
         let output = math::lerp(self.buffer[read_pos_0], self.buffer[read_pos_1], frac);
@@ -223,10 +208,7 @@ struct AllpassFilter {
 
 impl AllpassFilter {
     fn new(size: usize) -> Self {
-        Self {
-            buffer: vec![0.0; size],
-            pos: 0,
-        }
+        Self { buffer: vec![0.0; size], pos: 0 }
     }
 
     fn process(&mut self, input: f32) -> f32 {
@@ -266,15 +248,9 @@ pub struct Reverb {
 
 impl Reverb {
     pub fn new(_sample_rate: f32) -> Self {
-        let combs_l = core::array::from_fn(|i| {
-            ModCombFilter::new(COMB_LENGTHS[i], COMB_LFO_RATES[i], i as f32 / 8.0)
-        });
+        let combs_l = core::array::from_fn(|i| ModCombFilter::new(COMB_LENGTHS[i], COMB_LFO_RATES[i], i as f32 / 8.0));
         let combs_r = core::array::from_fn(|i| {
-            ModCombFilter::new(
-                COMB_LENGTHS[i] + STEREO_SPREAD,
-                COMB_LFO_RATES[i],
-                (i as f32 / 8.0 + 0.5) % 1.0,
-            )
+            ModCombFilter::new(COMB_LENGTHS[i] + STEREO_SPREAD, COMB_LFO_RATES[i], (i as f32 / 8.0 + 0.5) % 1.0)
         });
         let allpasses_l = core::array::from_fn(|i| AllpassFilter::new(ALLPASS_LENGTHS[i]));
         let allpasses_r = core::array::from_fn(|i| AllpassFilter::new(ALLPASS_LENGTHS[i] + STEREO_SPREAD));
@@ -321,16 +297,15 @@ impl Reverb {
         }
     }
 
-    pub fn is_frozen(&self) -> bool { self.frozen }
+    pub fn is_frozen(&self) -> bool {
+        self.frozen
+    }
 
     fn update_params(&mut self) {
         // size 0..1 → feedback 0.7..0.985. At 0.985 the tail is ~15 s; beyond
         // that the combs ring and pile up into a roar under sustained input.
-        let (feedback, damp) = if self.frozen {
-            (1.0, 0.0)
-        } else {
-            (self.room_size * 0.285 + 0.7, self.damping * 0.4 + 0.1)
-        };
+        let (feedback, damp) =
+            if self.frozen { (1.0, 0.0) } else { (self.room_size * 0.285 + 0.7, self.damping * 0.4 + 0.1) };
         for comb in &mut self.combs_l {
             comb.set_feedback(feedback);
             comb.set_damp(damp);
@@ -455,10 +430,7 @@ struct FractionalDelay {
 
 impl FractionalDelay {
     fn new(len: usize) -> Self {
-        Self {
-            buffer: vec![0.0; len],
-            pos: 0,
-        }
+        Self { buffer: vec![0.0; len], pos: 0 }
     }
 
     fn write(&mut self, input: f32) {
@@ -474,11 +446,7 @@ impl FractionalDelay {
         let delay_int = delay as usize;
         let frac = delay - delay_int as f32;
 
-        let read_pos_0 = if self.pos > delay_int {
-            self.pos - delay_int - 1
-        } else {
-            len - 1 - (delay_int - self.pos)
-        };
+        let read_pos_0 = if self.pos > delay_int { self.pos - delay_int - 1 } else { len - 1 - (delay_int - self.pos) };
         let read_pos_1 = if read_pos_0 == 0 { len - 1 } else { read_pos_0 - 1 };
 
         math::lerp(self.buffer[read_pos_0], self.buffer[read_pos_1], frac)
@@ -486,11 +454,7 @@ impl FractionalDelay {
 
     fn read_at(&self, index: usize) -> f32 {
         let len = self.buffer.len();
-        let read_pos = if self.pos > index {
-            self.pos - index - 1
-        } else {
-            len - 1 - (index - self.pos)
-        };
+        let read_pos = if self.pos > index { self.pos - index - 1 } else { len - 1 - (index - self.pos) };
         self.buffer[read_pos]
     }
 
@@ -512,11 +476,7 @@ struct StaticAllpass {
 
 impl StaticAllpass {
     fn new(size: usize, gain: f32) -> Self {
-        Self {
-            buffer: vec![0.0; size],
-            pos: 0,
-            gain,
-        }
+        Self { buffer: vec![0.0; size], pos: 0, gain }
     }
 
     fn process(&mut self, input: f32) -> f32 {
@@ -575,11 +535,7 @@ impl ModAllpass {
 
         let buf_len = self.buffer.len();
 
-        let read_pos_0 = if self.pos >= delay_int {
-            self.pos - delay_int
-        } else {
-            buf_len - (delay_int - self.pos)
-        };
+        let read_pos_0 = if self.pos >= delay_int { self.pos - delay_int } else { buf_len - (delay_int - self.pos) };
         let read_pos_1 = if read_pos_0 == 0 { buf_len - 1 } else { read_pos_0 - 1 };
 
         let buffered = math::lerp(self.buffer[read_pos_0], self.buffer[read_pos_1], frac);
@@ -657,17 +613,11 @@ impl DattorroReverb {
                 StaticAllpass::new(DATTORRO_INPUT_AP[2], 0.625),
                 StaticAllpass::new(DATTORRO_INPUT_AP[3], 0.625),
             ],
-            delay_l: [
-                FractionalDelay::new(DATTORRO_DELAY_L[0]),
-                FractionalDelay::new(DATTORRO_DELAY_L[1]),
-            ],
+            delay_l: [FractionalDelay::new(DATTORRO_DELAY_L[0]), FractionalDelay::new(DATTORRO_DELAY_L[1])],
             mod_ap_l: ModAllpass::new(DATTORRO_MOD_AP_L, 0.1, 8.0),
             lp_l: 0.0,
             static_ap_l: StaticAllpass::new(DATTORRO_STATIC_AP_L, 0.5),
-            delay_r: [
-                FractionalDelay::new(DATTORRO_DELAY_R[0]),
-                FractionalDelay::new(DATTORRO_DELAY_R[1]),
-            ],
+            delay_r: [FractionalDelay::new(DATTORRO_DELAY_R[0]), FractionalDelay::new(DATTORRO_DELAY_R[1])],
             mod_ap_r: ModAllpass::new(DATTORRO_MOD_AP_R, 0.143, 8.0),
             lp_r: 0.0,
             static_ap_r: StaticAllpass::new(DATTORRO_STATIC_AP_R, 0.5),
@@ -733,11 +683,9 @@ impl DattorroReverb {
 
         // Output: cross-channel taps for stereo width
         // L output taps from R tank, R output taps from L tank
-        let tap_l = self.delay_r[0].read_at(266) + self.delay_r[0].read_at(1913)
-            - self.delay_r[1].read_at(1066)
+        let tap_l = self.delay_r[0].read_at(266) + self.delay_r[0].read_at(1913) - self.delay_r[1].read_at(1066)
             + self.delay_l[1].read_at(353);
-        let tap_r = self.delay_l[0].read_at(266) + self.delay_l[0].read_at(1913)
-            - self.delay_l[1].read_at(1066)
+        let tap_r = self.delay_l[0].read_at(266) + self.delay_l[0].read_at(1913) - self.delay_l[1].read_at(1066)
             + self.delay_r[1].read_at(353);
 
         let wet_l = tap_l * 0.3;
@@ -834,4 +782,3 @@ mod tests {
         assert!(found_non_zero, "ModCombFilter should produce non-zero output after impulse");
     }
 }
-

@@ -57,21 +57,21 @@ pub struct Globals {
     /// Shape of the ducking envelope, in milliseconds.
     pub sidechain_attack_ms: Option<f32>,
     pub sidechain_release_ms: Option<f32>,
-    pub swing: Option<f32>,              // 0.5 = straight, 0.67 = triplet feel
-    pub humanize: Option<f32>,           // velocity humanization 0.0-1.0
-    pub humanize_timing: Option<f32>,    // timing humanization 0.0-1.0
+    pub swing: Option<f32>,           // 0.5 = straight, 0.67 = triplet feel
+    pub humanize: Option<f32>,        // velocity humanization 0.0-1.0
+    pub humanize_timing: Option<f32>, // timing humanization 0.0-1.0
     /// `gain_comp`, which no longer does anything: kept so a file that sets it
     /// still compiles, and so the lint can say so.
     pub gain_comp: Option<f32>,
-    pub send_delay: SendDelayDef,        // `delay sync=dotted_eighth feedback=0.45 filter=0.5`
-    pub send_reverb: SendReverbDef,      // `reverb size=0.7 damp=0.4 predelay=20`
+    pub send_delay: SendDelayDef,   // `delay sync=dotted_eighth feedback=0.45 filter=0.5`
+    pub send_reverb: SendReverbDef, // `reverb size=0.7 damp=0.4 predelay=20`
 }
 
 /// Global send delay settings (top-level `delay ...` line).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SendDelayDef {
-    pub sync: Option<String>,   // free | quarter | dotted_eighth | eighth | sixteenth | triplet_eighth
-    pub time: Option<f32>,      // seconds, used when sync is free
+    pub sync: Option<String>, // free | quarter | dotted_eighth | eighth | sixteenth | triplet_eighth
+    pub time: Option<f32>,    // seconds, used when sync is free
     pub feedback: Option<f32>,
     pub filter: Option<f32>,
     pub sidechain: Option<f32>, // duck the delay return against the kick
@@ -108,8 +108,8 @@ impl Default for Globals {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScaleDef {
-    pub root: String,    // "A", "C#", "Bb", etc
-    pub kind: String,    // "minor", "major", "dorian", etc
+    pub root: String, // "A", "C#", "Bb", etc
+    pub kind: String, // "minor", "major", "dorian", etc
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -144,17 +144,17 @@ impl PartialEq for Line {
 /// A node in an instrument graph.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NodeDef {
-    pub kind: String,           // "osc", "lowpass", "adsr", "noise", "mix", etc
-    pub alias: Option<String>,  // "as osc1"
-    pub params: Vec<Param>,     // positional + named params
+    pub kind: String,          // "osc", "lowpass", "adsr", "noise", "mix", etc
+    pub alias: Option<String>, // "as osc1"
+    pub params: Vec<Param>,    // positional + named params
     pub line: Line,
 }
 
 /// A connection between nodes: a > b > c
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConnectionDef {
-    pub from: String,  // node alias or "in"
-    pub to: String,    // node alias or "out" / "mix" / "master"
+    pub from: String, // node alias or "in"
+    pub to: String,   // node alias or "out" / "mix" / "master"
     pub line: Line,
 }
 
@@ -163,9 +163,9 @@ pub struct ConnectionDef {
 pub enum Param {
     Float(f32),
     Named(String, f32),
-    Waveform(String),        // "saw", "sine", "square", "triangle"
-    RhythmDiv(u8, u8),       // 1/4, 1/8, etc
-    Expr(Expr),              // 55 * 2 — simple arithmetic
+    Waveform(String),  // "saw", "sine", "square", "triangle"
+    RhythmDiv(u8, u8), // 1/4, 1/8, etc
+    Expr(Expr),        // 55 * 2 — simple arithmetic
 }
 
 /// Simple expression for frequency math like `55 * 2`.
@@ -190,8 +190,8 @@ impl Expr {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PatternDef {
     pub name: String,
-    pub rows: Vec<Vec<Step>>,  // rows of steps (each row = one bar line)
-    pub lane_labels: Vec<String>,  // empty = sequential, non-empty = parallel drum lanes (lane_labels[i] names rows[i])
+    pub rows: Vec<Vec<Step>>,     // rows of steps (each row = one bar line)
+    pub lane_labels: Vec<String>, // empty = sequential, non-empty = parallel drum lanes (lane_labels[i] names rows[i])
 }
 
 /// Per-step parameter lock: overrides instrument params for a single step.
@@ -221,15 +221,15 @@ pub enum Step {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChordStep {
     pub notes: Vec<NoteStep>,
-    pub velocity: Option<f32>,  // shared velocity (overrides individual if set)
+    pub velocity: Option<f32>, // shared velocity (overrides individual if set)
     pub plock: PLock,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NoteRef {
-    Absolute(String),        // "A1", "C#4", "G0"
-    Degree(u8, u8),          // (degree 1-7, octave 0-9)
-    Midi(u8),                // resolved, e.g. from a chord symbol
+    Absolute(String), // "A1", "C#4", "G0"
+    Degree(u8, u8),   // (degree 1-7, octave 0-9)
+    Midi(u8),         // resolved, e.g. from a chord symbol
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -243,9 +243,9 @@ pub struct NoteStep {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DrumStep {
-    pub velocity: f32,       // default 0.8
-    pub probability: f32,    // 0.0-1.0, default 1.0 (always play). Syntax: g?0.4
-    pub roll: u8,            // retrigger count, default 1 (no roll). Syntax: x*3
+    pub velocity: f32,    // default 0.8
+    pub probability: f32, // 0.0-1.0, default 1.0 (always play). Syntax: g?0.4
+    pub roll: u8,         // retrigger count, default 1 (no roll). Syntax: x*3
     pub plock: PLock,
 }
 
@@ -253,8 +253,8 @@ pub struct DrumStep {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TrackDef {
     pub name: String,
-    pub play: String,                     // pattern name
-    pub using_instrument: String,         // instrument name
+    pub play: String,             // pattern name
+    pub using_instrument: String, // instrument name
     pub velocity: Option<f32>,
     pub level: Option<f32>,               // track output level 0.0-1.0
     pub pan: Option<f32>,                 // stereo pan -1.0 (L) to 1.0 (R), 0.0 = center
@@ -271,16 +271,16 @@ pub struct TrackDef {
 /// (single notes or chords, extended with ties); the arp plays through them.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArpDef {
-    pub mode: String,        // up | down | updown | off
-    pub rate: Option<f32>,   // steps per bar subdivision: 4, 8, 16 (default), 32
-    pub gate: Option<f32>,   // 0.1..1.0 fraction of each arp step
-    pub octaves: Option<f32>,// 1..4
+    pub mode: String,         // up | down | updown | off
+    pub rate: Option<f32>,    // steps per bar subdivision: 4, 8, 16 (default), 32
+    pub gate: Option<f32>,    // 0.1..1.0 fraction of each arp step
+    pub octaves: Option<f32>, // 1..4
 }
 
 /// A node in a routing chain: effect or bus target.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RoutingNode {
-    pub kind: String,         // "drive", "chorus", "master", bus name, etc
+    pub kind: String, // "drive", "chorus", "master", bus name, etc
     pub params: Vec<Param>,
     /// `> autowah(...) as wah`. Naming a node is what lets anything else refer
     /// to it -- an `auto` sweep, or a person reading the chain. Counting
@@ -311,7 +311,7 @@ pub struct MasterDef {
 /// Module-based instrument definition (bass, fm, keys).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModuleDef {
-    pub module_type: String,     // "bass", "fm", "keys"
+    pub module_type: String, // "bass", "fm", "keys"
     pub name: String,
     pub params: Vec<ModuleParam>,
     pub op_envelopes: Vec<OpEnvelopeDef>,
@@ -343,8 +343,8 @@ pub struct OpEnvelopeDef {
 /// Automation definition within a scene.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AutomationDef {
-    pub target: String,           // "funk_bass.cutoff" or "reverb_mix"
-    pub keyframes: Vec<f32>,      // 2 = linear, 3 = triangle
+    pub target: String,      // "funk_bass.cutoff" or "reverb_mix"
+    pub keyframes: Vec<f32>, // 2 = linear, 3 = triangle
 }
 
 /// Scene definition (for arrangement).
@@ -361,7 +361,7 @@ pub struct SceneDef {
 /// Parameter override in a scene.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Override {
-    pub target: String,       // "bass.velocity"
+    pub target: String, // "bass.velocity"
     pub value: f32,
 }
 
@@ -375,9 +375,9 @@ pub struct GrooveDef {
 /// A single lane in a groove block.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GrooveLane {
-    pub drum_name: String,      // "hat", "snare", "kick", etc.
-    pub swing: Option<f32>,     // per-lane swing override (0.5-0.75)
-    pub nudge: Option<f32>,     // timing offset as fraction of step (-0.05 to 0.05)
+    pub drum_name: String,  // "hat", "snare", "kick", etc.
+    pub swing: Option<f32>, // per-lane swing override (0.5-0.75)
+    pub nudge: Option<f32>, // timing offset as fraction of step (-0.05 to 0.05)
 }
 
 /// Arrangement entry: scene name + repeat count.

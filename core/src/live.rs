@@ -56,15 +56,38 @@ pub type Generation = u64;
 pub enum FastOp {
     Tempo(f32),
     Swing(f32),
-    Humanize { velocity: f32, timing: f32 },
-    TrackLevel { track: usize, level: f32 },
-    TrackPan { track: usize, pan: f32 },
-    TrackVelocity { track: usize, velocity: f32 },
-    TrackGate { track: usize, gate: f32 },
-    ModuleParam { instrument: usize, id: ParamId, value: f32 },
+    Humanize {
+        velocity: f32,
+        timing: f32,
+    },
+    TrackLevel {
+        track: usize,
+        level: f32,
+    },
+    TrackPan {
+        track: usize,
+        pan: f32,
+    },
+    TrackVelocity {
+        track: usize,
+        velocity: f32,
+    },
+    TrackGate {
+        track: usize,
+        gate: f32,
+    },
+    ModuleParam {
+        instrument: usize,
+        id: ParamId,
+        value: f32,
+    },
     /// Switch one node of a track's insert chain in or out, or anywhere
     /// between. The node is already built; only how much of it is heard moves.
-    NodeWet { track: usize, node: usize, wet: f32 },
+    NodeWet {
+        track: usize,
+        node: usize,
+        wet: f32,
+    },
     /// Wet level of the global returns, 0..1. Only a knob sends these: in the
     /// text they are per-scene values, which a swap carries.
     ReverbMix(f32),
@@ -72,11 +95,21 @@ pub enum FastOp {
     ReverbFreeze(bool),
     /// A note from the keyboard or a pad, on the instrument a track plays.
     /// Only ever sent as [`Plan::Play`].
-    NoteOn { track: usize, note: u8, velocity: f32 },
-    NoteOff { track: usize, note: u8 },
+    NoteOn {
+        track: usize,
+        note: u8,
+        velocity: f32,
+    },
+    NoteOff {
+        track: usize,
+        note: u8,
+    },
     /// The pitch strip: every note on the instrument, by `ratio` of its
     /// frequency.
-    PitchBend { instrument: usize, ratio: f32 },
+    PitchBend {
+        instrument: usize,
+        ratio: f32,
+    },
 }
 
 /// What a new engine takes over from the one it replaces, by index in the new
@@ -105,7 +138,8 @@ impl Inherit {
     }
 
     pub fn is_complete(&self) -> bool {
-        self.sends && self.master
+        self.sends
+            && self.master
             && self.buses.iter().all(|m| m.is_some())
             && self.instruments.iter().all(|m| m.is_some())
             && self.tracks.iter().all(|m| m.is_some())
@@ -120,11 +154,7 @@ pub enum Plan {
     /// A new engine, ready built, to take over on the next bar line. `inherit`
     /// holds one map per engine the player may be running when the swap lands
     /// (the current one, and a pending one it may have swapped to meanwhile).
-    Swap {
-        engine: Box<SongEngine>,
-        generation: Generation,
-        inherit: Vec<(Generation, Inherit)>,
-    },
+    Swap { engine: Box<SongEngine>, generation: Generation, inherit: Vec<(Generation, Inherit)> },
     /// One value from a knob, for the engine of generation `base`: the one
     /// playing or the one queued behind it. A single op and no `Vec`, because
     /// a knob sends these many times a second and whatever the plan owns is
@@ -187,7 +217,9 @@ impl Known {
             generation,
             ast,
             instruments: (0..engine.instrument_count()).map(|i| String::from(engine.instrument_name(i))).collect(),
-            track_instruments: (0..engine.track_count()).map(|i| engine.track_instrument(i).unwrap_or(usize::MAX)).collect(),
+            track_instruments: (0..engine.track_count())
+                .map(|i| engine.track_instrument(i).unwrap_or(usize::MAX))
+                .collect(),
             tracks: (0..engine.track_count()).map(|i| String::from(engine.track_name(i))).collect(),
             buses: (0..engine.bus_count()).map(|i| String::from(engine.bus_name(i))).collect(),
             track_nodes: (0..engine.track_count())
@@ -249,7 +281,9 @@ pub struct LivePlanner {
 }
 
 impl Default for LivePlanner {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LivePlanner {
@@ -375,7 +409,10 @@ impl LivePlanner {
         self.catch_up(playing);
         let mut turn = KnobTurn { plans: Vec::new(), readings: Vec::new() };
         let Some(latest) = self.pending.as_ref().or(self.running.as_ref()) else { return turn };
-        turn.readings = latest.controls.knobs.iter()
+        turn.readings = latest
+            .controls
+            .knobs
+            .iter()
             .filter(|k| k.cc == cc && !k.moves.is_empty())
             .map(|k| k.reading(value))
             .collect();
@@ -397,7 +434,10 @@ impl LivePlanner {
     /// Forget the knobs whose target the text now writes differently.
     fn forget_edited_knobs(&mut self, new: &Song) {
         let Some(latest) = self.pending.as_ref().or(self.running.as_ref()) else { return };
-        let edited: Vec<u8> = latest.controls.knobs.iter()
+        let edited: Vec<u8> = latest
+            .controls
+            .knobs
+            .iter()
             .filter(|k| midi::text_value(&latest.ast, &k.target) != midi::text_value(new, &k.target))
             .map(|k| k.cc)
             .collect();
@@ -443,7 +483,8 @@ impl LivePlanner {
                 let lufs = if self.isolation.is_empty() {
                     SongEngine::loudness(&compiled)
                 } else {
-                    let full = crate::dsl::parse(source).map_err(DslError::Parse)
+                    let full = crate::dsl::parse(source)
+                        .map_err(DslError::Parse)
                         .and_then(|a| crate::dsl::compiler::compile(&a).map_err(DslError::Compile))?;
                     SongEngine::loudness(&full)
                 };
@@ -481,7 +522,12 @@ impl LivePlanner {
 /// Resolve non-structural changes to indices in the new song. `None` when a
 /// name does not resolve, which makes the caller swap instead. `instruments`
 /// are the engine's names, one per copy: a module edit reaches every copy.
-fn resolve_fast(changes: &[DslChange], ast: &Song, compiled: &CompiledSong, instruments: &[String]) -> Option<Vec<FastOp>> {
+fn resolve_fast(
+    changes: &[DslChange],
+    ast: &Song,
+    compiled: &CompiledSong,
+    instruments: &[String],
+) -> Option<Vec<FastOp>> {
     let track = |name: &str| compiled.tracks.iter().position(|t| t.name == name);
     let mut ops = Vec::with_capacity(changes.len());
     for change in changes {
@@ -521,7 +567,9 @@ fn resolve_fast(changes: &[DslChange], ast: &Song, compiled: &CompiledSong, inst
                         any = true;
                     }
                 }
-                if !any { return None; }
+                if !any {
+                    return None;
+                }
                 continue;
             }
             DslChange::TrackNodeWetChanged { track_name, node_index, wet } => {
@@ -571,15 +619,21 @@ fn inherit_map(old: &Known, known: &Known) -> Inherit {
         && chain_of(o, "delay_return") == chain_of(new, "delay_return");
     let master = o.master == new.master;
 
-    let buses = known.buses.iter().map(|name| {
-        let j = old.buses.iter().position(|n| n == name)?;
-        (chain_of(o, name) == chain_of(new, name)).then_some(j)
-    }).collect::<Vec<_>>();
+    let buses = known
+        .buses
+        .iter()
+        .map(|name| {
+            let j = old.buses.iter().position(|n| n == name)?;
+            (chain_of(o, name) == chain_of(new, name)).then_some(j)
+        })
+        .collect::<Vec<_>>();
 
-    let instruments = (0..known.instruments.len()).map(|i| {
-        let j = nth_same(&old.instruments, &known.instruments, i)?;
-        same_instrument(o, new, &known.instruments[i]).then_some(j)
-    }).collect::<Vec<_>>();
+    let instruments = (0..known.instruments.len())
+        .map(|i| {
+            let j = nth_same(&old.instruments, &known.instruments, i)?;
+            same_instrument(o, new, &known.instruments[i]).then_some(j)
+        })
+        .collect::<Vec<_>>();
 
     // A track continues only where everything that decides what it plays is
     // the same: its own definition, its pattern, its instrument, the scale and
@@ -590,21 +644,32 @@ fn inherit_map(old: &Known, known: &Known) -> Inherit {
         && o.grooves == new.grooves
         && o.globals.scale == new.globals.scale
         && o.globals.meter == new.globals.meter;
-    let tracks = known.tracks.iter().enumerate().map(|(i, name)| {
-        if !composition_same { return None; }
-        let j = old.tracks.iter().position(|n| n == name)?;
-        let od = o.tracks.iter().find(|d| &d.name == name)?;
-        let nd = new.tracks.iter().find(|d| &d.name == name)?;
-        if od != nd { return None; }
-        let op = o.patterns.iter().find(|p| p.name == nd.play)?;
-        let np = new.patterns.iter().find(|p| p.name == nd.play)?;
-        if op != np { return None; }
-        // The copy this track plays must be the one inherited from the copy
-        // the old track played.
-        let inst = *known.track_instruments.get(i)?;
-        let old_inst = *old.track_instruments.get(j)?;
-        (instruments.get(inst).copied().flatten() == Some(old_inst)).then_some(j)
-    }).collect::<Vec<_>>();
+    let tracks = known
+        .tracks
+        .iter()
+        .enumerate()
+        .map(|(i, name)| {
+            if !composition_same {
+                return None;
+            }
+            let j = old.tracks.iter().position(|n| n == name)?;
+            let od = o.tracks.iter().find(|d| &d.name == name)?;
+            let nd = new.tracks.iter().find(|d| &d.name == name)?;
+            if od != nd {
+                return None;
+            }
+            let op = o.patterns.iter().find(|p| p.name == nd.play)?;
+            let np = new.patterns.iter().find(|p| p.name == nd.play)?;
+            if op != np {
+                return None;
+            }
+            // The copy this track plays must be the one inherited from the copy
+            // the old track played.
+            let inst = *known.track_instruments.get(i)?;
+            let old_inst = *old.track_instruments.get(j)?;
+            (instruments.get(inst).copied().flatten() == Some(old_inst)).then_some(j)
+        })
+        .collect::<Vec<_>>();
 
     Inherit { sends, master, buses, instruments, tracks }
 }
@@ -666,7 +731,9 @@ pub struct LivePlayer {
 }
 
 impl Default for LivePlayer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LivePlayer {
@@ -682,16 +749,32 @@ impl LivePlayer {
         }
     }
 
-    pub fn generation(&self) -> Generation { self.generation }
-    pub fn swaps(&self) -> u32 { self.swaps }
-    pub fn blind_swaps(&self) -> u32 { self.blind_swaps }
-    pub fn has_pending(&self) -> bool { self.pending.is_some() }
-    pub fn engine(&self) -> Option<&SongEngine> { self.engine.as_deref() }
-    pub fn engine_mut(&mut self) -> Option<&mut SongEngine> { self.engine.as_deref_mut() }
-    pub fn running(&self) -> bool { self.engine.as_ref().is_some_and(|e| e.running()) }
+    pub fn generation(&self) -> Generation {
+        self.generation
+    }
+    pub fn swaps(&self) -> u32 {
+        self.swaps
+    }
+    pub fn blind_swaps(&self) -> u32 {
+        self.blind_swaps
+    }
+    pub fn has_pending(&self) -> bool {
+        self.pending.is_some()
+    }
+    pub fn engine(&self) -> Option<&SongEngine> {
+        self.engine.as_deref()
+    }
+    pub fn engine_mut(&mut self) -> Option<&mut SongEngine> {
+        self.engine.as_deref_mut()
+    }
+    pub fn running(&self) -> bool {
+        self.engine.as_ref().is_some_and(|e| e.running())
+    }
 
     /// Engines the player is done with, for dropping elsewhere.
-    pub fn take_retired(&mut self) -> Option<Retired> { self.retired.pop() }
+    pub fn take_retired(&mut self) -> Option<Retired> {
+        self.retired.pop()
+    }
 
     fn retire(&mut self, engine: Box<SongEngine>, maps: Vec<(Generation, Inherit)>) {
         self.discard(Spent::Engine(engine, maps));
@@ -718,7 +801,9 @@ impl LivePlayer {
                 };
                 let applied = match target {
                     Some(engine) => {
-                        for op in &ops { apply_op(engine, *op); }
+                        for op in &ops {
+                            apply_op(engine, *op);
+                        }
                         Applied::Fast
                     }
                     None => Applied::Stale,
@@ -737,12 +822,16 @@ impl LivePlayer {
                         _ => None,
                     }
                 };
-                if let Some(engine) = target { apply_op(engine, op); }
+                if let Some(engine) = target {
+                    apply_op(engine, op);
+                }
                 Applied::Control
             }
             Plan::Play { base, op } => {
                 if base == self.generation {
-                    if let Some(engine) = self.engine.as_deref_mut() { apply_op(engine, op); }
+                    if let Some(engine) = self.engine.as_deref_mut() {
+                        apply_op(engine, op);
+                    }
                 }
                 Applied::Control
             }
@@ -765,15 +854,23 @@ impl LivePlayer {
     }
 
     pub fn start(&mut self) {
-        if let Some(e) = self.engine.as_mut() { e.start(); }
+        if let Some(e) = self.engine.as_mut() {
+            e.start();
+        }
     }
 
     /// Stop. A queued engine takes over at once, with nothing to inherit.
     pub fn stop(&mut self) {
-        if let Some(e) = self.engine.as_mut() { e.reset(); }
-        if let Some((f, _, m)) = self.fading.take() { self.retire(f, m); }
+        if let Some(e) = self.engine.as_mut() {
+            e.reset();
+        }
+        if let Some((f, _, m)) = self.fading.take() {
+            self.retire(f, m);
+        }
         if let Some((e, g, m)) = self.pending.take() {
-            if let Some(old) = self.engine.replace(e) { self.retire(old, m); }
+            if let Some(old) = self.engine.replace(e) {
+                self.retire(old, m);
+            }
             self.generation = g;
         }
     }
@@ -812,7 +909,9 @@ impl LivePlayer {
             old.process_block_stereo(&mut tl[..len], &mut tr[..len]);
             for i in 0..len {
                 let k = *done + i;
-                if k >= CROSSFADE_SAMPLES { break; }
+                if k >= CROSSFADE_SAMPLES {
+                    break;
+                }
                 let g = 1.0 - k as f32 / CROSSFADE_SAMPLES as f32;
                 out_l[i] += tl[i] * g;
                 out_r[i] += tr[i] * g;
@@ -853,7 +952,9 @@ fn apply_op(engine: &mut SongEngine, op: FastOp) {
         FastOp::Tempo(bpm) => engine.set_tempo(bpm),
         FastOp::Swing(s) => engine.set_swing(s),
         FastOp::Humanize { velocity, timing } => engine.set_humanize(velocity, timing),
-        FastOp::NodeWet { track, node, wet } => { engine.set_node_wet(track, node, wet); }
+        FastOp::NodeWet { track, node, wet } => {
+            engine.set_node_wet(track, node, wet);
+        }
         FastOp::TrackLevel { track, level } => engine.set_track_level(track, level),
         FastOp::TrackPan { track, pan } => engine.set_track_pan(track, pan),
         FastOp::TrackVelocity { track, velocity } => engine.set_track_velocity(track, velocity),

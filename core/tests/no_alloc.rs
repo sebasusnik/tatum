@@ -147,7 +147,9 @@ fn live_swap_never_allocates() {
     let mut swaps = 0;
     let mut blocks = 0;
     while swaps < 1 && blocks < 4000 {
-        if player.process(&mut l, &mut r).is_some() { swaps += 1; }
+        if player.process(&mut l, &mut r).is_some() {
+            swaps += 1;
+        }
         blocks += 1;
     }
     COUNTING.store(false, Ordering::Relaxed);
@@ -155,7 +157,9 @@ fn live_swap_never_allocates() {
     COUNTING.store(true, Ordering::Relaxed);
     assert_eq!(player.apply(plan_b), Applied::Queued);
     while swaps < 2 && blocks < 8000 {
-        if player.process(&mut l, &mut r).is_some() { swaps += 1; }
+        if player.process(&mut l, &mut r).is_some() {
+            swaps += 1;
+        }
         blocks += 1;
     }
     // Past the fade-out, so the coasting engine retires inside the count.
@@ -168,7 +172,9 @@ fn live_swap_never_allocates() {
     let n = ALLOCS.load(Ordering::Relaxed);
     assert_eq!(n, 0, "the live swap path allocated {} times", n);
     let mut retired = 0;
-    while player.take_retired().is_some() { retired += 1; }
+    while player.take_retired().is_some() {
+        retired += 1;
+    }
     assert_eq!(retired, 2, "both old engines must come back for dropping");
 }
 
@@ -204,6 +210,8 @@ fn a_fast_edit_frees_nothing_on_the_audio_thread() {
     let (a, f) = (ALLOCS.load(Ordering::Relaxed), FREES.load(Ordering::Relaxed));
     assert_eq!((a, f), (0, 0), "a fast edit allocated {} and freed {} times on the audio thread", a, f);
     let mut retired = 0;
-    while player.take_retired().is_some() { retired += 1; }
+    while player.take_retired().is_some() {
+        retired += 1;
+    }
     assert_eq!(retired, 1, "the op list must come back for dropping");
 }

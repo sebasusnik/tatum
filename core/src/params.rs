@@ -195,7 +195,11 @@ impl Curve {
                 }
             }
             Curve::Lin { min, max, .. } => {
-                if (max - min).abs() < 1e-12 { 0.0 } else { (real - min) / (max - min) }
+                if (max - min).abs() < 1e-12 {
+                    0.0
+                } else {
+                    (real - min) / (max - min)
+                }
             }
         }
     }
@@ -310,13 +314,20 @@ impl ParamSpec {
                 // the top of a range written exactly (`attack 2s`) can land a
                 // hair past the end of the knob. That is the end of the knob.
                 if let Range::Unit = self.range {
-                    if (-1e-3..0.0).contains(&knob) { knob = 0.0 }
-                    if (1.0..1.0 + 1e-3).contains(&knob) { knob = 1.0 }
+                    if (-1e-3..0.0).contains(&knob) {
+                        knob = 0.0
+                    }
+                    if (1.0..1.0 + 1e-3).contains(&knob) {
+                        knob = 1.0
+                    }
                 }
                 if !self.range.contains(knob) {
                     return Err(alloc::format!(
                         "'{}' = {}{} is outside {}",
-                        self.name, value, suffix, self.curve.describe()
+                        self.name,
+                        value,
+                        suffix,
+                        self.curve.describe()
                     ));
                 }
                 Ok(knob)
@@ -339,14 +350,20 @@ impl ParamSpec {
         let mut lo = self.curve.to_real(knob - 0.01);
         let mut hi = self.curve.to_real(knob + 0.01);
         let rising = back(hi).zip(back(lo)).is_none_or(|(h, l)| h >= l);
-        if !rising { core::mem::swap(&mut lo, &mut hi); }
+        if !rising {
+            core::mem::swap(&mut lo, &mut hi);
+        }
         for _ in 0..64 {
             let mid = (lo + hi) * 0.5;
             let below = match back(mid) {
                 Some(k) => k < knob,
                 None => mid < self.curve.to_real(knob),
             };
-            if below == rising { lo = mid } else { hi = mid }
+            if below == rising {
+                lo = mid
+            } else {
+                hi = mid
+            }
         }
         let real = (lo + hi) * 0.5;
         let mut best = (f32::MAX, String::new());
@@ -355,10 +372,13 @@ impl ParamSpec {
             if text.contains('.') {
                 text = String::from(text.trim_end_matches('0').trim_end_matches('.'));
             }
-            let miss = text.parse::<f32>().ok().and_then(back)
-                .map_or(f32::MAX, |k| crate::math::abs(k - knob));
-            if miss < best.0 { best = (miss, text); }
-            if best.0 <= 1e-6 { break }
+            let miss = text.parse::<f32>().ok().and_then(back).map_or(f32::MAX, |k| crate::math::abs(k - knob));
+            if miss < best.0 {
+                best = (miss, text);
+            }
+            if best.0 <= 1e-6 {
+                break;
+            }
         }
         Some(alloc::format!("{}{suffix}", best.1))
     }
@@ -385,33 +405,47 @@ impl ParamSpec {
         if self.range.contains(value) {
             Ok(())
         } else {
-            Err(alloc::format!(
-                "'{}' = {} is out of range ({})",
-                self.name, value, self.range.describe()
-            ))
+            Err(alloc::format!("'{}' = {} is out of range ({})", self.name, value, self.range.describe()))
         }
     }
 }
 
 /// Encode a choice index as the normalized float the modules expect.
 pub fn choice_value(idx: usize, count: usize) -> f32 {
-    if count <= 1 { 0.0 } else { idx as f32 / (count - 1) as f32 }
+    if count <= 1 {
+        0.0
+    } else {
+        idx as f32 / (count - 1) as f32
+    }
 }
 
 // ── Shared choice tables ──
 
 pub const LFO_WAVEFORMS: &[&str] = &["sine", "triangle", "saw", "square", "sample_hold"];
-pub const LFO_SYNC: &[&str] = &["free", "quarter", "eighth", "sixteenth", "dotted_eighth", "triplet_eighth", "bar", "bars_2", "bars_4", "bars_8", "bars_12", "bars_16"];
+pub const LFO_SYNC: &[&str] = &[
+    "free",
+    "quarter",
+    "eighth",
+    "sixteenth",
+    "dotted_eighth",
+    "triplet_eighth",
+    "bar",
+    "bars_2",
+    "bars_4",
+    "bars_8",
+    "bars_12",
+    "bars_16",
+];
 pub const OSC_WAVES: &[&str] = &["saw", "square"];
 pub const FM_ALGORITHMS: &[&str] = &[
-    "serial3_plus_carrier",   // 0: Op3 -> Op2 -> Op1 -> Out (+ Op4 -> Out)
-    "dual_pairs",             // 1: (Op2 -> Op1) -> Out, (Op4 -> Op3) -> Out
-    "two_op",                 // 2: Op2 -> Op1 -> Out
-    "additive",               // 3: all carriers
-    "serial4",                // 4: Op4 -> Op3 -> Op2 -> Op1 -> Out
-    "dual_mod",               // 5: (Op3 + Op4) -> Op2 -> Op1 -> Out
-    "triple_mod",             // 6: (Op2 + Op3 + Op4) -> Op1 -> Out
-    "pair_plus_two",          // 7: (Op2 -> Op1) -> Out + Op3 -> Out + Op4 -> Out
+    "serial3_plus_carrier", // 0: Op3 -> Op2 -> Op1 -> Out (+ Op4 -> Out)
+    "dual_pairs",           // 1: (Op2 -> Op1) -> Out, (Op4 -> Op3) -> Out
+    "two_op",               // 2: Op2 -> Op1 -> Out
+    "additive",             // 3: all carriers
+    "serial4",              // 4: Op4 -> Op3 -> Op2 -> Op1 -> Out
+    "dual_mod",             // 5: (Op3 + Op4) -> Op2 -> Op1 -> Out
+    "triple_mod",           // 6: (Op2 + Op3 + Op4) -> Op1 -> Out
+    "pair_plus_two",        // 7: (Op2 -> Op1) -> Out + Op3 -> Out + Op4 -> Out
 ];
 pub const FM_WAVEFORMS: &[&str] = &["sine", "half_sine", "abs_sine", "quarter_sine"];
 pub const FM_LFO_TARGETS: &[&str] = &["pitch", "amplitude", "mod_index"];
@@ -419,7 +453,8 @@ pub const FILTER_LFO_TARGETS: &[&str] = &["cutoff", "pitch", "amplitude"];
 pub const VOICE_MODES: &[&str] = &["poly", "unison", "octave", "fifth", "ringmod"];
 pub const STUTTER_DRUMS: &[&str] = &["kick", "snare", "hihat", "clap", "tom"];
 
-const ENV_TIME_DOC: &str = "Knob 0..1, not seconds. Maps exponentially to 1ms..2s: 0.25 ≈ 6.7ms, 0.5 ≈ 45ms, 0.75 ≈ 300ms, 1.0 = 2s";
+const ENV_TIME_DOC: &str =
+    "Knob 0..1, not seconds. Maps exponentially to 1ms..2s: 0.25 ≈ 6.7ms, 0.5 ≈ 45ms, 0.75 ≈ 300ms, 1.0 = 2s";
 
 macro_rules! spec {
     ($name:expr, $id:expr, $range:expr, $default:expr, $doc:expr) => {
@@ -455,50 +490,174 @@ pub const DRUM_PITCH: Curve = Curve::lin(0.5, 2.0, Unit::Ratio);
 // ── Bass ──
 
 pub const BASS_PARAMS: &[ParamSpec] = &[
-    spec!("cutoff", ParamId::Bass(BassParam::Cutoff), Range::Unit, 0.433677, BASS_CUTOFF, "Ladder filter cutoff, exponential 20Hz..20kHz (0.25 ≈ 110Hz, 0.5 ≈ 630Hz, 0.75 ≈ 3.5kHz)"),
-    spec!("cutoff_env", ParamId::Bass(BassParam::CutoffEnv), Range::Unit, 0.884311, BASS_CUTOFF_ENV, "Filter envelope depth, exponential 20Hz..8kHz sweep"),
-    spec!("resonance", ParamId::Bass(BassParam::Resonance), Range::Unit, 0.3, "Ladder resonance, self-oscillates near 1.0"),
+    spec!(
+        "cutoff",
+        ParamId::Bass(BassParam::Cutoff),
+        Range::Unit,
+        0.433677,
+        BASS_CUTOFF,
+        "Ladder filter cutoff, exponential 20Hz..20kHz (0.25 ≈ 110Hz, 0.5 ≈ 630Hz, 0.75 ≈ 3.5kHz)"
+    ),
+    spec!(
+        "cutoff_env",
+        ParamId::Bass(BassParam::CutoffEnv),
+        Range::Unit,
+        0.884311,
+        BASS_CUTOFF_ENV,
+        "Filter envelope depth, exponential 20Hz..8kHz sweep"
+    ),
+    spec!(
+        "resonance",
+        ParamId::Bass(BassParam::Resonance),
+        Range::Unit,
+        0.3,
+        "Ladder resonance, self-oscillates near 1.0"
+    ),
     spec!("glide", ParamId::Bass(BassParam::Glide), Range::Unit, 0.058, "Portamento rate between notes (0 = instant)"),
     spec!("attack", ParamId::Bass(BassParam::Attack), Range::Unit, 0.211743, ENV_TIME, ENV_TIME_DOC),
     spec!("decay", ParamId::Bass(BassParam::Decay), Range::Unit, 0.697064, ENV_TIME, ENV_TIME_DOC),
     spec!("sustain", ParamId::Bass(BassParam::Sustain), Range::Unit, 0.8, "Amp envelope sustain level"),
     spec!("release", ParamId::Bass(BassParam::Release), Range::Unit, 0.659216, ENV_TIME, ENV_TIME_DOC),
-    spec!("lfo_rate", ParamId::Bass(BassParam::LfoRate), Range::Unit, 0.0, LFO_RATE, "LFO rate 0.1..20Hz when lfo_sync is free"),
-    spec!("lfo_depth", ParamId::Bass(BassParam::LfoDepth), Range::Unit, 0.0, "LFO depth; 0 disables the LFO. On cutoff it is relative: 1.0 sweeps ±4 octaves, so 0.1 is a gentle wobble"),
+    spec!(
+        "lfo_rate",
+        ParamId::Bass(BassParam::LfoRate),
+        Range::Unit,
+        0.0,
+        LFO_RATE,
+        "LFO rate 0.1..20Hz when lfo_sync is free"
+    ),
+    spec!(
+        "lfo_depth",
+        ParamId::Bass(BassParam::LfoDepth),
+        Range::Unit,
+        0.0,
+        "LFO depth; 0 disables the LFO. On cutoff it is relative: 1.0 sweeps ±4 octaves, so 0.1 is a gentle wobble"
+    ),
     spec!("lfo_waveform", ParamId::Bass(BassParam::LfoWaveform), Range::Choice(LFO_WAVEFORMS), 0.0, "LFO shape"),
-    spec!("lfo_target", ParamId::Bass(BassParam::LfoTarget), Range::Choice(FILTER_LFO_TARGETS), 0.0, "What the LFO modulates"),
-    spec!("lfo_sync", ParamId::Bass(BassParam::LfoSync), Range::Choice(LFO_SYNC), 0.0, "Free Hz, a tempo-synced subdivision, or a slow cycle over 1..16 bars"),
-    spec!("osc2_pitch", ParamId::Bass(BassParam::Osc2Pitch), Range::Unit, 0.5, OSC_PITCH, "Osc 2 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24 (steps of 1/48)"),
-    spec!("osc3_pitch", ParamId::Bass(BassParam::Osc3Pitch), Range::Unit, 0.5, OSC_PITCH, "Osc 3 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24 (steps of 1/48)"),
+    spec!(
+        "lfo_target",
+        ParamId::Bass(BassParam::LfoTarget),
+        Range::Choice(FILTER_LFO_TARGETS),
+        0.0,
+        "What the LFO modulates"
+    ),
+    spec!(
+        "lfo_sync",
+        ParamId::Bass(BassParam::LfoSync),
+        Range::Choice(LFO_SYNC),
+        0.0,
+        "Free Hz, a tempo-synced subdivision, or a slow cycle over 1..16 bars"
+    ),
+    spec!(
+        "osc2_pitch",
+        ParamId::Bass(BassParam::Osc2Pitch),
+        Range::Unit,
+        0.5,
+        OSC_PITCH,
+        "Osc 2 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24 (steps of 1/48)"
+    ),
+    spec!(
+        "osc3_pitch",
+        ParamId::Bass(BassParam::Osc3Pitch),
+        Range::Unit,
+        0.5,
+        OSC_PITCH,
+        "Osc 3 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24 (steps of 1/48)"
+    ),
     spec!("osc1_wave", ParamId::Bass(BassParam::Osc1Wave), Range::Choice(OSC_WAVES), 0.0, "Osc 1 waveform"),
     spec!("osc2_wave", ParamId::Bass(BassParam::Osc2Wave), Range::Choice(OSC_WAVES), 0.0, "Osc 2 waveform"),
     spec!("osc3_wave", ParamId::Bass(BassParam::Osc3Wave), Range::Choice(OSC_WAVES), 0.0, "Osc 3 waveform"),
     spec!("keytrack", ParamId::Bass(BassParam::Keytrack), Range::Unit, 0.0, "Filter cutoff follows note pitch"),
-    spec!("vibrato_rate", ParamId::Bass(BassParam::VibratoRate), Range::Unit, 0.0, VIBRATO_RATE, "Vibrato rate 0.5..10Hz"),
-    spec!("vibrato_depth", ParamId::Bass(BassParam::VibratoDepth), Range::Unit, 0.0, "Vibrato depth, up to half a semitone"),
+    spec!(
+        "vibrato_rate",
+        ParamId::Bass(BassParam::VibratoRate),
+        Range::Unit,
+        0.0,
+        VIBRATO_RATE,
+        "Vibrato rate 0.5..10Hz"
+    ),
+    spec!(
+        "vibrato_depth",
+        ParamId::Bass(BassParam::VibratoDepth),
+        Range::Unit,
+        0.0,
+        "Vibrato depth, up to half a semitone"
+    ),
     spec!("vel_env", ParamId::Bass(BassParam::VelEnv), Range::Unit, 0.0, "Velocity scales filter envelope depth"),
 ];
 
 // ── FM ──
 
 pub const FM_PARAMS: &[ParamSpec] = &[
-    spec!("level", ParamId::Fm(FmParam::Level), Range::Gain { max: 4.0 }, 1.0, "Module output gain. FM sums quieter than the other modules: try 2.0 to sit near keys at the same track level"),
+    spec!(
+        "level",
+        ParamId::Fm(FmParam::Level),
+        Range::Gain { max: 4.0 },
+        1.0,
+        "Module output gain. FM sums quieter than the other modules: try 2.0 to sit near keys at the same track level"
+    ),
     spec!("algorithm", ParamId::Fm(FmParam::Algorithm), Range::Choice(FM_ALGORITHMS), 0.0, "Operator routing"),
-    spec!("mod_index", ParamId::Fm(FmParam::ModIndex), Range::Unit, 0.624196, "Modulation index, exponential 0.1..4.0 (0.5 ≈ 0.63, 0.75 ≈ 1.6)"),
+    spec!(
+        "mod_index",
+        ParamId::Fm(FmParam::ModIndex),
+        Range::Unit,
+        0.624196,
+        "Modulation index, exponential 0.1..4.0 (0.5 ≈ 0.63, 0.75 ≈ 1.6)"
+    ),
     spec!("feedback", ParamId::Fm(FmParam::Feedback), Range::Unit, 0.0, "Global operator feedback (scaled to 0..0.7)"),
     spec!("waveform", ParamId::Fm(FmParam::Waveform), Range::Choice(FM_WAVEFORMS), 0.0, "Operator waveform"),
     spec!("chorus_mix", ParamId::Fm(FmParam::ChorusMix), Range::Unit, 0.0, "Dedicated chorus wet mix"),
-    spec!("attack", ParamId::Fm(FmParam::Attack), Range::Unit, 0.302936, ENV_TIME, "Carrier (op0) attack, exponential 1ms..2s"),
-    spec!("decay", ParamId::Fm(FmParam::Decay), Range::Unit, 0.605872, ENV_TIME, "Carrier (op0) decay, exponential 1ms..2s"),
+    spec!(
+        "attack",
+        ParamId::Fm(FmParam::Attack),
+        Range::Unit,
+        0.302936,
+        ENV_TIME,
+        "Carrier (op0) attack, exponential 1ms..2s"
+    ),
+    spec!(
+        "decay",
+        ParamId::Fm(FmParam::Decay),
+        Range::Unit,
+        0.605872,
+        ENV_TIME,
+        "Carrier (op0) decay, exponential 1ms..2s"
+    ),
     spec!("sustain", ParamId::Fm(FmParam::Sustain), Range::Unit, 0.7, "Carrier (op0) sustain level"),
-    spec!("release", ParamId::Fm(FmParam::Release), Range::Unit, 0.750409, ENV_TIME, "Carrier (op0) release, exponential 1ms..2s"),
-    spec!("lfo_rate", ParamId::Fm(FmParam::LfoRate), Range::Unit, 0.0, LFO_RATE, "LFO rate 0.1..20Hz when lfo_sync is free"),
+    spec!(
+        "release",
+        ParamId::Fm(FmParam::Release),
+        Range::Unit,
+        0.750409,
+        ENV_TIME,
+        "Carrier (op0) release, exponential 1ms..2s"
+    ),
+    spec!(
+        "lfo_rate",
+        ParamId::Fm(FmParam::LfoRate),
+        Range::Unit,
+        0.0,
+        LFO_RATE,
+        "LFO rate 0.1..20Hz when lfo_sync is free"
+    ),
     spec!("lfo_depth", ParamId::Fm(FmParam::LfoDepth), Range::Unit, 0.0, "LFO depth; 0 disables the LFO"),
     spec!("lfo_waveform", ParamId::Fm(FmParam::LfoWaveform), Range::Choice(LFO_WAVEFORMS), 0.0, "LFO shape"),
     spec!("lfo_target", ParamId::Fm(FmParam::LfoTarget), Range::Choice(FM_LFO_TARGETS), 0.0, "What the LFO modulates"),
-    spec!("lfo_sync", ParamId::Fm(FmParam::LfoSync), Range::Choice(LFO_SYNC), 0.0, "Free Hz or tempo-synced subdivision"),
+    spec!(
+        "lfo_sync",
+        ParamId::Fm(FmParam::LfoSync),
+        Range::Choice(LFO_SYNC),
+        0.0,
+        "Free Hz or tempo-synced subdivision"
+    ),
     spec!("vibrato_rate", ParamId::Fm(FmParam::VibratoRate), Range::Unit, 0.0, VIBRATO_RATE, "Vibrato rate 0.5..10Hz"),
-    spec!("vibrato_depth", ParamId::Fm(FmParam::VibratoDepth), Range::Unit, 0.0, "Vibrato depth, up to half a semitone"),
+    spec!(
+        "vibrato_depth",
+        ParamId::Fm(FmParam::VibratoDepth),
+        Range::Unit,
+        0.0,
+        "Vibrato depth, up to half a semitone"
+    ),
     spec!("op0_attack", ParamId::Fm(FmParam::Op0Attack), Range::Unit, 0.302936, ENV_TIME, ENV_TIME_DOC),
     spec!("op0_decay", ParamId::Fm(FmParam::Op0Decay), Range::Unit, 0.605872, ENV_TIME, ENV_TIME_DOC),
     spec!("op0_sustain", ParamId::Fm(FmParam::Op0Sustain), Range::Unit, 0.7, "Operator sustain level"),
@@ -519,32 +678,111 @@ pub const FM_PARAMS: &[ParamSpec] = &[
     spec!("op1_feedback", ParamId::Fm(FmParam::Op1Feedback), Range::Unit, 0.0, "Self-modulation of operator 1"),
     spec!("op2_feedback", ParamId::Fm(FmParam::Op2Feedback), Range::Unit, 0.0, "Self-modulation of operator 2"),
     spec!("op3_feedback", ParamId::Fm(FmParam::Op3Feedback), Range::Unit, 0.0, "Self-modulation of operator 3"),
-    spec!("op0_ratio", ParamId::Fm(FmParam::Op0Ratio), Range::Unit, 0.032258, OP_RATIO, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
-    spec!("op1_ratio", ParamId::Fm(FmParam::Op1Ratio), Range::Unit, 0.032258, OP_RATIO, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
-    spec!("op2_ratio", ParamId::Fm(FmParam::Op2Ratio), Range::Unit, 0.032258, OP_RATIO, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
-    spec!("op3_ratio", ParamId::Fm(FmParam::Op3Ratio), Range::Unit, 0.032258, OP_RATIO, "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"),
+    spec!(
+        "op0_ratio",
+        ParamId::Fm(FmParam::Op0Ratio),
+        Range::Unit,
+        0.032258,
+        OP_RATIO,
+        "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"
+    ),
+    spec!(
+        "op1_ratio",
+        ParamId::Fm(FmParam::Op1Ratio),
+        Range::Unit,
+        0.032258,
+        OP_RATIO,
+        "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"
+    ),
+    spec!(
+        "op2_ratio",
+        ParamId::Fm(FmParam::Op2Ratio),
+        Range::Unit,
+        0.032258,
+        OP_RATIO,
+        "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"
+    ),
+    spec!(
+        "op3_ratio",
+        ParamId::Fm(FmParam::Op3Ratio),
+        Range::Unit,
+        0.032258,
+        OP_RATIO,
+        "Frequency ratio, linear 0.5..16.0 (ratio = 0.5 + v*15.5: 0.032 = 1.0, 0.097 = 2.0, 0.161 = 3.0)"
+    ),
 ];
 
 // ── Keys ──
 
 pub const KEYS_PARAMS: &[ParamSpec] = &[
-    spec!("cutoff", ParamId::Keys(KeysParam::Cutoff), Range::Unit, 0.588152, KEYS_CUTOFF, "Biquad lowpass cutoff, exponential 200Hz..20kHz (0.5 ≈ 2kHz)"),
+    spec!(
+        "cutoff",
+        ParamId::Keys(KeysParam::Cutoff),
+        Range::Unit,
+        0.588152,
+        KEYS_CUTOFF,
+        "Biquad lowpass cutoff, exponential 200Hz..20kHz (0.5 ≈ 2kHz)"
+    ),
     spec!("resonance", ParamId::Keys(KeysParam::Resonance), Range::Unit, 0.2, "Filter resonance"),
     spec!("detune", ParamId::Keys(KeysParam::Detune), Range::Unit, 0.15, "Osc detune, up to 2%"),
     spec!("chorus_mix", ParamId::Keys(KeysParam::ChorusMix), Range::Unit, 0.3, "Chorus wet mix"),
     spec!("level", ParamId::Keys(KeysParam::Level), Range::Gain { max: 2.0 }, 0.5, "Module output gain"),
-    spec!("voice_mode", ParamId::Keys(KeysParam::VoiceMode), Range::Choice(VOICE_MODES), 0.0, "Volca Keys style voice allocation"),
+    spec!(
+        "voice_mode",
+        ParamId::Keys(KeysParam::VoiceMode),
+        Range::Choice(VOICE_MODES),
+        0.0,
+        "Volca Keys style voice allocation"
+    ),
     spec!("attack", ParamId::Keys(KeysParam::Attack), Range::Unit, 0.750409, ENV_TIME, ENV_TIME_DOC),
     spec!("decay", ParamId::Keys(KeysParam::Decay), Range::Unit, 0.817615, ENV_TIME, ENV_TIME_DOC),
     spec!("sustain", ParamId::Keys(KeysParam::Sustain), Range::Unit, 0.7, "Amp envelope sustain level"),
     spec!("release", ParamId::Keys(KeysParam::Release), Range::Unit, 0.908807, ENV_TIME, ENV_TIME_DOC),
-    spec!("lfo_rate", ParamId::Keys(KeysParam::LfoRate), Range::Unit, 0.0, LFO_RATE, "LFO rate 0.1..20Hz when lfo_sync is free"),
-    spec!("lfo_depth", ParamId::Keys(KeysParam::LfoDepth), Range::Unit, 0.0, "LFO depth; 0 disables the LFO. On cutoff it is relative: 1.0 sweeps ±4 octaves, so 0.1 is a gentle wobble"),
+    spec!(
+        "lfo_rate",
+        ParamId::Keys(KeysParam::LfoRate),
+        Range::Unit,
+        0.0,
+        LFO_RATE,
+        "LFO rate 0.1..20Hz when lfo_sync is free"
+    ),
+    spec!(
+        "lfo_depth",
+        ParamId::Keys(KeysParam::LfoDepth),
+        Range::Unit,
+        0.0,
+        "LFO depth; 0 disables the LFO. On cutoff it is relative: 1.0 sweeps ±4 octaves, so 0.1 is a gentle wobble"
+    ),
     spec!("lfo_waveform", ParamId::Keys(KeysParam::LfoWaveform), Range::Choice(LFO_WAVEFORMS), 0.0, "LFO shape"),
-    spec!("lfo_target", ParamId::Keys(KeysParam::LfoTarget), Range::Choice(FILTER_LFO_TARGETS), 0.0, "What the LFO modulates"),
-    spec!("lfo_sync", ParamId::Keys(KeysParam::LfoSync), Range::Choice(LFO_SYNC), 0.0, "Free Hz or tempo-synced subdivision"),
-    spec!("vibrato_rate", ParamId::Keys(KeysParam::VibratoRate), Range::Unit, 0.0, VIBRATO_RATE, "Vibrato rate 0.5..10Hz"),
-    spec!("vibrato_depth", ParamId::Keys(KeysParam::VibratoDepth), Range::Unit, 0.0, "Vibrato depth, up to half a semitone"),
+    spec!(
+        "lfo_target",
+        ParamId::Keys(KeysParam::LfoTarget),
+        Range::Choice(FILTER_LFO_TARGETS),
+        0.0,
+        "What the LFO modulates"
+    ),
+    spec!(
+        "lfo_sync",
+        ParamId::Keys(KeysParam::LfoSync),
+        Range::Choice(LFO_SYNC),
+        0.0,
+        "Free Hz or tempo-synced subdivision"
+    ),
+    spec!(
+        "vibrato_rate",
+        ParamId::Keys(KeysParam::VibratoRate),
+        Range::Unit,
+        0.0,
+        VIBRATO_RATE,
+        "Vibrato rate 0.5..10Hz"
+    ),
+    spec!(
+        "vibrato_depth",
+        ParamId::Keys(KeysParam::VibratoDepth),
+        Range::Unit,
+        0.0,
+        "Vibrato depth, up to half a semitone"
+    ),
 ];
 
 // ── Beats ──
@@ -689,16 +927,41 @@ pub struct TrackOption {
 
 pub const TRACK_OPTIONS: &[TrackOption] = &[
     TrackOption { name: "play", range: "pattern name", default: "required", doc: "Pattern the track loops" },
-    TrackOption { name: "using", range: "module or instrument name", default: "required", doc: "Instrument that plays it" },
-    TrackOption { name: "level", range: "0.0..4.0", default: "0.8", doc: "Output level after the instrument. Above 1.0 is boost: 2.0 is +6 dB, 4.0 is +12 dB" },
+    TrackOption {
+        name: "using",
+        range: "module or instrument name",
+        default: "required",
+        doc: "Instrument that plays it",
+    },
+    TrackOption {
+        name: "level",
+        range: "0.0..4.0",
+        default: "0.8",
+        doc: "Output level after the instrument. Above 1.0 is boost: 2.0 is +6 dB, 4.0 is +12 dB",
+    },
     TrackOption { name: "pan", range: "-1.0..1.0", default: "0.0", doc: "Stereo position" },
     TrackOption { name: "velocity", range: "0.0..1.0", default: "0.8", doc: "Scales every note's velocity" },
     TrackOption { name: "gate", range: "0.0..1.0", default: "0.85", doc: "Note length as a fraction of the step" },
     TrackOption { name: "delay_send", range: "0.0..1.0", default: "0.0", doc: "Amount into the global delay" },
     TrackOption { name: "reverb_send", range: "0.0..1.0", default: "0.0", doc: "Amount into the global reverb" },
-    TrackOption { name: "sidechain", range: "0.0..1.0", default: "global `sidechain`", doc: "How much the kick ducks this track; only acts in scenes that have a beats track" },
-    TrackOption { name: "arp", range: "up | down | updown | off, rate=4|8|16|32, gate=0.1..1, octaves=1..4", default: "none", doc: "Arpeggiate the held notes; a scene can add, change or turn it off" },
-    TrackOption { name: "out", range: "`> node(...) > ... > master` or `> <bus>`", default: "`> master`", doc: "Insert chain and destination; see effects and nodes" },
+    TrackOption {
+        name: "sidechain",
+        range: "0.0..1.0",
+        default: "global `sidechain`",
+        doc: "How much the kick ducks this track; only acts in scenes that have a beats track",
+    },
+    TrackOption {
+        name: "arp",
+        range: "up | down | updown | off, rate=4|8|16|32, gate=0.1..1, octaves=1..4",
+        default: "none",
+        doc: "Arpeggiate the held notes; a scene can add, change or turn it off",
+    },
+    TrackOption {
+        name: "out",
+        range: "`> node(...) > ... > master` or `> <bus>`",
+        default: "`> master`",
+        doc: "Insert chain and destination; see effects and nodes",
+    },
 ];
 
 /// Markdown table of track options.
@@ -720,7 +983,10 @@ pub fn track_json() -> String {
     for (i, t) in TRACK_OPTIONS.iter().enumerate() {
         out.push_str(&alloc::format!(
             "  {{\"name\": \"{}\", \"range\": \"{}\", \"default\": \"{}\", \"doc\": \"{}\"}}{}\n",
-            t.name, json_escape(t.range), json_escape(t.default), json_escape(t.doc),
+            t.name,
+            json_escape(t.range),
+            json_escape(t.default),
+            json_escape(t.doc),
             if i + 1 < TRACK_OPTIONS.len() { "," } else { "" }
         ));
     }
@@ -795,7 +1061,8 @@ pub fn json(kinds: &[ModuleKind]) -> String {
             let unit = match s.curve.unit() {
                 Some(unit) => alloc::format!(
                     ", \"unit\": \"{}\", \"unit_range\": \"{}\", \"unit_default\": \"{}\"",
-                    unit.suffix(), s.curve.describe(),
+                    unit.suffix(),
+                    s.curve.describe(),
                     write_amount(s.curve.to_real(s.default), unit)
                 ),
                 None => String::new(),

@@ -14,15 +14,7 @@ struct Biquad {
 
 impl Biquad {
     fn new() -> Self {
-        Self {
-            b0: 1.0,
-            b1: 0.0,
-            b2: 0.0,
-            a1: 0.0,
-            a2: 0.0,
-            z1: 0.0,
-            z2: 0.0,
-        }
+        Self { b0: 1.0, b1: 0.0, b2: 0.0, a1: 0.0, a2: 0.0, z1: 0.0, z2: 0.0 }
     }
 
     #[inline]
@@ -107,13 +99,7 @@ pub struct TiltEq {
 
 impl TiltEq {
     pub fn new(sample_rate: f32) -> Self {
-        Self {
-            low_l: Biquad::new(),
-            low_r: Biquad::new(),
-            high_l: Biquad::new(),
-            high_r: Biquad::new(),
-            sample_rate,
-        }
+        Self { low_l: Biquad::new(), low_r: Biquad::new(), high_l: Biquad::new(), high_r: Biquad::new(), sample_rate }
     }
 
     /// Set tilt amount: -1.0 (bright) to +1.0 (dark).

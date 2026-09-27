@@ -29,12 +29,16 @@ impl Parser {
 
     pub(super) fn parse_groove(&mut self, grooves: &mut Vec<GrooveDef>) {
         let name = self.expect_ident().unwrap_or_else(|| String::from("default"));
-        if !self.expect(&Token::LBrace) { return; }
+        if !self.expect(&Token::LBrace) {
+            return;
+        }
 
         let mut lanes = Vec::new();
         loop {
             self.skip_newlines();
-            if self.at_block_end() { break; }
+            if self.at_block_end() {
+                break;
+            }
 
             if let Token::Ident(ref drum_name) = self.peek().clone() {
                 let drum_name = drum_name.clone();
@@ -61,7 +65,9 @@ impl Parser {
                             }
                         }
                         Token::Newline | Token::RBrace | Token::Eof => break,
-                        _ => { self.advance(); }
+                        _ => {
+                            self.advance();
+                        }
                     }
                 }
 
@@ -88,11 +94,15 @@ impl Parser {
     /// knob of the rig it `use`s. Inside one block, a source named twice
     /// moves both targets.
     pub(super) fn parse_midi(&mut self, maps: &mut Vec<MidiMapDef>) {
-        if !self.expect(&Token::LBrace) { return; }
+        if !self.expect(&Token::LBrace) {
+            return;
+        }
         let mut block: Vec<MidiMapDef> = Vec::new();
         loop {
             self.skip_newlines();
-            if self.at_block_end() { break; }
+            if self.at_block_end() {
+                break;
+            }
             let line = self.span().line;
             let word = match self.peek() {
                 Token::Ident(w) if w == "cc" || w == "keys" || w == "pad" => w.clone(),
@@ -116,13 +126,22 @@ impl Parser {
                 match self.peek().clone() {
                     Token::Number(n) if (0.0..=127.0).contains(&n) && (n as u8) as f32 == n => {
                         self.advance();
-                        if word == "cc" { MidiSource::Cc(n as u8) } else { MidiSource::Pad(n as u8) }
+                        if word == "cc" {
+                            MidiSource::Cc(n as u8)
+                        } else {
+                            MidiSource::Pad(n as u8)
+                        }
                     }
                     other => {
                         let s = self.span().clone();
                         self.errors.push(ParseError {
-                            line: s.line, col: s.col,
-                            message: format!("midi: {} is a whole number from 0 to 127, got {}", what, describe_token(&other)),
+                            line: s.line,
+                            col: s.col,
+                            message: format!(
+                                "midi: {} is a whole number from 0 to 127, got {}",
+                                what,
+                                describe_token(&other)
+                            ),
                         });
                         self.recover_to_line_end();
                         continue;
@@ -139,7 +158,9 @@ impl Parser {
             let mut words: Vec<String> = Vec::new();
             loop {
                 let word = match self.peek() {
-                    Token::Ident(w) if (w == "cc" || w == "pad") && matches!(self.peek_ahead(1), Token::Number(_)) => break,
+                    Token::Ident(w) if (w == "cc" || w == "pad") && matches!(self.peek_ahead(1), Token::Number(_)) => {
+                        break
+                    }
                     Token::Ident(w) if w == "keys" && matches!(self.peek_ahead(1), Token::Arrow) => break,
                     Token::Ident(w) => w.clone(),
                     Token::Level => String::from("level"),
@@ -160,7 +181,8 @@ impl Parser {
                     MidiSource::Pad(_) => "a track and a drum, like `kick kick`",
                 };
                 self.errors.push(ParseError {
-                    line: s.line, col: s.col,
+                    line: s.line,
+                    col: s.col,
                     message: format!("midi: {} needs a target after `>`: {}", word, example),
                 });
                 self.recover_to_line_end();
@@ -191,8 +213,12 @@ impl Parser {
         self.pos = saved_pos;
         let s = self.span().clone();
         self.errors.push(ParseError {
-            line: s.line, col: s.col,
-            message: format!("unexpected {} at top level (expected tempo, scale, module, pattern, track, scene, arrange, ...)", describe_token(&s.token)),
+            line: s.line,
+            col: s.col,
+            message: format!(
+                "unexpected {} at top level (expected tempo, scale, module, pattern, track, scene, arrange, ...)",
+                describe_token(&s.token)
+            ),
         });
         self.recover_to_line_end();
     }
@@ -203,11 +229,17 @@ impl Parser {
         // Parse: in > effect(params) > ... > out/master
         loop {
             self.skip_newlines();
-            if self.at_block_end() { break; }
+            if self.at_block_end() {
+                break;
+            }
 
             match self.peek().clone() {
-                Token::In => { self.advance(); }
-                Token::Arrow => { self.advance(); }
+                Token::In => {
+                    self.advance();
+                }
+                Token::Arrow => {
+                    self.advance();
+                }
                 Token::Out | Token::Master => {
                     self.advance();
                     // End of chain
@@ -229,7 +261,9 @@ impl Parser {
                     };
                     chain.push(ChainNode { kind: name, params, label });
                 }
-                _ => { self.advance(); }
+                _ => {
+                    self.advance();
+                }
             }
         }
 
@@ -244,17 +278,27 @@ impl Parser {
     // ── Master ──
 
     pub(super) fn parse_master(&mut self, song: &mut Song) {
-        if !self.expect(&Token::LBrace) { return; }
+        if !self.expect(&Token::LBrace) {
+            return;
+        }
         let mut chain: Vec<ChainNode> = Vec::new();
 
         loop {
             self.skip_newlines();
-            if self.at_block_end() { break; }
+            if self.at_block_end() {
+                break;
+            }
 
             match self.peek().clone() {
-                Token::In => { self.advance(); }
-                Token::Arrow => { self.advance(); }
-                Token::Out => { self.advance(); }
+                Token::In => {
+                    self.advance();
+                }
+                Token::Arrow => {
+                    self.advance();
+                }
+                Token::Out => {
+                    self.advance();
+                }
                 Token::Ident(ref name) => {
                     let name = name.clone();
                     self.advance();
@@ -272,7 +316,9 @@ impl Parser {
                     };
                     chain.push(ChainNode { kind: name, params, label });
                 }
-                _ => { self.advance(); }
+                _ => {
+                    self.advance();
+                }
             }
         }
 
@@ -287,7 +333,9 @@ impl Parser {
             Some(n) => n,
             None => return,
         };
-        if !self.expect(&Token::LBrace) { return; }
+        if !self.expect(&Token::LBrace) {
+            return;
+        }
         self.parse_scene_body(name, scenes);
     }
 
@@ -303,7 +351,9 @@ impl Parser {
 
         loop {
             self.skip_newlines();
-            if self.at_block_end() { break; }
+            if self.at_block_end() {
+                break;
+            }
 
             match self.peek().clone() {
                 Token::Extends => {
@@ -339,12 +389,18 @@ impl Parser {
                         }
                     } else {
                         self.errors.push(ParseError {
-                            line, col,
-                            message: format!("scene '{}': unexpected '{}' (expected track, auto, tempo, or <override> = value)", scene.name, target),
+                            line,
+                            col,
+                            message: format!(
+                                "scene '{}': unexpected '{}' (expected track, auto, tempo, or <override> = value)",
+                                scene.name, target
+                            ),
                         });
                     }
                 }
-                _ => { self.advance(); }
+                _ => {
+                    self.advance();
+                }
             }
         }
 

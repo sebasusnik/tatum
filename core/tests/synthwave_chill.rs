@@ -19,24 +19,16 @@ fn test_synthwave_chill_dsl() {
 
     let (out_l, out_r) = engine.render(total_bars);
 
-    let peak = out_l.iter().chain(out_r.iter())
-        .fold(0.0f32, |a, &b| a.max(b.abs()));
+    let peak = out_l.iter().chain(out_r.iter()).fold(0.0f32, |a, &b| a.max(b.abs()));
     assert!(peak > 0.01, "Should produce audible output, peak={:.4}", peak);
     assert!(peak <= 1.0, "Should not clip, peak={:.4}", peak);
 
     // Stereo width: panned drums, the panned FM bells and the reverb return
     // should decorrelate the two channels.
-    let width: f32 = out_l.iter().zip(out_r.iter())
-        .map(|(l, r)| (l - r).abs())
-        .sum::<f32>() / out_l.len() as f32;
+    let width: f32 = out_l.iter().zip(out_r.iter()).map(|(l, r)| (l - r).abs()).sum::<f32>() / out_l.len() as f32;
     assert!(width > 0.001, "Should be stereo, avg |L-R|={:.5}", width);
 
-    write_wav_stereo(
-        &output_path("synthwave_chill.wav"),
-        &out_l,
-        &out_r,
-        44100,
-    );
+    write_wav_stereo(&output_path("synthwave_chill.wav"), &out_l, &out_r, 44100);
 
     let duration = out_l.len() as f32 / 44100.0;
     println!("Wrote test_output/synthwave_chill.wav ({:.1}s, {} bars at 85 BPM)", duration, total_bars);

@@ -6,11 +6,7 @@ use tatum_core::song_engine::SongEngine;
 
 /// A minimal song for one module kind, with `body` pasted into the module block.
 fn song(kind: ModuleKind, body: &str) -> String {
-    let pattern = if kind == ModuleKind::Beats {
-        "pattern p { kick: X - X - }"
-    } else {
-        "pattern p { 1.1 - 1.3 - }"
-    };
+    let pattern = if kind == ModuleKind::Beats { "pattern p { kick: X - X - }" } else { "pattern p { 1.1 - 1.3 - }" };
     format!(
         "tempo 120\nscale C major\n\nmodule {k} m {{\n{body}}}\n\n{pattern}\n\n\
          track t {{ play p using m out > master }}\n\n\
@@ -42,10 +38,7 @@ fn every_registry_default_is_a_no_op_on_a_fresh_module() {
         for spec in params::specs(kind) {
             let line = format!("    {} {}\n", spec.name, spec.default);
             let with_default = render(&song(kind, &line));
-            assert_eq!(
-                plain.len(), with_default.len(),
-                "{}.{}: render length changed", kind.as_str(), spec.name
-            );
+            assert_eq!(plain.len(), with_default.len(), "{}.{}: render length changed", kind.as_str(), spec.name);
             // Relative RMS, not worst sample: a filter's phase response makes the
             // peak difference jumpy even when the two renders are the same sound.
             // 1e-4 is -80 dB, far below anything audible.
@@ -53,14 +46,22 @@ fn every_registry_default_is_a_no_op_on_a_fresh_module() {
             let diff: Vec<f32> = plain.iter().zip(&with_default).map(|(a, b)| a - b).collect();
             let relative = energy(&diff) / energy(&plain).max(1e-12);
             if relative >= 1e-4 {
-                drift.push(format!("{}.{} (default {}) moves the output by {:.2} dB below signal",
-                    kind.as_str(), spec.name, spec.default, 20.0 * relative.log10()));
+                drift.push(format!(
+                    "{}.{} (default {}) moves the output by {:.2} dB below signal",
+                    kind.as_str(),
+                    spec.name,
+                    spec.default,
+                    20.0 * relative.log10()
+                ));
             }
         }
     }
-    assert!(drift.is_empty(),
+    assert!(
+        drift.is_empty(),
         "the registry and the modules disagree on {} defaults:\n  {}",
-        drift.len(), drift.join("\n  "));
+        drift.len(),
+        drift.join("\n  ")
+    );
 }
 
 /// Every option name must decode back to its own index. Adding an option in the
@@ -71,14 +72,21 @@ fn every_choice_name_round_trips() {
         for spec in params::specs(kind) {
             if let params::Range::Choice(names) = spec.range {
                 for (idx, name) in names.iter().enumerate() {
-                    let value = spec.value_from_name(name)
+                    let value = spec
+                        .value_from_name(name)
                         .unwrap_or_else(|| panic!("{}.{}: '{}' has no value", kind.as_str(), spec.name, name));
-                    let back = spec.choice_name(value)
+                    let back = spec
+                        .choice_name(value)
                         .unwrap_or_else(|| panic!("{}.{}: {} decodes to nothing", kind.as_str(), spec.name, value));
                     assert_eq!(
-                        back, *name,
+                        back,
+                        *name,
                         "{}.{}: option {} ('{}') decodes to '{}'",
-                        kind.as_str(), spec.name, idx, name, back
+                        kind.as_str(),
+                        spec.name,
+                        idx,
+                        name,
+                        back
                     );
                 }
             }
@@ -95,7 +103,9 @@ fn every_param_name_fits_where_automation_stores_it() {
             assert!(
                 spec.name.len() <= tatum_core::song_engine::INLINE_NAME_CAP,
                 "'{}' is {} bytes; automation stores names inline in {}",
-                spec.name, spec.name.len(), tatum_core::song_engine::INLINE_NAME_CAP
+                spec.name,
+                spec.name.len(),
+                tatum_core::song_engine::INLINE_NAME_CAP
             );
         }
     }
@@ -107,10 +117,7 @@ fn every_param_name_fits_where_automation_stores_it() {
 fn every_param_is_documented() {
     for kind in ModuleKind::ALL {
         for spec in params::specs(kind) {
-            assert!(
-                spec.doc.len() > 8,
-                "{}.{} has no usable description", kind.as_str(), spec.name
-            );
+            assert!(spec.doc.len() > 8, "{}.{} has no usable description", kind.as_str(), spec.name);
         }
     }
 }
@@ -152,7 +159,9 @@ fn every_curve_round_trips_through_its_unit() {
     let mut worst = 0.0f32;
     for kind in ModuleKind::ALL {
         for spec in params::specs(kind) {
-            if spec.curve.unit().is_none() { continue; }
+            if spec.curve.unit().is_none() {
+                continue;
+            }
             for step in 0..=20 {
                 let knob = step as f32 / 20.0;
                 let back = spec.curve.to_knob(spec.curve.to_real(knob));
@@ -161,7 +170,11 @@ fn every_curve_round_trips_through_its_unit() {
                 assert!(
                     err < 2e-3,
                     "{}.{}: knob {} -> {} -> {}",
-                    kind.as_str(), spec.name, knob, spec.curve.to_real(knob), back
+                    kind.as_str(),
+                    spec.name,
+                    knob,
+                    spec.curve.to_real(knob),
+                    back
                 );
             }
         }

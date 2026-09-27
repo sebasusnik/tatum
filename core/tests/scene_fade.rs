@@ -40,8 +40,7 @@ fn a_dropped_track_fades_instead_of_stopping_dead() {
     // Scene b has nothing to play, so the last sound is where the pad ended.
     let end = l.iter().rposition(|v| v.abs() > 1e-6).expect("some sound");
     // Stopping dead leaves the wave at full height on its last sample.
-    assert!(l[end].abs() < playing * 0.02,
-        "the pad was cut at {:.3} of its level", l[end].abs() / playing);
+    assert!(l[end].abs() < playing * 0.02, "the pad was cut at {:.3} of its level", l[end].abs() / playing);
     // Over about ten milliseconds, starting on the bar line.
     let bar = l.len() / 2;
     assert!(end > bar + 300 && end < bar + 600, "faded from {bar} to {end}");

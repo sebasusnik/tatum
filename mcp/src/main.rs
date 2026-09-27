@@ -45,7 +45,10 @@ fn staleness() -> Option<String> {
             let Ok(entries) = std::fs::read_dir(&dir) else { continue };
             for e in entries.flatten() {
                 let path = e.path();
-                if path.is_dir() { stack.push(path); continue; }
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
                 let Ok(meta) = e.metadata() else { continue };
                 let Ok(modified) = meta.modified() else { continue };
                 let Ok(secs) = modified.duration_since(std::time::UNIX_EPOCH) else { continue };
@@ -200,7 +203,8 @@ fn error_response(id: Value, code: i64, message: &str) -> Value {
 
 fn initialize(params: &Value) -> Value {
     let requested = params.get("protocolVersion").and_then(Value::as_str).unwrap_or("");
-    let version = if PROTOCOL_VERSIONS.contains(&requested) { requested } else { PROTOCOL_VERSIONS[PROTOCOL_VERSIONS.len() - 1] };
+    let version =
+        if PROTOCOL_VERSIONS.contains(&requested) { requested } else { PROTOCOL_VERSIONS[PROTOCOL_VERSIONS.len() - 1] };
     json!({
         "protocolVersion": version,
         "capabilities": {
@@ -324,7 +328,9 @@ fn tool_params(args: &Value) -> Result<String, String> {
         });
     }
     let kinds: Vec<ModuleKind> = match args.get("module").and_then(Value::as_str) {
-        Some(m) => vec![ModuleKind::from_str(m).ok_or_else(|| format!("unknown module '{}' (bass, fm, keys, beats)", m))?],
+        Some(m) => {
+            vec![ModuleKind::from_str(m).ok_or_else(|| format!("unknown module '{}' (bass, fm, keys, beats)", m))?]
+        }
         None => ModuleKind::ALL.to_vec(),
     };
     Ok(match args.get("format").and_then(Value::as_str) {
@@ -356,15 +362,21 @@ fn example_sources(ctx: &Ctx) -> Vec<(String, String)> {
 }
 
 fn list_examples(ctx: &Ctx) -> Vec<(String, String)> {
-    example_sources(ctx).into_iter().map(|(name, source)| {
-        // First comment line that has words in it (skips box-drawing banners).
-        let first_line = source.lines()
-            .take(8)
-            .map(|l| l.trim_start_matches('#').trim().trim_matches(|c: char| !c.is_alphanumeric()).trim().to_string())
-            .find(|l| l.chars().filter(|c| c.is_alphabetic()).count() >= 4)
-            .unwrap_or_default();
-        (name, first_line)
-    }).collect()
+    example_sources(ctx)
+        .into_iter()
+        .map(|(name, source)| {
+            // First comment line that has words in it (skips box-drawing banners).
+            let first_line = source
+                .lines()
+                .take(8)
+                .map(|l| {
+                    l.trim_start_matches('#').trim().trim_matches(|c: char| !c.is_alphanumeric()).trim().to_string()
+                })
+                .find(|l| l.chars().filter(|c| c.is_alphabetic()).count() >= 4)
+                .unwrap_or_default();
+            (name, first_line)
+        })
+        .collect()
 }
 
 fn tool_examples(ctx: &Ctx, args: &Value) -> Result<String, String> {
@@ -423,7 +435,8 @@ fn tool_check(args: &Value) -> Result<String, String> {
                 "stale_server": staleness(),
                 "summary": summary(&song),
                 "warnings": warnings
-            })).unwrap())
+            }))
+            .unwrap())
         }
         Err(err_json) => Err(match staleness() {
             Some(w) => format!("STALE SERVER: {}\n\n{}", w, pretty(&err_json)),
@@ -441,7 +454,8 @@ fn pretty(json_text: &str) -> String {
 fn tool_debug(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let source = args.get("source").and_then(Value::as_str).ok_or("missing 'source'")?;
     let names = |key: &str| -> Vec<String> {
-        args.get(key).and_then(Value::as_array)
+        args.get(key)
+            .and_then(Value::as_array)
             .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect())
             .unwrap_or_default()
     };
@@ -462,8 +476,11 @@ fn tool_debug(ctx: &Ctx, args: &Value) -> Result<String, String> {
             Some((a, b)) => a.trim().parse().ok().zip(b.trim().parse().ok()),
             None => text.trim().parse().ok().map(|n| (1, n)),
         };
-        opts.bars = Some(range.filter(|(a, b): &(u32, u32)| *a >= 1 && b >= a)
-            .ok_or("bars: a count (\"16\") or a range (\"17-24\")")?);
+        opts.bars = Some(
+            range
+                .filter(|(a, b): &(u32, u32)| *a >= 1 && b >= a)
+                .ok_or("bars: a count (\"16\") or a range (\"17-24\")")?,
+        );
     }
     let outcome = tatum_debug::run(song, &slug, &isolation, &opts)?;
     Ok(format!("{}\nsheet: {}\n", outcome.report, outcome.sheet.display()))
@@ -472,10 +489,16 @@ fn tool_debug(ctx: &Ctx, args: &Value) -> Result<String, String> {
 /// Refuse a song longer than `MAX_RENDER_MINUTES`, before rendering any of it.
 fn short_enough(song: &tatum_core::dsl::compiler::CompiledSong) -> Result<(), String> {
     let mut bpm = song.globals.tempo;
-    let seconds: f32 = song.arrangement.iter().map(|(si, r)| {
-        if let Some(t) = song.scenes.get(*si).and_then(|s| s.tempo) { bpm = t; }
-        *r as f32 * song.globals.meter.0 as f32 * 60.0 / bpm
-    }).sum();
+    let seconds: f32 = song
+        .arrangement
+        .iter()
+        .map(|(si, r)| {
+            if let Some(t) = song.scenes.get(*si).and_then(|s| s.tempo) {
+                bpm = t;
+            }
+            *r as f32 * song.globals.meter.0 as f32 * 60.0 / bpm
+        })
+        .sum();
     if seconds > MAX_RENDER_MINUTES * 60.0 {
         return Err(format!(
             "the song is {:.0} minutes long; the server renders up to {} minutes. Shorten the arrangement or raise the tempo.",
@@ -489,7 +512,9 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let source = args.get("source").and_then(Value::as_str).ok_or("missing 'source'")?;
     let song = compile_source(source).map_err(|e| pretty(&e))?;
 
-    let sections: Vec<(String, u32)> = song.arrangement.iter()
+    let sections: Vec<(String, u32)> = song
+        .arrangement
+        .iter()
         .map(|(si, r)| (song.scenes.get(*si).map(|s| s.name.clone()).unwrap_or_default(), *r))
         .collect();
     let total_bars: u32 = sections.iter().map(|(_, r)| *r).sum();
@@ -497,7 +522,13 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         return Err("nothing to render: the arrangement is empty (add `arrange { scene xN }`)".into());
     }
     short_enough(&song)?;
-    let bars = args.get("bars").and_then(Value::as_u64).map(|b| b as u32).unwrap_or(total_bars).min(total_bars).min(MAX_RENDER_BARS);
+    let bars = args
+        .get("bars")
+        .and_then(Value::as_u64)
+        .map(|b| b as u32)
+        .unwrap_or(total_bars)
+        .min(total_bars)
+        .min(MAX_RENDER_BARS);
     let tempo = song.globals.tempo;
     let steps_per_bar = song.globals.meter.0 as usize * 4;
 
@@ -536,16 +567,18 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     }
     // Buses carry level too, and a track can meter fine on its own while the
     // bus chain it feeds swallows it before master.
-    let bus_report: Vec<Value> = (0..engine.bus_count()).map(|i| {
-        let (p, rr) = (engine.bus_peak(i), engine.bus_rms(i));
-        json!({
-            "bus": engine.bus_name(i),
-            "peak": round3(p),
-            "rms": round3(rr),
-            "db": round1(20.0 * rr.max(1e-6).log10()),
-            "crest": round1(analysis::crest(p, rr)),
+    let bus_report: Vec<Value> = (0..engine.bus_count())
+        .map(|i| {
+            let (p, rr) = (engine.bus_peak(i), engine.bus_rms(i));
+            json!({
+                "bus": engine.bus_name(i),
+                "peak": round3(p),
+                "rms": round3(rr),
+                "db": round1(20.0 * rr.max(1e-6).log10()),
+                "crest": round1(analysis::crest(p, rr)),
+            })
         })
-    }).collect();
+        .collect();
     let bad = l.iter().chain(r.iter()).filter(|v| !v.is_finite()).count();
     if bad > 0 {
         return Err(format!(
@@ -574,13 +607,17 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let mut at_ceiling_sections: Vec<String> = Vec::new();
     let mut bar_cursor = 0u32;
     for (name, count) in &sections {
-        if bar_cursor >= bars { break; }
+        if bar_cursor >= bars {
+            break;
+        }
         let count = (*count).min(bars - bar_cursor);
         let a = (bar_cursor as usize * samples_per_bar).min(l.len());
         let b = ((bar_cursor + count) as usize * samples_per_bar).min(l.len());
         let (rms, peak) = stats(&l[a..b], &r[a..b]);
         let at_ceiling = peak >= LIMITER_CEILING - 0.005;
-        if at_ceiling { at_ceiling_sections.push(name.clone()); }
+        if at_ceiling {
+            at_ceiling_sections.push(name.clone());
+        }
         let [sub, lo, mid, harsh, air] = balance(&l[a..b], &r[a..b]);
         report.push(json!({
             "scene": name, "bars": count,
@@ -603,7 +640,8 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     }
     // Tracks buried more than 30 dB under the loudest are effectively inaudible;
     // a chain that silently reroutes or a missing make-up gain looks like this.
-    let buried: Vec<String> = track_report.iter()
+    let buried: Vec<String> = track_report
+        .iter()
         .filter(|t| t["vs_loudest_db"].as_f64().unwrap_or(0.0) < -30.0 && t["rms"].as_f64().unwrap_or(0.0) > 0.0)
         .map(|t| t["track"].as_str().unwrap_or("").to_string())
         .collect();
@@ -613,12 +651,16 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
             buried.join(", ")
         ));
     }
-    let silent: Vec<String> = track_report.iter()
+    let silent: Vec<String> = track_report
+        .iter()
         .filter(|t| t["rms"].as_f64().unwrap_or(1.0) <= 0.0)
         .map(|t| t["track"].as_str().unwrap_or("").to_string())
         .collect();
     if !silent.is_empty() {
-        hints.push(format!("silent for the whole render: {}. They play in no scene, or their pattern is all rests.", silent.join(", ")));
+        hints.push(format!(
+            "silent for the whole render: {}. They play in no scene, or their pattern is all rests.",
+            silent.join(", ")
+        ));
     }
     if let Some(w) = report.iter().find(|s| s["balance_pct"]["mid"].as_f64().unwrap_or(0.0) >= 70.0) {
         hints.push(format!(
@@ -643,24 +685,33 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     // Two tracks whose energy sits in the same band, at similar level, mask each
     // other. It took a lot of listening to work out that the kick was fighting
     // the drone; the numbers were there the whole time.
-    let loudest_db = track_report.iter()
-        .filter_map(|t| t["db"].as_f64())
-        .fold(f64::MIN, f64::max);
+    let loudest_db = track_report.iter().filter_map(|t| t["db"].as_f64()).fold(f64::MIN, f64::max);
     let mut masking: Vec<(f64, String)> = Vec::new();
     for i in 0..track_report.len() {
         for j in (i + 1)..track_report.len() {
             let (a, b) = (&track_report[i], &track_report[j]);
-            if a["band"] != b["band"] || a["band"].is_null() { continue; }
+            if a["band"] != b["band"] || a["band"].is_null() {
+                continue;
+            }
             let (da, db_) = (a["db"].as_f64().unwrap_or(-99.0), b["db"].as_f64().unwrap_or(-99.0));
             // Two quiet tracks sharing a band mask nothing anyone can hear.
-            if da < loudest_db - 12.0 || db_ < loudest_db - 12.0 { continue; }
+            if da < loudest_db - 12.0 || db_ < loudest_db - 12.0 {
+                continue;
+            }
             let apart = (da - db_).abs();
-            if apart > 6.0 { continue; }
-            masking.push((apart, format!(
-                "{} and {} are {:.0} dB apart in {}",
-                a["track"].as_str().unwrap_or(""), b["track"].as_str().unwrap_or(""),
-                apart, a["band"].as_str().unwrap_or("")
-            )));
+            if apart > 6.0 {
+                continue;
+            }
+            masking.push((
+                apart,
+                format!(
+                    "{} and {} are {:.0} dB apart in {}",
+                    a["track"].as_str().unwrap_or(""),
+                    b["track"].as_str().unwrap_or(""),
+                    apart,
+                    a["band"].as_str().unwrap_or("")
+                ),
+            ));
         }
     }
     masking.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -687,7 +738,8 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         ));
     }
 
-    let buried_buses: Vec<String> = bus_report.iter()
+    let buried_buses: Vec<String> = bus_report
+        .iter()
         .filter(|b| b["rms"].as_f64().unwrap_or(1.0) <= 0.0)
         .map(|b| b["bus"].as_str().unwrap_or("").to_string())
         .collect();
@@ -705,9 +757,11 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     // it carries most of the energy: a techno mix with a hard-panned pad still
     // reads 1% wide on the plain figure.
     let mix_width = analysis::stereo_width_above(&l, &r, 250.0, SAMPLE_RATE) * 200.0;
-    let centred: Vec<String> = track_report.iter()
-        .filter(|t| t["width_pct"].as_f64().unwrap_or(0.0) < 4.0
-            && t["db"].as_f64().unwrap_or(-99.0) > loudest_db - 18.0)
+    let centred: Vec<String> = track_report
+        .iter()
+        .filter(|t| {
+            t["width_pct"].as_f64().unwrap_or(0.0) < 4.0 && t["db"].as_f64().unwrap_or(-99.0) > loudest_db - 18.0
+        })
         .map(|t| t["track"].as_str().unwrap_or("").to_string())
         .collect();
     if mix_width < 12.0 {
@@ -767,7 +821,8 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         "tracks": track_report,
         "buses": bus_report,
         "hint": hint
-    })).unwrap())
+    }))
+    .unwrap())
 }
 
 fn stats(l: &[f32], r: &[f32]) -> (f32, f32) {
@@ -784,19 +839,28 @@ fn balance(l: &[f32], r: &[f32]) -> [f32; 5] {
     m.percentages()
 }
 
-fn round3(v: f32) -> f64 { ((v as f64) * 1000.0).round() / 1000.0 }
-fn round1(v: f32) -> f64 { ((v as f64) * 10.0).round() / 10.0 }
+fn round3(v: f32) -> f64 {
+    ((v as f64) * 1000.0).round() / 1000.0
+}
+fn round1(v: f32) -> f64 {
+    ((v as f64) * 10.0).round() / 10.0
+}
 
 /// File name from the first `# Title` comment, else "song".
 fn slug_from_source(source: &str) -> String {
     let title = source.lines().next().unwrap_or("").trim_start_matches('#').trim();
     let title = title.split(['—', '-', ':']).next().unwrap_or("").trim();
-    let slug: String = title.chars()
+    let slug: String = title
+        .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' })
         .collect::<String>()
         .trim_matches('_')
         .to_string();
-    if slug.is_empty() { "song".into() } else { slug }
+    if slug.is_empty() {
+        "song".into()
+    } else {
+        slug
+    }
 }
 
 // ── Resources ──
@@ -816,7 +880,10 @@ fn read_resource(ctx: &Ctx, params: &Value) -> Result<Value, (i64, String)> {
     let uri = params.get("uri").and_then(Value::as_str).unwrap_or("");
     let (mime, text) = match uri {
         "tatum://docs/dsl" => ("text/markdown", DSL_DOC.to_string()),
-        "tatum://docs/params" => ("text/markdown", params::markdown(&ModuleKind::ALL) + &params::track_markdown() + &tatum_core::nodes::markdown()),
+        "tatum://docs/params" => (
+            "text/markdown",
+            params::markdown(&ModuleKind::ALL) + &params::track_markdown() + &tatum_core::nodes::markdown(),
+        ),
         _ => match uri.strip_prefix("tatum://examples/") {
             Some(name) => ("text/plain", tool_examples(ctx, &json!({ "name": name })).map_err(|e| (-32002, e))?),
             None => return Err((-32002, format!("unknown resource: {}", uri))),
@@ -830,14 +897,14 @@ mod tests {
     use super::*;
 
     fn ctx() -> Ctx {
-        Ctx {
-            examples_dir: None,
-            render_dir: std::env::temp_dir().join("tatum-mcp-tests"),
-        }
+        Ctx { examples_dir: None, render_dir: std::env::temp_dir().join("tatum-mcp-tests") }
     }
 
     fn example(name: &str) -> String {
-        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples").join(format!("{}.synth", name))).unwrap()
+        std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples").join(format!("{}.synth", name)),
+        )
+        .unwrap()
     }
 
     fn call(ctx: &Ctx, msg: Value) -> Value {
@@ -847,12 +914,19 @@ mod tests {
     #[test]
     fn initialize_and_list_tools() {
         let c = ctx();
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": "2025-03-26" } }));
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": "2025-03-26" } }),
+        );
         assert_eq!(r["result"]["protocolVersion"], "2025-03-26");
         assert_eq!(r["result"]["serverInfo"]["name"], "tatum-mcp");
         let r = call(&c, json!({ "jsonrpc": "2.0", "id": "x", "method": "tools/list" }));
-        let names: Vec<&str> = r["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
-        assert_eq!(names, vec!["tatum_docs", "tatum_params", "tatum_examples", "tatum_check", "tatum_render", "tatum_debug"]);
+        let names: Vec<&str> =
+            r["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
+        assert_eq!(
+            names,
+            vec!["tatum_docs", "tatum_params", "tatum_examples", "tatum_check", "tatum_render", "tatum_debug"]
+        );
         assert_eq!(r["id"], "x");
     }
 
@@ -873,7 +947,10 @@ mod tests {
     fn check_reports_errors_with_lines() {
         let c = ctx();
         let src = "tempo 120\nmodule bass b { cutof 0.3 }\n";
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": { "name": "tatum_check", "arguments": { "source": src } } }));
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": { "name": "tatum_check", "arguments": { "source": src } } }),
+        );
         assert_eq!(r["result"]["isError"], true);
         let text = r["result"]["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("Did you mean 'cutoff'"), "{}", text);
@@ -884,7 +961,10 @@ mod tests {
     fn check_and_render_an_example() {
         let c = ctx();
         let src = example("acid_arp");
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": { "name": "tatum_check", "arguments": { "source": src } } }));
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": { "name": "tatum_check", "arguments": { "source": src } } }),
+        );
         assert_eq!(r["result"]["isError"], false, "{}", r);
         let text = r["result"]["content"][0]["text"].as_str().unwrap();
         let v: Value = serde_json::from_str(text).unwrap();
@@ -892,7 +972,10 @@ mod tests {
         assert_eq!(v["summary"]["bars"], 12);
 
         let out = c.render_dir.join("acid_arp_test.wav");
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": { "name": "tatum_render", "arguments": { "source": src, "output": "acid_arp_test.wav", "bars": 4 } } }));
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": { "name": "tatum_render", "arguments": { "source": src, "output": "acid_arp_test.wav", "bars": 4 } } }),
+        );
         assert_eq!(r["result"]["isError"], false, "{}", r);
         let v: Value = serde_json::from_str(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
         assert_eq!(v["bars"], 4);
@@ -919,16 +1002,22 @@ mod tests {
             ("tatum_debug", std::env::temp_dir().to_str().unwrap()),
             ("tatum_debug", "../escape"),
         ] {
-            let r = call(&c, json!({ "jsonrpc": "2.0", "id": 12, "method": "tools/call", "params": { "name": tool,
-                "arguments": { "source": src, "output": output, "bars": 1 } } }));
+            let r = call(
+                &c,
+                json!({ "jsonrpc": "2.0", "id": 12, "method": "tools/call", "params": { "name": tool,
+                "arguments": { "source": src, "output": output, "bars": 1 } } }),
+            );
             assert_eq!(r["result"]["isError"], true, "{} wrote to {:?}: {}", tool, output, r);
             assert!(r["result"]["content"][0]["text"].as_str().unwrap().starts_with("output:"), "{}", r);
         }
         assert!(!outside.exists());
         assert!(!std::env::temp_dir().join("escape").exists());
 
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 13, "method": "tools/call", "params": { "name": "tatum_render",
-            "arguments": { "source": src, "output": "drafts/v2.wav", "bars": 1 } } }));
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 13, "method": "tools/call", "params": { "name": "tatum_render",
+            "arguments": { "source": src, "output": "drafts/v2.wav", "bars": 1 } } }),
+        );
         assert_eq!(r["result"]["isError"], false, "{}", r);
         assert!(c.render_dir.join("drafts/v2.wav").exists());
     }
@@ -937,8 +1026,11 @@ mod tests {
     fn a_song_too_long_to_hold_is_refused_before_rendering() {
         let c = ctx();
         let src = "tempo 20\nmeter 16/4\nmodule bass b { cutoff 1khz }\npattern p { 1.1 - - - }\ntrack t { play p using b out > master }\nscene a { track t { play p using b } }\narrange { a x512 }\n";
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 14, "method": "tools/call", "params": { "name": "tatum_render",
-            "arguments": { "source": src, "bars": 1 } } }));
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 14, "method": "tools/call", "params": { "name": "tatum_render",
+            "arguments": { "source": src, "bars": 1 } } }),
+        );
         assert_eq!(r["result"]["isError"], true, "{}", r);
         assert!(r["result"]["content"][0]["text"].as_str().unwrap().contains("minutes long"), "{}", r);
     }
@@ -948,8 +1040,11 @@ mod tests {
         let c = ctx();
         let src = example("acid_arp");
         let dir = c.render_dir.join("debug_test");
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": { "name": "tatum_debug",
-            "arguments": { "source": src, "output": "debug_test", "bars": "3-4", "mute": ["drums"] } } }));
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": { "name": "tatum_debug",
+            "arguments": { "source": src, "output": "debug_test", "bars": "3-4", "mute": ["drums"] } } }),
+        );
         assert_eq!(r["result"]["isError"], false, "{}", r);
         let text = r["result"]["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("bars 3-4 of 12") && text.contains("muted: drums"), "{}", text);
@@ -957,8 +1052,11 @@ mod tests {
         assert!(text.contains("levels by section") && text.contains("in each other's way"), "{}", text);
         assert!(dir.join("sheet.png").exists() && dir.join("mix.wav").exists());
 
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 11, "method": "tools/call", "params": { "name": "tatum_debug",
-            "arguments": { "source": src, "solo": ["nope"] } } }));
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 11, "method": "tools/call", "params": { "name": "tatum_debug",
+            "arguments": { "source": src, "solo": ["nope"] } } }),
+        );
         assert_eq!(r["result"]["isError"], true);
         assert!(r["result"]["content"][0]["text"].as_str().unwrap().contains("no track named nope"));
     }
@@ -966,21 +1064,36 @@ mod tests {
     #[test]
     fn examples_and_resources() {
         let c = ctx();
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": { "name": "tatum_examples", "arguments": {} } }));
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": { "name": "tatum_examples", "arguments": {} } }),
+        );
         let text = r["result"]["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("- acid_arp:"), "{}", text);
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 7, "method": "resources/read", "params": { "uri": "tatum://examples/acid_arp" } }));
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 7, "method": "resources/read", "params": { "uri": "tatum://examples/acid_arp" } }),
+        );
         assert!(r["result"]["contents"][0]["text"].as_str().unwrap().contains("tempo 126"));
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 8, "method": "resources/read", "params": { "uri": "tatum://docs/params" } }));
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 8, "method": "resources/read", "params": { "uri": "tatum://docs/params" } }),
+        );
         assert!(r["result"]["contents"][0]["text"].as_str().unwrap().contains("| `cutoff` |"));
-        let r = call(&c, json!({ "jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": { "name": "tatum_examples", "arguments": { "name": "../secret" } } }));
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": { "name": "tatum_examples", "arguments": { "name": "../secret" } } }),
+        );
         assert_eq!(r["result"]["isError"], true);
     }
 
     #[test]
     fn the_compiled_in_examples_are_the_repo_examples() {
         let embedded = example_sources(&ctx());
-        let on_disk = example_sources(&Ctx { examples_dir: Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples")), ..ctx() });
+        let on_disk = example_sources(&Ctx {
+            examples_dir: Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples")),
+            ..ctx()
+        });
         assert!(embedded.len() > 10);
         assert_eq!(embedded, on_disk);
     }

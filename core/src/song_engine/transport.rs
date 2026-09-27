@@ -90,11 +90,15 @@ impl SongEngine {
         (out_l, out_r)
     }
 
-    pub fn tempo(&self) -> f32 { self.tempo }
+    pub fn tempo(&self) -> f32 {
+        self.tempo
+    }
     /// Sixteenths in a bar: 16 in 4/4, 12 in 3/4. A set counts its steps in
     /// bars and a step can change the tempo or the meter, so the length of a
     /// bar has to be asked of the engine that is about to play it.
-    pub fn steps_per_bar(&self) -> usize { self.steps_per_bar }
+    pub fn steps_per_bar(&self) -> usize {
+        self.steps_per_bar
+    }
 
     pub fn reset(&mut self) {
         for track in self.tracks.iter_mut() {
@@ -149,9 +153,15 @@ impl SongEngine {
         self.delay_wet_heard = self.delay_wet_level;
     }
 
-    pub fn global_step(&self) -> usize { self.global_step }
-    pub fn running(&self) -> bool { self.running }
-    pub fn current_bar(&self) -> usize { self.current_bar }
+    pub fn global_step(&self) -> usize {
+        self.global_step
+    }
+    pub fn running(&self) -> bool {
+        self.running
+    }
+    pub fn current_bar(&self) -> usize {
+        self.current_bar
+    }
 
     /// Start playback from a specific bar (for hot-swap continuity).
     /// Fast-forwards through the arrangement to land on the right scene.

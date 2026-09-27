@@ -89,7 +89,9 @@ struct Part {
 
 impl Part {
     fn push(&mut self, l: &[f32], r: &[f32]) -> Result<(), String> {
-        if let Some(w) = self.wav.as_mut() { w.push(l, r)?; }
+        if let Some(w) = self.wav.as_mut() {
+            w.push(l, r)?;
+        }
         for (a, b) in l.iter().zip(r) {
             let m = (a + b) * 0.5;
             self.spec.push(m);
@@ -102,10 +104,16 @@ impl Part {
         Ok(())
     }
 
-    fn silent(&self) -> bool { self.peak < 1e-5 }
+    fn silent(&self) -> bool {
+        self.peak < 1e-5
+    }
 
     fn rms(&self) -> f32 {
-        if self.samples == 0 { 0.0 } else { (self.sum_sq / self.samples as f64).sqrt() as f32 }
+        if self.samples == 0 {
+            0.0
+        } else {
+            (self.sum_sq / self.samples as f64).sqrt() as f32
+        }
     }
 }
 
@@ -119,9 +127,8 @@ impl Clock {
     fn new(engine: &SongEngine) -> Clock {
         let beats_per_bar = engine.steps_per_bar() as f32 / 4.0;
         let bar_len = |bpm: f32| SAMPLE_RATE * 60.0 / bpm * beats_per_bar;
-        let mut sections: Vec<(String, u32, f32)> = engine.sections().into_iter()
-            .map(|(n, b, bpm)| (n.to_string(), b, bpm))
-            .collect();
+        let mut sections: Vec<(String, u32, f32)> =
+            engine.sections().into_iter().map(|(n, b, bpm)| (n.to_string(), b, bpm)).collect();
         if sections.is_empty() {
             // A rig without an arrangement plays its tracks; four bars shows them.
             sections.push((String::new(), 4, engine.tempo()));
@@ -139,7 +146,9 @@ impl Clock {
         Clock { bar_starts, sections: named }
     }
 
-    fn bars(&self) -> u32 { self.bar_starts.len() as u32 - 1 }
+    fn bars(&self) -> u32 {
+        self.bar_starts.len() as u32 - 1
+    }
 
     /// "bar 17.3 (0:32.4)" for a sample from the start of the song.
     fn at(&self, sample: usize) -> String {
@@ -185,7 +194,9 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
     // For each block fed: where it ended, and which tracks held a note.
     let mut held_log: Vec<(usize, Vec<bool>)> = Vec::new();
     let reached = play(&mut engine, end, |pos, chunk, taps, bl, br| {
-        if pos + chunk <= start { return Ok(()) }
+        if pos + chunk <= start {
+            return Ok(());
+        }
         let from = start.saturating_sub(pos);
         for p in parts.iter_mut() {
             let (l, r) = p.source.pick(taps, bl, br);
@@ -198,7 +209,9 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
 
     for p in parts.iter_mut() {
         p.spec.finish(columns);
-        if let Some(w) = p.wav.take() { w.finish()?; }
+        if let Some(w) = p.wav.take() {
+            w.finish()?;
+        }
         if p.silent() {
             let _ = std::fs::remove_file(opts.out_dir.join(format!("{}.wav", p.file)));
         }
@@ -214,21 +227,19 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
     // Not the mix: every click in it is in a part, where it can be told apart
     // from what surrounds it, and in the mix a drum hit landing on a loud bar
     // looks like one.
-    let scans: Vec<Vec<Click>> = parts.iter()
-        .map(|p| if p.source == Source::Mix { Vec::new() } else { listen::clicks(&p.frames) })
+    let scans: Vec<Vec<Click>> =
+        parts.iter().map(|p| if p.source == Source::Mix { Vec::new() } else { listen::clicks(&p.frames) }).collect();
+    let floors: Vec<Vec<Floor>> = parts
+        .iter()
+        .map(|p| match p.source {
+            Source::Track(ti) | Source::Dry(ti) if p.tonal => listen::floors(&p.frames, &|f| held(ti, f)),
+            _ => Vec::new(),
+        })
         .collect();
-    let floors: Vec<Vec<Floor>> = parts.iter().map(|p| match p.source {
-        Source::Track(ti) | Source::Dry(ti) if p.tonal => {
-            listen::floors(&p.frames, &|f| held(ti, f))
-        }
-        _ => Vec::new(),
-    }).collect();
     // A click within this of a section change is filed under it: a scene
     // taking over is the one moment many parts are cut at once.
-    let section_starts: Vec<usize> = clock.sections.iter()
-        .filter(|(_, b)| *b > 1)
-        .map(|(_, b)| clock.bar_starts[*b as usize - 1])
-        .collect();
+    let section_starts: Vec<usize> =
+        clock.sections.iter().filter(|(_, b)| *b > 1).map(|(_, b)| clock.bar_starts[*b as usize - 1]).collect();
     let at_change = |frame: usize| {
         let s = start + frame * FRAME;
         section_starts.iter().any(|&c| s.abs_diff(c) < SAMPLE_RATE as usize / 50)
@@ -237,14 +248,21 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
     // Zoom in on the worst of each part: its loudest click, its loudest floor.
     let mut zooms: Vec<Zoom> = Vec::new();
     for (i, p) in parts.iter().enumerate() {
-        if p.source == Source::Mix { continue }
+        if p.source == Source::Mix {
+            continue;
+        }
         if let Some(c) = scans[i].iter().max_by(|a, b| a.db.total_cmp(&b.db)) {
             zooms.push(Zoom::new(Zoom {
                 part: i,
                 centre: start + c.frame * FRAME + FRAME / 2,
                 file: format!("zoom.{}.click.png", p.file),
-                title: format!("{}: click at {}, {:.0} dB{}", p.label, clock.at(start + c.frame * FRAME), c.db,
-                    if at_change(c.frame) { ", on a section change" } else { "" }),
+                title: format!(
+                    "{}: click at {}, {:.0} dB{}",
+                    p.label,
+                    clock.at(start + c.frame * FRAME),
+                    c.db,
+                    if at_change(c.frame) { ", on a section change" } else { "" }
+                ),
                 ..Default::default()
             }));
         }
@@ -269,8 +287,12 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
                 for k in 0..chunk {
                     let s = pos + k;
                     let m = (l[k] + r[k]) * 0.5;
-                    if s + ZOOM_SPECTRUM / 2 >= z.centre && s < z.centre + ZOOM_SPECTRUM / 2 { z.spec.push(m) }
-                    if s + ZOOM_WAVE / 2 >= z.centre && s < z.centre + ZOOM_WAVE / 2 { z.wave.push(m) }
+                    if s + ZOOM_SPECTRUM / 2 >= z.centre && s < z.centre + ZOOM_SPECTRUM / 2 {
+                        z.spec.push(m)
+                    }
+                    if s + ZOOM_WAVE / 2 >= z.centre && s < z.centre + ZOOM_WAVE / 2 {
+                        z.wave.push(m)
+                    }
                 }
             }
             Ok(())
@@ -280,19 +302,29 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
     // The mix, section by section. Only what a listener hears as a voice: the
     // tracks and the two returns, not the buses (their tracks are already
     // here) nor the dry copies.
-    let spans: Vec<Span> = clock.sections.iter().enumerate().filter_map(|(i, (name, bar))| {
-        let s = clock.bar_starts[*bar as usize - 1];
-        let e = clock.sections.get(i + 1).map_or(*clock.bar_starts.last().unwrap(), |(_, nb)| clock.bar_starts[*nb as usize - 1]);
-        let (s, e) = (s.max(start), e.min(start + rendered));
-        if e <= s { return None }
-        let last_bar = clock.bar_starts.partition_point(|&b| b < e) as u32;
-        Some(Span {
-            name: if name.is_empty() { "all".into() } else { name.clone() },
-            bars: (clock.bar_starts.partition_point(|&b| b <= s) as u32, last_bar),
-            frames: ((s - start) / FRAME, (e - start) / FRAME),
-            columns: ((s - start) / hop, ((e - start) / hop).min(columns)),
+    let spans: Vec<Span> = clock
+        .sections
+        .iter()
+        .enumerate()
+        .filter_map(|(i, (name, bar))| {
+            let s = clock.bar_starts[*bar as usize - 1];
+            let e = clock
+                .sections
+                .get(i + 1)
+                .map_or(*clock.bar_starts.last().unwrap(), |(_, nb)| clock.bar_starts[*nb as usize - 1]);
+            let (s, e) = (s.max(start), e.min(start + rendered));
+            if e <= s {
+                return None;
+            }
+            let last_bar = clock.bar_starts.partition_point(|&b| b < e) as u32;
+            Some(Span {
+                name: if name.is_empty() { "all".into() } else { name.clone() },
+                bars: (clock.bar_starts.partition_point(|&b| b <= s) as u32, last_bar),
+                frames: ((s - start) / FRAME, (e - start) / FRAME),
+                columns: ((s - start) / hop, ((e - start) / hop).min(columns)),
+            })
         })
-    }).collect();
+        .collect();
     let voices: Vec<usize> = (0..parts.len())
         .filter(|&i| matches!(parts[i].source, Source::Track(_) | Source::Reverb | Source::Delay))
         .collect();
@@ -303,27 +335,39 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
     // Draw.
     let ruler = Ruler {
         bars: (first..=last).map(|b| ((clock.bar_starts[b as usize - 1] - start) / hop, b)).collect(),
-        sections: clock.sections.iter()
+        sections: clock
+            .sections
+            .iter()
             .filter(|(n, _)| !n.is_empty())
             .filter_map(|(n, b)| {
                 let s = clock.bar_starts[*b as usize - 1];
-                let next = clock.sections.iter().find(|(_, nb)| nb > b)
+                let next = clock
+                    .sections
+                    .iter()
+                    .find(|(_, nb)| nb > b)
                     .map_or(end, |(_, nb)| clock.bar_starts[*nb as usize - 1]);
-                if next <= start || s >= end { return None }
+                if next <= start || s >= end {
+                    return None;
+                }
                 Some((s.saturating_sub(start) / hop, n.clone()))
             })
             .collect(),
     };
     let col = |frame: usize| (frame * FRAME / hop).min(columns.saturating_sub(1));
-    let strips: Vec<Strip> = parts.iter().zip(&scans).zip(&floors).map(|((p, scan), fl)| Strip {
-        name: &p.label,
-        note: format!("peak {:.0} db", listen::db(p.peak)),
-        spec: &p.spec,
-        marks: Marks {
-            clicks: scan.iter().map(|c| col(c.frame)).collect(),
-            floors: fl.iter().map(|f| (col(f.start), col(f.end))).collect(),
-        },
-    }).collect();
+    let strips: Vec<Strip> = parts
+        .iter()
+        .zip(&scans)
+        .zip(&floors)
+        .map(|((p, scan), fl)| Strip {
+            name: &p.label,
+            note: format!("peak {:.0} db", listen::db(p.peak)),
+            spec: &p.spec,
+            marks: Marks {
+                clicks: scan.iter().map(|c| col(c.frame)).collect(),
+                floors: fl.iter().map(|f| (col(f.start), col(f.end))).collect(),
+            },
+        })
+        .collect();
     let sheet_path = opts.out_dir.join("sheet.png");
     draw::sheet(&strips, Some(&crowd), &ruler, columns).save(&sheet_path)?;
     for (s, p) in strips.iter().zip(&parts) {
@@ -332,28 +376,42 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
     for z in &zooms {
         let zoom_hop = ZOOM_SPECTRUM.div_ceil(opts.width).max(16);
         let mut spec = Spectrogram::new(zoom_hop);
-        for &x in &z.spec { spec.push(x) }
+        for &x in &z.spec {
+            spec.push(x)
+        }
         let zoom_columns = z.spec.len().div_ceil(zoom_hop);
         spec.finish(zoom_columns);
-        draw::zoom(&z.title, &z.wave, &spec, opts.width, zoom_columns)
-            .save(&opts.out_dir.join(&z.file))?;
+        draw::zoom(&z.title, &z.wave, &spec, opts.width, zoom_columns).save(&opts.out_dir.join(&z.file))?;
     }
-    let zoom_of = |part: usize, kind: &str| zooms.iter()
-        .find(|z| z.part == part && z.file.ends_with(kind))
-        .map_or(String::new(), |z| format!("\n  {:<18} see {}", "", z.file));
+    let zoom_of = |part: usize, kind: &str| {
+        zooms
+            .iter()
+            .find(|z| z.part == part && z.file.ends_with(kind))
+            .map_or(String::new(), |z| format!("\n  {:<18} see {}", "", z.file))
+    };
 
     // Report.
     let mut r = String::new();
     let secs = rendered as f32 / SAMPLE_RATE;
-    let _ = writeln!(r, "tatum debug: {title}, bars {first}-{last} of {} ({}:{:02})",
-        clock.bars(), (secs / 60.0) as u32, secs as u32 % 60);
-    if !isolation.solo.is_empty() { let _ = writeln!(r, "solo: {}", isolation.solo.join(", ")); }
-    if !isolation.mute.is_empty() { let _ = writeln!(r, "muted: {}", isolation.mute.join(", ")); }
+    let _ = writeln!(
+        r,
+        "tatum debug: {title}, bars {first}-{last} of {} ({}:{:02})",
+        clock.bars(),
+        (secs / 60.0) as u32,
+        secs as u32 % 60
+    );
+    if !isolation.solo.is_empty() {
+        let _ = writeln!(r, "solo: {}", isolation.solo.join(", "));
+    }
+    if !isolation.mute.is_empty() {
+        let _ = writeln!(r, "muted: {}", isolation.mute.join(", "));
+    }
     let _ = writeln!(r, "\nin {}/", opts.out_dir.display());
     let _ = writeln!(r, "  sheet.png        every part stacked on one time axis, the mix at the bottom");
     let _ = writeln!(r, "  <part>.png/.wav  each part on its own, as it sits in the mix");
     if !zooms.is_empty() {
-        let _ = writeln!(r, "  zoom.*.png       the worst moment of a part up close: the wave, and the spectrum around it");
+        let _ =
+            writeln!(r, "  zoom.*.png       the worst moment of a part up close: the wave, and the spectrum around it");
     }
     if !silent.is_empty() {
         let names: Vec<&str> = silent.iter().map(|p| p.label.as_str()).collect();
@@ -369,42 +427,69 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
     for span in &spans {
         let (f0, f1) = span.frames;
         let mix = parts.iter().find(|p| p.source == Source::Mix).map_or(-200.0, |p| p.frames.db(f0, f1));
-        let mut here: Vec<(&str, f32, bool)> = voices.iter()
-            .map(|&i| (parts[i].label.as_str(), parts[i].frames.db(f0, f1), matches!(parts[i].source, Source::Track(_))))
+        let mut here: Vec<(&str, f32, bool)> = voices
+            .iter()
+            .map(|&i| {
+                (parts[i].label.as_str(), parts[i].frames.db(f0, f1), matches!(parts[i].source, Source::Track(_)))
+            })
             .filter(|(_, db, _)| *db > PLAYING_DB)
             .collect();
         here.sort_by(|a, b| b.1.total_cmp(&a.1));
         let top = here.iter().filter(|h| h.2).map(|h| h.1).fold(f32::MIN, f32::max);
-        let list: Vec<String> = here.iter().map(|(n, db, track)| {
-            let rel = db - top;
-            // A return is meant to sit under the tracks it carries.
-            if *track && rel < -BURIED_DB { format!("{n} {rel:.0} (buried)") } else { format!("{n} {rel:.0}") }
-        }).collect();
-        let _ = writeln!(r, "  {:<14} bars {:>3}-{:<3} mix {:>4.0} dB | {}", span.name, span.bars.0, span.bars.1, mix,
-            if list.is_empty() { "nothing playing".into() } else { list.join(", ") });
+        let list: Vec<String> = here
+            .iter()
+            .map(|(n, db, track)| {
+                let rel = db - top;
+                // A return is meant to sit under the tracks it carries.
+                if *track && rel < -BURIED_DB {
+                    format!("{n} {rel:.0} (buried)")
+                } else {
+                    format!("{n} {rel:.0}")
+                }
+            })
+            .collect();
+        let _ = writeln!(
+            r,
+            "  {:<14} bars {:>3}-{:<3} mix {:>4.0} dB | {}",
+            span.name,
+            span.bars.0,
+            span.bars.1,
+            mix,
+            if list.is_empty() { "nothing playing".into() } else { list.join(", ") }
+        );
     }
 
-    let _ = writeln!(r, "\nin each other's way: two parts level with each other and on top of the same range, most of a section");
-    if clashes.is_empty() { let _ = writeln!(r, "  none"); }
+    let _ = writeln!(
+        r,
+        "\nin each other's way: two parts level with each other and on top of the same range, most of a section"
+    );
+    if clashes.is_empty() {
+        let _ = writeln!(r, "  none");
+    }
     for c in clashes.iter().take(12) {
         let (a, b) = (&parts[voices[c.a]].label, &parts[voices[c.b]].label);
-        let mut where_: Vec<String> = c.sections.iter().take(4)
-            .map(|(si, share)| format!("{} {:.0}%", spans[*si].name, share * 100.0)).collect();
-        if c.sections.len() > 4 { where_.push(format!("+{} more", c.sections.len() - 4)); }
+        let mut where_: Vec<String> =
+            c.sections.iter().take(4).map(|(si, share)| format!("{} {:.0}%", spans[*si].name, share * 100.0)).collect();
+        if c.sections.len() > 4 {
+            where_.push(format!("+{} more", c.sections.len() - 4));
+        }
         let _ = writeln!(r, "  {:<26} {:<13} {}", format!("{a} + {b}"), mixing::BANDS[c.band].2, where_.join(", "));
     }
-    if clashes.len() > 12 { let _ = writeln!(r, "  (+{} more)", clashes.len() - 12); }
+    if clashes.len() > 12 {
+        let _ = writeln!(r, "  (+{} more)", clashes.len() - 12);
+    }
 
     let at = |frame: usize| clock.at(start + frame * FRAME);
     let _ = writeln!(r, "\nclicks: a sudden corner in the wave that is not a note starting");
     let mut any = false;
     for (i, (p, scan)) in parts.iter().zip(&scans).enumerate() {
-        if scan.is_empty() { continue }
+        if scan.is_empty() {
+            continue;
+        }
         any = true;
         let mut worst: Vec<&Click> = scan.iter().collect();
         worst.sort_by(|a, b| b.db.total_cmp(&a.db));
-        let shown: Vec<String> = worst.iter().take(3)
-            .map(|c| format!("{} at {:.0} dB", at(c.frame), c.db)).collect();
+        let shown: Vec<String> = worst.iter().take(3).map(|c| format!("{} at {:.0} dB", at(c.frame), c.db)).collect();
         let changes = scan.iter().filter(|c| at_change(c.frame)).count();
         let count = if changes > 0 {
             format!("{} ({} on a section change)", scan.len(), changes)
@@ -413,22 +498,37 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
         };
         let _ = writeln!(r, "  {:<18} {}; loudest {}{}", p.label, count, shown.join(", "), zoom_of(i, ".click.png"));
     }
-    if !any { let _ = writeln!(r, "  none"); }
+    if !any {
+        let _ = writeln!(r, "  none");
+    }
 
     let _ = writeln!(r, "\nnot quiet between notes: a gap with no note held that ends still sounding, and not fading");
     any = false;
     for (i, (p, fl)) in parts.iter().zip(&floors).enumerate() {
-        if fl.is_empty() { continue }
+        if fl.is_empty() {
+            continue;
+        }
         any = true;
         let worst = fl.iter().max_by(|a, b| a.db.total_cmp(&b.db)).unwrap();
         let under = listen::playing_db(&p.frames) - worst.db;
         let what = floor_character(&parts[i], worst, hop);
         let places: Vec<String> = fl.iter().take(3).map(|f| at(f.start)).collect();
         let more = if fl.len() > 3 { format!(" (+{} more)", fl.len() - 3) } else { String::new() };
-        let _ = writeln!(r, "  {:<18} {:.0} dB, {:.0} dB under its notes, {}; {}{}{}",
-            p.label, worst.db, under, what, places.join(", "), more, zoom_of(i, ".not-quiet.png"));
+        let _ = writeln!(
+            r,
+            "  {:<18} {:.0} dB, {:.0} dB under its notes, {}; {}{}{}",
+            p.label,
+            worst.db,
+            under,
+            what,
+            places.join(", "),
+            more,
+            zoom_of(i, ".not-quiet.png")
+        );
     }
-    if !any { let _ = writeln!(r, "  none"); }
+    if !any {
+        let _ = writeln!(r, "  none");
+    }
 
     // The two ends of the range. Only reported past a share no instrument
     // gets to by playing what it is meant to; the numbers were set from the
@@ -437,20 +537,43 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
         let mut lines = Vec::new();
         for p in parts.iter().filter(|p| judged(p)) {
             let share = listen::share_db(&p.frames, band(&p.frames));
-            if share < over { continue }
+            if share < over {
+                continue;
+            }
             let where_ = loudest_second(band(&p.frames)).map(|f| format!("; most at {}", at(f))).unwrap_or_default();
             lines.push(format!("  {:<18} {:.0}% of its energy{}", p.label, 10f32.powf(share / 10.0) * 100.0, where_));
         }
         lines
     };
     let low = edge(&|f| &f.low, &|p| p.source != Source::Mix, RUMBLE_SHARE_DB);
-    let _ = writeln!(r, "\nbelow {:.0} Hz: under what speakers play -- a note pitched too low, or an FM ratio under 1", listen::RUMBLE_HZ);
-    if low.is_empty() { let _ = writeln!(r, "  none"); } else { for l in low { let _ = writeln!(r, "{l}"); } }
+    let _ = writeln!(
+        r,
+        "\nbelow {:.0} Hz: under what speakers play -- a note pitched too low, or an FM ratio under 1",
+        listen::RUMBLE_HZ
+    );
+    if low.is_empty() {
+        let _ = writeln!(r, "  none");
+    } else {
+        for l in low {
+            let _ = writeln!(r, "{l}");
+        }
+    }
     let high = edge(&|f| &f.high, &|p| p.tonal && matches!(p.source, Source::Track(_) | Source::Dry(_)), FIZZ_SHARE_DB);
-    let _ = writeln!(r, "\nabove {:.0} kHz on a tonal track: fizz, usually overtones folding back (aliasing) or clipping", listen::FIZZ_HZ / 1000.0);
-    if high.is_empty() { let _ = writeln!(r, "  none"); } else { for l in high { let _ = writeln!(r, "{l}"); } }
+    let _ = writeln!(
+        r,
+        "\nabove {:.0} kHz on a tonal track: fizz, usually overtones folding back (aliasing) or clipping",
+        listen::FIZZ_HZ / 1000.0
+    );
+    if high.is_empty() {
+        let _ = writeln!(r, "  none");
+    } else {
+        for l in high {
+            let _ = writeln!(r, "{l}");
+        }
+    }
 
-    let off: Vec<String> = parts.iter()
+    let off: Vec<String> = parts
+        .iter()
         .filter(|p| p.samples > 0 && (p.sum / p.samples as f64).abs() > 0.01)
         .map(|p| format!("{} ({:+.3})", p.label, p.sum / p.samples as f64))
         .collect();
@@ -458,8 +581,7 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
         let _ = writeln!(r, "\noff centre: the wave sits above or below zero on average (DC)\n  {}", off.join(", "));
     }
 
-    std::fs::write(opts.out_dir.join("report.txt"), &r)
-        .map_err(|e| format!("cannot write report: {e}"))?;
+    std::fs::write(opts.out_dir.join("report.txt"), &r).map_err(|e| format!("cannot write report: {e}"))?;
     Ok(Outcome { report: r, sheet: sheet_path })
 }
 
@@ -507,7 +629,8 @@ impl Listener {
         let at = |frame: usize| clock.at(frame * FRAME);
         let mut out = Vec::new();
 
-        let clicks: Vec<String> = parts.iter()
+        let clicks: Vec<String> = parts
+            .iter()
             .filter(|p| p.source != Source::Mix && !p.silent())
             .filter_map(|p| {
                 let c = listen::clicks(&p.frames);
@@ -516,36 +639,51 @@ impl Listener {
                 Some(format!("{} at {}{}", p.label, at(first.frame), more))
             })
             .collect();
-        if !clicks.is_empty() { out.push(format!("clicks: {}", clicks.join("; "))); }
+        if !clicks.is_empty() {
+            out.push(format!("clicks: {}", clicks.join("; ")));
+        }
 
         let held = |ti: usize, frame: usize| -> bool {
             let s = frame * FRAME;
             let k = held_log.partition_point(|(e, _)| *e <= s);
             held_log.get(k).is_some_and(|(_, h)| h[ti])
         };
-        let floors: Vec<String> = parts.iter()
+        let floors: Vec<String> = parts
+            .iter()
             .filter_map(|p| {
                 let Source::Track(ti) = p.source else { return None };
-                if !p.tonal { return None }
+                if !p.tonal {
+                    return None;
+                }
                 let fl = listen::floors(&p.frames, &|f| held(ti, f));
                 let worst = fl.iter().max_by(|a, b| a.db.total_cmp(&b.db))?;
-                Some(format!("{} at {}, {:.0} dB, {}", p.label, at(worst.start), worst.db, floor_character(p, worst, LISTEN_HOP)))
+                Some(format!(
+                    "{} at {}, {:.0} dB, {}",
+                    p.label,
+                    at(worst.start),
+                    worst.db,
+                    floor_character(p, worst, LISTEN_HOP)
+                ))
             })
             .collect();
-        if !floors.is_empty() { out.push(format!("not quiet between notes: {}", floors.join("; "))); }
+        if !floors.is_empty() {
+            out.push(format!("not quiet between notes: {}", floors.join("; ")));
+        }
 
         let share = |p: &Part, band: &Vec<f32>, over: f32| {
             let s = listen::share_db(&p.frames, band);
             (s >= over).then(|| format!("{} {:.0}%", p.label, 10f32.powf(s / 10.0) * 100.0))
         };
-        let low: Vec<String> = parts.iter()
+        let low: Vec<String> = parts
+            .iter()
             .filter(|p| p.source != Source::Mix)
             .filter_map(|p| share(p, &p.frames.low, RUMBLE_SHARE_DB))
             .collect();
         if !low.is_empty() {
             out.push(format!("under {:.0} Hz, where no speaker plays: {}", listen::RUMBLE_HZ, low.join(", ")));
         }
-        let high: Vec<String> = parts.iter()
+        let high: Vec<String> = parts
+            .iter()
             .filter(|p| p.tonal && matches!(p.source, Source::Track(_)))
             .filter_map(|p| share(p, &p.frames.high, FIZZ_SHARE_DB))
             .collect();
@@ -553,11 +691,14 @@ impl Listener {
             out.push(format!("over {:.0} kHz on a tonal track: {}", listen::FIZZ_HZ / 1000.0, high.join(", ")));
         }
 
-        let off: Vec<String> = parts.iter()
+        let off: Vec<String> = parts
+            .iter()
             .filter(|p| p.samples > 0 && (p.sum / p.samples as f64).abs() > 0.01)
             .map(|p| format!("{} ({:+.3})", p.label, p.sum / p.samples as f64))
             .collect();
-        if !off.is_empty() { out.push(format!("off centre (DC): {}", off.join(", "))); }
+        if !off.is_empty() {
+            out.push(format!("off centre (DC): {}", off.join(", ")));
+        }
         out
     }
 }
@@ -646,12 +787,17 @@ fn play(
 /// The frame starting the loudest second of a band, if it has any energy.
 fn loudest_second(band: &[f32]) -> Option<usize> {
     const SECOND: usize = 1000;
-    if band.len() < SECOND { return band.iter().any(|&v| v > 0.0).then_some(0) }
+    if band.len() < SECOND {
+        return band.iter().any(|&v| v > 0.0).then_some(0);
+    }
     let mut sum: f64 = band[..SECOND].iter().map(|&v| v as f64).sum();
     let (mut best, mut at) = (sum, 0);
     for i in SECOND..band.len() {
         sum += band[i] as f64 - band[i - SECOND] as f64;
-        if sum > best { best = sum; at = i + 1 - SECOND; }
+        if sum > best {
+            best = sum;
+            at = i + 1 - SECOND;
+        }
     }
     (best > 0.0).then_some(at)
 }
@@ -661,12 +807,13 @@ fn floor_character(p: &Part, f: &Floor, hop: usize) -> String {
     use spectrogram::{cell_db, row_hz, ROWS};
     let (a, b) = (f.start * FRAME / hop, (f.end * FRAME / hop).max(f.start * FRAME / hop + 1));
     let b = b.min(p.spec.columns());
-    if a >= b { return "?".into() }
-    let rows: Vec<f32> = (0..ROWS)
-        .map(|r| (a..b).map(|c| cell_db(p.spec.cell(c, r))).sum::<f32>() / (b - a) as f32)
-        .collect();
-    let (top, loudest) = rows.iter().enumerate()
-        .fold((0, f32::MIN), |acc, (i, &v)| if v > acc.1 { (i, v) } else { acc });
+    if a >= b {
+        return "?".into();
+    }
+    let rows: Vec<f32> =
+        (0..ROWS).map(|r| (a..b).map(|c| cell_db(p.spec.cell(c, r))).sum::<f32>() / (b - a) as f32).collect();
+    let (top, loudest) =
+        rows.iter().enumerate().fold((0, f32::MIN), |acc, (i, &v)| if v > acc.1 { (i, v) } else { acc });
     let wide = rows.iter().filter(|&&v| v > loudest - 12.0).count();
     if wide * 3 > ROWS {
         "spread over the whole range, like hiss".into()
@@ -708,18 +855,27 @@ fn plan_parts(engine: &SongEngine, dry: bool, hop: usize, dir: Option<&Path>) ->
     specs.push(("reverb return".into(), "send.reverb".into(), Source::Reverb, false));
     specs.push(("delay return".into(), "send.delay".into(), Source::Delay, false));
     specs.push(("mix".into(), "mix".into(), Source::Mix, false));
-    specs.into_iter().map(|(label, file, source, tonal)| {
-        Ok(Part {
-            wav: match dir {
-                Some(dir) => Some(WavWriter::create(&dir.join(format!("{file}.wav")))?),
-                None => None,
-            },
-            label, file, source, tonal,
-            spec: Spectrogram::new(hop),
-            frames: Frames::default(),
-            peak: 0.0, sum_sq: 0.0, sum: 0.0, samples: 0,
+    specs
+        .into_iter()
+        .map(|(label, file, source, tonal)| {
+            Ok(Part {
+                wav: match dir {
+                    Some(dir) => Some(WavWriter::create(&dir.join(format!("{file}.wav")))?),
+                    None => None,
+                },
+                label,
+                file,
+                source,
+                tonal,
+                spec: Spectrogram::new(hop),
+                frames: Frames::default(),
+                peak: 0.0,
+                sum_sq: 0.0,
+                sum: 0.0,
+                samples: 0,
+            })
         })
-    }).collect()
+        .collect()
 }
 
 fn file_name(name: &str) -> String {

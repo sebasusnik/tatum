@@ -23,7 +23,9 @@ scene a { track low { play p using sub } track hi { play q using tone } }
 arrange { a x1 }
 "#;
 
-fn song(extra: &str) -> String { SONG.replace("GAINCOMP", extra) }
+fn song(extra: &str) -> String {
+    SONG.replace("GAINCOMP", extra)
+}
 
 #[test]
 fn routing_chains_may_wrap_across_lines() {
@@ -33,8 +35,10 @@ fn routing_chains_may_wrap_across_lines() {
     assert_eq!(kinds, vec!["highpass", "saturate", "master"], "the wrapped chain must survive");
 
     // A chain that simply ends still lets the track body continue
-    let two = song("").replace("track hi  { play q using tone level 0.6 out > master }",
-        "track hi  {\n    play q\n    using tone\n    out > master\n    level 0.6\n}");
+    let two = song("").replace(
+        "track hi  { play q using tone level 0.6 out > master }",
+        "track hi  {\n    play q\n    using tone\n    out > master\n    level 0.6\n}",
+    );
     let ast = dsl::parse(&two).expect("parse");
     let hi = ast.tracks.iter().find(|t| t.name == "hi").unwrap();
     assert_eq!(hi.level, Some(0.6), "level after the chain is still read");
@@ -107,8 +111,10 @@ fn every_choice_name_decodes_to_its_own_index() {
 
 #[test]
 fn a_silent_or_buried_track_is_visible_in_the_meters() {
-    let quiet = song("").replace("track hi  { play q using tone level 0.6 out > master }",
-        "track hi  { play q using tone level 0.6 out > gain(0.001) > master }");
+    let quiet = song("").replace(
+        "track hi  { play q using tone level 0.6 out > master }",
+        "track hi  { play q using tone level 0.6 out > gain(0.001) > master }",
+    );
     let mut e = SongEngine::from_source(&quiet).unwrap();
     e.reset_meters();
     let _ = e.render(1);
@@ -122,10 +128,13 @@ fn a_silent_or_buried_track_is_visible_in_the_meters() {
 fn compile_still_accepts_every_example() {
     for entry in std::fs::read_dir("../examples").unwrap() {
         let path = entry.unwrap().path();
-        if path.extension().and_then(|e| e.to_str()) != Some("synth") { continue; }
+        if path.extension().and_then(|e| e.to_str()) != Some("synth") {
+            continue;
+        }
         let src = std::fs::read_to_string(&path).unwrap();
         let ast = dsl::parse(&src).unwrap_or_else(|e| panic!("{}: {:?}", path.display(), e));
-        compiler::compile(&ast).unwrap_or_else(|e| panic!("{}: {:?}", path.display(), e.first().map(|x| x.message.clone())));
+        compiler::compile(&ast)
+            .unwrap_or_else(|e| panic!("{}: {:?}", path.display(), e.first().map(|x| x.message.clone())));
     }
 }
 
@@ -139,7 +148,9 @@ fn registry_defaults_match_what_a_fresh_module_does() {
     let spec = params::lookup(ModuleKind::Fm, "level").unwrap();
     let render = |set_default: bool| {
         let mut m = FmModule::new();
-        if set_default { m.set_param(FmParam::Level, spec.default); }
+        if set_default {
+            m.set_param(FmParam::Level, spec.default);
+        }
         m.note_on(60, 1.0);
         let mut buf = [0.0f32; 128];
         let mut energy = 0.0f32;
@@ -152,8 +163,12 @@ fn registry_defaults_match_what_a_fresh_module_does() {
     let untouched = render(false);
     let with_default = render(true);
     assert!(untouched > 0.0);
-    assert!((untouched - with_default).abs() / untouched < 0.01,
-        "applying the registry default must be a no-op on a fresh module: {} vs {}", untouched, with_default);
+    assert!(
+        (untouched - with_default).abs() / untouched < 0.01,
+        "applying the registry default must be a no-op on a fresh module: {} vs {}",
+        untouched,
+        with_default
+    );
 }
 
 /// 7.6 / 8.8: no example may hand its dynamics to the master chain. This is the
@@ -168,7 +183,9 @@ fn no_example_lets_the_master_chain_eat_its_transients() {
     let mut broken = Vec::new();
     for entry in std::fs::read_dir("../examples").unwrap() {
         let path = entry.unwrap().path();
-        if path.extension().and_then(|e| e.to_str()) != Some("synth") { continue; }
+        if path.extension().and_then(|e| e.to_str()) != Some("synth") {
+            continue;
+        }
         let src = std::fs::read_to_string(&path).unwrap();
         let mut engine = SongEngine::from_source(&src).unwrap();
         engine.start();
@@ -188,11 +205,18 @@ fn no_example_lets_the_master_chain_eat_its_transients() {
         }
         let (in_peak, in_rms) = engine.master_input_peak_rms();
         let (ci, co) = (analysis::crest(in_peak, in_rms), analysis::crest(out_peak, out_rms));
-        if ci <= 0.0 || co <= 0.0 { continue; }
+        if ci <= 0.0 || co <= 0.0 {
+            continue;
+        }
         let change_db = 20.0 * (co / ci).log10();
         if change_db < -3.0 {
-            offenders.push(format!("{}: {:.1} dB of crest lost ({:.1} -> {:.1})",
-                path.file_stem().unwrap().to_string_lossy(), -change_db, ci, co));
+            offenders.push(format!(
+                "{}: {:.1} dB of crest lost ({:.1} -> {:.1})",
+                path.file_stem().unwrap().to_string_lossy(),
+                -change_db,
+                ci,
+                co
+            ));
         }
     }
     assert!(broken.is_empty(), "the first eight bars are wrong in:\n  {}", broken.join("\n  "));

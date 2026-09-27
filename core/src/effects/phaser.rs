@@ -10,7 +10,10 @@ const F_MIN: f32 = 200.0;
 const F_MAX: f32 = 2400.0;
 
 #[derive(Clone, Copy, Default)]
-struct Allpass { x1: f32, y1: f32 }
+struct Allpass {
+    x1: f32,
+    y1: f32,
+}
 
 impl Allpass {
     #[inline]
@@ -104,8 +107,12 @@ impl Phaser {
 
     pub fn process_stereo(&mut self, l: f32, r: f32) -> (f32, f32) {
         self.phase += self.phase_inc;
-        if self.phase >= 1.0 { self.phase -= 1.0; }
-        if self.tick.is_multiple_of(16) { self.update_coeffs(); }
+        if self.phase >= 1.0 {
+            self.phase -= 1.0;
+        }
+        if self.tick.is_multiple_of(16) {
+            self.update_coeffs();
+        }
         self.tick = self.tick.wrapping_add(1);
         let wl = Self::run(&mut self.left, l, self.coeff_l, self.stages, self.feedback);
         let wr = Self::run(&mut self.right, r, self.coeff_r, self.stages, self.feedback);

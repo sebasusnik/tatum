@@ -78,10 +78,7 @@ impl Arg {
                 } else {
                     "no unit"
                 };
-                Err(format!(
-                    "'{}' takes {} ({}), not '{}'",
-                    self.name, accepts, self.doc, suffix
-                ))
+                Err(format!("'{}' takes {} ({}), not '{}'", self.name, accepts, self.doc, suffix))
             }
         }
     }
@@ -252,7 +249,9 @@ pub fn suggest(kind: &str) -> Option<&'static str> {
     let mut best: Option<(usize, &'static str)> = None;
     for n in NODES {
         let d = crate::params::levenshtein(kind, n.name);
-        if best.is_none_or(|(bd, _)| d < bd) { best = Some((d, n.name)); }
+        if best.is_none_or(|(bd, _)| d < bd) {
+            best = Some((d, n.name));
+        }
     }
     best.filter(|(d, _)| *d <= (kind.len() / 3).max(2)).map(|(_, n)| n)
 }
@@ -270,7 +269,9 @@ pub fn validate(kind: &str, params: &[Param]) -> Vec<String> {
     let mut errors = Vec::new();
     let Some(spec) = lookup(kind) else {
         let mut msg = format!("unknown node '{}'", kind);
-        if let Some(s) = suggest(kind) { msg.push_str(&format!(". Did you mean '{}'?", s)); }
+        if let Some(s) = suggest(kind) {
+            msg.push_str(&format!(". Did you mean '{}'?", s));
+        }
         errors.push(msg);
         return errors;
     };
@@ -283,12 +284,17 @@ pub fn validate(kind: &str, params: &[Param]) -> Vec<String> {
                 match spec.positional.get(positional_idx) {
                     Some(arg) => {
                         if v < arg.min || v > arg.max {
-                            errors.push(format!("{}: {} = {} is out of range ({}..{})", spec.name, arg.name, v, arg.min, arg.max));
+                            errors.push(format!(
+                                "{}: {} = {} is out of range ({}..{})",
+                                spec.name, arg.name, v, arg.min, arg.max
+                            ));
                         }
                     }
                     None => errors.push(format!(
                         "{}: too many positional arguments ({} takes {})",
-                        spec.name, spec.name, spec.positional.len()
+                        spec.name,
+                        spec.name,
+                        spec.positional.len()
                     )),
                 }
                 positional_idx += 1;
@@ -308,7 +314,10 @@ pub fn validate(kind: &str, params: &[Param]) -> Vec<String> {
             Param::Named(name, v) => match spec.named.iter().find(|a| a.name == name) {
                 Some(arg) => {
                     if *v < arg.min || *v > arg.max {
-                        errors.push(format!("{}: {} = {} is out of range ({}..{})", spec.name, arg.name, v, arg.min, arg.max));
+                        errors.push(format!(
+                            "{}: {} = {} is out of range ({}..{})",
+                            spec.name, arg.name, v, arg.min, arg.max
+                        ));
                     }
                 }
                 None => {
@@ -322,7 +331,8 @@ pub fn validate(kind: &str, params: &[Param]) -> Vec<String> {
             },
             Param::Waveform(w) => {
                 if !spec.waveform {
-                    errors.push(format!("{}: unexpected word '{}' (arguments are numbers or name=value)", spec.name, w));
+                    errors
+                        .push(format!("{}: unexpected word '{}' (arguments are numbers or name=value)", spec.name, w));
                 }
             }
             Param::RhythmDiv(_, _) => {
@@ -358,17 +368,32 @@ pub fn markdown() -> String {
     out.push_str("| node | where | arguments | options | description |\n");
     out.push_str("|------|-------|-----------|---------|-------------|\n");
     for n in NODES {
-        let mut args: Vec<String> = n.positional.iter().map(|a| format!("`{}` {}..{} (default {})", a.name, a.min, a.max, a.default)).collect();
-        if n.waveform { args.push(String::from("waveform word")); }
-        if n.rhythm { args.push(String::from("division like `1/8`")); }
-        let opts: Vec<String> = n.named.iter().map(|a| format!("`{}=` {}..{} (default {}), {}", a.name, a.min, a.max, a.default, a.doc)).collect();
-        let name = if n.aliases.is_empty() { format!("`{}`", n.name) } else { format!("`{}` / `{}`", n.name, n.aliases.join("` / `")) };
-        out.push_str(&format!("| {} | {} | {} | {} | {} |\n",
+        let mut args: Vec<String> =
+            n.positional.iter().map(|a| format!("`{}` {}..{} (default {})", a.name, a.min, a.max, a.default)).collect();
+        if n.waveform {
+            args.push(String::from("waveform word"));
+        }
+        if n.rhythm {
+            args.push(String::from("division like `1/8`"));
+        }
+        let opts: Vec<String> = n
+            .named
+            .iter()
+            .map(|a| format!("`{}=` {}..{} (default {}), {}", a.name, a.min, a.max, a.default, a.doc))
+            .collect();
+        let name = if n.aliases.is_empty() {
+            format!("`{}`", n.name)
+        } else {
+            format!("`{}` / `{}`", n.name, n.aliases.join("` / `"))
+        };
+        out.push_str(&format!(
+            "| {} | {} | {} | {} | {} |\n",
             name,
             if n.in_chains { "chain, graph" } else { "graph" },
             if args.is_empty() { String::from("none") } else { args.join("; ") },
             if opts.is_empty() { String::from("none") } else { opts.join("; ") },
-            n.doc));
+            n.doc
+        ));
     }
     out.push('\n');
     out
@@ -376,10 +401,16 @@ pub fn markdown() -> String {
 
 /// JSON reference of every node.
 pub fn json() -> String {
-    let arg_json = |a: &Arg| format!(
-        "{{\"name\": \"{}\", \"min\": {}, \"max\": {}, \"default\": {}, \"doc\": \"{}\"}}",
-        a.name, a.min, a.max, a.default, a.doc.replace('"', "\\\"")
-    );
+    let arg_json = |a: &Arg| {
+        format!(
+            "{{\"name\": \"{}\", \"min\": {}, \"max\": {}, \"default\": {}, \"doc\": \"{}\"}}",
+            a.name,
+            a.min,
+            a.max,
+            a.default,
+            a.doc.replace('"', "\\\"")
+        )
+    };
     let mut out = String::from("[\n");
     for (i, n) in NODES.iter().enumerate() {
         let pos: Vec<String> = n.positional.iter().map(arg_json).collect();

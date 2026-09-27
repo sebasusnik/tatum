@@ -88,13 +88,23 @@ impl FmOperator {
     fn apply_waveform(&self, raw: f32) -> f32 {
         match self.waveform {
             FmWaveform::Sine => raw,
-            FmWaveform::HalfSine => if raw > 0.0 { raw } else { 0.0 },
+            FmWaveform::HalfSine => {
+                if raw > 0.0 {
+                    raw
+                } else {
+                    0.0
+                }
+            }
             FmWaveform::AbsSine => math::abs(raw),
             FmWaveform::QuarterSine => {
                 let p = self.osc.phase(); // 0.0..1.0 normalized (after advance)
-                // We want the first quarter: phase was just advanced, so check
-                // if we're in the first quarter of the cycle
-                if p < 0.25 { raw } else { 0.0 }
+                                          // We want the first quarter: phase was just advanced, so check
+                                          // if we're in the first quarter of the cycle
+                if p < 0.25 {
+                    raw
+                } else {
+                    0.0
+                }
             }
         }
     }

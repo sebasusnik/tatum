@@ -57,10 +57,7 @@ fn report(name: &str, path: &str) -> f64 {
 /// about. CI runs it in the `ci` profile: release without fat LTO, which
 /// renders just as fast.
 #[test]
-#[cfg_attr(
-    debug_assertions,
-    ignore = "release only: debug is ~5x slower than the build you would play with"
-)]
+#[cfg_attr(debug_assertions, ignore = "release only: debug is ~5x slower than the build you would play with")]
 fn the_engine_fits_in_a_callback_with_room_to_spare() {
     println!();
     for (n, p) in [
@@ -74,10 +71,6 @@ fn the_engine_fits_in_a_callback_with_room_to_spare() {
         // Half the budget at the median. The corpus sits between 2% and 8%,
         // so this is a six-fold margin: it is here to catch an engine that
         // got several times slower, not to police a runner's scheduler.
-        assert!(
-            used < 0.5,
-            "{n}: the median block took {:.0}% of the callback budget",
-            used * 100.0
-        );
+        assert!(used < 0.5, "{n}: the median block took {:.0}% of the callback budget", used * 100.0);
     }
 }

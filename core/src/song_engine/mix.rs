@@ -82,7 +82,9 @@ impl SongEngine {
 
             // Gate-off handling (after step advance, so Tie extends before expiry)
             for ti in 0..track_count {
-                if !self.tracks[ti].active { continue; }
+                if !self.tracks[ti].active {
+                    continue;
+                }
                 if self.tracks[ti].gate_samples_remaining > 0.0 {
                     self.tracks[ti].gate_samples_remaining -= 1.0;
                     if self.tracks[ti].gate_samples_remaining <= 0.0 {
@@ -104,9 +106,13 @@ impl SongEngine {
 
             // Arpeggiators: one tick per sample, events go straight to the instrument
             for ti in 0..track_count {
-                if !self.tracks[ti].active { continue; }
+                if !self.tracks[ti].active {
+                    continue;
+                }
                 let inst_idx = self.trigger_instrument(ti);
-                if inst_idx >= self.instruments.len() { continue; }
+                if inst_idx >= self.instruments.len() {
+                    continue;
+                }
                 if let Some(arp) = self.tracks[ti].arp.as_mut() {
                     match arp.tick() {
                         Some(ArpEvent::NoteOn(n, v)) => self.instruments[inst_idx].note_on(n, v),
@@ -125,9 +131,7 @@ impl SongEngine {
             // A ghost kick -- `level 0` but feeding the sidechain so it ducks the
             // mix without being heard -- is a real idiom, and it has to keep
             // running. Muting the fader does not mute the trigger.
-            let muted = self.tracks[ti].active
-                && self.tracks[ti].level <= 0.0
-                && !self.tracks[ti].is_sc_source;
+            let muted = self.tracks[ti].active && self.tracks[ti].level <= 0.0 && !self.tracks[ti].is_sc_source;
             // Pulling the fader releases what is held, the way a mute does.
             // Without this a tied note never ends: the tie branch extends the
             // gate every step whether or not the track fired the note, so a
@@ -136,9 +140,7 @@ impl SongEngine {
             if muted && self.tracks[ti].current_notes_count > 0 {
                 Self::release_track_notes(&mut self.tracks[ti], &mut self.instruments);
             }
-            let silent = muted
-                && self.instruments.get(self.tracks[ti].instrument_idx)
-                    .is_some_and(|i| i.is_idle());
+            let silent = muted && self.instruments.get(self.tracks[ti].instrument_idx).is_some_and(|i| i.is_idle());
             // Clear the chain on the way in, so a delay or reverb sitting in it
             // does not come back stale when the track is brought back.
             if silent && !self.track_silent[ti] {
@@ -149,7 +151,9 @@ impl SongEngine {
 
         // Render each track's instrument (stereo-aware)
         for ti in 0..track_count {
-            if !self.tracks[ti].sounding() || self.track_silent[ti] { continue; }
+            if !self.tracks[ti].sounding() || self.track_silent[ti] {
+                continue;
+            }
             let inst_idx = self.tracks[ti].instrument_idx;
             if inst_idx < self.instruments.len() {
                 let is_stereo = self.instruments[inst_idx]
@@ -167,8 +171,12 @@ impl SongEngine {
 
         // Apply insert FX per track (mono processing applied to both channels)
         for ti in 0..track_count {
-            if !self.tracks[ti].sounding() || self.track_silent[ti] { continue; }
-            if self.tracks[ti].insert_fx.nodes.is_empty() { continue; }
+            if !self.tracks[ti].sounding() || self.track_silent[ti] {
+                continue;
+            }
+            if self.tracks[ti].insert_fx.nodes.is_empty() {
+                continue;
+            }
             for s in 0..len {
                 let (fl, fr) = self.tracks[ti].insert_fx.process_stereo(track_bufs_l[ti][s], track_bufs_r[ti][s]);
                 track_bufs_l[ti][s] = fl;
@@ -179,33 +187,42 @@ impl SongEngine {
         // Sidechain ducking: use kick track to duck other tracks
         // A track's own amount overrides the song's, zero included.
         let has_any_sidechain = self.sidechain_amount > 0.0
-            || self.reverb_sidechain > 0.0 || self.delay_sidechain > 0.0
-            || self.tracks.iter().any(|t| t.active && (t.sidechain_amount.is_some_and(|a| a > 0.0) || t.heard_duck > 0.0));
+            || self.reverb_sidechain > 0.0
+            || self.delay_sidechain > 0.0
+            || self
+                .tracks
+                .iter()
+                .any(|t| t.active && (t.sidechain_amount.is_some_and(|a| a > 0.0) || t.heard_duck > 0.0));
         let (sc_attack, sc_release) = (self.sc_attack_coeff, self.sc_release_coeff);
         if has_any_sidechain {
             for s in 0..len {
                 // Each source keeps its own envelope, so `sidechain from=bass`
                 // breathes with the bass while the drums still duck the pads.
                 for (si, buf_l) in track_bufs_l[..track_count].iter().enumerate() {
-                    if !self.tracks[si].is_sc_source || !self.tracks[si].active { continue; }
+                    if !self.tracks[si].is_sc_source || !self.tracks[si].active {
+                        continue;
+                    }
                     // A Beats track uses its kick envelope rather than the raw
                     // signal, so hats and snares do not duck the mix.
                     let level = if let SongInstrument::Beats(ref m) = self.instruments[self.tracks[si].instrument_idx] {
-                        if s < m.kick_env.len() { m.kick_env[s] } else { 0.0 }
+                        if s < m.kick_env.len() {
+                            m.kick_env[s]
+                        } else {
+                            0.0
+                        }
                     } else {
                         math::abs(buf_l[s])
                     };
                     let env = self.tracks[si].sc_env;
-                    self.tracks[si].sc_env = if level > env {
-                        env + (level - env) * sc_attack
-                    } else {
-                        sc_release * env
-                    };
+                    self.tracks[si].sc_env =
+                        if level > env { env + (level - env) * sc_attack } else { sc_release * env };
                 }
                 // The sends follow the kick, or the song's named source.
                 self.sc_envelope = self.global_sc_idx.map_or(0.0, |si| self.tracks[si].sc_env);
                 for ti in 0..track_count {
-                    if !self.tracks[ti].active { continue; }
+                    if !self.tracks[ti].active {
+                        continue;
+                    }
                     let Some(si) = self.tracks[ti].sc_source else { continue };
                     let target = self.tracks[ti].sidechain_amount.unwrap_or(self.sidechain_amount);
                     let amount = glide(&mut self.tracks[ti].heard_duck, target);
@@ -218,7 +235,11 @@ impl SongEngine {
             }
             for t in self.tracks.iter_mut() {
                 let target = t.sidechain_amount.unwrap_or(self.sidechain_amount);
-                if t.sc_source.is_none() { t.heard_duck = target } else { settle(&mut t.heard_duck, target) }
+                if t.sc_source.is_none() {
+                    t.heard_duck = target
+                } else {
+                    settle(&mut t.heard_duck, target)
+                }
             }
         }
 
@@ -240,7 +261,9 @@ impl SongEngine {
 
         let band_metering = self.band_metering;
         for ti in 0..track_count {
-            if !self.tracks[ti].sounding() || self.track_silent[ti] { continue; }
+            if !self.tracks[ti].sounding() || self.track_silent[ti] {
+                continue;
+            }
             // A leaving track fades over the block from where it is; the
             // fade is linear, which over ten milliseconds is inaudible as a
             // shape and only removes the corner.
@@ -273,10 +296,7 @@ impl SongEngine {
                 }
                 // Both channels always: mono sources were copied to R before the
                 // insert chain, and stereo inserts (autopan, chorus) rely on R.
-                let (sample_l, sample_r) = (
-                    track_bufs_l[ti][s] * gain_l,
-                    track_bufs_r[ti][s] * gain_r,
-                );
+                let (sample_l, sample_r) = (track_bufs_l[ti][s] * gain_l, track_bufs_r[ti][s] * gain_r);
                 let t = &mut self.tracks[ti];
                 t.meter_peak = t.meter_peak.max(sample_l.abs()).max(sample_r.abs());
                 t.meter_sum_sq += (sample_l * sample_l + sample_r * sample_r) as f64;
@@ -354,7 +374,8 @@ impl SongEngine {
             }
             if duck_delay > 0.0 {
                 let g = 1.0 - duck_delay * sc;
-                dl *= g; dr *= g;
+                dl *= g;
+                dr *= g;
             }
             output_l[s] += dl * dwet;
             output_r[s] += dr * dwet;
@@ -368,7 +389,8 @@ impl SongEngine {
             }
             if duck_reverb > 0.0 {
                 let g = 1.0 - duck_reverb * sc;
-                rl *= g; rr *= g;
+                rl *= g;
+                rr *= g;
             }
             output_l[s] += rl * rwet;
             output_r[s] += rr * rwet;

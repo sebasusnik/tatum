@@ -45,12 +45,22 @@ pub(super) struct ActiveAutomation {
 
 /// Resolved automation target.
 pub(super) enum AutoTarget {
-    InstrumentParam { instrument_idx: usize, param_name: InlineName },
-    MasterParam { param_name: InlineName },
-    TrackLevel { track_idx: usize },
+    InstrumentParam {
+        instrument_idx: usize,
+        param_name: InlineName,
+    },
+    MasterParam {
+        param_name: InlineName,
+    },
+    TrackLevel {
+        track_idx: usize,
+    },
     /// Dry/wet of one named node in a track's insert chain, resolved to its
     /// position at compile time so the audio thread never looks up a name.
-    TrackNodeWet { track_idx: usize, node_idx: usize },
+    TrackNodeWet {
+        track_idx: usize,
+        node_idx: usize,
+    },
     ReverbMix,
     DelayMix,
     ReverbFreeze,
@@ -78,7 +88,9 @@ impl SongEngine {
                     // so the audio thread never compares a string.
                     if let Some(inner) = param.strip_suffix(".wet") {
                         if let Some(ti) = self.track_names.iter().position(|n| n == name) {
-                            if let Some(ni) = self.tracks[ti].fx_labels.iter()
+                            if let Some(ni) = self.tracks[ti]
+                                .fx_labels
+                                .iter()
                                 .position(|l| l.as_ref().is_some_and(|l| l.as_str() == inner))
                             {
                                 return Some(AutoTarget::TrackNodeWet { track_idx: ti, node_idx: ni });
@@ -88,15 +100,11 @@ impl SongEngine {
 
                     if param == "level" {
                         // `<track> level` by track name, else by the instrument a track uses
-                        let track_idx = self.track_names.iter()
-                            .position(|n| n == name)
-                            .or_else(|| {
-                                self.instrument_names.iter()
-                                    .position(|n| n == name)
-                                    .and_then(|inst_idx| {
-                                        self.tracks.iter().position(|t| t.instrument_idx == inst_idx && t.active)
-                                    })
-                            });
+                        let track_idx = self.track_names.iter().position(|n| n == name).or_else(|| {
+                            self.instrument_names.iter().position(|n| n == name).and_then(|inst_idx| {
+                                self.tracks.iter().position(|t| t.instrument_idx == inst_idx && t.active)
+                            })
+                        });
                         if let Some(ti) = track_idx {
                             return Some(AutoTarget::TrackLevel { track_idx: ti });
                         }
@@ -104,10 +112,8 @@ impl SongEngine {
 
                     // Try as instrument.param
                     if let Some(inst_idx) = self.instrument_names.iter().position(|n| n == name) {
-                        return InlineName::new(param).map(|param_name| AutoTarget::InstrumentParam {
-                            instrument_idx: inst_idx,
-                            param_name,
-                        });
+                        return InlineName::new(param)
+                            .map(|param_name| AutoTarget::InstrumentParam { instrument_idx: inst_idx, param_name });
                     }
                 }
                 None

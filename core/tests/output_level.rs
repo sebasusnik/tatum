@@ -5,7 +5,8 @@ use tatum_core::output::{Loudness, CEILING_DB, TARGET_LUFS};
 use tatum_core::song_engine::SongEngine;
 
 fn song(level: &str) -> String {
-    format!(r#"
+    format!(
+        r#"
 tempo 120
 scale A minor
 module beats kit {{ kick_level 1.0 }}
@@ -16,7 +17,8 @@ track kick {{ play beat using kit level {level} out > master }}
 track pad  {{ play hold using pad level {level} out > master }}
 scene a {{ track kick {{ play beat using kit }} track pad {{ play hold using pad }} }}
 arrange {{ a x4 }}
-"#)
+"#
+    )
 }
 
 fn lufs(l: &[f32], r: &[f32]) -> f32 {

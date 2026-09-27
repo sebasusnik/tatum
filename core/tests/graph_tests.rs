@@ -13,16 +13,22 @@ use tatum_core::{BLOCK_SIZE, SAMPLE_RATE};
 fn build_bass_graph() -> Instrument {
     let mut b = GraphBuilder::new();
 
-    let osc = b.add_node(NodeSpec::Osc { waveform: Waveform::Saw, freq: 55.0, drift_seed: 42, fixed: false, pitch_semitones: 0.0 });
+    let osc = b.add_node(NodeSpec::Osc {
+        waveform: Waveform::Saw,
+        freq: 55.0,
+        drift_seed: 42,
+        fixed: false,
+        pitch_semitones: 0.0,
+    });
     let filt = b.add_node(NodeSpec::ladder(900.0, 0.6));
     let env = b.add_node(NodeSpec::Env { a: 0.01, d: 0.2, s: 0.7, r: 0.3 });
     let vca = b.add_node(NodeSpec::Vca);
     let out = b.add_node(NodeSpec::Output);
 
-    b.connect(osc, filt);    // osc -> filter
-    b.connect(filt, vca);    // filter -> VCA input 0 (audio)
-    b.connect(env, vca);     // env -> VCA input 1 (control)
-    b.connect(vca, out);     // VCA -> output
+    b.connect(osc, filt); // osc -> filter
+    b.connect(filt, vca); // filter -> VCA input 0 (audio)
+    b.connect(env, vca); // env -> VCA input 1 (control)
+    b.connect(vca, out); // VCA -> output
 
     let template = b.build();
     Instrument::new(template)
@@ -36,7 +42,13 @@ fn build_kick_graph() -> Instrument {
     let mut b = GraphBuilder::new();
 
     // Body
-    let body_osc = b.add_node(NodeSpec::Osc { waveform: Waveform::Sine, freq: 50.0, drift_seed: 42, fixed: false, pitch_semitones: 0.0 });
+    let body_osc = b.add_node(NodeSpec::Osc {
+        waveform: Waveform::Sine,
+        freq: 50.0,
+        drift_seed: 42,
+        fixed: false,
+        pitch_semitones: 0.0,
+    });
     let body_env = b.add_node(NodeSpec::Env { a: 0.001, d: 0.3, s: 0.0, r: 0.01 });
     let body_vca = b.add_node(NodeSpec::Vca);
     let sat = b.add_node(NodeSpec::Saturator { drive: 0.5 });
@@ -76,8 +88,20 @@ fn build_kick_graph() -> Instrument {
 fn build_pad_graph() -> Instrument {
     let mut b = GraphBuilder::new();
 
-    let osc1 = b.add_node(NodeSpec::Osc { waveform: Waveform::Saw, freq: 220.0, drift_seed: 42, fixed: false, pitch_semitones: 0.0 });
-    let osc2 = b.add_node(NodeSpec::Osc { waveform: Waveform::Square, freq: 221.0, drift_seed: 43, fixed: false, pitch_semitones: 0.0 });
+    let osc1 = b.add_node(NodeSpec::Osc {
+        waveform: Waveform::Saw,
+        freq: 220.0,
+        drift_seed: 42,
+        fixed: false,
+        pitch_semitones: 0.0,
+    });
+    let osc2 = b.add_node(NodeSpec::Osc {
+        waveform: Waveform::Square,
+        freq: 221.0,
+        drift_seed: 43,
+        fixed: false,
+        pitch_semitones: 0.0,
+    });
     let mix = b.add_node(NodeSpec::Mix);
     let filt = b.add_node(NodeSpec::biquad(FilterType::LowPass, 2000.0, 0.3));
     let env = b.add_node(NodeSpec::Env { a: 0.5, d: 0.3, s: 0.8, r: 1.0 });
@@ -217,7 +241,13 @@ fn test_graph_topological_sort() {
     let out = b.add_node(NodeSpec::Output);
     let vca = b.add_node(NodeSpec::Vca);
     let env = b.add_node(NodeSpec::Env { a: 0.01, d: 0.1, s: 0.5, r: 0.1 });
-    let osc = b.add_node(NodeSpec::Osc { waveform: Waveform::Sine, freq: 440.0, drift_seed: 42, fixed: false, pitch_semitones: 0.0 });
+    let osc = b.add_node(NodeSpec::Osc {
+        waveform: Waveform::Sine,
+        freq: 440.0,
+        drift_seed: 42,
+        fixed: false,
+        pitch_semitones: 0.0,
+    });
 
     b.connect(osc, vca);
     b.connect(env, vca);
@@ -241,7 +271,13 @@ fn test_graph_topological_sort() {
 fn test_graph_voice_stealing() {
     // With MAX_VOICES=8, playing 9 notes should steal the oldest
     let mut b = GraphBuilder::new();
-    let osc = b.add_node(NodeSpec::Osc { waveform: Waveform::Sine, freq: 440.0, drift_seed: 42, fixed: false, pitch_semitones: 0.0 });
+    let osc = b.add_node(NodeSpec::Osc {
+        waveform: Waveform::Sine,
+        freq: 440.0,
+        drift_seed: 42,
+        fixed: false,
+        pitch_semitones: 0.0,
+    });
     let env = b.add_node(NodeSpec::Env { a: 0.01, d: 0.1, s: 1.0, r: 0.1 });
     let vca = b.add_node(NodeSpec::Vca);
     let out = b.add_node(NodeSpec::Output);

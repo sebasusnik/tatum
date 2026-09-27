@@ -8,7 +8,8 @@
 use tatum_core::song_engine::SongEngine;
 
 fn song(global: &str, pad: &str) -> String {
-    format!(r#"
+    format!(
+        r#"
 tempo 120
 scale A minor
 sidechain {global}
@@ -18,7 +19,8 @@ pattern beat {{ kick: X - - - X - - - X - - - X - - - }}
 pattern hold {{ [1.3 3.3 5.3]:0.8 ..*15 }}
 track kick {{ play beat using kit level 0 out > master }}
 track pad  {{ play hold using pad level 0.5 {pad} out > master }}
-"#)
+"#
+    )
 }
 
 fn render(src: &str) -> Vec<f32> {
@@ -39,6 +41,7 @@ fn a_track_at_sidechain_zero_is_not_ducked() {
 #[test]
 fn a_scene_can_turn_one_track_off() {
     let src = song("0.8", "") + "scene a { track kick { play beat using kit } track pad { play hold using pad sidechain 0 } }\narrange { a x2 }\n";
-    let plain = song("0.0", "") + "scene a { track kick { play beat using kit } track pad { play hold using pad } }\narrange { a x2 }\n";
+    let plain = song("0.0", "")
+        + "scene a { track kick { play beat using kit } track pad { play hold using pad } }\narrange { a x2 }\n";
     assert_eq!(render(&src), render(&plain));
 }

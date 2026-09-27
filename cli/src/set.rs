@@ -55,7 +55,13 @@ fn parse_header(src: &str, default_bars: u32) -> (u32, String, Option<f32>, Stri
         for field in rest.split_whitespace() {
             let Some((k, v)) = field.split_once('=') else { continue };
             match k {
-                "bars" => if let Ok(n) = v.parse::<u32>() { if n > 0 { bars = n; } },
+                "bars" => {
+                    if let Ok(n) = v.parse::<u32>() {
+                        if n > 0 {
+                            bars = n;
+                        }
+                    }
+                }
                 "phase" => phase = v.to_string(),
                 "energy" => energy = v.parse::<f32>().ok(),
                 _ => {}
@@ -80,16 +86,19 @@ pub fn load(dir: &Path, default_bars: u32) -> Result<Vec<Step>, String> {
     if files.is_empty() {
         return Err(format!("{}: no .synth files", dir.display()));
     }
-    files.into_iter().map(|path| {
-        // Resolved through `use`, so a step can be the rig plus its overrides
-        // rather than a copy of the whole rig. The header is read from the raw
-        // file, not the expansion: `bars` belongs to the step, and a rig that
-        // carried one would otherwise leak into every step that includes it.
-        let raw = fs::read_to_string(&path).map_err(|e| format!("{}: {}", path.display(), e))?;
-        let src = crate::include::Source::load(&path)?.text;
-        let (bars, phase, energy, note) = parse_header(&raw, default_bars);
-        Ok(Step { path, src, bars, phase, energy, note })
-    }).collect()
+    files
+        .into_iter()
+        .map(|path| {
+            // Resolved through `use`, so a step can be the rig plus its overrides
+            // rather than a copy of the whole rig. The header is read from the raw
+            // file, not the expansion: `bars` belongs to the step, and a rig that
+            // carried one would otherwise leak into every step that includes it.
+            let raw = fs::read_to_string(&path).map_err(|e| format!("{}: {}", path.display(), e))?;
+            let src = crate::include::Source::load(&path)?.text;
+            let (bars, phase, energy, note) = parse_header(&raw, default_bars);
+            Ok(Step { path, src, bars, phase, energy, note })
+        })
+        .collect()
 }
 
 /// Bars are the unit a set is written in, and a step can change the tempo, so
@@ -115,7 +124,8 @@ pub struct Rendered {
 pub fn render_set(steps: &[Step]) -> Result<Rendered, String> {
     let mut planner = LivePlanner::new();
     let mut player = LivePlayer::new();
-    let first = planner.plan(&steps[0].src, player.generation())
+    let first = planner
+        .plan(&steps[0].src, player.generation())
         .map_err(|e| format!("{}: {}", steps[0].name(), describe(&e)))?;
     player.apply(first);
     player.start();
@@ -147,8 +157,8 @@ pub fn render_set(steps: &[Step]) -> Result<Rendered, String> {
             render_samples(&mut player, total, &mut l, &mut r);
             break;
         };
-        let plan = planner.plan(&next.src, player.generation())
-            .map_err(|e| format!("{}: {}", next.name(), describe(&e)))?;
+        let plan =
+            planner.plan(&next.src, player.generation()).map_err(|e| format!("{}: {}", next.name(), describe(&e)))?;
         match plan {
             Plan::Swap { .. } => {
                 let lead = (spb as usize).min(total);
@@ -168,10 +178,10 @@ pub fn render_set(steps: &[Step]) -> Result<Rendered, String> {
 fn describe(e: &tatum_core::song_engine::DslError) -> String {
     use tatum_core::song_engine::DslError;
     match e {
-        DslError::Parse(errs) => errs.iter().map(|x| format!("line {}: {}", x.line, x.message))
-            .collect::<Vec<_>>().join("; "),
-        DslError::Compile(errs) => errs.iter().map(|x| x.message.clone())
-            .collect::<Vec<_>>().join("; "),
+        DslError::Parse(errs) => {
+            errs.iter().map(|x| format!("line {}: {}", x.line, x.message)).collect::<Vec<_>>().join("; ")
+        }
+        DslError::Compile(errs) => errs.iter().map(|x| x.message.clone()).collect::<Vec<_>>().join("; "),
     }
 }
 
@@ -205,9 +215,7 @@ pub fn probe(src: &str, bars: u32) -> Result<Probe, String> {
     let mut e = SongEngine::from_source(src)?;
     e.start();
     let (l, r) = e.render(bars);
-    let voices = (0..e.track_count())
-        .filter(|i| e.track_level(*i) > 0.0 && e.track_rms(*i) > 1e-5)
-        .count();
+    let voices = (0..e.track_count()).filter(|i| e.track_level(*i) > 0.0 && e.track_rms(*i) > 1e-5).count();
     let peak = l.iter().chain(r.iter()).fold(0.0f32, |m, v| m.max(v.abs()));
     let n = (l.len() + r.len()).max(1) as f64;
     let sum: f64 = l.iter().chain(r.iter()).map(|v| (*v as f64) * (*v as f64)).sum();
@@ -230,12 +238,12 @@ pub fn probe(src: &str, bars: u32) -> Result<Probe, String> {
 fn band_ratio(x: &[f32]) -> f32 {
     // Two one-pole filters is enough to separate a floor from a midrange.
     let (mut lo, mut hi_lp, mut hi_hp) = (0.0f32, 0.0f32, 0.0f32);
-    let (a_lo, a_hi) = (0.019f32, 0.38f32);   // ~140 Hz and ~3 kHz at 44.1k
+    let (a_lo, a_hi) = (0.019f32, 0.38f32); // ~140 Hz and ~3 kHz at 44.1k
     let (mut e_lo, mut e_hi) = (0.0f64, 0.0f64);
     for &v in x {
         lo += a_lo * (v - lo);
         hi_lp += a_hi * (v - hi_lp);
-        hi_hp += 0.041 * (v - hi_hp);         // ~300 Hz
+        hi_hp += 0.041 * (v - hi_hp); // ~300 Hz
         let mid = hi_lp - hi_hp;
         e_lo += (lo * lo) as f64;
         e_hi += (mid * mid) as f64;
@@ -248,10 +256,19 @@ fn band_ratio(x: &[f32]) -> f32 {
 /// can hear -- an agent editing a parameter that is not reachable, say.
 fn difference_db(a: &[f32], b: &[f32]) -> f32 {
     let n = a.len().min(b.len());
-    if n == 0 { return f32::NEG_INFINITY; }
-    let d: f64 = (0..n).map(|i| { let x = (a[i] - b[i]) as f64; x * x }).sum();
+    if n == 0 {
+        return f32::NEG_INFINITY;
+    }
+    let d: f64 = (0..n)
+        .map(|i| {
+            let x = (a[i] - b[i]) as f64;
+            x * x
+        })
+        .sum();
     let e: f64 = (0..n).map(|i| (a[i] as f64) * (a[i] as f64)).sum();
-    if e <= 0.0 { return f32::NEG_INFINITY; }
+    if e <= 0.0 {
+        return f32::NEG_INFINITY;
+    }
     10.0 * (d / e).max(1e-20).log10() as f32
 }
 
@@ -302,8 +319,15 @@ fn cmd_render(args: &[String]) -> Result<(), String> {
     let secs = rendered.l.len() as f32 / SAMPLE_RATE;
     for (i, step) in steps.iter().enumerate() {
         let at = rendered.applied.get(i).map(|a| a.1).unwrap_or(0) as f32 / SAMPLE_RATE;
-        eprintln!("  {:>3}:{:02}  {:<14} {:>3} bars  {:<10} {}",
-            (at / 60.0) as u32, (at % 60.0) as u32, step.name(), step.bars, step.phase, step.note);
+        eprintln!(
+            "  {:>3}:{:02}  {:<14} {:>3} bars  {:<10} {}",
+            (at / 60.0) as u32,
+            (at % 60.0) as u32,
+            step.name(),
+            step.bars,
+            step.phase,
+            step.note
+        );
     }
     let bytes = tatum_core::wav::encode_stereo_16(&rendered.l, &rendered.r, SAMPLE_RATE as u32);
     fs::write(&out, bytes).map_err(|e| format!("{}: {}", out, e))?;
@@ -324,14 +348,34 @@ fn cmd_check(args: &[String]) -> Result<(), String> {
 
     for (i, step) in steps.iter().enumerate() {
         let kind = match planner.plan(&step.src, player.generation()) {
-            Ok(p) => { let k = p.describe(); player.apply(p); if i == 0 { player.start(); } k }
-            Err(e) => { bad += 1; rows.push((step, String::from("error"), None, describe(&e))); continue; }
+            Ok(p) => {
+                let k = p.describe();
+                player.apply(p);
+                if i == 0 {
+                    player.start();
+                }
+                k
+            }
+            Err(e) => {
+                bad += 1;
+                rows.push((step, String::from("error"), None, describe(&e)));
+                continue;
+            }
         };
         let pr = probe(&step.src, 2)?;
         let mut why = String::new();
-        if i > 0 && kind == "unchanged" { bad += 1; why = String::from("changes nothing"); }
-        if pr.peak < 1e-4 { bad += 1; why = String::from("silent"); }
-        if pr.clipped > 0 { bad += 1; why = format!("{} clipped samples", pr.clipped); }
+        if i > 0 && kind == "unchanged" {
+            bad += 1;
+            why = String::from("changes nothing");
+        }
+        if pr.peak < 1e-4 {
+            bad += 1;
+            why = String::from("silent");
+        }
+        if pr.clipped > 0 {
+            bad += 1;
+            why = format!("{} clipped samples", pr.clipped);
+        }
         rows.push((step, String::from(kind), Some(pr), why));
     }
 
@@ -346,16 +390,30 @@ fn cmd_check(args: &[String]) -> Result<(), String> {
         }
         println!("],\"problems\":{}}}", bad);
     } else {
-        println!("{:<14} {:>5} {:<10} {:>6} {:<10} {:>7} {:>8} {:>6}  problem",
-            "step", "bars", "phase", "energy", "transition", "peak", "rms dB", "muted");
+        println!(
+            "{:<14} {:>5} {:<10} {:>6} {:<10} {:>7} {:>8} {:>6}  problem",
+            "step", "bars", "phase", "energy", "transition", "peak", "rms dB", "muted"
+        );
         for (s, kind, pr, why) in &rows {
             let (peak, rms, silent) = pr.as_ref().map_or((0.0, 0.0, 0), |p| (p.peak, p.rms_db, p.silent_tracks));
             let en = s.energy.map(|e| format!("{:.0}", e)).unwrap_or_else(|| String::from("-"));
-            println!("{:<14} {:>5} {:<10} {:>6} {:<10} {:>7.3} {:>8.1} {:>6}  {}",
-                s.name(), s.bars, s.phase, en, kind, peak, rms, silent, why);
+            println!(
+                "{:<14} {:>5} {:<10} {:>6} {:<10} {:>7.3} {:>8.1} {:>6}  {}",
+                s.name(),
+                s.bars,
+                s.phase,
+                en,
+                kind,
+                peak,
+                rms,
+                silent,
+                why
+            );
         }
     }
-    if bad > 0 { return Err(format!("{} problems", bad)); }
+    if bad > 0 {
+        return Err(format!("{} problems", bad));
+    }
     Ok(())
 }
 
@@ -405,12 +463,20 @@ fn cmd_next(args: &[String]) -> Result<(), String> {
             return Err(String::from("rejected"));
         }
     };
-    if transition == "unchanged" { problems.push(String::from("changes nothing the engine can hear")); }
+    if transition == "unchanged" {
+        problems.push(String::from("changes nothing the engine can hear"));
+    }
 
     // 3. Is it playable?
-    if pr.peak < 1e-4 { problems.push(String::from("silent")); }
-    if pr.clipped > 0 { problems.push(format!("{} clipped samples", pr.clipped)); }
-    if pr.silent_tracks == pr.tracks { problems.push(String::from("every track is muted")); }
+    if pr.peak < 1e-4 {
+        problems.push(String::from("silent"));
+    }
+    if pr.clipped > 0 {
+        problems.push(format!("{} clipped samples", pr.clipped));
+    }
+    if pr.silent_tracks == pr.tracks {
+        problems.push(String::from("every track is muted"));
+    }
     // Headroom. Once the mix arrives over full scale the limiter decides how
     // loud the step is, not the faders, and every step lands at the same
     // loudness however the set is arranged. Measured on one set: at 1.36 in,
@@ -437,11 +503,14 @@ fn cmd_next(args: &[String]) -> Result<(), String> {
     let a = SongEngine::from_source(&prev.src)?;
     let b = SongEngine::from_source(&cand)?;
     let (mut a, mut b) = (a, b);
-    a.start(); b.start();
+    a.start();
+    b.start();
     let (al, _) = a.render(2);
     let (bl, _) = b.render(2);
     let diff = difference_db(&al, &bl);
-    if diff < -40.0 { problems.push(format!("inaudible: {:.0} dB from the step before it", diff)); }
+    if diff < -40.0 {
+        problems.push(format!("inaudible: {:.0} dB from the step before it", diff));
+    }
 
     // 5. A build has to explode. If the step before this one was a fill or a
     //    roll, it promised an arrival, and this step is the arrival.
@@ -461,13 +530,16 @@ fn cmd_next(args: &[String]) -> Result<(), String> {
 
     let verdict = if problems.is_empty() { "accepted" } else { "rejected" };
     emit(json, verdict, transition, &problems, Some(&pr), diff);
-    if problems.is_empty() { Ok(()) } else { Err(String::from("rejected")) }
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        Err(String::from("rejected"))
+    }
 }
 
 fn emit(json: bool, verdict: &str, transition: &str, problems: &[String], pr: Option<&Probe>, diff: f32) {
-    let (peak, rms, muted, voices, floor, min) = pr.map_or((0.0, 0.0, 0, 0, 0.0, 0.0), |p| {
-        (p.peak, p.rms_db, p.silent_tracks, p.voices, p.floor_db, p.master_in)
-    });
+    let (peak, rms, muted, voices, floor, min) = pr
+        .map_or((0.0, 0.0, 0, 0, 0.0, 0.0), |p| (p.peak, p.rms_db, p.silent_tracks, p.voices, p.floor_db, p.master_in));
     if json {
         println!("{{\"verdict\":\"{}\",\"transition\":\"{}\",\"peak\":{:.4},\"rms_db\":{:.2},\"voices\":{},\"floor_db\":{:.1},\"master_in\":{:.2},\"muted_tracks\":{},\"difference_db\":{:.1},\"problems\":[{}]}}",
             verdict, transition, peak, rms, voices, floor, min, muted, diff,
@@ -475,7 +547,9 @@ fn emit(json: bool, verdict: &str, transition: &str, problems: &[String], pr: Op
     } else {
         println!("{}: {} transition, rms {:.1} dB, {} voices, floor {:+.1} dB over the mids, master in {:.2}, {:.0} dB from the step before",
             verdict, transition, rms, voices, floor, min, diff);
-        for p in problems { println!("  - {}", p); }
+        for p in problems {
+            println!("  - {}", p);
+        }
     }
 }
 
@@ -518,11 +592,7 @@ master { in > out }
     /// hands over without rebuilding the engine, so nothing restarts.
     #[test]
     fn level_and_wet_steps_stay_on_the_fast_path() {
-        let steps = [
-            RIG.to_string(),
-            RIG.replace("wet=0.0", "wet=1.0"),
-            RIG.replace("level 0.5", "level 0.2"),
-        ];
+        let steps = [RIG.to_string(), RIG.replace("wet=0.0", "wet=1.0"), RIG.replace("level 0.5", "level 0.2")];
         let mut planner = LivePlanner::new();
         let mut player = LivePlayer::new();
         player.apply(planner.plan(&steps[0], player.generation()).expect("first"));
@@ -540,12 +610,13 @@ master { in > out }
     fn the_walk_lasts_as_long_as_the_steps_say() {
         let mk = |n: u32, src: String| Step {
             path: PathBuf::from(format!("{n:03}.synth")),
-            src, bars: 2, phase: String::new(), energy: None, note: String::new(),
+            src,
+            bars: 2,
+            phase: String::new(),
+            energy: None,
+            note: String::new(),
         };
-        let steps = vec![
-            mk(0, RIG.to_string()),
-            mk(1, RIG.replace("wet=0.0", "wet=1.0")),
-        ];
+        let steps = vec![mk(0, RIG.to_string()), mk(1, RIG.replace("wet=0.0", "wet=1.0"))];
         let out = render_set(&steps).expect("renders");
         // Two steps of two bars at 120 BPM in 4/4 is eight seconds.
         let secs = out.l.len() as f32 / SAMPLE_RATE;

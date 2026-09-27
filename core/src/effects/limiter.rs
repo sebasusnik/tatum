@@ -60,11 +60,7 @@ impl Limiter {
         }
 
         // Calculate target gain
-        let target = if peak > self.threshold {
-            self.threshold / peak
-        } else {
-            1.0
-        };
+        let target = if peak > self.threshold { self.threshold / peak } else { 1.0 };
 
         // Smooth gain: instant attack, exponential release
         if target < self.gain {
@@ -76,10 +72,7 @@ impl Limiter {
         // Advance write position
         self.write_pos = (self.write_pos + 1) % LOOKAHEAD_SIZE;
 
-        (
-            delayed_l * self.gain * self.makeup_gain,
-            delayed_r * self.gain * self.makeup_gain,
-        )
+        (delayed_l * self.gain * self.makeup_gain, delayed_r * self.gain * self.makeup_gain)
     }
 
     pub fn reset(&mut self) {

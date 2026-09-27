@@ -31,7 +31,11 @@ const DRIFT_AMOUNT: f32 = 0.001731;
 #[inline]
 fn fmod_1(x: f32) -> f32 {
     let r = x - math::floor(x);
-    if r < 0.0 { r + 1.0 } else { r }
+    if r < 0.0 {
+        r + 1.0
+    } else {
+        r
+    }
 }
 
 /// PolyBLEP residual for anti-aliased waveforms.
@@ -85,11 +89,7 @@ impl Oscillator {
     }
 
     fn update_phase_inc(&mut self) {
-        let drift_mult = if self.drift_enabled {
-            1.0 + self.drift_value * DRIFT_AMOUNT
-        } else {
-            1.0
-        };
+        let drift_mult = if self.drift_enabled { 1.0 + self.drift_value * DRIFT_AMOUNT } else { 1.0 };
         self.phase_inc = (self.freq * drift_mult) / self.sample_rate;
     }
 

@@ -61,20 +61,23 @@ impl DslError {
         match self {
             DslError::Parse(errs) => {
                 for (i, e) in errs.iter().enumerate() {
-                    if i > 0 { out.push(','); }
+                    if i > 0 {
+                        out.push(',');
+                    }
                     out.push_str(&format!(
                         r#"{{"line":{},"col":{},"msg":"{}"}}"#,
-                        e.line, e.col, json_escape(&e.message),
+                        e.line,
+                        e.col,
+                        json_escape(&e.message),
                     ));
                 }
             }
             DslError::Compile(errs) => {
                 for (i, e) in errs.iter().enumerate() {
-                    if i > 0 { out.push(','); }
-                    out.push_str(&format!(
-                        r#"{{"line":{},"col":0,"msg":"{}"}}"#,
-                        e.line, json_escape(&e.message),
-                    ));
+                    if i > 0 {
+                        out.push(',');
+                    }
+                    out.push_str(&format!(r#"{{"line":{},"col":0,"msg":"{}"}}"#, e.line, json_escape(&e.message),));
                 }
             }
         }

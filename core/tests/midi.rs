@@ -49,10 +49,13 @@ fn cc(source: MidiSource) -> u8 {
 }
 
 fn ops(plans: &[Plan]) -> Vec<FastOp> {
-    plans.iter().filter_map(|p| match p {
-        Plan::Control { op, .. } => Some(*op),
-        _ => None,
-    }).collect()
+    plans
+        .iter()
+        .filter_map(|p| match p {
+            Plan::Control { op, .. } => Some(*op),
+            _ => None,
+        })
+        .collect()
 }
 
 fn track(engine: &SongEngine, name: &str) -> usize {
@@ -81,7 +84,8 @@ fn a_midi_block_parses_into_dotted_targets() {
 fn a_later_block_replaces_the_same_controller_and_keeps_the_rest() {
     let src = format!("{}{}\nmidi {{\n  cc 74 > pad level\n  cc 74 > acid resonance\n}}\n", SONG, KNOBS);
     let song = dsl::parse(&src).expect("parses");
-    let on_74: Vec<&str> = song.midi.iter().filter(|m| m.source == MidiSource::Cc(74)).map(|m| m.target.as_str()).collect();
+    let on_74: Vec<&str> =
+        song.midi.iter().filter(|m| m.source == MidiSource::Cc(74)).map(|m| m.target.as_str()).collect();
     // Both lines of the later block, and nothing of the earlier one.
     assert_eq!(on_74, ["pad.level", "acid.resonance"]);
     assert!(song.midi.iter().any(|m| m.source == MidiSource::Cc(7)), "cc 7 is untouched by the later block");
@@ -246,11 +250,14 @@ midi {
 /// The notes a list of plans plays on one track, as `(note, on)`.
 fn notes_on(plans: &[Plan], engine: &SongEngine, name: &str) -> Vec<(u8, bool)> {
     let t = track(engine, name);
-    plans.iter().filter_map(|p| match p {
-        Plan::Play { op: FastOp::NoteOn { track, note, .. }, .. } if *track == t => Some((*note, true)),
-        Plan::Play { op: FastOp::NoteOff { track, note }, .. } if *track == t => Some((*note, false)),
-        _ => None,
-    }).collect()
+    plans
+        .iter()
+        .filter_map(|p| match p {
+            Plan::Play { op: FastOp::NoteOn { track, note, .. }, .. } if *track == t => Some((*note, true)),
+            Plan::Play { op: FastOp::NoteOff { track, note }, .. } if *track == t => Some((*note, false)),
+            _ => None,
+        })
+        .collect()
 }
 
 /// How loud `blocks` blocks of the player come out, RMS over both sides.
@@ -265,7 +272,9 @@ fn loudness(player: &mut LivePlayer, blocks: usize) -> f32 {
 }
 
 fn apply(player: &mut LivePlayer, plans: Option<Vec<Plan>>) {
-    for plan in plans.expect("mapped") { player.apply(plan); }
+    for plan in plans.expect("mapped") {
+        player.apply(plan);
+    }
 }
 
 #[test]
@@ -278,7 +287,8 @@ fn keys_and_pads_parse_as_their_own_sources() {
 
 #[test]
 fn keys_and_pads_on_the_wrong_thing_are_compile_errors() {
-    let bad = PLAYED.replace("keys > solo", "keys > drums")
+    let bad = PLAYED
+        .replace("keys > solo", "keys > drums")
         .replace("pad 36 > drums kick", "pad 36 > solo kick")
         .replace("pad 38 > drums clap", "pad 38 > drums cowbell");
     let text = format!("{:?}", SongEngine::from_source(&bad).err().expect("does not compile"));
@@ -329,7 +339,8 @@ fn a_key_sounds_and_its_release_lets_it_go() {
 
 #[test]
 fn a_key_on_a_muted_track_is_silent() {
-    let muted = PLAYED.replace("using lead level 0.8", "using lead level 0")
+    let muted = PLAYED
+        .replace("using lead level 0.8", "using lead level 0")
         .replace("using chords level 0.8", "using chords level 0");
     let (mut planner, mut player) = session(&muted);
     player.start();
@@ -356,10 +367,13 @@ fn a_pad_hits_the_drum_it_names() {
 }
 
 fn ops_of_play(plans: &[Plan]) -> Vec<FastOp> {
-    plans.iter().filter_map(|p| match p {
-        Plan::Play { op, .. } => Some(*op),
-        _ => None,
-    }).collect()
+    plans
+        .iter()
+        .filter_map(|p| match p {
+            Plan::Play { op, .. } => Some(*op),
+            _ => None,
+        })
+        .collect()
 }
 
 #[test]
@@ -370,14 +384,19 @@ fn a_note_reaches_whichever_engine_is_playing_and_never_the_queued_one() {
     let queued = planner.plan(&format!("{}\npattern unused {{ 1.1 - - - }}\n", PLAYED), player.generation()).unwrap();
     player.apply(queued);
     let plans = planner.key(57, 110, player.generation()).unwrap();
-    let bases: Vec<u64> = plans.iter().filter_map(|p| match p {
-        Plan::Play { base, .. } => Some(*base),
-        _ => None,
-    }).collect();
+    let bases: Vec<u64> = plans
+        .iter()
+        .filter_map(|p| match p {
+            Plan::Play { base, .. } => Some(*base),
+            _ => None,
+        })
+        .collect();
     assert!(bases.contains(&player.generation()), "the playing engine gets the note");
     assert!(bases.iter().any(|b| *b != player.generation()), "and so does the queued one, resolved against it");
     // The one playing sounds it.
-    for plan in plans { player.apply(plan); }
+    for plan in plans {
+        player.apply(plan);
+    }
     assert!(loudness(&mut player, 8) > 1e-3);
 }
 
@@ -385,10 +404,15 @@ fn a_note_reaches_whichever_engine_is_playing_and_never_the_queued_one() {
 fn the_pitch_strip_bends_the_keys_two_semitones_either_way() {
     let (mut planner, player) = session(PLAYED);
     let g = player.generation();
-    let ratio = |plans: Vec<Plan>| plans.iter().find_map(|p| match p {
-        Plan::Control { op: FastOp::PitchBend { ratio, .. }, .. } => Some(*ratio),
-        _ => None,
-    }).unwrap();
+    let ratio = |plans: Vec<Plan>| {
+        plans
+            .iter()
+            .find_map(|p| match p {
+                Plan::Control { op: FastOp::PitchBend { ratio, .. }, .. } => Some(*ratio),
+                _ => None,
+            })
+            .unwrap()
+    };
     assert!((ratio(planner.bend(16383, g)) - 2f32.powf(2.0 / 12.0)).abs() < 1e-3);
     assert!((ratio(planner.bend(0, g)) - 2f32.powf(-2.0 / 12.0)).abs() < 1e-3);
     assert!((ratio(planner.bend(8192, g)) - 1.0).abs() < 1e-6, "at rest is no bend");

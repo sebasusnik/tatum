@@ -87,18 +87,12 @@ impl Default for Graph {
 
 impl Graph {
     pub fn new() -> Self {
-        Self {
-            nodes: core::array::from_fn(|_| None),
-            buffers: [[0.0; BLOCK_SIZE]; MAX_GRAPH_NODES],
-        }
+        Self { nodes: core::array::from_fn(|_| None), buffers: [[0.0; BLOCK_SIZE]; MAX_GRAPH_NODES] }
     }
 
     /// Create from a template with fresh node instances.
     pub fn from_template(template: &GraphTemplate) -> Self {
-        Self {
-            nodes: template.create_nodes(),
-            buffers: [[0.0; BLOCK_SIZE]; MAX_GRAPH_NODES],
-        }
+        Self { nodes: template.create_nodes(), buffers: [[0.0; BLOCK_SIZE]; MAX_GRAPH_NODES] }
     }
 
     /// Re-initialize nodes from template (for voice reuse).
@@ -118,10 +112,7 @@ impl Graph {
                 // Gather inputs
                 let mut input_vals = [0.0f32; MAX_NODE_INPUTS];
                 let ic = input_count as usize;
-                for (val, edge) in input_vals[..ic]
-                    .iter_mut()
-                    .zip(template.edges[node_idx][..ic].iter())
-                {
+                for (val, edge) in input_vals[..ic].iter_mut().zip(template.edges[node_idx][..ic].iter()) {
                     if edge.is_connected() {
                         *val = self.buffers[edge.src_node as usize][s];
                     }
@@ -289,9 +280,8 @@ impl GraphBuilder {
 
         for i in 0..node_count as usize {
             if self.specs[i].is_oscillator() {
-                let offset = if let NodeSpec::Osc { pitch_semitones, .. } = self.specs[i] {
-                    pitch_semitones
-                } else { 0.0 };
+                let offset =
+                    if let NodeSpec::Osc { pitch_semitones, .. } = self.specs[i] { pitch_semitones } else { 0.0 };
                 osc_nodes[osc_count as usize] = i as u8;
                 osc_pitch_offsets[osc_count as usize] = offset;
                 osc_count += 1;
@@ -317,8 +307,7 @@ impl GraphBuilder {
         }
 
         // Adjacency: src -> [dependents]
-        let mut dep_list: [[u8; MAX_GRAPH_NODES]; MAX_GRAPH_NODES] =
-            [[0; MAX_GRAPH_NODES]; MAX_GRAPH_NODES];
+        let mut dep_list: [[u8; MAX_GRAPH_NODES]; MAX_GRAPH_NODES] = [[0; MAX_GRAPH_NODES]; MAX_GRAPH_NODES];
         let mut dep_counts = [0u8; MAX_GRAPH_NODES];
 
         for dst in 0..node_count as usize {

@@ -23,7 +23,9 @@ impl Parser {
             Some(n) => n,
             None => return,
         };
-        if !self.expect(&Token::LBrace) { return; }
+        if !self.expect(&Token::LBrace) {
+            return;
+        }
 
         // Look ahead to determine if this is a scene or a note pattern
         let saved_pos = self.pos;
@@ -34,7 +36,10 @@ impl Parser {
             match &self.tokens[scan].token {
                 Token::LBrace => depth += 1,
                 Token::RBrace => depth -= 1,
-                Token::Track | Token::Extends | Token::Tempo | Token::Auto => { is_scene = true; break; }
+                Token::Track | Token::Extends | Token::Tempo | Token::Auto => {
+                    is_scene = true;
+                    break;
+                }
                 _ => {}
             }
             scan += 1;
@@ -86,7 +91,8 @@ impl Parser {
                             // Mixed mode: first row wasn't labeled but this one is — error
                             let s = self.span();
                             self.errors.push(ParseError {
-                                line: s.line, col: s.col,
+                                line: s.line,
+                                col: s.col,
                                 message: format!("pattern '{}': mixed labeled/unlabeled rows", name),
                             });
                         }
@@ -116,7 +122,10 @@ impl Parser {
                     let mut notes = Vec::new();
                     loop {
                         match self.peek().clone() {
-                            Token::RBracket => { self.advance(); break; }
+                            Token::RBracket => {
+                                self.advance();
+                                break;
+                            }
                             Token::Eof => break,
                             Token::Note(ref n) => {
                                 let n = n.clone();
@@ -154,7 +163,9 @@ impl Parser {
                                     });
                                 }
                             }
-                            _ => { self.advance(); } // skip unexpected tokens inside chord
+                            _ => {
+                                self.advance();
+                            } // skip unexpected tokens inside chord
                         }
                     }
                     // Optional shared velocity after ]: [A3 C4 E4]:0.35
@@ -165,11 +176,8 @@ impl Parser {
                         None
                     };
                     // Optional plock after chord
-                    let plock = if matches!(self.peek(), Token::LParen) {
-                        self.parse_plock_params()
-                    } else {
-                        PLock::default()
-                    };
+                    let plock =
+                        if matches!(self.peek(), Token::LParen) { self.parse_plock_params() } else { PLock::default() };
                     current_row.push(Step::Chord(ChordStep { notes, velocity, plock }));
                 }
                 // `<B4 C#5 D5>` -- notes in sequence inside one step. The
@@ -181,9 +189,15 @@ impl Parser {
                     let mut slide_next = false;
                     loop {
                         match self.peek() {
-                            Token::Arrow => { self.advance(); break; }
+                            Token::Arrow => {
+                                self.advance();
+                                break;
+                            }
                             Token::RBrace | Token::Eof => break,
-                            Token::Tilde => { self.advance(); slide_next = true; }
+                            Token::Tilde => {
+                                self.advance();
+                                slide_next = true;
+                            }
                             Token::Note(ref nn) => {
                                 let nn = nn.clone();
                                 self.check_note_range(&nn);
@@ -191,7 +205,9 @@ impl Parser {
                                 let velocity = if matches!(self.peek(), Token::Colon) {
                                     self.advance();
                                     self.expect_number()
-                                } else { None };
+                                } else {
+                                    None
+                                };
                                 subs.push(NoteStep {
                                     note: NoteRef::Absolute(nn),
                                     velocity,
@@ -208,7 +224,9 @@ impl Parser {
                                     let velocity = if matches!(self.peek(), Token::Colon) {
                                         self.advance();
                                         self.expect_number()
-                                    } else { None };
+                                    } else {
+                                        None
+                                    };
                                     subs.push(NoteStep {
                                         note: NoteRef::Degree(degree, octave),
                                         velocity,
@@ -217,17 +235,28 @@ impl Parser {
                                     });
                                 }
                             }
-                            _ => { self.advance(); }
+                            _ => {
+                                self.advance();
+                            }
                         }
                     }
                     let sp = self.span();
                     if subs.is_empty() {
-                        self.errors.push(ParseError { line: sp.line, col: sp.col,
-                            message: String::from("subdivision group `<...>` is empty: it needs at least one note") });
+                        self.errors.push(ParseError {
+                            line: sp.line,
+                            col: sp.col,
+                            message: String::from("subdivision group `<...>` is empty: it needs at least one note"),
+                        });
                     } else if subs.len() > crate::dsl::compiler::MAX_SUBDIV {
-                        self.errors.push(ParseError { line: sp.line, col: sp.col,
-                            message: format!("subdivision group has {} notes, the most one step can hold is {}",
-                                subs.len(), crate::dsl::compiler::MAX_SUBDIV) });
+                        self.errors.push(ParseError {
+                            line: sp.line,
+                            col: sp.col,
+                            message: format!(
+                                "subdivision group has {} notes, the most one step can hold is {}",
+                                subs.len(),
+                                crate::dsl::compiler::MAX_SUBDIV
+                            ),
+                        });
                     } else {
                         // the group inherits the pending `~` for its first note
                         if core::mem::take(&mut pending_slide) {
@@ -236,7 +265,10 @@ impl Parser {
                         current_row.push(Step::Subdiv(subs));
                     }
                 }
-                Token::Note(ref n) if note_is_chord_symbol(n) || (self.peek_is_slash_next() && crate::dsl::chords::parse(n).is_some()) => {
+                Token::Note(ref n)
+                    if note_is_chord_symbol(n)
+                        || (self.peek_is_slash_next() && crate::dsl::chords::parse(n).is_some()) =>
+                {
                     let n = n.clone();
                     self.advance();
                     if let Some(step) = self.chord_symbol_step(&n) {
@@ -253,11 +285,8 @@ impl Parser {
                     } else {
                         None
                     };
-                    let plock = if matches!(self.peek(), Token::LParen) {
-                        self.parse_plock_params()
-                    } else {
-                        PLock::default()
-                    };
+                    let plock =
+                        if matches!(self.peek(), Token::LParen) { self.parse_plock_params() } else { PLock::default() };
                     // `A4*3` -- the same note three times inside the step. The
                     // drum lanes already spell a roll this way; this is the same
                     // idea for pitches, desugared into a subdivision group so the
@@ -308,7 +337,7 @@ impl Parser {
                     let default_vel = match self.peek() {
                         Token::DrumAccent => 1.0,
                         Token::DrumGhost => 0.35,
-                        _ => 0.8,  // DrumHit
+                        _ => 0.8, // DrumHit
                     };
                     self.advance();
                     // Optional probability: g?0.4 or x?0.5
@@ -333,22 +362,23 @@ impl Parser {
                     } else {
                         1
                     };
-                    let plock = if matches!(self.peek(), Token::LParen) {
-                        self.parse_plock_params()
-                    } else {
-                        PLock::default()
-                    };
+                    let plock =
+                        if matches!(self.peek(), Token::LParen) { self.parse_plock_params() } else { PLock::default() };
                     current_row.push(Step::DrumHit(DrumStep { velocity, probability, roll, plock }));
                 }
                 Token::Rest => {
                     self.advance();
                     let n = self.repeat_count();
-                    for _ in 0..n { current_row.push(Step::Rest); }
+                    for _ in 0..n {
+                        current_row.push(Step::Rest);
+                    }
                 }
                 Token::Tie => {
                     self.advance();
                     let n = self.repeat_count();
-                    for _ in 0..n { current_row.push(Step::Tie); }
+                    for _ in 0..n {
+                        current_row.push(Step::Tie);
+                    }
                 }
                 Token::Newline => {
                     // A drum lane may be written across several lines. Ending
@@ -377,8 +407,13 @@ impl Parser {
                     let s = self.span();
                     let (l, c) = (s.line, s.col);
                     self.errors.push(ParseError {
-                        line: l, col: c,
-                        message: format!("pattern '{}': unexpected {} (expected a note, degree, chord symbol, `-`, `..` or `~`)", name, describe_token(self.peek())),
+                        line: l,
+                        col: c,
+                        message: format!(
+                            "pattern '{}': unexpected {} (expected a note, degree, chord symbol, `-`, `..` or `~`)",
+                            name,
+                            describe_token(self.peek())
+                        ),
                     });
                     self.advance();
                 }
@@ -414,11 +449,18 @@ impl Parser {
         if matches!(self.peek(), Token::Slash) {
             self.advance();
             match self.peek().clone() {
-                Token::Number(n) if (0.0..=8.0).contains(&n) => { self.advance(); octave = n as u8; }
+                Token::Number(n) if (0.0..=8.0).contains(&n) => {
+                    self.advance();
+                    octave = n as u8;
+                }
                 _ => {
                     let s = self.span();
                     let (l, c) = (s.line, s.col);
-                    self.errors.push(ParseError { line: l, col: c, message: format!("chord {}: expected an octave 0..8 after '/'", symbol) });
+                    self.errors.push(ParseError {
+                        line: l,
+                        col: c,
+                        message: format!("chord {}: expected an octave 0..8 after '/'", symbol),
+                    });
                 }
             }
         }
@@ -430,12 +472,10 @@ impl Parser {
         };
         let plock = if matches!(self.peek(), Token::LParen) { self.parse_plock_params() } else { PLock::default() };
         let midi = crate::dsl::chords::notes(symbol, octave)?;
-        let notes = midi.into_iter().map(|m| NoteStep {
-            note: NoteRef::Midi(m),
-            velocity: None,
-            plock: PLock::default(),
-            slide: false,
-        }).collect();
+        let notes = midi
+            .into_iter()
+            .map(|m| NoteStep { note: NoteRef::Midi(m), velocity: None, plock: PLock::default(), slide: false })
+            .collect();
         Some(Step::Chord(ChordStep { notes, velocity, plock }))
     }
 
@@ -446,7 +486,9 @@ impl Parser {
 
         loop {
             self.skip_newlines();
-            if matches!(self.peek(), Token::RParen | Token::Eof) { break; }
+            if matches!(self.peek(), Token::RParen | Token::Eof) {
+                break;
+            }
 
             if let Token::Ident(name) = self.peek().clone() {
                 let saved_pos = self.pos;
@@ -493,9 +535,13 @@ impl Parser {
     /// `C999` used to play as C4.
     fn check_note_range(&mut self, name: &str) {
         if !crate::dsl::compiler::note_in_midi_range(name) {
-            let (line, col) = { let s = self.span(); (s.line, s.col) };
+            let (line, col) = {
+                let s = self.span();
+                (s.line, s.col)
+            };
             self.errors.push(ParseError {
-                line, col,
+                line,
+                col,
                 message: format!("note {} is above what MIDI can play (G9 is the top)", name),
             });
         }
@@ -504,7 +550,9 @@ impl Parser {
     /// `*N` after a note: repeat it N times inside the step. Returns 1 when
     /// there is no `*`, and clamps to what one step can hold.
     fn parse_ratchet_count(&mut self) -> usize {
-        if !matches!(self.peek(), Token::Star) { return 1; }
+        if !matches!(self.peek(), Token::Star) {
+            return 1;
+        }
         self.advance();
         match self.peek() {
             Token::Number(v) => {

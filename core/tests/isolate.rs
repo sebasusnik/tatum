@@ -38,10 +38,7 @@ arrange { a x2 }
 "#;
 
 fn iso(solo: &[&str], mute: &[&str]) -> Isolation {
-    Isolation {
-        solo: solo.iter().map(|s| s.to_string()).collect(),
-        mute: mute.iter().map(|s| s.to_string()).collect(),
-    }
+    Isolation { solo: solo.iter().map(|s| s.to_string()).collect(), mute: mute.iter().map(|s| s.to_string()).collect() }
 }
 
 /// Every part of the render, block by block: per track, per bus, the two
@@ -72,8 +69,12 @@ fn render(isolation: &Isolation, bars: usize) -> Parts {
         let (mut l, mut r) = ([0.0f32; BLOCK_SIZE], [0.0f32; BLOCK_SIZE]);
         e.process_block_stereo(&mut l, &mut r);
         let t = e.taps().unwrap();
-        for (i, tr) in t.tracks.iter().enumerate() { p.tracks[i].extend_from_slice(&tr.l); }
-        for (i, b) in t.buses.iter().enumerate() { p.buses[i].extend_from_slice(&b.l); }
+        for (i, tr) in t.tracks.iter().enumerate() {
+            p.tracks[i].extend_from_slice(&tr.l);
+        }
+        for (i, b) in t.buses.iter().enumerate() {
+            p.buses[i].extend_from_slice(&b.l);
+        }
         p.returns.extend((0..BLOCK_SIZE).map(|s| t.delay.l[s] + t.reverb.l[s]));
         p.out.extend_from_slice(&l);
     }
@@ -86,7 +87,9 @@ impl Parts {
     }
 }
 
-fn peak(x: &[f32]) -> f32 { x.iter().fold(0.0, |a, v| a.max(v.abs())) }
+fn peak(x: &[f32]) -> f32 {
+    x.iter().fold(0.0, |a, v| a.max(v.abs()))
+}
 
 #[test]
 fn the_parts_add_up_to_the_mix() {
@@ -109,8 +112,7 @@ fn the_parts_add_up_to_the_mix() {
 fn a_soloed_track_sounds_as_it_does_in_the_mix() {
     let full = render(&Isolation::default(), 2);
     let solo = render(&iso(&["pad"], &[]), 2);
-    assert_eq!(full.track("pad"), solo.track("pad"),
-        "the pad changed when soloed: the muted kick must still duck it");
+    assert_eq!(full.track("pad"), solo.track("pad"), "the pad changed when soloed: the muted kick must still duck it");
     assert_eq!(peak(solo.track("drums")), 0.0);
     assert_eq!(peak(solo.track("bass")), 0.0);
     assert_eq!(peak(&solo.buses[0]), 0.0);

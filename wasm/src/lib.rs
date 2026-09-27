@@ -160,7 +160,9 @@ impl Tatum {
         };
         let mut json = String::from("[");
         for i in 0..engine.track_count() {
-            if i > 0 { json.push(','); }
+            if i > 0 {
+                json.push(',');
+            }
             json.push_str(&alloc::format!(
                 r#"{{"name":"{}","kind":"{}","level":{:.3},"pan":{:.3}}}"#,
                 engine.track_name(i),
@@ -208,7 +210,13 @@ impl Tatum {
     /// # Safety
     /// `name_ptr`/`name_len` must describe valid UTF-8 inside this module's
     /// memory. The JS glue hands over a slice it just wrote there.
-    pub unsafe fn set_module_param(&mut self, inst_idx: usize, name_ptr: *const u8, name_len: usize, value: f32) -> bool {
+    pub unsafe fn set_module_param(
+        &mut self,
+        inst_idx: usize,
+        name_ptr: *const u8,
+        name_len: usize,
+        value: f32,
+    ) -> bool {
         let name = unsafe {
             let slice = core::slice::from_raw_parts(name_ptr, name_len);
             core::str::from_utf8_unchecked(slice)

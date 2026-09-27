@@ -124,10 +124,7 @@ fn detect(x: &[f32], candidates: &[f32]) -> Option<f32> {
     let bin = SAMPLE_RATE as f64 / n as f64;
     let power = |f: f64| -> f64 {
         let k = (f / bin).round() as usize;
-        (k.saturating_sub(2)..=(k + 2))
-            .filter(|k| *k > 0 && *k < n / 2)
-            .map(|k| re[k] * re[k] + im[k] * im[k])
-            .sum()
+        (k.saturating_sub(2)..=(k + 2)).filter(|k| *k > 0 && *k < n / 2).map(|k| re[k] * re[k] + im[k] * im[k]).sum()
     };
     candidates
         .iter()
@@ -183,10 +180,7 @@ fn written_notes(song: &Song, track: &str) -> Vec<f32> {
         .and_then(|a| a.octaves)
         .unwrap_or(1.0)
         .max(1.0) as u8;
-    let lifted: Vec<u8> = midi
-        .iter()
-        .flat_map(|m| (0..octs).filter_map(move |o| m.checked_add(12 * o)))
-        .collect();
+    let lifted: Vec<u8> = midi.iter().flat_map(|m| (0..octs).filter_map(move |o| m.checked_add(12 * o))).collect();
     lifted
         .into_iter()
         .collect::<BTreeSet<u8>>()
@@ -216,7 +210,10 @@ pub enum Suspect {
 
 impl Suspect {
     fn label(self) -> &'static str {
-        match self { Suspect::Chorus => "chorus", Suspect::Drive => "drive" }
+        match self {
+            Suspect::Chorus => "chorus",
+            Suspect::Drive => "drive",
+        }
     }
 }
 
@@ -227,7 +224,9 @@ fn solo_without(song: &Song, keep: &str, off: Option<Suspect>) -> Song {
     if off == Suspect::Chorus {
         for m in s.module_defs.iter_mut() {
             for p in m.params.iter_mut() {
-                if p.name == "chorus_mix" { p.value = 0.0; }
+                if p.name == "chorus_mix" {
+                    p.value = 0.0;
+                }
             }
         }
     }
@@ -237,9 +236,13 @@ fn solo_without(song: &Song, keep: &str, off: Option<Suspect>) -> Song {
             Suspect::Drive => !matches!(r.kind.as_str(), "saturate" | "drive" | "distort" | "bitcrush"),
         });
     };
-    for t in s.tracks.iter_mut().filter(|t| t.name == keep) { strip(&mut t.routing); }
+    for t in s.tracks.iter_mut().filter(|t| t.name == keep) {
+        strip(&mut t.routing);
+    }
     for sc in s.scenes.iter_mut() {
-        for t in sc.tracks.iter_mut().filter(|t| t.name == keep) { strip(&mut t.routing); }
+        for t in sc.tracks.iter_mut().filter(|t| t.name == keep) {
+            strip(&mut t.routing);
+        }
     }
     s
 }
@@ -257,10 +260,8 @@ fn solo_without(song: &Song, keep: &str, off: Option<Suspect>) -> Song {
 /// The with-and-without comparison is unaffected by every one of these: it
 /// is the same voice both times, so whatever differs, the effect caused it.
 fn cannot_judge_notes(song: &Song, track: &str) -> Option<&'static str> {
-    let mine = || {
-        song.tracks.iter().chain(song.scenes.iter().flat_map(|s| s.tracks.iter()))
-            .filter(move |t| t.name == track)
-    };
+    let mine =
+        || song.tracks.iter().chain(song.scenes.iter().flat_map(|s| s.tracks.iter())).filter(move |t| t.name == track);
     // An arp runs below the step, so a window that fits inside a step still
     // holds several of its notes.
     if mine().any(|t| t.arp.as_ref().is_some_and(|a| a.mode != "off")) {
@@ -277,7 +278,6 @@ fn cannot_judge_notes(song: &Song, track: &str) -> Option<&'static str> {
     None
 }
 
-
 /// Is there anything for this suspect to switch off on this track? Rendering
 /// a second time to remove something that is not there costs the same as
 /// rendering to remove something that is.
@@ -289,8 +289,12 @@ fn has_suspect(song: &Song, track: &str, what: Suspect) -> bool {
             Suspect::Drive => matches!(r.kind.as_str(), "saturate" | "drive" | "distort" | "bitcrush"),
         })
     });
-    if in_chain { return true }
-    if what != Suspect::Chorus { return false }
+    if in_chain {
+        return true;
+    }
+    if what != Suspect::Chorus {
+        return false;
+    }
     tracks()
         .filter(|t| t.name == track)
         .filter_map(|t| song.module_defs.iter().find(|m| m.name == t.using_instrument))
@@ -413,9 +417,7 @@ fn measure(mono: &[f32], peak: f32, cands: &[f32], spb: f32) -> Vec<Note> {
     // that can still resolve the +/-45 Hz harmonic bands.
     let room = (step as usize).saturating_sub(skip);
     let n = (1..=13).map(|k| 1usize << k).rfind(|w| *w <= room).unwrap_or(1024).clamp(1024, 8192);
-    let hann: Vec<f32> = (0..n)
-        .map(|i| 0.5 - 0.5 * (2.0 * std::f32::consts::PI * i as f32 / n as f32).cos())
-        .collect();
+    let hann: Vec<f32> = (0..n).map(|i| 0.5 - 0.5 * (2.0 * std::f32::consts::PI * i as f32 / n as f32).cos()).collect();
 
     let steps = ((mono.len() as f32 - skip as f32 - n as f32) / step).max(0.0) as usize;
     let mut per_step: Vec<Option<(f32, f64)>> = Vec::with_capacity(steps);
@@ -447,22 +449,25 @@ fn measure(mono: &[f32], peak: f32, cands: &[f32], spb: f32) -> Vec<Note> {
     let mut run_f0 = 0.0f32;
     let mut run_at = 0usize;
     let flush = |notes: &mut Vec<Note>, run: &mut Vec<f64>, f0: f32, at: usize| {
-        if run.is_empty() { return }
-        notes.push(Note {
-            bar: at as f32 / 16.0 + 1.0,
-            hz: f0,
-            db: median(run),
-            windows: run.len(),
-        });
+        if run.is_empty() {
+            return;
+        }
+        notes.push(Note { bar: at as f32 / 16.0 + 1.0, hz: f0, db: median(run), windows: run.len() });
         run.clear();
     };
     for (s, m) in per_step.iter().enumerate() {
         match m {
-            Some((f0, db)) if run.is_empty() => { run_f0 = *f0; run_at = s; run.push(*db); }
+            Some((f0, db)) if run.is_empty() => {
+                run_f0 = *f0;
+                run_at = s;
+                run.push(*db);
+            }
             Some((f0, db)) if (*f0 - run_f0).abs() < 0.5 => run.push(*db),
             Some((f0, db)) => {
                 flush(&mut notes, &mut run, run_f0, run_at);
-                run_f0 = *f0; run_at = s; run.push(*db);
+                run_f0 = *f0;
+                run_at = s;
+                run.push(*db);
             }
             None => flush(&mut notes, &mut run, run_f0, run_at),
         }
@@ -484,7 +489,9 @@ struct Track {
 fn audit_track(song: &Song, name: &str, bars: u32, spb: f32) -> Track {
     let mut out = Track::default();
     let cands = written_notes(song, name);
-    if cands.is_empty() { return out }
+    if cands.is_empty() {
+        return out;
+    }
     let run = |off: Option<Suspect>| -> Option<(Vec<Note>, f32)> {
         let solo = solo_without(song, name, off);
         let compiled = dsl::compiler::compile(&solo).ok()?;
@@ -493,7 +500,9 @@ fn audit_track(song: &Song, name: &str, bars: u32, spb: f32) -> Track {
         let (l, r) = eng.render(bars);
         let mono: Vec<f32> = l.iter().zip(&r).map(|(a, b)| (a + b) * 0.5).collect();
         let peak = mono.iter().fold(0.0f32, |a, v| a.max(v.abs()));
-        if peak < 1e-4 { return None }
+        if peak < 1e-4 {
+            return None;
+        }
         Some((measure(&mono, peak, &cands, spb), peak))
     };
     let blind = cannot_judge_notes(song, name);
@@ -525,9 +534,13 @@ fn audit_track(song: &Song, name: &str, bars: u32, spb: f32) -> Track {
     // because a clean bell is where there is nothing to hide behind.
     let mut blame = Vec::new();
     for suspect in [Suspect::Chorus, Suspect::Drive] {
-        if !has_suspect(song, name, suspect) { continue }
+        if !has_suspect(song, name, suspect) {
+            continue;
+        }
         let Some((clean, _)) = run(Some(suspect)) else { continue };
-        if clean.len() < 8 { continue }
+        if clean.len() < 8 {
+            continue;
+        }
         let mut c: Vec<f64> = clean.iter().map(|n| n.db).collect();
         let delta = med - median(&mut c);
         if delta >= BLAME_DB {
@@ -544,12 +557,16 @@ fn audit_track(song: &Song, name: &str, bars: u32, spb: f32) -> Track {
     out.unjudged = blind;
     for note in &notes {
         let margin = note.db - med;
-        if blind.is_some() { break }
+        if blind.is_some() {
+            break;
+        }
         // Below this the harmonics are closer together than the +/-45 Hz
         // band they are measured in, so the bands overlap and the number
         // is arithmetic rather than sound. A sub at D1 has its harmonics
         // 37 Hz apart.
-        if note.hz < MIN_PITCH_HZ { continue }
+        if note.hz < MIN_PITCH_HZ {
+            continue;
+        }
         if margin >= OUTLIER_DB && note.windows >= MIN_STEPS_TO_REPORT {
             out.findings.push(Finding {
                 track: name.to_string(),
@@ -570,10 +587,11 @@ fn audit_track(song: &Song, name: &str, bars: u32, spb: f32) -> Track {
 pub fn cmd(args: &[String]) {
     let strict = args.iter().any(|a| a == "--strict");
     let json = args.iter().any(|a| a == "--json");
-    let limit: Option<u32> = args.iter().position(|a| a == "--bars")
-        .and_then(|i| args.get(i + 1))
-        .and_then(|v| v.parse().ok());
-    let Some(path) = args.iter().enumerate()
+    let limit: Option<u32> =
+        args.iter().position(|a| a == "--bars").and_then(|i| args.get(i + 1)).and_then(|v| v.parse().ok());
+    let Some(path) = args
+        .iter()
+        .enumerate()
         .filter(|(i, _)| *i == 0 || args[i - 1] != "--bars")
         .map(|(_, a)| a)
         .find(|a| !a.starts_with("--"))
@@ -596,7 +614,9 @@ pub fn cmd(args: &[String]) {
         Ok(s) => s,
         Err(errs) => {
             eprintln!("{path}: parse errors:");
-            for e in &errs { eprintln!("  line {}: {}", e.line, e.message); }
+            for e in &errs {
+                eprintln!("  line {}: {}", e.line, e.message);
+            }
             process::exit(1);
         }
     };
@@ -622,9 +642,7 @@ pub fn cmd(args: &[String]) {
     // by side; merged in track order, the report is the same as one after
     // the other.
     let tracks: Vec<Track> = std::thread::scope(|s| {
-        let running: Vec<_> = names.iter()
-            .map(|name| s.spawn(|| audit_track(&song, name, bars, spb)))
-            .collect();
+        let running: Vec<_> = names.iter().map(|name| s.spawn(|| audit_track(&song, name, bars, spb))).collect();
         running.into_iter().map(|t| t.join().expect("audit thread")).collect()
     });
     let mut rows: Vec<Row> = Vec::new();
@@ -632,8 +650,12 @@ pub fn cmd(args: &[String]) {
     let mut skipped: Vec<(String, usize)> = Vec::new();
     let mut unjudged: Vec<(String, &'static str)> = Vec::new();
     for (name, t) in names.iter().zip(tracks) {
-        if let Some(n) = t.skipped { skipped.push((name.clone(), n)) }
-        if let Some(why) = t.unjudged { unjudged.push((name.clone(), why)) }
+        if let Some(n) = t.skipped {
+            skipped.push((name.clone(), n))
+        }
+        if let Some(why) = t.unjudged {
+            unjudged.push((name.clone(), why))
+        }
         findings.extend(t.findings);
         rows.extend(t.row);
     }
@@ -666,12 +688,22 @@ fn print_table(
     blamed: &[&Row],
 ) {
     println!();
-    println!("{:<12} {:>6} {:>10} {:>10} {:>9} {:>6} {:>7}", "track", "notes", "median", "worst", "at bar", "note", "peak");
+    println!(
+        "{:<12} {:>6} {:>10} {:>10} {:>9} {:>6} {:>7}",
+        "track", "notes", "median", "worst", "at bar", "note", "peak"
+    );
     for r in rows {
         let flag = if r.peak > 0.99 { "  <-- clipping" } else { "" };
         println!(
             "{:<12} {:>6} {:>7.1} dB {:>7.1} dB {:>9.2} {:>6} {:>7.3}{}",
-            r.track, r.notes, r.median_db, r.worst.db, r.worst.bar, hz_name(r.worst.hz), r.peak, flag
+            r.track,
+            r.notes,
+            r.median_db,
+            r.worst.db,
+            r.worst.bar,
+            hz_name(r.worst.hz),
+            r.peak,
+            flag
         );
     }
 
@@ -682,7 +714,9 @@ fn print_table(
             for (what, delta) in &r.blame {
                 println!(
                     "  the {} on `{}` accounts for {:.1} dB of its inharmonic content",
-                    what.label(), r.track, delta
+                    what.label(),
+                    r.track,
+                    delta
                 );
             }
         }
@@ -749,9 +783,8 @@ fn print_json(
     println!("  \"bars\": {bars},");
     println!("  \"tracks\": [");
     for (i, r) in rows.iter().enumerate() {
-        let blame: Vec<String> = r.blame.iter()
-            .map(|(w, d)| format!("{{\"what\": \"{}\", \"db\": {:.2}}}", w.label(), d))
-            .collect();
+        let blame: Vec<String> =
+            r.blame.iter().map(|(w, d)| format!("{{\"what\": \"{}\", \"db\": {:.2}}}", w.label(), d)).collect();
         println!(
             "    {{\"track\": \"{}\", \"notes\": {}, \"median_db\": {:.2}, \"worst_db\": {:.2}, \"worst_bar\": {:.2}, \"worst_note\": \"{}\", \"peak\": {:.4}, \"blame\": [{}]}}{}",
             esc(&r.track), r.notes, r.median_db, r.worst.db, r.worst.bar, hz_name(r.worst.hz),
@@ -770,11 +803,13 @@ fn print_json(
     }
     println!("  ],");
     let list = |v: Vec<String>| v.join(", ");
-    println!("  \"not_checked_note_by_note\": [{}],", list(
-        unjudged.iter().map(|(t, w)| format!("{{\"track\": \"{}\", \"why\": \"{}\"}}", esc(t), w)).collect()
-    ));
-    println!("  \"not_measurable\": [{}]", list(
-        skipped.iter().map(|(t, n)| format!("{{\"track\": \"{}\", \"notes\": {}}}", esc(t), n)).collect()
-    ));
+    println!(
+        "  \"not_checked_note_by_note\": [{}],",
+        list(unjudged.iter().map(|(t, w)| format!("{{\"track\": \"{}\", \"why\": \"{}\"}}", esc(t), w)).collect())
+    );
+    println!(
+        "  \"not_measurable\": [{}]",
+        list(skipped.iter().map(|(t, n)| format!("{{\"track\": \"{}\", \"notes\": {}}}", esc(t), n)).collect())
+    );
     println!("}}");
 }

@@ -19,7 +19,10 @@ pub fn take_isolation(args: &mut Vec<String>) -> Isolation {
         let list = match args[i].as_str() {
             "--solo" => &mut iso.solo,
             "--mute" => &mut iso.mute,
-            _ => { i += 1; continue }
+            _ => {
+                i += 1;
+                continue;
+            }
         };
         let Some(names) = args.get(i + 1).filter(|v| !v.starts_with('-')).cloned() else {
             eprintln!("error: {} needs track names, separated by commas", args[i]);

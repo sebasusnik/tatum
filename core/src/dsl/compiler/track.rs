@@ -16,7 +16,6 @@ use super::compiled::{ArpConfig, CompiledBus, CompiledPattern, CompiledTrack};
 use super::graph::node_def_to_spec;
 use super::params::named_param;
 
-
 // ── Track compilation ──
 
 pub(super) fn compile_track(
@@ -27,15 +26,15 @@ pub(super) fn compile_track(
     defaults: Option<&CompiledTrack>,
     samples_per_bar: f32,
 ) -> Result<CompiledTrack, CompileError> {
-    let instrument_idx = inst_names.iter().position(|n| n == &track.using_instrument)
-        .ok_or_else(|| CompileError { line: 0,
-            message: format!("track '{}': unknown instrument '{}'", track.name, track.using_instrument),
-        })?;
+    let instrument_idx = inst_names.iter().position(|n| n == &track.using_instrument).ok_or_else(|| CompileError {
+        line: 0,
+        message: format!("track '{}': unknown instrument '{}'", track.name, track.using_instrument),
+    })?;
 
-    let pattern_idx = patterns.iter().position(|p| p.name == track.play)
-        .ok_or_else(|| CompileError { line: 0,
-            message: format!("track '{}': unknown pattern '{}'", track.name, track.play),
-        })?;
+    let pattern_idx = patterns.iter().position(|p| p.name == track.play).ok_or_else(|| CompileError {
+        line: 0,
+        message: format!("track '{}': unknown pattern '{}'", track.name, track.play),
+    })?;
 
     let velocity = track.velocity.unwrap_or_else(|| defaults.map(|d| d.velocity).unwrap_or(0.8));
     let level = track.level.unwrap_or_else(|| defaults.map(|d| d.level).unwrap_or(0.8));
@@ -78,9 +77,12 @@ pub(super) fn compile_track(
                         insert_fx.push(ChainStep { spec, wet });
                         insert_fx_labels.push(rnode.label.clone());
                     }
-                    Err(e) => return Err(CompileError::new(format!(
-                        "track '{}': {} (or declare `bus {}` if it is a bus)", track.name, e.message, rnode.kind
-                    ))),
+                    Err(e) => {
+                        return Err(CompileError::new(format!(
+                            "track '{}': {} (or declare `bus {}` if it is a bus)",
+                            track.name, e.message, rnode.kind
+                        )))
+                    }
                 }
             }
         }
@@ -111,8 +113,7 @@ pub(super) fn compile_track(
         delay_send,
         reverb_send,
         sidechain: track.sidechain.or_else(|| defaults.and_then(|d| d.sidechain)),
-        sidechain_source: track.sidechain_source.clone()
-            .or_else(|| defaults.and_then(|d| d.sidechain_source.clone())),
+        sidechain_source: track.sidechain_source.clone().or_else(|| defaults.and_then(|d| d.sidechain_source.clone())),
         arp,
     })
 }
@@ -124,32 +125,30 @@ fn compile_arp(track_name: &str, def: &ArpDef) -> Result<Option<ArpConfig>, Comp
         "up" => 0.0,
         "down" => 0.5,
         "updown" => 1.0,
-        other => return Err(CompileError::new(format!(
-            "track '{}': arp mode '{}' — expected up, down, updown or off", track_name, other
-        ))),
+        other => {
+            return Err(CompileError::new(format!(
+                "track '{}': arp mode '{}' — expected up, down, updown or off",
+                track_name, other
+            )))
+        }
     };
     let rate = def.rate.unwrap_or(16.0);
     if ![4.0, 8.0, 16.0, 32.0].contains(&rate) {
         return Err(CompileError::new(format!(
-            "track '{}': arp rate {} — expected 4, 8, 16 or 32 (notes per bar)", track_name, rate
+            "track '{}': arp rate {} — expected 4, 8, 16 or 32 (notes per bar)",
+            track_name, rate
         )));
     }
     let gate = def.gate.unwrap_or(0.6);
     if !(0.1..=1.0).contains(&gate) {
-        return Err(CompileError::new(format!(
-            "track '{}': arp gate {} — expected 0.1..1.0", track_name, gate
-        )));
+        return Err(CompileError::new(format!("track '{}': arp gate {} — expected 0.1..1.0", track_name, gate)));
     }
     let octaves = def.octaves.unwrap_or(1.0);
     if !(1.0..=4.0).contains(&octaves) || octaves != math::floor(octaves) {
         return Err(CompileError::new(format!(
-            "track '{}': arp octaves {} — expected 1, 2, 3 or 4", track_name, octaves
+            "track '{}': arp octaves {} — expected 1, 2, 3 or 4",
+            track_name, octaves
         )));
     }
-    Ok(Some(ArpConfig {
-        pattern,
-        rate_mult: rate / 16.0,
-        gate,
-        octaves: octaves as u8,
-    }))
+    Ok(Some(ArpConfig { pattern, rate_mult: rate / 16.0, gate, octaves: octaves as u8 }))
 }

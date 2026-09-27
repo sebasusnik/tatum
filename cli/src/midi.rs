@@ -70,11 +70,18 @@ pub fn open(wanted: Option<&str>, tx: &Sender<Event>) -> Result<Inputs, String> 
         let mut input = MidiInput::new("tatum").map_err(|e| format!("cannot reach MIDI: {}", e))?;
         input.ignore(Ignore::All);
         let tx = tx.clone();
-        let conn = input.connect(port, "tatum-in", move |_stamp, message, _| {
-            if let Some(event) = decode(message) {
-                let _ = tx.send(event);
-            }
-        }, ()).map_err(|e| format!("cannot open MIDI input '{}': {}", name, e))?;
+        let conn = input
+            .connect(
+                port,
+                "tatum-in",
+                move |_stamp, message, _| {
+                    if let Some(event) = decode(message) {
+                        let _ = tx.send(event);
+                    }
+                },
+                (),
+            )
+            .map_err(|e| format!("cannot open MIDI input '{}': {}", name, e))?;
         connections.push(conn);
         names.push(name);
     }

@@ -43,9 +43,8 @@ impl Spectrogram {
     /// note stops being resolvable at all.
     pub fn new(hop: usize) -> Spectrogram {
         let size = (hop * 4).next_power_of_two().clamp(1024, 4096);
-        let window = (0..size)
-            .map(|i| 0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / size as f64).cos())
-            .collect();
+        let window =
+            (0..size).map(|i| 0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / size as f64).cos()).collect();
         let bin_hz = SAMPLE_RATE / size as f32;
         let row_bins = (0..ROWS)
             .map(|r| {
@@ -87,10 +86,14 @@ impl Spectrogram {
         self.cells.truncate(count * ROWS);
     }
 
-    pub fn columns(&self) -> usize { self.cells.len() / ROWS }
+    pub fn columns(&self) -> usize {
+        self.cells.len() / ROWS
+    }
 
     /// Cell of column `c`, row `r` (row 0 = 20 Hz).
-    pub fn cell(&self, c: usize, r: usize) -> u8 { self.cells[c * ROWS + r] }
+    pub fn cell(&self, c: usize, r: usize) -> u8 {
+        self.cells[c * ROWS + r]
+    }
 
     fn column(&mut self) {
         let start = self.seen % self.size; // oldest sample
@@ -141,8 +144,14 @@ mod tests {
             s.push((2.0 * std::f32::consts::PI * 1000.0 * i as f32 / SAMPLE_RATE).sin());
         }
         let c = s.columns() / 2;
-        let (row, &top) = (0..ROWS).map(|r| s.cell(c, r)).collect::<Vec<_>>()
-            .iter().enumerate().max_by_key(|(_, v)| **v).map(|(r, v)| (r, v)).unwrap();
+        let (row, &top) = (0..ROWS)
+            .map(|r| s.cell(c, r))
+            .collect::<Vec<_>>()
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, v)| **v)
+            .map(|(r, v)| (r, v))
+            .unwrap();
         assert!((row_hz(row as f32) - 1000.0).abs() < 60.0, "row {row} = {} Hz", row_hz(row as f32));
         assert!(cell_db(top) > -2.0, "peak {} dB", cell_db(top));
         // and an octave away there is next to nothing

@@ -42,7 +42,13 @@ pub const QUALITIES: &[(&str, &[u8])] = &[
 pub fn parse(symbol: &str) -> Option<(u8, &'static [u8])> {
     let mut chars = symbol.chars();
     let root = match chars.next()?.to_ascii_uppercase() {
-        'C' => 0, 'D' => 2, 'E' => 4, 'F' => 5, 'G' => 7, 'A' => 9, 'B' => 11,
+        'C' => 0,
+        'D' => 2,
+        'E' => 4,
+        'F' => 5,
+        'G' => 7,
+        'A' => 9,
+        'B' => 11,
         _ => return None,
     };
     let rest = chars.as_str();

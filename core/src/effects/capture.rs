@@ -66,10 +66,7 @@ impl Capture {
         let i = pos as usize % len;
         let j = (i + 1) % len;
         let frac = pos - crate::math::floor(pos);
-        (
-            self.left[i] + (self.left[j] - self.left[i]) * frac,
-            self.right[i] + (self.right[j] - self.right[i]) * frac,
-        )
+        (self.left[i] + (self.left[j] - self.left[i]) * frac, self.right[i] + (self.right[j] - self.right[i]) * frac)
     }
 
     pub fn process_stereo(&mut self, l: f32, r: f32) -> (f32, f32) {
@@ -117,8 +114,12 @@ impl Capture {
     }
 
     pub fn reset(&mut self) {
-        for v in self.left.iter_mut() { *v = 0.0; }
-        for v in self.right.iter_mut() { *v = 0.0; }
+        for v in self.left.iter_mut() {
+            *v = 0.0;
+        }
+        for v in self.right.iter_mut() {
+            *v = 0.0;
+        }
         self.elapsed = 0;
         self.write_pos = 0;
         self.read_pos = 0.0;
@@ -127,8 +128,14 @@ impl Capture {
 
     pub fn set_named(&mut self, name: &str, value: f32) -> bool {
         match name {
-            "mix" => { self.mix = value.clamp(0.0, 1.0); true }
-            "speed" => { self.speed = value.max(0.01); true }
+            "mix" => {
+                self.mix = value.clamp(0.0, 1.0);
+                true
+            }
+            "speed" => {
+                self.speed = value.max(0.01);
+                true
+            }
             _ => false,
         }
     }

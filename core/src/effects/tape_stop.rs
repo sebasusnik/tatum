@@ -11,10 +11,10 @@ pub struct TapeStop {
     buffer_l: Vec<f32>,
     buffer_r: Vec<f32>,
     write_pos: usize,
-    read_pos: f32,          // fractional for pitch interpolation
-    speed: f32,             // 1.0 = normal, ramps to 0.0
-    ramp_time: f32,         // seconds to reach full stop
-    ramp_decrement: f32,    // per-sample speed decrease
+    read_pos: f32,       // fractional for pitch interpolation
+    speed: f32,          // 1.0 = normal, ramps to 0.0
+    ramp_time: f32,      // seconds to reach full stop
+    ramp_decrement: f32, // per-sample speed decrease
     active: bool,
     mix: f32,
     sample_rate: f32,
@@ -101,15 +101,16 @@ impl TapeStop {
         let wet_l = Self::read_interp(&self.buffer_l, self.read_pos);
         let wet_r = Self::read_interp(&self.buffer_r, self.read_pos);
 
-        (
-            l * (1.0 - self.mix) + wet_l * self.mix,
-            r * (1.0 - self.mix) + wet_r * self.mix,
-        )
+        (l * (1.0 - self.mix) + wet_l * self.mix, r * (1.0 - self.mix) + wet_r * self.mix)
     }
 
     pub fn reset(&mut self) {
-        for s in self.buffer_l.iter_mut() { *s = 0.0; }
-        for s in self.buffer_r.iter_mut() { *s = 0.0; }
+        for s in self.buffer_l.iter_mut() {
+            *s = 0.0;
+        }
+        for s in self.buffer_r.iter_mut() {
+            *s = 0.0;
+        }
         self.write_pos = 0;
         self.read_pos = 0.0;
         self.speed = 1.0;

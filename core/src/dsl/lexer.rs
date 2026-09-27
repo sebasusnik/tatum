@@ -36,45 +36,45 @@ pub enum Token {
     Auto,
 
     // Literals
-    Ident(String),     // bass, osc1, etc
-    Number(f32),       // 120, 0.01, 55
+    Ident(String), // bass, osc1, etc
+    Number(f32),   // 120, 0.01, 55
     /// A number written with a unit: `800hz`, `20ms`, `-12st`, `6db`, `80%`.
     /// The suffix is kept as written; the parser resolves it against the
     /// parameter it belongs to, because the same number means different things
     /// on a cutoff and on a gain.
     Quantity(f32, String),
-    Note(String),      // A1, C#4, G0
-    DrumHit,           // x  (normal velocity 0.8)
-    DrumAccent,        // X  (accent velocity 1.0)
-    DrumGhost,         // o  (ghost note velocity 0.35)
-    Rest,              // -
+    Note(String), // A1, C#4, G0
+    DrumHit,      // x  (normal velocity 0.8)
+    DrumAccent,   // X  (accent velocity 1.0)
+    DrumGhost,    // o  (ghost note velocity 0.35)
+    Rest,         // -
     /// `<` opens a subdivision group: `<B4 C#5 D5>` splits one step into
     /// three. The closing `>` lexes as Arrow, which never appears inside a
     /// pattern body, so there is no ambiguity with a routing chain.
     LAngle,
-    Tilde,             // ~  (slide into this note)
-    Tie,               // ..
+    Tilde, // ~  (slide into this note)
+    Tie,   // ..
 
     // Operators
-    Arrow,             // >
-    Eq,                // =
-    Star,              // *
-    Slash,             // /
-    Plus,              // +
-    Question,          // ?  (probability modifier for drum hits)
+    Arrow,    // >
+    Eq,       // =
+    Star,     // *
+    Slash,    // /
+    Plus,     // +
+    Question, // ?  (probability modifier for drum hits)
 
     // Delimiters
-    LBrace,            // {
-    RBrace,            // }
-    LBracket,          // [
-    RBracket,          // ]
-    LParen,            // (
-    RParen,            // )
-    Comma,             // ,
-    Colon,             // :
+    LBrace,   // {
+    RBrace,   // }
+    LBracket, // [
+    RBracket, // ]
+    LParen,   // (
+    RParen,   // )
+    Comma,    // ,
+    Colon,    // :
 
     // Special
-    Repeat(u32),       // x2, x4
+    Repeat(u32), // x2, x4
     Newline,
 
     Eof,
@@ -135,23 +135,108 @@ pub fn tokenize(source: &str) -> Vec<Span> {
 
         // Single-char tokens
         match ch {
-            '<' => { tokens.push(Span { token: Token::LAngle, line, col: start_col }); i += 1; col += 1; continue; }
-            '>' => { tokens.push(Span { token: Token::Arrow, line, col: start_col }); i += 1; col += 1; continue; }
-            '=' => { tokens.push(Span { token: Token::Eq, line, col: start_col }); i += 1; col += 1; continue; }
-            '*' => { tokens.push(Span { token: Token::Star, line, col: start_col }); i += 1; col += 1; continue; }
-            '/' => { tokens.push(Span { token: Token::Slash, line, col: start_col }); i += 1; col += 1; continue; }
-            '+' => { tokens.push(Span { token: Token::Plus, line, col: start_col }); i += 1; col += 1; continue; }
-            '?' => { tokens.push(Span { token: Token::Question, line, col: start_col }); i += 1; col += 1; continue; }
-            '{' => { tokens.push(Span { token: Token::LBrace, line, col: start_col }); i += 1; col += 1; continue; }
-            '}' => { tokens.push(Span { token: Token::RBrace, line, col: start_col }); i += 1; col += 1; continue; }
-            '[' => { tokens.push(Span { token: Token::LBracket, line, col: start_col }); i += 1; col += 1; continue; }
-            ']' => { tokens.push(Span { token: Token::RBracket, line, col: start_col }); i += 1; col += 1; continue; }
-            '(' => { tokens.push(Span { token: Token::LParen, line, col: start_col }); i += 1; col += 1; continue; }
-            ')' => { tokens.push(Span { token: Token::RParen, line, col: start_col }); i += 1; col += 1; continue; }
-            ',' => { tokens.push(Span { token: Token::Comma, line, col: start_col }); i += 1; col += 1; continue; }
-            ':' => { tokens.push(Span { token: Token::Colon, line, col: start_col }); i += 1; col += 1; continue; }
-            '-' => { tokens.push(Span { token: Token::Rest, line, col: start_col }); i += 1; col += 1; continue; }
-            '~' => { tokens.push(Span { token: Token::Tilde, line, col: start_col }); i += 1; col += 1; continue; }
+            '<' => {
+                tokens.push(Span { token: Token::LAngle, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            '>' => {
+                tokens.push(Span { token: Token::Arrow, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            '=' => {
+                tokens.push(Span { token: Token::Eq, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            '*' => {
+                tokens.push(Span { token: Token::Star, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            '/' => {
+                tokens.push(Span { token: Token::Slash, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            '+' => {
+                tokens.push(Span { token: Token::Plus, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            '?' => {
+                tokens.push(Span { token: Token::Question, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            '{' => {
+                tokens.push(Span { token: Token::LBrace, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            '}' => {
+                tokens.push(Span { token: Token::RBrace, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            '[' => {
+                tokens.push(Span { token: Token::LBracket, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            ']' => {
+                tokens.push(Span { token: Token::RBracket, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            '(' => {
+                tokens.push(Span { token: Token::LParen, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            ')' => {
+                tokens.push(Span { token: Token::RParen, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            ',' => {
+                tokens.push(Span { token: Token::Comma, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            ':' => {
+                tokens.push(Span { token: Token::Colon, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            '-' => {
+                tokens.push(Span { token: Token::Rest, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
+            '~' => {
+                tokens.push(Span { token: Token::Tilde, line, col: start_col });
+                i += 1;
+                col += 1;
+                continue;
+            }
             _ => {}
         }
 
@@ -180,11 +265,7 @@ pub fn tokenize(source: &str) -> Vec<Span> {
             }
             let suffix: String = chars[suffix_start..i].iter().collect::<String>().to_ascii_lowercase();
             if let Ok(n) = s.parse::<f32>() {
-                let token = if suffix.is_empty() {
-                    Token::Number(n)
-                } else {
-                    Token::Quantity(n, suffix)
-                };
+                let token = if suffix.is_empty() { Token::Number(n) } else { Token::Quantity(n, suffix) };
                 tokens.push(Span { token, line, col: start_col });
             }
             col += i - start;
@@ -260,7 +341,7 @@ pub fn tokenize(source: &str) -> Vec<Span> {
                 "swing" => Token::Swing,
                 "humanize" => Token::Humanize,
                 "auto" => Token::Auto,
-                "groove" => Token::Ident(word),  // groove is parsed as ident, handled in parser
+                "groove" => Token::Ident(word), // groove is parsed as ident, handled in parser
                 _ => Token::Ident(word),
             };
 
@@ -281,11 +362,15 @@ pub fn tokenize(source: &str) -> Vec<Span> {
 /// Check if a word looks like a note name: A-G, optional #/b, followed by a digit.
 fn is_note_name(s: &str) -> bool {
     let chars: Vec<char> = s.chars().collect();
-    if chars.is_empty() { return false; }
+    if chars.is_empty() {
+        return false;
+    }
 
     // First char must be A-G
     let first = chars[0].to_ascii_uppercase();
-    if !('A'..='G').contains(&first) { return false; }
+    if !('A'..='G').contains(&first) {
+        return false;
+    }
 
     let mut i = 1;
     // Optional # or b
@@ -293,7 +378,9 @@ fn is_note_name(s: &str) -> bool {
         i += 1;
     }
     // Must have at least one digit
-    if i >= chars.len() { return false; }
+    if i >= chars.len() {
+        return false;
+    }
     // Remaining chars must all be digits
     chars[i..].iter().all(|c| c.is_ascii_digit())
 }

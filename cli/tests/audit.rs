@@ -29,11 +29,7 @@ fn audit(src: &str) -> String {
     let nth = NTH.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let path = dir.join(format!("{nth}.synth"));
     std::fs::write(&path, src).unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_tatum"))
-        .arg("audit")
-        .arg(&path)
-        .output()
-        .expect("run tatum audit");
+    let out = Command::new(env!("CARGO_BIN_EXE_tatum")).arg("audit").arg(&path).output().expect("run tatum audit");
     let _ = std::fs::remove_file(&path);
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
@@ -60,19 +56,13 @@ fn bell(chorus: &str) -> String {
 #[test]
 fn the_chorus_that_dirtied_a_bell_is_named() {
     let out = audit(&bell("chorus_mix 18%"));
-    assert!(
-        out.contains("the chorus on `bell` accounts for"),
-        "the audit did not name the chorus:\n{out}"
-    );
+    assert!(out.contains("the chorus on `bell` accounts for"), "the audit did not name the chorus:\n{out}");
 }
 
 #[test]
 fn the_same_bell_without_it_is_left_alone() {
     let out = audit(&bell("chorus_mix 0%"));
-    assert!(
-        !out.contains("the chorus on `bell`"),
-        "blamed a chorus that is not there:\n{out}"
-    );
+    assert!(!out.contains("the chorus on `bell`"), "blamed a chorus that is not there:\n{out}");
     assert!(out.contains("bell"), "the bell should still get a row:\n{out}");
 }
 
@@ -143,10 +133,7 @@ fn low(pattern: &str, extra_track: &str) -> String {
 #[test]
 fn notes_too_low_to_resolve_are_not_called_dirty() {
     let out = audit(&low("D1:0.8 .. .. ..  C1:0.8 .. .. ..  D1:0.8 .. .. ..  A0:0.8 .. .. ..", ""));
-    assert!(
-        !out.contains("stand out from their own voice"),
-        "a sub cannot be judged note by note:\n{out}"
-    );
+    assert!(!out.contains("stand out from their own voice"), "a sub cannot be judged note by note:\n{out}");
 }
 
 /// An arp runs below the step, so a window that fits inside one step still
@@ -167,10 +154,7 @@ fn an_arpeggio_is_measured_but_not_checked_note_by_note() {
          master {{ in > limiter(0.95) > out }}\n"
     );
     let out = audit(&src);
-    assert!(
-        out.contains("its arp puts several notes in every window"),
-        "it should say why it stepped back:\n{out}"
-    );
+    assert!(out.contains("its arp puts several notes in every window"), "it should say why it stepped back:\n{out}");
     assert!(!out.contains("stand out from their own voice"), "{out}");
 }
 
@@ -193,8 +177,5 @@ fn an_arpeggio_is_still_compared_with_and_without_its_chorus() {
          master {{ in > limiter(0.95) > out }}\n"
     );
     let out = audit(&src);
-    assert!(
-        out.contains("the chorus on `plink` accounts for"),
-        "an arp still gets the comparison:\n{out}"
-    );
+    assert!(out.contains("the chorus on `plink` accounts for"), "an arp still gets the comparison:\n{out}");
 }

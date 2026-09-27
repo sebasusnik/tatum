@@ -2,12 +2,12 @@ use crate::math;
 
 /// Bitcrusher — reduces bit depth and sample rate for lo-fi/glitch effects.
 pub struct Bitcrusher {
-    bit_depth: f32,     // 1.0..16.0 (lower = more crushed)
-    rate_reduce: f32,   // 0.0..1.0 (0 = clean, 1 = extreme downsampling)
-    mix: f32,           // dry/wet blend
-    hold_l: f32,        // sample-and-hold state
+    bit_depth: f32,   // 1.0..16.0 (lower = more crushed)
+    rate_reduce: f32, // 0.0..1.0 (0 = clean, 1 = extreme downsampling)
+    mix: f32,         // dry/wet blend
+    hold_l: f32,      // sample-and-hold state
     hold_r: f32,
-    counter: f32,       // accumulator for rate reduction
+    counter: f32, // accumulator for rate reduction
 }
 
 impl Default for Bitcrusher {
@@ -18,14 +18,7 @@ impl Default for Bitcrusher {
 
 impl Bitcrusher {
     pub fn new() -> Self {
-        Self {
-            bit_depth: 16.0,
-            rate_reduce: 0.0,
-            mix: 1.0,
-            hold_l: 0.0,
-            hold_r: 0.0,
-            counter: 0.0,
-        }
+        Self { bit_depth: 16.0, rate_reduce: 0.0, mix: 1.0, hold_l: 0.0, hold_r: 0.0, counter: 0.0 }
     }
 
     pub fn set_bit_depth(&mut self, bits: f32) {
@@ -63,10 +56,7 @@ impl Bitcrusher {
 
         let wet_l = self.hold_l;
         let wet_r = self.hold_r;
-        (
-            l * (1.0 - self.mix) + wet_l * self.mix,
-            r * (1.0 - self.mix) + wet_r * self.mix,
-        )
+        (l * (1.0 - self.mix) + wet_l * self.mix, r * (1.0 - self.mix) + wet_r * self.mix)
     }
 
     pub fn reset(&mut self) {

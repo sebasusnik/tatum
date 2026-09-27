@@ -39,9 +39,7 @@ fn redefining_a_track_replaces_it_rather_than_adding_another() {
 
 #[test]
 fn redefining_a_module_or_a_pattern_replaces_it_too() {
-    let song = parse(&format!(
-        "{RIG}\nmodule bass low {{ cutoff 0.9 }}\npattern sparse {{ E2:0.5 - - - }}"
-    ));
+    let song = parse(&format!("{RIG}\nmodule bass low {{ cutoff 0.9 }}\npattern sparse {{ E2:0.5 - - - }}"));
     assert_eq!(song.module_defs.len(), 1);
     assert_eq!(song.patterns.len(), 2, "sparse replaced, busy untouched");
     let low = &song.module_defs[0];
@@ -169,11 +167,9 @@ fn a_fix_to_the_rigs_chain_reaches_a_step_that_only_moved_a_fader() {
     let fixed_rig = RIG2.replace("lowpass(600, 0.1, wet=0.0) as lp", "lowpass(600, 0.1, wet=1.0) as lp");
     let step = format!("{fixed_rig}\ntrack bass {{ level 0.2 play p2 }}");
     let song = parse(&step);
-    let wet = song.tracks[0].routing.iter()
-        .flat_map(|n| n.params.iter())
-        .find_map(|p| match p {
-            tatum_core::dsl::ast::Param::Named(n, v) if n == "wet" => Some(*v),
-            _ => None,
-        });
+    let wet = song.tracks[0].routing.iter().flat_map(|n| n.params.iter()).find_map(|p| match p {
+        tatum_core::dsl::ast::Param::Named(n, v) if n == "wet" => Some(*v),
+        _ => None,
+    });
     assert_eq!(wet, Some(1.0), "the step inherited the rig's repaired chain");
 }

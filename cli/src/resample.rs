@@ -59,16 +59,11 @@ impl Resampler {
                 sum += v;
             }
             // Unity DC gain at every phase.
-            for k in 0..TAPS { table[p * TAPS + k] /= sum; }
+            for k in 0..TAPS {
+                table[p * TAPS + k] /= sum;
+            }
         }
-        Self {
-            ratio,
-            table,
-            left: vec![0.0; CAPACITY],
-            right: vec![0.0; CAPACITY],
-            len: TAPS,
-            pos: TAPS as f64 / 2.0,
-        }
+        Self { ratio, table, left: vec![0.0; CAPACITY], right: vec![0.0; CAPACITY], len: TAPS, pos: TAPS as f64 / 2.0 }
     }
 
     /// Input frames the caller must supply before `out_frames` can be
@@ -166,7 +161,9 @@ mod tests {
         out[(fout / 4) as usize..].to_vec()
     }
 
-    fn rms(x: &[f32]) -> f32 { (x.iter().map(|v| v * v).sum::<f32>() / x.len() as f32).sqrt() }
+    fn rms(x: &[f32]) -> f32 {
+        (x.iter().map(|v| v * v).sum::<f32>() / x.len() as f32).sqrt()
+    }
 
     fn zero_crossings(x: &[f32]) -> usize {
         x.windows(2).filter(|w| (w[0] >= 0.0) != (w[1] >= 0.0)).count()

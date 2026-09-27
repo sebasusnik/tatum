@@ -14,7 +14,6 @@ use super::graph::node_def_to_spec;
 use super::params::named_param;
 use super::track::compile_track;
 
-
 // ── Bus/Master FX chain compilation ──
 
 /// Two nodes in one chain with the same name make `auto track.name wet` mean
@@ -32,19 +31,19 @@ pub(super) fn check_unique_labels(owner: &str, labels: &[Option<String>]) -> Res
     Ok(())
 }
 
-pub(super) fn compile_fx_chain(owner: &str, chain: &[ChainNode], samples_per_bar: f32) -> Result<Vec<ChainStep>, CompileError> {
+pub(super) fn compile_fx_chain(
+    owner: &str,
+    chain: &[ChainNode],
+    samples_per_bar: f32,
+) -> Result<Vec<ChainStep>, CompileError> {
     check_unique_labels(owner, &chain.iter().map(|n| n.label.clone()).collect::<Vec<_>>())?;
     let mut specs = Vec::new();
     let mut noise_seed = 200u32;
     let mut drift_seed = 8000u32;
 
     for node in chain {
-        let node_def = NodeDef {
-            kind: node.kind.clone(),
-            alias: None,
-            params: node.params.clone(),
-            line: Line::default(),
-        };
+        let node_def =
+            NodeDef { kind: node.kind.clone(), alias: None, params: node.params.clone(), line: Line::default() };
         let wet = named_param(&node.params, crate::nodes::WET).unwrap_or(1.0);
         match node_def_to_spec(&node_def, &mut noise_seed, &mut drift_seed, samples_per_bar) {
             Ok(spec) => specs.push(ChainStep { spec, wet }),
@@ -100,18 +99,20 @@ pub(super) fn compile_scene(
             "reverb_mix" => reverb_mix = Some(ovr.value),
             "delay_mix" => delay_mix = Some(ovr.value),
             "reverb_freeze" => reverb_freeze = Some(ovr.value >= 0.5),
-            other => return Err(CompileError::new(format!(
-                "scene '{}': unknown override '{}' (expected reverb_mix, delay_mix or reverb_freeze)", scene.name, other
-            ))),
+            other => {
+                return Err(CompileError::new(format!(
+                    "scene '{}': unknown override '{}' (expected reverb_mix, delay_mix or reverb_freeze)",
+                    scene.name, other
+                )))
+            }
         }
     }
 
     // Compile automation definitions
-    let automations: Vec<CompiledAutomation> = scene.automations.iter()
-        .map(|a| CompiledAutomation {
-            target: a.target.clone(),
-            keyframes: a.keyframes.clone(),
-        })
+    let automations: Vec<CompiledAutomation> = scene
+        .automations
+        .iter()
+        .map(|a| CompiledAutomation { target: a.target.clone(), keyframes: a.keyframes.clone() })
         .collect();
 
     Ok(CompiledScene {

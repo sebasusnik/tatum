@@ -8,10 +8,7 @@ pub struct Saturator {
 impl Saturator {
     pub fn new(drive: f32) -> Self {
         let d = if drive < 0.1 { 0.1 } else { drive };
-        Self {
-            drive: d,
-            inv_tanh_drive: 1.0 / math::tanh(d),
-        }
+        Self { drive: d, inv_tanh_drive: 1.0 / math::tanh(d) }
     }
 
     pub fn set_drive(&mut self, drive: f32) {

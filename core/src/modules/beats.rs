@@ -116,8 +116,8 @@ struct Snare {
     body_amp: f32,
     // Noise (snappy component)
     noise_amp: f32,
-    noise_hp: BiquadFilter,   // HP ~3kHz
-    noise_bp: BiquadFilter,   // BP ~5.5kHz for presence
+    noise_hp: BiquadFilter, // HP ~3kHz
+    noise_bp: BiquadFilter, // BP ~5.5kHz for presence
     // Transient click
     transient_amp: f32,
     transient_filter: BiquadFilter, // BP ~4kHz wide
@@ -134,8 +134,8 @@ struct Snare {
     decay_rate: f32,
     level: f32,
     pitch: f32,
-    drive: f32,   // tanh saturation drive (default 1.8)
-    snap: f32,    // noise/crack intensity (default 1.0)
+    drive: f32, // tanh saturation drive (default 1.8)
+    snap: f32,  // noise/crack intensity (default 1.0)
 }
 
 impl Snare {
@@ -226,8 +226,12 @@ impl Snare {
 
         self.body_phase_1 += self.body_freq_1 / SAMPLE_RATE;
         self.body_phase_2 += self.body_freq_2 / SAMPLE_RATE;
-        if self.body_phase_1 >= 1.0 { self.body_phase_1 -= 1.0; }
-        if self.body_phase_2 >= 1.0 { self.body_phase_2 -= 1.0; }
+        if self.body_phase_1 >= 1.0 {
+            self.body_phase_1 -= 1.0;
+        }
+        if self.body_phase_2 >= 1.0 {
+            self.body_phase_2 -= 1.0;
+        }
 
         // Subtle pitch sweep (~20-30Hz drop over ~30ms)
         self.body_freq_1 += (self.body_target_freq_1 - self.body_freq_1) * 0.006;
@@ -256,10 +260,8 @@ impl Snare {
         let center = tone + transient + crack * 1.6;
         let stereo_jitter = self.rng.next_bipolar() * 0.2; // ±20% stereo width
         let tail_pan = self.rng.next_bipolar() * 0.2;
-        let left  = center + noise_out * (1.0 - stereo_jitter) * 0.7
-                   + tail * (1.0 - tail_pan) * 0.5;
-        let right = center + noise_out * (1.0 + stereo_jitter) * 0.7
-                   + tail * (1.0 + tail_pan) * 0.5;
+        let left = center + noise_out * (1.0 - stereo_jitter) * 0.7 + tail * (1.0 - tail_pan) * 0.5;
+        let right = center + noise_out * (1.0 + stereo_jitter) * 0.7 + tail * (1.0 + tail_pan) * 0.5;
 
         // Saturation
         let sat_l = math::tanh(left * self.drive);
@@ -481,10 +483,22 @@ impl Tom {
         self.phase = 0.0;
         // 3 toms with different pitch ranges based on MIDI note
         match note {
-            43 => { self.start_freq = 220.0; self.end_freq = 110.0; } // low tom
-            45 => { self.start_freq = 300.0; self.end_freq = 165.0; } // mid tom
-            47 => { self.start_freq = 400.0; self.end_freq = 220.0; } // high tom
-            _  => { self.start_freq = 300.0; self.end_freq = 165.0; } // default mid
+            43 => {
+                self.start_freq = 220.0;
+                self.end_freq = 110.0;
+            } // low tom
+            45 => {
+                self.start_freq = 300.0;
+                self.end_freq = 165.0;
+            } // mid tom
+            47 => {
+                self.start_freq = 400.0;
+                self.end_freq = 220.0;
+            } // high tom
+            _ => {
+                self.start_freq = 300.0;
+                self.end_freq = 165.0;
+            } // default mid
         }
         self.freq = self.start_freq;
         self.amp = velocity;
@@ -575,7 +589,9 @@ impl Crash {
         for i in 0..4 {
             metal += if self.phases[i] < 0.5 { 1.0 } else { -1.0 };
             self.phases[i] += self.freqs[i] / SAMPLE_RATE;
-            if self.phases[i] >= 1.0 { self.phases[i] -= 1.0; }
+            if self.phases[i] >= 1.0 {
+                self.phases[i] -= 1.0;
+            }
         }
         metal /= 4.0;
 
@@ -665,7 +681,6 @@ impl Default for BeatsModule {
 }
 
 impl BeatsModule {
-
     /// True when nothing is sounding and nothing is still releasing. A track
     /// whose level is 0 and whose instrument is idle is skipped whole by the
     /// song engine: no voices, no insert chain, no mix. That is what makes a
@@ -700,11 +715,17 @@ impl BeatsModule {
             BeatsParam::StutterRate => self.set_stutter_rate(value),
             BeatsParam::StutterDrum => {
                 // 0.0 = kick(36), 0.25 = snare(38), 0.5 = hihat(42), 0.75 = clap(39), 1.0 = tom(45)
-                let note = if value < 0.15 { 36 }
-                    else if value < 0.35 { 38 }
-                    else if value < 0.55 { 42 }
-                    else if value < 0.85 { 39 }
-                    else { 45 };
+                let note = if value < 0.15 {
+                    36
+                } else if value < 0.35 {
+                    38
+                } else if value < 0.55 {
+                    42
+                } else if value < 0.85 {
+                    39
+                } else {
+                    45
+                };
                 self.stutter_drum = Some(note);
             }
             BeatsParam::TomPan => self.tom_pan = math::clamp(value, -1.0, 1.0),
@@ -767,9 +788,9 @@ impl BeatsModule {
         // Calculate interval in samples from BPM
         let beat_samples = SAMPLE_RATE * 60.0 / self.bpm;
         self.stutter_interval = match rate {
-            1 => (beat_samples / 2.0) as u32,  // 8th notes
-            2 => (beat_samples / 4.0) as u32,  // 16th notes
-            3 => (beat_samples / 8.0) as u32,  // 32nd notes
+            1 => (beat_samples / 2.0) as u32, // 8th notes
+            2 => (beat_samples / 4.0) as u32, // 16th notes
+            3 => (beat_samples / 8.0) as u32, // 32nd notes
             _ => (beat_samples / 4.0) as u32,
         };
         self.stutter_counter = 0;
@@ -781,7 +802,13 @@ impl BeatsModule {
             self.stutter_remaining = 0;
             return;
         }
-        let rate = if value < 0.4 { 1 } else if value < 0.7 { 2 } else { 3 };
+        let rate = if value < 0.4 {
+            1
+        } else if value < 0.7 {
+            2
+        } else {
+            3
+        };
         let beat_samples = SAMPLE_RATE * 60.0 / self.bpm;
         self.stutter_interval = match rate {
             1 => (beat_samples / 2.0) as u32,

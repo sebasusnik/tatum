@@ -6,7 +6,8 @@ use tatum_core::dsl::{self, compiler};
 use tatum_core::song_engine::SongEngine;
 
 fn song(chain: &str) -> String {
-    format!(r#"
+    format!(
+        r#"
 tempo 120
 scale C major
 
@@ -21,7 +22,9 @@ master {{ in > limiter > out }}
 scene main {{ track bass {{ play line using low }} }}
 scene tail {{ track bass {{ play quiet using low }} }}
 arrange {{ main x1 tail x1 }}
-"#, chain)
+"#,
+        chain
+    )
 }
 
 /// Peak per bar of the whole render.
@@ -30,11 +33,12 @@ fn bars(source: &str, count: u32) -> Vec<f32> {
     engine.start();
     let (l, r) = engine.render(count);
     let per_bar = l.len() / count as usize;
-    (0..count as usize).map(|b| {
-        let a = b * per_bar;
-        l[a..a + per_bar].iter().zip(&r[a..a + per_bar])
-            .fold(0.0f32, |m, (x, y)| m.max(x.abs()).max(y.abs()))
-    }).collect()
+    (0..count as usize)
+        .map(|b| {
+            let a = b * per_bar;
+            l[a..a + per_bar].iter().zip(&r[a..a + per_bar]).fold(0.0f32, |m, (x, y)| m.max(x.abs()).max(y.abs()))
+        })
+        .collect()
 }
 
 #[test]
@@ -47,7 +51,8 @@ fn a_captured_bar_keeps_playing_after_the_track_goes_quiet() {
     assert!(
         looped[1] > silent[0] * 0.2,
         "the captured bar should still be playing in bar 2: control {:?}, capture {:?}",
-        silent, looped
+        silent,
+        looped
     );
 }
 
@@ -65,16 +70,17 @@ fn the_window_is_sized_from_the_song_tempo() {
     let src = song("capture(2) >");
     let ast = dsl::parse(&src).unwrap();
     let compiled = compiler::compile(&ast).unwrap_or_else(|e| panic!("{:?}", e));
-    let spec = compiled.tracks[0].insert_fx.iter().find_map(|s| match s.spec {
-        tatum_core::graph::node::NodeSpec::Capture { samples, .. } => Some(samples),
-        _ => None,
-    }).expect("a capture node");
+    let spec = compiled.tracks[0]
+        .insert_fx
+        .iter()
+        .find_map(|s| match s.spec {
+            tatum_core::graph::node::NodeSpec::Capture { samples, .. } => Some(samples),
+            _ => None,
+        })
+        .expect("a capture node");
     // Two bars of 4/4 at 120 BPM is four seconds.
     let expected = (tatum_core::SAMPLE_RATE * 4.0) as u32;
-    assert!(
-        (spec as i64 - expected as i64).abs() < 100,
-        "expected about {} samples, got {}", expected, spec
-    );
+    assert!((spec as i64 - expected as i64).abs() < 100, "expected about {} samples, got {}", expected, spec);
 }
 
 #[test]

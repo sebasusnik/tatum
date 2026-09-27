@@ -27,7 +27,10 @@ fn render(src: &str) -> String {
     let wav = dir.join(format!("{nth}.wav"));
     std::fs::write(&song, src).unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_tatum"))
-        .arg("render").arg(&song).arg("-o").arg(&wav)
+        .arg("render")
+        .arg(&song)
+        .arg("-o")
+        .arg(&wav)
         .output()
         .expect("run tatum render");
     let _ = std::fs::remove_file(&song);
@@ -150,8 +153,5 @@ fn autopan_reads_wider_than_the_middle() {
     // point of it. What has to hold is that moving the thing across the
     // field reads as much wider than leaving it where it was.
     assert!(centred < 15.0, "a pad with no panning should not read wide, got {centred}%");
-    assert!(
-        moving > centred * 2.5,
-        "autopan read {moving}% against {centred}% still -- the meter is not seeing it"
-    );
+    assert!(moving > centred * 2.5, "autopan read {moving}% against {centred}% still -- the meter is not seeing it");
 }

@@ -54,7 +54,7 @@ pub struct BassModule {
     cutoff_env_amount: f32,
     resonance: f32,
     keytrack: f32,
-    vel_env: f32,  // velocity-to-filter-envelope scaling (0=none, 1=full)
+    vel_env: f32, // velocity-to-filter-envelope scaling (0=none, 1=full)
     // State
     velocity: f32,
     // LFO
@@ -76,7 +76,6 @@ impl Default for BassModule {
 }
 
 impl BassModule {
-
     /// True when nothing is sounding and nothing is still releasing. A track
     /// whose level is 0 and whose instrument is idle is skipped whole by the
     /// song engine: no voices, no insert chain, no mix. That is what makes a
@@ -266,16 +265,13 @@ impl Module for BassModule {
             if self.vibrato_onset < delay_samples {
                 self.vibrato_onset += 1.0;
             }
-            let onset_amt = if delay_samples > 0.0 {
-                (self.vibrato_onset / delay_samples).min(1.0)
-            } else {
-                1.0
-            };
+            let onset_amt = if delay_samples > 0.0 { (self.vibrato_onset / delay_samples).min(1.0) } else { 1.0 };
             if self.vibrato_depth > 0.0 {
-                let vib = math::sin(self.vibrato_phase * math::TWO_PI)
-                    * self.vibrato_depth * onset_amt;
+                let vib = math::sin(self.vibrato_phase * math::TWO_PI) * self.vibrato_depth * onset_amt;
                 self.vibrato_phase += self.vibrato_rate / SAMPLE_RATE;
-                if self.vibrato_phase >= 1.0 { self.vibrato_phase -= 1.0; }
+                if self.vibrato_phase >= 1.0 {
+                    self.vibrato_phase -= 1.0;
+                }
                 pitch_mult *= math::pow2(vib / 12.0);
             }
 
@@ -286,9 +282,7 @@ impl Module for BassModule {
             self.oscs[1].set_frequency(base * ratio1);
             self.oscs[2].set_frequency(base * ratio2);
 
-            let raw = (self.oscs[0].next_sample()
-                + self.oscs[1].next_sample()
-                + self.oscs[2].next_sample()) / 3.0;
+            let raw = (self.oscs[0].next_sample() + self.oscs[1].next_sample() + self.oscs[2].next_sample()) / 3.0;
             let filtered = self.filter.process(raw);
             let amp = self.amp_env.next_sample();
 
@@ -301,8 +295,7 @@ impl Module for BassModule {
         self.velocity = velocity;
         self.target_freq = math::midi_to_freq(note);
 
-        let is_legato = !self.amp_env.is_idle()
-            && self.amp_env.stage() != EnvStage::Release;
+        let is_legato = !self.amp_env.is_idle() && self.amp_env.stage() != EnvStage::Release;
 
         if is_legato {
             // Legato: glide to new note without retriggering amp envelope.

@@ -11,16 +11,17 @@ use crate::params::{self, ModuleKind};
 
 use super::compiled::{CompiledInstrumentKind, FmPreset, ModulePreset};
 
-
 // ── Module compilation ──
 
 pub(super) fn compile_module_def(mod_def: &ModuleDef) -> Result<CompiledInstrumentKind, Vec<CompileError>> {
     let kind = match ModuleKind::from_str(&mod_def.module_type) {
         Some(k) => k,
-        None => return Err(vec![CompileError::new(format!(
-            "module '{}': unknown module type '{}' (expected bass, fm, keys, or beats)",
-            mod_def.name, mod_def.module_type
-        ))]),
+        None => {
+            return Err(vec![CompileError::new(format!(
+                "module '{}': unknown module type '{}' (expected bass, fm, keys, or beats)",
+                mod_def.name, mod_def.module_type
+            ))])
+        }
     };
 
     let mut errors = Vec::new();
@@ -37,11 +38,13 @@ pub(super) fn compile_module_def(mod_def: &ModuleDef) -> Result<CompiledInstrume
     for env in &mod_def.op_envelopes {
         if kind != ModuleKind::Fm {
             errors.push(CompileError::new(format!(
-                "module '{}': op{}_envelope is only valid on fm modules", mod_def.name, env.op_index
+                "module '{}': op{}_envelope is only valid on fm modules",
+                mod_def.name, env.op_index
             )));
         } else if env.op_index > 3 {
             errors.push(CompileError::new(format!(
-                "module '{}': op{}_envelope — operators are op0..op3", mod_def.name, env.op_index
+                "module '{}': op{}_envelope — operators are op0..op3",
+                mod_def.name, env.op_index
             )));
         }
     }

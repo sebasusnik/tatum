@@ -50,16 +50,30 @@ fn dump_funk_dsl_compiled() {
         for (si, step) in pat.steps.iter().enumerate() {
             let _row = si / pat.steps_per_row;
             let col = si % pat.steps_per_row;
-            if col == 0 && si > 0 { println!(); }
+            if col == 0 && si > 0 {
+                println!();
+            }
             match step {
                 CompiledStep::NoteOn { midi_note, velocity, plock, .. } => {
                     print!("    [{:2}] NoteOn(midi={:3}, vel={:.2}", si, midi_note, velocity);
-                    if plock.cutoff.is_some() || plock.env_depth.is_some() || plock.resonance.is_some() || plock.gate.is_some() {
+                    if plock.cutoff.is_some()
+                        || plock.env_depth.is_some()
+                        || plock.resonance.is_some()
+                        || plock.gate.is_some()
+                    {
                         print!(" plock[");
-                        if let Some(c) = plock.cutoff { print!("cutoff={}", c); }
-                        if let Some(e) = plock.env_depth { print!(" edepth={}", e); }
-                        if let Some(r) = plock.resonance { print!(" res={}", r); }
-                        if let Some(g) = plock.gate { print!(" gate={}", g); }
+                        if let Some(c) = plock.cutoff {
+                            print!("cutoff={}", c);
+                        }
+                        if let Some(e) = plock.env_depth {
+                            print!(" edepth={}", e);
+                        }
+                        if let Some(r) = plock.resonance {
+                            print!(" res={}", r);
+                        }
+                        if let Some(g) = plock.gate {
+                            print!(" gate={}", g);
+                        }
                         print!("]");
                     }
                     print!(")");
@@ -67,20 +81,33 @@ fn dump_funk_dsl_compiled() {
                 CompiledStep::Subdiv { notes, count, .. } => {
                     print!("    [{:2}] Subdiv(", si);
                     for (i, n) in notes.iter().take(*count as usize).enumerate() {
-                        if i > 0 { print!(" "); }
-                        print!("{}{}@{:.2}", if n.slide { "~" } else { "" },
-                               n.midi_note, n.velocity);
+                        if i > 0 {
+                            print!(" ");
+                        }
+                        print!("{}{}@{:.2}", if n.slide { "~" } else { "" }, n.midi_note, n.velocity);
                     }
                     print!(")");
                 }
                 CompiledStep::DrumHit { velocity, plock, .. } => {
                     print!("    [{:2}] DrumHit(vel={:.2}", si, velocity);
-                    if plock.cutoff.is_some() || plock.env_depth.is_some() || plock.resonance.is_some() || plock.gate.is_some() {
+                    if plock.cutoff.is_some()
+                        || plock.env_depth.is_some()
+                        || plock.resonance.is_some()
+                        || plock.gate.is_some()
+                    {
                         print!(" plock[");
-                        if let Some(c) = plock.cutoff { print!("cutoff={}", c); }
-                        if let Some(e) = plock.env_depth { print!(" edepth={}", e); }
-                        if let Some(r) = plock.resonance { print!(" res={}", r); }
-                        if let Some(g) = plock.gate { print!(" gate={}", g); }
+                        if let Some(c) = plock.cutoff {
+                            print!("cutoff={}", c);
+                        }
+                        if let Some(e) = plock.env_depth {
+                            print!(" edepth={}", e);
+                        }
+                        if let Some(r) = plock.resonance {
+                            print!(" res={}", r);
+                        }
+                        if let Some(g) = plock.gate {
+                            print!(" gate={}", g);
+                        }
                         print!("]");
                     }
                     print!(")");
@@ -137,8 +164,10 @@ fn dump_funk_dsl_compiled() {
     for scene in &compiled.scenes {
         println!("  \"{}\" (tempo: {:?})", scene.name, scene.tempo);
         for t in &scene.tracks {
-            println!("      track \"{}\" → inst[{}] pat[{}] vel={} lvl={} gate={} pan={}",
-                t.name, t.instrument_idx, t.pattern_idx, t.velocity, t.level, t.gate, t.pan);
+            println!(
+                "      track \"{}\" → inst[{}] pat[{}] vel={} lvl={} gate={} pan={}",
+                t.name, t.instrument_idx, t.pattern_idx, t.velocity, t.level, t.gate, t.pan
+            );
         }
     }
 

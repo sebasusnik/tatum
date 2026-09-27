@@ -9,10 +9,7 @@ use tatum_core::dsl;
 
 fn lints(src: &str) -> Vec<(String, String)> {
     let song = dsl::parse(src).unwrap_or_else(|e| panic!("{e:?}"));
-    dsl::lint::lint_song(&song)
-        .into_iter()
-        .map(|l| (String::from(l.code), l.message))
-        .collect()
+    dsl::lint::lint_song(&song).into_iter().map(|l| (String::from(l.code), l.message)).collect()
 }
 
 fn codes(src: &str, code: &str) -> Vec<String> {
@@ -112,8 +109,7 @@ fn a_bus_compressor_counts() {
 /// its own, before the track level or the master gets a say.
 #[test]
 fn a_drum_level_above_one_is_flagged() {
-    let src = HEAD.replace("module beats kit { }", "module beats kit { snare_level 1.4 }")
-        + "master { in > out }\n";
+    let src = HEAD.replace("module beats kit { }", "module beats kit { snare_level 1.4 }") + "master { in > out }\n";
     let out = codes(&src, "drum_level_past_full_scale");
     assert_eq!(out.len(), 1, "{out:?}");
     assert!(out[0].contains("snare_level"), "name the knob: {}", out[0]);
@@ -130,8 +126,7 @@ fn a_drum_level_at_or_below_one_is_fine() {
 /// is a fader in the way the per-voice ones are not.
 #[test]
 fn the_modules_own_level_is_a_different_knob() {
-    let src = HEAD.replace("module beats kit { }", "module beats kit { level 1.6 }")
-        + "master { in > out }\n";
+    let src = HEAD.replace("module beats kit { }", "module beats kit { level 1.6 }") + "master { in > out }\n";
     assert!(codes(&src, "drum_level_past_full_scale").is_empty());
 }
 
@@ -277,7 +272,9 @@ fn nothing_in_the_corpus_sends_a_chord_to_a_voice_that_cannot_hold_it() {
         let path = std::path::Path::new(root).join(dir);
         for entry in std::fs::read_dir(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display())) {
             let f = entry.unwrap().path();
-            if f.extension().is_none_or(|e| e != "synth") { continue }
+            if f.extension().is_none_or(|e| e != "synth") {
+                continue;
+            }
             let src = std::fs::read_to_string(&f).unwrap();
             for m in codes(&src, "chord_into_mono_voice") {
                 bad.push(format!("{}: {m}", f.file_name().unwrap().to_string_lossy()));

@@ -22,15 +22,12 @@ fn test_fm_madness() {
     let (out_l, out_r) = engine.render(total_bars);
 
     // Verify output has audio content
-    let peak = out_l.iter().chain(out_r.iter())
-        .fold(0.0f32, |a, &b| a.max(b.abs()));
+    let peak = out_l.iter().chain(out_r.iter()).fold(0.0f32, |a, &b| a.max(b.abs()));
     assert!(peak > 0.01, "FM madness should produce audible output, peak={:.4}", peak);
     assert!(peak <= 1.0, "FM madness should not clip, peak={:.4}", peak);
 
     // Verify stereo content (chorus + delay + reverb should create L/R differences)
-    let stereo_diff: f32 = out_l.iter().zip(out_r.iter())
-        .map(|(l, r)| (l - r).abs())
-        .sum::<f32>() / out_l.len() as f32;
+    let stereo_diff: f32 = out_l.iter().zip(out_r.iter()).map(|(l, r)| (l - r).abs()).sum::<f32>() / out_l.len() as f32;
     assert!(stereo_diff > 0.001, "Should have stereo width, avg diff={:.6}", stereo_diff);
 
     // Verify different sections have different energy (intro quieter than drops)
@@ -42,26 +39,22 @@ fn test_fm_madness() {
     assert!(
         drop_rms > intro_rms * 1.2,
         "Drop should be louder than intro: drop_rms={:.4}, intro_rms={:.4}",
-        drop_rms, intro_rms
+        drop_rms,
+        intro_rms
     );
 
-    write_wav_stereo(
-        &output_path("fm_madness.wav"),
-        &out_l,
-        &out_r,
-        44100,
-    );
+    write_wav_stereo(&output_path("fm_madness.wav"), &out_l, &out_r, 44100);
 
     let duration = out_l.len() as f32 / 44100.0;
     println!("Wrote test_output/fm_madness.wav ({:.1}s, {} bars at 130 BPM)", duration, total_bars);
-    println!("  Peak: {:.3}, Stereo diff: {:.5}, Intro RMS: {:.4}, Drop RMS: {:.4}",
-        peak, stereo_diff, intro_rms, drop_rms);
+    println!(
+        "  Peak: {:.3}, Stereo diff: {:.5}, Intro RMS: {:.4}, Drop RMS: {:.4}",
+        peak, stereo_diff, intro_rms, drop_rms
+    );
 }
 
 fn rms(left: &[f32], right: &[f32]) -> f32 {
     let n = left.len();
-    let sum: f32 = left.iter().zip(right.iter())
-        .map(|(l, r)| l * l + r * r)
-        .sum();
+    let sum: f32 = left.iter().zip(right.iter()).map(|(l, r)| l * l + r * r).sum();
     (sum / (2 * n) as f32).sqrt()
 }

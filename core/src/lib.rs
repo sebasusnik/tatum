@@ -23,7 +23,6 @@ pub mod analysis;
 pub mod nodes;
 pub mod output;
 
-
 pub const SAMPLE_RATE: f32 = 44100.0;
 pub const BLOCK_SIZE: usize = 128;
 pub const MAX_VOICES: usize = 8;

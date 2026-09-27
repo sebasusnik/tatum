@@ -3,7 +3,6 @@
 
 use crate::dsl::ast::*;
 
-
 // ── Param helpers ──
 
 pub(super) fn first_float_param(params: &[Param]) -> Option<f32> {
@@ -22,11 +21,15 @@ pub(super) fn float_param_at(params: &[Param], index: usize) -> Option<f32> {
     for p in params {
         match p {
             Param::Float(v) => {
-                if count == index { return Some(*v); }
+                if count == index {
+                    return Some(*v);
+                }
                 count += 1;
             }
             Param::Expr(e) => {
-                if count == index { return Some(e.eval()); }
+                if count == index {
+                    return Some(e.eval());
+                }
                 count += 1;
             }
             Param::Waveform(_) => {} // skip waveforms in positional count
@@ -46,7 +49,9 @@ pub(super) fn float_param_at(params: &[Param], index: usize) -> Option<f32> {
 pub(super) fn named_param(params: &[Param], name: &str) -> Option<f32> {
     for p in params {
         if let Param::Named(n, v) = p {
-            if n == name { return Some(*v); }
+            if n == name {
+                return Some(*v);
+            }
         }
     }
     None

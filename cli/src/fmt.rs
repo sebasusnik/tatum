@@ -90,9 +90,8 @@ fn replace_value(line: &str, name: &str, new: &str) -> Option<String> {
             let rest = &line[end..];
             let spaces = rest.len() - rest.trim_start().len();
             let num_start = end + spaces;
-            let num_len = line[num_start..].bytes()
-                .take_while(|c| c.is_ascii_digit() || *c == b'.' || *c == b'-')
-                .count();
+            let num_len =
+                line[num_start..].bytes().take_while(|c| c.is_ascii_digit() || *c == b'.' || *c == b'-').count();
             let after = line.as_bytes().get(num_start + num_len).copied();
             if spaces > 0 && num_len > 0 && !after.is_some_and(|c| c.is_ascii_alphabetic() || c == b'%') {
                 return Some(format!("{}{}{}", &line[..num_start], new, &line[num_start + num_len..]));
@@ -110,10 +109,14 @@ mod tests {
     #[test]
     fn only_the_named_parameter_and_only_its_number() {
         assert_eq!(replace_value("    cutoff 0.10", "cutoff", "179hz").unwrap(), "    cutoff 179hz");
-        assert_eq!(replace_value("module k { cutoff_env 0.2 cutoff 0.3 }", "cutoff", "2khz").unwrap(),
-            "module k { cutoff_env 0.2 cutoff 2khz }");
+        assert_eq!(
+            replace_value("module k { cutoff_env 0.2 cutoff 0.3 }", "cutoff", "2khz").unwrap(),
+            "module k { cutoff_env 0.2 cutoff 2khz }"
+        );
         assert!(replace_value("    cutoff 800hz", "cutoff", "800hz").is_none());
-        assert_eq!(replace_value("    osc2_pitch -0.25   # an octave down", "osc2_pitch", "-12st").unwrap(),
-            "    osc2_pitch -12st   # an octave down");
+        assert_eq!(
+            replace_value("    osc2_pitch -0.25   # an octave down", "osc2_pitch", "-12st").unwrap(),
+            "    osc2_pitch -12st   # an octave down"
+        );
     }
 }

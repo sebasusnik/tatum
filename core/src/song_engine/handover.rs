@@ -104,7 +104,9 @@ impl SongEngine {
         }
         for (i, m) in map.tracks.iter().enumerate() {
             let Some(j) = *m else { continue };
-            if i >= self.tracks.len() || j >= old.tracks.len() { continue; }
+            if i >= self.tracks.len() || j >= old.tracks.len() {
+                continue;
+            }
             let n = &mut self.tracks[i];
             let o = &mut old.tracks[j];
             core::mem::swap(&mut n.current_step, &mut o.current_step);

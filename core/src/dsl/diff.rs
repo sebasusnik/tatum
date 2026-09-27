@@ -20,40 +20,20 @@ pub enum DslChange {
     /// Humanize (velocity, timing) changed
     HumanizeChanged { velocity: f32, timing: f32 },
     /// A module parameter changed — can apply via set_module_param()
-    ModuleParamChanged {
-        module_name: String,
-        param_name: String,
-        value: f32,
-    },
+    ModuleParamChanged { module_name: String, param_name: String, value: f32 },
     /// A track's level changed — can apply via set_track_level()
-    TrackLevelChanged {
-        track_name: String,
-        level: f32,
-    },
+    TrackLevelChanged { track_name: String, level: f32 },
     /// A track's pan changed
-    TrackPanChanged {
-        track_name: String,
-        pan: f32,
-    },
+    TrackPanChanged { track_name: String, pan: f32 },
     /// A track's velocity changed
-    TrackVelocityChanged {
-        track_name: String,
-        velocity: f32,
-    },
+    TrackVelocityChanged { track_name: String, velocity: f32 },
     /// A track's gate length changed
-    TrackGateChanged {
-        track_name: String,
-        gate: f32,
-    },
+    TrackGateChanged { track_name: String, gate: f32 },
     /// One node in a track's insert chain changed its dry/wet. Switching an
     /// effect in or out is the one chain edit that does not need a swap: the
     /// node is already built and already in the chain, only how much of it you
     /// hear changes. Everything else about a chain is still structural.
-    TrackNodeWetChanged {
-        track_name: String,
-        node_index: usize,
-        wet: f32,
-    },
+    TrackNodeWetChanged { track_name: String, node_index: usize, wet: f32 },
     /// Something structural changed — requires full hot-swap
     StructuralChange,
 }
@@ -68,25 +48,39 @@ fn wet_only_routing_diff(
     old: &[crate::dsl::ast::RoutingNode],
     new: &[crate::dsl::ast::RoutingNode],
 ) -> Option<Vec<(usize, f32)>> {
-    if old.len() != new.len() { return None; }
+    if old.len() != new.len() {
+        return None;
+    }
     let wet_of = |n: &crate::dsl::ast::RoutingNode| {
-        n.params.iter().find_map(|p| match p {
-            Param::Named(name, v) if name == crate::nodes::WET => Some(*v),
-            _ => None,
-        }).unwrap_or(1.0)
+        n.params
+            .iter()
+            .find_map(|p| match p {
+                Param::Named(name, v) if name == crate::nodes::WET => Some(*v),
+                _ => None,
+            })
+            .unwrap_or(1.0)
     };
     let without_wet = |n: &crate::dsl::ast::RoutingNode| {
-        n.params.iter().filter(|p| !matches!(p, Param::Named(name, _) if name == crate::nodes::WET))
-            .cloned().collect::<Vec<_>>()
+        n.params
+            .iter()
+            .filter(|p| !matches!(p, Param::Named(name, _) if name == crate::nodes::WET))
+            .cloned()
+            .collect::<Vec<_>>()
     };
     let mut moved = Vec::new();
     for (i, (o, n)) in old.iter().zip(new.iter()).enumerate() {
         // Renaming a node is not a wet change. Without this the rename would
         // produce an empty change list and be dropped on the floor.
-        if o.kind != n.kind || o.label != n.label { return None; }
-        if without_wet(o) != without_wet(n) { return None; }
+        if o.kind != n.kind || o.label != n.label {
+            return None;
+        }
+        if without_wet(o) != without_wet(n) {
+            return None;
+        }
         let (ow, nw) = (wet_of(o), wet_of(n));
-        if (ow - nw).abs() > f32::EPSILON { moved.push((i, nw)); }
+        if (ow - nw).abs() > f32::EPSILON {
+            moved.push((i, nw));
+        }
     }
     Some(moved)
 }
@@ -103,9 +97,7 @@ pub fn diff(old: &Song, new: &Song) -> Vec<DslChange> {
     if old.globals.swing != new.globals.swing {
         changes.push(DslChange::SwingChanged(new.globals.swing.unwrap_or(0.5)));
     }
-    if old.globals.humanize != new.globals.humanize
-        || old.globals.humanize_timing != new.globals.humanize_timing
-    {
+    if old.globals.humanize != new.globals.humanize || old.globals.humanize_timing != new.globals.humanize_timing {
         changes.push(DslChange::HumanizeChanged {
             velocity: new.globals.humanize.unwrap_or(0.0),
             timing: new.globals.humanize_timing.unwrap_or(0.0),
@@ -115,10 +107,14 @@ pub fn diff(old: &Song, new: &Song) -> Vec<DslChange> {
     {
         let mut o = old.globals.clone();
         let mut n = new.globals.clone();
-        o.tempo = 0.0; n.tempo = 0.0;
-        o.swing = None; n.swing = None;
-        o.humanize = None; n.humanize = None;
-        o.humanize_timing = None; n.humanize_timing = None;
+        o.tempo = 0.0;
+        n.tempo = 0.0;
+        o.swing = None;
+        n.swing = None;
+        o.humanize = None;
+        n.humanize = None;
+        o.humanize_timing = None;
+        n.humanize_timing = None;
         if o != n {
             changes.push(DslChange::StructuralChange);
             return changes;
@@ -147,9 +143,7 @@ pub fn diff(old: &Song, new: &Song) -> Vec<DslChange> {
         }
         // Changed or added params
         for new_param in &new_mod.params {
-            let old_val = old_mod.params.iter()
-                .find(|p| p.name == new_param.name)
-                .map(|p| p.value);
+            let old_val = old_mod.params.iter().find(|p| p.name == new_param.name).map(|p| p.value);
             if old_val != Some(new_param.value) {
                 changes.push(DslChange::ModuleParamChanged {
                     module_name: new_mod.name.clone(),
@@ -161,7 +155,9 @@ pub fn diff(old: &Song, new: &Song) -> Vec<DslChange> {
         // Removed params go back to the registry default
         let kind = ModuleKind::from_str(&new_mod.module_type);
         for old_param in &old_mod.params {
-            if new_mod.params.iter().any(|p| p.name == old_param.name) { continue; }
+            if new_mod.params.iter().any(|p| p.name == old_param.name) {
+                continue;
+            }
             match kind.and_then(|k| params::lookup(k, &old_param.name)) {
                 Some(spec) => changes.push(DslChange::ModuleParamChanged {
                     module_name: new_mod.name.clone(),
@@ -197,8 +193,7 @@ pub fn diff(old: &Song, new: &Song) -> Vec<DslChange> {
         return changes;
     }
     for (old_track, new_track) in old.tracks.iter().zip(new.tracks.iter()) {
-        if old_track.name != new_track.name ||
-           old_track.using_instrument != new_track.using_instrument {
+        if old_track.name != new_track.name || old_track.using_instrument != new_track.using_instrument {
             changes.push(DslChange::StructuralChange);
             return changes;
         }

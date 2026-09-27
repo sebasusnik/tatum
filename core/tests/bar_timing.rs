@@ -55,9 +55,14 @@ fn bar_counter_crosses_on_the_downbeat_sample() {
         // One sixteenth early is 5512 samples; that is what this guards.
         let expected = (bar as f32 * BAR) as isize;
         let delta = sample as isize - expected;
-        assert!(delta.abs() <= 1,
+        assert!(
+            delta.abs() <= 1,
             "bar {} crossed at sample {} but the downbeat is at {} (delta {})",
-            bar, sample, expected, delta);
+            bar,
+            sample,
+            expected,
+            delta
+        );
     }
 }
 
@@ -82,10 +87,13 @@ fn scene_change_does_not_cut_the_last_step_of_the_previous_scene() {
     // scene b (silent). The note at step 15 of scene a must sound for 90 % of
     // its step like every other one. It used to sound for 0 %: the scene
     // change ran together with the trigger and released it on the same sample.
-    let src = format!("{}\n\
+    let src = format!(
+        "{}\n\
         scene a {{ track pad {{ play every using pad level 0.8 gate 0.9 }} }}\n\
         scene b {{ track kick {{ play beat using kit level 0.0 }} }}\n\
-        arrange {{ a x1 b x1 }}\n", RIG);
+        arrange {{ a x1 b x1 }}\n",
+        RIG
+    );
     let mut e = SongEngine::from_source(&src).unwrap();
     e.start();
     let (l, _) = e.render_steps(32);
@@ -102,9 +110,13 @@ fn scene_change_does_not_cut_the_last_step_of_the_previous_scene() {
     assert!(reference > 0.85, "step 13 audible for {:.0}%", reference * 100.0);
     for step in [14usize, 15] {
         let frac = audible(step);
-        assert!((frac - reference).abs() < 0.05,
+        assert!(
+            (frac - reference).abs() < 0.05,
             "step {} audible for {:.0}% of its length, step 13 for {:.0}%",
-            step, frac * 100.0, reference * 100.0);
+            step,
+            frac * 100.0,
+            reference * 100.0
+        );
     }
     // And scene b really is silent: the pad did not leak past the bar line
     // beyond the 10 ms fade a track gets when a scene drops it.
@@ -118,17 +130,25 @@ fn arranged_render_has_every_sample_of_its_last_bar() {
     // Two bars arranged. The render must stop on the downbeat of bar 2, not
     // one sixteenth before it. Compared against the engine's own arithmetic
     // so a change in samples_per_step does not make this test lie.
-    let src = format!("{}\n\
+    let src = format!(
+        "{}\n\
         scene a {{ track pad {{ play every using pad level 0.8 gate 0.9 }} }}\n\
         scene b {{ track pad {{ play every using pad level 0.8 gate 0.9 }} }}\n\
-        arrange {{ a x1 b x1 }}\n", RIG);
+        arrange {{ a x1 b x1 }}\n",
+        RIG
+    );
     let mut e = SongEngine::from_source(&src).unwrap();
     assert_eq!(e.arrangement_bars(), 2);
     let (l, _) = e.render(e.arrangement_bars());
     let expected = (BAR * 2.0) as usize;
-    assert!(l.len() >= expected,
+    assert!(
+        l.len() >= expected,
         "arranged render wrote {} samples, the arrangement is {} long (short by {}, one sixteenth is {})",
-        l.len(), expected, expected - l.len(), STEP as usize);
+        l.len(),
+        expected,
+        expected - l.len(),
+        STEP as usize
+    );
     // The last step of the last bar is audible for its 90 % gate.
     let s = (STEP * 31.0) as usize;
     let seg = &l[s..(s + STEP as usize).min(l.len())];

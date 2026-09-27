@@ -24,10 +24,9 @@ mod track;
 mod validate;
 
 pub use compiled::{
-    ArpConfig, ChordNote, CompiledAutomation, CompiledBus, CompiledGroove, CompiledGrooveLane,
-    CompiledInstrumentKind, CompiledLane, CompiledMaster, CompiledPattern, CompiledScene,
-    CompiledSong, CompiledStep, CompiledTrack, FmPreset, ModulePreset, StepPLock, SubNote,
-    MAX_CHORD_NOTES, MAX_SUBDIV,
+    ArpConfig, ChordNote, CompiledAutomation, CompiledBus, CompiledGroove, CompiledGrooveLane, CompiledInstrumentKind,
+    CompiledLane, CompiledMaster, CompiledPattern, CompiledScene, CompiledSong, CompiledStep, CompiledTrack, FmPreset,
+    ModulePreset, StepPLock, SubNote, MAX_CHORD_NOTES, MAX_SUBDIV,
 };
 pub use notes::{drum_note, note_in_midi_range, note_name_to_midi, resolve_note, scale_context};
 pub use validate::{master_auto_node_kinds, MASTER_AUTO_PARAMS};
@@ -40,7 +39,6 @@ use pattern::compile_pattern;
 use track::compile_track;
 use validate::{validate_automations, validate_midi};
 
-
 // ── Compiler ──
 
 pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
@@ -49,10 +47,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     // A `capture` window is sized in samples at compile time so the buffer can
     // be allocated when the chain is built. Use the slowest tempo the song ever
     // reaches, since a scene can override it and a slower bar is a longer one.
-    let slowest_tempo = song.scenes.iter()
-        .filter_map(|s| s.tempo)
-        .fold(song.globals.tempo, f32::min)
-        .max(20.0);
+    let slowest_tempo = song.scenes.iter().filter_map(|s| s.tempo).fold(song.globals.tempo, f32::min).max(20.0);
     let samples_per_bar = crate::SAMPLE_RATE * 60.0 / slowest_tempo * song.globals.meter.0 as f32;
 
     // 1. Compile graph instruments
@@ -111,7 +106,10 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
         let chain = match song.bus_chains.iter().find(|bc| bc.bus_name == bus_def.name) {
             Some(bc) => match compile_fx_chain(&format!("bus '{}'", bus_def.name), &bc.chain, samples_per_bar) {
                 Ok(c) => c,
-                Err(e) => { errors.push(e); Vec::new() }
+                Err(e) => {
+                    errors.push(e);
+                    Vec::new()
+                }
             },
             None => Vec::new(),
         };
@@ -132,7 +130,8 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
                 Err(e) => errors.push(e),
             },
             name if !song.buses.iter().any(|b| b.name == name) => errors.push(CompileError::new(format!(
-                "chain '{}' has no `bus {}` declaration (or use reverb_return / delay_return for the global sends)", name, name
+                "chain '{}' has no `bus {}` declaration (or use reverb_return / delay_return for the global sends)",
+                name, name
             ))),
             // Names that do match a declared bus were already compiled in step 3.
             _ => {}
@@ -152,19 +151,17 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     // cannot duck against itself. Getting this wrong used to be impossible
     // because there was nothing to get wrong: everything ducked the kick.
     {
-        let known = |name: &str| {
-            song.tracks.iter().any(|t| t.name == name)
-                || instrument_names.iter().any(|n| n == name)
-        };
+        let known =
+            |name: &str| song.tracks.iter().any(|t| t.name == name) || instrument_names.iter().any(|n| n == name);
         let mut check = |amount: Option<f32>, source: &Option<String>, owner: &str| {
             let Some(name) = source else { return };
             if !known(name) {
-                errors.push(CompileError::new(format!(
-                    "{}: sidechain from='{}' names no track or module", owner, name
-                )));
+                errors
+                    .push(CompileError::new(format!("{}: sidechain from='{}' names no track or module", owner, name)));
             } else if owner == name {
                 errors.push(CompileError::new(format!(
-                    "{}: sidechain from='{}' would duck the track against itself", owner, name
+                    "{}: sidechain from='{}' would duck the track against itself",
+                    owner, name
                 )));
             } else if amount.unwrap_or(song.globals.sidechain) <= 0.0 {
                 errors.push(CompileError::new(format!(
@@ -191,7 +188,10 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     let master = match &song.master {
         Some(m) => match compile_fx_chain("master", &without_limiter(&m.chain), samples_per_bar) {
             Ok(c) => CompiledMaster { fx_chain: c },
-            Err(e) => { errors.push(e); CompiledMaster { fx_chain: Vec::new() } }
+            Err(e) => {
+                errors.push(e);
+                CompiledMaster { fx_chain: Vec::new() }
+            }
         },
         None => CompiledMaster { fx_chain: Vec::new() },
     };
@@ -212,7 +212,8 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
         if let Some(idx) = scene_names.iter().position(|&n| n == entry.scene_name) {
             arrangement.push((idx, entry.repeat));
         } else {
-            errors.push(CompileError { line: 0,
+            errors.push(CompileError {
+                line: 0,
                 message: format!("unknown scene '{}' in arrangement", entry.scene_name),
             });
         }
@@ -223,16 +224,22 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     }
 
     // Compile groove blocks
-    let grooves: Vec<CompiledGroove> = song.grooves.iter().map(|g| {
-        let lanes = g.lanes.iter().map(|l| {
-            CompiledGrooveLane {
-                midi_note: drum_name_to_midi(&l.drum_name),
-                swing_override: l.swing,
-                nudge: l.nudge.unwrap_or(0.0),
-            }
-        }).collect();
-        CompiledGroove { name: g.name.clone(), lanes }
-    }).collect();
+    let grooves: Vec<CompiledGroove> = song
+        .grooves
+        .iter()
+        .map(|g| {
+            let lanes = g
+                .lanes
+                .iter()
+                .map(|l| CompiledGrooveLane {
+                    midi_note: drum_name_to_midi(&l.drum_name),
+                    swing_override: l.swing,
+                    nudge: l.nudge.unwrap_or(0.0),
+                })
+                .collect();
+            CompiledGroove { name: g.name.clone(), lanes }
+        })
+        .collect();
 
     // Apply first groove block to all drum patterns (simple model: one active groove)
     if let Some(groove) = grooves.first() {

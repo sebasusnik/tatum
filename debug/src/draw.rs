@@ -89,8 +89,16 @@ pub fn part(strip: &Strip, ruler: &Ruler, columns: usize) -> Canvas {
     draw_strip(&mut c, strip, RULER_H, h, columns);
     c.text(8, RULER_H + 4, strip.name, TEXT, 2);
     c.text(8, RULER_H + 4 + GLYPH_HEIGHT * 2 + 6, &strip.note, DIM_TEXT, 1);
-    for (hz, label) in [(50.0, "50"), (100.0, "100"), (200.0, "200"), (500.0, "500"),
-                        (1000.0, "1k"), (2000.0, "2k"), (5000.0, "5k"), (10000.0, "10k")] {
+    for (hz, label) in [
+        (50.0, "50"),
+        (100.0, "100"),
+        (200.0, "200"),
+        (500.0, "500"),
+        (1000.0, "1k"),
+        (2000.0, "2k"),
+        (5000.0, "5k"),
+        (10000.0, "10k"),
+    ] {
         let y = RULER_H + h - 1 - (hz_row(hz) / ROWS as f32 * h as f32) as usize;
         c.hline(LABEL_W, y, columns, GUIDE, 0.18);
         let label_x = LABEL_W - 8 - text_width(label, 1);
@@ -115,10 +123,14 @@ fn draw_ruler(c: &mut Canvas, ruler: &Ruler, columns: usize, height: usize) {
     // second, fourth... bar, always on a power of two so they land on phrases.
     let per_bar = columns as f32 / ruler.bars.len().max(1) as f32;
     let mut every = 1;
-    while per_bar * (every as f32) < 10.0 { every *= 2 }
+    while per_bar * (every as f32) < 10.0 {
+        every *= 2
+    }
     let mut label_from = 0;
     for (x, bar) in &ruler.bars {
-        if (bar - 1) % every != 0 { continue }
+        if (bar - 1) % every != 0 {
+            continue;
+        }
         c.vline(LABEL_W + x, 20, height - 20, GUIDE, 0.12);
         let label = bar.to_string();
         if *x >= label_from {
@@ -174,7 +186,9 @@ pub fn zoom(title: &str, wave: &[f32], spec: &Spectrogram, width: usize, spec_co
     for x in 0..width {
         let a = x * wave.len() / width;
         let b = ((x + 1) * wave.len() / width).max(a + 1).min(wave.len());
-        if a >= wave.len() { break }
+        if a >= wave.len() {
+            break;
+        }
         let (lo, hi) = wave[a..b].iter().fold((f32::MAX, f32::MIN), |(l, h), &v| (l.min(v), h.max(v)));
         let to_y = |v: f32| (mid as f32 - v / peak * (WAVE_H as f32 / 2.0 - 4.0)) as usize;
         let (top, bottom) = (to_y(hi), to_y(lo));

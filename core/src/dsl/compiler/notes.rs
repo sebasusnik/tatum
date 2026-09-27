@@ -6,7 +6,6 @@ use alloc::vec::Vec;
 
 use crate::dsl::ast::*;
 
-
 // ── Note resolution ──
 
 /// Resolve a NoteRef (absolute or scale degree) to a MIDI note number.
@@ -41,9 +40,18 @@ pub fn scale_context(song: &Song) -> ([u8; 7], u8) {
         };
         // Root pitch class (0=C, 2=D, 4=E, 5=F, 7=G, 9=A, 11=B)
         let root_pc = match scale_def.root.as_str() {
-            "C" => 0, "C#" | "Db" => 1, "D" => 2, "D#" | "Eb" => 3,
-            "E" => 4, "F" => 5, "F#" | "Gb" => 6, "G" => 7,
-            "G#" | "Ab" => 8, "A" => 9, "A#" | "Bb" => 10, "B" => 11,
+            "C" => 0,
+            "C#" | "Db" => 1,
+            "D" => 2,
+            "D#" | "Eb" => 3,
+            "E" => 4,
+            "F" => 5,
+            "F#" | "Gb" => 6,
+            "G" => 7,
+            "G#" | "Ab" => 8,
+            "A" => 9,
+            "A#" | "Bb" => 10,
+            "B" => 11,
             _ => 0,
         };
         (intervals, root_pc)
@@ -92,7 +100,9 @@ pub fn note_in_midi_range(name: &str) -> bool {
 
 fn note_name_midi(name: &str) -> i32 {
     let chars: Vec<char> = name.chars().collect();
-    if chars.is_empty() { return 60; } // default C4
+    if chars.is_empty() {
+        return 60;
+    } // default C4
 
     let base = match chars[0].to_ascii_uppercase() {
         'C' => 0,

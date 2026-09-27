@@ -28,18 +28,18 @@ pub(super) struct TrackPlayback {
     pub(super) instrument_idx: usize,
     pub(super) pattern_idx: usize,
     pub(super) velocity: f32,
-    pub(super) level: f32,              // output level 0.0-1.0
-    pub(super) pan: f32,                // raw pan value -1.0 to 1.0
-    pub(super) pan_l: f32,              // pre-computed left gain (equal-power)
-    pub(super) pan_r: f32,              // pre-computed right gain (equal-power)
-    pub(super) gate: f32,               // gate length as fraction of step (0.0-1.0)
+    pub(super) level: f32, // output level 0.0-1.0
+    pub(super) pan: f32,   // raw pan value -1.0 to 1.0
+    pub(super) pan_l: f32, // pre-computed left gain (equal-power)
+    pub(super) pan_r: f32, // pre-computed right gain (equal-power)
+    pub(super) gate: f32,  // gate length as fraction of step (0.0-1.0)
     pub(super) insert_fx: FxChain,
     /// `as <name>` per insert node, for resolving automation targets.
     pub(super) fx_labels: Vec<Option<InlineName>>,
     pub(super) bus_send: Option<(usize, f32)>,
     pub(super) to_master: bool,
-    pub(super) delay_send: f32,         // global delay send amount 0.0-1.0
-    pub(super) reverb_send: f32,        // global reverb send amount 0.0-1.0
+    pub(super) delay_send: f32,  // global delay send amount 0.0-1.0
+    pub(super) reverb_send: f32, // global reverb send amount 0.0-1.0
     /// This track's own sidechain amount, or `None` to take the song's.
     /// `sidechain 0` used to mean "the song's amount" too, because the
     /// override was a float with 0 standing for unset, so a track written
@@ -47,7 +47,7 @@ pub(super) struct TrackPlayback {
     pub(super) sidechain_amount: Option<f32>,
     // Step sequencer state
     pub(super) current_step: usize,
-    pub(super) current_notes: [u8; compiler::MAX_CHORD_NOTES],  // active MIDI notes (0 = unused)
+    pub(super) current_notes: [u8; compiler::MAX_CHORD_NOTES], // active MIDI notes (0 = unused)
     pub(super) current_notes_count: u8,
     pub(super) gate_samples_remaining: f32,
     pub(super) active: bool,
@@ -56,7 +56,7 @@ pub(super) struct TrackPlayback {
     /// its wave to zero mid-cycle, and that was the loudest click in most
     /// arranged songs: `tatum debug` found it on every section change.
     pub(super) leaving: u32,
-    pub(super) stereo_src: bool,        // true if instrument produces native stereo (BeatsModule)
+    pub(super) stereo_src: bool, // true if instrument produces native stereo (BeatsModule)
     // Arpeggiator: the pattern supplies held notes, the arp schedules them per sample
     pub(super) arp: Option<ArpProcessor>,
     pub(super) arp_cfg: Option<ArpConfig>,
@@ -102,7 +102,11 @@ pub(super) fn seed_from_name(name: &str) -> u32 {
         h ^= *b as u32;
         h = h.wrapping_mul(16777619);
     }
-    if h == 0 { 1 } else { h }
+    if h == 0 {
+        1
+    } else {
+        h
+    }
 }
 
 /// Build a fresh arp processor from compiled settings at the given tempo.
@@ -129,7 +133,9 @@ pub(super) fn pan_gains(pan: f32) -> (f32, f32) {
 
 impl TrackPlayback {
     /// Playing, or on its way out after a scene dropped it.
-    pub(super) fn sounding(&self) -> bool { self.active || self.leaving > 0 }
+    pub(super) fn sounding(&self) -> bool {
+        self.active || self.leaving > 0
+    }
 
     /// Level, pan and sends as the track has them set.
     pub(super) fn target(&self) -> Heard {
@@ -159,7 +165,9 @@ pub(super) fn glide(now: &mut f32, to: f32) -> f32 {
 /// Close enough to its target to stop gliding. Without the snap the gap
 /// shrinks into denormals, which are slow.
 pub(super) fn settle(now: &mut f32, to: f32) {
-    if (to - *now).abs() < 1e-6 { *now = to; }
+    if (to - *now).abs() < 1e-6 {
+        *now = to;
+    }
 }
 
 /// A track's gains into the mix: level times pan for each side, and its sends.

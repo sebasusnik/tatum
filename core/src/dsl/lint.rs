@@ -25,15 +25,26 @@ fn lint(code: &'static str, message: String, hint: &str) -> Lint {
 /// Longest run of ties after a note or chord, in steps.
 fn longest_hold(song: &Song, pattern: &str) -> usize {
     let Some(pat) = song.patterns.iter().find(|p| p.name == pattern) else { return 0 };
-    if !pat.lane_labels.is_empty() { return 0; }
+    if !pat.lane_labels.is_empty() {
+        return 0;
+    }
     let mut best = 0;
     let mut run = 0;
     let mut holding = false;
     for step in pat.rows.iter().flatten() {
         match step {
-            Step::Note(_) | Step::Chord(_) => { holding = true; run = 0; }
-            Step::Tie if holding => { run += 1; best = best.max(run); }
-            _ => { holding = false; run = 0; }
+            Step::Note(_) | Step::Chord(_) => {
+                holding = true;
+                run = 0;
+            }
+            Step::Tie if holding => {
+                run += 1;
+                best = best.max(run);
+            }
+            _ => {
+                holding = false;
+                run = 0;
+            }
         }
     }
     best
@@ -56,9 +67,12 @@ fn static_scenes(song: &Song, m: &ModuleDef, track: &TrackDef) -> Vec<String> {
     let mut out = Vec::new();
     for scene in &song.scenes {
         let Some(st) = scene.tracks.iter().find(|t| t.name == track.name) else { continue };
-        if longest_hold(song, &st.play) < 8 { continue; }
+        if longest_hold(song, &st.play) < 8 {
+            continue;
+        }
         let arped = st.arp.as_ref().is_some_and(|a| a.mode != "off");
-        let automated = scene.automations.iter().any(|a| a.target.starts_with(&prefix) && !a.target.ends_with(".level"));
+        let automated =
+            scene.automations.iter().any(|a| a.target.starts_with(&prefix) && !a.target.ends_with(".level"));
         if !arped && !automated {
             out.push(scene.name.clone());
         }
@@ -85,7 +99,9 @@ fn note_span_hz(song: &Song, pattern: &str) -> Option<(f32, f32, String)> {
     // and the lint walked straight past it.
     let (intervals, root) = super::compiler::scale_context(song);
     let pat = song.patterns.iter().find(|p| p.name == pattern)?;
-    if !pat.lane_labels.is_empty() { return None; }
+    if !pat.lane_labels.is_empty() {
+        return None;
+    }
     let mut hi: Option<(u8, String)> = None;
     let mut lo: Option<u8> = None;
     let mut consider = |n: &NoteRef| {
@@ -116,7 +132,9 @@ fn note_span_hz(song: &Song, pattern: &str) -> Option<(f32, f32, String)> {
     Some((hz(lo?), hz(himidi), name))
 }
 
-fn libm_pow2(x: f32) -> f32 { crate::math::pow2(x) }
+fn libm_pow2(x: f32) -> f32 {
+    crate::math::pow2(x)
+}
 
 /// A MIDI number as a name, so a warning about a scale degree still says
 /// which pitch it is worried about.
@@ -131,8 +149,12 @@ fn chorus_amount(song: &Song, track: &TrackDef, m: &ModuleDef) -> f32 {
     let mode = m.params.iter().find(|p| p.name == "voice_mode");
     let inert = m.module_type == "keys" && mode.is_some_and(|p| p.value > 0.01);
     let own = if inert { 0.0 } else { param(m, "chorus_mix").unwrap_or(0.0) };
-    let in_chain = song.tracks.iter().find(|t| t.name == track.name)
-        .into_iter().flat_map(|t| t.routing.iter())
+    let in_chain = song
+        .tracks
+        .iter()
+        .find(|t| t.name == track.name)
+        .into_iter()
+        .flat_map(|t| t.routing.iter())
         .filter(|r| r.kind == "chorus")
         .filter_map(|r| match r.params.first() {
             Some(super::ast::Param::Float(v)) => Some(*v),
@@ -158,15 +180,18 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
     let mut out = Vec::new();
 
     // Tracks as they appear anywhere (top level and scenes), keyed by name.
-    let all_tracks: Vec<&TrackDef> = song.tracks.iter()
-        .chain(song.scenes.iter().flat_map(|s| s.tracks.iter()))
-        .collect();
+    let all_tracks: Vec<&TrackDef> =
+        song.tracks.iter().chain(song.scenes.iter().flat_map(|s| s.tracks.iter())).collect();
 
     // ── static_pad: sustained keys/fm notes with nothing moving them ──
     for track in &song.tracks {
         let Some(m) = song.module_defs.iter().find(|m| m.name == track.using_instrument) else { continue };
-        if m.module_type != "keys" && m.module_type != "fm" { continue; }
-        if has_intrinsic_modulation(m, track) { continue; }
+        if m.module_type != "keys" && m.module_type != "fm" {
+            continue;
+        }
+        if has_intrinsic_modulation(m, track) {
+            continue;
+        }
         let scenes = static_scenes(song, m, track);
         if !scenes.is_empty() {
             out.push(lint(
@@ -188,12 +213,13 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
     for track in &song.tracks {
         let Some(m) = song.module_defs.iter().find(|m| m.name == track.using_instrument) else { continue };
         let mix = chorus_amount(song, track, m);
-        if mix < 0.08 { continue; }
+        if mix < 0.08 {
+            continue;
+        }
         // every pattern this track plays, top level and in scenes
-        let played = core::iter::once(track.play.clone())
-            .chain(song.scenes.iter().filter_map(|sc| {
-                sc.tracks.iter().find(|t| t.name == track.name).map(|t| t.play.clone())
-            }));
+        let played = core::iter::once(track.play.clone()).chain(
+            song.scenes.iter().filter_map(|sc| sc.tracks.iter().find(|t| t.name == track.name).map(|t| t.play.clone())),
+        );
         let mut worst: Option<(f32, f32, String)> = None;
         for pat in played {
             if let Some((lo, hi, name)) = note_span_hz(song, &pat) {
@@ -207,9 +233,8 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
         // a time. Both halves of that matter: the top note is higher than the
         // pattern says, and because nothing sounds underneath it, the
         // chord-top exemption below does not apply -- there is no chord.
-        let arp = song.tracks.iter().find(|t| t.name == track.name)
-            .and_then(|t| t.arp.as_ref())
-            .filter(|a| a.mode != "off");
+        let arp =
+            song.tracks.iter().find(|t| t.name == track.name).and_then(|t| t.arp.as_ref()).filter(|a| a.mode != "off");
         if let Some(a) = arp {
             let oct = a.octaves.unwrap_or(1.0).max(1.0) as i32 - 1;
             if oct > 0 {
@@ -217,16 +242,26 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
                 name = format!("{} lifted {} octave(s) by its arp", name, oct);
             }
         }
-        if hz <= floor_hz { continue; }
+        if hz <= floor_hz {
+            continue;
+        }
         // A high note on top of a low chord is buried by the notes under it.
         // Only exempt it when the notes really do sound together.
-        if arp.is_none() && lo_hz <= floor_hz { continue; }
+        if arp.is_none() && lo_hz <= floor_hz {
+            continue;
+        }
         out.push(lint(
             "chorus_beats",
             format!(
                 "track '{}' plays {} ({:.0} Hz) through chorus_mix {:.0}% on module '{}': \
                  the chorus detunes its copy by {:.1}%, so it beats against the dry signal at {:.0} Hz",
-                track.name, name, hz, mix * 100.0, m.name, detune * 100.0, hz * detune
+                track.name,
+                name,
+                hz,
+                mix * 100.0,
+                m.name,
+                detune * 100.0,
+                hz * detune
             ),
             "Above ~20 Hz a beat stops sounding like two tones and starts sounding like roughness, \
              which on a clean tone reads as distortion. Drop chorus_mix on this voice and get its \
@@ -236,7 +271,8 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
 
     // ── dry_mix: nothing goes to the sends or a bus ──
     let any_send = all_tracks.iter().any(|t| {
-        t.delay_send.unwrap_or(0.0) > 0.0 || t.reverb_send.unwrap_or(0.0) > 0.0
+        t.delay_send.unwrap_or(0.0) > 0.0
+            || t.reverb_send.unwrap_or(0.0) > 0.0
             || t.routing.iter().any(|r| song.buses.iter().any(|b| b.name == r.kind))
     });
     if !any_send && !song.tracks.is_empty() {
@@ -248,8 +284,14 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
     }
 
     // ── no_sidechain: drums plus a bass or pad, but nothing ducks ──
-    let has_drums = song.tracks.iter().any(|t| song.module_defs.iter().any(|m| m.name == t.using_instrument && m.module_type == "beats"));
-    let has_tonal = song.tracks.iter().any(|t| song.module_defs.iter().any(|m| m.name == t.using_instrument && m.module_type != "beats"));
+    let has_drums = song
+        .tracks
+        .iter()
+        .any(|t| song.module_defs.iter().any(|m| m.name == t.using_instrument && m.module_type == "beats"));
+    let has_tonal = song
+        .tracks
+        .iter()
+        .any(|t| song.module_defs.iter().any(|m| m.name == t.using_instrument && m.module_type != "beats"));
     let any_sidechain = song.globals.sidechain > 0.0 || all_tracks.iter().any(|t| t.sidechain.unwrap_or(0.0) > 0.0);
     if has_drums && has_tonal && !any_sidechain {
         out.push(lint(
@@ -262,8 +304,12 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
     // ── sidechain_without_kick: ducking set, but this scene has no beats track ──
     let is_beats = |name: &str| song.module_defs.iter().any(|m| m.name == name && m.module_type == "beats");
     for scene in &song.scenes {
-        if scene.tracks.iter().any(|t| is_beats(&t.using_instrument)) { continue; }
-        let ducked: Vec<&str> = scene.tracks.iter()
+        if scene.tracks.iter().any(|t| is_beats(&t.using_instrument)) {
+            continue;
+        }
+        let ducked: Vec<&str> = scene
+            .tracks
+            .iter()
             .filter(|t| {
                 let global = song.tracks.iter().find(|g| g.name == t.name);
                 let amount = t.sidechain.or(global.and_then(|g| g.sidechain)).unwrap_or(song.globals.sidechain);
@@ -307,7 +353,10 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
         for p in m.params.iter().filter(|p| p.bare) {
             let Some(spec) = crate::params::lookup(kind, &p.name) else { continue };
             let Some(units) = spec.write_in_units(p.value) else { continue };
-            bare.push(format!("`{} {}` is `{} {}` (module '{}', line {})", p.name, p.value, p.name, units, m.name, p.line));
+            bare.push(format!(
+                "`{} {}` is `{} {}` (module '{}', line {})",
+                p.name, p.value, p.name, units, m.name, p.line
+            ));
         }
     }
     if !bare.is_empty() {
@@ -335,19 +384,27 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
     // under everything else, which is exactly the complaint this came from.
     for track in &song.tracks {
         let Some(m) = song.module_defs.iter().find(|m| m.name == track.using_instrument) else { continue };
-        if m.module_type == "beats" { continue; }
+        if m.module_type == "beats" {
+            continue;
+        }
         let mut levels: Vec<(String, f32)> = Vec::new();
         for scene in &song.scenes {
             let Some(st) = scene.tracks.iter().find(|t| t.name == track.name) else { continue };
             // Only sustained material: a staccato part may well be a fader.
-            if longest_hold(song, &st.play) < 8 { continue; }
+            if longest_hold(song, &st.play) < 8 {
+                continue;
+            }
             let level = st.level.or(track.level).unwrap_or(0.8);
             levels.push((scene.name.clone(), level));
         }
-        if levels.len() < 2 { continue; }
+        if levels.len() < 2 {
+            continue;
+        }
         let lo = levels.iter().fold(f32::MAX, |a, (_, v)| a.min(*v));
         let hi = levels.iter().fold(0.0f32, |a, (_, v)| a.max(*v));
-        if lo <= 0.0 { continue; }
+        if lo <= 0.0 {
+            continue;
+        }
         // 3 dB is where a level move stops reading as arrangement and starts
         // reading as someone touching the fader.
         let spread_db = 20.0 * crate::math::log10(hi / lo);
@@ -381,7 +438,9 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
     // a copy per scene and this used to print the same line eight times.
     let mut reported: Vec<&str> = Vec::new();
     for track in &all_tracks {
-        if reported.contains(&track.name.as_str()) { continue }
+        if reported.contains(&track.name.as_str()) {
+            continue;
+        }
         let Some(m) = song.module_defs.iter().find(|m| m.name == track.using_instrument) else { continue };
         let why = match m.module_type.as_str() {
             // poly is index 0 of VOICE_MODES; every other mode collapses voices.
@@ -389,10 +448,18 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
             "bass" => "which is a single voice",
             _ => continue,
         };
-        if track.arp.as_ref().is_some_and(|a| a.mode != "off") { continue; }
+        if track.arp.as_ref().is_some_and(|a| a.mode != "off") {
+            continue;
+        }
         let Some(pat) = song.patterns.iter().find(|p| p.name == track.play) else { continue };
-        let widest = pat.rows.iter().flatten()
-            .filter_map(|s| match s { Step::Chord(c) => Some(c.notes.len()), _ => None })
+        let widest = pat
+            .rows
+            .iter()
+            .flatten()
+            .filter_map(|s| match s {
+                Step::Chord(c) => Some(c.notes.len()),
+                _ => None,
+            })
             .max()
             .unwrap_or(0);
         if widest > 1 {
@@ -414,7 +481,8 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
     // Instruments that sit on top of each other cannot be told apart however
     // well they are balanced, and nothing in the tooling looked at it.
     {
-        let tonal: Vec<&&TrackDef> = all_tracks.iter()
+        let tonal: Vec<&&TrackDef> = all_tracks
+            .iter()
             .filter(|t| song.module_defs.iter().any(|m| m.name == t.using_instrument && m.module_type != "beats"))
             .collect();
         let panned = tonal.iter().filter(|t| t.pan.is_some_and(|p| crate::math::abs(p) > 0.15)).count();
@@ -458,14 +526,15 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
         // to be a fader. It cannot: past its ceiling the knob silently stops
         // moving, and the reflex is to turn it further.
         for node in master.chain.iter().chain(song.bus_chains.iter().flat_map(|b| b.chain.iter())) {
-            if node.kind != "compressor" { continue }
+            if node.kind != "compressor" {
+                continue;
+            }
             let makeup = chain_arg(&node.params, "makeup").unwrap_or(1.0);
             // Within 5% of the registry's maximum, not at it: `makeup=12db`
             // comes back a hair under 4.0 through `pow`. Reading the ceiling
             // from the registry also means the check follows if the range
             // ever moves.
-            let ceiling = crate::nodes::arg_at("compressor", Some("makeup"), 0)
-                .map_or(4.0, |a| a.max);
+            let ceiling = crate::nodes::arg_at("compressor", Some("makeup"), 0).map_or(4.0, |a| a.max);
             if makeup >= ceiling * 0.95 {
                 out.push(lint(
                     "makeup_at_the_ceiling",
@@ -486,7 +555,9 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
     // at a snare that clipped on its own.
     for m in song.module_defs.iter().filter(|m| m.module_type == "beats") {
         for mp in &m.params {
-            if !mp.name.ends_with("_level") || mp.name == "level" { continue }
+            if !mp.name.ends_with("_level") || mp.name == "level" {
+                continue;
+            }
             if mp.value > 1.0 {
                 out.push(lint(
                     "drum_level_past_full_scale",
@@ -500,7 +571,11 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
     // ── unused definitions ──
     for m in &song.module_defs {
         if !all_tracks.iter().any(|t| t.using_instrument == m.name) {
-            out.push(lint("unused_module", format!("module '{}' is never used by a track", m.name), "Remove it or add a track that plays it."));
+            out.push(lint(
+                "unused_module",
+                format!("module '{}' is never used by a track", m.name),
+                "Remove it or add a track that plays it.",
+            ));
         }
     }
     // An unused pattern is usually a pattern someone forgot to wire up. In a
@@ -509,7 +584,9 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
     // buried the warnings that mattered under a wall of ones that did not.
     // A file with no arrangement is not a song, and several unused patterns
     // in one is a palette; a single one is still worth pointing at by name.
-    let unplayed: Vec<&str> = song.patterns.iter()
+    let unplayed: Vec<&str> = song
+        .patterns
+        .iter()
         .filter(|p| !all_tracks.iter().any(|t| t.play == p.name))
         .map(|p| p.name.as_str())
         .collect();
@@ -522,7 +599,11 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
         ));
     } else {
         for name in unplayed {
-            out.push(lint("unused_pattern", format!("pattern '{name}' is never played"), "Remove it or play it from a track or scene."));
+            out.push(lint(
+                "unused_pattern",
+                format!("pattern '{name}' is never played"),
+                "Remove it or play it from a track or scene.",
+            ));
         }
     }
     // A declared bus nothing routes into processes silence. Easy to write when

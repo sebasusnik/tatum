@@ -24,18 +24,14 @@ impl Scale {
 
 #[derive(Clone, Copy)]
 pub struct HarmonyContext {
-    pub root: u8,        // MIDI note of root (e.g., 57 = A3)
+    pub root: u8, // MIDI note of root (e.g., 57 = A3)
     pub scale: Scale,
     pub chord_degree: u8, // 0-based scale degree (0 = I, 1 = II, etc.)
 }
 
 impl HarmonyContext {
     pub fn new(root: u8, scale: Scale) -> Self {
-        Self {
-            root,
-            scale,
-            chord_degree: 0,
-        }
+        Self { root, scale, chord_degree: 0 }
     }
 
     /// Get the MIDI notes of the scale starting from root.
@@ -57,19 +53,11 @@ impl HarmonyContext {
         let deg = (self.chord_degree % 7) as usize;
 
         let root_note = scale[deg];
-        let third = scale[(deg + 2) % 7]
-            + if (deg + 2) >= 7 { 12 } else { 0 };
-        let fifth = scale[(deg + 4) % 7]
-            + if (deg + 4) >= 7 { 12 } else { 0 };
-        let seventh = scale[(deg + 6) % 7]
-            + if (deg + 6) >= 7 { 12 } else { 0 };
+        let third = scale[(deg + 2) % 7] + if (deg + 2) >= 7 { 12 } else { 0 };
+        let fifth = scale[(deg + 4) % 7] + if (deg + 4) >= 7 { 12 } else { 0 };
+        let seventh = scale[(deg + 6) % 7] + if (deg + 6) >= 7 { 12 } else { 0 };
 
-        [
-            Some(root_note),
-            Some(third),
-            Some(fifth),
-            Some(seventh),
-        ]
+        [Some(root_note), Some(third), Some(fifth), Some(seventh)]
     }
 
     /// Get bass note for current chord (root of the chord).

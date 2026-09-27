@@ -7,13 +7,18 @@ use alloc::format;
 use crate::dsl::ast::*;
 use crate::dsl::error::CompileError;
 
-use super::compiled::{ChordNote, CompiledLane, CompiledPattern, CompiledStep, StepPLock, SubNote, MAX_CHORD_NOTES, MAX_SUBDIV};
+use super::compiled::{
+    ChordNote, CompiledLane, CompiledPattern, CompiledStep, StepPLock, SubNote, MAX_CHORD_NOTES, MAX_SUBDIV,
+};
 use super::notes::{drum_name_to_midi, resolve_note};
-
 
 // ── Pattern compilation ──
 
-pub(super) fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_midi: u8) -> Result<CompiledPattern, CompileError> {
+pub(super) fn compile_pattern(
+    pat: &PatternDef,
+    scale_intervals: &[u8],
+    root_midi: u8,
+) -> Result<CompiledPattern, CompileError> {
     // Multi-lane drum pattern
     if !pat.lane_labels.is_empty() {
         let mut lanes = Vec::new();
@@ -30,48 +35,46 @@ pub(super) fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_mid
                     pat.name, label
                 )));
             }
-            let steps: Vec<CompiledStep> = row.iter().map(|step| {
-                match step {
-                    Step::Subdiv(_) => CompiledStep::Rest,
-                    Step::DrumHit(ds) => {
-                        let plock = StepPLock {
-                            cutoff: ds.plock.cutoff,
-                            env_depth: ds.plock.env_depth,
-                            resonance: ds.plock.resonance,
-                            gate: ds.plock.gate,
-                        };
-                        CompiledStep::DrumHit {
-                            velocity: ds.velocity,
-                            probability: ds.probability,
-                            roll: ds.roll,
-                            plock,
+            let steps: Vec<CompiledStep> = row
+                .iter()
+                .map(|step| {
+                    match step {
+                        Step::Subdiv(_) => CompiledStep::Rest,
+                        Step::DrumHit(ds) => {
+                            let plock = StepPLock {
+                                cutoff: ds.plock.cutoff,
+                                env_depth: ds.plock.env_depth,
+                                resonance: ds.plock.resonance,
+                                gate: ds.plock.gate,
+                            };
+                            CompiledStep::DrumHit {
+                                velocity: ds.velocity,
+                                probability: ds.probability,
+                                roll: ds.roll,
+                                plock,
+                            }
+                        }
+                        Step::Rest => CompiledStep::Rest,
+                        Step::Tie => CompiledStep::Tie,
+                        Step::Chord(_) => CompiledStep::Rest, // chords not supported in drum lanes
+                        Step::Note(ns) => {
+                            let midi = resolve_note(&ns.note, scale_intervals, root_midi);
+                            let vel = ns.velocity.unwrap_or(0.8);
+                            let plock = StepPLock {
+                                cutoff: ns.plock.cutoff,
+                                env_depth: ns.plock.env_depth,
+                                resonance: ns.plock.resonance,
+                                gate: ns.plock.gate,
+                            };
+                            CompiledStep::NoteOn { midi_note: midi, velocity: vel, plock, slide: ns.slide }
                         }
                     }
-                    Step::Rest => CompiledStep::Rest,
-                    Step::Tie => CompiledStep::Tie,
-                    Step::Chord(_) => CompiledStep::Rest, // chords not supported in drum lanes
-                    Step::Note(ns) => {
-                        let midi = resolve_note(&ns.note, scale_intervals, root_midi);
-                        let vel = ns.velocity.unwrap_or(0.8);
-                        let plock = StepPLock {
-                            cutoff: ns.plock.cutoff,
-                            env_depth: ns.plock.env_depth,
-                            resonance: ns.plock.resonance,
-                            gate: ns.plock.gate,
-                        };
-                        CompiledStep::NoteOn { midi_note: midi, velocity: vel, plock, slide: ns.slide }
-                    }
-                }
-            }).collect();
+                })
+                .collect();
             lanes.push(CompiledLane { midi_note, steps, swing_override: None, nudge: 0.0 });
         }
         let steps_per_row = lanes.first().map(|l| l.steps.len()).unwrap_or(4);
-        return Ok(CompiledPattern {
-            name: pat.name.clone(),
-            steps: Vec::new(),
-            steps_per_row,
-            lanes,
-        });
+        return Ok(CompiledPattern { name: pat.name.clone(), steps: Vec::new(), steps_per_row, lanes });
     }
 
     // Sequential pattern (existing behavior)
@@ -124,12 +127,15 @@ pub(super) fn compile_pattern(pat: &PatternDef, scale_intervals: &[u8], root_mid
                             slide: ns.slide,
                         };
                     }
-                    let plock = subs.first().map(|ns| StepPLock {
-                        cutoff: ns.plock.cutoff,
-                        env_depth: ns.plock.env_depth,
-                        resonance: ns.plock.resonance,
-                        gate: ns.plock.gate,
-                    }).unwrap_or_default();
+                    let plock = subs
+                        .first()
+                        .map(|ns| StepPLock {
+                            cutoff: ns.plock.cutoff,
+                            env_depth: ns.plock.env_depth,
+                            resonance: ns.plock.resonance,
+                            gate: ns.plock.gate,
+                        })
+                        .unwrap_or_default();
                     steps.push(CompiledStep::Subdiv { notes, count: count as u8, plock });
                 }
                 Step::DrumHit(ds) => {

@@ -9,7 +9,6 @@
 
 use crate::spectrogram::{cell_db, hz_row, Spectrogram, ROWS};
 
-
 /// The ranges a mix is talked about in, low to high.
 pub const BANDS: [(f32, f32, &str); 8] = [
     (20.0, 60.0, "20-60 Hz"),
@@ -39,18 +38,19 @@ const MOST_OF_THE_TIME: f32 = 0.3;
 
 /// Per column, each band's level in dB: the power average of its rows.
 pub fn band_levels(spec: &Spectrogram) -> Vec<[f32; 8]> {
-    let rows: Vec<(usize, usize)> = BANDS.iter()
-        .map(|&(lo, hi, _)| (hz_row(lo).max(0.0) as usize, (hz_row(hi) as usize).min(ROWS)))
-        .collect();
-    (0..spec.columns()).map(|c| {
-        let mut out = [0.0f32; 8];
-        for (b, &(r0, r1)) in rows.iter().enumerate() {
-            let p: f32 = (r0..r1).map(|r| 10f32.powf(cell_db(spec.cell(c, r)) / 10.0)).sum::<f32>()
-                / (r1 - r0).max(1) as f32;
-            out[b] = 10.0 * p.max(1e-20).log10();
-        }
-        out
-    }).collect()
+    let rows: Vec<(usize, usize)> =
+        BANDS.iter().map(|&(lo, hi, _)| (hz_row(lo).max(0.0) as usize, (hz_row(hi) as usize).min(ROWS))).collect();
+    (0..spec.columns())
+        .map(|c| {
+            let mut out = [0.0f32; 8];
+            for (b, &(r0, r1)) in rows.iter().enumerate() {
+                let p: f32 = (r0..r1).map(|r| 10f32.powf(cell_db(spec.cell(c, r)) / 10.0)).sum::<f32>()
+                    / (r1 - r0).max(1) as f32;
+                out[b] = 10.0 * p.max(1e-20).log10();
+            }
+            out
+        })
+        .collect()
 }
 
 /// Two parts level with each other and on top of one band, for a good part
@@ -72,13 +72,20 @@ pub fn clashes(levels: &[Vec<[f32; 8]>], sections: &[(usize, usize)]) -> Vec<Cla
             for b in a + 1..n {
                 let mut found = Vec::new();
                 for (si, &(c0, c1)) in sections.iter().enumerate() {
-                    if c1 <= c0 { continue }
-                    let together = (c0..c1).filter(|&c| {
-                        (levels[a][c][band] - levels[b][c][band]).abs() <= CLOSE_DB
-                            && on_top(levels, a, c, band) && on_top(levels, b, c, band)
-                    }).count();
+                    if c1 <= c0 {
+                        continue;
+                    }
+                    let together = (c0..c1)
+                        .filter(|&c| {
+                            (levels[a][c][band] - levels[b][c][band]).abs() <= CLOSE_DB
+                                && on_top(levels, a, c, band)
+                                && on_top(levels, b, c, band)
+                        })
+                        .count();
                     let share = together as f32 / (c1 - c0) as f32;
-                    if share >= MOST_OF_THE_TIME { found.push((si, share)) }
+                    if share >= MOST_OF_THE_TIME {
+                        found.push((si, share))
+                    }
                 }
                 if !found.is_empty() {
                     out.push(Clash { a, b, band, sections: found });
@@ -91,7 +98,9 @@ pub fn clashes(levels: &[Vec<[f32; 8]>], sections: &[(usize, usize)]) -> Vec<Cla
     out
 }
 
-fn weight(c: &Clash) -> f32 { c.sections.iter().map(|(_, s)| s).sum() }
+fn weight(c: &Clash) -> f32 {
+    c.sections.iter().map(|(_, s)| s).sum()
+}
 
 /// Whether a part counts as on top of a band at one column: there, near the
 /// loudest thing in the band, and not just its own edge. The same test the
@@ -108,22 +117,29 @@ fn on_top(levels: &[Vec<[f32; 8]>], part: usize, c: usize, band: usize) -> bool 
 /// columns, the most any of them saw, so a moment shows as a block rather
 /// than as a speckle.
 pub fn crowding(levels: &[Vec<[f32; 8]>], columns: usize) -> Vec<[u8; 8]> {
-    let raw: Vec<[u8; 8]> = (0..columns).map(|c| {
-        let mut out = [0u8; 8];
-        for (band, n) in out.iter_mut().enumerate() {
-            *n = (0..levels.len()).filter(|&p| on_top(levels, p, c, band)).count().min(255) as u8;
-        }
-        out
-    }).collect();
+    let raw: Vec<[u8; 8]> = (0..columns)
+        .map(|c| {
+            let mut out = [0u8; 8];
+            for (band, n) in out.iter_mut().enumerate() {
+                *n = (0..levels.len()).filter(|&p| on_top(levels, p, c, band)).count().min(255) as u8;
+            }
+            out
+        })
+        .collect();
     const SPREAD: usize = 2;
-    (0..columns).map(|c| {
-        let mut out = [0u8; 8];
-        for (band, n) in out.iter_mut().enumerate() {
-            *n = raw[c.saturating_sub(SPREAD)..(c + SPREAD + 1).min(columns)].iter()
-                .map(|r| r[band]).max().unwrap_or(0);
-        }
-        out
-    }).collect()
+    (0..columns)
+        .map(|c| {
+            let mut out = [0u8; 8];
+            for (band, n) in out.iter_mut().enumerate() {
+                *n = raw[c.saturating_sub(SPREAD)..(c + SPREAD + 1).min(columns)]
+                    .iter()
+                    .map(|r| r[band])
+                    .max()
+                    .unwrap_or(0);
+            }
+            out
+        })
+        .collect()
 }
 
 #[cfg(test)]

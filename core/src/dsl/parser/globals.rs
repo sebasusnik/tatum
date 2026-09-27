@@ -21,11 +21,15 @@ impl Parser {
     /// a meter of 0/4 rendered nothing).
     fn expect_number_in(&mut self, what: &str, lo: f32, hi: f32, meaning: &str) -> Option<f32> {
         self.skip_newlines();
-        let (line, col) = { let s = self.span(); (s.line, s.col) };
+        let (line, col) = {
+            let s = self.span();
+            (s.line, s.col)
+        };
         let n = self.expect_number()?;
         if !(lo..=hi).contains(&n) {
             self.errors.push(ParseError {
-                line, col,
+                line,
+                col,
                 message: format!("{} {} is outside {}..{} ({})", what, n, lo, hi, meaning),
             });
             return None;
@@ -47,7 +51,10 @@ impl Parser {
         let num = self.expect_number_in("meter", 1.0, 16.0, "beats in a bar");
         self.expect(&Token::Slash);
         self.skip_newlines();
-        let (line, col) = { let s = self.span(); (s.line, s.col) };
+        let (line, col) = {
+            let s = self.span();
+            (s.line, s.col)
+        };
         let den = self.expect_number();
         if let Some(den) = den {
             if den != 4.0 {
@@ -59,7 +66,11 @@ impl Parser {
         }
         if let (Some(num), Some(4.0)) = (num, den) {
             if num != (num as u8) as f32 {
-                self.errors.push(ParseError { line, col, message: format!("meter {}/4: a whole number of beats", num) });
+                self.errors.push(ParseError {
+                    line,
+                    col,
+                    message: format!("meter {}/4: a whole number of beats", num),
+                });
             } else {
                 globals.meter = (num as u8, 4);
             }
@@ -88,14 +99,26 @@ impl Parser {
             let sp = self.span();
             let (l, c) = (sp.line, sp.col);
             self.advance();
-            if !self.expect(&Token::Eq) { break; }
+            if !self.expect(&Token::Eq) {
+                break;
+            }
             let ms = match self.peek().clone() {
-                Token::Quantity(v, ref suffix) if suffix == "ms" => { self.advance(); Some(v) }
-                Token::Quantity(v, ref suffix) if suffix == "s" || suffix == "sec" => { self.advance(); Some(v * 1000.0) }
-                Token::Number(v) => { self.advance(); Some(v) }
+                Token::Quantity(v, ref suffix) if suffix == "ms" => {
+                    self.advance();
+                    Some(v)
+                }
+                Token::Quantity(v, ref suffix) if suffix == "s" || suffix == "sec" => {
+                    self.advance();
+                    Some(v * 1000.0)
+                }
+                Token::Number(v) => {
+                    self.advance();
+                    Some(v)
+                }
                 other => {
                     self.errors.push(ParseError {
-                        line: l, col: c,
+                        line: l,
+                        col: c,
                         message: format!("sidechain {}= takes a time like 80ms, got {}", key, describe_token(&other)),
                     });
                     None
@@ -104,7 +127,8 @@ impl Parser {
             let Some(ms) = ms else { break };
             if !(0.1..=2000.0).contains(&ms) {
                 self.errors.push(ParseError {
-                    line: l, col: c,
+                    line: l,
+                    col: c,
                     message: format!("sidechain {}= {}ms is outside 0.1ms..2000ms", key, ms),
                 });
                 continue;
@@ -127,12 +151,16 @@ impl Parser {
             return None;
         }
         match self.peek().clone() {
-            Token::Ident(name) => { self.advance(); Some(name) }
+            Token::Ident(name) => {
+                self.advance();
+                Some(name)
+            }
             other => {
                 let sp = self.span();
                 let (l, c) = (sp.line, sp.col);
                 self.errors.push(ParseError {
-                    line: l, col: c,
+                    line: l,
+                    col: c,
                     message: format!("sidechain from= needs a track or module name, got {}", describe_token(&other)),
                 });
                 None
@@ -180,10 +208,16 @@ impl Parser {
             let s = self.span();
             let (line, col) = (s.line, s.col);
             self.advance();
-            if !self.expect(&Token::Eq) { break; }
+            if !self.expect(&Token::Eq) {
+                break;
+            }
             // Value: number, or an identifier for `sync`
             let ident_value = match self.peek().clone() {
-                Token::Ident(ref v) => { let v = v.clone(); self.advance(); Some(v) }
+                Token::Ident(ref v) => {
+                    let v = v.clone();
+                    self.advance();
+                    Some(v)
+                }
                 _ => None,
             };
             let num_value = if ident_value.is_none() { self.expect_number() } else { None };

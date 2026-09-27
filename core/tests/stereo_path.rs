@@ -13,8 +13,14 @@ use tatum_core::{BLOCK_SIZE, SAMPLE_RATE};
 
 fn lowpass(cutoff: f32, resonance: f32) -> NodeSpec {
     NodeSpec::Biquad {
-        filter_type: FilterType::LowPass, cutoff, resonance,
-        env_attack: 0.0, env_decay: 0.0, env_sustain: 0.0, env_release: 0.0, env_depth: 0.0,
+        filter_type: FilterType::LowPass,
+        cutoff,
+        resonance,
+        env_attack: 0.0,
+        env_decay: 0.0,
+        env_sustain: 0.0,
+        env_release: 0.0,
+        env_depth: 0.0,
         lfo: FilterLfo { hz: 0.0, bars: 0.0, depth: 0.0 },
     }
 }
@@ -45,7 +51,11 @@ fn a_stereo_lowpass_sits_at_its_written_corner() {
     let octave_up = stereo_gain_at(&spec, 6800.0);
     let db = |g: f32| 20.0 * g.max(1e-9).log10();
     assert!((db(at_corner) + 3.0).abs() < 1.0, "corner gain {:.1} dB, expected -3", db(at_corner));
-    assert!(db(octave_up) < -9.0, "one octave above the corner reads {:.1} dB; the filter is not where it says", db(octave_up));
+    assert!(
+        db(octave_up) < -9.0,
+        "one octave above the corner reads {:.1} dB; the filter is not where it says",
+        db(octave_up)
+    );
 }
 
 #[test]
@@ -67,9 +77,18 @@ fn a_second_track_on_the_same_module_does_not_change_the_first() {
     // per track per block: each track got every other block, envelopes ran
     // at twice their rate, and the discarded half combed at 344.5 Hz. A
     // silent second track must leave the first sample-identical.
-    let alone = { let mut e = SongEngine::from_source(PAD).unwrap(); e.start(); e.render_steps(32).0 };
-    let shared_src = PAD.replace("master { in > out }", "track b { play rest using pad level 0.5 out > master }\nmaster { in > out }");
-    let shared = { let mut e = SongEngine::from_source(&shared_src).unwrap(); e.start(); e.render_steps(32).0 };
+    let alone = {
+        let mut e = SongEngine::from_source(PAD).unwrap();
+        e.start();
+        e.render_steps(32).0
+    };
+    let shared_src = PAD
+        .replace("master { in > out }", "track b { play rest using pad level 0.5 out > master }\nmaster { in > out }");
+    let shared = {
+        let mut e = SongEngine::from_source(&shared_src).unwrap();
+        e.start();
+        e.render_steps(32).0
+    };
     assert!(alone.iter().any(|v| v.abs() > 0.01), "the pad is silent, the test proves nothing");
     let first = alone.iter().zip(&shared).position(|(x, y)| x != y);
     assert_eq!(first, None, "a silent track on the same module changed the other one at sample {:?}", first);
@@ -96,8 +115,10 @@ fn keys_chorus_makes_the_two_channels_differ() {
 #[test]
 fn fm_chorus_makes_the_two_channels_differ() {
     // FM had no stereo path at all; the chorus is its whole width budget.
-    let src = PAD.replace("module keys pad { voice_mode poly attack 300ms release 200ms cutoff 2khz chorus_mix 0.0 }",
-                          "module fm pad { chorus_mix 0.8 }");
+    let src = PAD.replace(
+        "module keys pad { voice_mode poly attack 300ms release 200ms cutoff 2khz chorus_mix 0.0 }",
+        "module fm pad { chorus_mix 0.8 }",
+    );
     let (l, r) = render_stereo(&src);
     assert!(l.iter().any(|v| v.abs() > 0.01), "silent");
     let w = stereo_width(&l, &r);
@@ -110,8 +131,18 @@ fn autowah_opens_with_the_signal_and_closes_after_it() {
     // must push the cutoff well above its base; a second of silence must
     // bring it back down. Every other filter here has an LFO; this is the
     // one that follows the playing.
-    let spec = NodeSpec::AutoWah { sens: 0.8, base: 300.0, range: 2500.0, q: 0.6,
-        attack_ms: 8.0, release_ms: 200.0, mode: 0, down: false, wobble: 0.0, wobble_hz: 5.0 };
+    let spec = NodeSpec::AutoWah {
+        sens: 0.8,
+        base: 300.0,
+        range: 2500.0,
+        q: 0.6,
+        attack_ms: 8.0,
+        release_ms: 200.0,
+        mode: 0,
+        down: false,
+        wobble: 0.0,
+        wobble_hz: 5.0,
+    };
     let mut node = spec.instantiate();
     let cutoff = |node: &tatum_core::graph::node::NodeKind| match node {
         tatum_core::graph::node::NodeKind::AutoWah { cutoff, .. } => *cutoff,

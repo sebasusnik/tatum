@@ -5,23 +5,30 @@ use crate::math;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum DelaySync {
-    Free,           // manual time in seconds
-    Quarter,        // 1/4 note
-    DottedEighth,   // 3/16 note
-    Eighth,         // 1/8 note
-    Sixteenth,      // 1/16 note
-    TripletEighth,  // 1/8 triplet
+    Free,          // manual time in seconds
+    Quarter,       // 1/4 note
+    DottedEighth,  // 3/16 note
+    Eighth,        // 1/8 note
+    Sixteenth,     // 1/16 note
+    TripletEighth, // 1/8 triplet
 }
 
 impl DelaySync {
     /// Convert a normalized 0.0..1.0 value to a sync mode (for param locks).
     pub fn from_normalized(v: f32) -> Self {
-        if v < 0.17 { DelaySync::Free }
-        else if v < 0.33 { DelaySync::Quarter }
-        else if v < 0.50 { DelaySync::DottedEighth }
-        else if v < 0.67 { DelaySync::Eighth }
-        else if v < 0.83 { DelaySync::Sixteenth }
-        else { DelaySync::TripletEighth }
+        if v < 0.17 {
+            DelaySync::Free
+        } else if v < 0.33 {
+            DelaySync::Quarter
+        } else if v < 0.50 {
+            DelaySync::DottedEighth
+        } else if v < 0.67 {
+            DelaySync::Eighth
+        } else if v < 0.83 {
+            DelaySync::Sixteenth
+        } else {
+            DelaySync::TripletEighth
+        }
     }
 
     fn beat_multiplier(self) -> Option<f32> {
@@ -72,11 +79,7 @@ impl Delay {
 
     pub fn set_time(&mut self, time: f32, sample_rate: f32) {
         let samples = (sample_rate * time) as usize;
-        self.delay_samples = if samples >= self.buffer_l.len() {
-            self.buffer_l.len() - 1
-        } else {
-            samples
-        };
+        self.delay_samples = if samples >= self.buffer_l.len() { self.buffer_l.len() - 1 } else { samples };
     }
 
     pub fn set_feedback(&mut self, feedback: f32) {

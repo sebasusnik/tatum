@@ -84,13 +84,13 @@ pub struct SongEngine {
     tempo: f32,
     samples_per_step: f32,
     sample_counter: f32,
-    current_step_duration: f32,  // effective duration of current step (with swing)
+    current_step_duration: f32, // effective duration of current step (with swing)
     steps_per_bar: usize,
 
     // Groove / humanization
-    swing: f32,                  // 0.5 = straight, 0.67 = triplet feel (range 0.5-0.75)
-    humanize_velocity: f32,      // velocity jitter amount 0.0-1.0
-    humanize_timing: f32,        // timing jitter amount 0.0-1.0
+    swing: f32,             // 0.5 = straight, 0.67 = triplet feel (range 0.5-0.75)
+    humanize_velocity: f32, // velocity jitter amount 0.0-1.0
+    humanize_timing: f32,   // timing jitter amount 0.0-1.0
     /// Jitter on the step clock, which is one clock for the whole song. Every
     /// other random draw belongs to a track and lives on the track, so that
     /// this stream is not perturbed by how many tracks the song happens to

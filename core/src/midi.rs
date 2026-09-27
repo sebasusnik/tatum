@@ -104,16 +104,16 @@ pub fn resolve_all(song: &Song, names: &Names) -> Controls {
     let track = |name: &str| names.tracks.iter().position(|t| t == name);
     for m in &song.midi {
         match m.source {
-            MidiSource::Cc(cc) => controls.knobs.push(Knob {
-                cc,
-                target: m.target.clone(),
-                moves: resolve(song, names, &m.target),
-            }),
+            MidiSource::Cc(cc) => {
+                controls.knobs.push(Knob { cc, target: m.target.clone(), moves: resolve(song, names, &m.target) })
+            }
             MidiSource::Keys => {
                 let Some(t) = track(&m.target) else { continue };
                 let Some(&instrument) = names.track_instruments.get(t).filter(|&&i| i != usize::MAX) else { continue };
                 let module = song.tracks.iter().find(|d| d.name == m.target).map(|d| d.using_instrument.as_str());
-                let mono = song.module_defs.iter()
+                let mono = song
+                    .module_defs
+                    .iter()
                     .find(|d| Some(d.name.as_str()) == module)
                     .is_some_and(|d| d.module_type == "bass");
                 controls.keys.push(Keys { track: t, instrument, mono });
@@ -143,9 +143,13 @@ pub fn resolve(song: &Song, names: &Names, target: &str) -> Vec<Move> {
             let tracks: Vec<usize> = match track(name) {
                 Some(t) => Vec::from([t]),
                 None => (0..names.tracks.len())
-                    .filter(|&t| names.track_instruments.get(t)
-                        .and_then(|&i| names.instruments.get(i))
-                        .is_some_and(|n| n == name))
+                    .filter(|&t| {
+                        names
+                            .track_instruments
+                            .get(t)
+                            .and_then(|&i| names.instruments.get(i))
+                            .is_some_and(|n| n == name)
+                    })
                     .collect(),
             };
             for t in tracks {
@@ -154,15 +158,18 @@ pub fn resolve(song: &Song, names: &Names, target: &str) -> Vec<Move> {
         }
         [t, node, "wet"] => {
             if let Some(t) = track(t) {
-                let found = names.track_nodes.get(t)
-                    .and_then(|nodes| nodes.iter().position(|l| l.as_deref() == Some(*node)));
+                let found =
+                    names.track_nodes.get(t).and_then(|nodes| nodes.iter().position(|l| l.as_deref() == Some(*node)));
                 if let Some(n) = found {
                     out.push(Move::NodeWet { track: t, node: n });
                 }
             }
         }
         [module, param] => {
-            let spec = song.module_defs.iter().find(|m| &m.name == module)
+            let spec = song
+                .module_defs
+                .iter()
+                .find(|m| &m.name == module)
                 .and_then(|def| ModuleKind::from_str(&def.module_type))
                 .and_then(|kind| params::lookup(kind, param));
             if let Some(spec) = spec {
@@ -194,8 +201,14 @@ pub fn text_value(song: &Song, target: &str) -> Option<f32> {
                 _ => None,
             })
         }
-        [module, param] => song.module_defs.iter().find(|m| &m.name == module)?
-            .params.iter().find(|p| &p.name == param).map(|p| p.value),
+        [module, param] => song
+            .module_defs
+            .iter()
+            .find(|m| &m.name == module)?
+            .params
+            .iter()
+            .find(|p| &p.name == param)
+            .map(|p| p.value),
         _ => None,
     }
 }
@@ -223,7 +236,13 @@ fn scaled(m: &Move, value: u8) -> f32 {
         Move::TrackPan { .. } => x * 2.0 - 1.0,
         Move::NodeWet { .. } | Move::ReverbMix | Move::DelayMix => x,
         // Past half is on, which is also what a pad sending 0 and 127 means.
-        Move::ReverbFreeze => if value >= 64 { 1.0 } else { 0.0 },
+        Move::ReverbFreeze => {
+            if value >= 64 {
+                1.0
+            } else {
+                0.0
+            }
+        }
     }
 }
 
@@ -252,7 +271,11 @@ fn reading(m: &Move, v: f32) -> String {
         Move::TrackLevel { .. } => decibels(v),
         Move::TrackPan { .. } => {
             let amount = crate::math::floor(crate::math::abs(v) * 100.0 + 0.5) as i32;
-            if amount == 0 { String::from("center") } else { format!("{}% {}", amount, if v < 0.0 { "L" } else { "R" }) }
+            if amount == 0 {
+                String::from("center")
+            } else {
+                format!("{}% {}", amount, if v < 0.0 { "L" } else { "R" })
+            }
         }
         Move::NodeWet { .. } | Move::ReverbMix | Move::DelayMix => percent(v),
         Move::ReverbFreeze => String::from(if v >= 0.5 { "frozen" } else { "off" }),

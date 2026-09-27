@@ -13,8 +13,9 @@ use crate::graph::node::NodeSpec;
 use crate::primitives::oscillator::Waveform;
 use crate::primitives::filter::FilterType;
 
-use super::params::{filter_env_params, filter_lfo_params, first_float_param, float_param_at, named_param, rhythm_div_param};
-
+use super::params::{
+    filter_env_params, filter_lfo_params, first_float_param, float_param_at, named_param, rhythm_div_param,
+};
 
 // ── Instrument compilation ──
 
@@ -23,10 +24,12 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
     let mut name_to_idx: Vec<(String, u8)> = Vec::new();
     let mut noise_seed = 42u32;
     let mut osc_drift_seed = 1000u32; // unique drift seed per oscillator
-    let full = |line: Line| CompileError::at(line.0, format!(
+    let full = |line: Line| {
+        CompileError::at(line.0, format!(
         "instrument '{}': more than {} nodes (an envelope counts twice, it brings its own VCA); split it into two instruments, or share a filter through `mix`",
         inst.name, crate::graph::MAX_GRAPH_NODES
-    ));
+    ))
+    };
 
     // First pass: ensure built-in nodes exist
     // "out" and "mix" are always available as implicit nodes
@@ -58,8 +61,13 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
 
     // Create explicit nodes
     for node_def in &inst.nodes {
-        let spec = node_def_to_spec(node_def, &mut noise_seed, &mut osc_drift_seed, samples_per_bar)
-            .map_err(|e| if e.line == 0 { CompileError::at(node_def.line.0, e.message) } else { e })?;
+        let spec = node_def_to_spec(node_def, &mut noise_seed, &mut osc_drift_seed, samples_per_bar).map_err(|e| {
+            if e.line == 0 {
+                CompileError::at(node_def.line.0, e.message)
+            } else {
+                e
+            }
+        })?;
 
         if matches!(spec, NodeSpec::Env { .. }) {
             // Envelope+VCA pattern: an envelope in a signal chain means
@@ -90,18 +98,23 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
 
     // Second pass: create connections
     for conn in &inst.connections {
-        let from_idx = find_node(&name_to_idx, &conn.from)
-            .ok_or_else(|| CompileError::at(conn.line.0,
-                format!("instrument '{}': unknown node '{}'", inst.name, conn.from),
-            ))?;
-        let to_idx = find_node(&name_to_idx, &conn.to)
-            .ok_or_else(|| CompileError::at(conn.line.0,
-                format!("instrument '{}': unknown node '{}'", inst.name, conn.to),
-            ))?;
-        builder.try_connect(from_idx, to_idx).map_err(|_| CompileError::at(conn.line.0, format!(
-            "instrument '{}': more than {} connections into '{}'; gather them in a `mix` first",
-            inst.name, crate::graph::node::MAX_NODE_INPUTS, conn.to
-        )))?;
+        let from_idx = find_node(&name_to_idx, &conn.from).ok_or_else(|| {
+            CompileError::at(conn.line.0, format!("instrument '{}': unknown node '{}'", inst.name, conn.from))
+        })?;
+        let to_idx = find_node(&name_to_idx, &conn.to).ok_or_else(|| {
+            CompileError::at(conn.line.0, format!("instrument '{}': unknown node '{}'", inst.name, conn.to))
+        })?;
+        builder.try_connect(from_idx, to_idx).map_err(|_| {
+            CompileError::at(
+                conn.line.0,
+                format!(
+                    "instrument '{}': more than {} connections into '{}'; gather them in a `mix` first",
+                    inst.name,
+                    crate::graph::node::MAX_NODE_INPUTS,
+                    conn.to
+                ),
+            )
+        })?;
     }
 
     let mut template = builder.try_build().map_err(|e| match e {
@@ -141,14 +154,21 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
     Ok(template)
 }
 
-pub(super) fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_seed: &mut u32, samples_per_bar: f32) -> Result<NodeSpec, CompileError> {
+pub(super) fn node_def_to_spec(
+    node: &NodeDef,
+    noise_seed: &mut u32,
+    osc_drift_seed: &mut u32,
+    samples_per_bar: f32,
+) -> Result<NodeSpec, CompileError> {
     let problems = crate::nodes::validate(&node.kind, &node.params);
     if !problems.is_empty() {
         return Err(CompileError::new(problems.join("; ")));
     }
     match node.kind.as_str() {
         "osc" => {
-            let waveform = node.params.iter()
+            let waveform = node
+                .params
+                .iter()
                 .find_map(|p| if let Param::Waveform(w) = p { Some(w.as_str()) } else { None })
                 .unwrap_or("sine");
             let wf = match waveform {
@@ -165,7 +185,9 @@ pub(super) fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_s
             Ok(NodeSpec::Osc { waveform: wf, freq, drift_seed: seed, fixed: false, pitch_semitones })
         }
         "fixosc" => {
-            let waveform = node.params.iter()
+            let waveform = node
+                .params
+                .iter()
                 .find_map(|p| if let Param::Waveform(w) = p { Some(w.as_str()) } else { None })
                 .unwrap_or("sine");
             let wf = match waveform {
@@ -181,7 +203,9 @@ pub(super) fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_s
             Ok(NodeSpec::Osc { waveform: wf, freq, drift_seed: seed, fixed: true, pitch_semitones: 0.0 })
         }
         "pitch_osc" => {
-            let waveform = node.params.iter()
+            let waveform = node
+                .params
+                .iter()
                 .find_map(|p| if let Param::Waveform(w) = p { Some(w.as_str()) } else { None })
                 .unwrap_or("sine");
             let wf = match waveform {
@@ -193,9 +217,7 @@ pub(super) fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_s
             };
             let start_freq = float_param_at(&node.params, 0).unwrap_or(300.0);
             let end_freq = float_param_at(&node.params, 1).unwrap_or(55.0);
-            let decay = named_param(&node.params, "decay")
-                .or_else(|| float_param_at(&node.params, 2))
-                .unwrap_or(0.995);
+            let decay = named_param(&node.params, "decay").or_else(|| float_param_at(&node.params, 2)).unwrap_or(0.995);
             Ok(NodeSpec::PitchOsc { waveform: wf, start_freq, end_freq, decay })
         }
         "noise" => {
@@ -223,33 +245,64 @@ pub(super) fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_s
             let cutoff = float_param_at(&node.params, 0).unwrap_or(1000.0);
             let res = float_param_at(&node.params, 1).unwrap_or(0.01);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
-            Ok(NodeSpec::Biquad { filter_type: FilterType::LowPass, cutoff, resonance: res,
-                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,
-                lfo: filter_lfo_params(&node.params) })
+            Ok(NodeSpec::Biquad {
+                filter_type: FilterType::LowPass,
+                cutoff,
+                resonance: res,
+                env_attack: ea,
+                env_decay: ed,
+                env_sustain: es,
+                env_release: er,
+                env_depth: edepth,
+                lfo: filter_lfo_params(&node.params),
+            })
         }
         "highpass" => {
             let cutoff = float_param_at(&node.params, 0).unwrap_or(1000.0);
             let res = float_param_at(&node.params, 1).unwrap_or(0.01);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
-            Ok(NodeSpec::Biquad { filter_type: FilterType::HighPass, cutoff, resonance: res,
-                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,
-                lfo: filter_lfo_params(&node.params) })
+            Ok(NodeSpec::Biquad {
+                filter_type: FilterType::HighPass,
+                cutoff,
+                resonance: res,
+                env_attack: ea,
+                env_decay: ed,
+                env_sustain: es,
+                env_release: er,
+                env_depth: edepth,
+                lfo: filter_lfo_params(&node.params),
+            })
         }
         "bandpass" => {
             let cutoff = float_param_at(&node.params, 0).unwrap_or(1000.0);
             let res = float_param_at(&node.params, 1).unwrap_or(0.5);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
-            Ok(NodeSpec::Biquad { filter_type: FilterType::BandPass, cutoff, resonance: res,
-                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,
-                lfo: filter_lfo_params(&node.params) })
+            Ok(NodeSpec::Biquad {
+                filter_type: FilterType::BandPass,
+                cutoff,
+                resonance: res,
+                env_attack: ea,
+                env_decay: ed,
+                env_sustain: es,
+                env_release: er,
+                env_depth: edepth,
+                lfo: filter_lfo_params(&node.params),
+            })
         }
         "ladder" => {
             let cutoff = float_param_at(&node.params, 0).unwrap_or(1000.0);
             let res = float_param_at(&node.params, 1).unwrap_or(0.5);
             let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
-            Ok(NodeSpec::Ladder { cutoff, resonance: res,
-                env_attack: ea, env_decay: ed, env_sustain: es, env_release: er, env_depth: edepth,
-                lfo: filter_lfo_params(&node.params) })
+            Ok(NodeSpec::Ladder {
+                cutoff,
+                resonance: res,
+                env_attack: ea,
+                env_decay: ed,
+                env_sustain: es,
+                env_release: er,
+                env_depth: edepth,
+                lfo: filter_lfo_params(&node.params),
+            })
         }
         "mix" => Ok(NodeSpec::Mix),
         "gain" => {
@@ -311,7 +364,9 @@ pub(super) fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_s
             Ok(NodeSpec::Phaser { mix, hz, bars, stages, feedback, depth })
         }
         "vowel" => {
-            let words: Vec<&str> = node.params.iter()
+            let words: Vec<&str> = node
+                .params
+                .iter()
                 .filter_map(|p| if let Param::Waveform(w) = p { Some(w.as_str()) } else { None })
                 .collect();
             let mut idx = Vec::new();
@@ -322,7 +377,9 @@ pub(super) fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_s
                 }
             }
             if idx.is_empty() {
-                return Err(CompileError::new(String::from("vowel: needs one or two vowels, e.g. vowel(a, o, bars=2)")));
+                return Err(CompileError::new(String::from(
+                    "vowel: needs one or two vowels, e.g. vowel(a, o, bars=2)",
+                )));
             }
             let from = idx[0];
             let to = *idx.get(1).unwrap_or(&from);
@@ -332,9 +389,7 @@ pub(super) fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_s
             Ok(NodeSpec::Vowel { from, to, hz, bars, mix })
         }
         "capture" => {
-            let bars = float_param_at(&node.params, 0)
-                .or_else(|| named_param(&node.params, "bars"))
-                .unwrap_or(2.0);
+            let bars = float_param_at(&node.params, 0).or_else(|| named_param(&node.params, "bars")).unwrap_or(2.0);
             let start = named_param(&node.params, "start").unwrap_or(0.0);
             let speed = named_param(&node.params, "speed").unwrap_or(1.0);
             let reverse = named_param(&node.params, "reverse").unwrap_or(0.0) >= 0.5;
@@ -364,13 +419,16 @@ pub(super) fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_s
                         "lowpass" | "lp" => 0,
                         "bandpass" | "bp" => 1,
                         "highpass" | "hp" => 2,
-                        other => return Err(CompileError::new(format!(
-                            "autowah: '{}' is not a mode (lowpass, bandpass, highpass)", other))),
+                        other => {
+                            return Err(CompileError::new(format!(
+                                "autowah: '{}' is not a mode (lowpass, bandpass, highpass)",
+                                other
+                            )))
+                        }
                     };
                 }
             }
-            Ok(NodeSpec::AutoWah { sens, base, range, q, attack_ms, release_ms, mode, down,
-                                   wobble, wobble_hz })
+            Ok(NodeSpec::AutoWah { sens, base, range, q, attack_ms, release_ms, mode, down, wobble, wobble_hz })
         }
         "panenv" => {
             let depth = float_param_at(&node.params, 0).unwrap_or(0.6);
@@ -384,9 +442,7 @@ pub(super) fn node_def_to_spec(node: &NodeDef, noise_seed: &mut u32, osc_drift_s
             let hz = named_param(&node.params, "hz").unwrap_or(if bars > 0.0 { 0.0 } else { 0.25 });
             Ok(NodeSpec::AutoPan { hz, bars, depth })
         }
-        other => Err(CompileError { line: 0,
-            message: format!("unknown node type '{}'", other),
-        }),
+        other => Err(CompileError { line: 0, message: format!("unknown node type '{}'", other) }),
     }
 }
 

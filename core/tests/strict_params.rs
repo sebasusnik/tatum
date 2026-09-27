@@ -149,7 +149,8 @@ fn swing_and_humanize_apply_live() {
 
 #[test]
 fn short_names_that_look_like_drum_hits_are_valid_identifiers() {
-    let src = BASE.replace("module bass acid {", "module bass x {")
+    let src = BASE
+        .replace("module bass acid {", "module bass x {")
         .replace("using acid", "using x")
         .replace("auto acid cutoff", "auto x cutoff");
     assert!(compile_errors(&src).is_empty(), "{:?}", compile_errors(&src));
@@ -168,23 +169,36 @@ fn one_top_level_mistake_yields_one_error() {
 
 #[test]
 fn unknown_drum_lane_is_an_error() {
-    let src = BASE.replace("pattern p { 1.1:0.9 - - - }", "pattern p { kik: X - - - }")
-        .replace("using bell", "using bell");
+    let src =
+        BASE.replace("pattern p { 1.1:0.9 - - - }", "pattern p { kik: X - - - }").replace("using bell", "using bell");
     let errs = compile_errors(&src);
     assert!(errs.iter().any(|e| e.contains("unknown drum lane 'kik'")), "{:?}", errs);
 }
 
 #[test]
 fn effect_arguments_are_validated() {
-    let bad = BASE.replace("track acid { play p using acid out > master }", "track acid { play p using acid out > saturat(0.3) > master }");
+    let bad = BASE.replace(
+        "track acid { play p using acid out > master }",
+        "track acid { play p using acid out > saturat(0.3) > master }",
+    );
     let errs = compile_errors(&bad);
     assert!(errs[0].contains("unknown node 'saturat'") && errs[0].contains("Did you mean 'saturate'"), "{:?}", errs);
 
-    let bad = BASE.replace("track acid { play p using acid out > master }", "track acid { play p using acid out > compressor(-8, ration=4) > master }");
+    let bad = BASE.replace(
+        "track acid { play p using acid out > master }",
+        "track acid { play p using acid out > compressor(-8, ration=4) > master }",
+    );
     let errs = compile_errors(&bad);
-    assert!(errs[0].contains("unknown option 'ration'") && errs[0].contains("ratio, attack, release, makeup"), "{:?}", errs);
+    assert!(
+        errs[0].contains("unknown option 'ration'") && errs[0].contains("ratio, attack, release, makeup"),
+        "{:?}",
+        errs
+    );
 
-    let bad = BASE.replace("track acid { play p using acid out > master }", "track acid { play p using acid out > lowpass(0.4) > master }");
+    let bad = BASE.replace(
+        "track acid { play p using acid out > master }",
+        "track acid { play p using acid out > lowpass(0.4) > master }",
+    );
     let errs = compile_errors(&bad);
     assert!(errs[0].contains("cutoff = 0.4 is out of range (20..20000)"), "{:?}", errs);
 
@@ -192,7 +206,10 @@ fn effect_arguments_are_validated() {
     let errs = compile_errors(&bad);
     assert!(errs[0].contains("master: eq: unknown option 'hi'"), "{:?}", errs);
 
-    let bad = BASE.replace("track acid { play p using acid out > master }", "track acid { play p using acid out > saturate(warm) > master }");
+    let bad = BASE.replace(
+        "track acid { play p using acid out > master }",
+        "track acid { play p using acid out > saturate(warm) > master }",
+    );
     let errs = dsl::parse(&bad).unwrap_err();
     assert!(errs[0].message.contains("unexpected 'warm' in arguments"), "{}", errs[0].message);
 }

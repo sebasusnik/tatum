@@ -39,7 +39,12 @@ impl BandMeter {
     pub fn new(sample_rate: f32) -> Self {
         let coeff = |hz: f32| math::exp(-2.0 * math::PI * hz * CASCADE_FIX / sample_rate);
         Self {
-            coeffs: [coeff(BAND_EDGES_HZ[0]), coeff(BAND_EDGES_HZ[1]), coeff(BAND_EDGES_HZ[2]), coeff(BAND_EDGES_HZ[3])],
+            coeffs: [
+                coeff(BAND_EDGES_HZ[0]),
+                coeff(BAND_EDGES_HZ[1]),
+                coeff(BAND_EDGES_HZ[2]),
+                coeff(BAND_EDGES_HZ[3]),
+            ],
             states: [[0.0; POLES]; 4],
             energy: [0.0; 5],
         }
@@ -57,13 +62,7 @@ impl BandMeter {
             }
             *b = v;
         }
-        let bands = [
-            below[0],
-            below[1] - below[0],
-            below[2] - below[1],
-            below[3] - below[2],
-            x - below[3],
-        ];
+        let bands = [below[0], below[1] - below[0], below[2] - below[1], below[3] - below[2], x - below[3]];
         for (acc, b) in self.energy.iter_mut().zip(bands) {
             *acc += (b * b) as f64;
         }
@@ -139,7 +138,11 @@ pub fn stereo_width(l: &[f32], r: &[f32]) -> f32 {
         side += s * s;
     }
     let total = mid + side;
-    if total <= 0.0 { 0.0 } else { (side / total) as f32 }
+    if total <= 0.0 {
+        0.0
+    } else {
+        (side / total) as f32
+    }
 }
 
 /// Stereo width of everything above `hz`. The plain figure is dominated by the
@@ -154,9 +157,15 @@ pub fn stereo_width_above(l: &[f32], r: &[f32], hz: f32, sample_rate: f32) -> f3
     let (mut mid, mut side) = (0.0f64, 0.0f64);
     for (a, b) in l.iter().zip(r) {
         let mut low_l = *a;
-        for s in sl.iter_mut() { *s = low_l * (1.0 - c) + *s * c; low_l = *s; }
+        for s in sl.iter_mut() {
+            *s = low_l * (1.0 - c) + *s * c;
+            low_l = *s;
+        }
         let mut low_r = *b;
-        for s in sr.iter_mut() { *s = low_r * (1.0 - c) + *s * c; low_r = *s; }
+        for s in sr.iter_mut() {
+            *s = low_r * (1.0 - c) + *s * c;
+            low_r = *s;
+        }
         let (hl, hr) = (a - low_l, b - low_r);
         let m = (hl + hr) as f64;
         let d = (hl - hr) as f64;
@@ -164,13 +173,21 @@ pub fn stereo_width_above(l: &[f32], r: &[f32], hz: f32, sample_rate: f32) -> f3
         side += d * d;
     }
     let total = mid + side;
-    if total <= 0.0 { 0.0 } else { (side / total) as f32 }
+    if total <= 0.0 {
+        0.0
+    } else {
+        (side / total) as f32
+    }
 }
 
 /// Crest factor: peak over RMS. Around 4-6 for a punchy mix; a limiter that is
 /// working hard pulls it towards 2-3 and takes the transients with it.
 pub fn crest(peak: f32, rms: f32) -> f32 {
-    if rms <= 1e-9 { 0.0 } else { peak / rms }
+    if rms <= 1e-9 {
+        0.0
+    } else {
+        peak / rms
+    }
 }
 
 #[cfg(test)]
@@ -196,8 +213,12 @@ mod tests {
             let m = tone(hz, 1.0, SR);
             let pct = m.percentages();
             assert_eq!(
-                m.dominant(), Some(idx),
-                "a {} Hz tone should read mostly '{}', got {:?}", hz, BAND_NAMES[idx], pct
+                m.dominant(),
+                Some(idx),
+                "a {} Hz tone should read mostly '{}', got {:?}",
+                hz,
+                BAND_NAMES[idx],
+                pct
             );
             // The bands overlap (three poles is still gentle, and 2-5 kHz is
             // barely more than an octave wide), so the bar is that the right
@@ -226,9 +247,7 @@ mod tests {
     #[test]
     fn crest_of_a_sine_is_the_square_root_of_two() {
         const SR: f32 = 44100.0;
-        let sine: Vec<f32> = (0..4410)
-            .map(|i| math::sin(i as f32 / SR * 100.0 * math::TWO_PI))
-            .collect();
+        let sine: Vec<f32> = (0..4410).map(|i| math::sin(i as f32 / SR * 100.0 * math::TWO_PI)).collect();
         let (p, r) = peak_rms(&sine, &sine);
         assert!((crest(p, r) - core::f32::consts::SQRT_2).abs() < 0.02, "got {}", crest(p, r));
     }

@@ -96,7 +96,11 @@ impl Parser {
     fn expect_ident(&mut self) -> Option<String> {
         self.skip_newlines();
         match self.peek().clone() {
-            Token::Ident(s) => { let s = s.clone(); self.advance(); Some(s) }
+            Token::Ident(s) => {
+                let s = s.clone();
+                self.advance();
+                Some(s)
+            }
             // Also accept keywords that could be used as identifiers in certain contexts
             Token::In | Token::Out | Token::Mix | Token::Master => {
                 let name = match self.peek() {
@@ -122,7 +126,8 @@ impl Parser {
             _ => {
                 let s = self.span();
                 self.errors.push(ParseError {
-                    line: s.line, col: s.col,
+                    line: s.line,
+                    col: s.col,
                     message: format!("expected identifier, got {}", describe_token(self.peek())),
                 });
                 None
@@ -151,7 +156,8 @@ impl Parser {
         } else {
             let s = self.span();
             self.errors.push(ParseError {
-                line: s.line, col: s.col,
+                line: s.line,
+                col: s.col,
                 message: format!("expected number, got {:?}", self.peek()),
             });
             None
@@ -161,8 +167,7 @@ impl Parser {
     /// A named argument's value, which may carry a unit (`cutoff=2khz`).
     fn named_arg_value(&mut self, kind: &str, name: &str) -> Option<f32> {
         // A minus sign used to drop out of the unit path entirely.
-        let negative = matches!(self.peek(), Token::Rest)
-            && matches!(self.peek_ahead(1), Token::Quantity(_, _));
+        let negative = matches!(self.peek(), Token::Rest) && matches!(self.peek_ahead(1), Token::Quantity(_, _));
         if negative {
             self.advance();
         }
@@ -179,7 +184,10 @@ impl Parser {
                 }
             };
         }
-        let (line, col) = { let sp = self.span(); (sp.line, sp.col) };
+        let (line, col) = {
+            let sp = self.span();
+            (sp.line, sp.col)
+        };
         let value = self.parse_expr_value();
         // A compressor's makeup is a linear gain inside, and a bare number
         // there was read as one: `makeup=4` is +12 dB. Every use in the corpus
@@ -191,23 +199,31 @@ impl Parser {
                     "makeup takes decibels: write `makeup={db:.1}db` for what `makeup={v}` did (a gain of {v}), or `makeup={v}db` if you meant {v} dB"
                 ) });
             } else {
-                self.errors.push(ParseError { line, col, message: String::from(
-                    "makeup takes decibels, like `makeup=3db`"
-                ) });
+                self.errors.push(ParseError {
+                    line,
+                    col,
+                    message: String::from("makeup takes decibels, like `makeup=3db`"),
+                });
             }
             return None;
         }
         value
     }
 
-    fn resolve_arg_quantity(&self, kind: &str, name: Option<&str>, index: usize, raw: f32, suffix: &str)
-        -> Result<f32, String>
-    {
+    fn resolve_arg_quantity(
+        &self,
+        kind: &str,
+        name: Option<&str>,
+        index: usize,
+        raw: f32,
+        suffix: &str,
+    ) -> Result<f32, String> {
         match crate::nodes::arg_at(kind, name, index) {
             Some(arg) => arg.value_from_quantity(raw, suffix),
             None => Err(format!(
                 "'{}{}' carries a unit, but {} has no argument there to give it meaning",
-                raw, suffix,
+                raw,
+                suffix,
                 if kind.is_empty() { "this" } else { kind }
             )),
         }
@@ -215,14 +231,23 @@ impl Parser {
 
     /// Optional `*N` after a tie or rest: `..*15` is fifteen ties.
     fn repeat_count(&mut self) -> usize {
-        if !matches!(self.peek(), Token::Star) { return 1; }
+        if !matches!(self.peek(), Token::Star) {
+            return 1;
+        }
         self.advance();
         match self.peek().clone() {
-            Token::Number(n) if (1.0..=256.0).contains(&n) => { self.advance(); n as usize }
+            Token::Number(n) if (1.0..=256.0).contains(&n) => {
+                self.advance();
+                n as usize
+            }
             _ => {
                 let s = self.span();
                 let (l, c) = (s.line, s.col);
-                self.errors.push(ParseError { line: l, col: c, message: String::from("expected a count 1..256 after '*'") });
+                self.errors.push(ParseError {
+                    line: l,
+                    col: c,
+                    message: String::from("expected a count 1..256 after '*'"),
+                });
                 1
             }
         }
@@ -250,9 +275,7 @@ impl Parser {
     fn next_is_key_value(&self) -> bool {
         let n = self.tokens.len();
         let i = self.pos + 1;
-        i + 1 < n
-            && matches!(self.tokens[i].token, Token::Ident(_))
-            && matches!(self.tokens[i + 1].token, Token::Eq)
+        i + 1 < n && matches!(self.tokens[i].token, Token::Ident(_)) && matches!(self.tokens[i + 1].token, Token::Eq)
     }
 
     /// After a top-level error, skip the rest of the line so one mistake
@@ -311,20 +334,62 @@ impl Parser {
             self.skip_newlines();
             match self.peek().clone() {
                 Token::Eof => break,
-                Token::Tempo => { self.advance(); self.parse_tempo(&mut song.globals); }
-                Token::Meter => { self.advance(); self.parse_meter(&mut song.globals); }
-                Token::Scale => { self.advance(); self.parse_scale(&mut song.globals); }
-                Token::Sidechain => { self.advance(); self.parse_sidechain(&mut song.globals); }
-                Token::Swing => { self.advance(); self.parse_swing(&mut song.globals); }
-                Token::Humanize => { self.advance(); self.parse_humanize(&mut song.globals); }
-                Token::Bus => { self.advance(); self.parse_bus_decl(&mut song.buses); }
-                Token::Instrument => { self.advance(); self.parse_instrument(&mut song.instruments); }
-                Token::Module => { self.advance(); self.parse_module_def(&mut song.module_defs); }
-                Token::Pattern => { self.advance(); self.parse_pattern_or_scene(&mut song); }
-                Token::Track => { self.advance(); self.parse_track(&mut song.tracks); }
-                Token::Master => { self.advance(); self.parse_master(&mut song); }
-                Token::Arrange => { self.advance(); self.parse_arrange(&mut song.arrangement); }
-                Token::Scene => { self.advance(); self.parse_scene(&mut song.scenes); }
+                Token::Tempo => {
+                    self.advance();
+                    self.parse_tempo(&mut song.globals);
+                }
+                Token::Meter => {
+                    self.advance();
+                    self.parse_meter(&mut song.globals);
+                }
+                Token::Scale => {
+                    self.advance();
+                    self.parse_scale(&mut song.globals);
+                }
+                Token::Sidechain => {
+                    self.advance();
+                    self.parse_sidechain(&mut song.globals);
+                }
+                Token::Swing => {
+                    self.advance();
+                    self.parse_swing(&mut song.globals);
+                }
+                Token::Humanize => {
+                    self.advance();
+                    self.parse_humanize(&mut song.globals);
+                }
+                Token::Bus => {
+                    self.advance();
+                    self.parse_bus_decl(&mut song.buses);
+                }
+                Token::Instrument => {
+                    self.advance();
+                    self.parse_instrument(&mut song.instruments);
+                }
+                Token::Module => {
+                    self.advance();
+                    self.parse_module_def(&mut song.module_defs);
+                }
+                Token::Pattern => {
+                    self.advance();
+                    self.parse_pattern_or_scene(&mut song);
+                }
+                Token::Track => {
+                    self.advance();
+                    self.parse_track(&mut song.tracks);
+                }
+                Token::Master => {
+                    self.advance();
+                    self.parse_master(&mut song);
+                }
+                Token::Arrange => {
+                    self.advance();
+                    self.parse_arrange(&mut song.arrangement);
+                }
+                Token::Scene => {
+                    self.advance();
+                    self.parse_scene(&mut song.scenes);
+                }
                 // A bare identifier followed by { could be a bus chain or groove block
                 Token::Ident(ref name) if name == "gain_comp" => {
                     self.advance();
@@ -352,7 +417,8 @@ impl Parser {
                 _ => {
                     let s = self.span().clone();
                     self.errors.push(ParseError {
-                        line: s.line, col: s.col,
+                        line: s.line,
+                        col: s.col,
                         message: format!("unexpected {} at top level", describe_token(&s.token)),
                     });
                     self.recover_to_line_end();

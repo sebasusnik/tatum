@@ -29,14 +29,7 @@ fn the_arrangement_comes_back_in_order_with_its_repeats() {
          master {{ in > out }}\n"
     );
     let got = sections(&src);
-    assert_eq!(
-        got,
-        vec![
-            ("a".into(), 4, 120.0),
-            ("b".into(), 8, 120.0),
-            ("a".into(), 2, 120.0),
-        ]
-    );
+    assert_eq!(got, vec![("a".into(), 4, 120.0), ("b".into(), 8, 120.0), ("a".into(), 2, 120.0),]);
 }
 
 #[test]

@@ -63,7 +63,11 @@ impl SongEngine {
     /// RMS of a track after its level and pan, before the master chain.
     pub fn track_rms(&self, idx: usize) -> f32 {
         self.tracks.get(idx).map_or(0.0, |t| {
-            if t.meter_samples == 0 { 0.0 } else { math::sqrt((t.meter_sum_sq / t.meter_samples as f64) as f32) }
+            if t.meter_samples == 0 {
+                0.0
+            } else {
+                math::sqrt((t.meter_sum_sq / t.meter_samples as f64) as f32)
+            }
         })
     }
 
@@ -88,19 +92,23 @@ impl SongEngine {
 
     /// Keep every part of each block apart, for `tatum debug`. See [`Taps`].
     pub fn set_taps(&mut self, on: bool) {
-        self.taps = on.then(|| Box::new(Taps {
-            len: 0,
-            tracks: vec![TapBlock::SILENT; self.tracks.len()],
-            dry: vec![TapBlock::SILENT; self.tracks.len()],
-            buses: vec![TapBlock::SILENT; self.buses.len()],
-            delay: TapBlock::SILENT,
-            reverb: TapBlock::SILENT,
-            held: vec![false; self.tracks.len()],
-        }));
+        self.taps = on.then(|| {
+            Box::new(Taps {
+                len: 0,
+                tracks: vec![TapBlock::SILENT; self.tracks.len()],
+                dry: vec![TapBlock::SILENT; self.tracks.len()],
+                buses: vec![TapBlock::SILENT; self.buses.len()],
+                delay: TapBlock::SILENT,
+                reverb: TapBlock::SILENT,
+                held: vec![false; self.tracks.len()],
+            })
+        });
     }
 
     /// The parts of the last block, if [`set_taps`](Self::set_taps) is on.
-    pub fn taps(&self) -> Option<&Taps> { self.taps.as_deref() }
+    pub fn taps(&self) -> Option<&Taps> {
+        self.taps.as_deref()
+    }
 
     /// Whether a track goes straight to master, rather than only into a bus.
     pub fn track_to_master(&self, idx: usize) -> bool {
@@ -118,7 +126,11 @@ impl SongEngine {
     pub fn track_width(&self, idx: usize) -> f32 {
         self.tracks.get(idx).map_or(0.0, |t| {
             let total = t.meter_mid_sq + t.meter_side_sq;
-            if total <= 0.0 { 0.0 } else { (t.meter_side_sq / total) as f32 }
+            if total <= 0.0 {
+                0.0
+            } else {
+                (t.meter_side_sq / total) as f32
+            }
         })
     }
 
@@ -132,7 +144,9 @@ impl SongEngine {
         self.tracks.get(idx).and_then(|t| t.band.dominant())
     }
 
-    pub fn bus_count(&self) -> usize { self.buses.len() }
+    pub fn bus_count(&self) -> usize {
+        self.buses.len()
+    }
 
     pub fn bus_name(&self, idx: usize) -> &str {
         self.buses.get(idx).map_or("", |b| b.name.as_str())
@@ -145,7 +159,11 @@ impl SongEngine {
 
     pub fn bus_rms(&self, idx: usize) -> f32 {
         self.buses.get(idx).map_or(0.0, |b| {
-            if b.meter_samples == 0 { 0.0 } else { math::sqrt((b.meter_sum_sq / b.meter_samples as f64) as f32) }
+            if b.meter_samples == 0 {
+                0.0
+            } else {
+                math::sqrt((b.meter_sum_sq / b.meter_samples as f64) as f32)
+            }
         })
     }
 
@@ -175,7 +193,10 @@ impl SongEngine {
     pub fn loudness(song: &CompiledSong) -> Option<f32> {
         let mut engine = Self::from_compiled(song.clone());
         engine.output.bypass = true;
-        let bars = match engine.arrangement_bars() { 0 => 4, n => n };
+        let bars = match engine.arrangement_bars() {
+            0 => 4,
+            n => n,
+        };
         let total = (bars as f32 * engine.steps_per_bar as f32 * engine.samples_per_step) as usize;
         engine.start();
         let mut meter = Loudness::new();
@@ -194,12 +215,16 @@ impl SongEngine {
 
     /// The gain the output stage puts on the song, linear. 1.0 until the
     /// engine is normalized.
-    pub fn output_gain(&self) -> f32 { self.output.gain }
+    pub fn output_gain(&self) -> f32 {
+        self.output.gain
+    }
 
     /// Put the output stage at a gain measured elsewhere: a live session keeps
     /// the one it measured when the song was loaded.
     pub fn set_output_gain(&mut self, gain: f32) {
-        if gain.is_finite() { self.output.gain = gain; }
+        if gain.is_finite() {
+            self.output.gain = gain;
+        }
     }
 
     /// How many tracks the last rendered block skipped whole: muted, nothing

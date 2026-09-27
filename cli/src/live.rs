@@ -26,7 +26,9 @@ use crate::resample::Resampler;
 /// What the audio thread tells the main thread.
 enum Event {
     Applied(Applied),
-    Swapped { bar: usize },
+    Swapped {
+        bar: usize,
+    },
     Finished,
     /// A retired engine could not be handed back and was dropped in place.
     DroppedInPlace,
@@ -117,8 +119,7 @@ fn list_devices() {
                     Ok((_, rate)) => format!("  [resampled to {} Hz]", rate),
                     Err(_) => "  [no stereo f32 output]".to_string(),
                 };
-                println!("{}{}{}", name,
-                    if Some(&name) == default.as_ref() { "  (default)" } else { "" }, note);
+                println!("{}{}{}", name, if Some(&name) == default.as_ref() { "  (default)" } else { "" }, note);
             }
         }
         Err(e) => eprintln!("error: cannot list devices: {}", e),
@@ -132,13 +133,18 @@ fn list_devices() {
 /// they offer 48 kHz and 24 kHz and nothing else.
 fn pick_config(device: &cpal::Device, forced: Option<u32>) -> Result<(cpal::StreamConfig, u32), String> {
     let engine = SAMPLE_RATE as u32;
-    let ranges: Vec<_> = device.supported_output_configs().map_err(|e| e.to_string())?
+    let ranges: Vec<_> = device
+        .supported_output_configs()
+        .map_err(|e| e.to_string())?
         .filter(|r| r.channels() == 2 && r.sample_format() == cpal::SampleFormat::F32)
         .collect();
-    let at = |rate: u32| ranges.iter()
-        .find(|r| r.min_sample_rate() <= rate && r.max_sample_rate() >= rate)
-        .and_then(|r| (*r).try_with_sample_rate(rate))
-        .map(|c| (c.config(), rate));
+    let at = |rate: u32| {
+        ranges
+            .iter()
+            .find(|r| r.min_sample_rate() <= rate && r.max_sample_rate() >= rate)
+            .and_then(|r| (*r).try_with_sample_rate(rate))
+            .map(|c| (c.config(), rate))
+    };
     // `--rate` forces the device rate, to hear the converter on a device
     // that would not otherwise need it.
     if let Some(rate) = forced {
@@ -196,7 +202,9 @@ fn run(
     planner.isolate(isolation);
     let mut player = LivePlayer::new();
     match planner.plan(&source.text, player.generation()) {
-        Ok(plan) => { player.apply(plan); }
+        Ok(plan) => {
+            player.apply(plan);
+        }
         Err(err) => {
             source.print_errors(&err);
             return Err("the song does not compile".into());
@@ -229,81 +237,102 @@ fn run(
 
     player.start();
     let mut was_running = true;
-    let stream = device.build_output_stream(
-        config,
-        move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-            let t0 = Instant::now();
-            // Plans first, so an edit lands in this callback, not the next.
-            while let Ok(plan) = plan_rx.try_recv() {
-                let applied = player.apply(plan);
-                if applied == Applied::Loaded && !player.running() {
-                    // Nothing was playing (the arrangement had ended):
-                    // the new song starts from the top.
-                    player.start();
-                    was_running = true;
-                }
-                // Knob values are shown when they are sent, not here.
-                if applied != Applied::Control {
-                    let _ = event_tx.try_send(Event::Applied(applied));
-                }
-            }
-            let mut l = [0.0f32; BLOCK_SIZE];
-            let mut r = [0.0f32; BLOCK_SIZE];
-            for chunk in data.chunks_mut(BLOCK_SIZE * 2) {
-                let frames = chunk.len() / 2;
-                match resampler.as_mut() {
-                    None => {
-                        if let Some(bar) = player.process(&mut l[..frames], &mut r[..frames]) {
-                            let _ = event_tx.try_send(Event::Swapped { bar });
-                        }
+    let stream = device
+        .build_output_stream(
+            config,
+            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                let t0 = Instant::now();
+                // Plans first, so an edit lands in this callback, not the next.
+                while let Ok(plan) = plan_rx.try_recv() {
+                    let applied = player.apply(plan);
+                    if applied == Applied::Loaded && !player.running() {
+                        // Nothing was playing (the arrangement had ended):
+                        // the new song starts from the top.
+                        player.start();
+                        was_running = true;
                     }
-                    Some(rs) => {
-                        // Render engine blocks until the converter has enough
-                        // input for this chunk of device frames, then pull.
-                        while rs.needed(frames) > 0 && rs.can_push() {
-                            let mut bl = [0.0f32; BLOCK_SIZE];
-                            let mut br = [0.0f32; BLOCK_SIZE];
-                            if let Some(bar) = player.process(&mut bl, &mut br) {
+                    // Knob values are shown when they are sent, not here.
+                    if applied != Applied::Control {
+                        let _ = event_tx.try_send(Event::Applied(applied));
+                    }
+                }
+                let mut l = [0.0f32; BLOCK_SIZE];
+                let mut r = [0.0f32; BLOCK_SIZE];
+                for chunk in data.chunks_mut(BLOCK_SIZE * 2) {
+                    let frames = chunk.len() / 2;
+                    match resampler.as_mut() {
+                        None => {
+                            if let Some(bar) = player.process(&mut l[..frames], &mut r[..frames]) {
                                 let _ = event_tx.try_send(Event::Swapped { bar });
                             }
-                            rs.push(&bl, &br);
                         }
-                        rs.pull(&mut l[..frames], &mut r[..frames]);
+                        Some(rs) => {
+                            // Render engine blocks until the converter has enough
+                            // input for this chunk of device frames, then pull.
+                            while rs.needed(frames) > 0 && rs.can_push() {
+                                let mut bl = [0.0f32; BLOCK_SIZE];
+                                let mut br = [0.0f32; BLOCK_SIZE];
+                                if let Some(bar) = player.process(&mut bl, &mut br) {
+                                    let _ = event_tx.try_send(Event::Swapped { bar });
+                                }
+                                rs.push(&bl, &br);
+                            }
+                            rs.pull(&mut l[..frames], &mut r[..frames]);
+                        }
+                    }
+                    for (i, frame) in chunk.chunks_mut(2).enumerate() {
+                        frame[0] = l[i];
+                        if frame.len() > 1 {
+                            frame[1] = r[i];
+                        }
                     }
                 }
-                for (i, frame) in chunk.chunks_mut(2).enumerate() {
-                    frame[0] = l[i];
-                    if frame.len() > 1 { frame[1] = r[i]; }
+                while let Some(retired) = player.take_retired() {
+                    if let Err(TrySendError::Full(_)) = retired_tx.try_send(retired) {
+                        let _ = event_tx.try_send(Event::DroppedInPlace);
+                    }
                 }
-            }
-            while let Some(retired) = player.take_retired() {
-                if let Err(TrySendError::Full(_)) = retired_tx.try_send(retired) {
-                    let _ = event_tx.try_send(Event::DroppedInPlace);
+                if was_running && !player.running() {
+                    was_running = false;
+                    let _ = event_tx.try_send(Event::Finished);
                 }
-            }
-            if was_running && !player.running() {
-                was_running = false;
-                let _ = event_tx.try_send(Event::Finished);
-            }
-            stats_cb.generation.store(player.generation(), Ordering::Relaxed);
-            stats_cb.callbacks.fetch_add(1, Ordering::Relaxed);
-            stats_cb.frames.fetch_add((data.len() / 2) as u64, Ordering::Relaxed);
-            let ns = t0.elapsed().as_nanos() as u64;
-            stats_cb.worst_ns.fetch_max(ns, Ordering::Relaxed);
-            let budget_ns = (data.len() / 2) as u64 * 1_000_000_000 / rate as u64;
-            if ns > budget_ns {
-                stats_cb.late.fetch_add(1, Ordering::Relaxed);
-            }
-        },
-        |err| eprintln!("audio stream error: {}", err),
-        None,
-    ).map_err(|e| format!("cannot open output stream: {}", e))?;
+                stats_cb.generation.store(player.generation(), Ordering::Relaxed);
+                stats_cb.callbacks.fetch_add(1, Ordering::Relaxed);
+                stats_cb.frames.fetch_add((data.len() / 2) as u64, Ordering::Relaxed);
+                let ns = t0.elapsed().as_nanos() as u64;
+                stats_cb.worst_ns.fetch_max(ns, Ordering::Relaxed);
+                let budget_ns = (data.len() / 2) as u64 * 1_000_000_000 / rate as u64;
+                if ns > budget_ns {
+                    stats_cb.late.fetch_add(1, Ordering::Relaxed);
+                }
+            },
+            |err| eprintln!("audio stream error: {}", err),
+            None,
+        )
+        .map_err(|e| format!("cannot open output stream: {}", e))?;
     stream.play().map_err(|e| format!("cannot start output stream: {}", e))?;
 
-    eprintln!("{} {} on {}{}", verb(watch), path, device_desc,
-        if rate == SAMPLE_RATE as u32 { String::new() } else { format!(" (resampled {} -> {} Hz)", SAMPLE_RATE as u32, rate) });
-    eprintln!("  {} BPM, {} tracks, {}", tempo, tracks,
-        if bars > 0 { format!("{} bars arranged", bars) } else { "no arrangement: loops until you stop it".to_string() });
+    eprintln!(
+        "{} {} on {}{}",
+        verb(watch),
+        path,
+        device_desc,
+        if rate == SAMPLE_RATE as u32 {
+            String::new()
+        } else {
+            format!(" (resampled {} -> {} Hz)", SAMPLE_RATE as u32, rate)
+        }
+    );
+    eprintln!(
+        "  {} BPM, {} tracks, {}",
+        tempo,
+        tracks,
+        if bars > 0 {
+            format!("{} bars arranged", bars)
+        } else {
+            "no arrangement: loops until you stop it".to_string()
+        }
+    );
     // Every input is read even when the song maps no knob yet, so adding a
     // `midi` block while watching works without a restart.
     let (midi_tx, midi_rx) = channel::<Midi>();
@@ -321,7 +350,10 @@ fn run(
         let stdin = std::io::stdin();
         for line in stdin.lock().lines() {
             match line {
-                Ok(l) if l.trim() == "q" => { let _ = quit_tx.send(()); break; }
+                Ok(l) if l.trim() == "q" => {
+                    let _ = quit_tx.send(());
+                    break;
+                }
                 Ok(_) => {}
                 Err(_) => break,
             }
@@ -370,9 +402,13 @@ fn run(
                             // Waits for room rather than drop one: a lost
                             // release is a note that never stops.
                             for plan in plans {
-                                if plan_tx.send(plan).is_err() { break; }
+                                if plan_tx.send(plan).is_err() {
+                                    break;
+                                }
                             }
-                            if velocity > 0 { notes_played += 1; }
+                            if velocity > 0 {
+                                notes_played += 1;
+                            }
                         }
                         None if velocity > 0 => {
                             readings.push(format!("{} {} (not mapped)", if pad { "pad" } else { "key" }, note));
@@ -386,9 +422,13 @@ fn run(
             let generation = stats.generation.load(Ordering::Relaxed);
             let mut full = false;
             for plan in planner.bend(value, generation) {
-                if let Err(TrySendError::Full(_)) = plan_tx.try_send(plan) { full = true; }
+                if let Err(TrySendError::Full(_)) = plan_tx.try_send(plan) {
+                    full = true;
+                }
             }
-            if !full { unsent_bend = None; }
+            if !full {
+                unsent_bend = None;
+            }
         }
         if unsent.iter().any(|v| v.is_some()) {
             let generation = stats.generation.load(Ordering::Relaxed);
@@ -397,11 +437,15 @@ fn run(
                 let turn = planner.knob(cc as u8, value, generation);
                 let mut full = false;
                 for plan in turn.plans {
-                    if let Err(TrySendError::Full(_)) = plan_tx.try_send(plan) { full = true; }
+                    if let Err(TrySendError::Full(_)) = plan_tx.try_send(plan) {
+                        full = true;
+                    }
                 }
                 // A full channel keeps the value for the next round rather
                 // than leave the knob somewhere it was only passing through.
-                if !full { *slot = None; }
+                if !full {
+                    *slot = None;
+                }
                 if turn.readings.is_empty() {
                     // Shown anyway: turning a knob and reading its number is
                     // how the `midi` block gets written in the first place.
@@ -412,8 +456,12 @@ fn run(
                 }
             }
         }
-        if !readings.is_empty() { status.show(&readings.join("   ")); }
-        if Instant::now() < next_poll { continue; }
+        if !readings.is_empty() {
+            status.show(&readings.join("   "));
+        }
+        if Instant::now() < next_poll {
+            continue;
+        }
         next_poll = Instant::now() + poll_every;
 
         // Everything the callback retired is freed here.
@@ -422,23 +470,42 @@ fn run(
             status.close();
             let t = started.elapsed().as_secs_f32();
             match ev {
-                Event::Applied(Applied::Fast) => { fast += 1; eprintln!("[{:7.2}s] applied instantly", t); }
+                Event::Applied(Applied::Fast) => {
+                    fast += 1;
+                    eprintln!("[{:7.2}s] applied instantly", t);
+                }
                 Event::Applied(Applied::Queued) => eprintln!("[{:7.2}s] queued for the next bar", t),
                 Event::Applied(Applied::Loaded) => eprintln!("[{:7.2}s] loaded (nothing was playing)", t),
                 Event::Applied(Applied::Unchanged) => eprintln!("[{:7.2}s] unchanged", t),
                 Event::Applied(Applied::Control) => {}
                 Event::Applied(Applied::Stale) => eprintln!("[{:7.2}s] BUG: plan was stale, edit lost; save again", t),
-                Event::Swapped { bar } => { swaps += 1; eprintln!("[{:7.2}s] swapped at bar {}", t, bar); }
-                Event::Finished => { finished = true; eprintln!("[{:7.2}s] arrangement finished", t); }
-                Event::DroppedInPlace => { dropped_in_place += 1; }
+                Event::Swapped { bar } => {
+                    swaps += 1;
+                    eprintln!("[{:7.2}s] swapped at bar {}", t, bar);
+                }
+                Event::Finished => {
+                    finished = true;
+                    eprintln!("[{:7.2}s] arrangement finished", t);
+                }
+                Event::DroppedInPlace => {
+                    dropped_in_place += 1;
+                }
             }
         }
-        if quit_rx.try_recv().is_ok() { break; }
-        if finished && !watch { break; }
-        if !watch { continue; }
+        if quit_rx.try_recv().is_ok() {
+            break;
+        }
+        if finished && !watch {
+            break;
+        }
+        if !watch {
+            continue;
+        }
         // Any file the song `use`s counts: editing the rig re-evaluates too.
         let now = source.newest_mtime();
-        if now == last_mtime { continue; }
+        if now == last_mtime {
+            continue;
+        }
         last_mtime = now;
         // Editors write through a temporary file: a file missing for a tick
         // is retried, not reported. A `use` that no longer resolves is.
@@ -452,14 +519,18 @@ fn run(
                 continue;
             }
         };
-        if new_source.text == source.text { continue; }
+        if new_source.text == source.text {
+            continue;
+        }
         source = new_source;
         status.close();
         let generation = stats.generation.load(Ordering::Relaxed);
         match planner.plan(&source.text, generation) {
             Ok(plan) => {
                 let kind = plan.describe();
-                if plan_tx.send(plan).is_err() { break; }
+                if plan_tx.send(plan).is_err() {
+                    break;
+                }
                 eprintln!("[{:7.2}s] saved: {}", started.elapsed().as_secs_f32(), kind);
             }
             Err(err) => {
@@ -478,11 +549,20 @@ fn run(
     let worst = stats.worst_ns.load(Ordering::Relaxed) as f64 / 1e6;
     let per_cb = if callbacks > 0 { frames as f64 / callbacks as f64 } else { 0.0 };
     let budget = per_cb / rate as f64 * 1e3;
-    eprintln!("played {:.1} s in {} callbacks of ~{:.0} frames ({:.2} ms each)",
-        frames as f64 / rate as f64, callbacks, per_cb, budget);
-    eprintln!("worst callback {:.3} ms of {:.2} ms budget ({:.0}%), {} late",
-        worst, budget, if budget > 0.0 { worst / budget * 100.0 } else { 0.0 },
-        stats.late.load(Ordering::Relaxed));
+    eprintln!(
+        "played {:.1} s in {} callbacks of ~{:.0} frames ({:.2} ms each)",
+        frames as f64 / rate as f64,
+        callbacks,
+        per_cb,
+        budget
+    );
+    eprintln!(
+        "worst callback {:.3} ms of {:.2} ms budget ({:.0}%), {} late",
+        worst,
+        budget,
+        if budget > 0.0 { worst / budget * 100.0 } else { 0.0 },
+        stats.late.load(Ordering::Relaxed)
+    );
     if watch {
         eprintln!("{} swaps, {} instant edits, {} rejected saves", swaps, fast, rejected);
     }
@@ -496,7 +576,11 @@ fn run(
 }
 
 fn verb(watch: bool) -> &'static str {
-    if watch { "watching" } else { "playing" }
+    if watch {
+        "watching"
+    } else {
+        "playing"
+    }
 }
 
 /// The line that shows what the knob being turned reads. On a terminal it is

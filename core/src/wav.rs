@@ -4,8 +4,12 @@
 extern crate alloc;
 use alloc::vec::Vec;
 
-fn push_u32(out: &mut Vec<u8>, v: u32) { out.extend_from_slice(&v.to_le_bytes()); }
-fn push_u16(out: &mut Vec<u8>, v: u16) { out.extend_from_slice(&v.to_le_bytes()); }
+fn push_u32(out: &mut Vec<u8>, v: u32) {
+    out.extend_from_slice(&v.to_le_bytes());
+}
+fn push_u16(out: &mut Vec<u8>, v: u16) {
+    out.extend_from_slice(&v.to_le_bytes());
+}
 
 /// Encode interleaved stereo 16-bit PCM. Samples are clamped to -1.0..1.0.
 pub fn encode_stereo_16(left: &[f32], right: &[f32], sample_rate: u32) -> Vec<u8> {
@@ -17,12 +21,12 @@ pub fn encode_stereo_16(left: &[f32], right: &[f32], sample_rate: u32) -> Vec<u8
     out.extend_from_slice(b"WAVE");
     out.extend_from_slice(b"fmt ");
     push_u32(&mut out, 16);
-    push_u16(&mut out, 1);            // PCM
-    push_u16(&mut out, 2);            // channels
+    push_u16(&mut out, 1); // PCM
+    push_u16(&mut out, 2); // channels
     push_u32(&mut out, sample_rate);
     push_u32(&mut out, sample_rate * 4);
-    push_u16(&mut out, 4);            // block align
-    push_u16(&mut out, 16);           // bits per sample
+    push_u16(&mut out, 4); // block align
+    push_u16(&mut out, 16); // bits per sample
     out.extend_from_slice(b"data");
     push_u32(&mut out, data_len);
     for i in 0..frames {

@@ -173,7 +173,6 @@ impl Default for KeysModule {
 }
 
 impl KeysModule {
-
     /// True when nothing is sounding and nothing is still releasing. A track
     /// whose level is 0 and whose instrument is idle is skipped whole by the
     /// song engine: no voices, no insert chain, no mix. That is what makes a
@@ -327,18 +326,26 @@ impl KeysModule {
             KeysParam::VibratoDepth => self.vibrato_depth = value * 0.5,
             KeysParam::Attack => {
                 let a = crate::params::ENV_TIME.to_real(value) * 0.001;
-                for voice in &mut self.voices { voice.env.set_attack(a); }
+                for voice in &mut self.voices {
+                    voice.env.set_attack(a);
+                }
             }
             KeysParam::Decay => {
                 let d = 0.001 * crate::math::pow(2000.0, value);
-                for voice in &mut self.voices { voice.env.set_decay(d); }
+                for voice in &mut self.voices {
+                    voice.env.set_decay(d);
+                }
             }
             KeysParam::Sustain => {
-                for voice in &mut self.voices { voice.env.set_sustain(value); }
+                for voice in &mut self.voices {
+                    voice.env.set_sustain(value);
+                }
             }
             KeysParam::Release => {
                 let r = crate::params::ENV_TIME.to_real(value) * 0.001;
-                for voice in &mut self.voices { voice.env.set_release(r); }
+                for voice in &mut self.voices {
+                    voice.env.set_release(r);
+                }
             }
             KeysParam::Resonance => {
                 self.resonance = value;
@@ -397,13 +404,10 @@ impl KeysModule {
             let mut amp_mod = 1.0;
 
             // Cutoff modulation: apply every 4 samples to reduce overhead
-            if self.lfo_router.target == LfoTarget::Cutoff
-                && self.lfo_router.enabled
-                && i.is_multiple_of(4)
-            {
+            if self.lfo_router.target == LfoTarget::Cutoff && self.lfo_router.enabled && i.is_multiple_of(4) {
                 // Relative (octaves), like the bass: see LFO_CUTOFF_OCTAVES.
-                let mod_cutoff = self.cutoff_base
-                    * crate::math::pow2(lfo_val * crate::modules::bass::LFO_CUTOFF_OCTAVES);
+                let mod_cutoff =
+                    self.cutoff_base * crate::math::pow2(lfo_val * crate::modules::bass::LFO_CUTOFF_OCTAVES);
                 for voice in &mut self.voices {
                     voice.filter.set_cutoff(mod_cutoff);
                 }
@@ -420,16 +424,13 @@ impl KeysModule {
             if self.vibrato_onset < delay_samples {
                 self.vibrato_onset += 1.0;
             }
-            let onset_amt = if delay_samples > 0.0 {
-                (self.vibrato_onset / delay_samples).min(1.0)
-            } else {
-                1.0
-            };
+            let onset_amt = if delay_samples > 0.0 { (self.vibrato_onset / delay_samples).min(1.0) } else { 1.0 };
             let vibrato_mult = if self.vibrato_depth > 0.0 {
-                let vib = math::sin(self.vibrato_phase * math::TWO_PI)
-                    * self.vibrato_depth * onset_amt;
+                let vib = math::sin(self.vibrato_phase * math::TWO_PI) * self.vibrato_depth * onset_amt;
                 self.vibrato_phase += self.vibrato_rate / SAMPLE_RATE;
-                if self.vibrato_phase >= 1.0 { self.vibrato_phase -= 1.0; }
+                if self.vibrato_phase >= 1.0 {
+                    self.vibrato_phase -= 1.0;
+                }
                 math::pow2(vib / 12.0)
             } else {
                 1.0
@@ -468,11 +469,7 @@ impl KeysModule {
                 output_r[i] = sum_r * self.level * amp_mod * 0.35;
             } else {
                 // Equal-power scaling: 1/sqrt(N) prevents clipping with multiple voices
-                let voice_scaler = if active_count > 1 {
-                    1.0 / math::sqrt(active_count as f32)
-                } else {
-                    1.0
-                };
+                let voice_scaler = if active_count > 1 { 1.0 / math::sqrt(active_count as f32) } else { 1.0 };
                 // Non-Unison: the chord is centred, and the chorus is what opens
                 // it out. Summing to mono and copying L into R made `chorus_mix`
                 // a comb filter on one channel instead of the width the docs

@@ -6,10 +6,7 @@
 //! runs far from the repo, and its examples are half of what it teaches.
 
 fn main() {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     println!("cargo:rustc-env=SYNTH_BUILD_EPOCH={}", now);
     println!("cargo:rustc-env=SYNTH_BUILD_TIME={}", now);
     // Rebuild the stamp whenever anything it describes changes.
@@ -19,7 +16,8 @@ fn main() {
 
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples");
     println!("cargo:rerun-if-changed={}", dir.display());
-    let mut names: Vec<_> = std::fs::read_dir(&dir).expect("examples/")
+    let mut names: Vec<_> = std::fs::read_dir(&dir)
+        .expect("examples/")
         .flatten()
         .map(|e| e.path())
         .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("synth"))

@@ -34,7 +34,9 @@ pub struct ChainStep {
 }
 
 impl ChainStep {
-    pub fn full(spec: NodeSpec) -> Self { Self { spec, wet: 1.0 } }
+    pub fn full(spec: NodeSpec) -> Self {
+        Self { spec, wet: 1.0 }
+    }
 }
 
 // ── NodeSpec: lightweight description for creating nodes ──
@@ -43,56 +45,150 @@ impl ChainStep {
 /// Small, Copy-able, no heap allocations.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum NodeSpec {
-    Osc { waveform: Waveform, freq: f32, drift_seed: u32, fixed: bool, pitch_semitones: f32 },
+    Osc {
+        waveform: Waveform,
+        freq: f32,
+        drift_seed: u32,
+        fixed: bool,
+        pitch_semitones: f32,
+    },
     /// Oscillator with built-in pitch envelope (exponential sweep from start→end).
     /// Used for drum body synthesis (kick, tom). Not MIDI-note tracked.
-    PitchOsc { waveform: Waveform, start_freq: f32, end_freq: f32, decay: f32 },
-    Noise { seed: u32 },
-    Lfo { rate: f32, depth: f32 },
-    Env { a: f32, d: f32, s: f32, r: f32 },
+    PitchOsc {
+        waveform: Waveform,
+        start_freq: f32,
+        end_freq: f32,
+        decay: f32,
+    },
+    Noise {
+        seed: u32,
+    },
+    Lfo {
+        rate: f32,
+        depth: f32,
+    },
+    Env {
+        a: f32,
+        d: f32,
+        s: f32,
+        r: f32,
+    },
     Biquad {
-        filter_type: FilterType, cutoff: f32, resonance: f32,
-        env_attack: f32, env_decay: f32, env_sustain: f32, env_release: f32,
+        filter_type: FilterType,
+        cutoff: f32,
+        resonance: f32,
+        env_attack: f32,
+        env_decay: f32,
+        env_sustain: f32,
+        env_release: f32,
         env_depth: f32,
         lfo: FilterLfo,
     },
     Ladder {
-        cutoff: f32, resonance: f32,
-        env_attack: f32, env_decay: f32, env_sustain: f32, env_release: f32,
+        cutoff: f32,
+        resonance: f32,
+        env_attack: f32,
+        env_decay: f32,
+        env_sustain: f32,
+        env_release: f32,
         env_depth: f32,
         lfo: FilterLfo,
     },
     /// Stereo auto-panner: slow LFO moves the signal between L and R.
-    AutoPan { hz: f32, bars: f32, depth: f32 },
+    AutoPan {
+        hz: f32,
+        bars: f32,
+        depth: f32,
+    },
     /// Stereo panner driven by the signal's own envelope rather than an LFO.
-    PanEnv { depth: f32, attack_ms: f32, release_ms: f32 },
+    PanEnv {
+        depth: f32,
+        attack_ms: f32,
+        release_ms: f32,
+    },
     /// Envelope filter: a resonant filter whose cutoff the signal's own
     /// envelope sweeps. `mode` is 0 lowpass, 1 bandpass, 2 highpass.
-    AutoWah { sens: f32, base: f32, range: f32, q: f32,
-              attack_ms: f32, release_ms: f32, mode: u8, down: bool,
-              wobble: f32, wobble_hz: f32 },
+    AutoWah {
+        sens: f32,
+        base: f32,
+        range: f32,
+        q: f32,
+        attack_ms: f32,
+        release_ms: f32,
+        mode: u8,
+        down: bool,
+        wobble: f32,
+        wobble_hz: f32,
+    },
     /// Swept allpass phaser.
-    Phaser { mix: f32, hz: f32, bars: f32, stages: u8, feedback: f32, depth: f32 },
+    Phaser {
+        mix: f32,
+        hz: f32,
+        bars: f32,
+        stages: u8,
+        feedback: f32,
+        depth: f32,
+    },
     /// Vowel formant filter morphing between two vowels.
-    Vowel { from: u8, to: u8, hz: f32, bars: f32, mix: f32 },
+    Vowel {
+        from: u8,
+        to: u8,
+        hz: f32,
+        bars: f32,
+        mix: f32,
+    },
     Mix,
-    Gain { amount: f32 },
+    Gain {
+        amount: f32,
+    },
     Vca,
-    Saturator { drive: f32 },
-    Chorus { mix: f32 },
-    Bitcrusher { bits: f32, rate: f32 },
-    Compressor { threshold_db: f32, ratio: f32, attack_ms: f32, release_ms: f32, makeup: f32 },
-    Limiter { threshold: f32 },
-    TiltEq { amount: f32 },
-    ThreeBandEq { low: f32, mid: f32, high: f32 },
+    Saturator {
+        drive: f32,
+    },
+    Chorus {
+        mix: f32,
+    },
+    Bitcrusher {
+        bits: f32,
+        rate: f32,
+    },
+    Compressor {
+        threshold_db: f32,
+        ratio: f32,
+        attack_ms: f32,
+        release_ms: f32,
+        makeup: f32,
+    },
+    Limiter {
+        threshold: f32,
+    },
+    TiltEq {
+        amount: f32,
+    },
+    ThreeBandEq {
+        low: f32,
+        mid: f32,
+        high: f32,
+    },
     /// Delay (bus/master chain only, not per-voice).
-    Delay { sync_div: f32, feedback: f32 },
+    Delay {
+        sync_div: f32,
+        feedback: f32,
+    },
     /// Reverb (bus/master chain only, not per-voice).
-    Reverb { room_size: f32 },
+    Reverb {
+        room_size: f32,
+    },
     /// Record a window of the chain's output and loop it back. The window is
     /// already in samples: the compiler resolves `bars` against the song's
     /// slowest tempo so the buffer can be allocated when the chain is built.
-    Capture { samples: u32, start_samples: u32, speed: f32, reverse: bool, mix: f32 },
+    Capture {
+        samples: u32,
+        start_samples: u32,
+        speed: f32,
+        reverse: bool,
+        mix: f32,
+    },
     Output,
 }
 
@@ -131,8 +227,12 @@ impl NodeSpec {
     /// Convenience: ladder with no filter envelope (backward compat).
     pub fn ladder(cutoff: f32, resonance: f32) -> Self {
         NodeSpec::Ladder {
-            cutoff, resonance,
-            env_attack: 0.005, env_decay: 0.2, env_sustain: 0.0, env_release: 0.1,
+            cutoff,
+            resonance,
+            env_attack: 0.005,
+            env_decay: 0.2,
+            env_sustain: 0.0,
+            env_release: 0.1,
             env_depth: 0.0,
             lfo: FilterLfo::default(),
         }
@@ -141,8 +241,13 @@ impl NodeSpec {
     /// Convenience: biquad with no filter envelope (backward compat).
     pub fn biquad(filter_type: FilterType, cutoff: f32, resonance: f32) -> Self {
         NodeSpec::Biquad {
-            filter_type, cutoff, resonance,
-            env_attack: 0.005, env_decay: 0.2, env_sustain: 0.0, env_release: 0.1,
+            filter_type,
+            cutoff,
+            resonance,
+            env_attack: 0.005,
+            env_decay: 0.2,
+            env_sustain: 0.0,
+            env_release: 0.1,
             env_depth: 0.0,
             lfo: FilterLfo::default(),
         }
@@ -161,12 +266,7 @@ impl NodeSpec {
                 let mut osc = Oscillator::new(waveform, SAMPLE_RATE);
                 osc.set_frequency(start_freq);
                 osc.set_drift_enabled(false); // drums don't need drift
-                NodeKind::PitchOsc(PitchOscState {
-                    osc,
-                    current_freq: start_freq,
-                    end_freq,
-                    decay,
-                })
+                NodeKind::PitchOsc(PitchOscState { osc, current_freq: start_freq, end_freq, decay })
             }
             NodeSpec::Noise { seed } => NodeKind::Noise(NoiseGen::new(seed)),
             NodeSpec::Lfo { rate, depth } => {
@@ -180,8 +280,17 @@ impl NodeSpec {
                 env.set_adsr(a, d, s, r);
                 NodeKind::Env(env)
             }
-            NodeSpec::Biquad { filter_type, cutoff, resonance,
-                               env_attack, env_decay, env_sustain, env_release, env_depth, lfo } => {
+            NodeSpec::Biquad {
+                filter_type,
+                cutoff,
+                resonance,
+                env_attack,
+                env_decay,
+                env_sustain,
+                env_release,
+                env_depth,
+                lfo,
+            } => {
                 let mut f = BiquadFilter::new(SAMPLE_RATE);
                 f.set_params(filter_type, cutoff, resonance);
                 let mut fr = BiquadFilter::new(SAMPLE_RATE);
@@ -189,37 +298,50 @@ impl NodeSpec {
                 let mut env = Envelope::new(SAMPLE_RATE);
                 env.set_adsr(env_attack, env_decay, env_sustain, env_release);
                 NodeKind::Biquad(ModBiquad {
-                    filter: f, filter_r: fr, env, base_cutoff: cutoff, env_depth, velocity: 1.0,
-                    lfo: make_lfo(lfo.hz), lfo_depth: lfo.depth, lfo_bars: lfo.bars, lfo_tick: 0,
+                    filter: f,
+                    filter_r: fr,
+                    env,
+                    base_cutoff: cutoff,
+                    env_depth,
+                    velocity: 1.0,
+                    lfo: make_lfo(lfo.hz),
+                    lfo_depth: lfo.depth,
+                    lfo_bars: lfo.bars,
+                    lfo_tick: 0,
                 })
             }
-            NodeSpec::AutoPan { hz, bars, depth } => {
-                NodeKind::AutoPan { lfo: make_lfo(hz), bars, depth }
-            }
-            NodeSpec::AutoWah { sens, base, range, q, attack_ms, release_ms, mode, down,
-                                wobble, wobble_hz } => {
-                let ft = match mode { 1 => FilterType::BandPass, 2 => FilterType::HighPass,
-                                      _ => FilterType::LowPass };
+            NodeSpec::AutoPan { hz, bars, depth } => NodeKind::AutoPan { lfo: make_lfo(hz), bars, depth },
+            NodeSpec::AutoWah { sens, base, range, q, attack_ms, release_ms, mode, down, wobble, wobble_hz } => {
+                let ft = match mode {
+                    1 => FilterType::BandPass,
+                    2 => FilterType::HighPass,
+                    _ => FilterType::LowPass,
+                };
                 let mut fl = BiquadFilter::new(SAMPLE_RATE);
                 fl.set_params(ft, base, q);
                 let mut fr = BiquadFilter::new(SAMPLE_RATE);
                 fr.set_params(ft, base, q);
                 NodeKind::AutoWah {
-                    left: fl, right: fr, sens, base, range, q,
-                    atk: coeff(attack_ms), rel: coeff(release_ms), down,
-                    env: 0.0, peak: 0.0, cutoff: base, tick: 0,
-                    wobble, wob_inc: wobble_hz / SAMPLE_RATE, wob_phase: 0.0,
+                    left: fl,
+                    right: fr,
+                    sens,
+                    base,
+                    range,
+                    q,
+                    atk: coeff(attack_ms),
+                    rel: coeff(release_ms),
+                    down,
+                    env: 0.0,
+                    peak: 0.0,
+                    cutoff: base,
+                    tick: 0,
+                    wobble,
+                    wob_inc: wobble_hz / SAMPLE_RATE,
+                    wob_phase: 0.0,
                 }
             }
             NodeSpec::PanEnv { depth, attack_ms, release_ms } => {
-                NodeKind::PanEnv {
-                    depth,
-                    atk: coeff(attack_ms),
-                    rel: coeff(release_ms),
-                    env: 0.0,
-                    peak: 0.0,
-                    pos: 0.0,
-                }
+                NodeKind::PanEnv { depth, atk: coeff(attack_ms), rel: coeff(release_ms), env: 0.0, peak: 0.0, pos: 0.0 }
             }
             NodeSpec::Phaser { mix, hz, bars, stages, feedback, depth } => {
                 NodeKind::Phaser(Phaser::new(mix, hz, bars, stages as usize, feedback, depth))
@@ -227,11 +349,8 @@ impl NodeSpec {
             NodeSpec::Capture { samples, start_samples, speed, reverse, mix } => {
                 NodeKind::Capture(Capture::new(samples, start_samples, speed, reverse, mix))
             }
-            NodeSpec::Vowel { from, to, hz, bars, mix } => {
-                NodeKind::Vowel(Formant::new(from, to, hz, bars, mix))
-            }
-            NodeSpec::Ladder { cutoff, resonance,
-                               env_attack, env_decay, env_sustain, env_release, env_depth, lfo } => {
+            NodeSpec::Vowel { from, to, hz, bars, mix } => NodeKind::Vowel(Formant::new(from, to, hz, bars, mix)),
+            NodeSpec::Ladder { cutoff, resonance, env_attack, env_decay, env_sustain, env_release, env_depth, lfo } => {
                 let mut f = LadderFilter::new(SAMPLE_RATE);
                 f.set_params(cutoff, resonance);
                 let mut fr = LadderFilter::new(SAMPLE_RATE);
@@ -239,8 +358,16 @@ impl NodeSpec {
                 let mut env = Envelope::new(SAMPLE_RATE);
                 env.set_adsr(env_attack, env_decay, env_sustain, env_release);
                 NodeKind::Ladder(ModLadder {
-                    filter: f, filter_r: fr, env, base_cutoff: cutoff, env_depth, velocity: 1.0,
-                    lfo: make_lfo(lfo.hz), lfo_depth: lfo.depth, lfo_bars: lfo.bars, lfo_tick: 0,
+                    filter: f,
+                    filter_r: fr,
+                    env,
+                    base_cutoff: cutoff,
+                    env_depth,
+                    velocity: 1.0,
+                    lfo: make_lfo(lfo.hz),
+                    lfo_depth: lfo.depth,
+                    lfo_bars: lfo.bars,
+                    lfo_tick: 0,
                 })
             }
             NodeSpec::Mix => NodeKind::Mix,
@@ -346,11 +473,15 @@ pub struct ModLadder {
 
 impl ModLadder {
     pub fn gate_on(&mut self) {
-        if self.env_depth > 0.0 { self.env.gate_on(); }
+        if self.env_depth > 0.0 {
+            self.env.gate_on();
+        }
     }
 
     pub fn gate_off(&mut self) {
-        if self.env_depth > 0.0 { self.env.gate_off(); }
+        if self.env_depth > 0.0 {
+            self.env.gate_off();
+        }
     }
 
     pub fn set_velocity(&mut self, vel: f32) {
@@ -427,11 +558,15 @@ pub struct ModBiquad {
 
 impl ModBiquad {
     pub fn gate_on(&mut self) {
-        if self.env_depth > 0.0 { self.env.gate_on(); }
+        if self.env_depth > 0.0 {
+            self.env.gate_on();
+        }
     }
 
     pub fn gate_off(&mut self) {
-        if self.env_depth > 0.0 { self.env.gate_off(); }
+        if self.env_depth > 0.0 {
+            self.env.gate_off();
+        }
     }
 
     pub fn set_velocity(&mut self, vel: f32) {
@@ -545,18 +680,43 @@ pub enum NodeKind {
     Vca,
 
     // ── Effects ──
-    AutoPan { lfo: Lfo, bars: f32, depth: f32 },
+    AutoPan {
+        lfo: Lfo,
+        bars: f32,
+        depth: f32,
+    },
     /// `env` follows the input, `peak` is a slowly falling reference so the
     /// follower reads 0..1 whatever the level going in.
-    PanEnv { depth: f32, atk: f32, rel: f32, env: f32, peak: f32, pos: f32 },
+    PanEnv {
+        depth: f32,
+        atk: f32,
+        rel: f32,
+        env: f32,
+        peak: f32,
+        pos: f32,
+    },
     /// A resonant filter the signal sweeps by its own envelope. At high `q` the
     /// filter rings near self-oscillation and every attack excites it, so what
     /// you hear is a narrow resonant peak sliding -- which is what a thin sheet
     /// does when you flex it and its modes shift.
-    AutoWah { left: BiquadFilter, right: BiquadFilter, sens: f32, base: f32,
-              range: f32, q: f32, atk: f32, rel: f32, down: bool,
-              env: f32, peak: f32, cutoff: f32, tick: u32,
-              wobble: f32, wob_inc: f32, wob_phase: f32 },
+    AutoWah {
+        left: BiquadFilter,
+        right: BiquadFilter,
+        sens: f32,
+        base: f32,
+        range: f32,
+        q: f32,
+        atk: f32,
+        rel: f32,
+        down: bool,
+        env: f32,
+        peak: f32,
+        cutoff: f32,
+        tick: u32,
+        wobble: f32,
+        wob_inc: f32,
+        wob_phase: f32,
+    },
     Phaser(Phaser),
     Vowel(Formant),
     Saturator(Saturator),
@@ -587,7 +747,10 @@ impl NodeKind {
             NodeKind::Env(env) => env.next_sample(),
             NodeKind::Biquad(m) => m.process(inputs[0]),
             NodeKind::Ladder(m) => m.process(inputs[0]),
-            NodeKind::AutoPan { lfo, .. } => { let _ = lfo.next_sample(); inputs[0] }
+            NodeKind::AutoPan { lfo, .. } => {
+                let _ = lfo.next_sample();
+                inputs[0]
+            }
             // Panning is a stereo gesture; in mono the signal passes.
             NodeKind::PanEnv { .. } => inputs[0],
             NodeKind::AutoWah { left, .. } => left.process(inputs[0]),
@@ -672,8 +835,24 @@ impl NodeKind {
                 // a mono source the two forms are the same expression.
                 (l * gl, r * gr)
             }
-            NodeKind::AutoWah { left, right, sens, base, range, atk, rel, down,
-                                env, peak, cutoff, tick, wobble, wob_inc, wob_phase, .. } => {
+            NodeKind::AutoWah {
+                left,
+                right,
+                sens,
+                base,
+                range,
+                atk,
+                rel,
+                down,
+                env,
+                peak,
+                cutoff,
+                tick,
+                wobble,
+                wob_inc,
+                wob_phase,
+                ..
+            } => {
                 let level = crate::math::abs(l) + crate::math::abs(r);
                 let c = if level > *env { *atk } else { *rel };
                 *env += (level - *env) * c;
@@ -688,15 +867,16 @@ impl NodeKind {
                 *tick = tick.wrapping_add(1);
                 if *tick % 8 == 0 {
                     let norm = (*env * *peak).min(1.0);
-                    let mut target = if *down { *base + *range * (1.0 - norm) }
-                                     else { *base + *range * norm };
+                    let mut target = if *down { *base + *range * (1.0 - norm) } else { *base + *range * norm };
                     // Bending a sheet and letting go does not move the resonance
                     // once: it rings back and forth and settles. The wobble
                     // rides on the envelope, so a fresh hit swings wide and the
                     // swing dies with the note.
                     if *wobble > 0.0 {
                         *wob_phase += *wob_inc * 8.0;
-                        if *wob_phase >= 1.0 { *wob_phase -= 1.0; }
+                        if *wob_phase >= 1.0 {
+                            *wob_phase -= 1.0;
+                        }
                         target += *wobble * norm * crate::math::sin(*wob_phase * crate::math::TWO_PI);
                     }
                     // Asymmetric on purpose: the sweep opens with the attack
@@ -752,17 +932,51 @@ impl NodeKind {
     /// Returns false when this node has no such parameter.
     pub fn set_named(&mut self, name: &str, value: f32) -> bool {
         match (self, name) {
-            (NodeKind::TiltEq(eq), "tilt") => { eq.set_tilt(value); true }
-            (NodeKind::ThreeBandEq(eq), "eq_low") => { eq.set_low(value); true }
-            (NodeKind::ThreeBandEq(eq), "eq_mid") => { eq.set_mid(value); true }
-            (NodeKind::ThreeBandEq(eq), "eq_high") => { eq.set_high(value); true }
-            (NodeKind::Saturator(s), "drive") => { s.set_drive(value); true }
-            (NodeKind::Gain(g), "gain") => { *g = value; true }
+            (NodeKind::TiltEq(eq), "tilt") => {
+                eq.set_tilt(value);
+                true
+            }
+            (NodeKind::ThreeBandEq(eq), "eq_low") => {
+                eq.set_low(value);
+                true
+            }
+            (NodeKind::ThreeBandEq(eq), "eq_mid") => {
+                eq.set_mid(value);
+                true
+            }
+            (NodeKind::ThreeBandEq(eq), "eq_high") => {
+                eq.set_high(value);
+                true
+            }
+            (NodeKind::Saturator(s), "drive") => {
+                s.set_drive(value);
+                true
+            }
+            (NodeKind::Gain(g), "gain") => {
+                *g = value;
+                true
+            }
             (NodeKind::Capture(c), n) => c.set_named(n, value),
-            (NodeKind::Limiter(l), "limiter") => { l.set_threshold(value); true }
-            (NodeKind::Compressor(c), "comp_threshold") => { c.set_threshold(value); true }
-            (NodeKind::Biquad(m), "cutoff") => { m.base_cutoff = value; m.filter.set_cutoff(value); m.filter_r.set_cutoff(value); true }
-            (NodeKind::Ladder(m), "cutoff") => { m.base_cutoff = value; m.filter.set_cutoff(value); m.filter_r.set_cutoff(value); true }
+            (NodeKind::Limiter(l), "limiter") => {
+                l.set_threshold(value);
+                true
+            }
+            (NodeKind::Compressor(c), "comp_threshold") => {
+                c.set_threshold(value);
+                true
+            }
+            (NodeKind::Biquad(m), "cutoff") => {
+                m.base_cutoff = value;
+                m.filter.set_cutoff(value);
+                m.filter_r.set_cutoff(value);
+                true
+            }
+            (NodeKind::Ladder(m), "cutoff") => {
+                m.base_cutoff = value;
+                m.filter.set_cutoff(value);
+                m.filter_r.set_cutoff(value);
+                true
+            }
             _ => false,
         }
     }
@@ -773,7 +987,9 @@ impl NodeKind {
             NodeKind::Biquad(m) => m.set_bpm(bpm),
             NodeKind::Ladder(m) => m.set_bpm(bpm),
             NodeKind::AutoPan { lfo, bars, .. } => {
-                if *bars > 0.0 { lfo.set_rate(bpm / 60.0 / 4.0 / *bars); }
+                if *bars > 0.0 {
+                    lfo.set_rate(bpm / 60.0 / 4.0 / *bars);
+                }
             }
             NodeKind::Phaser(p) => p.set_bpm(bpm),
             NodeKind::Vowel(v) => v.set_bpm(bpm),
@@ -831,10 +1047,18 @@ impl NodeKind {
             NodeKind::Phaser(p) => p.reset(),
             NodeKind::Vowel(v) => v.reset(),
             NodeKind::Env(env) => env.reset(),
-            NodeKind::PanEnv { env, peak, pos, .. } => { *env = 0.0; *peak = 0.0; *pos = 0.0; }
+            NodeKind::PanEnv { env, peak, pos, .. } => {
+                *env = 0.0;
+                *peak = 0.0;
+                *pos = 0.0;
+            }
             NodeKind::AutoWah { left, right, env, peak, cutoff, base, wob_phase, .. } => {
-                left.reset(); right.reset(); *env = 0.0; *peak = 0.0;
-                *cutoff = *base; *wob_phase = 0.0;
+                left.reset();
+                right.reset();
+                *env = 0.0;
+                *peak = 0.0;
+                *cutoff = *base;
+                *wob_phase = 0.0;
             }
             NodeKind::Biquad(m) => m.reset(),
             NodeKind::Ladder(m) => m.reset(),

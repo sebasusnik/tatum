@@ -19,23 +19,15 @@ fn test_primus_mud() {
 
     let (out_l, out_r) = engine.render(total_bars);
 
-    let peak = out_l.iter().chain(out_r.iter())
-        .fold(0.0f32, |a, &b| a.max(b.abs()));
+    let peak = out_l.iter().chain(out_r.iter()).fold(0.0f32, |a, &b| a.max(b.abs()));
     assert!(peak > 0.01, "Should produce audible output, peak={:.4}", peak);
     assert!(peak <= 1.0, "Should not clip, peak={:.4}", peak);
 
     // Bass should be prominent — check low-end energy exists
-    let total_energy: f32 = out_l.iter().chain(out_r.iter())
-        .map(|s| s * s)
-        .sum::<f32>();
+    let total_energy: f32 = out_l.iter().chain(out_r.iter()).map(|s| s * s).sum::<f32>();
     assert!(total_energy > 100.0, "Should have significant energy, got {:.1}", total_energy);
 
-    write_wav_stereo(
-        &output_path("primus_mud.wav"),
-        &out_l,
-        &out_r,
-        44100,
-    );
+    write_wav_stereo(&output_path("primus_mud.wav"), &out_l, &out_r, 44100);
 
     let duration = out_l.len() as f32 / 44100.0;
     println!("Wrote test_output/primus_mud.wav ({:.1}s, {} bars at 108 BPM)", duration, total_bars);

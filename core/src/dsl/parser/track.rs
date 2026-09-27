@@ -47,7 +47,9 @@ impl Parser {
             Some(n) => n,
             None => return,
         };
-        if !self.expect(&Token::LBrace) { return; }
+        if !self.expect(&Token::LBrace) {
+            return;
+        }
 
         let mut track = TrackDef {
             name,
@@ -67,7 +69,9 @@ impl Parser {
 
         loop {
             self.skip_newlines();
-            if self.at_block_end() { break; }
+            if self.at_block_end() {
+                break;
+            }
 
             match self.peek().clone() {
                 Token::Play => {
@@ -130,8 +134,9 @@ impl Parser {
                     }
                 }
                 // `sidechain` is a top-level keyword and also a track option.
-                Token::Sidechain | Token::Ident(_) if matches!(self.peek(), Token::Sidechain)
-                    || matches!(self.peek(), Token::Ident(ref w) if w == "sidechain") =>
+                Token::Sidechain | Token::Ident(_)
+                    if matches!(self.peek(), Token::Sidechain)
+                        || matches!(self.peek(), Token::Ident(ref w) if w == "sidechain") =>
                 {
                     self.advance();
                     if let Some(v) = self.expect_number() {
@@ -198,7 +203,8 @@ impl Parser {
                     let s = self.span();
                     let (l, c) = (s.line, s.col);
                     self.errors.push(ParseError {
-                        line: l, col: c,
+                        line: l,
+                        col: c,
                         message: format!("arp: unknown option '{}' (expected rate, gate, octaves)", other),
                     });
                 }
@@ -218,19 +224,32 @@ impl Parser {
             if matches!(self.peek(), Token::Newline) && matches!(self.peek_past_newlines(), Token::Arrow) {
                 self.skip_newlines();
             }
-            if !matches!(self.peek(), Token::Arrow) { break; }
+            if !matches!(self.peek(), Token::Arrow) {
+                break;
+            }
             self.advance(); // >
             self.skip_newlines(); // `>` at end of line, node on the next
 
             let kind = match self.peek().clone() {
-                Token::Ident(ref name) => { let n = name.clone(); self.advance(); n }
-                Token::Master => { self.advance(); String::from("master") }
+                Token::Ident(ref name) => {
+                    let n = name.clone();
+                    self.advance();
+                    n
+                }
+                Token::Master => {
+                    self.advance();
+                    String::from("master")
+                }
                 other => {
                     let s = self.span();
                     let (l, c) = (s.line, s.col);
                     self.errors.push(ParseError {
-                        line: l, col: c,
-                        message: format!("routing: expected an effect or destination after '>', got {}", describe_token(&other)),
+                        line: l,
+                        col: c,
+                        message: format!(
+                            "routing: expected an effect or destination after '>', got {}",
+                            describe_token(&other)
+                        ),
                     });
                     break;
                 }

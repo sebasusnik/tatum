@@ -48,10 +48,21 @@ impl Envelope {
         self.recalc_rates();
     }
 
-    pub fn set_attack(&mut self, a: f32) { self.attack = math::clamp(a, 0.001, 10.0); self.recalc_rates(); }
-    pub fn set_decay(&mut self, d: f32) { self.decay = math::clamp(d, 0.001, 10.0); self.recalc_rates(); }
-    pub fn set_sustain(&mut self, s: f32) { self.sustain = math::clamp(s, 0.0, 1.0); }
-    pub fn set_release(&mut self, r: f32) { self.release = math::clamp(r, 0.001, 10.0); self.recalc_rates(); }
+    pub fn set_attack(&mut self, a: f32) {
+        self.attack = math::clamp(a, 0.001, 10.0);
+        self.recalc_rates();
+    }
+    pub fn set_decay(&mut self, d: f32) {
+        self.decay = math::clamp(d, 0.001, 10.0);
+        self.recalc_rates();
+    }
+    pub fn set_sustain(&mut self, s: f32) {
+        self.sustain = math::clamp(s, 0.0, 1.0);
+    }
+    pub fn set_release(&mut self, r: f32) {
+        self.release = math::clamp(r, 0.001, 10.0);
+        self.recalc_rates();
+    }
 
     fn recalc_rates(&mut self) {
         // Exponential envelope coefficients

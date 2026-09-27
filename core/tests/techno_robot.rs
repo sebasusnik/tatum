@@ -62,7 +62,11 @@ fn test_techno_robot() {
     for (name, a, b) in SECTIONS {
         println!(
             "  {:<10} bars {:>2}-{:<2}  rms {:.4}  peak {:.4}",
-            name, a + 1, b, section_rms(*a, *b), section_peak(*a, *b)
+            name,
+            a + 1,
+            b,
+            section_rms(*a, *b),
+            section_peak(*a, *b)
         );
     }
 
@@ -76,20 +80,14 @@ fn test_techno_robot() {
     assert!(
         climax_rms > intro_rms,
         "climax should be louder than intro: climax={:.4} intro={:.4}",
-        climax_rms, intro_rms
+        climax_rms,
+        intro_rms
     );
-    assert!(
-        drop_peak > intro_peak,
-        "drop should hit harder than intro: drop={:.4} intro={:.4}",
-        drop_peak, intro_peak
-    );
+    assert!(drop_peak > intro_peak, "drop should hit harder than intro: drop={:.4} intro={:.4}", drop_peak, intro_peak);
 
     write_wav_stereo(&output_path("techno_robot.wav"), &out_l, &out_r, 44100);
 
     let duration = out_l.len() as f32 / 44100.0;
-    println!(
-        "Wrote test_output/techno_robot.wav ({:.1}s, {} bars at 140 BPM)",
-        duration, total_bars
-    );
+    println!("Wrote test_output/techno_robot.wav ({:.1}s, {} bars at 140 BPM)", duration, total_bars);
     println!("  Peak: {:.3}", peak_all);
 }

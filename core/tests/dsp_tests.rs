@@ -156,9 +156,12 @@ fn test_beats_full() {
     let total = step_samples * total_steps;
     let mut samples = vec![0.0f32; total];
 
-    let kick_pattern:  [bool; 16] = [true,false,false,false,true,false,false,false,true,false,false,false,true,false,false,false];
-    let snare_pattern: [bool; 16] = [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false];
-    let hh_pattern:    [bool; 16] = [true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false];
+    let kick_pattern: [bool; 16] =
+        [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false];
+    let snare_pattern: [bool; 16] =
+        [false, false, false, false, true, false, false, false, false, false, false, false, true, false, false, false];
+    let hh_pattern: [bool; 16] =
+        [true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false];
 
     for step in 0..total_steps {
         let pattern_step = step % 16;
@@ -455,9 +458,7 @@ fn test_delay_feedback_filter() {
         let input = if i < burst_len {
             let t = i as f32 / SAMPLE_RATE;
             let env = 1.0 - (i as f32 / burst_len as f32);
-            ((t * 440.0 * TAU).sin()
-                + 0.5 * (t * 880.0 * TAU).sin()
-                + 0.3 * (t * 1760.0 * TAU).sin()) * env * 0.5
+            ((t * 440.0 * TAU).sin() + 0.5 * (t * 880.0 * TAU).sin() + 0.3 * (t * 1760.0 * TAU).sin()) * env * 0.5
         } else {
             0.0
         };
@@ -490,13 +491,11 @@ fn test_delay_feedback_filter() {
     assert!(
         late_crossings < early_crossings,
         "Later delay taps should be darker: early_crossings={}, late_crossings={}",
-        early_crossings, late_crossings
+        early_crossings,
+        late_crossings
     );
 
-    write_wav_stereo(
-        &output_path("test_delay_feedback_filter.wav"),
-        &out_l, &out_r, SAMPLE_RATE as u32,
-    );
+    write_wav_stereo(&output_path("test_delay_feedback_filter.wav"), &out_l, &out_r, SAMPLE_RATE as u32);
 }
 
 #[test]
@@ -531,7 +530,9 @@ fn test_delay_tempo_sync() {
     assert!(
         (peak_idx as i64 - expected_samples as i64).unsigned_abs() <= tolerance as u64,
         "Delay echo should appear at ~{} samples, found peak at {} (val={})",
-        expected_samples, peak_idx, peak_val
+        expected_samples,
+        peak_idx,
+        peak_val
     );
     assert!(peak_val > 0.5, "Echo peak should be significant, got {}", peak_val);
 }
@@ -555,7 +556,11 @@ fn test_delay_filter_bypass() {
 
     for i in 0..total {
         let input = if i < 100 {
-            if i % 3 == 0 { 0.5 } else { -0.3 }
+            if i % 3 == 0 {
+                0.5
+            } else {
+                -0.3
+            }
         } else {
             0.0
         };
@@ -563,15 +568,15 @@ fn test_delay_filter_bypass() {
         let (rl, rr) = delay_reference.process_stereo(input, input);
         let diff_l = (fl - rl).abs();
         let diff_r = (fr - rr).abs();
-        if diff_l > max_diff { max_diff = diff_l; }
-        if diff_r > max_diff { max_diff = diff_r; }
+        if diff_l > max_diff {
+            max_diff = diff_l;
+        }
+        if diff_r > max_diff {
+            max_diff = diff_r;
+        }
     }
 
-    assert!(
-        max_diff < 1e-6,
-        "Filter bypass (0.0) should produce identical output, max diff was {}",
-        max_diff
-    );
+    assert!(max_diff < 1e-6, "Filter bypass (0.0) should produce identical output, max diff was {}", max_diff);
 }
 
 #[test]
@@ -590,11 +595,7 @@ fn test_limiter_prevents_clipping() {
         }
     }
 
-    assert!(
-        max_out <= 0.96,
-        "Limiter output should not exceed threshold, got {}",
-        max_out
-    );
+    assert!(max_out <= 0.96, "Limiter output should not exceed threshold, got {}", max_out);
 }
 
 #[test]
@@ -625,11 +626,7 @@ fn test_limiter_transparent_below_threshold() {
         }
     }
 
-    assert!(
-        max_diff < 0.001,
-        "Below-threshold signal should pass transparently, max diff was {}",
-        max_diff
-    );
+    assert!(max_diff < 0.001, "Below-threshold signal should pass transparently, max diff was {}", max_diff);
 }
 
 #[test]
@@ -656,7 +653,8 @@ fn test_limiter_stereo_linked() {
     assert!(
         (ratio_in - ratio_out).abs() < 0.05,
         "Stereo-linked: L/R ratio should be preserved. in={}, out={}",
-        ratio_in, ratio_out
+        ratio_in,
+        ratio_out
     );
 }
 
@@ -685,13 +683,11 @@ fn test_limiter_release_envelope() {
     assert!(
         early_gain < mid_gain && mid_gain < late_gain,
         "Gain should recover gradually: early={}, mid={}, late={}",
-        early_gain, mid_gain, late_gain
+        early_gain,
+        mid_gain,
+        late_gain
     );
-    assert!(
-        early_gain < 0.95,
-        "Early gain should still be reduced, got {}",
-        early_gain
-    );
+    assert!(early_gain < 0.95, "Early gain should still be reduced, got {}", early_gain);
 }
 
 #[test]
@@ -749,10 +745,7 @@ fn test_keys_octave_voices() {
     keys.note_off(60);
     for v in &keys.voices {
         if v.note == 48 || v.note == 60 || v.note == 72 {
-            assert!(
-                v.env.stage() == EnvStage::Release || !v.active,
-                "note_off(60) should release all octave voices"
-            );
+            assert!(v.env.stage() == EnvStage::Release || !v.active, "note_off(60) should release all octave voices");
         }
     }
 }
@@ -774,10 +767,8 @@ fn test_keys_fifth_voices() {
     assert_eq!(active_count, 4, "Two fifths should use 4 voices, got {}", active_count);
 
     keys.note_off(60);
-    let still_active: Vec<u8> = keys.voices.iter()
-        .filter(|v| v.active && v.env.stage() != EnvStage::Release)
-        .map(|v| v.root_note)
-        .collect();
+    let still_active: Vec<u8> =
+        keys.voices.iter().filter(|v| v.active && v.env.stage() != EnvStage::Release).map(|v| v.root_note).collect();
     assert!(still_active.iter().all(|&r| r == 64), "Only the E4 pair should remain active");
 }
 
@@ -1030,7 +1021,8 @@ fn test_fm_velocity_mod() {
     assert!(
         energy_high > energy_low * 2.0,
         "High velocity should have significantly more energy: low={}, high={}",
-        energy_low, energy_high
+        energy_low,
+        energy_high
     );
 
     let max_low = samples_low.iter().fold(0.0f32, |a, &b| if b.abs() > a { b.abs() } else { a });
@@ -1209,10 +1201,14 @@ fn test_fm_adsr_lifecycle() {
 
     let spm = SAMPLE_RATE as usize;
 
-    let attack_start = samples[0..spm/100].iter().fold(0.0f32, |a, &b| a.max(b.abs()));
-    let attack_peak = samples[spm/40..spm/10].iter().fold(0.0f32, |a, &b| a.max(b.abs()));
-    assert!(attack_peak > attack_start * 2.0,
-        "Attack should ramp up: start={:.4}, peak region={:.4}", attack_start, attack_peak);
+    let attack_start = samples[0..spm / 100].iter().fold(0.0f32, |a, &b| a.max(b.abs()));
+    let attack_peak = samples[spm / 40..spm / 10].iter().fold(0.0f32, |a, &b| a.max(b.abs()));
+    assert!(
+        attack_peak > attack_start * 2.0,
+        "Attack should ramp up: start={:.4}, peak region={:.4}",
+        attack_start,
+        attack_peak
+    );
 
     let sustain_rms_1: f32 = {
         let s = (0.8 * SAMPLE_RATE) as usize;
@@ -1224,13 +1220,15 @@ fn test_fm_adsr_lifecycle() {
         let e = (1.4 * SAMPLE_RATE) as usize;
         (samples[s..e].iter().map(|x| x * x).sum::<f32>() / (e - s) as f32).sqrt()
     };
-    let sustain_ratio = if sustain_rms_1 > sustain_rms_2 {
-        sustain_rms_1 / sustain_rms_2
-    } else {
-        sustain_rms_2 / sustain_rms_1
-    };
-    assert!(sustain_ratio < 1.5,
-        "Sustain should be stable: rms_1={:.4}, rms_2={:.4}, ratio={:.2}", sustain_rms_1, sustain_rms_2, sustain_ratio);
+    let sustain_ratio =
+        if sustain_rms_1 > sustain_rms_2 { sustain_rms_1 / sustain_rms_2 } else { sustain_rms_2 / sustain_rms_1 };
+    assert!(
+        sustain_ratio < 1.5,
+        "Sustain should be stable: rms_1={:.4}, rms_2={:.4}, ratio={:.2}",
+        sustain_rms_1,
+        sustain_rms_2,
+        sustain_ratio
+    );
 
     let pre_release_rms: f32 = {
         let s = (1.3 * SAMPLE_RATE) as usize;
@@ -1242,16 +1240,19 @@ fn test_fm_adsr_lifecycle() {
         let e = (2.5 * SAMPLE_RATE) as usize;
         (samples[s..e].iter().map(|x| x * x).sum::<f32>() / (e - s) as f32).sqrt()
     };
-    assert!(post_release_rms < pre_release_rms * 0.3,
-        "Release should decay: pre={:.4}, post={:.4}", pre_release_rms, post_release_rms);
+    assert!(
+        post_release_rms < pre_release_rms * 0.3,
+        "Release should decay: pre={:.4}, post={:.4}",
+        pre_release_rms,
+        post_release_rms
+    );
 
     let tail_rms: f32 = {
         let s = (2.5 * SAMPLE_RATE) as usize;
         let e = (3.0 * SAMPLE_RATE) as usize;
         (samples[s..e].iter().map(|x| x * x).sum::<f32>() / (e - s) as f32).sqrt()
     };
-    assert!(tail_rms < 0.01,
-        "Tail should be near silence after release: rms={:.4}", tail_rms);
+    assert!(tail_rms < 0.01, "Tail should be near silence after release: rms={:.4}", tail_rms);
 
     write_wav(&output_path("test_fm_adsr_lifecycle.wav"), &samples, SAMPLE_RATE as u32);
 }
@@ -1280,18 +1281,20 @@ fn test_reverb_pre_delay_wav() {
     let check_end = pre_delay_samples.saturating_sub(50);
     let mut max_early = 0.0f32;
     for i in 10..check_end {
-        if samples_l[i].abs() > max_early { max_early = samples_l[i].abs(); }
-        if samples_r[i].abs() > max_early { max_early = samples_r[i].abs(); }
+        if samples_l[i].abs() > max_early {
+            max_early = samples_l[i].abs();
+        }
+        if samples_r[i].abs() > max_early {
+            max_early = samples_r[i].abs();
+        }
     }
-    assert!(
-        max_early < 0.01,
-        "First {} samples should be quiet with 20ms pre-delay, max={}",
-        check_end, max_early
-    );
+    assert!(max_early < 0.01, "First {} samples should be quiet with 20ms pre-delay, max={}", check_end, max_early);
 
     let mut max_late = 0.0f32;
     for i in (pre_delay_samples + 2000)..(pre_delay_samples + 8000).min(total) {
-        if samples_l[i].abs() > max_late { max_late = samples_l[i].abs(); }
+        if samples_l[i].abs() > max_late {
+            max_late = samples_l[i].abs();
+        }
     }
     assert!(max_late > 0.001, "Should have reverb tail after pre-delay, max={}", max_late);
 
@@ -1343,11 +1346,7 @@ fn test_dattorro_reverb_wav() {
         diff_sum += (samples_l[i] - samples_r[i]).abs();
     }
     let avg_diff = diff_sum / (check_end - check_start) as f32;
-    assert!(
-        avg_diff > 0.0001,
-        "Dattorro should produce stereo decorrelation, avg L-R diff={}",
-        avg_diff
-    );
+    assert!(avg_diff > 0.0001, "Dattorro should produce stereo decorrelation, avg L-R diff={}", avg_diff);
 
     write_wav_stereo(&output_path("test_dattorro_reverb.wav"), &samples_l, &samples_r, SAMPLE_RATE as u32);
 }
@@ -1374,7 +1373,6 @@ fn test_bass_keytrack_brighter() {
         samples
     }
 
-
     let low_note = 33;
     let high_note = 57;
 
@@ -1390,7 +1388,8 @@ fn test_bass_keytrack_brighter() {
     assert!(
         high_zc > low_zc,
         "Keytrack=1.0: high note (A3) should have more zero crossings than low note (A1): high={}, low={}",
-        high_zc, low_zc
+        high_zc,
+        low_zc
     );
 }
 
@@ -1433,9 +1432,7 @@ fn test_tilt_eq_spectral() {
     let mut signal = vec![0.0f32; len];
     for i in 0..len {
         let t = i as f32 / SAMPLE_RATE;
-        signal[i] = (TAU * 200.0 * t).sin() * 0.5
-                  + (TAU * 2000.0 * t).sin() * 0.3
-                  + (TAU * 8000.0 * t).sin() * 0.2;
+        signal[i] = (TAU * 200.0 * t).sin() * 0.5 + (TAU * 2000.0 * t).sin() * 0.3 + (TAU * 8000.0 * t).sin() * 0.2;
     }
 
     let mut dark_eq = TiltEq::new(SAMPLE_RATE);
@@ -1469,7 +1466,8 @@ fn test_tilt_eq_spectral() {
     assert!(
         bright_crossings > dark_crossings,
         "Bright tilt should have more zero crossings ({}) than dark ({})",
-        bright_crossings, dark_crossings
+        bright_crossings,
+        dark_crossings
     );
 }
 
@@ -1487,7 +1485,9 @@ fn test_three_band_eq_boost() {
     let mut flat_energy = 0.0f32;
     for i in 0..len {
         let out = flat_eq.process_stereo(signal[i], signal[i]).0;
-        if i > 200 { flat_energy += out * out; }
+        if i > 200 {
+            flat_energy += out * out;
+        }
     }
 
     let mut boost_eq = ThreeBandEq::new(SAMPLE_RATE);
@@ -1495,13 +1495,16 @@ fn test_three_band_eq_boost() {
     let mut boost_energy = 0.0f32;
     for i in 0..len {
         let out = boost_eq.process_stereo(signal[i], signal[i]).0;
-        if i > 200 { boost_energy += out * out; }
+        if i > 200 {
+            boost_energy += out * out;
+        }
     }
 
     assert!(
         boost_energy > flat_energy * 2.0,
         "Low shelf +12dB should significantly boost bass: boosted={:.4}, flat={:.4}",
-        boost_energy, flat_energy
+        boost_energy,
+        flat_energy
     );
 }
 
@@ -1512,8 +1515,7 @@ fn test_eq_flat_transparent() {
     let mut signal = vec![0.0f32; len];
     for i in 0..len {
         let t = i as f32 / SAMPLE_RATE;
-        signal[i] = (TAU * 440.0 * t).sin() * 0.5
-                  + (TAU * 1000.0 * t).sin() * 0.3;
+        signal[i] = (TAU * 440.0 * t).sin() * 0.5 + (TAU * 1000.0 * t).sin() * 0.3;
     }
 
     let mut tilt = TiltEq::new(SAMPLE_RATE);
@@ -1526,15 +1528,13 @@ fn test_eq_flat_transparent() {
         let (out, _) = eq3.process_stereo(tl, tl);
         if i >= warmup {
             let diff = (out - signal[i]).abs();
-            if diff > max_diff { max_diff = diff; }
+            if diff > max_diff {
+                max_diff = diff;
+            }
         }
     }
 
-    assert!(
-        max_diff < 0.01,
-        "Flat EQ should be transparent, max diff = {:.6}",
-        max_diff
-    );
+    assert!(max_diff < 0.01, "Flat EQ should be transparent, max diff = {:.6}", max_diff);
 }
 
 #[test]
@@ -1562,16 +1562,8 @@ fn test_compressor_gain_reduction() {
         }
     }
 
-    assert!(
-        max_out < input_amp * 0.9,
-        "Compressor should reduce gain: input_amp={}, max_out={}",
-        input_amp, max_out
-    );
-    assert!(
-        max_out > 0.05,
-        "Compressor should still pass signal, got {}",
-        max_out
-    );
+    assert!(max_out < input_amp * 0.9, "Compressor should reduce gain: input_amp={}, max_out={}", input_amp, max_out);
+    assert!(max_out > 0.05, "Compressor should still pass signal, got {}", max_out);
 }
 
 #[test]
@@ -1595,11 +1587,7 @@ fn test_compressor_transparent_below_threshold() {
         }
     }
 
-    assert!(
-        max_diff < 0.001,
-        "Below-threshold signal should pass transparently, max diff was {}",
-        max_diff
-    );
+    assert!(max_diff < 0.001, "Below-threshold signal should pass transparently, max diff was {}", max_diff);
 }
 
 /// Upward and downward zero crossings in a buffer. Coarse: useful for telling
@@ -1638,7 +1626,13 @@ fn test_vibrato_delayed_onset() {
     // crossings of the fundamental is the pitch itself, sample by sample.
     let mut low = 0.0f32;
     let c = tatum_core::math::exp(-2.0 * tatum_core::math::PI * 300.0 / SAMPLE_RATE);
-    let filtered: Vec<f32> = samples.iter().map(|v| { low = v * (1.0 - c) + low * c; low }).collect();
+    let filtered: Vec<f32> = samples
+        .iter()
+        .map(|v| {
+            low = v * (1.0 - c) + low * c;
+            low
+        })
+        .collect();
 
     /// Spread of the period, as a fraction of its mean, over a span.
     fn period_spread(x: &[f32]) -> f32 {
@@ -1651,10 +1645,14 @@ fn test_vibrato_delayed_onset() {
                 crossings.push(i as f32 - 1.0 + frac);
             }
         }
-        if crossings.len() < 4 { return 0.0; }
+        if crossings.len() < 4 {
+            return 0.0;
+        }
         let periods: Vec<f32> = crossings.windows(2).map(|w| w[1] - w[0]).collect();
         let mean = periods.iter().sum::<f32>() / periods.len() as f32;
-        if mean <= 0.0 { return 0.0; }
+        if mean <= 0.0 {
+            return 0.0;
+        }
         let var = periods.iter().map(|p| (p - mean) * (p - mean)).sum::<f32>() / periods.len() as f32;
         tatum_core::math::sqrt(var) / mean
     }
@@ -1665,7 +1663,7 @@ fn test_vibrato_delayed_onset() {
     assert!(
         late > early * 1.5,
         "the vibrato onset delay should leave the early span steady and the late span moving: early {:.4}, late {:.4}",
-        early, late
+        early,
+        late
     );
 }
-

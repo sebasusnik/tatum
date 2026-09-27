@@ -16,7 +16,9 @@ pub(super) const SCENE_FADE: u32 = 441;
 impl SongEngine {
     /// Apply a scene's track configuration.
     pub(super) fn apply_scene(&mut self, scene_idx: usize) {
-        if scene_idx >= self.scenes.len() { return; }
+        if scene_idx >= self.scenes.len() {
+            return;
+        }
 
         // Update tempo if scene overrides it
         if let Some(t) = self.scenes[scene_idx].tempo {
@@ -66,7 +68,9 @@ impl SongEngine {
         // does not name fades out rather than stopping dead; one it does name
         // is simply active again below.
         for track in self.tracks.iter_mut() {
-            if track.active { track.leaving = SCENE_FADE; }
+            if track.active {
+                track.leaving = SCENE_FADE;
+            }
             track.active = false;
         }
 
@@ -76,10 +80,8 @@ impl SongEngine {
         for st in scene.tracks.iter() {
             if let Some(i) = self.track_names.iter().position(|n| n == &st.name) {
                 // The scene names a module; this track's own copy of it plays.
-                let inst_idx = self.inst_for
-                    .get(i * self.n_instruments + st.instrument_idx)
-                    .copied()
-                    .unwrap_or(st.instrument_idx);
+                let inst_idx =
+                    self.inst_for.get(i * self.n_instruments + st.instrument_idx).copied().unwrap_or(st.instrument_idx);
                 let tp = &mut self.tracks[i];
                 // Only a track that was already sounding glides to its new
                 // settings; one coming in from silence starts at them.
@@ -95,8 +97,8 @@ impl SongEngine {
                 tp.delay_send = st.delay_send;
                 tp.reverb_send = st.reverb_send;
                 tp.sidechain_amount = st.sidechain;
-                tp.stereo_src = inst_idx < self.instruments.len()
-                    && matches!(self.instruments[inst_idx], SongInstrument::Beats(_));
+                tp.stereo_src =
+                    inst_idx < self.instruments.len() && matches!(self.instruments[inst_idx], SongInstrument::Beats(_));
                 tp.active = true;
                 tp.leaving = 0;
                 tp.current_step = 0;
@@ -113,7 +115,8 @@ impl SongEngine {
 
         // Recompute kick track index after scene reassignment
         self.kick_track_idx = self.tracks.iter().position(|t| {
-            t.active && t.instrument_idx < self.instruments.len()
+            t.active
+                && t.instrument_idx < self.instruments.len()
                 && matches!(self.instruments[t.instrument_idx], SongInstrument::Beats(_))
         });
         self.resolve_sidechain_sources(scene_idx);
@@ -147,8 +150,12 @@ impl SongEngine {
             None => self.kick_track_idx,
         };
         for ti in 0..self.tracks.len() {
-            if !self.tracks[ti].active { continue; }
-            let named = self.scenes.get(scene_idx)
+            if !self.tracks[ti].active {
+                continue;
+            }
+            let named = self
+                .scenes
+                .get(scene_idx)
                 .and_then(|s| s.tracks.iter().find(|st| st.name == self.track_names[ti]))
                 .and_then(|st| st.sidechain_source.as_deref());
             let source = match named {
@@ -174,17 +181,19 @@ impl SongEngine {
 
     /// A sidechain source names a track, or the module a track plays.
     fn find_source_track(&self, name: &str) -> Option<usize> {
-        self.track_names.iter().position(|n| n == name)
-            .filter(|i| self.tracks[*i].active)
-            .or_else(|| {
-                let inst = self.instrument_names.iter().position(|n| n == name)?;
-                self.tracks.iter().position(|t| t.active && t.instrument_idx == inst)
-            })
+        self.track_names.iter().position(|n| n == name).filter(|i| self.tracks[*i].active).or_else(|| {
+            let inst = self.instrument_names.iter().position(|n| n == name)?;
+            self.tracks.iter().position(|t| t.active && t.instrument_idx == inst)
+        })
     }
 
     pub(super) fn check_arrangement_advance(&mut self) {
-        if self.arrangement.is_empty() { return; }
-        if self.arrangement_idx >= self.arrangement.len() { return; }
+        if self.arrangement.is_empty() {
+            return;
+        }
+        if self.arrangement_idx >= self.arrangement.len() {
+            return;
+        }
 
         self.arrangement_bar_count += 1;
         let (_, repeat) = self.arrangement[self.arrangement_idx];
@@ -218,7 +227,9 @@ impl SongEngine {
         let mut out = Vec::new();
         for (i, repeat) in &self.arrangement {
             let Some(scene) = self.scenes.get(*i) else { continue };
-            if let Some(t) = scene.tempo { bpm = t.clamp(20.0, 999.0); }
+            if let Some(t) = scene.tempo {
+                bpm = t.clamp(20.0, 999.0);
+            }
             out.push((scene.name.as_str(), *repeat, bpm));
         }
         out

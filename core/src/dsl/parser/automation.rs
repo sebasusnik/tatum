@@ -40,15 +40,22 @@ impl Parser {
             // it belongs to whatever comes next and we have to give it back.
             let continues = matches!(
                 self.peek(),
-                Token::Number(_) | Token::Rest | Token::Ident(_)
-                    | Token::Level | Token::Velocity | Token::Pan | Token::Mix
+                Token::Number(_)
+                    | Token::Rest
+                    | Token::Ident(_)
+                    | Token::Level
+                    | Token::Velocity
+                    | Token::Pan
+                    | Token::Mix
             );
             if !continues {
                 self.pos = saved;
                 break;
             }
             target = alloc::format!("{}.{}", target, part);
-            if matches!(self.peek(), Token::Number(_) | Token::Rest) { break; }
+            if matches!(self.peek(), Token::Number(_) | Token::Rest) {
+                break;
+            }
         }
 
         // Parse keyframes: val > val [> val]
@@ -68,7 +75,9 @@ impl Parser {
         // Parse additional keyframes: > val
         loop {
             self.skip_newlines();
-            if !matches!(self.peek(), Token::Arrow) { break; }
+            if !matches!(self.peek(), Token::Arrow) {
+                break;
+            }
             self.advance(); // consume >
 
             let negative = if matches!(self.peek(), Token::Rest) {
@@ -92,11 +101,15 @@ impl Parser {
     // ── Arrange ──
 
     pub(super) fn parse_arrange(&mut self, arrangement: &mut Vec<ArrangeEntry>) {
-        if !self.expect(&Token::LBrace) { return; }
+        if !self.expect(&Token::LBrace) {
+            return;
+        }
 
         loop {
             self.skip_newlines();
-            if self.at_block_end() { break; }
+            if self.at_block_end() {
+                break;
+            }
 
             if let Some(scene_name) = self.expect_ident() {
                 let repeat = if let Token::Repeat(n) = self.peek() {

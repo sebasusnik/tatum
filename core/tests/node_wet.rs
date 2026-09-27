@@ -52,7 +52,8 @@ fn wet_zero_bypasses_the_node_and_wet_one_does_not() {
 /// effect in has only one, very abrupt, gesture available.
 #[test]
 fn wet_between_zero_and_one_blends() {
-    let e: Vec<f32> = ["0.0", "0.5", "1.0"].iter()
+    let e: Vec<f32> = ["0.0", "0.5", "1.0"]
+        .iter()
         .map(|w| brightness_db(&render(&SONG.replace("wet=1.0", &format!("wet={w}")), 2)))
         .collect();
     assert!(e[0] > e[1] && e[1] > e[2], "wet should move monotonically, got {e:?}");
@@ -134,9 +135,9 @@ master { in > out }
 "#;
     let mut e = SongEngine::from_source(src).unwrap_or_else(|err| panic!("{}", err));
     e.start();
-    let _ = e.render(1);               // the delay fills up
+    let _ = e.render(1); // the delay fills up
     assert!(e.set_node_wet(0, 0, 0.0), "the delay should be addressable");
-    let _ = e.render(2);               // two bars bypassed: the note is long gone
+    let _ = e.render(2); // two bars bypassed: the note is long gone
     assert!(e.set_node_wet(0, 0, 1.0));
     // Bring it back one step before the next note and listen to the gap.
     let sr = tatum_core::SAMPLE_RATE as usize;
@@ -188,10 +189,7 @@ fn auto_can_sweep_a_named_nodes_wet_across_a_scene() {
     let sr = tatum_core::SAMPLE_RATE as usize;
     let bar = sr * 2;
     let bars: Vec<f32> = (0..4).map(|i| brightness_db(&l[i * bar..(i + 1) * bar])).collect();
-    assert!(
-        bars.windows(2).all(|w| w[1] < w[0]),
-        "the lowpass should fade in across the scene, got {bars:?}"
-    );
+    assert!(bars.windows(2).all(|w| w[1] < w[0]), "the lowpass should fade in across the scene, got {bars:?}");
     assert!(bars[0] - bars[3] > 4.0, "and by an audible amount, got {bars:?}");
 }
 

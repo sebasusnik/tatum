@@ -38,8 +38,8 @@ pub enum LfoTarget {
 
 pub struct Lfo {
     phase: f32,
-    rate: f32,   // Hz (free-running rate)
-    depth: f32,  // 0.0-1.0
+    rate: f32,  // Hz (free-running rate)
+    depth: f32, // 0.0-1.0
     waveform: LfoWaveform,
     sample_rate: f32,
     phase_inc: f32,
@@ -137,7 +137,11 @@ impl Lfo {
             }
             LfoWaveform::Saw => self.phase * 2.0 - 1.0,
             LfoWaveform::Square => {
-                if self.phase < 0.5 { 1.0 } else { -1.0 }
+                if self.phase < 0.5 {
+                    1.0
+                } else {
+                    -1.0
+                }
             }
             LfoWaveform::SampleHold => self.sh_value,
         };
@@ -172,11 +176,7 @@ impl ModulationRouter {
         let mut lfo = Lfo::new_with_seed(sample_rate, seed);
         lfo.set_rate(2.0);
         lfo.set_depth(0.0);
-        Self {
-            lfo,
-            target: LfoTarget::Cutoff,
-            enabled: false,
-        }
+        Self { lfo, target: LfoTarget::Cutoff, enabled: false }
     }
 
     /// Returns LFO value, or 0.0 if disabled.

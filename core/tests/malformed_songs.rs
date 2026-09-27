@@ -46,15 +46,23 @@ fn globals_outside_what_the_engine_plays_are_errors() {
     assert_eq!(errs.len(), 2, "{:?}", errs);
     assert!(errs[1].contains("humanize timing 9"), "{:?}", errs);
     // The edges are in.
-    for ok in ["tempo 20", "tempo 999", "tempo 120\nmeter 1/4", "tempo 120\nmeter 16/4",
-               "tempo 120\nswing 0.5", "tempo 120\nswing 0.75", "tempo 120\nhumanize 1 timing 1"] {
+    for ok in [
+        "tempo 20",
+        "tempo 999",
+        "tempo 120\nmeter 1/4",
+        "tempo 120\nmeter 16/4",
+        "tempo 120\nswing 0.5",
+        "tempo 120\nswing 0.75",
+        "tempo 120\nhumanize 1 timing 1",
+    ] {
         assert!(parse_errors(&song(ok)).is_empty(), "{}: {:?}", ok, parse_errors(&song(ok)));
     }
 }
 
 #[test]
 fn a_scene_tempo_is_held_to_the_same_span() {
-    let src = format!("tempo 120\nmodule bass xx {{ cutoff 1khz }}\n{}scene a {{ tempo 0 }}\narrange {{ a x2 }}\n", TRACK);
+    let src =
+        format!("tempo 120\nmodule bass xx {{ cutoff 1khz }}\n{}scene a {{ tempo 0 }}\narrange {{ a x2 }}\n", TRACK);
     one_error(parse_errors(&src), 5, "tempo 0 is outside 20..999");
 }
 
@@ -101,7 +109,8 @@ fn an_instrument_that_moves_down_the_file_is_the_same_instrument() {
     // The live diff compares definitions; a line above them must not make
     // every instrument read as changed and force a full swap.
     let a = format!("tempo 120\ninstrument xx {{\n  osc saw(55) as osc1\n  osc1 > out\n}}\n{}", TRACK);
-    let b = format!("tempo 120\n\n\n# a comment\ninstrument xx {{\n  osc saw(55) as osc1\n\n  osc1 > out\n}}\n{}", TRACK);
+    let b =
+        format!("tempo 120\n\n\n# a comment\ninstrument xx {{\n  osc saw(55) as osc1\n\n  osc1 > out\n}}\n{}", TRACK);
     assert_eq!(dsl::parse(&a).unwrap().instruments, dsl::parse(&b).unwrap().instruments);
 }
 

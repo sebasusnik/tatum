@@ -9,7 +9,8 @@ use tatum_core::dsl::{self, compiler};
 /// sources never hit together, so which one the pad ducks is visible in the
 /// output: the pad dips where its source plays.
 fn song(pad_sidechain: &str) -> String {
-    format!(r#"
+    format!(
+        r#"
 tempo 120
 scale C major
 
@@ -31,7 +32,9 @@ scene a {{
     track pad   {{ play hold using pad }}
 }}
 arrange {{ a x1 }}
-"#, pad_sidechain)
+"#,
+        pad_sidechain
+    )
 }
 
 /// Envelope of the pad track alone, in sixteen slots, one per step.
@@ -51,9 +54,7 @@ fn pad_envelope(source: &str) -> Vec<f32> {
     }
     let (l, _) = engine.render(1);
     let per_step = l.len() / 16;
-    (0..16).map(|s| {
-        l[s * per_step..(s + 1) * per_step].iter().fold(0.0f32, |a, v| a.max(v.abs()))
-    }).collect()
+    (0..16).map(|s| l[s * per_step..(s + 1) * per_step].iter().fold(0.0f32, |a, v| a.max(v.abs()))).collect()
 }
 
 #[test]
@@ -69,14 +70,22 @@ fn ducking_follows_the_named_source_and_not_the_kick() {
         assert!(
             kicked[step] < bassed[step] * 0.9,
             "step {}: the kick should duck harder than the bass does ({} vs {})\nkick {:?}\nbass {:?}",
-            step, kicked[step], bassed[step], kicked, bassed
+            step,
+            kicked[step],
+            bassed[step],
+            kicked,
+            bassed
         );
     }
     for step in [4usize, 12] {
         assert!(
             bassed[step] < kicked[step] * 0.9,
             "step {}: from=bass should duck harder than the kick does ({} vs {})\nkick {:?}\nbass {:?}",
-            step, bassed[step], kicked[step], kicked, bassed
+            step,
+            bassed[step],
+            kicked[step],
+            kicked,
+            bassed
         );
     }
 }
@@ -122,7 +131,8 @@ fn the_release_time_changes_how_long_the_duck_lasts() {
     /// A kick on beat 1 and a pad that is already sounding, so the only thing
     /// shaping the pad's level is the duck.
     fn probe(shape: &str) -> Vec<f32> {
-        let src = format!(r#"
+        let src = format!(
+            r#"
 tempo 120
 scale C major
 sidechain 0.9 {}
@@ -134,7 +144,9 @@ track drums {{ play beat using kit level 0.0 out > master }}
 track pad {{ play hold using pad out > master }}
 scene a {{ track drums {{ play beat using kit level 0.0 }} track pad {{ play hold using pad }} }}
 arrange {{ a x1 }}
-"#, shape);
+"#,
+            shape
+        );
         let mut engine = SongEngine::from_source(&src).unwrap_or_else(|e| panic!("{}", e));
         engine.start();
         let (l, _) = engine.render(1);
@@ -148,7 +160,8 @@ arrange {{ a x1 }}
     assert!(
         long[0] < short[0] * 0.85,
         "a long release should hold the pad down through the first 50 ms:\n  default {:?}\n  long    {:?}",
-        short, long
+        short,
+        long
     );
     // And the two must agree once the kick is long gone, or the release is
     // doing something other than releasing.

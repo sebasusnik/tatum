@@ -1,0 +1,8 @@
+# Wide lines, and short blocks kept on one line where they fit: the code was
+# written that way before rustfmt first ran over it, and of the layouts tried
+# these settings rewrote the fewest lines.
+
+max_width = 120
+use_small_heuristics = "Max"
+reorder_imports = false
+reorder_modules = false

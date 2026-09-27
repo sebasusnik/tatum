@@ -25,14 +25,18 @@ impl Parser {
             Some(n) => n,
             None => return,
         };
-        if !self.expect(&Token::LBrace) { return; }
+        if !self.expect(&Token::LBrace) {
+            return;
+        }
 
         let mut params = Vec::new();
         let mut op_envelopes = Vec::new();
 
         loop {
             self.skip_newlines();
-            if self.at_block_end() { break; }
+            if self.at_block_end() {
+                break;
+            }
 
             // Some parameter names are also keywords elsewhere in the language
             // (`level`, `pan`, `velocity`, `mix`, `sidechain`, `swing`). Treat
@@ -53,10 +57,7 @@ impl Parser {
 
                 // Check for op_envelope shorthand: op0_envelope 0.001 0.12 0.05 0.08
                 if key.starts_with("op") && key.ends_with("_envelope") {
-                    let op_idx_str: String = key.chars()
-                        .skip(2)
-                        .take_while(|c| c.is_ascii_digit())
-                        .collect();
+                    let op_idx_str: String = key.chars().skip(2).take_while(|c| c.is_ascii_digit()).collect();
                     if let Ok(op_idx) = op_idx_str.parse::<usize>() {
                         let a = self.expect_number().unwrap_or(0.01);
                         let d = self.expect_number().unwrap_or(0.1);
@@ -78,8 +79,7 @@ impl Parser {
                 // Symbolic values for choice params: `waveform half_sine`, `voice_mode unison`
                 if let Token::Ident(ref word) = self.peek().clone() {
                     let word = word.clone();
-                    let spec = ModuleKind::from_str(&module_type)
-                        .and_then(|k| params::lookup(k, &key));
+                    let spec = ModuleKind::from_str(&module_type).and_then(|k| params::lookup(k, &key));
                     match spec {
                         Some(spec) => match spec.value_from_name(&word) {
                             Some(value) => {
@@ -90,8 +90,14 @@ impl Parser {
                                 let s = self.span();
                                 let (l, c) = (s.line, s.col);
                                 self.errors.push(ParseError {
-                                    line: l, col: c,
-                                    message: format!("'{}' has no option '{}' (choices: {})", key, word, spec.range.describe()),
+                                    line: l,
+                                    col: c,
+                                    message: format!(
+                                        "'{}' has no option '{}' (choices: {})",
+                                        key,
+                                        word,
+                                        spec.range.describe()
+                                    ),
                                 });
                                 self.advance();
                             }
@@ -110,8 +116,7 @@ impl Parser {
                     let (l, c) = (sp.line, sp.col);
                     self.advance();
                     let raw = if negative { -raw } else { raw };
-                    let spec = ModuleKind::from_str(&module_type)
-                        .and_then(|k| params::lookup(k, &key));
+                    let spec = ModuleKind::from_str(&module_type).and_then(|k| params::lookup(k, &key));
                     match spec {
                         Some(spec) => match spec.value_from_quantity(raw, &suffix) {
                             Ok(value) => params.push(ModuleParam { name: key, value, line, bare: false }),
@@ -131,8 +136,13 @@ impl Parser {
                 let sp = self.span();
                 let (l, c) = (sp.line, sp.col);
                 self.errors.push(ParseError {
-                    line: l, col: c,
-                    message: format!("module '{}': unexpected {} (expected `name value`)", name, describe_token(self.peek())),
+                    line: l,
+                    col: c,
+                    message: format!(
+                        "module '{}': unexpected {} (expected `name value`)",
+                        name,
+                        describe_token(self.peek())
+                    ),
                 });
                 self.recover_to_line_end();
             }
@@ -151,7 +161,9 @@ impl Parser {
                         None => merged.params.push(np),
                     }
                 }
-                if !def.op_envelopes.is_empty() { merged.op_envelopes = def.op_envelopes; }
+                if !def.op_envelopes.is_empty() {
+                    merged.op_envelopes = def.op_envelopes;
+                }
                 module_defs[i] = merged;
             }
             None => module_defs.push(def),

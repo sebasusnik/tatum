@@ -69,10 +69,7 @@ impl ArpProcessor {
 
         // Gate off at gate_length fraction of step
         let gate_off_point = self.samples_per_step * self.gate_length;
-        if self.gate_open
-            && self.sample_counter >= gate_off_point
-            && self.sample_counter < gate_off_point + 1.0
-        {
+        if self.gate_open && self.sample_counter >= gate_off_point && self.sample_counter < gate_off_point + 1.0 {
             self.gate_open = false;
             return Some(ArpEvent::NoteOff(self.current_note));
         }
@@ -178,11 +175,7 @@ impl ArpProcessor {
                 let next = self.current_step as i8 + self.direction;
                 if next >= self.num_notes as i8 {
                     self.direction = -1;
-                    self.current_step = if self.num_notes > 1 {
-                        self.num_notes - 2
-                    } else {
-                        0
-                    };
+                    self.current_step = if self.num_notes > 1 { self.num_notes - 2 } else { 0 };
                 } else if next < 0 {
                     self.direction = 1;
                     self.current_step = if self.num_notes > 1 { 1 } else { 0 };

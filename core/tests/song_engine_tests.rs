@@ -165,12 +165,7 @@ fn test_song_engine_render_bars() {
     assert!(max_l > 0.01, "output should have audible signal, max={}", max_l);
 
     // Write WAV for manual listening
-    test_helpers::write_wav_stereo(
-        &test_helpers::output_path("test_song_engine_2bars.wav"),
-        &out_l,
-        &out_r,
-        44100,
-    );
+    test_helpers::write_wav_stereo(&test_helpers::output_path("test_song_engine_2bars.wav"), &out_l, &out_r, 44100);
 }
 
 #[test]
@@ -185,12 +180,7 @@ fn test_song_engine_full_arrangement() {
     let max_l = out_l.iter().fold(0.0f32, |a, &b| a.max(b.abs()));
     assert!(max_l > 0.01, "output should have audible signal");
 
-    test_helpers::write_wav_stereo(
-        &test_helpers::output_path("test_song_engine_full.wav"),
-        &out_l,
-        &out_r,
-        44100,
-    );
+    test_helpers::write_wav_stereo(&test_helpers::output_path("test_song_engine_full.wav"), &out_l, &out_r, 44100);
 }
 
 #[test]
@@ -220,12 +210,7 @@ track lead {
     let max = out_l.iter().fold(0.0f32, |a, &b| a.max(b.abs()));
     assert!(max > 0.01, "should have audible output, max={}", max);
 
-    test_helpers::write_wav_stereo(
-        &test_helpers::output_path("test_song_engine_minimal.wav"),
-        &out_l,
-        &out_r,
-        44100,
-    );
+    test_helpers::write_wav_stereo(&test_helpers::output_path("test_song_engine_minimal.wav"), &out_l, &out_r, 44100);
 }
 
 #[test]
@@ -237,16 +222,10 @@ fn test_funk_replica_render() {
     let total_bars = engine.arrangement_bars();
     let (out_l, out_r) = engine.render(total_bars);
 
-    let max_val = out_l.iter().chain(out_r.iter())
-        .fold(0.0f32, |a, &b| a.max(b.abs()));
+    let max_val = out_l.iter().chain(out_r.iter()).fold(0.0f32, |a, &b| a.max(b.abs()));
     assert!(max_val > 0.01, "funk_replica should produce audible output, max={}", max_val);
 
-    test_helpers::write_wav_stereo(
-        &test_helpers::output_path("funk_dsl_replica.wav"),
-        &out_l,
-        &out_r,
-        44100,
-    );
+    test_helpers::write_wav_stereo(&test_helpers::output_path("funk_dsl_replica.wav"), &out_l, &out_r, 44100);
 }
 
 #[test]
@@ -258,16 +237,10 @@ fn test_deephouse_render() {
     let total_bars = engine.arrangement_bars();
     let (out_l, out_r) = engine.render(total_bars);
 
-    let max_val = out_l.iter().chain(out_r.iter())
-        .fold(0.0f32, |a, &b| a.max(b.abs()));
+    let max_val = out_l.iter().chain(out_r.iter()).fold(0.0f32, |a, &b| a.max(b.abs()));
     assert!(max_val > 0.01, "deephouse should produce audible output, max={}", max_val);
 
-    test_helpers::write_wav_stereo(
-        &test_helpers::output_path("test_deephouse.wav"),
-        &out_l,
-        &out_r,
-        44100,
-    );
+    test_helpers::write_wav_stereo(&test_helpers::output_path("test_deephouse.wav"), &out_l, &out_r, 44100);
 }
 
 /// Minimal bass-only test to isolate bass pattern behavior
@@ -321,8 +294,7 @@ arrange {
     let mut engine = SongEngine::from_source(BASS_ONLY).expect("should load bass-only");
     let (out_l, out_r) = engine.render(4);
 
-    let max_val = out_l.iter().chain(out_r.iter())
-        .fold(0.0f32, |a, &b| a.max(b.abs()));
+    let max_val = out_l.iter().chain(out_r.iter()).fold(0.0f32, |a, &b| a.max(b.abs()));
     eprintln!("bass-only: max={:.4}, samples={}", max_val, out_l.len());
 
     // Print peak at each bar
@@ -336,12 +308,7 @@ arrange {
 
     assert!(max_val > 0.01, "bass-only should produce audible output, max={}", max_val);
 
-    test_helpers::write_wav_stereo(
-        &test_helpers::output_path("test_bass_only_dsl_debug.wav"),
-        &out_l,
-        &out_r,
-        44100,
-    );
+    test_helpers::write_wav_stereo(&test_helpers::output_path("test_bass_only_dsl_debug.wav"), &out_l, &out_r, 44100);
 }
 
 #[test]
@@ -388,7 +355,7 @@ arrange { main x2 }
         let s = bar * samples_per_bar;
         let e = s + samples_per_bar;
         let peak = out_l[s..e].iter().fold(0.0f32, |a, &b| a.max(b.abs()));
-        let rms = (out_l[s..e].iter().map(|x| x*x).sum::<f32>() / (e-s) as f32).sqrt();
+        let rms = (out_l[s..e].iter().map(|x| x * x).sum::<f32>() / (e - s) as f32).sqrt();
         eprintln!("  bar {}: peak={:.4} rms={:.6}", bar, peak, rms);
     }
 
@@ -398,17 +365,12 @@ arrange { main x2 }
     for i in 0..4 {
         let s = i * quarter + quarter / 2; // midpoint of each quarter
         let e = s + 2000;
-        let rms = (out_l[s..e.min(total_len)].iter().map(|x| x*x).sum::<f32>() / 2000.0).sqrt();
+        let rms = (out_l[s..e.min(total_len)].iter().map(|x| x * x).sum::<f32>() / 2000.0).sqrt();
         eprintln!("  quarter {}: rms={:.6}", i, rms);
         assert!(rms > 0.01, "pad should sustain through quarter {}, rms={}", i, rms);
     }
 
     assert!(max > 0.01, "pad should produce sound, max={}", max);
 
-    test_helpers::write_wav_stereo(
-        &test_helpers::output_path("test_pad_debug.wav"),
-        &out_l,
-        &out_r,
-        44100,
-    );
+    test_helpers::write_wav_stereo(&test_helpers::output_path("test_pad_debug.wav"), &out_l, &out_r, 44100);
 }

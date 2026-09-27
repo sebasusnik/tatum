@@ -104,22 +104,23 @@ impl SongEngine {
         midi_note: u8,
         vel: f32,
     ) {
-        Self::push_pending(pending, instruments,
-            PendingTrigger { samples, inst_idx, midi_note, velocity: vel, release: NO_RELEASE, slide: false });
+        Self::push_pending(
+            pending,
+            instruments,
+            PendingTrigger { samples, inst_idx, midi_note, velocity: vel, release: NO_RELEASE, slide: false },
+        );
     }
 
     /// Queue a trigger. If the queue is full it fires now rather than growing:
     /// the audio thread must not allocate, and losing a few milliseconds of
     /// swing is better than losing the note.
-    fn push_pending(
-        pending: &mut Vec<PendingTrigger>,
-        instruments: &mut [SongInstrument],
-        t: PendingTrigger,
-    ) {
+    fn push_pending(pending: &mut Vec<PendingTrigger>, instruments: &mut [SongInstrument], t: PendingTrigger) {
         if pending.len() < MAX_PENDING_TRIGGERS {
             pending.push(t);
         } else if t.inst_idx < instruments.len() {
-            if t.release != NO_RELEASE { instruments[t.inst_idx].note_off(t.release); }
+            if t.release != NO_RELEASE {
+                instruments[t.inst_idx].note_off(t.release);
+            }
             instruments[t.inst_idx].note_on(t.midi_note, t.velocity);
         }
     }
@@ -148,7 +149,9 @@ impl SongEngine {
             if bar_of_step > self.current_bar {
                 self.current_bar = bar_of_step;
                 self.check_arrangement_advance();
-                if !self.running { return; }
+                if !self.running {
+                    return;
+                }
             }
         }
         self.scene_step += 1;
@@ -156,17 +159,23 @@ impl SongEngine {
         let track_count = self.tracks.len();
 
         for ti in 0..track_count {
-            if !self.tracks[ti].active { continue; }
+            if !self.tracks[ti].active {
+                continue;
+            }
 
             let pat_idx = self.tracks[ti].pattern_idx;
-            if pat_idx >= self.patterns.len() { continue; }
+            if pat_idx >= self.patterns.len() {
+                continue;
+            }
 
             let pattern = &self.patterns[pat_idx];
 
             // Multi-lane drum pattern
             if !pattern.lanes.is_empty() {
                 let lane_len = pattern.lanes[0].steps.len();
-                if lane_len == 0 { continue; }
+                if lane_len == 0 {
+                    continue;
+                }
                 let step_idx = self.tracks[ti].current_step % lane_len;
                 let inst_idx = self.trigger_instrument(ti);
                 if inst_idx < self.instruments.len() {
@@ -187,8 +196,14 @@ impl SongEngine {
                                 let nudge_samples = lane.nudge * self.samples_per_step;
                                 if nudge_samples.abs() > 0.5 && nudge_samples > 0.0 {
                                     // Positive nudge = delay trigger
-                                    Self::push_trigger(&mut self.pending_triggers, &mut self.instruments,
-                                        nudge_samples, inst_idx, lane.midi_note, vel);
+                                    Self::push_trigger(
+                                        &mut self.pending_triggers,
+                                        &mut self.instruments,
+                                        nudge_samples,
+                                        inst_idx,
+                                        lane.midi_note,
+                                        vel,
+                                    );
                                 } else {
                                     // No nudge or negative nudge (trigger immediately, can't go back in time)
                                     self.instruments[inst_idx].note_on(lane.midi_note, vel);
@@ -216,7 +231,9 @@ impl SongEngine {
             }
 
             // Sequential pattern (existing behavior)
-            if pattern.steps.is_empty() { continue; }
+            if pattern.steps.is_empty() {
+                continue;
+            }
 
             let step_idx = self.tracks[ti].current_step % pattern.steps.len();
             let step = pattern.steps[step_idx];
@@ -232,10 +249,7 @@ impl SongEngine {
                     samples_per_step: self.samples_per_step,
                     step_duration: self.current_step_duration,
                 };
-                Self::advance_arp_track(
-                    &mut self.tracks[ti], &mut self.instruments,
-                    timing, step, next_is_tie,
-                );
+                Self::advance_arp_track(&mut self.tracks[ti], &mut self.instruments, timing, step, next_is_tie);
                 self.tracks[ti].current_step += 1;
                 continue;
             }
@@ -248,15 +262,12 @@ impl SongEngine {
                     let next_continues = match pattern.steps[next_step_idx] {
                         CompiledStep::Tie => true,
                         CompiledStep::NoteOn { midi_note, .. } => {
-                            self.tracks[ti].current_notes_count == 1
-                                && self.tracks[ti].current_notes[0] == midi_note
+                            self.tracks[ti].current_notes_count == 1 && self.tracks[ti].current_notes[0] == midi_note
                         }
                         CompiledStep::Chord { notes, count, .. } => {
                             let c = count as usize;
                             let pc = self.tracks[ti].current_notes_count as usize;
-                            c == pc && (0..c).all(|i| {
-                                self.tracks[ti].current_notes[i] == notes[i].midi_note
-                            })
+                            c == pc && (0..c).all(|i| self.tracks[ti].current_notes[i] == notes[i].midi_note)
                         }
                         _ => false,
                     };
@@ -289,19 +300,22 @@ impl SongEngine {
                             let mut vels = [0.0f32; compiler::MAX_SUBDIV];
                             for k in 0..n {
                                 vels[k] = Self::humanize_vel(
-                                    subs[k].velocity * tv, self.humanize_velocity, &mut self.tracks[ti].rng);
+                                    subs[k].velocity * tv,
+                                    self.humanize_velocity,
+                                    &mut self.tracks[ti].rng,
+                                );
                             }
                             let step_samples = self.effective_step_samples(self.global_step);
                             let interval = step_samples / n as f32;
                             Self::release_track_notes(&mut self.tracks[ti], &mut self.instruments);
                             let inst_idx = self.trigger_instrument(ti);
                             if inst_idx < self.instruments.len() {
-                                self.instruments[inst_idx].stage_plock(
-                                    plock.cutoff, plock.env_depth, plock.resonance);
+                                self.instruments[inst_idx].stage_plock(plock.cutoff, plock.env_depth, plock.resonance);
                                 self.instruments[inst_idx].note_on(subs[0].midi_note, vels[0]);
                                 for k in 1..n {
                                     Self::push_pending(
-                                        &mut self.pending_triggers, &mut self.instruments,
+                                        &mut self.pending_triggers,
+                                        &mut self.instruments,
                                         PendingTrigger {
                                             samples: interval * k as f32,
                                             inst_idx,
@@ -309,13 +323,10 @@ impl SongEngine {
                                             velocity: vels[k],
                                             // each note takes the previous one's place,
                                             // so eight of them do not stack up on a poly
-                                            release: if subs[k].slide {
-                                                NO_RELEASE
-                                            } else {
-                                                subs[k - 1].midi_note
-                                            },
+                                            release: if subs[k].slide { NO_RELEASE } else { subs[k - 1].midi_note },
                                             slide: subs[k].slide,
-                                        });
+                                        },
+                                    );
                                 }
                             }
                             // The step ends holding its LAST note, so a tie or a
@@ -348,7 +359,11 @@ impl SongEngine {
                                 let raw_vel = velocity * self.tracks[ti].velocity;
                                 let vel = Self::humanize_vel(raw_vel, self.humanize_velocity, &mut self.tracks[ti].rng);
                                 let handled = inst_idx < self.instruments.len() && {
-                                    self.instruments[inst_idx].stage_plock(plock.cutoff, plock.env_depth, plock.resonance);
+                                    self.instruments[inst_idx].stage_plock(
+                                        plock.cutoff,
+                                        plock.env_depth,
+                                        plock.resonance,
+                                    );
                                     self.instruments[inst_idx].slide_to(midi_note, vel)
                                 };
                                 if !handled {
@@ -369,15 +384,16 @@ impl SongEngine {
                                 }
                             } else {
                                 // Release previous notes
-                                Self::release_track_notes(
-                                    &mut self.tracks[ti],
-                                    &mut self.instruments,
-                                );
+                                Self::release_track_notes(&mut self.tracks[ti], &mut self.instruments);
                                 let inst_idx = self.trigger_instrument(ti);
                                 let raw_vel = velocity * self.tracks[ti].velocity;
                                 let vel = Self::humanize_vel(raw_vel, self.humanize_velocity, &mut self.tracks[ti].rng);
                                 if inst_idx < self.instruments.len() {
-                                    self.instruments[inst_idx].stage_plock(plock.cutoff, plock.env_depth, plock.resonance);
+                                    self.instruments[inst_idx].stage_plock(
+                                        plock.cutoff,
+                                        plock.env_depth,
+                                        plock.resonance,
+                                    );
                                     self.instruments[inst_idx].note_on(midi_note, vel);
                                 }
                                 self.tracks[ti].current_notes[0] = midi_note;
@@ -396,24 +412,28 @@ impl SongEngine {
                             // Check if the exact same chord is already playing (pattern loop).
                             let c = count as usize;
                             let prev_c = self.tracks[ti].current_notes_count as usize;
-                            let same_chord = c == prev_c && (0..c).all(|i| {
-                                self.tracks[ti].current_notes[i] == notes[i].midi_note
-                            });
+                            let same_chord =
+                                c == prev_c && (0..c).all(|i| self.tracks[ti].current_notes[i] == notes[i].midi_note);
                             if same_chord && next_is_tie {
                                 // Sustain continuation — treat as tie
                                 self.tracks[ti].gate_samples_remaining = self.samples_per_step * 2.0;
                             } else {
                                 // Release previous notes
-                                Self::release_track_notes(
-                                    &mut self.tracks[ti],
-                                    &mut self.instruments,
-                                );
+                                Self::release_track_notes(&mut self.tracks[ti], &mut self.instruments);
                                 let inst_idx = self.trigger_instrument(ti);
                                 if inst_idx < self.instruments.len() {
-                                    self.instruments[inst_idx].stage_plock(plock.cutoff, plock.env_depth, plock.resonance);
+                                    self.instruments[inst_idx].stage_plock(
+                                        plock.cutoff,
+                                        plock.env_depth,
+                                        plock.resonance,
+                                    );
                                     for (ni, n) in notes[..c].iter().enumerate() {
                                         let raw_vel = n.velocity * self.tracks[ti].velocity;
-                                        let vel = Self::humanize_vel(raw_vel, self.humanize_velocity, &mut self.tracks[ti].rng);
+                                        let vel = Self::humanize_vel(
+                                            raw_vel,
+                                            self.humanize_velocity,
+                                            &mut self.tracks[ti].rng,
+                                        );
                                         self.instruments[inst_idx].note_on(n.midi_note, vel);
                                         self.tracks[ti].current_notes[ni] = n.midi_note;
                                     }
@@ -430,10 +450,7 @@ impl SongEngine {
                             }
                         }
                         CompiledStep::DrumHit { velocity, plock, .. } => {
-                            Self::release_track_notes(
-                                &mut self.tracks[ti],
-                                &mut self.instruments,
-                            );
+                            Self::release_track_notes(&mut self.tracks[ti], &mut self.instruments);
                             let inst_idx = self.trigger_instrument(ti);
                             let raw_vel = velocity * self.tracks[ti].velocity;
                             let vel = Self::humanize_vel(raw_vel, self.humanize_velocity, &mut self.tracks[ti].rng);
@@ -451,10 +468,7 @@ impl SongEngine {
                             }
                         }
                         CompiledStep::Rest => {
-                            Self::release_track_notes(
-                                &mut self.tracks[ti],
-                                &mut self.instruments,
-                            );
+                            Self::release_track_notes(&mut self.tracks[ti], &mut self.instruments);
                         }
                         CompiledStep::Tie => unreachable!(),
                     }
@@ -519,8 +533,8 @@ impl SongEngine {
             CompiledStep::Tie => return,
         };
 
-        let same = count == track.current_notes_count as usize
-            && (0..count).all(|i| track.current_notes[i] == notes[i]);
+        let same =
+            count == track.current_notes_count as usize && (0..count).all(|i| track.current_notes[i] == notes[i]);
         track.current_notes[..count].copy_from_slice(&notes[..count]);
         track.current_notes_count = count as u8;
 

@@ -59,11 +59,7 @@ fn song(extra: &str) -> String {
 fn a_track_at_level_zero_changes_nothing_about_the_others() {
     let without = render(&song(""));
     let with = render(&song("track bass { play line using low level 0.0 out > master }\n"));
-    assert_eq!(
-        first_difference(&without, &with),
-        None,
-        "a silent track moved the rest of the mix"
-    );
+    assert_eq!(first_difference(&without, &with), None, "a silent track moved the rest of the mix");
 }
 
 /// The same, one step further: the silent track is also drawing from the
@@ -106,10 +102,7 @@ fn moving_a_track_up_the_file_does_not_reroll_it() {
 fn one_character_of_name_is_a_different_stream() {
     let a = render(&song("track hat  { play line using low level 0.4 out > master }\n"));
     let b = render(&song("track hats { play line using low level 0.4 out > master }\n"));
-    assert!(
-        first_difference(&a, &b).is_some(),
-        "`hat` and `hats` drew the same numbers"
-    );
+    assert!(first_difference(&a, &b).is_some(), "`hat` and `hats` drew the same numbers");
 }
 
 /// Nothing above means anything if the render is not reproducible.

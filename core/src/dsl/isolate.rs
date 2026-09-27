@@ -24,36 +24,34 @@ pub struct Isolation {
 }
 
 impl Isolation {
-    pub fn is_empty(&self) -> bool { self.solo.is_empty() && self.mute.is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.solo.is_empty() && self.mute.is_empty()
+    }
 
     fn silences(&self, track: &str) -> bool {
-        self.mute.iter().any(|m| m == track)
-            || (!self.solo.is_empty() && !self.solo.iter().any(|s| s == track))
+        self.mute.iter().any(|m| m == track) || (!self.solo.is_empty() && !self.solo.iter().any(|s| s == track))
     }
 
     /// Names given that are not a track of `song`, so a typo is an error
     /// rather than a solo that silences everything.
     pub fn unknown(&self, song: &Song) -> Vec<String> {
         let names = track_names(song);
-        self.solo.iter().chain(self.mute.iter())
-            .filter(|n| !names.contains(n))
-            .cloned()
-            .collect()
+        self.solo.iter().chain(self.mute.iter()).filter(|n| !names.contains(n)).cloned().collect()
     }
 
     /// Pull every track this silences down to `level 0`, everywhere it is
     /// defined, and drop the level automations that would bring it back.
     pub fn apply(&self, song: &mut Song) {
-        if self.is_empty() { return }
+        if self.is_empty() {
+            return;
+        }
         for t in song.tracks.iter_mut().chain(song.scenes.iter_mut().flat_map(|s| s.tracks.iter_mut())) {
             if self.silences(&t.name) {
                 t.level = Some(0.0);
             }
         }
         for sc in song.scenes.iter_mut() {
-            sc.automations.retain(|a| {
-                !a.target.strip_suffix(".level").is_some_and(|t| self.silences(t))
-            });
+            sc.automations.retain(|a| !a.target.strip_suffix(".level").is_some_and(|t| self.silences(t)));
         }
     }
 }

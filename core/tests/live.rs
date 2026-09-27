@@ -79,8 +79,8 @@ fn render_live(first: &str, edits: &[(usize, &str)], bars: usize) -> (Vec<f32>, 
     let mut pos = 0;
     while pos < total {
         while next_edit < edits.len() && edits[next_edit].0 <= pos {
-            let plan = planner.plan(edits[next_edit].1, player.generation())
-                .unwrap_or_else(|e| panic!("{}", e.to_json()));
+            let plan =
+                planner.plan(edits[next_edit].1, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json()));
             let applied = player.apply(plan);
             assert_ne!(applied, Applied::Stale, "a plan went stale");
             next_edit += 1;
@@ -102,8 +102,16 @@ fn first_difference(a: &[f32], b: &[f32]) -> Option<usize> {
 fn assert_identical(reference: &(Vec<f32>, Vec<f32>), live: &(Vec<f32>, Vec<f32>), what: &str) {
     for (ch, (r, l)) in [(&reference.0, &live.0), (&reference.1, &live.1)].iter().enumerate() {
         if let Some(i) = first_difference(r, l) {
-            panic!("{}: channel {} differs from sample {} (bar {}, step {:.2}): {} vs {}",
-                what, ch, i, i / BAR, (i % BAR) as f32 / STEP, r[i], l[i]);
+            panic!(
+                "{}: channel {} differs from sample {} (bar {}, step {:.2}): {} vs {}",
+                what,
+                ch,
+                i,
+                i / BAR,
+                (i % BAR) as f32 / STEP,
+                r[i],
+                l[i]
+            );
         }
     }
 }
@@ -192,9 +200,7 @@ fn a_changed_track_is_the_only_thing_that_changes() {
     // from a block before the bar.
     let from = 4 * BAR - 256;
     let onset = |x: &[f32]| -> (usize, f32) {
-        let mut jumps: Vec<(usize, f32)> = (from..from + 1323)
-            .map(|i| (i, (x[i + 1] - x[i]).abs()))
-            .collect();
+        let mut jumps: Vec<(usize, f32)> = (from..from + 1323).map(|i| (i, (x[i + 1] - x[i]).abs())).collect();
         jumps.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
         (jumps[0].0, jumps[jumps.len() / 2].1)
     };
@@ -220,7 +226,11 @@ fn the_fast_path_validates_like_check() {
     let edited = LIVE.replace("cutoff 0.4", "cutoff 0.5");
     match planner.plan(&edited, player.generation()).unwrap() {
         Plan::Fast { ops, .. } => {
-            assert!(matches!(ops[..], [FastOp::ModuleParam { instrument: 2, value, .. }] if (value - 0.5).abs() < 1e-6), "{:?}", ops);
+            assert!(
+                matches!(ops[..], [FastOp::ModuleParam { instrument: 2, value, .. }] if (value - 0.5).abs() < 1e-6),
+                "{:?}",
+                ops
+            );
         }
         other => panic!("expected a fast plan, got {}", other.describe()),
     }
@@ -253,7 +263,9 @@ fn a_fast_edit_after_a_queued_swap_lands_on_the_new_engine() {
     assert!((player.engine().unwrap().track_level(0) - 0.8).abs() < 1e-6, "applied to the old engine");
     let mut swapped = None;
     for _ in 0..(BAR / BLOCK_SIZE + 2) {
-        if let Some(b) = player.process(&mut l, &mut r) { swapped = Some(b); }
+        if let Some(b) = player.process(&mut l, &mut r) {
+            swapped = Some(b);
+        }
     }
     assert_eq!(swapped, Some(1));
     assert!((player.engine().unwrap().track_level(0) - 0.3).abs() < 1e-6);

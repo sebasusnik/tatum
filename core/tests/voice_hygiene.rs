@@ -8,7 +8,6 @@
 //!
 //! These are the assertions that would have caught them, applied to every voice.
 
-
 use tatum_core::params::{self, ModuleKind};
 use tatum_core::song_engine::SongEngine;
 use tatum_core::SAMPLE_RATE;
@@ -39,7 +38,10 @@ fn melodic(kind: &str, note: &str, steps: usize) -> Vec<f32> {
          track t {{ play p using v out > master }}\n\
          master {{ in > out }}\n\
          scene a {{ track t {{ play p using v }} }}\narrange {{ a x1 }}\n",
-        kind = kind, note = note, hold = steps - 1, rest = 32 - steps
+        kind = kind,
+        note = note,
+        hold = steps - 1,
+        rest = 32 - steps
     );
     render(&src)
 }
@@ -73,7 +75,11 @@ fn energy_above(x: &[f32], hz: f32) -> f32 {
         high += (h * h) as f64;
         total += (v * v) as f64;
     }
-    if total <= 0.0 { 0.0 } else { (high / total) as f32 }
+    if total <= 0.0 {
+        0.0
+    } else {
+        (high / total) as f32
+    }
 }
 
 // ── No voice may produce a broken signal ──
@@ -96,10 +102,7 @@ fn no_voice_leaves_a_dc_offset() {
         let x = drum(lane);
         let mean = x.iter().map(|v| *v as f64).sum::<f64>() / x.len() as f64;
         let p = peak(&x).max(1e-9);
-        assert!(
-            (mean.abs() as f32) < p * 0.01,
-            "{}: DC offset {:.6} against a peak of {:.3}", lane, mean, p
-        );
+        assert!((mean.abs() as f32) < p * 0.01, "{}: DC offset {:.6} against a peak of {:.3}", lane, mean, p);
     }
     for (kind, note) in MODULES {
         let x = melodic(kind, note, 16);
@@ -119,7 +122,9 @@ fn no_choice_of_any_parameter_introduces_a_dc_offset() {
     use tatum_core::params::Range;
     let mut offenders = Vec::new();
     for kind in ModuleKind::ALL {
-        if kind == ModuleKind::Beats { continue; } // drums are one-shots, tested above
+        if kind == ModuleKind::Beats {
+            continue;
+        } // drums are one-shots, tested above
         for spec in params::specs(kind) {
             let Range::Choice(names) = spec.range else { continue };
             for name in names {
@@ -130,23 +135,24 @@ fn no_choice_of_any_parameter_introduces_a_dc_offset() {
                 );
                 let x = render(&src);
                 let p = peak(&x);
-                if p < 1e-6 { continue; }
+                if p < 1e-6 {
+                    continue;
+                }
                 let mean = x.iter().map(|v| *v as f64).sum::<f64>() / x.len() as f64;
                 let share = (mean.abs() as f32) / p;
                 if share > 0.02 {
                     offenders.push(format!(
                         "{}.{} = {}: DC is {:.0}% of peak",
-                        kind.as_str(), spec.name, name, share * 100.0
+                        kind.as_str(),
+                        spec.name,
+                        name,
+                        share * 100.0
                     ));
                 }
             }
         }
     }
-    assert!(
-        offenders.is_empty(),
-        "{} settings leave a DC offset:\n  {}",
-        offenders.len(), offenders.join("\n  ")
-    );
+    assert!(offenders.is_empty(), "{} settings leave a DC offset:\n  {}", offenders.len(), offenders.join("\n  "));
 }
 
 #[test]
@@ -160,7 +166,9 @@ fn every_voice_falls_silent_after_its_note_ends() {
         assert!(
             peak(tail) < peak(&x) * limit,
             "{} is still sounding at 75% of the render: {:.4} against a peak of {:.4}",
-            lane, peak(tail), peak(&x)
+            lane,
+            peak(tail),
+            peak(&x)
         );
     }
     for (kind, note) in MODULES {
@@ -169,7 +177,9 @@ fn every_voice_falls_silent_after_its_note_ends() {
         assert!(
             peak(tail) < peak(&x) * 0.05,
             "{} is still sounding long after note-off: {:.4} against a peak of {:.4}",
-            kind, peak(tail), peak(&x)
+            kind,
+            peak(tail),
+            peak(&x)
         );
     }
 }
@@ -182,15 +192,22 @@ fn no_drum_voice_dumps_its_energy_into_the_top_octave() {
     // 15 kHz, which reads as hiss rather than as a cymbal and is fatiguing
     // under a 16th pattern. Nothing in the engine should live up there.
     let limits: [(&str, f32); 7] = [
-        ("kick", 0.02), ("snare", 0.25), ("hihat", 0.55), ("openhat", 0.45),
-        ("clap", 0.10), ("tom", 0.02), ("crash", 0.55),
+        ("kick", 0.02),
+        ("snare", 0.25),
+        ("hihat", 0.55),
+        ("openhat", 0.45),
+        ("clap", 0.10),
+        ("tom", 0.02),
+        ("crash", 0.55),
     ];
     for (lane, limit) in limits {
         let above = energy_above(&drum(lane), 10000.0);
         assert!(
             above < limit,
             "{}: {:.0}% of its energy is above 10 kHz (limit {:.0}%)",
-            lane, above * 100.0, limit * 100.0
+            lane,
+            above * 100.0,
+            limit * 100.0
         );
     }
 }
@@ -238,7 +255,9 @@ fn raising_the_pitch_does_not_fold_energy_back_down() {
         assert!(
             b >= a * 0.7,
             "{}: three octaves up the share above 8 kHz went from {:.1}% to {:.1}%, which means it is folding",
-            kind, a * 100.0, b * 100.0
+            kind,
+            a * 100.0,
+            b * 100.0
         );
     }
 }
@@ -257,7 +276,9 @@ fn no_voice_starts_or_stops_with_a_discontinuity() {
         assert!(
             worst < p * 1.5,
             "{}: a {:.3} jump between consecutive samples against a peak of {:.3}",
-            kind, worst, p
+            kind,
+            worst,
+            p
         );
     }
 }

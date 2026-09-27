@@ -53,10 +53,13 @@ fn rms(l: &[f32], r: &[f32]) -> f32 {
 fn tilde_marks_a_slide_step() {
     let ast = dsl::parse(SONG).unwrap();
     let acid = ast.patterns.iter().find(|p| p.name == "acid").unwrap();
-    let slides: Vec<bool> = acid.rows[0].iter().map(|s| match s {
-        Step::Note(n) => n.slide,
-        _ => false,
-    }).collect();
+    let slides: Vec<bool> = acid.rows[0]
+        .iter()
+        .map(|s| match s {
+            Step::Note(n) => n.slide,
+            _ => false,
+        })
+        .collect();
     assert_eq!(slides, vec![false, true, true, false, false, false, true, false]);
 }
 
@@ -140,14 +143,21 @@ fn diff_treats_pattern_and_scene_edits_as_structural() {
 fn diff_fast_paths_gate_and_removed_params() {
     let old = dsl::parse(SONG).unwrap();
 
-    let edited = SONG.replace("track acid { play acid using acid out > master }", "track acid { play acid using acid gate 0.5 out > master }");
+    let edited = SONG.replace(
+        "track acid { play acid using acid out > master }",
+        "track acid { play acid using acid gate 0.5 out > master }",
+    );
     let changes = diff::diff(&old, &dsl::parse(&edited).unwrap());
     assert!(!diff::has_structural_change(&changes));
-    assert!(changes.iter().any(|c| matches!(c, diff::DslChange::TrackGateChanged { gate, .. } if (*gate - 0.5).abs() < 1e-6)));
+    assert!(changes
+        .iter()
+        .any(|c| matches!(c, diff::DslChange::TrackGateChanged { gate, .. } if (*gate - 0.5).abs() < 1e-6)));
 
     // Deleting `glide 0.2` restores the registry default at runtime
     let edited = SONG.replace("    glide 0.2\n", "");
     let changes = diff::diff(&old, &dsl::parse(&edited).unwrap());
     assert!(!diff::has_structural_change(&changes));
-    assert!(changes.iter().any(|c| matches!(c, diff::DslChange::ModuleParamChanged { param_name, .. } if param_name == "glide")));
+    assert!(changes
+        .iter()
+        .any(|c| matches!(c, diff::DslChange::ModuleParamChanged { param_name, .. } if param_name == "glide")));
 }

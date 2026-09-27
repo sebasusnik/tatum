@@ -28,11 +28,7 @@
 use std::collections::BTreeMap;
 use std::process::{Command, Stdio};
 
-const SONGS: &[&str] = &[
-    "examples/detroit.synth",
-    "examples/liquid_dnb.synth",
-    "examples/neon_arterial.synth",
-];
+const SONGS: &[&str] = &["examples/detroit.synth", "examples/liquid_dnb.synth", "examples/neon_arterial.synth"];
 
 /// How far a number may move before it is a regression. Far above any
 /// platform difference in the last bits of an FFT, far below the 16.7 dB a
@@ -140,7 +136,9 @@ fn read_baseline(text: &str) -> BTreeMap<Key, Entry> {
     let mut out = BTreeMap::new();
     for line in text.lines() {
         let line = line.trim();
-        if line.is_empty() || line.starts_with('#') { continue }
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
         let mut cols = line.split('\t');
         let song = cols.next().unwrap().to_string();
         let track = cols.next().expect("track column").to_string();
@@ -161,7 +159,9 @@ fn read_baseline(text: &str) -> BTreeMap<Key, Entry> {
 fn check(song: &str) {
     // Regenerating is `baseline_is_rewritten_when_asked`'s job: it needs all
     // three songs to write one file.
-    if std::env::var("UPDATE_AUDIT_BASELINE").is_ok() { return }
+    if std::env::var("UPDATE_AUDIT_BASELINE").is_ok() {
+        return;
+    }
     let now = measure(&[song]);
     let mut was = read_baseline(&std::fs::read_to_string(BASELINE).expect("audit_baseline.txt"));
     was.retain(|(s, _), _| s == song);
@@ -174,7 +174,11 @@ fn check(song: &str) {
                 if (new.median - old.median).abs() > TOLERANCE_DB {
                     moved.push(format!(
                         "{} / {}: median {:.2} -> {:.2} dB ({:+.2})",
-                        key.0, key.1, old.median, new.median, new.median - old.median
+                        key.0,
+                        key.1,
+                        old.median,
+                        new.median,
+                        new.median - old.median
                     ));
                 }
                 for (what, db) in &old.blame {
@@ -219,40 +223,30 @@ fn check(song: &str) {
 }
 
 #[test]
-#[cfg_attr(
-    debug_assertions,
-    ignore = "release only: the audit renders every track twice and debug is ~5x slower"
-)]
+#[cfg_attr(debug_assertions, ignore = "release only: the audit renders every track twice and debug is ~5x slower")]
 fn detroit_still_measures_the_way_it_did() {
     check("examples/detroit.synth");
 }
 
 #[test]
-#[cfg_attr(
-    debug_assertions,
-    ignore = "release only: the audit renders every track twice and debug is ~5x slower"
-)]
+#[cfg_attr(debug_assertions, ignore = "release only: the audit renders every track twice and debug is ~5x slower")]
 fn liquid_dnb_still_measures_the_way_it_did() {
     check("examples/liquid_dnb.synth");
 }
 
 #[test]
-#[cfg_attr(
-    debug_assertions,
-    ignore = "release only: the audit renders every track twice and debug is ~5x slower"
-)]
+#[cfg_attr(debug_assertions, ignore = "release only: the audit renders every track twice and debug is ~5x slower")]
 fn neon_arterial_still_measures_the_way_it_did() {
     check("examples/neon_arterial.synth");
 }
 
 /// Does nothing unless `UPDATE_AUDIT_BASELINE` is set.
 #[test]
-#[cfg_attr(
-    debug_assertions,
-    ignore = "release only: the audit renders every track twice and debug is ~5x slower"
-)]
+#[cfg_attr(debug_assertions, ignore = "release only: the audit renders every track twice and debug is ~5x slower")]
 fn baseline_is_rewritten_when_asked() {
-    if std::env::var("UPDATE_AUDIT_BASELINE").is_err() { return }
+    if std::env::var("UPDATE_AUDIT_BASELINE").is_err() {
+        return;
+    }
     std::fs::write(BASELINE, write_baseline(&measure(SONGS))).unwrap();
     eprintln!("wrote {BASELINE} -- read the diff before committing it");
 }

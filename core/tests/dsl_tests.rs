@@ -300,10 +300,12 @@ fn test_compile_full_song() {
     // Each graph instrument template has valid node count and execution order
     for (i, kind) in compiled.instruments.iter().enumerate() {
         if let Some(template) = kind.as_graph() {
-            assert!(template.node_count > 0,
-                "instrument {} should have nodes", compiled.instrument_names[i]);
-            assert_eq!(template.exec_len, template.node_count,
-                "instrument {} execution order should cover all nodes", compiled.instrument_names[i]);
+            assert!(template.node_count > 0, "instrument {} should have nodes", compiled.instrument_names[i]);
+            assert_eq!(
+                template.exec_len, template.node_count,
+                "instrument {} execution order should cover all nodes",
+                compiled.instrument_names[i]
+            );
         }
     }
 
@@ -369,10 +371,13 @@ track t { play notes using test }
     let compiled = compiler::compile(&song).expect("compile");
 
     let steps = &compiled.patterns[0].steps;
-    let midi_notes: Vec<u8> = steps.iter().filter_map(|s| match s {
-        compiler::CompiledStep::NoteOn { midi_note, .. } => Some(*midi_note),
-        _ => None,
-    }).collect();
+    let midi_notes: Vec<u8> = steps
+        .iter()
+        .filter_map(|s| match s {
+            compiler::CompiledStep::NoteOn { midi_note, .. } => Some(*midi_note),
+            _ => None,
+        })
+        .collect();
 
     assert_eq!(midi_notes, vec![60, 62, 64, 65, 67, 69, 71, 72]);
 }
@@ -444,7 +449,12 @@ fn a_drum_row_without_a_label_is_an_error() {
         Ok(ast) => {
             let p = ast.patterns.iter().find(|p| p.name == "bad").unwrap();
             let steps: usize = p.rows.iter().map(|r| r.len()).sum();
-            assert_eq!(steps, 12, "every written step survives: {:?}", p.rows.iter().map(|r| r.len()).collect::<Vec<_>>());
+            assert_eq!(
+                steps,
+                12,
+                "every written step survives: {:?}",
+                p.rows.iter().map(|r| r.len()).collect::<Vec<_>>()
+            );
         }
         Err(errs) => assert!(errs[0].message.contains("lane labels"), "{}", errs[0].message),
     }

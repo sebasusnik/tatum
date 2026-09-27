@@ -47,7 +47,10 @@ impl SongInstrument {
     /// the instrument has no portamento, so the caller falls back to note_on.
     pub(super) fn slide_to(&mut self, note: u8, velocity: f32) -> bool {
         match self {
-            Self::Bass(m) => { m.slide_to(note, velocity); true }
+            Self::Bass(m) => {
+                m.slide_to(note, velocity);
+                true
+            }
             _ => false,
         }
     }
@@ -86,14 +89,26 @@ impl SongInstrument {
     /// Process a block with stereo output. Returns true if the instrument produced native stereo.
     pub(super) fn process_block_stereo(&mut self, out_l: &mut [f32], out_r: &mut [f32]) -> bool {
         match self {
-            Self::Beats(m) => { m.process_block_stereo(out_l, out_r); true }
+            Self::Beats(m) => {
+                m.process_block_stereo(out_l, out_r);
+                true
+            }
             // Keys pans its voices (unison spreads eight of them across the
             // field) and runs the chorus in stereo. Routing it through the mono
             // `process_block` downmixed all of that and then copied one channel
             // into the other.
-            Self::Keys(m) => { m.process_block_stereo(out_l, out_r); true }
-            Self::Fm(m) => { m.process_block_stereo(out_l, out_r); true }
-            _ => { self.process_block(out_l); false }
+            Self::Keys(m) => {
+                m.process_block_stereo(out_l, out_r);
+                true
+            }
+            Self::Fm(m) => {
+                m.process_block_stereo(out_l, out_r);
+                true
+            }
+            _ => {
+                self.process_block(out_l);
+                false
+            }
         }
     }
 

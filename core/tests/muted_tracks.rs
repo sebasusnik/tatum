@@ -20,7 +20,8 @@ fn song(pad_level: &str, extra_track: bool) -> String {
     } else {
         String::new()
     };
-    format!(r#"
+    format!(
+        r#"
 tempo 120
 scale C minor
 humanize 0
@@ -36,7 +37,8 @@ track bass {{ play line using low level 0.5 out > master }}
 {pad}
 
 master {{ in > out }}
-"#)
+"#
+    )
 }
 
 fn render(src: &str, bars: u32) -> Vec<f32> {
@@ -67,7 +69,8 @@ fn raising_the_fader_brings_the_part_back() {
     assert!(
         peak(&loud) > peak(&muted) * 1.2,
         "unmuted {:.4} should be clearly louder than muted {:.4}",
-        peak(&loud), peak(&muted)
+        peak(&loud),
+        peak(&muted)
     );
 }
 
@@ -109,7 +112,9 @@ master { in > out }
 /// trigger. `core/tests/sidechain_source.rs` renders one; this pins the reason.
 #[test]
 fn a_sidechain_source_still_runs_when_its_fader_is_down() {
-    let src = |sc: &str| format!(r#"
+    let src = |sc: &str| {
+        format!(
+            r#"
 tempo 120
 scale C minor
 humanize 0
@@ -121,7 +126,9 @@ pattern hold {{ [1.3 3.3 5.3] ..*15 }}
 track drums {{ play beat using kit level 0.0 out > master }}
 track pad {{ play hold using pad level 0.5 out > master }}
 master {{ in > out }}
-"#);
+"#
+        )
+    };
     let ducked = render(&src("0.9"), 1);
     let flat = render(&src("0"), 1);
     let sr = tatum_core::SAMPLE_RATE as usize;
@@ -129,7 +136,8 @@ master {{ in > out }}
     assert!(
         head(&ducked) < head(&flat) * 0.85,
         "an inaudible kick must still duck: ducked {:.4} vs flat {:.4}",
-        head(&ducked), head(&flat)
+        head(&ducked),
+        head(&flat)
     );
 }
 
@@ -194,11 +202,7 @@ track bass { play line using low level 0.5 out > master }
     // alone the render is the same to the bit as not having the track.
     let muted = format!("{head}track pad {{ play other using pad level 0 out > master }}\n{tail}");
     let absent = format!("{head}{tail}");
-    assert_eq!(
-        render(&muted, 2),
-        render(&absent, 2),
-        "muting the pad changed the bass"
-    );
+    assert_eq!(render(&muted, 2), render(&absent, 2), "muting the pad changed the bass");
 }
 
 /// The other end of the fader. A `level` above 1.0 is boost, and the corpus
@@ -228,10 +232,7 @@ master { in > out }
     };
     let unity = peak(1.0);
     let boosted = peak(2.0);
-    assert!(
-        boosted > unity * 1.9,
-        "level 2.0 should be about twice level 1.0, got {boosted:.4} against {unity:.4}"
-    );
+    assert!(boosted > unity * 1.9, "level 2.0 should be about twice level 1.0, got {boosted:.4} against {unity:.4}");
     // There is still a ceiling, so a typo cannot take the master out.
     let absurd = peak(40.0);
     let ceiling = peak(tatum_core::song_engine::MAX_TRACK_LEVEL);

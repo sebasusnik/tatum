@@ -41,7 +41,6 @@ impl FxChain {
         true
     }
 
-
     /// Process a stereo pair through the chain (for master bus).
     #[inline]
     pub(super) fn process_stereo(&mut self, l: f32, r: f32) -> (f32, f32) {
@@ -52,7 +51,9 @@ impl FxChain {
             // Bypassed: not processed at all. This is the whole point -- an
             // effect that is switched off has to cost nothing, or a rig with a
             // full chain on every voice is unaffordable.
-            if wet <= 0.0 { continue; }
+            if wet <= 0.0 {
+                continue;
+            }
             let (wl, wr) = node.process_stereo(vl, vr);
             if wet >= 1.0 {
                 (vl, vr) = (wl, wr);

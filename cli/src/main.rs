@@ -7,7 +7,6 @@ mod midi;
 mod set;
 mod resample;
 
-
 use std::fs;
 use std::process;
 
@@ -39,7 +38,8 @@ fn main() {
 }
 
 fn print_usage() {
-    eprintln!("tatum - DSL-powered synthesizer
+    eprintln!(
+        "tatum - DSL-powered synthesizer
 
 USAGE:
     tatum render <song.synth> [-o output.wav] [--bars N] [--solo a,b] [--mute c]
@@ -100,7 +100,8 @@ COMMANDS:
     (comma-separated, or the flag repeated). A muted track is taken to level 0
     everywhere, level automation included; a muted kick still drives the
     sidechain, so what is left pumps the way it does in the mix.
-");
+"
+    );
 }
 
 fn cmd_params(args: &[String]) {
@@ -108,11 +109,19 @@ fn cmd_params(args: &[String]) {
 
     let json = args.iter().any(|a| a == "--json");
     if args.iter().any(|a| a == "fx" || a == "nodes") {
-        if json { print!("{}", tatum_core::nodes::json()); } else { print!("{}", tatum_core::nodes::markdown()); }
+        if json {
+            print!("{}", tatum_core::nodes::json());
+        } else {
+            print!("{}", tatum_core::nodes::markdown());
+        }
         return;
     }
     if args.iter().any(|a| a == "track") {
-        if json { print!("{}", params::track_json()); } else { print!("{}", params::track_markdown()); }
+        if json {
+            print!("{}", params::track_json());
+        } else {
+            print!("{}", params::track_markdown());
+        }
         return;
     }
     let kinds: Vec<ModuleKind> = match args.iter().find(|a| !a.starts_with("--")) {
@@ -171,17 +180,15 @@ fn cmd_check(args: &[String]) {
     match tatum_core::dsl::compiler::compile(&ast) {
         Ok(compiled) => {
             eprintln!("  compile OK");
-            eprintln!("  {} instruments, {} patterns, {} tracks, {} buses",
+            eprintln!(
+                "  {} instruments, {} patterns, {} tracks, {} buses",
                 compiled.instruments.len(),
                 compiled.patterns.len(),
                 compiled.tracks.len(),
                 compiled.buses.len(),
             );
             if !compiled.scenes.is_empty() {
-                eprintln!("  {} scenes, arrangement: {} entries",
-                    compiled.scenes.len(),
-                    compiled.arrangement.len(),
-                );
+                eprintln!("  {} scenes, arrangement: {} entries", compiled.scenes.len(), compiled.arrangement.len(),);
             }
             eprintln!("  tempo: {} BPM", compiled.globals.tempo);
             let lints = tatum_core::dsl::lint::lint_song(&ast);
@@ -245,14 +252,16 @@ fn cmd_render(args: &[String]) {
 
     eprintln!("loading {}...", path);
 
-    let mut engine = tatum_core::song_engine::SongEngine::from_compiled(
-        debug::compile_or_exit(&source, &isolation),
-    );
+    let mut engine = tatum_core::song_engine::SongEngine::from_compiled(debug::compile_or_exit(&source, &isolation));
     engine.set_output_gain(debug::output_gain_or_exit(&source));
 
     let render_bars = bars.unwrap_or_else(|| {
         let arr = engine.arrangement_bars();
-        if arr > 0 { arr } else { 4 }
+        if arr > 0 {
+            arr
+        } else {
+            4
+        }
     });
 
     eprintln!("rendering {} bars at {} BPM...", render_bars, engine.tempo());
@@ -275,24 +284,47 @@ fn cmd_render(args: &[String]) {
     let loudest_peak = (0..engine.track_count()).fold(0.0f32, |a, i| a.max(engine.track_peak(i)));
     if engine.track_count() > 0 && loudest > 0.0 {
         eprintln!("mix (post level/pan, pre master):");
-        eprintln!("  {:<12} {:>6} {:>8} {:>8} {:>8} {:>6} {:>6}  band",
-            "track", "peak", "rms", "rms dB", "peak dB", "crest", "width");
+        eprintln!(
+            "  {:<12} {:>6} {:>8} {:>8} {:>8} {:>6} {:>6}  band",
+            "track", "peak", "rms", "rms dB", "peak dB", "crest", "width"
+        );
         for i in 0..engine.track_count() {
             let rms = engine.track_rms(i);
             let peak = engine.track_peak(i);
             let rel = 20.0 * (rms.max(1e-6) / loudest).log10();
             let rel_peak = 20.0 * (peak.max(1e-6) / loudest_peak.max(1e-6)).log10();
-            let flag = if rms <= 0.0 { "  SILENT" } else if rel < -30.0 { "  buried" } else { "" };
+            let flag = if rms <= 0.0 {
+                "  SILENT"
+            } else if rel < -30.0 {
+                "  buried"
+            } else {
+                ""
+            };
             let band = engine.track_dominant_band(i).map_or("-", |b| tatum_core::analysis::BAND_NAMES[b]);
-            eprintln!("  {:<12} {:>6.3} {:>8.4} {:>+8.1} {:>+8.1} {:>6.1} {:>5.0}%  {}{}",
-                engine.track_name(i), peak, rms, rel, rel_peak,
+            eprintln!(
+                "  {:<12} {:>6.3} {:>8.4} {:>+8.1} {:>+8.1} {:>6.1} {:>5.0}%  {}{}",
+                engine.track_name(i),
+                peak,
+                rms,
+                rel,
+                rel_peak,
                 tatum_core::analysis::crest(peak, rms),
-                engine.track_width(i) * 100.0, band, flag);
+                engine.track_width(i) * 100.0,
+                band,
+                flag
+            );
         }
         for i in 0..engine.bus_count() {
             let (p, rms) = (engine.bus_peak(i), engine.bus_rms(i));
-            eprintln!("  bus {:<8} {:>6.3} {:>8.4} {:>8} {:>8} {:>6.1}",
-                engine.bus_name(i), p, rms, "", "", tatum_core::analysis::crest(p, rms));
+            eprintln!(
+                "  bus {:<8} {:>6.3} {:>8.4} {:>8} {:>8} {:>6.1}",
+                engine.bus_name(i),
+                p,
+                rms,
+                "",
+                "",
+                tatum_core::analysis::crest(p, rms)
+            );
         }
     }
     // Where two tracks are in each other's way. Balance is visible in the
@@ -311,17 +343,25 @@ fn cmd_render(args: &[String]) {
                     (engine.track_name(i).to_string(), db)
                 })
                 .collect();
-            if here.len() < 2 { continue }
+            if here.len() < 2 {
+                continue;
+            }
             here.sort_by(|a, b| b.1.total_cmp(&a.1));
             // Within 6 dB is where one stops sitting clearly behind the other.
             let close = here[0].1 - here[1].1 < 6.0;
             let who: Vec<String> = here.iter().map(|(n, d)| format!("{n} {d:+.1}")).collect();
-            lines.push(format!("  {:<6} {}{}", name, who.join(", "),
-                if close { "   <-- within 6 dB of each other" } else { "" }));
+            lines.push(format!(
+                "  {:<6} {}{}",
+                name,
+                who.join(", "),
+                if close { "   <-- within 6 dB of each other" } else { "" }
+            ));
         }
         if !lines.is_empty() {
             eprintln!("sharing a band:");
-            for l in lines { eprintln!("{l}"); }
+            for l in lines {
+                eprintln!("{l}");
+            }
         }
     }
 
@@ -337,7 +377,9 @@ fn cmd_render(args: &[String]) {
             for (name, bars, bpm) in &sections {
                 let spb = (tatum_core::SAMPLE_RATE * 60.0 / bpm * beats_per_bar) as usize;
                 let end = (at + spb * *bars as usize).min(out_l.len());
-                if at >= end { break }
+                if at >= end {
+                    break;
+                }
                 let (_, rms) = tatum_core::analysis::peak_rms(&out_l[at..end], &out_r[at..end]);
                 rows.push(((*name).to_string(), *bars, 20.0 * rms.max(1e-6).log10()));
                 at = end;
@@ -350,9 +392,11 @@ fn cmd_render(args: &[String]) {
                     let bar = "#".repeat((((db - lo) / (hi - lo).max(0.1)) * 24.0) as usize);
                     eprintln!("  {:<12} {:>3} bars {:>7.1} dB  {}", name, bars, db, bar);
                 }
-                eprintln!("  arc: {:.1} dB between the quietest section and the loudest{}",
+                eprintln!(
+                    "  arc: {:.1} dB between the quietest section and the loudest{}",
                     hi - lo,
-                    if hi - lo < 3.0 { "  -- that is flat" } else { "" });
+                    if hi - lo < 3.0 { "  -- that is flat" } else { "" }
+                );
                 eprintln!("  (`width` above is how much of a track is NOT in the middle, full");
                 eprintln!("   band -- on a drum track the mono kick holds it near zero.)");
             }
@@ -364,21 +408,21 @@ fn cmd_render(args: &[String]) {
     // leaves with the transients.
     let (in_peak, in_rms) = engine.master_input_peak_rms();
     let (out_peak, out_rms) = tatum_core::analysis::peak_rms(&out_l, &out_r);
-    let (crest_in, crest_out) = (
-        tatum_core::analysis::crest(in_peak, in_rms),
-        tatum_core::analysis::crest(out_peak, out_rms),
-    );
+    let (crest_in, crest_out) =
+        (tatum_core::analysis::crest(in_peak, in_rms), tatum_core::analysis::crest(out_peak, out_rms));
     if crest_in > 0.0 {
         let change = 20.0 * (crest_out / crest_in).log10();
-        eprintln!("master: peak {:.2} in -> {:.2} out | crest {:.1} -> {:.1} ({:+.1} dB){}",
-            in_peak, out_peak, crest_in, crest_out, change,
-            if change < -3.0 { "  the master chain is eating transients" } else { "" });
+        eprintln!(
+            "master: peak {:.2} in -> {:.2} out | crest {:.1} -> {:.1} ({:+.1} dB){}",
+            in_peak,
+            out_peak,
+            crest_in,
+            crest_out,
+            change,
+            if change < -3.0 { "  the master chain is eating transients" } else { "" }
+        );
     }
-    eprintln!("writing {} ({} samples, {:.1}s)...",
-        output_path,
-        out_l.len(),
-        out_l.len() as f32 / 44100.0,
-    );
+    eprintln!("writing {} ({} samples, {:.1}s)...", output_path, out_l.len(), out_l.len() as f32 / 44100.0,);
 
     write_wav_stereo(&output_path, &out_l, &out_r, 44100);
     if heard.is_empty() {
@@ -415,14 +459,22 @@ mod test_alloc {
 
     unsafe impl GlobalAlloc for Counting {
         unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-            COUNTING.with(|c| if c.get() { ALLOCS.with(|a| a.set(a.get() + 1)); });
+            COUNTING.with(|c| {
+                if c.get() {
+                    ALLOCS.with(|a| a.set(a.get() + 1));
+                }
+            });
             unsafe { System.alloc(layout) }
         }
         unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
             unsafe { System.dealloc(ptr, layout) }
         }
         unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-            COUNTING.with(|c| if c.get() { ALLOCS.with(|a| a.set(a.get() + 1)); });
+            COUNTING.with(|c| {
+                if c.get() {
+                    ALLOCS.with(|a| a.set(a.get() + 1));
+                }
+            });
             unsafe { System.realloc(ptr, layout, new_size) }
         }
     }

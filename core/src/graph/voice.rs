@@ -23,13 +23,7 @@ impl Default for Voice {
 
 impl Voice {
     pub fn new() -> Self {
-        Self {
-            nodes: core::array::from_fn(|_| None),
-            note: 0,
-            velocity: 0.0,
-            active: false,
-            age: 0,
-        }
+        Self { nodes: core::array::from_fn(|_| None), note: 0, velocity: 0.0, active: false, age: 0 }
     }
 
     /// Initialize this voice for a new note.
@@ -116,7 +110,6 @@ pub struct Instrument {
 }
 
 impl Instrument {
-
     /// True when nothing is sounding and nothing is still releasing. A track
     /// whose level is 0 and whose instrument is idle is skipped whole by the
     /// song engine: no voices, no insert chain, no mix. That is what makes a
@@ -168,9 +161,8 @@ impl Instrument {
         self.voices[idx].init(&self.template, note, velocity);
 
         // Apply staged p-lock values to filter nodes on the newly initialized voice
-        let has_plocks = self.staged_cutoff.is_some()
-            || self.staged_env_depth.is_some()
-            || self.staged_resonance.is_some();
+        let has_plocks =
+            self.staged_cutoff.is_some() || self.staged_env_depth.is_some() || self.staged_resonance.is_some();
 
         if has_plocks {
             for i in 0..self.template.filter_count as usize {
@@ -245,10 +237,7 @@ impl Instrument {
 
                     let mut input_vals = [0.0f32; MAX_NODE_INPUTS];
                     let ic = input_count as usize;
-                    for (val, edge) in input_vals[..ic]
-                        .iter_mut()
-                        .zip(template.edges[node_idx][..ic].iter())
-                    {
+                    for (val, edge) in input_vals[..ic].iter_mut().zip(template.edges[node_idx][..ic].iter()) {
                         if edge.is_connected() {
                             *val = self.node_bufs[edge.src_node as usize][s];
                         }

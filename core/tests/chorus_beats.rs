@@ -22,11 +22,7 @@ use tatum_core::effects::chorus;
 
 fn lints(src: &str) -> Vec<String> {
     let song = dsl::parse(src).unwrap_or_else(|e| panic!("{e:?}"));
-    dsl::lint::lint_song(&song)
-        .into_iter()
-        .filter(|l| l.code == "chorus_beats")
-        .map(|l| l.message)
-        .collect()
+    dsl::lint::lint_song(&song).into_iter().filter(|l| l.code == "chorus_beats").map(|l| l.message).collect()
 }
 
 fn song(module: &str, pattern: &str) -> String {
@@ -52,10 +48,7 @@ fn the_threshold_is_derived_from_the_chorus_itself() {
         detune
     );
     let floor = chorus::roughness_above_hz();
-    assert!(
-        (450.0..650.0).contains(&floor),
-        "roughness floor came out at {floor:.0} Hz"
-    );
+    assert!((450.0..650.0).contains(&floor), "roughness floor came out at {floor:.0} Hz");
     // the floor is exactly where the beat reaches 20 Hz
     assert!((floor * detune - 20.0).abs() < 0.01);
 }
@@ -148,9 +141,7 @@ fn the_arp_octave_lift_counts_toward_the_pitch() {
                 pattern p { [1.4 3.4 5.4 7.4]:0.7 ..*15 }\n";
     let tail = "master { in > limiter(0.95) > out }\n";
     let no_arp = format!("{base}track keys {{ play p using pad out > master }}\n{tail}");
-    let arped = format!(
-        "{base}track keys {{ play p using pad arp up rate=16 octaves=2 out > master }}\n{tail}"
-    );
+    let arped = format!("{base}track keys {{ play p using pad arp up rate=16 octaves=2 out > master }}\n{tail}");
     assert!(lints(&no_arp).is_empty(), "held low, it is a chord: {:?}", lints(&no_arp));
     let out = lints(&arped);
     assert_eq!(out.len(), 1, "the arp lifts it over the line: {out:?}");
@@ -174,10 +165,7 @@ fn an_arp_gets_no_chord_top_exemption() {
 /// The song the bug came from, after the fix.
 #[test]
 fn neon_arterial_is_clean() {
-    let src = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../examples/neon_arterial.synth"
-    ))
-    .expect("neon_arterial.synth");
+    let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/neon_arterial.synth"))
+        .expect("neon_arterial.synth");
     assert!(lints(&src).is_empty(), "{:?}", lints(&src));
 }

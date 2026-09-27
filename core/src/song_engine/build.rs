@@ -81,10 +81,8 @@ impl SongEngine {
         // some other way is held to the same ones the setters use, so a
         // tempo of 0 cannot make a step infinitely long.
         let tempo = song.globals.tempo.clamp(20.0, 999.0);
-        let mut instruments: Vec<SongInstrument> = song.instruments
-            .iter()
-            .map(|kind| Self::build_instrument(kind, tempo))
-            .collect();
+        let mut instruments: Vec<SongInstrument> =
+            song.instruments.iter().map(|kind| Self::build_instrument(kind, tempo)).collect();
 
         // One instrument, one track. Two tracks naming the same module used to
         // share a single instance, and the render loop then called it once per
@@ -116,9 +114,13 @@ impl SongEngine {
             }
         }
         for (ti, ii) in pairs {
-            if ti >= n_tracks || ii >= n_inst { continue; }
+            if ti >= n_tracks || ii >= n_inst {
+                continue;
+            }
             let slot = ti * n_inst + ii;
-            if inst_for[slot] != usize::MAX { continue; }
+            if inst_for[slot] != usize::MAX {
+                continue;
+            }
             if !claimed[ii] {
                 claimed[ii] = true;
                 inst_for[slot] = ii;
@@ -132,7 +134,9 @@ impl SongEngine {
         // Pairs the song never names still need an answer, in case a lookup
         // arrives for one: the compiled instrument itself.
         for (slot, v) in inst_for.iter_mut().enumerate() {
-            if *v == usize::MAX { *v = slot % n_inst.max(1); }
+            if *v == usize::MAX {
+                *v = slot % n_inst.max(1);
+            }
         }
 
         Self::assemble(song, instruments, instrument_names, inst_for, n_inst, tempo)
@@ -141,55 +145,61 @@ impl SongEngine {
     /// Build one live instrument from a compiled preset. Called once per track
     /// that names the module, so each gets its own voices and envelopes.
     fn build_instrument(kind: &CompiledInstrumentKind, tempo: f32) -> SongInstrument {
-                match kind.clone() {
-                    CompiledInstrumentKind::Graph(template) => {
-                        SongInstrument::Graph(Instrument::new(*template))
-                    }
-                    CompiledInstrumentKind::Bass(preset) => {
-                        let mut m = BassModule::new();
-                        for (name, value) in &preset.params {
-                            if let Some(spec) = params::lookup(ModuleKind::Bass, name) {
-                                if let ParamId::Bass(p) = spec.id { m.set_param(p, *value); }
-                            }
+        match kind.clone() {
+            CompiledInstrumentKind::Graph(template) => SongInstrument::Graph(Instrument::new(*template)),
+            CompiledInstrumentKind::Bass(preset) => {
+                let mut m = BassModule::new();
+                for (name, value) in &preset.params {
+                    if let Some(spec) = params::lookup(ModuleKind::Bass, name) {
+                        if let ParamId::Bass(p) = spec.id {
+                            m.set_param(p, *value);
                         }
-                        m.set_bpm(tempo);
-                        SongInstrument::Bass(m)
-                    }
-                    CompiledInstrumentKind::Fm(preset) => {
-                        let mut m = FmModule::new();
-                        for (name, value) in &preset.params {
-                            if let Some(spec) = params::lookup(ModuleKind::Fm, name) {
-                                if let ParamId::Fm(p) = spec.id { m.set_param(p, *value); }
-                            }
-                        }
-                        // Apply per-operator envelopes if specified
-                        for (op_idx, env) in &preset.op_envelopes {
-                            m.set_op_envelope(*op_idx, env.0, env.1, env.2, env.3);
-                        }
-                        m.set_bpm(tempo);
-                        SongInstrument::Fm(m)
-                    }
-                    CompiledInstrumentKind::Keys(preset) => {
-                        let mut m = KeysModule::new();
-                        for (name, value) in &preset.params {
-                            if let Some(spec) = params::lookup(ModuleKind::Keys, name) {
-                                if let ParamId::Keys(p) = spec.id { m.set_param(p, *value); }
-                            }
-                        }
-                        m.set_bpm(tempo);
-                        SongInstrument::Keys(m)
-                    }
-                    CompiledInstrumentKind::Beats(preset) => {
-                        let mut m = BeatsModule::new();
-                        for (name, value) in &preset.params {
-                            if let Some(spec) = params::lookup(ModuleKind::Beats, name) {
-                                if let ParamId::Beats(p) = spec.id { m.set_param(p, *value); }
-                            }
-                        }
-                        m.set_bpm(tempo);
-                        SongInstrument::Beats(m)
                     }
                 }
+                m.set_bpm(tempo);
+                SongInstrument::Bass(m)
+            }
+            CompiledInstrumentKind::Fm(preset) => {
+                let mut m = FmModule::new();
+                for (name, value) in &preset.params {
+                    if let Some(spec) = params::lookup(ModuleKind::Fm, name) {
+                        if let ParamId::Fm(p) = spec.id {
+                            m.set_param(p, *value);
+                        }
+                    }
+                }
+                // Apply per-operator envelopes if specified
+                for (op_idx, env) in &preset.op_envelopes {
+                    m.set_op_envelope(*op_idx, env.0, env.1, env.2, env.3);
+                }
+                m.set_bpm(tempo);
+                SongInstrument::Fm(m)
+            }
+            CompiledInstrumentKind::Keys(preset) => {
+                let mut m = KeysModule::new();
+                for (name, value) in &preset.params {
+                    if let Some(spec) = params::lookup(ModuleKind::Keys, name) {
+                        if let ParamId::Keys(p) = spec.id {
+                            m.set_param(p, *value);
+                        }
+                    }
+                }
+                m.set_bpm(tempo);
+                SongInstrument::Keys(m)
+            }
+            CompiledInstrumentKind::Beats(preset) => {
+                let mut m = BeatsModule::new();
+                for (name, value) in &preset.params {
+                    if let Some(spec) = params::lookup(ModuleKind::Beats, name) {
+                        if let ParamId::Beats(p) = spec.id {
+                            m.set_param(p, *value);
+                        }
+                    }
+                }
+                m.set_bpm(tempo);
+                SongInstrument::Beats(m)
+            }
+        }
     }
 
     /// Everything after the instruments exist: buses, tracks, sends, master.
@@ -202,10 +212,7 @@ impl SongEngine {
         tempo: f32,
     ) -> Self {
         // Build buses
-        let buses: Vec<SongBus> = song.buses
-            .iter()
-            .map(|b| SongBus::new(b.name.clone(), &b.fx_chain))
-            .collect();
+        let buses: Vec<SongBus> = song.buses.iter().map(|b| SongBus::new(b.name.clone(), &b.fx_chain)).collect();
 
         // Build master FX chain
         let master_fx = FxChain::new(&song.master.fx_chain);
@@ -216,17 +223,15 @@ impl SongEngine {
 
         // Build track playback states from the compiled tracks
         let track_names: Vec<String> = song.tracks.iter().map(|t| t.name.clone()).collect();
-        let tracks: Vec<TrackPlayback> = song.tracks
+        let tracks: Vec<TrackPlayback> = song
+            .tracks
             .iter()
             .enumerate()
             .map(|(ti, t)| {
-                let inst_idx = inst_for
-                    .get(ti * n_inst + t.instrument_idx)
-                    .copied()
-                    .unwrap_or(t.instrument_idx);
+                let inst_idx = inst_for.get(ti * n_inst + t.instrument_idx).copied().unwrap_or(t.instrument_idx);
                 let (pan_l, pan_r) = pan_gains(t.pan);
-                let stereo_src = inst_idx < instruments.len()
-                    && matches!(instruments[inst_idx], SongInstrument::Beats(_));
+                let stereo_src =
+                    inst_idx < instruments.len() && matches!(instruments[inst_idx], SongInstrument::Beats(_));
                 TrackPlayback {
                     instrument_idx: inst_idx,
                     pattern_idx: t.pattern_idx,
@@ -238,8 +243,7 @@ impl SongEngine {
                     gate: t.gate,
                     rng: Rng::new(seed_from_name(&t.name)),
                     insert_fx: FxChain::new(&t.insert_fx),
-                    fx_labels: t.insert_fx_labels.iter()
-                        .map(|l| l.as_deref().and_then(InlineName::new)).collect(),
+                    fx_labels: t.insert_fx_labels.iter().map(|l| l.as_deref().and_then(InlineName::new)).collect(),
                     bus_send: t.bus_send,
                     to_master: t.to_master,
                     delay_send: t.delay_send,
@@ -283,7 +287,9 @@ impl SongEngine {
         let kick_track_idx = tracks.iter().position(|t| {
             if t.instrument_idx < instrument_names.len() {
                 let name = &instrument_names[t.instrument_idx];
-                if name.contains("kick") { return true; }
+                if name.contains("kick") {
+                    return true;
+                }
                 // BeatsModule tracks contain kick internally
                 if t.instrument_idx < instruments.len()
                     && matches!(instruments[t.instrument_idx], SongInstrument::Beats(_))
@@ -368,9 +374,7 @@ impl SongEngine {
             delay_wet_heard: 1.0,
             // Sized for the busiest scene so the first scene change, which
             // happens on the audio thread, does not grow it.
-            active_automations: Vec::with_capacity(
-                song.scenes.iter().map(|s| s.automations.len()).max().unwrap_or(0)
-            ),
+            active_automations: Vec::with_capacity(song.scenes.iter().map(|s| s.automations.len()).max().unwrap_or(0)),
             scene_step: 0,
             scene_total_steps: 0,
             scenes: song.scenes,
@@ -397,8 +401,12 @@ impl SongEngine {
 
     /// Bar-synced modulation inside chains follows the tempo.
     pub(super) fn retune_fx(&mut self, bpm: f32) {
-        for t in self.tracks.iter_mut() { t.insert_fx.set_bpm(bpm); }
-        for b in self.buses.iter_mut() { b.fx_chain.set_bpm(bpm); }
+        for t in self.tracks.iter_mut() {
+            t.insert_fx.set_bpm(bpm);
+        }
+        for b in self.buses.iter_mut() {
+            b.fx_chain.set_bpm(bpm);
+        }
         self.master_fx.set_bpm(bpm);
         self.reverb_return.set_bpm(bpm);
         self.delay_return.set_bpm(bpm);

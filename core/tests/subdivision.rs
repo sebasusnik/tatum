@@ -133,10 +133,7 @@ fn a_ratchet_is_a_group_of_repeats() {
     let ratchet = compile_steps("C4:0.7*3 - - -");
     let spelled = compile_steps("<C4:0.7 C4:0.7 C4:0.7> - - -");
     match (ratchet[0], spelled[0]) {
-        (
-            CompiledStep::Subdiv { notes: a, count: ca, .. },
-            CompiledStep::Subdiv { notes: b, count: cb, .. },
-        ) => {
+        (CompiledStep::Subdiv { notes: a, count: ca, .. }, CompiledStep::Subdiv { notes: b, count: cb, .. }) => {
             assert_eq!(ca, cb);
             for i in 0..ca as usize {
                 assert_eq!(a[i].midi_note, b[i].midi_note);
@@ -228,11 +225,7 @@ fn a_run_does_not_pile_up_into_a_chord() {
 fn subdivisions_move_with_the_swing() {
     let straight = format!("{}\nswing 0.5", song("<C4 E4 G4> - <C4 E4 G4> -"));
     let swung = format!("{}\nswing 0.66", song("<C4 E4 G4> - <C4 E4 G4> -"));
-    assert_ne!(
-        render(&straight),
-        render(&swung),
-        "swing has to reach the notes inside a group"
-    );
+    assert_ne!(render(&straight), render(&swung), "swing has to reach the notes inside a group");
 }
 
 // ── The edges ────────────────────────────────────────────────────────────────

@@ -88,8 +88,12 @@ fn track_level_automation_applies() {
     let (l1, r1) = engine.render_steps(4); // scene b start: lead at full level
     let _ = engine.render_steps(8);
     let (l2, r2) = engine.render_steps(4); // scene b end: lead faded to 0
-    assert!(rms(&l2, &r2) < rms(&l1, &r1) * 0.8,
-        "lead fade should lower the mix: start={} end={}", rms(&l1, &r1), rms(&l2, &r2));
+    assert!(
+        rms(&l2, &r2) < rms(&l1, &r1) * 0.8,
+        "lead fade should lower the mix: start={} end={}",
+        rms(&l1, &r1),
+        rms(&l2, &r2)
+    );
 }
 
 #[test]
@@ -105,14 +109,20 @@ fn unknown_scene_override_is_an_error() {
 
 #[test]
 fn scene_track_must_exist_at_top_level() {
-    let bad = SONG.replace("track bass { play low using sub }\n    track lead", "track ghost { play low using sub }\n    track lead");
+    let bad = SONG.replace(
+        "track bass { play low using sub }\n    track lead",
+        "track ghost { play low using sub }\n    track lead",
+    );
     let msg = compile_error(&bad);
     assert!(msg.contains("track 'ghost' is not declared at top level"), "{}", msg);
 }
 
 #[test]
 fn fm_has_level() {
-    let src = SONG.replace("module fm pluck { algorithm two_op decay 0.3 sustain 0.0 }", "module fm pluck { algorithm two_op decay 0.3 sustain 0.0 level 2.0 }");
+    let src = SONG.replace(
+        "module fm pluck { algorithm two_op decay 0.3 sustain 0.0 }",
+        "module fm pluck { algorithm two_op decay 0.3 sustain 0.0 level 2.0 }",
+    );
     let mut e = SongEngine::from_source(&src).unwrap();
     e.start();
     let _ = e.render_steps(4);

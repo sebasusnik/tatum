@@ -14,14 +14,21 @@ impl SongEngine {
     //  Real-time track control (no recompile)
     // ═══════════════════════════════════════════════════════
 
-    pub fn track_count(&self) -> usize { self.tracks.len() }
+    pub fn track_count(&self) -> usize {
+        self.tracks.len()
+    }
 
     pub fn track_name(&self, idx: usize) -> &str {
-        if idx < self.track_names.len() { &self.track_names[idx] } else { "" }
+        if idx < self.track_names.len() {
+            &self.track_names[idx]
+        } else {
+            ""
+        }
     }
 
     pub fn track_kind(&self, idx: usize) -> &str {
-        self.tracks.get(idx)
+        self.tracks
+            .get(idx)
             .and_then(|t| self.instruments.get(t.instrument_idx))
             .map_or("unknown", |inst| inst.kind_str())
     }
@@ -39,14 +46,18 @@ impl SongEngine {
     // NaN through, which would sit in a filter's state and silence the track
     // until it is rebuilt.
     pub fn set_track_level(&mut self, idx: usize, level: f32) {
-        if !level.is_finite() { return; }
+        if !level.is_finite() {
+            return;
+        }
         if let Some(track) = self.tracks.get_mut(idx) {
             track.level = level.clamp(0.0, MAX_TRACK_LEVEL);
         }
     }
 
     pub fn set_track_pan(&mut self, idx: usize, pan: f32) {
-        if !pan.is_finite() { return; }
+        if !pan.is_finite() {
+            return;
+        }
         if let Some(track) = self.tracks.get_mut(idx) {
             let p = pan.clamp(-1.0, 1.0);
             track.pan = p;
@@ -61,7 +72,9 @@ impl SongEngine {
     // ═══════════════════════════════════════════════════════
 
     pub fn set_tempo(&mut self, bpm: f32) {
-        if !bpm.is_finite() { return; }
+        if !bpm.is_finite() {
+            return;
+        }
         let bpm = bpm.clamp(20.0, 999.0);
         self.tempo = bpm;
         self.samples_per_step = SAMPLE_RATE * 60.0 / bpm / 4.0;
@@ -93,7 +106,9 @@ impl SongEngine {
     }
 
     pub fn set_track_velocity(&mut self, track_idx: usize, velocity: f32) {
-        if !velocity.is_finite() { return; }
+        if !velocity.is_finite() {
+            return;
+        }
         if let Some(track) = self.tracks.get_mut(track_idx) {
             track.velocity = velocity.clamp(0.0, 1.0);
         }
@@ -105,23 +120,25 @@ impl SongEngine {
     /// real one. This is a fast-path edit: the node is already built, so it
     /// applies inside the bar with no swap and no voice restart.
     pub fn set_node_wet(&mut self, track_idx: usize, node_idx: usize, wet: f32) -> bool {
-        if !wet.is_finite() { return false; }
-        self.tracks.get_mut(track_idx)
-            .is_some_and(|t| t.insert_fx.set_wet(node_idx, wet))
+        if !wet.is_finite() {
+            return false;
+        }
+        self.tracks.get_mut(track_idx).is_some_and(|t| t.insert_fx.set_wet(node_idx, wet))
     }
 
     /// The `as` name of each node in a track's insert chain, in chain order;
     /// `None` for a node nobody named.
     pub fn track_node_labels(&self, track_idx: usize) -> impl Iterator<Item = Option<&str>> {
-        self.tracks.get(track_idx).into_iter()
-            .flat_map(|t| t.fx_labels.iter().map(|l| l.as_ref().map(|l| l.as_str())))
+        self.tracks.get(track_idx).into_iter().flat_map(|t| t.fx_labels.iter().map(|l| l.as_ref().map(|l| l.as_str())))
     }
 
     /// A note played from outside the pattern -- a key, a pad -- on the
     /// instrument track `track_idx` plays. A muted track does not sound it,
     /// the same as its own pattern: bring the fader up to hear what you play.
     pub fn live_note_on(&mut self, track_idx: usize, note: u8, velocity: f32) {
-        if track_idx >= self.tracks.len() { return; }
+        if track_idx >= self.tracks.len() {
+            return;
+        }
         let inst = self.trigger_instrument(track_idx);
         if let Some(i) = self.instruments.get_mut(inst) {
             i.note_on(note, velocity.clamp(0.0, 1.0));
@@ -140,7 +157,9 @@ impl SongEngine {
 
     /// Bend instrument `inst_idx` by `ratio` of its frequency (1.0 is none).
     pub fn set_pitch_bend(&mut self, inst_idx: usize, ratio: f32) {
-        if !ratio.is_finite() { return; }
+        if !ratio.is_finite() {
+            return;
+        }
         if let Some(i) = self.instruments.get_mut(inst_idx) {
             i.set_pitch_bend(ratio);
         }
@@ -150,13 +169,17 @@ impl SongEngine {
     /// The same value `reverb_mix =` and `auto reverb_mix` write, so a scene
     /// that sets it takes over again when it starts.
     pub fn set_reverb_mix(&mut self, mix: f32) {
-        if !mix.is_finite() { return; }
+        if !mix.is_finite() {
+            return;
+        }
         self.reverb_wet_level = mix.clamp(0.0, 1.0);
     }
 
     /// Wet level of the global delay return, like [`Self::set_reverb_mix`].
     pub fn set_delay_mix(&mut self, mix: f32) {
-        if !mix.is_finite() { return; }
+        if !mix.is_finite() {
+            return;
+        }
         self.delay_wet_level = mix.clamp(0.0, 1.0);
     }
 
@@ -166,13 +189,17 @@ impl SongEngine {
     }
 
     pub fn set_track_gate(&mut self, track_idx: usize, gate: f32) {
-        if !gate.is_finite() { return; }
+        if !gate.is_finite() {
+            return;
+        }
         if let Some(track) = self.tracks.get_mut(track_idx) {
             track.gate = gate.clamp(0.0, 1.0);
         }
     }
 
-    pub fn pattern_count(&self) -> usize { self.patterns.len() }
+    pub fn pattern_count(&self) -> usize {
+        self.patterns.len()
+    }
 
     pub fn pattern_name(&self, idx: usize) -> &str {
         self.patterns.get(idx).map_or("", |p| &p.name)
@@ -181,14 +208,18 @@ impl SongEngine {
     /// Set a named module parameter at runtime. Returns false if the
     /// instrument does not exist or the name is not in the registry.
     pub fn set_module_param(&mut self, inst_idx: usize, name: &str, value: f32) -> bool {
-        if !value.is_finite() { return false; }
+        if !value.is_finite() {
+            return false;
+        }
         match self.instruments.get_mut(inst_idx) {
             Some(inst) => inst.set_param_by_name(name, value),
             None => false,
         }
     }
 
-    pub fn instrument_count(&self) -> usize { self.instruments.len() }
+    pub fn instrument_count(&self) -> usize {
+        self.instruments.len()
+    }
 
     pub fn instrument_name(&self, idx: usize) -> &str {
         self.instrument_names.get(idx).map_or("", |n| n.as_str())
@@ -207,7 +238,9 @@ impl SongEngine {
     /// Set a parameter already resolved to a registry id. False if the
     /// instrument does not exist or the id belongs to another module kind.
     pub fn set_module_param_id(&mut self, inst_idx: usize, id: ParamId, value: f32) -> bool {
-        if !value.is_finite() { return false; }
+        if !value.is_finite() {
+            return false;
+        }
         match self.instruments.get_mut(inst_idx) {
             Some(inst) => apply_param(inst, id, value),
             None => false,
@@ -216,7 +249,9 @@ impl SongEngine {
 
     /// Swing 0.5 (straight) ..= 0.75 (hard shuffle). Takes effect on the next step.
     pub fn set_swing(&mut self, swing: f32) {
-        if !swing.is_finite() { return; }
+        if !swing.is_finite() {
+            return;
+        }
         self.swing = swing.clamp(0.5, 0.75);
     }
 
@@ -230,12 +265,18 @@ impl SongEngine {
     }
 
     pub fn set_humanize(&mut self, velocity: f32, timing: f32) {
-        if !(velocity.is_finite() && timing.is_finite()) { return; }
+        if !(velocity.is_finite() && timing.is_finite()) {
+            return;
+        }
         self.humanize_velocity = velocity.clamp(0.0, 1.0);
         self.humanize_timing = timing.clamp(0.0, 1.0);
     }
 
-    pub fn swing(&self) -> f32 { self.swing }
+    pub fn swing(&self) -> f32 {
+        self.swing
+    }
 
-    pub fn humanize(&self) -> (f32, f32) { (self.humanize_velocity, self.humanize_timing) }
+    pub fn humanize(&self) -> (f32, f32) {
+        (self.humanize_velocity, self.humanize_timing)
+    }
 }

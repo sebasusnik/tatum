@@ -22,17 +22,11 @@ fn test_arp_keys_dsl() {
 
     let (out_l, out_r) = engine.render(total_bars);
 
-    let peak = out_l.iter().chain(out_r.iter())
-        .fold(0.0f32, |a, &b| a.max(b.abs()));
+    let peak = out_l.iter().chain(out_r.iter()).fold(0.0f32, |a, &b| a.max(b.abs()));
     assert!(peak > 0.01, "Arp-keys should produce audible output, peak={:.4}", peak);
     assert!(peak <= 1.0, "Arp-keys should not clip, peak={:.4}", peak);
 
-    write_wav_stereo(
-        &output_path("arp_keys.wav"),
-        &out_l,
-        &out_r,
-        44100,
-    );
+    write_wav_stereo(&output_path("arp_keys.wav"), &out_l, &out_r, 44100);
 
     // The track arpeggiator should be running shortly after playback starts —
     // this is what drives the track's activity LED in the UI.

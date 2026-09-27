@@ -32,9 +32,19 @@ impl Default for Frames {
         let lp = Biquad::lowpass(RUMBLE_HZ);
         let hp = Biquad::highpass(FIZZ_HZ);
         Frames {
-            jump: Vec::new(), power: Vec::new(), low: Vec::new(), high: Vec::new(),
-            low_pass: [lp.clone(), lp], high_pass: [hp.clone(), hp],
-            cur_jump: 0.0, cur_sq: 0.0, cur_low: 0.0, cur_high: 0.0, cur_n: 0, p1: 0.0, p2: 0.0,
+            jump: Vec::new(),
+            power: Vec::new(),
+            low: Vec::new(),
+            high: Vec::new(),
+            low_pass: [lp.clone(), lp],
+            high_pass: [hp.clone(), hp],
+            cur_jump: 0.0,
+            cur_sq: 0.0,
+            cur_low: 0.0,
+            cur_high: 0.0,
+            cur_n: 0,
+            p1: 0.0,
+            p2: 0.0,
         }
     }
 }
@@ -70,20 +80,28 @@ impl Frames {
         }
     }
 
-    pub fn len(&self) -> usize { self.jump.len() }
+    pub fn len(&self) -> usize {
+        self.jump.len()
+    }
 
-    pub fn is_empty(&self) -> bool { self.jump.is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.jump.is_empty()
+    }
 
     /// Power in dB over frames `a..b`.
     pub fn db(&self, a: usize, b: usize) -> f32 {
         let (a, b) = (a.min(self.len()), b.min(self.len()));
-        if b <= a { return -200.0 }
+        if b <= a {
+            return -200.0;
+        }
         let p: f64 = self.power[a..b].iter().map(|&v| v as f64).sum::<f64>() / (b - a) as f64;
         10.0 * p.max(1e-20).log10() as f32
     }
 }
 
-pub fn db(x: f32) -> f32 { 20.0 * x.max(1e-10).log10() }
+pub fn db(x: f32) -> f32 {
+    20.0 * x.max(1e-10).log10()
+}
 
 /// Below this is felt as a push on the speaker cone, not heard as a note: the
 /// lowest E on a bass is 41 Hz, and a sub rarely goes under 30.
@@ -95,7 +113,12 @@ pub const FIZZ_HZ: f32 = 16_000.0;
 /// A second-order Butterworth section; two in a row make the band edges
 /// steep enough that a 40 Hz sub barely counts as rumble.
 #[derive(Clone)]
-struct Biquad { b: [f32; 3], a: [f32; 2], x: [f32; 2], y: [f32; 2] }
+struct Biquad {
+    b: [f32; 3],
+    a: [f32; 2],
+    x: [f32; 2],
+    y: [f32; 2],
+}
 
 impl Biquad {
     fn new(hz: f32, high: bool) -> Biquad {
@@ -115,12 +138,17 @@ impl Biquad {
             y: [0.0; 2],
         }
     }
-    fn lowpass(hz: f32) -> Biquad { Biquad::new(hz, false) }
-    fn highpass(hz: f32) -> Biquad { Biquad::new(hz, true) }
+    fn lowpass(hz: f32) -> Biquad {
+        Biquad::new(hz, false)
+    }
+    fn highpass(hz: f32) -> Biquad {
+        Biquad::new(hz, true)
+    }
 
     fn run(&mut self, x: f32) -> f32 {
         let y = self.b[0] * x + self.b[1] * self.x[0] + self.b[2] * self.x[1]
-            - self.a[0] * self.y[0] - self.a[1] * self.y[1];
+            - self.a[0] * self.y[0]
+            - self.a[1] * self.y[1];
         self.x = [x, self.x[0]];
         self.y = [y, self.y[0]];
         y
@@ -132,7 +160,9 @@ impl Biquad {
 pub fn share_db(f: &Frames, band: &[f32]) -> f32 {
     let total: f64 = f.power.iter().map(|&v| v as f64).sum();
     let part: f64 = band.iter().map(|&v| v as f64).sum();
-    if total <= 0.0 { return -200.0 }
+    if total <= 0.0 {
+        return -200.0;
+    }
     10.0 * (part / total).max(1e-20).log10() as f32
 }
 
@@ -168,23 +198,33 @@ pub fn clicks(f: &Frames) -> Vec<Click> {
     let mut out: Vec<Click> = Vec::new();
     for i in 0..n {
         let j = f.jump[i];
-        if j < floor { continue }
+        if j < floor {
+            continue;
+        }
         let near = (i.saturating_sub(NEIGHBOURHOOD)..i.saturating_sub(GUARD))
             .chain((i + GUARD + 1).min(n)..(i + NEIGHBOURHOOD + 1).min(n))
             .map(|k| f.jump[k])
             .fold(0.0f32, f32::max);
-        if j < near * STANDS_OUT { continue }
+        if j < near * STANDS_OUT {
+            continue;
+        }
         let before = f.power[i.saturating_sub(12)..i.saturating_sub(1)].iter().sum::<f32>();
         let after = f.power[(i + 1).min(n)..(i + 12).min(n)].iter().sum::<f32>();
-        if after > before * ONSET_RISE { continue }
+        if after > before * ONSET_RISE {
+            continue;
+        }
         // Against the sound it sits in. A corner well under the level of the
         // note around it is part of that note's shape -- an envelope turning,
         // a compressor grabbing -- and is not heard as anything separate.
         let around = (before.max(after) / 11.0).sqrt();
-        if j < around * UNDER_SOUND { continue }
+        if j < around * UNDER_SOUND {
+            continue;
+        }
         match out.last_mut() {
             Some(last) if i - last.frame < MERGE => {
-                if db(j) > last.db { *last = Click { frame: i, db: db(j) } }
+                if db(j) > last.db {
+                    *last = Click { frame: i, db: db(j) }
+                }
             }
             _ => out.push(Click { frame: i, db: db(j) }),
         }
@@ -216,12 +256,19 @@ pub fn floors(f: &Frames, held: &dyn Fn(usize) -> bool) -> Vec<Floor> {
     let n = f.len();
     let mut i = 0;
     while i < n {
-        if held(i) { i += 1; continue }
+        if held(i) {
+            i += 1;
+            continue;
+        }
         let start = i;
-        while i < n && !held(i) { i += 1; }
+        while i < n && !held(i) {
+            i += 1;
+        }
         let end = i;
         // A gap cut off by the end of the render did not get to finish.
-        if end - start < MIN_GAP || end == n { continue }
+        if end - start < MIN_GAP || end == n {
+            continue;
+        }
         // Stop short of the end: `held` is read once a block, so the next
         // note can be a frame or two into the gap before it says so.
         let late = (end - 210, end - 10);
@@ -239,7 +286,9 @@ pub fn floors(f: &Frames, held: &dyn Fn(usize) -> bool) -> Vec<Floor> {
 /// tenth, which is what a floor is heard against.
 pub fn playing_db(f: &Frames) -> f32 {
     let mut p: Vec<f32> = f.power.iter().copied().filter(|&v| v > 1e-12).collect();
-    if p.is_empty() { return -200.0 }
+    if p.is_empty() {
+        return -200.0;
+    }
     p.sort_by(|a, b| a.total_cmp(b));
     10.0 * p[p.len() * 9 / 10].log10()
 }
@@ -250,7 +299,9 @@ mod tests {
 
     fn frames(xs: impl Iterator<Item = f32>) -> Frames {
         let mut f = Frames::default();
-        for x in xs { f.push(x) }
+        for x in xs {
+            f.push(x)
+        }
         f
     }
 
@@ -284,7 +335,10 @@ mod tests {
     #[test]
     fn hiss_that_never_stops_is_a_floor_and_a_tail_is_not() {
         let mut rng = 1u32;
-        let mut noise = || { rng = rng.wrapping_mul(1664525).wrapping_add(1013904223); (rng >> 8) as f32 / (1 << 24) as f32 - 0.5 };
+        let mut noise = || {
+            rng = rng.wrapping_mul(1664525).wrapping_add(1013904223);
+            (rng >> 8) as f32 / (1 << 24) as f32 - 0.5
+        };
         // a note for the first second, three seconds of gap, a note again
         let held = |i: usize| !(1000..3900).contains(&i);
         let hiss = frames((0..4 * 44100).map(|i| if i < 44100 { sine(220.0, i) } else { 0.01 * noise() }));
