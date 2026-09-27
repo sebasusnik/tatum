@@ -1,416 +1,328 @@
-# dark_techno.synth — Dark Techno (Sunn O))) drone x Sven Vaeth groove)
-# 132 BPM, E phrygian, 48 bars. Straight sixteenths: swing is a house tell.
-# Section map: intro(8) kick_enter(8) groove(8) breakdown(8) drop(12) outro(4)
-
+# Dark Techno — F minor, 132 BPM, robotic
+# Few elements, each one exact. A dry kick with no room at all; an FM bass
+# that rolls the three sixteenths after every kick; a machine that bleeps a
+# sixteen-step code; a metal knock on a five-step cycle sliding against it;
+# and, only at the peak, a robot voice made of formants. No melody, no pad.
+# Nothing breathes that should not: no reverb on the kick, a short and light
+# sidechain, and the reverb tails are never ducked, so nothing comes and goes.
 tempo 132
 meter 4/4
-scale E phrygian
+scale F minor
 swing 0.5
-sidechain 0.5
-# Mix exactly as written: the automatic 1/sqrt(active tracks) compensation was
-# making the two-track intro louder than the four-track groove.
+humanize 0.0 timing 0.0
+sidechain 0.25 attack=1ms release=60ms
 
-reverb size=0.9 damp=0.3 predelay=30 sidechain=0.5
-reverb_return { in > lowpass(2200, 0.3, lfo_bars=16, lfo_depth=900) > autopan(0.35, bars=12) > out }
-delay sync=dotted_eighth feedback=0.35 filter=0.4
+delay sync=eighth feedback=0.3 filter=0.4
+reverb size=0.35 damp=0.6 predelay=10 sidechain=0
+
+reverb_return { in > highpass(500hz, 0.05) > lowpass(6khz, 0.05) > out }
+delay_return  { in > highpass(600hz, 0.05) > lowpass(5khz, 0.05) > out }
 
 # ────────────────────────────────────────────────
 # MODULES
 # ────────────────────────────────────────────────
 
-# Sunn O))) drone: stacked square/saw across three octaves, low cutoff, high
-# resonance, a 16-bar filter LFO so it never sits still even when "static".
-module bass drone {
-    # Sunn O))) lives in the low-mids, not the sub: the cutoff has to be open
-    # enough for the square/saw harmonics to reach the distortion stages.
-    cutoff 363.94hz
-    cutoff_env 20hz
-    resonance 0.7
-    osc1_wave square
-    osc2_wave saw
-    osc2_pitch -12st
-    osc3_wave square
-    osc3_pitch 7st   # the fifth of the power chord the patterns ask for
-    attack 11.3849ms
-    decay 20.9128ms
-    sustain 0.95
-    release 639.55ms
-    glide 0.1
-    lfo_target cutoff
-    lfo_waveform triangle
-    lfo_sync bars_16
-    lfo_depth 0.35
-}
-
-# The fundamental. Heavy distortion turns a fundamental into a harmonic
-# series, so the weight of the wall has to come from a clean layer underneath.
-module bass subwall {
-    cutoff 45.8174hz
-    cutoff_env 20hz
-    resonance 0.12
-    osc1_wave saw
-    osc2_pitch -0st
-    osc3_pitch -0st
-    attack 6.6874ms
-    decay 44.7214ms
-    sustain 1.0
-    release 437.345ms
-}
-
-# Atmosphere: a metallic, slow-blooming FM texture. Sparse and drenched, it
-# is what keeps the drone-only stretches from being just a drone.
-module fm atmos {
-    algorithm two_op
-    waveform half_sine
-    mod_index 0.55
-    feedback 0.42
-    op0_ratio 1.5075x
-    op1_ratio 4.995x
-    op0_envelope 0.35 0.9 0.3 0.95
-    op1_envelope 0.2 0.6 0.15 0.8
-    level 2.2
-    lfo_target mod_index
-    lfo_waveform triangle
-    lfo_sync bars_12
-    lfo_depth 0.28
-}
-
-# Doom-organ overtones an octave above the drone: fifth voicing,
-# saturated and phased for movement.
-module keys doomorgan {
-    voice_mode poly
-    cutoff 1517.16hz
-    resonance 0.45
-    detune 0.6          # wide: the two oscillators beat against each other
-    chorus_mix 0.25
-    attack 65.398ms
-    decay 44.7214ms
-    sustain 0.9
-    release 935.25ms
-    lfo_target cutoff
-    lfo_waveform triangle
-    lfo_sync bars_8
-    lfo_depth 0.12
-    vibrato_rate 2.4hz
-    vibrato_depth 0.05
-}
-
-# Sven Vaeth kit: hard, dry, driven kick.
-module beats kit {
+# The kick: a long tonal body and no room. The body is the kick's own tail,
+# tuned low, about 210 ms to -40 dB; there is no reverb on it, so nothing
+# comes and goes. Barely driven: the weight is the tail, not the distortion.
+# The rim is the snare cut to a click; the hats are short and bright
+module beats machine {
     kick_level 1.0
-    kick_decay 0.36     # enough body to read under the wall
-    kick_pitch 0.95x
-    kick_click 0.9      # the transient is what makes a kick audible, not more low end
-    kick_drive 1.0
+    kick_decay 55%
+    kick_pitch 0.78x
+    kick_click 35%
+    kick_drive 30%
+    hihat_level 0.55
+    hihat_decay 10%
+    hihat_pitch 1.5x
+    hihat_pan 0.15
+    clap_level 0.5
+    clap_pan 0.0
     snare_level 0.5
-    snare_decay 0.18
-    snare_snap 0.55
-    snare_pan -0.15
-    hihat_level 0.6
-    hihat_decay 0.2
-    hihat_pitch 1.16x
-    hihat_pan 0.25
+    snare_decay 5%
+    snare_pitch 1.6x
+    snare_snap 30%
+    snare_pan -0.2
+    stutter_drum hihat
+    stutter_rate 0%
 }
 
-# Rolling 16th-note sub bassline that answers the kick.
-module bass pulse {
-    cutoff 209.426hz
-    cutoff_env 820.93hz
-    resonance 0.5
-    glide 0.03
-    osc1_wave saw
-    osc2_wave square
-    osc2_pitch -12st     # one octave down: the weight
-    osc3_wave saw
-    osc3_pitch -0st
-    attack 1ms
-    decay 3.9281ms
-    sustain 0.3
-    release 2.8983ms
-}
-
-# Tight metallic FM stab, interjecting between kicks in the drop.
-module fm stab {
+# Bass: FM, one carrier and one modulator at the same ratio -- a saw-like
+# tone whose brightness is the modulator's envelope, so each note is a
+# pluck. One oscillator path, so its level never wanders over the song
+module fm roller {
     algorithm two_op
+    level 2.0
+    mod_index 45%
+    feedback 10%
     waveform sine
-    mod_index 0.32
-    feedback 0.1
-    op0_envelope 0.001 0.12 0.0 0.08
-    op1_envelope 0.001 0.08 0.0 0.05
+    op0_ratio 1x
+    op1_ratio 1x
+    op0_envelope 0.002 0.18 0.3 0.05
+    op1_envelope 0.001 0.06 0.1 0.04
+}
+
+# Machine: a square-ish FM bleep, hard and short
+module fm bleep {
+    algorithm two_op
+    level 1.6
+    mod_index 70%
+    feedback 15%
+    waveform quarter_sine
+    op0_ratio 1x
+    op1_ratio 2x
+    op0_envelope 0.001 0.06 0.0 0.03
+    op1_envelope 0.001 0.04 0.0 0.02
+}
+
+# Knock: struck metal, inharmonic, very short
+module fm knock {
+    algorithm two_op
+    level 1.8
+    mod_index 75%
+    feedback 20%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 2.76x
+    op0_envelope 0.001 0.09 0.0 0.05
+    op1_envelope 0.001 0.05 0.0 0.03
+}
+
+# Voice: a buzz with the vowel filter racing through its formants, a
+# machine trying to speak
+module fm buzz {
+    algorithm two_op
+    level 1.6
+    mod_index 60%
+    feedback 50%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op0_envelope 0.005 0.15 0.5 0.06
+    op1_envelope 0.005 0.15 0.5 0.06
+}
+
+# Static: filtered feedback noise, only for the break
+module fm static {
+    algorithm pair_plus_two
+    level 1.0
+    mod_index 100%
+    feedback 100%
+    waveform sine
+    op0_ratio 5.3x
+    op1_ratio 2.51x
+    op2_ratio 7.1x
+    op3_ratio 1.43x
+    op0_envelope 1.0 1.0 1.0 1.0
+    op1_envelope 1.0 1.0 1.0 1.0
+    op2_envelope 1.0 1.0 1.0 1.0
+    op3_envelope 1.0 1.0 1.0 1.0
+    op0_feedback 90%
+    lfo_target mod_index
+    lfo_sync bars_4
+    lfo_waveform triangle
+    lfo_depth 25%
 }
 
 # ────────────────────────────────────────────────
-# PATTERNS
+# DRUMS
 # ────────────────────────────────────────────────
 
-# Drone roots — one per scene, held with ties for the whole section.
-#
-# These used to read `E5/1`, written in the belief that the parser could not
-# take "5" as a power chord. It can: `E5/1` compiles to [E1, B1]. The drone
-# is a `bass`, which has one voice, so the chord arrived as two note-ons and
-# only the last survived -- the drone has been sitting on B this whole time,
-# a fifth above the sub, which plays E. `chord_into_mono_voice` covers `bass`
-# now and says so.
-#
-# The fifth comes from the oscillator instead, which is how a monosynth plays
-# a power chord anyway: `osc3_pitch 7st` on the module below.
-pattern drone_em8    { E1:0.75   ..*127 }
-pattern drone_cm8    { C1:0.75   ..*127 }
-pattern drone_edrop12 { G1:0.78   ..*191 }
-pattern drone_em4    { E1:0.6    ..*63 }
-
-pattern sub_em8      { E1:0.9  ..*127 }
-pattern sub_cm8      { C1:0.9  ..*127 }
-pattern sub_edrop12  { G0:0.95 ..*191 }
-pattern sub_em4      { E1:0.7  ..*63 }
-
-pattern atmos_a  { B3:0.5 ..*47  - -*15  E4:0.42 ..*47  - -*15 }
-pattern atmos_b  { E4:0.45 ..*31 - -*15  G3:0.5 ..*31 - -*15  B3:0.4 ..*15 - -*15 }
-pattern atmos_low { G3:0.35 ..*63  - -*63 }
-
-pattern organ_em8    { Em/2:0.5      ..*127 }
-pattern organ_cm8    { Cm/2:0.5      ..*127 }
-pattern organ_edrop12 { G/2:0.55       ..*191 }
-pattern organ_em4    { Em/2:0.35     ..*63 }
-
-# Drums
-pattern beat_enter {
-    kick: X - - - X - - - X - - - X - - -
-    hat:  x:0.4 - x:0.22 -  x:0.35 - x:0.22 -  x:0.4 - x:0.22 -  x:0.35 - x:0.22 x:0.3
+pattern beat_intro {
+    kick:    X - - -  X - - -  X - - -  X - - -
+    hat:     - - x -  - - x -  - - x -  - - x -
 }
 
-pattern beat_groove {
-    kick:    X - - - X - - - X - - - X - - -
-    hat:     x:0.5 - x:0.25 o?0.5  x:0.4 - x:0.28 -  x:0.5 - x:0.25 o?0.5  x:0.4 - x:0.28 x:0.35
-    openhat: - - - -  - - - -  - - - -  - - x:0.4 -
-    snare:   - - - -  - - - -  - - - -  - - - o:0.3
+pattern beat_main {
+    kick:    X - - -  X - - -  X - - -  X - - -
+    hat:     o o x o  o o x o  o o x o  o o x o
+    snare:   - - - -  - - - x  - - - -  - - x -
 }
 
-pattern beat_drop {
-    kick:    X - - - X - - - X - - - X - - -
-    hat:     x:0.4 x?0.4 x:0.22 o?0.5  x:0.32 x?0.4 x:0.22 -  x:0.4 x?0.4 x:0.22 o?0.5  x:0.32 x?0.4 x:0.22 x*2
-    openhat: - - - -  - - - -  - - - -  - - x:0.45 -
-    snare:   - - - -  - - - o:0.3  - - - -  - - x:0.45 o:0.35
+pattern beat_peak {
+    kick:    X - - -  X - - -  X - - -  X - - -
+    clap:    - - - -  X - - -  - - - -  X - - -
+    hat:     o o x o  o o x o  o o x o  o o x o
+    openhat: - - x -  - - x -  - - x -  - - x -
+    snare:   - - - -  - - - x  - - - -  - - x -
 }
 
-# Rolling 16th-note bass, root-heavy with passing tones.
-pattern bass_pulse_groove {
-    1.2:0.95 - - 1.2:0.6   - - 1.2:0.7 -   1.2:0.95 - - 1.2:0.6   - ~5.1:0.75 - -
+pattern beat_break {
+    hat:     - - x -  - - x -  - - x -  - - x -
+    snare:   - - - -  - - - x  - - - -  - - x -
 }
 
-pattern bass_pulse_drop {
-    1.2:1.0 - ~1.2:0.7 -   - 1.2:0.75 - -   1.2:1.0 - ~1.2:0.7 -   ~5.1:0.8 - 1.2:0.65 -
+# ────────────────────────────────────────────────
+# BASS AND MACHINES
+# ────────────────────────────────────────────────
+
+# On the off-beats, out of the kick's body: kick and bass take turns
+# instead of sitting on each other. A sixteenth pickup every other bar
+pattern roll {
+    - - F1:0.9 -   - - F1:0.8 -   - - F1:0.9 -   - - F1:0.8 -
+    - - F1:0.9 -   - - F1:0.8 -   - - F1:0.9 -   - - F1:0.8 Ab1:0.6
 }
 
-# FM stab, answers the kick on the off-beats (the "&" of 2 and the "&" of 4).
-pattern stab_answer {
-    - - - - - - 1.4:0.75 - - - 7.3:0.6 - - - 1.4:0.7 -
+# A sixteen-step code on the tones of F minor
+pattern code {
+    F4:0.9 - - C5:0.6   - Ab4:0.7 - -   F4:0.9 - Eb5:0.6 -   - C5:0.7 - F4:0.5
+}
+
+# Five steps against sixteen: it lands somewhere else every bar
+pattern knock_5 {
+    C4:0.9 - - F3:0.6 -
+}
+
+# The voice: three syllables every eight bars
+pattern speak {
+    - - - -  - - - -  C3:0.9 C3:0.7 - C3:0.9  - - - -
+    -*112
+}
+
+pattern static_bed {
+    F4:0.6 ..*63
 }
 
 # ────────────────────────────────────────────────
 # TRACKS
 # ────────────────────────────────────────────────
 
-track bassdrone {
-    play drone_em8
-    using drone
-    velocity 0.9
-    level 0.19
-    gate 1.0
-    reverb_send 0.3
-    sidechain 0.8
-    out > highpass(95, 0.2)   # the kick owns 50-95 Hz; the clean subwall keeps below
-        > saturate(2.2)
-        > lowpass(1600, 0.3, lfo_bars=12, lfo_depth=500)
-        > saturate(1.0)
-        > lowpass(2400, 0.2)   # speaker cab: kills the fizz the last stage adds
-        > gain(0.55) > master
-}
-
-track subwall {
-    play sub_em8
-    using subwall
-    velocity 0.95
-    level 0.14
-    gate 1.0
-    sidechain 0.75
-    out > lowpass(150, 0.1) > saturate(0.5) > master
-}
-
-track organ {
-    play organ_em8
-    using doomorgan
-    pan -0.50
-    velocity 0.85
-    level 0.09238
-    gate 1.0
-    reverb_send 0.42
-    delay_send 0.15
-    sidechain 0.8
-    out > saturate(1.25)
-        > lowpass(2600, 0.25)
-        > phaser(0.35, bars=14)
-        > lowpass(3400, 0.2)
-        > gain(0.42) > master
-}
-
-track atmos {
-    play atmos_a
-    using atmos
-    pan 0.34
-    velocity 0.8
-    level 0.3
-    gate 0.9
-    reverb_send 0.75
-    delay_send 0.35
-    sidechain 0.5
-    out > highpass(380, 0.2)
-        > lowpass(2600, 0.25)
-        > phaser(0.3, bars=9) > master
-}
-
 track drums {
-    play beat_enter
-    using kit
+    play beat_main
+    using machine
+    level 0.8
     velocity 1.0
-    level 0.84
-    reverb_send 0.06
-    out > compressor(-14, ratio=4, attack=3, release=70, makeup=3.52db)
-        > saturate(0.55)
-        > eq(low=2.5, mid=-1.0, high=0.5)
-        > master
+    out > highpass(28hz, 0.05) > master
 }
 
-track bassline {
-    play bass_pulse_groove
-    using pulse
-    velocity 0.9
-    level 1.35
-    gate 0.4
-    sidechain 0.65
-    out > saturate(1.3)
-        > eq(low=3.5, mid=1.5, high=-0.5)
-        > lowpass(3000, 0.2) > master
-}
-
-track stab {
-    play stab_answer
-    using stab
-    velocity 0.85
-    level 0.55
-    gate 0.25
-    pan -0.38
-    delay_send 0.2
-    reverb_send 0.25
+track bass {
+    play roll
+    using roller
+    level 0.26
+    velocity 1.0
+    gate 0.7
     sidechain 0.5
-    out > saturate(0.7) > lowpass(2600, 0.25) > master
+    out > highpass(30hz, 0.05) > saturate(0.5) > lowpass(3khz, 0.05) > master
 }
 
-# ────────────────────────────────────────────────
-# MASTER
-# ────────────────────────────────────────────────
+track bleep {
+    play code
+    using bleep
+    level 0.5
+    velocity 1.0
+    gate 0.4
+    pan 0.25
+    delay_send 0.15
+    reverb_send 0.08
+    out > highpass(300hz, 0.05) > bitcrush(10, 0.2, wet=0.35) > master
+}
+
+track knock {
+    play knock_5
+    using knock
+    level 0.2
+    velocity 1.0
+    gate 0.3
+    pan -0.3
+    reverb_send 0.12
+    out > highpass(150hz, 0.05) > master
+}
+
+track voice {
+    play speak
+    using buzz
+    level 0.55
+    velocity 1.0
+    gate 0.8
+    pan 0.05
+    delay_send 0.2
+    reverb_send 0.1
+    out > highpass(200hz, 0.05) > vowel(o, i, hz=6, mix=1) > saturate(0.8) > master
+}
+
+track static {
+    play static_bed
+    using static
+    level 0.1
+    velocity 1.0
+    reverb_send 0.2
+    out > highpass(1500hz, 0.05) > lowpass(5khz, 0.05, lfo_bars=8, lfo_depth=2500) > autopan(0.6, bars=4) > master
+}
 
 master {
-    in > tilt(-0.08)
-       > eq(low=1.0, mid=-1.5, high=1.0)
-       > compressor(-10, ratio=3.0, attack=15, release=110, makeup=-1.17db)
-       > out
+    in > lowpass(20000, 0.05) > eq(low=1, high=0.5) > out
 }
 
 # ────────────────────────────────────────────────
 # SCENES
 # ────────────────────────────────────────────────
 
-# 1. Drone-only intro — nothing else. No drums here, so sidechain is inert
-# (synth_check warning); levels are set low on purpose since this must be
-# the quietest section in the render.
 scene intro {
-    track bassdrone { play drone_em8 using drone level 0.19 reverb_send 0.3 sidechain 0.8 }
-    track subwall   { play sub_em8 using subwall level 0.14 sidechain 0.75 }
-    track organ { play organ_em8 using doomorgan level 0.09238 reverb_send 0.42 sidechain 0.8 pan -0.50 }
+    track drums { play beat_intro using machine }
 }
 
-# 2. Kick enters, drone holds.
-scene intro_b {
-    track bassdrone { play drone_em8 using drone level 0.19 reverb_send 0.3 sidechain 0.8 }
-    track subwall   { play sub_em8 using subwall level 0.14 sidechain 0.75 }
-    track organ { play organ_em8 using doomorgan level 0.09238 reverb_send 0.42 sidechain 0.8 pan -0.50 }
-    track atmos { play atmos_a using atmos level 0.3 reverb_send 0.75 delay_send 0.35 sidechain 0.5 pan 0.34 }
+# The roller enters dark and brightens over sixteen bars
+scene bass {
+    auto roller mod_index 0.2 > 0.45
+    track drums { play beat_main using machine }
+    track bass  { play roll using roller }
 }
 
-scene kick_enter {
-    track bassdrone { play drone_em8 using drone level 0.19 reverb_send 0.3 sidechain 0.8 }
-    track subwall   { play sub_em8 using subwall level 0.14 sidechain 0.75 }
-    track organ { play organ_em8 using doomorgan level 0.09238 reverb_send 0.42 sidechain 0.8 pan -0.50 }
-    track atmos { play atmos_low using atmos level 0.22 reverb_send 0.7 delay_send 0.3 sidechain 0.5 pan 0.34 }
-    track drums     { play beat_enter using kit level 0.78 reverb_send 0.06 }
+scene machine {
+    auto roller mod_index 0.45 > 0.55 > 0.45
+    track drums { play beat_main using machine }
+    track bass  { play roll using roller }
+    track bleep { play code using bleep pan 0.25 }
+    track knock { play knock_5 using knock pan -0.3 }
 }
 
-# 3. Groove with bass — drone moves to Cm, claps and ghost hats enter.
-scene groove {
-    track bassdrone { play drone_cm8 using drone level 0.19 reverb_send 0.3 sidechain 0.8 }
-    track subwall   { play sub_cm8 using subwall level 0.14 sidechain 0.75 }
-    track organ { play organ_cm8 using doomorgan level 0.09238 reverb_send 0.42 sidechain 0.8 pan -0.50 }
-    track drums     { play beat_groove using kit level 0.95 reverb_send 0.06 }
-    track bassline  { play bass_pulse_groove using pulse level 1.15 gate 0.4 sidechain 0.65 }
+# No kick. The roller keeps turning under the static and the code
+scene break {
+    auto roller mod_index 0.45 > 0.2
+    track drums  { play beat_break using machine }
+    track bass   { play roll using roller }
+    track bleep  { play code using bleep pan 0.25 }
+    track static { play static_bed using static }
 }
 
-# 4. Breakdown — kick and bassline drop out, drone rises, reverb freezes.
-# No drums here either, so sidechain is inert (synth_check warning); levels
-# sit below the groove's ducked-but-louder mix so the breakdown reads as a
-# dip in energy, not a volume spike, even though the filter is opening up.
-scene breakdown {
-    reverb_freeze = 1
-    auto drone cutoff 0.40 > 0.50
-    auto doomorgan cutoff 0.46 > 0.54
-
-    track bassdrone { play drone_em8 using drone level 0.19 reverb_send 0.3 sidechain 0.8 }
-    track subwall   { play sub_em8 using subwall level 0.14 sidechain 0.75 }
-    track organ { play organ_em8 using doomorgan level 0.09238 reverb_send 0.42 sidechain 0.8 pan -0.50 }
-    track atmos { play atmos_b using atmos level 0.38 reverb_send 0.8 delay_send 0.4 sidechain 0.5 pan 0.34 }
+# The kick returns and the hats stutter faster into the peak
+scene rebuild {
+    auto machine stutter_rate 0.1 > 0.8
+    auto roller mod_index 0.2 > 0.55
+    track drums { play beat_main using machine }
+    track bass  { play roll using roller }
+    track bleep { play code using bleep pan 0.25 }
 }
 
-# 5. The drop — everything, master brightens.
-scene drop {
-    auto drone cutoff 0.50 > 0.42
-    auto doomorgan cutoff 0.54 > 0.46
-    auto master tilt -0.12 > 0.02
-
-    track bassdrone { play drone_edrop12 using drone level 0.19 reverb_send 0.26 sidechain 0.8 }
-    track subwall   { play sub_edrop12 using subwall level 0.14 sidechain 0.75 }
-    track organ { play organ_edrop12 using doomorgan level 0.09238 reverb_send 0.38 sidechain 0.8 pan -0.50 }
-    track drums     { play beat_drop using kit level 0.85 reverb_send 0.06 }
-    track bassline  { play bass_pulse_drop using pulse level 1.15 gate 0.4 sidechain 0.7 }
-    track atmos { play atmos_low using atmos level 0.24 reverb_send 0.7 delay_send 0.3 sidechain 0.5 pan 0.34 }
-    track stab { play stab_answer using stab level 0.62 gate 0.25 delay_send 0.2 reverb_send 0.25 sidechain 0.5 pan -0.38 }
+scene peak {
+    auto machine stutter_rate 0 > 0
+    auto roller mod_index 0.55 > 0.65 > 0.55
+    track drums { play beat_peak using machine }
+    track bass  { play roll using roller }
+    track bleep { play code using bleep pan 0.25 }
+    track knock { play knock_5 using knock pan -0.3 }
+    track voice { play speak using buzz pan 0.05 }
 }
 
-# 6. Outro — drone alone, dying. No drums here, so sidechain is inert
-# (synth_check warning); starts already below the drop's level and fades to
-# near-silence so it lands as the quietest moment alongside the intro.
+scene strip {
+    auto roller mod_index 0.55 > 0.3
+    track drums { play beat_main using machine }
+    track bass  { play roll using roller }
+    track knock { play knock_5 using knock pan -0.3 }
+}
+
 scene outro {
-    auto drone cutoff 0.42 > 0.1
-    auto doomorgan cutoff 0.46 > 0.14
-    auto subwall level 0.14 > 0.02
-    auto bassdrone level 0.19 > 0.03
-    auto organ level 0.16 > 0.02
-
-    track bassdrone { play drone_em4 using drone level 0.19 reverb_send 0.3 sidechain 0.8 }
-    track subwall   { play sub_em4 using subwall level 0.14 sidechain 0.75 }
-    track organ { play organ_em4 using doomorgan level 0.09238 reverb_send 0.42 sidechain 0.8 pan -0.50 }
-    track atmos { play atmos_low using atmos level 0.24 reverb_send 0.75 delay_send 0.3 sidechain 0.5 pan 0.34 }
+    track drums { play beat_intro using machine }
+    track bass  { play roll using roller level 0.0 }
 }
-
-# ────────────────────────────────────────────────
-# ARRANGEMENT — 48 bars
-# ────────────────────────────────────────────────
 
 arrange {
-    intro x4
-    intro_b x4
-    kick_enter x8
-    groove x8
-    breakdown x8
-    drop x12
-    outro x4
+    intro x16
+    bass x16
+    machine x32
+    break x16
+    rebuild x8
+    peak x32
+    strip x16
+    outro x16
 }
