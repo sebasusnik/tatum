@@ -133,7 +133,7 @@ pattern riff { 1.2:0.9  -  ~5.2:0.8  ..  [1.3 3.3 5.3]:0.6  ..  ..  .. }
 | `<a b c>` | **subdivision**: those notes in sequence inside this ONE step, evenly spaced. Up to 8. Each one takes its own `:velocity` and its own `~`, and each releases the one before it, so a group is a run and not a chord. This is how a pattern gets finer than a sixteenth — steps are fixed at sixteen a bar, and the notes are spread across the step's *real* duration, so a subdivided step still swings. |
 | `a*3` | **ratchet**: the same note three times inside the step, the melodic spelling of the drum roll. Sugar for `<a a a>`. |
 | `Fm9` `Dbmaj7/2` `C7:0.6` | chord symbol: root, optional `#`/`b`, quality, optional `/octave` (default 3), then `:velocity` and `(locks)` as usual. Qualities: maj, m, 7, maj7, m7, 9, maj9, m9, add9, madd9, 6, m6, sus2, sus4, 7sus4, dim, dim7, m7b5, aug, 11, m11, 13, maj13, m13, 5, mmaj7. A note token with octave 7 or above (`C7`, `Ab9`) is read as a chord; for a power chord write `E5/3` (bare `E5` is the note). |
-| `1.2:0.8(cutoff=0.4, edepth=0.3, res=0.6, gate=0.5)` | per-step parameter lock (bass filter and gate) |
+| `1.2:0.8(cutoff=0.4, edepth=0.3, res=0.6, gate=0.5)` | per-step parameter lock: `gate` on every module; the filter on `bass` (it stays until the next lock) and on `keys` and instrument graphs (that note only; `keys` has no filter envelope for `edepth`) |
 
 Drum patterns use labeled lanes:
 
@@ -889,6 +889,7 @@ never moves" instead of only "this parses". Each one came from a real session.
 | `dry_mix` | nothing uses `reverb_send`, `delay_send` or a bus | everything sits at the same depth |
 | `mono_mix` | fewer than a third of the tonal tracks are panned off centre | instruments in the same place cannot be told apart |
 | `chord_into_mono_voice` | a chord plays through a `keys` module whose `voice_mode` is not `poly`, or through a `bass`, which has one voice | only the last note of the chord sounds: unison, octave and fifth stack their voices on one note, and `bass` has one to begin with. Exempt when the track has an `arp`, where the chord is the note set the arpeggiator walks rather than something meant to sound at once. `fm` is eight-voice and is never flagged |
+| `plock_ignored` | a pattern with filter locks plays through a module that drops them: `cutoff=`, `edepth=` or `res=` on `fm` or `beats`, or `edepth=` on `keys` | the note plays and the lock is dropped without a sound, so a line written as if each note shaped the filter sounds as if nothing were written. `fm` has no filter, a kit none per drum, and `keys` no filter envelope. `gate=` works everywhere and is not counted. On `fm`, velocity already sets a note's brightness, and `auto <module> mod_index` sweeps it |
 | `no_sidechain` | drums and tonal tracks with no ducking anywhere | the kick has to fight through the mix |
 | `sidechain_without_kick` | a scene ducks tracks but has no beats track | those tracks play unducked, so a breakdown can end up louder than the drop |
 | `single_scene` | more than 8 bars in one scene | no arrangement shape |

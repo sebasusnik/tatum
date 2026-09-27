@@ -139,7 +139,11 @@ impl SongInstrument {
                     m.set_param(BassParam::Resonance, r);
                 }
             }
-            Self::Fm(_) | Self::Keys(_) | Self::Beats(_) => {}
+            // `keys` takes the filter locks per voice; it has no filter
+            // envelope for `edepth` to reach. `fm` has no filter and a kit
+            // none per drum: `plock_ignored` says so when a song writes them.
+            Self::Keys(m) => m.stage_plock(cutoff, resonance),
+            Self::Fm(_) | Self::Beats(_) => {}
         }
     }
 
