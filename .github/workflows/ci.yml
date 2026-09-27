@@ -12,6 +12,8 @@ on:
   # are checked when their turn comes.
   pull_request:
     branches: [main]
+  # A run by hand, from the Actions tab or `gh workflow run CI`.
+  workflow_dispatch:
 
 # A new push makes the run for the one before it worthless.
 concurrency:
@@ -28,7 +30,7 @@ jobs:
     name: build, test, corpus, docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
@@ -126,7 +128,7 @@ jobs:
       matrix:
         song: [detroit, liquid_dnb, neon_arterial]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
@@ -139,7 +141,7 @@ jobs:
     name: wasm32 build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -153,7 +155,7 @@ jobs:
     env:
       RUSTFLAGS: ""
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
