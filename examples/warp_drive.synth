@@ -1,0 +1,828 @@
+# Warp Drive — full-on psytrance, F# phrygian, 145 BPM
+# Straight grid, no swing, no humanize: every hit where the clock says.
+# The bass rolls the three sixteenths between kicks and never touches one.
+tempo 145
+meter 4/4
+scale F# phrygian
+swing 0.5
+humanize 0.0 timing 0.0
+sidechain 0.5 attack=1ms release=90ms
+
+delay sync=dotted_eighth feedback=0.3 filter=0.55
+reverb size=0.62 damp=0.5 predelay=25 sidechain=0.6
+
+delay_return  { in > highpass(400hz, 0.05) > autopan(0.5, bars=2) > out }
+reverb_return { in > highpass(300hz, 0.05) > lowpass(6000, 0.05, lfo_bars=16, lfo_depth=2500) > out }
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# Kick: short, clicky, a tight tail so the bass has room on the next 16th
+module beats kit {
+    kick_level 1.0
+    kick_decay 18%
+    kick_pitch 1.05x
+    kick_click 65%
+    kick_drive 55%
+    snare_level 0.55
+    snare_decay 12%
+    snare_pitch 1.2x
+    snare_snap 70%
+    snare_drive 40%
+    snare_pan 0.0
+    hihat_level 0.8
+    hihat_decay 12%
+    hihat_pitch 1.7x
+    hihat_pan 0.25
+    clap_level 0.7
+    clap_pan -0.05
+    tom_pan -0.3
+    crash_pan 0.2
+}
+
+# Rolling bass: two saws a hair apart, a fast filter pluck, no sustain
+module bass roll {
+    osc1_wave saw
+    osc2_wave saw
+    osc2_pitch 0.083st
+    cutoff 90hz
+    cutoff_env 1400hz
+    resonance 28%
+    keytrack 30%
+    glide 0%
+    attack 1ms
+    decay 95ms
+    sustain 0%
+    release 25ms
+}
+
+# 303: squelch with slides, the filter is automated per scene
+module bass acid {
+    osc1_wave saw
+    cutoff 260hz
+    cutoff_env 3200hz
+    resonance 84%
+    glide 14%
+    keytrack 20%
+    attack 1ms
+    decay 170ms
+    sustain 15%
+    release 40ms
+    vel_env 60%
+}
+
+# Zap: FM pitch-drop blips, the psy percussion between the drums
+module fm zap {
+    algorithm two_op
+    level 1.8
+    mod_index 82%
+    feedback 30%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 3.5x
+    op0_envelope 0.001 0.07 0.0 0.05
+    op1_envelope 0.001 0.04 0.0 0.03
+    lfo_target pitch
+    lfo_sync sixteenth
+    lfo_waveform saw
+    lfo_depth 45%
+}
+
+# Laser lead: serial FM with a growling index LFO and vibrato
+module fm laser {
+    algorithm serial4
+    level 1.6
+    mod_index 55%
+    feedback 22%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 2x
+    op2_ratio 1.005x
+    op3_ratio 3x
+    op0_envelope 0.004 0.25 0.7 0.15
+    op1_envelope 0.002 0.18 0.5 0.12
+    op2_envelope 0.002 0.30 0.4 0.12
+    op3_envelope 0.001 0.10 0.2 0.08
+    lfo_target mod_index
+    lfo_sync bars_2
+    lfo_waveform triangle
+    lfo_depth 35%
+    vibrato_rate 5.5hz
+    vibrato_depth 18%
+}
+
+# Haze: the dirt under the lead, on purpose. It started life as an engine
+# bug -- lead notes that never released and piled up on the phrygian
+# semitone -- and the song sounded better with it. Here it is written down:
+# the lead's timbre and chain holding F# against G. Its level and its FM
+# grit are drawn by the scene so the dirt moves instead of just growing; a
+# touch of bitcrush comes and goes but never above 30%
+module fm haze {
+    algorithm serial4
+    level 1.6
+    mod_index 55%
+    feedback 22%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 2x
+    op2_ratio 1.005x
+    op3_ratio 3x
+    op0_envelope 0.3 0.5 0.7 0.6
+    op1_envelope 0.3 0.5 0.5 0.6
+    op2_envelope 0.3 0.5 0.4 0.6
+    op3_envelope 0.3 0.5 0.2 0.6
+    lfo_target mod_index
+    lfo_sync bars_2
+    lfo_waveform triangle
+    lfo_depth 35%
+    vibrato_rate 5.5hz
+    vibrato_depth 18%
+}
+
+# Arp: bright plucked keys cycling the phrygian cluster
+module keys glass {
+    voice_mode poly
+    cutoff 2400hz
+    resonance 35%
+    detune 8%
+    chorus_mix 0%
+    attack 1ms
+    decay 120ms
+    sustain 10%
+    release 90ms
+    lfo_target cutoff
+    lfo_sync bars_4
+    lfo_waveform triangle
+    lfo_depth 22%
+}
+
+# Pad: dark wide bed, breathing filter
+module keys nebula {
+    voice_mode poly
+    cutoff 900hz
+    resonance 30%
+    detune 35%
+    chorus_mix 45%
+    attack 1.5s
+    decay 800ms
+    sustain 80%
+    release 600ms
+    lfo_target cutoff
+    lfo_sync bars_8
+    lfo_waveform triangle
+    lfo_depth 14%
+    vibrato_rate 0.6hz
+    vibrato_depth 5%
+}
+
+# Bell: glassy two-op for the breakdowns, drenched in delay
+module fm bell {
+    algorithm two_op
+    level 1.6
+    mod_index 48%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 3.5x
+    op0_envelope 0.001 0.9 0.0 0.8
+    op1_envelope 0.001 0.5 0.0 0.4
+    vibrato_rate 4hz
+    vibrato_depth 4%
+}
+
+# Riser: metallic noise that swells into every drop
+module fm riser {
+    algorithm pair_plus_two
+    level 1.2
+    mod_index 100%
+    feedback 100%
+    waveform abs_sine
+    op0_ratio 7.785x
+    op1_ratio 2.515x
+    op2_ratio 5.305x
+    op3_ratio 1.43x
+    op0_envelope 0.5 2.0 0.9 1.5
+    op1_envelope 0.5 1.8 0.9 1.3
+    op2_envelope 0.5 1.6 0.9 1.2
+    op3_envelope 0.5 2.2 0.9 1.8
+    op0_feedback 90%
+    op1_feedback 85%
+    lfo_target mod_index
+    lfo_sync bar
+    lfo_waveform triangle
+    lfo_depth 30%
+}
+
+# Grinder: an angle grinder with a hand on the RPM knob. A serial FM stack
+# with a gritty feedback operator, held for bars; a slow triangle on pitch
+# (up to an octave each way) is the motor spinning up and down, and each
+# scene rides the knob with `auto` on the LFO depth and the index
+module fm grinder {
+    algorithm serial4
+    level 1.6
+    mod_index 55%
+    feedback 20%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 2.01x
+    op2_ratio 3.03x
+    op3_ratio 1x
+    op0_envelope 0.3 0.5 1.0 0.6
+    op1_envelope 0.3 0.5 1.0 0.6
+    op2_envelope 0.3 0.5 1.0 0.6
+    op3_envelope 0.3 0.5 1.0 0.6
+    op1_feedback 40%
+    lfo_target pitch
+    lfo_sync bars_4
+    lfo_waveform triangle
+    lfo_depth 80%
+}
+
+
+# ────────────────────────────────────────────────
+# DRUMS
+# ────────────────────────────────────────────────
+
+pattern tick {
+    hat:     o - x - o - x - o - x - o - x o
+}
+
+pattern beat_ignite {
+    kick:    X - - -  X - - -  X - - -  X - - -
+    hat:     - - x - - - x - - - x - - - x -
+}
+
+pattern beat_main {
+    kick:    X - - -  X - - -  X - - -  X - - -
+    clap:    - - - -  X - - -  - - - -  X - - -
+    hat:     o o - o  o o - o  o o - o  o o - x
+    openhat: - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -
+}
+
+pattern beat_drive {
+    kick:    X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -
+    clap:    - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - x:0.5
+    snare:   - - - o  - - - -  - - o -  - - - o  - - - o  - - - -  - o - -  - o o x
+    hat:     x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x*2 x*3
+    openhat: - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - - -
+}
+
+pattern beat_glitch {
+    kick:    X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -
+    clap:    - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - x*2 -
+    snare:   - o - -  - - o -  - o - -  - - - x*3  - o - -  - - o -  x*2 - - -  - x*2 - x*4
+    hat:     x*2 o x o  x o x*3 o  x o x o  x*2 o x o  x o x o  x*2 o x o  x o x*3 o  x o x*4 x
+    openhat: - - x:0.7 -  - - - -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - - -  - - x:0.7 -  - - - -
+    tom:     - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - x:0.6
+}
+
+pattern beat_tribal {
+    kick:    X - - -  X - - -  X - - -  X - - -
+    tom:     - - x - - x - - - - x - - - - -
+    tom2:    - - - - - - - x - - - - - x - -
+    tom3:    - - - - - - - - - - - - - - x*2 x*2
+    hat:     - - x - - - x - - - x - - - x -
+}
+
+# Four bars that pack tighter every bar: quarters, eighths, sixteenths, rolls
+pattern beat_build {
+    kick:    X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - X -  X - X -  X X X X  X X X X
+    snare:   o - - -  o - - -  o - - -  o - - -  o - o -  o - o -  x - o -  x - x -  x o x o  x o x o  x x x x  x x x x  X*2 X*2 X*2 X*2  X*2 X*2 X*2 X*2  X*3 X*3 X*3 X*3  X*4 X*4 X*4 X*4
+    hat:     x - x -  x - x -  x - x -  x - x -  x x x x  x x x x  x x x x  x x x x  x x x x  x x x x  x x x x  x x x x  x*2 x*2 x*2 x*2  x*2 x*2 x*2 x*2  x*3 x*3 x*3 x*3  x*4 x*4 x*4 -
+}
+
+pattern beat_outro {
+    kick:    X - - -  X - - -  X - - -  X - - -
+    hat:     - - x - - - x - - - x - - - x -
+    openhat: - - - - - - - - - - - - - - x:0.5 -
+}
+
+# ────────────────────────────────────────────────
+# BASS
+# ────────────────────────────────────────────────
+
+pattern roll_a {
+    - 1.1:0.95 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8
+}
+
+# Three bars of root, then the phrygian b2 and a jump on the turnaround
+pattern roll_move {
+    - 1.1:0.95 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8
+    - 1.1:0.95 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8
+    - 1.1:0.95 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8
+    - 1.1:0.95 1.1:0.7 1.1:0.8  - 2.1:0.95 2.1:0.7 2.1:0.8  - 1.1:0.95 1.1:0.7 1.2:0.9  - 7.0:0.95 2.1:0.8 1.2:0.9
+}
+
+# Gallop: a ratchet on the first sixteenth after each kick
+pattern roll_gallop {
+    - <1.1:0.9 1.1:0.9> 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8  - <1.1:0.9 1.1:0.9> 1.1:0.7 1.1:0.8  - 1.1:0.95 1.2:0.8 1.1:0.8
+    - <1.1:0.9 1.1:0.9> 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8  - <2.1:0.9 2.1:0.9> 2.1:0.7 2.1:0.8  - 1.1:0.95 1.2:0.8 5.1:0.8
+}
+
+pattern roll_tribal {
+    - 1.1:0.9 - 1.1:0.7  - - 1.1:0.9 -  - 1.1:0.9 - 1.2:0.7  - - 2.1:0.9 -
+}
+
+pattern roll_build {
+    - 1.1:0.9 1.1:0.7 1.1:0.8  - 1.1:0.9 1.1:0.7 1.1:0.8  - 1.1:0.9 1.1:0.7 1.1:0.8  - 1.1:0.9 1.1:0.7 1.1:0.8
+    - 1.1:0.9 1.1:0.7 1.1:0.8  - 1.1:0.9 1.1:0.7 1.1:0.8  - 1.1:0.9 1.1:0.7 1.1:0.8  - 1.1:0.9 1.1:0.7 1.1:0.8
+    - 1.1:0.9 - 1.1:0.8  - 1.1:0.9 - 1.1:0.8  - 1.1:0.9 - 1.1:0.8  - 1.1:0.9 - 1.1:0.8
+    - 1.1:0.9 - -  - 1.1:0.9 - -  - - - -  - - - -
+}
+
+# ────────────────────────────────────────────────
+# ACID
+# ────────────────────────────────────────────────
+
+pattern acid_a {
+    1.2:0.9  1.2:0.5  ~2.2:0.8  1.2:0.6   5.2:0.9  -  1.3:0.9  ~7.2:0.7
+    1.2:0.8  1.2:0.5  4.2:0.8   -         ~5.2:0.9  3.2:0.6  1.3:1.0  ~2.3:0.8
+    1.2:0.9  -        1.2:0.6   ~1.3:0.9  7.2:0.7  5.2:0.8  -  2.2:0.9
+    1.2:0.8  <1.2:0.6 1.3:0.8>  ~2.2:0.7  1.2:0.6   5.1:0.9  -  ~1.2:0.8  -
+}
+
+# Screamer: ratchets and octave leaps, for the second half
+pattern acid_b {
+    <1.2:0.9 1.2:0.9>  1.3:0.7  ~2.3:0.9  1.2:0.6   1.2:0.9  ~1.3:1.0  7.2:0.6  5.2:0.8
+    1.2:0.9  <2.2:0.8 2.2:0.8 2.2:0.8>  1.2:0.6  ~5.2:0.9   1.3:1.0  -  ~2.3:0.9  1.3:0.7
+    <1.2:0.9 1.2:0.9>  1.3:0.7  ~2.3:0.9  1.2:0.6   4.2:0.9  ~5.2:1.0  7.2:0.6  1.3:0.8
+    <1.2:0.7 2.2:0.8 3.2:0.9 5.2:1.0>  1.3:1.0  ~2.3:0.9  -   <1.2:0.9 1.2:0.9 1.2:0.9>  -  ~1.3:1.0  <2.3:0.8 1.3:0.7>
+}
+
+# ────────────────────────────────────────────────
+# ZAPS, LEADS, ARPS
+# ────────────────────────────────────────────────
+
+pattern zap_sparse {
+    - - - -  - - - 5.4:0.7  - - - -  - - - -
+    - - - -  - - - -  - - 1.5:0.8 -  - - - 2.5:0.6
+}
+
+pattern zap_busy {
+    - - 1.5:0.7 -  - - - 5.4:0.8  - - 1.5:0.7 -  - 2.5:0.6 - -
+    - - 1.5:0.7 -  - <1.5:0.6 1.5:0.6 1.5:0.6> - 5.4:0.8  - - 1.5:0.7 -  <1.5:0.5 2.5:0.6 3.5:0.7 5.5:0.8> - - 7.4:0.7
+}
+
+pattern lead_theme {
+    1.4:0.9  ..  ..  2.4:0.8   ..  ..  1.4:0.8  ..   5.3:0.9  ..  ..  ..   7.3:0.8  ..  1.4:0.9  ..
+    2.4:0.9  ..  ..  3.4:0.8   ..  ..  2.4:0.8  ..   1.4:0.9  ..  ..  ..   ..  ..  -  -
+    1.4:0.9  ..  ..  2.4:0.8   ..  ..  1.4:0.8  ..   5.4:1.0  ..  ..  4.4:0.8   ..  3.4:0.8  2.4:0.8  ..
+    1.4:0.9  ..  ..  ..   <5.3:0.6 7.3:0.7 1.4:0.8 2.4:0.9>  <3.4:0.8 5.4:0.9 7.4:0.95 1.5:1.0>  1.5:1.0  ..   ..  ..  ..  ..   -  -  -  -
+}
+
+# Call and response: the theme up top, a machine-gun answer
+pattern lead_peak {
+    1.5:1.0  ..  ..  2.5:0.9   ..  ..  1.5:0.9  ..   5.4:1.0  ..  ..  ..   7.4:0.9  ..  1.5:1.0  ..
+    <2.5:0.9 2.5:0.9 2.5:0.9 2.5:0.9>  ..  3.5:0.9  ..   <2.5:0.8 2.5:0.8 2.5:0.8>  ..  1.5:0.9  ..   <5.4:0.9 5.4:0.9 5.4:0.9 5.4:0.9>  ..  ..  ..   -  -  -  -
+    1.5:1.0  ..  ..  2.5:0.9   ..  ..  1.5:0.9  ..   5.5:1.0  ..  ..  4.5:0.9   ..  3.5:0.9  2.5:0.9  ..
+    <1.5 7.4 5.4 4.4>  <3.4 2.4 1.4 7.3>  1.4:1.0  ..   <5.4:0.7 1.5:0.8 2.5:0.9 5.5:1.0>  ..  ..  ..   <1.5:1.0 1.5:1.0 1.5:1.0 1.5:1.0>  <1.5:1.0 1.5:1.0 1.5:1.0 1.5:1.0>  <1.5:1.0 1.5:1.0 1.5:1.0 1.5:1.0 1.5:1.0 1.5:1.0>  <1.5:1.0 1.5:1.0 1.5:1.0 1.5:1.0 1.5:1.0 1.5:1.0 1.5:1.0 1.5:1.0>   -  -  -  -
+}
+
+pattern arp_chords {
+    [1.3 2.3 5.3 7.3]:0.8  ..*15
+    [1.3 2.3 5.3 7.3]:0.8  ..*15
+    [7.2 2.3 4.3 6.3]:0.8  ..*15
+    [2.3 4.3 5.3 1.4]:0.8  ..*15
+}
+
+pattern bell_line {
+    1.5:0.8  -  -  5.4:0.6   -  -  2.5:0.7  -   -  -  -  -   7.4:0.6  -  -  -
+    -  -  -  -   1.5:0.7  -  -  3.5:0.6   -  -  2.5:0.7  -   -  -  -  -
+    1.5:0.8  -  -  5.4:0.6   -  -  2.5:0.7  -   -  -  5.5:0.8  -   4.5:0.6  -  3.5:0.6  -
+    2.5:0.8  -  -  -   -  -  -  -   1.5:0.6  -  -  -   -  -  -  -
+}
+
+pattern pad_prog {
+    [1.2 5.2 1.3 3.3]:0.6  ..*31
+    [2.2 6.2 2.3 4.3]:0.6  ..*15
+    [7.1 4.2 7.2 2.3]:0.6  ..*15
+}
+
+pattern grind_hold {
+    F#4:0.8  ..*63
+}
+
+# The grinder as a gesture: one held note, and the scene draws the RPM curve
+# on its ratios, a point every quarter bar
+pattern grind_rev_8 {
+    -*96  F#4:0.8 ..*29 - -
+}
+
+pattern grind_rev_16 {
+    -*224  F#4:0.8 ..*29 - -
+}
+
+# The notes and their weights are measured from the stuck voices. F# is the
+# root and carries it; the notes above ride on their own track because in FM
+# velocity barely moves a note's level, and each needs its own weight
+pattern haze_root_break {
+    F#4:0.9 ..*191
+}
+
+pattern haze_root_long {
+    F#4:0.9 ..*255
+}
+
+pattern haze_root_full {
+    F#4:0.9 ..*127
+}
+
+# Above the root: F#'s octave and fifth in the first break
+pattern haze_hi_break {
+    [F#5:0.9 C#6:0.7 F#6:0.4]:0.8 ..*191
+}
+
+# In the peak they pile up the way the stuck notes did: G5 first, the fifth
+# and the octaves only for the last four bars
+pattern haze_hi_peak {
+    -*64
+    G5:0.9 ..*127
+    [G5:0.9 C#6:0.5 F#5:0.6 F#6:0.6]:0.8 ..*63
+}
+
+pattern haze_hi_full {
+    [G5:0.9 F#5:0.6 F#6:0.6]:0.8 ..*127
+}
+
+# Through the build and the first drop: F# with its octaves and fifth
+pattern haze_root_4 {
+    F#4:0.9 ..*63
+}
+
+pattern haze_hi_drop {
+    [F#5:0.8 F#6:0.7 C#6:0.6]:0.8 ..*255
+}
+
+pattern haze_hi_4 {
+    [F#5:0.8 F#6:0.7 C#6:0.6]:0.8 ..*63
+}
+
+pattern swell {
+    1.3:0.8  ..*15
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+bus drums
+drums { in > compressor(-10, ratio=4, attack=3, release=45, makeup=2db) > saturate(0.15) > master }
+
+track drums {
+    play beat_main
+    using kit
+    level 0.8
+    velocity 1.0
+    out > highpass(28hz, 0.05) > eq(low=1.5, mid=-1.5, high=2) > drums
+}
+
+track bass {
+    play roll_a
+    using roll
+    level 0.62
+    velocity 1.0
+    gate 0.7
+    sidechain 0.3
+    out > highpass(32hz, 0.05) > saturate(0.35) > eq(low=1, mid=-2, high=1) > master
+}
+
+track acid {
+    play acid_a
+    using acid
+    level 0.6
+    velocity 1.0
+    gate 0.55
+    pan 0.18
+    delay_send 0.18
+    reverb_send 0.06
+    out > highpass(150hz, 0.05) > saturate(0.6) > autopan(0.35, bars=4) > master
+}
+
+track zap {
+    play zap_sparse
+    using zap
+    level 0.28
+    velocity 1.0
+    gate 0.3
+    pan -0.35
+    delay_send 0.15
+    reverb_send 0.1
+    sidechain 0.2
+    out > highpass(250hz, 0.05) > lowpass(11khz, 0.05) > panenv(0.7, release=300) > master
+}
+
+track lead {
+    play lead_theme
+    using laser
+    level 0.075
+    velocity 1.0
+    gate 0.95
+    pan 0.05
+    delay_send 0.3
+    reverb_send 0.22
+    sidechain 0.45
+    out > highpass(300hz, 0.05) > saturate(0.3) > phaser(0.3, bars=8) > master
+}
+
+track arp {
+    play arp_chords
+    using glass
+    level 0.3
+    velocity 1.0
+    pan -0.25
+    delay_send 0.12
+    reverb_send 0.15
+    sidechain 0.55
+    arp updown rate=16 gate=0.4 octaves=2
+    out > highpass(400hz, 0.05) > autopan(0.55, bars=2) > master
+}
+
+track pad {
+    play pad_prog
+    using nebula
+    level 0.26
+    velocity 1.0
+    pan 0.0
+    reverb_send 0.45
+    delay_send 0.08
+    sidechain 0.6
+    out > highpass(220hz, 0.05) > phaser(0.35, bars=16) > autopan(0.45, bars=8) > master
+}
+
+track bell {
+    play bell_line
+    using bell
+    level 0.42
+    velocity 1.0
+    pan 0.3
+    delay_send 0.3
+    reverb_send 0.35
+    out > highpass(350hz, 0.05) > master
+}
+
+track riser {
+    play swell
+    using riser
+    level 0.18
+    velocity 1.0
+    pan 0.0
+    reverb_send 0.3
+    out > highpass(600hz, 0.05, lfo_bars=4, lfo_depth=400) > lowpass(10khz, 0.05) > autopan(0.6, hz=0.5) > master
+}
+
+track grind {
+    play grind_hold
+    using grinder
+    level 0.1
+    velocity 1.0
+    gate 1.0
+    pan -0.2
+    reverb_send 0.15
+    sidechain 0.6
+    out > highpass(250hz, 0.05) > saturate(0.6) > lowpass(7khz, 0.05) > autopan(0.5, bars=1) > master
+}
+
+
+track haze {
+    play haze_root_long
+    using haze
+    level 0.07
+    velocity 1.0
+    gate 1.0
+    pan -0.1
+    reverb_send 0.22
+    delay_send 0.3
+    sidechain 0.3
+    out > highpass(300hz, 0.05) > saturate(0.3) > bitcrush(10, 0.15, wet=0.1) as crush > phaser(0.3, bars=8) > autopan(0.3, bars=2) > master
+}
+
+track haze_hi {
+    play haze_hi_peak
+    using haze
+    level 0.03
+    velocity 1.0
+    gate 1.0
+    pan 0.1
+    reverb_send 0.22
+    delay_send 0.3
+    sidechain 0.3
+    out > highpass(300hz, 0.05) > saturate(0.3) > phaser(0.3, bars=8) > autopan(0.3, bars=2) > master
+}
+
+master {
+    in > lowpass(20000, 0.05)
+       > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
+       > eq(low=0.5, mid=-0.5, high=1)
+       > out
+}
+
+# ────────────────────────────────────────────────
+# SCENES
+# ────────────────────────────────────────────────
+
+# Space before the engine starts: pad, stray zaps, a ticking hat
+scene intro {
+    auto grinder op0_ratio 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.1613 > 0.2903 > 0.4194 > 0.4194 > 0.4194 > 0.4194
+    auto grinder op1_ratio 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.3568 > 0.6161 > 0.8755 > 0.8755 > 0.8755 > 0.8755
+    auto grinder op2_ratio 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.5542 > 0.9452 > 1.0000 > 1.0000 > 1.0000 > 1.0000
+    auto grinder op3_ratio 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.1613 > 0.2903 > 0.4194 > 0.4194 > 0.4194 > 0.4194
+    auto grind level 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.130 > 0.140 > 0.150 > 0.150 > 0.150 > 0.150
+    auto grinder mod_index 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.400 > 0.350 > 0.300 > 0.300 > 0.300 > 0.300
+    auto grinder lfo_depth 0 > 0
+    auto grinder op0_release 0.39 > 0.39
+    auto grinder op1_release 0.39 > 0.39
+    auto grinder op2_release 0.39 > 0.39
+    auto grinder op3_release 0.39 > 0.39
+    auto master cutoff 900 > 8000
+    auto reverb_mix 0.5 > 0.3
+    track drums { play tick using kit }
+    track pad   { play pad_prog using nebula }
+    track riser { play swell using riser }
+    track grind { play grind_rev_8 using grinder pan -0.2 }
+}
+
+# Kick lands, the bass opens up bar by bar
+scene ignite {
+    auto roll cutoff 0.05 > 0.2
+    auto master cutoff 6000 > 20000
+    track drums { play beat_ignite using kit }
+    track bass  { play roll_a using roll }
+    track pad   { play pad_prog using nebula }
+}
+
+scene groove {
+    auto grinder op0_ratio 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.1290 > 0.2258 > 0.2258 > 0.0065 > 0.2129 > 0.4194 > 0.4194
+    auto grinder op1_ratio 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.0974 > 0.2919 > 0.4865 > 0.4865 > 0.0455 > 0.4605 > 0.8755 > 0.8755
+    auto grinder op2_ratio 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.1632 > 0.4565 > 0.7497 > 0.7497 > 0.0850 > 0.7106 > 1.0000 > 1.0000
+    auto grinder op3_ratio 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.0323 > 0.1290 > 0.2258 > 0.2258 > 0.0065 > 0.2129 > 0.4194 > 0.4194
+    auto grind level 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.120 > 0.135 > 0.150 > 0.150 > 0.010 > 0.080 > 0.150 > 0.150
+    auto grinder mod_index 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.450 > 0.390 > 0.330 > 0.330 > 0.450 > 0.375 > 0.300 > 0.300
+    auto grinder lfo_depth 0 > 0
+    auto grinder op0_release 0.39 > 0.39
+    auto grinder op1_release 0.39 > 0.39
+    auto grinder op2_release 0.39 > 0.39
+    auto grinder op3_release 0.39 > 0.39
+    track drums { play beat_main using kit }
+    track bass  { play roll_move using roll }
+    track zap   { play zap_sparse using zap pan -0.35 }
+    track pad   { play pad_prog using nebula }
+    track grind { play grind_rev_16 using grinder pan -0.2 }
+}
+
+# The 303 wakes up and climbs
+scene acid1 {
+    auto acid cutoff 0.25 > 0.5
+    track drums { play beat_drive using kit }
+    track bass  { play roll_move using roll }
+    track acid  { play acid_a using acid pan 0.18 }
+}
+
+# Breakdown: the theme on its own, the room opens
+scene break1 {
+    auto haze level 0 > 0.02 > 0.035 > 0.025 > 0.04 > 0.03 > 0.045 > 0.035 > 0.05 > 0.04 > 0.05 > 0.045 > 0.03
+    auto haze_hi level 0.0000 > 0.0180 > 0.0315 > 0.0225 > 0.0360 > 0.0270 > 0.0405 > 0.0315 > 0.0450 > 0.0360 > 0.0450 > 0.0405 > 0.0270
+    auto haze.crush wet 0.05 > 0.1 > 0.2 > 0.1 > 0.15 > 0.25 > 0.12 > 0.18 > 0.3 > 0.15 > 0.2 > 0.25 > 0.1
+    auto haze mod_index 0.45 > 0.48 > 0.46 > 0.5 > 0.48 > 0.52 > 0.49 > 0.53 > 0.5 > 0.54 > 0.51 > 0.53 > 0.48
+    reverb_mix = 0.45
+    track pad   { play pad_prog using nebula }
+    track lead  { play lead_theme using laser sidechain 0 pan 0.05 }
+    track bell  { play bell_line using bell pan 0.3 }
+    track riser { play swell using riser }
+    track haze  { play haze_root_break using haze pan -0.1 }
+    track haze_hi { play haze_hi_break using haze pan 0.1 }
+}
+
+scene build1 {
+    auto haze level 0.055 > 0.06 > 0.058 > 0.065 > 0.062
+    auto haze_hi level 0.02 > 0.022 > 0.021 > 0.024 > 0.023
+    auto haze mod_index 0.5 > 0.53 > 0.5 > 0.55 > 0.52
+    auto haze.crush wet 0.05 > 0.1 > 0.06 > 0.12 > 0.08
+    auto master cutoff 1500 > 20000
+    auto riser level 0.05 > 0.4
+    auto roll cutoff 0.1 > 0.3
+    track drums { play beat_build using kit }
+    track bass  { play roll_build using roll }
+    track lead  { play lead_theme using laser pan 0.05 }
+    track riser { play swell using riser }
+    track haze  { play haze_root_4 using haze pan -0.1 }
+    track haze_hi { play haze_hi_4 using haze pan 0.1 }
+}
+
+# Drop: everything that was introduced, at once
+scene drop1 {
+    auto haze level 0.07 > 0.08 > 0.075 > 0.085 > 0.08 > 0.09 > 0.085 > 0.09 > 0.085 > 0.09 > 0.085 > 0.09 > 0.085 > 0.09 > 0.085 > 0.09 > 0.085
+    auto haze_hi level 0.025 > 0.028 > 0.026 > 0.03 > 0.028 > 0.032 > 0.03 > 0.032 > 0.03 > 0.032 > 0.03 > 0.032 > 0.03 > 0.032 > 0.03 > 0.032 > 0.03
+    auto haze mod_index 0.5 > 0.52 > 0.5 > 0.54 > 0.52 > 0.55 > 0.53 > 0.56 > 0.54 > 0.56 > 0.54 > 0.56 > 0.54 > 0.56 > 0.54 > 0.56 > 0.54
+    auto haze.crush wet 0.05 > 0.1 > 0.06 > 0.12 > 0.08 > 0.14 > 0.1 > 0.15 > 0.1 > 0.15 > 0.1 > 0.15 > 0.1 > 0.15 > 0.1 > 0.15 > 0.1
+    track drums { play beat_drive using kit }
+    track bass  { play roll_move using roll }
+    track lead  { play lead_theme using laser pan 0.05 }
+    track arp   { play arp_chords using glass pan -0.25 }
+    track zap   { play zap_busy using zap pan -0.35 }
+    track pad   { play pad_prog using nebula }
+    track haze  { play haze_root_long using haze pan -0.1 }
+    track haze_hi { play haze_hi_drop using haze pan 0.1 }
+}
+
+# Twist: toms, a hollow bass and the acid through a talking filter
+scene twist {
+    auto acid cutoff 0.2 > 0.45 > 0.25
+    track drums { play beat_tribal using kit }
+    track bass  { play roll_tribal using roll }
+    track acid  { play acid_a using acid pan 0.18 }
+}
+
+# Acid 2: glitch drums, the screamer at full squelch
+scene acid2 {
+    auto acid cutoff 0.3 > 0.62 > 0.35
+    track drums { play beat_glitch using kit }
+    track bass  { play roll_gallop using roll }
+    track acid  { play acid_b using acid pan 0.18 }
+}
+
+# Second breakdown: bells into a frozen reverb
+scene break2 {
+    auto reverb_freeze 0 > 1
+    auto master cutoff 20000 > 3000
+    track pad   { play pad_prog using nebula }
+    track bell  { play bell_line using bell pan 0.3 }
+    track riser { play swell using riser }
+}
+
+scene build2 {
+    auto master cutoff 1200 > 20000
+    auto riser level 0.05 > 0.45
+    auto acid cutoff 0.2 > 0.7
+    track drums { play beat_build using kit }
+    track bass  { play roll_build using roll }
+    track acid  { play acid_b using acid pan 0.18 }
+    track riser { play swell using riser }
+}
+
+# Peak: the theme an octave up with its machine-gun answer, acid underneath
+scene peak {
+    auto haze level 0.1121 > 0.1239 > 0.1180 > 0.1298 > 0.1180 > 0.1298 > 0.1180 > 0.1239 > 0.1121 > 0.1180 > 0.1062 > 0.1180 > 0.1062 > 0.1180 > 0.1062 > 0.1180 > 0.1121
+    auto haze_hi level 0.0599 > 0.0662 > 0.0630 > 0.0693 > 0.0630 > 0.0693 > 0.0630 > 0.0662 > 0.0599 > 0.0630 > 0.0567 > 0.0630 > 0.0567 > 0.0630 > 0.0567 > 0.0630 > 0.0599
+    auto haze.crush wet 0.1 > 0.15 > 0.1 > 0.2 > 0.12 > 0.22 > 0.14 > 0.25 > 0.15 > 0.25 > 0.15 > 0.28 > 0.18 > 0.3 > 0.2 > 0.3 > 0.2
+    auto haze mod_index 0.5 > 0.52 > 0.5 > 0.54 > 0.52 > 0.55 > 0.53 > 0.56 > 0.54 > 0.57 > 0.55 > 0.58 > 0.56 > 0.58 > 0.56 > 0.58 > 0.56
+    track drums { play beat_drive using kit }
+    track bass  { play roll_gallop using roll }
+    track lead  { play lead_peak using laser pan 0.05 }
+    track acid  { play acid_b using acid pan 0.18 }
+    track arp   { play arp_chords using glass pan -0.25 }
+    track zap   { play zap_busy using zap pan -0.35 }
+    track pad   { play pad_prog using nebula }
+    track haze  { play haze_root_long using haze pan -0.1 }
+    track haze_hi { play haze_hi_peak using haze pan 0.1 }
+}
+
+scene peak2 {
+    auto haze level 0.1121 > 0.1180 > 0.1062 > 0.1180 > 0.1121 > 0.1180 > 0.1062 > 0.1121 > 0.1062
+    auto haze_hi level 0.0898 > 0.0945 > 0.0851 > 0.0945 > 0.0898 > 0.0945 > 0.0851 > 0.0898 > 0.0851
+    auto haze.crush wet 0.15 > 0.3 > 0.15 > 0.3 > 0.15 > 0.3 > 0.2 > 0.25 > 0.1
+    auto haze mod_index 0.55 > 0.6 > 0.56 > 0.62 > 0.57 > 0.62 > 0.58 > 0.6 > 0.55
+    auto acid cutoff 0.35 > 0.75
+    track drums { play beat_glitch using kit }
+    track bass  { play roll_move using roll }
+    track lead  { play lead_peak using laser pan 0.05 }
+    track acid  { play acid_b using acid pan 0.18 }
+    track haze  { play haze_root_full using haze pan -0.1 }
+    track haze_hi { play haze_hi_full using haze pan 0.1 }
+}
+
+# Out: the engine winds down through a closing filter
+scene outro {
+    auto grinder op0_ratio 0.0323 > 0.0323
+    auto grinder op1_ratio 0.0974 > 0.0974
+    auto grinder op2_ratio 0.1632 > 0.1632
+    auto grinder op3_ratio 0.0323 > 0.0323
+    auto grinder op0_release 0.8416 > 0.8416
+    auto grinder op1_release 0.8416 > 0.8416
+    auto grinder op2_release 0.8416 > 0.8416
+    auto grinder op3_release 0.8416 > 0.8416
+    auto grinder mod_index 0.7 > 0.25
+    auto grinder lfo_depth 1.0 > 0.3
+    auto master cutoff 20000 > 700
+    auto reverb_mix 0.3 > 0.6
+    track drums { play beat_outro using kit }
+    track bass  { play roll_a using roll }
+    track pad   { play pad_prog using nebula }
+    track grind { play grind_hold using grinder pan -0.2 }
+}
+
+arrange {
+    intro x8
+    ignite x8
+    groove x16
+    acid1 x16
+    break1 x12
+    build1 x4
+    drop1 x16
+    twist x12
+    acid2 x16
+    break2 x8
+    build2 x4
+    peak x16
+    peak2 x8
+    outro x8
+}
