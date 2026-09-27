@@ -9,7 +9,6 @@ humanize 0.20 timing 0.12
 # Full compensation (the default) made the 2-bar interlude the loudest thing in the
 # track and the 6-track verse the quietest. 0.35 keeps a little of it, so a thin
 # scene is not a hole, without flattening the arrangement.
-gain_comp 0.35
 
 groove primus_pocket {
     snare nudge 0.006
@@ -408,8 +407,11 @@ track scrape {
 # MASTER
 # ────────────────────────────────────────────────
 
+# gain(0.793) at the head of the master: what the engine used to take off this
+# song's fullest scene when it scaled every scene by 1/sqrt(its tracks). The
+# master chain is fed as it was; scenes with fewer tracks now play as written.
 master {
-    in > eq(low=-1.0, mid=2.0, high=1.5)
+    in > gain(0.793) > eq(low=-1.0, mid=2.0, high=1.5)
        > compressor(-9, ratio=2.5, attack=12, release=90, makeup=5db)
        > out
 }

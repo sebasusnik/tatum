@@ -244,8 +244,11 @@ track bells {
 # own output stage limits after it. tilt 0.15, eq low +3 / mid 0 / high -1.
 # ────────────────────────────────────────────────
 
+# gain(0.447) at the head of the master: what the engine used to take off this
+# song's fullest scene when it scaled every scene by 1/sqrt(its tracks). The
+# master chain is fed as it was; scenes with fewer tracks now play as written.
 master {
-    in > tilt(0.15)
+    in > gain(0.447) > tilt(0.15)
        > eq(low=3.0, mid=0.0, high=-1.0)
        > compressor(-3.0, ratio=3.0, attack=20, release=100, makeup=1.00)
        > out

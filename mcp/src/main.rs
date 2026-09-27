@@ -700,7 +700,6 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         "peak": round3(peak),
         "rms": round3(rms),
         "clipped_samples": clipped,
-        "gain_compensation": round3(engine.gain_compensation()),
         "output_gain_db": round1(20.0 * engine.output_gain().max(1e-6).log10()),
         "master": {
             "peak_in": round3(in_peak),

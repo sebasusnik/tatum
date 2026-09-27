@@ -35,7 +35,6 @@ scale A minor
 swing 0.52
 humanize 0.04 timing 0.012
 sidechain 0.55 attack=3ms release=220ms
-gain_comp 0
 
 # A big room, and the tail ducks with everything else so it breathes too.
 reverb size=0.78 damp=0.38 predelay=30 sidechain=0.5

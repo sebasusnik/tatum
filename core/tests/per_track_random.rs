@@ -29,14 +29,10 @@ fn first_difference(a: &(Vec<f32>, Vec<f32>), b: &(Vec<f32>, Vec<f32>)) -> Optio
     (0..a.0.len()).find(|&i| a.0[i] != b.0[i] || a.1[i] != b.1[i])
 }
 
-/// `gain_comp 0` because it scales the master by the number of active tracks:
-/// without it, adding a silent track changes the level of everything and the
-/// test would be measuring that instead.
 const HEAD: &str = "\
 tempo 120
 scale A minor
 humanize 0.4 timing 0.2
-gain_comp 0
 
 module beats kit { kick_level 1.0 }
 module keys pad { voice_mode poly attack 10ms release 300ms }

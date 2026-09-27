@@ -484,8 +484,11 @@ track doom {
 # MASTER
 # ────────────────────────────────────────────────
 
+# gain(0.378) at the head of the master: what the engine used to take off this
+# song's fullest scene when it scaled every scene by 1/sqrt(its tracks). The
+# master chain is fed as it was; scenes with fewer tracks now play as written.
 master {
-    in > eq(low=0.4, mid=2.0, high=0.8)
+    in > gain(0.378) > eq(low=0.4, mid=2.0, high=0.8)
        > saturate(0.30)
        > compressor(-10, ratio=5.0, attack=1, release=20, makeup=2.5)
        > out

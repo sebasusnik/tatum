@@ -12,7 +12,6 @@ use tatum_core::song_engine::SongEngine;
 const SONG: &str = r#"
 tempo 120
 scale C major
-gain_comp 0
 
 module keys pad { cutoff 0.8 sustain 1.0 attack 1ms release 0.8 }
 module beats kit { kick_level 1.0 }
@@ -51,7 +50,6 @@ fn a_dropped_track_fades_instead_of_stopping_dead() {
 const REBALANCED: &str = r#"
 tempo 120
 scale C major
-gain_comp 0
 
 module keys pad { cutoff 0.8 sustain 1.0 attack 1ms release 0.8 }
 

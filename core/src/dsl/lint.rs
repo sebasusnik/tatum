@@ -300,6 +300,15 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
         ));
     }
 
+    // ── gain_comp_ignored: a setting the engine dropped ──
+    if song.globals.gain_comp.is_some() {
+        out.push(lint(
+            "gain_comp_ignored",
+            String::from("`gain_comp` does nothing any more"),
+            "The engine no longer scales each scene by how many tracks it has: the level you write is the level you hear, in every scene, and the whole song is levelled at the end. Delete the line.",
+        ));
+    }
+
     // ── level_used_as_fader: a sustained element ridden up and down per scene ──
     //
     // A continuous drone or pad is a bed, not a fader. Moving its level between

@@ -11,7 +11,6 @@ meter 4/4
 scale F minor
 swing 0.52
 humanize 0.12 timing 0.05
-gain_comp 0
 sidechain 0.45 attack=1ms release=150ms
 
 # ── The sends are the instrument ──────────────────────────

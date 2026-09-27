@@ -31,7 +31,6 @@ scale E minor
 swing 0.50
 humanize 0
 sidechain 0.65 attack=1ms release=80ms
-gain_comp 0
 
 # Dry and close. A long tail would smear the sequences, and the point of the
 # sequences is that you can hear every step of them.

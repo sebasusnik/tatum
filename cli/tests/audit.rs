@@ -43,7 +43,7 @@ fn bell(chorus: &str) -> String {
     format!(
         "tempo 120\n\
          scale C minor\n\
-         gain_comp 0\n\
+         \
          humanize 0\n\
          module fm bell {{ level 2.0 algorithm dual_pairs mod_index 20% {chorus} }}\n\
          module beats kit {{ }}\n\
@@ -122,7 +122,7 @@ fn low(pattern: &str, extra_track: &str) -> String {
     format!(
         "tempo 120\n\
          scale C minor\n\
-         gain_comp 0\n\
+         \
          humanize 0\n\
          module bass sub {{ cutoff 0.3 sustain 0.9 }}\n\
          module beats kit {{ }}\n\
@@ -155,7 +155,7 @@ fn notes_too_low_to_resolve_are_not_called_dirty() {
 #[test]
 fn an_arpeggio_is_measured_but_not_checked_note_by_note() {
     let src = format!(
-        "tempo 120\nscale C minor\ngain_comp 0\nhumanize 0\n\
+        "tempo 120\nscale C minor\nhumanize 0\n\
          module keys plink {{ voice_mode poly attack 1ms decay 0.2 sustain 0.0 }}\n\
          module beats kit {{ }}\n\
          pattern beat {{ kick: X - - - X - - - X - - - X - - - }}\n\
@@ -181,7 +181,7 @@ fn an_arpeggio_is_measured_but_not_checked_note_by_note() {
 #[test]
 fn an_arpeggio_is_still_compared_with_and_without_its_chorus() {
     let src = format!(
-        "tempo 120\nscale C minor\ngain_comp 0\nhumanize 0\n\
+        "tempo 120\nscale C minor\nhumanize 0\n\
          module fm plink {{ level 2.0 algorithm dual_pairs mod_index 20% chorus_mix 35% }}\n\
          module beats kit {{ }}\n\
          pattern beat {{ kick: X - - - X - - - X - - - X - - - }}\n\

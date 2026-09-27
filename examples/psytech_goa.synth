@@ -12,7 +12,6 @@ sidechain 0.6 attack=1ms release=70ms
 humanize 0.03 timing 0.006
 # Levels exactly as written: automatic 1/sqrt(active tracks) compensation makes
 # the thin intro as loud as the full drop, which destroys the arrangement shape.
-gain_comp 0
 
 # Hi-tech ambience is short and dark: a long tail smears the 16ths.
 reverb size=0.42 damp=0.65 predelay=12 sidechain=0.6

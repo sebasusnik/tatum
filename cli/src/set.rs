@@ -486,7 +486,6 @@ mod tests {
     const RIG: &str = r#"
 tempo 120
 scale C minor
-gain_comp 0
 module bass low { cutoff 0.5 sustain 0.8 }
 pattern line { C2:0.9 - - -  C2:0.9 - - -  C2:0.9 - - -  C2:0.9 - - - }
 track bass { play line using low level 0.5 out > lowpass(600, 0.1, wet=0.0) as lp > master }

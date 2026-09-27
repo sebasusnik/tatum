@@ -309,7 +309,11 @@ struct TrackPlayback {
     to_master: bool,
     delay_send: f32,         // global delay send amount 0.0-1.0
     reverb_send: f32,        // global reverb send amount 0.0-1.0
-    sidechain_amount: f32,   // per-track sidechain override (0.0 = use global)
+    /// This track's own sidechain amount, or `None` to take the song's.
+    /// `sidechain 0` used to mean "the song's amount" too, because the
+    /// override was a float with 0 standing for unset, so a track written
+    /// `sidechain 0.0` to stay still was ducked at the global amount anyway.
+    sidechain_amount: Option<f32>,
     // Step sequencer state
     current_step: usize,
     current_notes: [u8; compiler::MAX_CHORD_NOTES],  // active MIDI notes (0 = unused)
@@ -511,9 +515,6 @@ pub struct SongEngine {
     master_level: f32,
 
     // Automatic gain compensation for track summing
-    gain_comp_amount: f32,   // 0 = off, 1 = full 1/sqrt(active_tracks)
-    gain_comp_target: f32,   // 1.0 / sqrt(active_tracks), clamped [0.25, 1.0]
-    gain_comp_current: f32,  // smoothed value (exponential approach to target)
 
     // Sidechain compression
     sidechain_amount: f32,
@@ -997,7 +998,7 @@ impl SongEngine {
                     to_master: t.to_master,
                     delay_send: t.delay_send,
                     reverb_send: t.reverb_send,
-                    sidechain_amount: t.sidechain.unwrap_or(0.0),
+                    sidechain_amount: t.sidechain,
                     current_step: 0,
                     current_notes: [0; compiler::MAX_CHORD_NOTES],
                     current_notes_count: 0,
@@ -1108,9 +1109,6 @@ impl SongEngine {
             humanize_timing,
             timing_rng: Rng::new(7919),
             master_level: 0.8,
-            gain_comp_amount: song.globals.gain_comp.unwrap_or(1.0),
-            gain_comp_target: 1.0,
-            gain_comp_current: 1.0,
             sidechain_amount,
             sc_envelope: 0.0,
             global_sc_source: song.globals.sidechain_source.clone(),
@@ -1185,11 +1183,7 @@ impl SongEngine {
         if !self.arrangement.is_empty() {
             let (scene_idx, _) = self.arrangement[0];
             self.apply_scene(scene_idx);
-        } else {
-            self.recompute_gain_comp();
         }
-        // Snap gain compensation so the first block starts at the correct level
-        self.gain_comp_current = self.gain_comp_target;
         self.snap_mix();
 
         for track in self.tracks.iter_mut() {
@@ -1278,7 +1272,7 @@ impl SongEngine {
                 tp.pan_r = pan_r;
                 tp.delay_send = st.delay_send;
                 tp.reverb_send = st.reverb_send;
-                tp.sidechain_amount = st.sidechain.unwrap_or(0.0);
+                tp.sidechain_amount = st.sidechain;
                 tp.stereo_src = inst_idx < self.instruments.len()
                     && matches!(self.instruments[inst_idx], SongInstrument::Beats(_));
                 tp.active = true;
@@ -1290,7 +1284,7 @@ impl SongEngine {
                 tp.arp = st.arp.map(|c| make_arp(&c, tempo));
                 if arriving {
                     tp.heard = tp.target();
-                    tp.heard_duck = if tp.sidechain_amount > 0.0 { tp.sidechain_amount } else { global_duck };
+                    tp.heard_duck = tp.sidechain_amount.unwrap_or(global_duck);
                 }
             }
         }
@@ -1301,8 +1295,6 @@ impl SongEngine {
                 && matches!(self.instruments[t.instrument_idx], SongInstrument::Beats(_))
         });
         self.resolve_sidechain_sources(scene_idx);
-
-        self.recompute_gain_comp();
 
         // Reuses the existing capacity: applying a scene runs on the audio thread.
         let mut lanes = core::mem::take(&mut self.active_automations);
@@ -1366,15 +1358,6 @@ impl SongEngine {
                 let inst = self.instrument_names.iter().position(|n| n == name)?;
                 self.tracks.iter().position(|t| t.active && t.instrument_idx == inst)
             })
-    }
-
-    /// Recompute automatic gain compensation based on active track count.
-    /// Uses equal-power scaling: 1/sqrt(N), clamped to [0.25, 1.0].
-    fn recompute_gain_comp(&mut self) {
-        let n = self.tracks.iter().filter(|t| t.active).count();
-        let raw = if n <= 1 { 1.0 } else { (1.0 / math::sqrt(n as f32)).max(0.25) };
-        // `gain_comp 0` disables it: every scene is mixed exactly as written.
-        self.gain_comp_target = 1.0 + (raw - 1.0) * self.gain_comp_amount;
     }
 
     // ── Metering (for mix reports) ──
@@ -1483,9 +1466,6 @@ impl SongEngine {
         };
         (self.master_in_peak, rms)
     }
-
-    /// Automatic gain compensation applied right now (1.0 = none).
-    pub fn gain_compensation(&self) -> f32 { self.gain_comp_current }
 
     /// An engine for `song` at the loudness every song plays at. It renders
     /// the song once first to measure it, which takes a fraction of its length.
@@ -1809,10 +1789,10 @@ impl SongEngine {
         }
 
         // Sidechain ducking: use kick track to duck other tracks
-        // Per-track sidechain_amount overrides the global amount when > 0.
+        // A track's own amount overrides the song's, zero included.
         let has_any_sidechain = self.sidechain_amount > 0.0
             || self.reverb_sidechain > 0.0 || self.delay_sidechain > 0.0
-            || self.tracks.iter().any(|t| t.active && (t.sidechain_amount > 0.0 || t.heard_duck > 0.0));
+            || self.tracks.iter().any(|t| t.active && (t.sidechain_amount.is_some_and(|a| a > 0.0) || t.heard_duck > 0.0));
         let (sc_attack, sc_release) = (self.sc_attack_coeff, self.sc_release_coeff);
         if has_any_sidechain {
             for s in 0..len {
@@ -1839,11 +1819,7 @@ impl SongEngine {
                 for ti in 0..track_count {
                     if !self.tracks[ti].active { continue; }
                     let Some(si) = self.tracks[ti].sc_source else { continue };
-                    let target = if self.tracks[ti].sidechain_amount > 0.0 {
-                        self.tracks[ti].sidechain_amount
-                    } else {
-                        self.sidechain_amount
-                    };
+                    let target = self.tracks[ti].sidechain_amount.unwrap_or(self.sidechain_amount);
                     let amount = glide(&mut self.tracks[ti].heard_duck, target);
                     if amount > 0.0 {
                         let duck = 1.0 - amount * self.tracks[si].sc_env;
@@ -1853,7 +1829,7 @@ impl SongEngine {
                 }
             }
             for t in self.tracks.iter_mut() {
-                let target = if t.sidechain_amount > 0.0 { t.sidechain_amount } else { self.sidechain_amount };
+                let target = t.sidechain_amount.unwrap_or(self.sidechain_amount);
                 if t.sc_source.is_none() { t.heard_duck = target } else { settle(&mut t.heard_duck, target) }
             }
         }
@@ -2016,34 +1992,20 @@ impl SongEngine {
         settle(&mut self.delay_wet_heard, dwet_to);
         settle(&mut self.reverb_wet_heard, rwet_to);
 
-        // Apply master level + gain compensation + master FX chain
-        // Smoothing: ~5ms exponential approach to avoid clicks on scene transitions
-        const SMOOTH_COEFF: f32 = 0.9955; // exp(-1/220) at 44.1kHz
-        let ml = self.master_level;
-        if !self.master_fx.nodes.is_empty() {
-            for s in 0..len {
-                self.gain_comp_current = SMOOTH_COEFF * self.gain_comp_current
-                    + (1.0 - SMOOTH_COEFF) * self.gain_comp_target;
-                let g = ml * self.gain_comp_current;
-                let (in_l, in_r) = (output_l[s] * g, output_r[s] * g);
-                self.master_in_peak = self.master_in_peak.max(math::abs(in_l)).max(math::abs(in_r));
-                self.master_in_sum_sq += (in_l * in_l + in_r * in_r) as f64;
-                self.master_in_samples += 2;
-                let (fl, fr) = self.master_fx.process_stereo(in_l, in_r);
-                output_l[s] = fl;
-                output_r[s] = fr;
-            }
-        } else {
-            for s in 0..len {
-                self.gain_comp_current = SMOOTH_COEFF * self.gain_comp_current
-                    + (1.0 - SMOOTH_COEFF) * self.gain_comp_target;
-                let g = ml * self.gain_comp_current;
-                output_l[s] *= g;
-                output_r[s] *= g;
-                self.master_in_peak = self.master_in_peak.max(math::abs(output_l[s])).max(math::abs(output_r[s]));
-                self.master_in_sum_sq += (output_l[s] * output_l[s] + output_r[s] * output_r[s]) as f64;
-                self.master_in_samples += 2;
-            }
+        // Master level and the master chain. There used to be a gain here too
+        // that scaled each scene by 1/sqrt(its active tracks), so a breakdown
+        // of two tracks played 4 dB over a drop of five at the same levels.
+        // It kept full scenes from clipping before the engine levelled and
+        // limited every song; after that, all it did was bend the shape a
+        // song wrote, and make `level` mean something different per scene.
+        let g = self.master_level;
+        let chain = !self.master_fx.nodes.is_empty();
+        for s in 0..len {
+            let (in_l, in_r) = (output_l[s] * g, output_r[s] * g);
+            self.master_in_peak = self.master_in_peak.max(math::abs(in_l)).max(math::abs(in_r));
+            self.master_in_sum_sq += (in_l * in_l + in_r * in_r) as f64;
+            self.master_in_samples += 2;
+            (output_l[s], output_r[s]) = if chain { self.master_fx.process_stereo(in_l, in_r) } else { (in_l, in_r) };
         }
 
         for s in 0..len {
@@ -2731,7 +2693,7 @@ impl SongEngine {
     fn snap_mix(&mut self) {
         for t in self.tracks.iter_mut() {
             t.heard = t.target();
-            t.heard_duck = if t.sidechain_amount > 0.0 { t.sidechain_amount } else { self.sidechain_amount };
+            t.heard_duck = t.sidechain_amount.unwrap_or(self.sidechain_amount);
         }
         self.reverb_wet_heard = self.reverb_wet_level;
         self.delay_wet_heard = self.delay_wet_level;
@@ -2788,13 +2750,10 @@ impl SongEngine {
             // must not restart its automation: a sweep that was three bars in
             // stays three bars in.
             self.scene_step = self.arrangement_bar_count as usize * self.steps_per_bar;
-        } else {
-            self.recompute_gain_comp();
         }
 
         self.current_bar = bar;
         self.global_step = bar * self.steps_per_bar;
-        self.gain_comp_current = self.gain_comp_target;
         self.snap_mix();
 
         for track in self.tracks.iter_mut() {
@@ -3156,7 +3115,6 @@ impl SongEngine {
         // Smoothed and random state continues regardless of what changed: a
         // gain ramp restarting or the humanize sequence rewinding is audible.
         core::mem::swap(&mut self.timing_rng, &mut old.timing_rng);
-        self.gain_comp_current = old.gain_comp_current;
         self.sc_envelope = old.sc_envelope;
         // The downbeat fires `until` samples into this block, on the old
         // clock; the new clock is set so it fires there too, carrying the

@@ -17,7 +17,6 @@ use tatum_core::song_engine::SongEngine;
 const HEAD: &str = r#"
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 module bass lead { cutoff 0.7 resonance 10% glide 100% attack 1ms decay 20ms sustain 0% release 12ms }
 "#;
@@ -38,7 +37,6 @@ fn one_bar(head: &str, pattern: &str) -> String {
 const SNAP: &str = r#"
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 module bass lead { cutoff 0.7 resonance 10% glide 100% attack 1ms decay 6ms sustain 0% release 2ms }
 "#;

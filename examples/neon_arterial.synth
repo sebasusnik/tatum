@@ -63,9 +63,6 @@ scale F# minor        # natural minor; the G natural and the E# are borrowed
 swing 0.5                 # synthwave is machine-straight; no shuffle
 humanize 0.03 timing 0.004
 sidechain 0.32 attack=2ms release=95ms
-gain_comp 0.45            # partly on: the intro and the breakdown run three
-                          # tracks against the chorus's eight, and without some
-                          # compensation that reads as a 12 dB hole, not a drop
 
 # Quarter-note delay on the lead is the outrun cliche and it is the right one.
 delay sync=quarter feedback=0.38 filter=0.5 sidechain=0.3
@@ -676,8 +673,11 @@ track bell {
 # limits it after the chain, so this is colour, not loudness.
 # ────────────────────────────────────────────────
 
+# gain(0.709) at the head of the master: what the engine used to take off this
+# song's fullest scene when it scaled every scene by 1/sqrt(its tracks). The
+# master chain is fed as it was; scenes with fewer tracks now play as written.
 master {
-    in > eq(low=1.6, mid=-0.8, high=1.0)
+    in > gain(0.709) > eq(low=1.6, mid=-0.8, high=1.0)
        > tilt(0.0)
        > compressor(-6db, ratio=2.0, attack=18ms, release=140ms, makeup=5.5db)
        > out

@@ -15,7 +15,6 @@ use tatum_core::song_engine::SongEngine;
 const RIG: &str = r#"
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 module bass low { cutoff 0.5 sustain 0.8 }
 pattern sparse { C2:0.9 - - - }
@@ -58,7 +57,6 @@ fn a_redefinition_keeps_its_place_in_the_order() {
     let src = r#"
 tempo 120
 scale C minor
-gain_comp 0
 module bass low { cutoff 0.5 }
 pattern p { C2:0.9 - - - }
 track first  { play p using low level 0.5 out > master }
@@ -79,7 +77,6 @@ fn a_rig_plus_overrides_is_the_same_song_as_writing_it_out() {
     let whole = r#"
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 module bass low { cutoff 0.5 sustain 0.8 }
 pattern sparse { C2:0.9 - - - }
@@ -109,7 +106,6 @@ master { in > out }
 const RIG2: &str = r#"
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 module bass low { cutoff 0.5 sustain 0.8 resonance 0.2 }
 pattern p1 { C2:0.9 - - - }
@@ -150,7 +146,6 @@ fn a_partial_override_sounds_like_the_song_written_out() {
     let whole = r#"
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 module bass low { cutoff 0.8 sustain 0.8 resonance 0.2 }
 pattern p1 { C2:0.9 - - - }

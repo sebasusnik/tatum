@@ -39,7 +39,7 @@ fn render(src: &str) -> String {
 /// `quiet` and `loud` differ only in the levels the scenes set.
 fn two_scenes(quiet: f32, loud: f32) -> String {
     format!(
-        "tempo 120\nscale C minor\ngain_comp 0\nhumanize 0\nsidechain 0\n\
+        "tempo 120\nscale C minor\nhumanize 0\nsidechain 0\n\
          module beats kit {{ }}\n\
          module keys pad {{ voice_mode poly attack 5ms release 200ms }}\n\
          pattern beat {{ kick: X - - - X - - - X - - - X - - - }}\n\
@@ -88,7 +88,6 @@ fn two_tracks_in_one_band_at_the_same_level_are_called_out() {
     let src = "\
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 sidechain 0
 module keys one { voice_mode poly attack 5ms release 200ms }
@@ -111,7 +110,6 @@ fn a_track_well_behind_another_is_listed_but_not_flagged() {
     let src = "\
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 sidechain 0
 module keys one { voice_mode poly attack 5ms release 200ms }
@@ -134,7 +132,7 @@ master { in > limiter(0.95) > out }
 fn autopan_reads_wider_than_the_middle() {
     let voice = |chain: &str| {
         format!(
-            "tempo 120\nscale C minor\ngain_comp 0\nhumanize 0\nsidechain 0\n\
+            "tempo 120\nscale C minor\nhumanize 0\nsidechain 0\n\
              module keys pad {{ voice_mode poly attack 5ms release 200ms }}\n\
              pattern hold {{ [C4 Eb4 G4]:0.8 ..*15 }}\n\
              track pad {{ play hold using pad level 0.6 out {chain}> master }}\n\

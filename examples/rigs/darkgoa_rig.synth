@@ -24,7 +24,6 @@ scale E phrygian
 swing 0.5
 sidechain 0.62 attack=1ms release=75ms
 humanize 0.03 timing 0.007
-gain_comp 0
 
 # Dark and tight, not a cathedral. A long tail smears 16ths and makes it pretty.
 reverb size=0.5 damp=0.6 predelay=15 sidechain=0.6

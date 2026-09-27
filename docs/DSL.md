@@ -21,9 +21,6 @@ scale A minor          # major | minor | dorian | phrygian | lydian | mixolydian
 swing 0.56             # 0.5 straight .. 0.75 hard shuffle
 humanize 0.05 timing 0.02   # velocity jitter, and jitter on the step clock
 sidechain 0.4
-gain_comp 1            # 1 = level is compensated for how many tracks a scene has
-                       # (1/sqrt(n), so a 2-track breakdown is ~4 dB louder than a
-                       # 5-track drop at the same levels). 0 = off, mix exactly as written.
 
 # Global send effects, fed by each track's delay_send / reverb_send
 delay sync=dotted_eighth feedback=0.45 filter=0.5   # sync: free | quarter | dotted_eighth |
@@ -186,7 +183,7 @@ Track options:
 | `velocity` | 0..1 | 0.8 | scales every note's velocity |
 | `gate` | 0..1 | 0.85 | note length as a fraction of the step |
 | `delay_send` / `reverb_send` | 0..1 | 0 | amount into the global sends |
-| `sidechain` | 0..1 | global `sidechain` | how much the kick ducks this track |
+| `sidechain` | 0..1 | global `sidechain` | how much the kick ducks this track; `sidechain 0` turns it off for this track |
 | `arp ...` | see below | none | arpeggiator |
 | `out > ... > master` or `> <bus>` | | `> master` | insert chain and destination |
 
@@ -565,10 +562,10 @@ track beat { play brk using kit out > drums }
 **Loudness shape.** Intro quietest, drop loudest, nothing at the limiter ceiling. Use the
 per-section report from `tatum_render`; if a section sits at the ceiling (`at_limiter_ceiling`),
 its peaks are too tall for its loudness: tame what spikes rather than pushing the others up.
-The song as a whole is levelled by the engine, so only the shape is yours. Two things that make section loudness non-obvious:
-the engine scales the mix by 1/sqrt(active tracks) in each scene (so fewer tracks are
-each louder), and sidechain only ducks in scenes that have a beats track (a breakdown
-without drums plays its pads at full level). Set levels per scene, not just per track.
+The song as a whole is levelled by the engine, so only the shape is yours. A track plays at
+the level written for it whatever else is playing, so a scene with fewer tracks is simply
+quieter. One thing that makes section loudness non-obvious: sidechain only ducks in scenes
+that have a beats track (a breakdown without drums plays its pads at full level).
 
 ## Reading a mix
 

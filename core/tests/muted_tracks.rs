@@ -23,7 +23,6 @@ fn song(pad_level: &str, extra_track: bool) -> String {
     format!(r#"
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 sidechain 0
 
@@ -80,7 +79,6 @@ fn a_muted_track_keeps_its_place_in_the_bar() {
     let src = r#"
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 sidechain 0
 module beats kit { kick_level 1.0 }
@@ -114,7 +112,6 @@ fn a_sidechain_source_still_runs_when_its_fader_is_down() {
     let src = |sc: &str| format!(r#"
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 sidechain {sc}
 module beats kit {{ kick_level 1.0 }}
@@ -184,7 +181,6 @@ fn muting_does_not_reach_the_tracks_that_are_still_playing() {
     let head = "\
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0.4 timing 0.2
 sidechain 0
 module bass low { cutoff 0.5 sustain 0.8 }
@@ -216,7 +212,6 @@ fn a_fader_can_be_pushed_past_unity() {
     let src = r#"
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 sidechain 0
 module beats kit { kick_level 1.0 }

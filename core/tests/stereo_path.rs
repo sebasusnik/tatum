@@ -59,9 +59,7 @@ fn a_chain_filter_resonance_is_what_the_docs_say() {
     assert!(peak(0.05) < 5.0, "resonance 0.05 peaks {:.1} dB", peak(0.05));
 }
 
-// gain_comp 0: the automatic 1/sqrt(active tracks) would otherwise change
-// the level the moment a second track exists, which is not what is measured.
-const PAD: &str = "tempo 120\nscale A minor\ngain_comp 0\nmodule keys pad { voice_mode poly attack 300ms release 200ms cutoff 2khz chorus_mix 0.0 }\npattern hold { [1.3 3.3 5.3]:0.8 ..*15 }\npattern rest { - - - - - - - - - - - - - - - - }\ntrack a { play hold using pad level 0.5 out > master }\nmaster { in > out }\n";
+const PAD: &str = "tempo 120\nscale A minor\nmodule keys pad { voice_mode poly attack 300ms release 200ms cutoff 2khz chorus_mix 0.0 }\npattern hold { [1.3 3.3 5.3]:0.8 ..*15 }\npattern rest { - - - - - - - - - - - - - - - - }\ntrack a { play hold using pad level 0.5 out > master }\nmaster { in > out }\n";
 
 #[test]
 fn a_second_track_on_the_same_module_does_not_change_the_first() {

@@ -9,7 +9,6 @@ swing 0.5
 sidechain 0.5
 # Mix exactly as written: the automatic 1/sqrt(active tracks) compensation was
 # making the two-track intro louder than the four-track groove.
-gain_comp 0
 
 reverb size=0.9 damp=0.3 predelay=30 sidechain=0.5
 reverb_return { in > lowpass(2200, 0.3, lfo_bars=16, lfo_depth=900) > autopan(0.35, bars=12) > out }

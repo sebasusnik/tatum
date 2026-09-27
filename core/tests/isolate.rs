@@ -12,7 +12,6 @@ use tatum_core::BLOCK_SIZE;
 const SONG: &str = r#"
 tempo 120
 scale C major
-gain_comp 0
 
 module beats kit { kick_level 1.0 }
 module bass low { cutoff 0.4 sustain 0.9 }
@@ -91,7 +90,7 @@ fn peak(x: &[f32]) -> f32 { x.iter().fold(0.0, |a, v| a.max(v.abs())) }
 
 #[test]
 fn the_parts_add_up_to_the_mix() {
-    // No master chain and no gain compensation: what enters master comes out,
+    // No master chain: what enters master comes out,
     // at the engine's fixed master level, OUTPUT_DELAY samples later (this
     // song stays under the output limiter's ceiling).
     const MASTER_LEVEL: f32 = 0.8;

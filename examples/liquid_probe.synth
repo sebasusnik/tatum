@@ -91,7 +91,10 @@ track rhodes { play rhodes_hits using rhodes level 0.123 reverb_send 0.6 delay_s
 track sub    { play sub_line using sub level 0.328 out > master }
 track drums  { play amen_ish using kit level 0.451 out > saturate(0.3) > master }
 
-master { in > eq(low=1.0, mid=-0.5, high=1.0) > compressor(-6, ratio=2, attack=10, release=90, makeup=2db) > out }
+# gain(0.5) at the head of the master: what the engine used to take off this
+# song's fullest scene when it scaled every scene by 1/sqrt(its tracks). The
+# master chain is fed as it was; scenes with fewer tracks now play as written.
+master { in > gain(0.5) > eq(low=1.0, mid=-0.5, high=1.0) > compressor(-6, ratio=2, attack=10, release=90, makeup=2db) > out }
 
 scene cloud_only {
     track pad { play voicings using cloud }

@@ -25,7 +25,6 @@
 
 tempo 126
 scale F minor
-gain_comp 0
 humanize 0.02 timing 0.01
 sidechain 0.4
 

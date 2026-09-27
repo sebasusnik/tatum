@@ -111,15 +111,13 @@ fn scene_track_must_exist_at_top_level() {
 }
 
 #[test]
-fn gain_comp_can_be_disabled_and_fm_has_level() {
-    let src = SONG.replace("tempo 120\n", "tempo 120\ngain_comp 0\n").replace("module fm pluck { algorithm two_op decay 0.3 sustain 0.0 }", "module fm pluck { algorithm two_op decay 0.3 sustain 0.0 level 2.0 }");
+fn fm_has_level() {
+    let src = SONG.replace("module fm pluck { algorithm two_op decay 0.3 sustain 0.0 }", "module fm pluck { algorithm two_op decay 0.3 sustain 0.0 level 2.0 }");
     let mut e = SongEngine::from_source(&src).unwrap();
     e.start();
     let _ = e.render_steps(4);
-    assert!((e.gain_compensation() - 1.0).abs() < 1e-3, "gain_comp 0 means no compensation, got {}", e.gain_compensation());
     let mut d = SongEngine::from_source(SONG).unwrap();
     d.start();
     let _ = d.render_steps(4);
-    assert!(d.gain_compensation() < 0.9, "two active tracks compensate by 1/sqrt(2)");
     assert!(d.track_rms(0) > 0.0 && d.track_peak(0) > 0.0, "per-track meters run");
 }

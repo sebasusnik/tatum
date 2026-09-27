@@ -254,8 +254,11 @@ track arpsynth {
 # MASTER (matching reference: eq, compressor; the engine limits after it)
 # ────────────────────────────────────────────────
 
+# gain(0.5) at the head of the master: what the engine used to take off this
+# song's fullest scene when it scaled every scene by 1/sqrt(its tracks). The
+# master chain is fed as it was; scenes with fewer tracks now play as written.
 master {
-    in > eq(low=2.0, mid=1.0, high=1.0) > compressor(-9.0, ratio=5.0, attack=8, release=80, makeup=12db) > out
+    in > gain(0.5) > eq(low=2.0, mid=1.0, high=1.0) > compressor(-9.0, ratio=5.0, attack=8, release=80, makeup=12db) > out
 }
 
 # ────────────────────────────────────────────────

@@ -391,8 +391,11 @@ track atmosphere {
 # MASTER
 # ────────────────────────────────────────────────
 
+# gain(0.378) at the head of the master: what the engine used to take off this
+# song's fullest scene when it scaled every scene by 1/sqrt(its tracks). The
+# master chain is fed as it was; scenes with fewer tracks now play as written.
 master {
-    in > eq(low=3.0, mid=1.2, high=1.6)
+    in > gain(0.378) > eq(low=3.0, mid=1.2, high=1.6)
        # makeup was 1.00, i.e. 0 dB, and with the snare no longer overdriving
        # the input the mix came out at 0.69 -- three decibels of the ceiling
        # simply unused. Swept it: crest is flat at 10.55 all the way to 1.35

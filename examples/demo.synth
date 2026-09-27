@@ -320,8 +320,11 @@ track stabs {
 # MASTER
 # ────────────────────────────────────────────────
 
+# gain(0.378) at the head of the master: what the engine used to take off this
+# song's fullest scene when it scaled every scene by 1/sqrt(its tracks). The
+# master chain is fed as it was; scenes with fewer tracks now play as written.
 master {
-  in > eq(low=3.0, mid=1.0, high=0.5) > compressor(-6.0, ratio=4.0, attack=10, release=80, makeup=2.80) > out
+  in > gain(0.378) > eq(low=3.0, mid=1.0, high=0.5) > compressor(-6.0, ratio=4.0, attack=10, release=80, makeup=2.80) > out
 }
 
 # ────────────────────────────────────────────────

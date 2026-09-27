@@ -16,7 +16,6 @@ use tatum_core::song_engine::SongEngine;
 const SONG: &str = r#"
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 sidechain 0
 module bass low { cutoff 0.75 sustain 0.9 }
@@ -126,7 +125,6 @@ fn a_bypassed_node_does_not_come_back_stale() {
     let src = r#"
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 sidechain 0
 module bass low { cutoff 0.75 sustain 0.9 }
@@ -169,7 +167,6 @@ fn compile_err(src: &str) -> String {
 const NAMED: &str = r#"
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 sidechain 0
 module bass low { cutoff 0.75 sustain 0.9 }
@@ -225,7 +222,6 @@ fn a_name_is_not_audible() {
     let plain = r#"
 tempo 120
 scale C minor
-gain_comp 0
 humanize 0
 sidechain 0
 module bass low { cutoff 0.75 sustain 0.9 }

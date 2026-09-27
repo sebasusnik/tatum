@@ -75,14 +75,14 @@ fn fm_has_a_level_parameter() {
 }
 
 #[test]
-fn gain_comp_can_be_turned_off() {
-    let on = SongEngine::from_source(&song("gain_comp 1")).unwrap();
-    let off = SongEngine::from_source(&song("gain_comp 0")).unwrap();
-    let mut on = on; let mut off = off;
-    let _ = on.render(1);
-    let _ = off.render(1);
-    assert!(on.gain_compensation() < 0.9, "two tracks are compensated down: {}", on.gain_compensation());
-    assert!((off.gain_compensation() - 1.0).abs() < 1e-3, "gain_comp 0 disables it: {}", off.gain_compensation());
+fn a_track_plays_at_its_level_however_many_others_play() {
+    // The engine used to scale each scene by 1/sqrt(its active tracks), so a
+    // pad got quieter the moment a silent track joined it.
+    let alone = "tempo 120\nscale A minor\nmodule keys pad { voice_mode poly }\npattern hold { [1.3 3.3 5.3]:0.8 ..*15 }\npattern rest { - - - - - - - - - - - - - - - - }\ntrack a { play hold using pad level 0.5 out > master }\n";
+    let joined = format!("{alone}track b {{ play rest using pad level 0.5 out > master }}\ntrack c {{ play rest using pad level 0.5 out > master }}\n");
+    let a = SongEngine::from_source(alone).unwrap().render(1);
+    let b = SongEngine::from_source(&joined).unwrap().render(1);
+    assert_eq!(a, b);
 }
 
 #[test]
