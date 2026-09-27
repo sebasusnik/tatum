@@ -36,7 +36,7 @@ use crate::dsl::diff::{self, DslChange};
 use crate::midi;
 use crate::params::{self, ModuleKind, ParamId};
 use crate::song_engine::{DslError, SongEngine};
-use crate::BLOCK_SIZE;
+use crate::{BLOCK_SIZE, SAMPLE_RATE};
 
 /// How far the pitch strip bends the keys, each way.
 pub const BEND_SEMITONES: f32 = 2.0;
@@ -180,7 +180,14 @@ pub enum Plan {
     /// A new engine, ready built, to take over on the next bar line. `inherit`
     /// holds one map per engine the player may be running when the swap lands
     /// (the current one, and a pending one it may have swapped to meanwhile).
-    Swap { engine: Box<SongEngine>, generation: Generation, inherit: Vec<(Generation, Inherit)> },
+    Swap {
+        engine: Box<SongEngine>,
+        generation: Generation,
+        inherit: Vec<(Generation, Inherit)>,
+        /// Bars the outgoing engine keeps playing under the new one, DJ
+        /// style, instead of handing over on the line. 0 is the plain swap.
+        blend_bars: f32,
+    },
     /// One value from a knob, for the engine of generation `base`: the one
     /// playing or the one queued behind it. A single op and no `Vec`, because
     /// a knob sends these many times a second and whatever the plan owns is
@@ -624,7 +631,7 @@ impl LivePlanner {
         } else {
             self.pending = Some(known);
         }
-        Ok(Plan::Swap { engine, generation, inherit })
+        Ok(Plan::Swap { engine, generation, inherit, blend_bars: 0.0 })
     }
 }
 
@@ -822,6 +829,44 @@ enum Spent {
     Ops(Vec<FastOp>),
 }
 
+/// Where the low end is split for a blend's bass swap: under it is the bass
+/// and the kick, which two tracks cannot share without a pile-up.
+const BLEND_SPLIT_HZ: f32 = 150.0;
+
+/// How long the bass swap takes: short enough to read as a cut on the beat,
+/// long enough not to click.
+const BASS_SWAP_SAMPLES: f32 = 2205.0;
+
+/// Two cascaded one-pole lowpasses, one per channel: the lows of a signal,
+/// and by subtraction its highs, which add back to it exactly.
+#[derive(Default, Clone, Copy)]
+struct Split {
+    a: [f32; 2],
+    b: [f32; 2],
+}
+
+impl Split {
+    fn low(&mut self, ch: usize, x: f32, k: f32) -> f32 {
+        self.a[ch] += (x - self.a[ch]) * k;
+        self.b[ch] += (self.a[ch] - self.b[ch]) * k;
+        self.b[ch]
+    }
+}
+
+/// Two engines playing at once while one hands over to the other, the way a
+/// DJ mixes: the new one comes in as the old one goes, and the low end changes hands at the midpoint in
+/// 50 ms, so two basses never play together. The old engine follows the new
+/// one's tempo, so they stay on the beat through a ramp. Nothing is inherited:
+/// each plays its own voices, and the old one takes its tails with it.
+struct Blend {
+    old: Box<SongEngine>,
+    maps: InheritMaps,
+    done: usize,
+    len: usize,
+    split_old: Split,
+    split_new: Split,
+}
+
 /// Audio-thread half. Nothing in here allocates or frees once constructed,
 /// except `apply` when handed more to retire than it has room for, which
 /// then drops one in place rather than lose it.
@@ -832,6 +877,10 @@ pub struct LivePlayer {
     /// The engine that just handed over, how far its fade-out has run, and
     /// the inherit maps of that handover, which retire with it.
     fading: Option<(Box<SongEngine>, usize, InheritMaps)>,
+    /// A queued swap's blend, in bars; see `Plan::Swap`.
+    pending_blend: f32,
+    /// Two engines playing at once: see [`Blend`].
+    blending: Option<Blend>,
     retired: Vec<Retired>,
     swaps: u32,
     /// Swaps that found no inherit map for the running generation. Bookkeeping
@@ -852,6 +901,8 @@ impl LivePlayer {
             generation: 0,
             pending: None,
             fading: None,
+            pending_blend: 0.0,
+            blending: None,
             retired: Vec::with_capacity(8),
             swaps: 0,
             blind_swaps: 0,
@@ -947,12 +998,13 @@ impl LivePlayer {
                 }
                 Applied::Control
             }
-            Plan::Swap { engine, generation, inherit } => {
+            Plan::Swap { engine, generation, inherit, blend_bars } => {
                 if let Some((e, _, m)) = self.pending.take() {
                     self.retire(e, m);
                 }
                 if self.running() {
                     self.pending = Some((engine, generation, inherit));
+                    self.pending_blend = blend_bars;
                     Applied::Queued
                 } else {
                     if let Some(old) = self.engine.replace(engine) {
@@ -978,6 +1030,9 @@ impl LivePlayer {
         }
         if let Some((f, _, m)) = self.fading.take() {
             self.retire(f, m);
+        }
+        if let Some(b) = self.blending.take() {
+            self.retire(b.old, b.maps);
         }
         if let Some((e, g, m)) = self.pending.take() {
             if let Some(old) = self.engine.replace(e) {
@@ -1009,7 +1064,45 @@ impl LivePlayer {
         engine.process_block_stereo(out_l, out_r);
         // What the previous engine still owns fades out on top.
         self.render_fade(out_l, out_r);
+        self.render_blend(out_l, out_r);
         swapped
+    }
+
+    /// Mix the outgoing engine of a blend under what the new one rendered.
+    fn render_blend(&mut self, out_l: &mut [f32], out_r: &mut [f32]) {
+        let Some(b) = self.blending.as_mut() else { return };
+        let len = out_l.len();
+        let tempo = self.engine.as_ref().map_or(0.0, |e| e.tempo());
+        if tempo > 0.0 && b.old.tempo() != tempo {
+            b.old.set_tempo(tempo);
+        }
+        let mut ol = [0.0f32; BLOCK_SIZE];
+        let mut or = [0.0f32; BLOCK_SIZE];
+        b.old.process_block_stereo(&mut ol[..len], &mut or[..len]);
+        let k = 1.0 - crate::math::exp(-core::f32::consts::TAU * BLEND_SPLIT_HZ / SAMPLE_RATE);
+        let mid = b.len as f32 / 2.0;
+        for i in 0..len {
+            let pos = (b.done + i) as f32;
+            let t = (pos / b.len as f32).min(1.0);
+            // Linear, not equal power: two songs playing at full are
+            // correlated on the beat, and an equal-power curve summed them
+            // 3.5 dB hot, to the edge of clipping, through the middle.
+            let (g_new, g_old) = (t, 1.0 - t);
+            // The low end belongs to the old engine until the midpoint and
+            // to the new one after it.
+            let swap = ((pos - mid) / BASS_SWAP_SAMPLES + 0.5).clamp(0.0, 1.0);
+            for (ch, (new, old)) in [(&mut out_l[i], ol[i]), (&mut out_r[i], or[i])].into_iter().enumerate() {
+                let new_low = b.split_new.low(ch, *new, k);
+                let old_low = b.split_old.low(ch, old, k);
+                let (new_high, old_high) = (*new - new_low, old - old_low);
+                *new = new_high * g_new + new_low * swap + old_high * g_old + old_low * (1.0 - swap);
+            }
+        }
+        b.done += len;
+        if b.done >= b.len {
+            let b = self.blending.take().expect("blending");
+            self.retire(b.old, b.maps);
+        }
     }
 
     fn render_fade(&mut self, out_l: &mut [f32], out_r: &mut [f32]) {
@@ -1043,6 +1136,26 @@ impl LivePlayer {
         let mut old = self.engine.take().expect("engine present");
         let bar = old.bar_of_next_step();
         new.start_before_bar(bar);
+        if let Some(b) = self.blending.take() {
+            self.retire(b.old, b.maps);
+        }
+        let blend_bars = core::mem::take(&mut self.pending_blend);
+        if blend_bars > 0.0 {
+            let bar_samples = SAMPLE_RATE * 60.0 / new.tempo() * new.steps_per_bar() as f32 / 4.0;
+            let len = (blend_bars * bar_samples) as usize;
+            self.blending = Some(Blend {
+                old,
+                maps,
+                done: 0,
+                len: len.max(1),
+                split_old: Split::default(),
+                split_new: Split::default(),
+            });
+            self.engine = Some(new);
+            self.generation = generation;
+            self.swaps += 1;
+            return bar;
+        }
         match maps.iter().find(|(g, _)| *g == self.generation) {
             Some((_, map)) => new.inherit_from(&mut old, map, until),
             None => self.blind_swaps += 1,

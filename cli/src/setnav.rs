@@ -43,6 +43,9 @@ pub struct SetNav {
     pub phrase: usize,
     /// Bars a tempo change takes. 0 jumps.
     pub ramp_bars: f32,
+    /// Bars the outgoing step keeps playing under a new engine, DJ style; a
+    /// step's own `# set: blend=` wins. 0 hands over on the line.
+    pub blend_bars: f32,
     /// A step that only changes values, waiting for the phrase line.
     held: Option<(Plan, usize, f32, f32)>,
     /// A swap sent and not yet landed: the step, and the tempo to ramp from and to.
@@ -60,6 +63,7 @@ impl SetNav {
             queued: None,
             phrase: phrase.max(1),
             ramp_bars,
+            blend_bars: 0.0,
             held: None,
             in_flight: None,
             ramp: None,
@@ -164,7 +168,8 @@ impl SetNav {
                         }
                         Ok(mut plan @ Plan::Swap { .. }) => {
                             let mut to = tempo;
-                            if let Plan::Swap { engine, .. } = &mut plan {
+                            if let Plan::Swap { engine, blend_bars, .. } = &mut plan {
+                                *blend_bars = self.steps[step].blend.unwrap_or(self.blend_bars);
                                 to = engine.tempo();
                                 if to != tempo && self.ramp_bars > 0.0 {
                                     engine.set_tempo(tempo);
@@ -338,7 +343,8 @@ track bass  { play line using acid out > master }
 
 /// Not a check: a scripted performance rendered to a WAV, to hear the live
 /// controls without a controller. `cargo test -p tatum-cli --release
-/// performance_demo -- --ignored`; the file lands in `TATUM_DEMO_OUT`.
+/// performance_demo -- --ignored`; the file lands in `TATUM_DEMO_OUT`, and
+/// `TATUM_DEMO_BLEND=8` blends the change of step over 8 bars.
 #[cfg(test)]
 mod demo {
     use super::*;
@@ -400,10 +406,12 @@ mod demo {
         sweep(&mut script, 70, (44.0, 46.0), 64, 10);
         sweep(&mut script, 70, (46.0, 47.0), 10, 64);
         script.sort_by(|a, b| a.0.total_cmp(&b.0));
-        let end_bar = 48.0;
+        // Long enough for an 8-bar blend to finish and be heard done.
+        let end_bar = 56.0;
 
         let steps = crate::set::load(&dir, 32).unwrap();
         let mut nav = SetNav::new(steps, 8, 4.0);
+        nav.blend_bars = std::env::var("TATUM_DEMO_BLEND").ok().and_then(|b| b.parse().ok()).unwrap_or(0.0);
         let mut planner = LivePlanner::new();
         let mut player = LivePlayer::new();
         let first = Source::load(&nav.path()).unwrap();

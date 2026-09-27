@@ -351,3 +351,83 @@ fn two_tracks_on_one_module_both_keep_their_voices_across_a_swap() {
     let first = first_difference(&expected, &got);
     assert_eq!(first, None, "the cutoff edit did not reach every copy (differs at {:?})", first);
 }
+
+/// Two songs with nothing in common: only drums, and only a held chord.
+const DRUMS_ONLY: &str = "tempo 120\nmodule beats kit { kick_level 1.0 }\npattern beat { kick: X - - - X - - - X - - - X - - - }\ntrack kick { play beat using kit out > master }\n";
+const CHORD_ONLY: &str = "tempo 120\nscale A minor\nmodule keys pad { voice_mode poly attack 5ms cutoff 3khz }\npattern hold { [1.3 3.3 5.3]:0.8 ..*15 }\ntrack pad { play hold using pad out > master }\n";
+
+/// Play `DRUMS_ONLY`, swap to `CHORD_ONLY` with a blend of `blend_bars`, and
+/// return, per bar after the swap, how much of the output is the kick: its
+/// energy under 120 Hz, where the chord has none.
+fn kick_per_bar_after_swap(blend_bars: f32) -> Vec<f64> {
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    player.apply(planner.plan(DRUMS_ONLY, player.generation()).unwrap());
+    player.start();
+    let (mut l, mut r) = ([0.0f32; BLOCK_SIZE], [0.0f32; BLOCK_SIZE]);
+    for _ in 0..BAR / BLOCK_SIZE {
+        player.process(&mut l, &mut r);
+    }
+    let mut plan = planner.plan(CHORD_ONLY, player.generation()).unwrap();
+    if let Plan::Swap { blend_bars: b, .. } = &mut plan {
+        *b = blend_bars;
+    }
+    player.apply(plan);
+    while player.process(&mut l, &mut r).is_none() {}
+    let mut lows = Vec::new();
+    let (mut a, mut b) = (0.0f32, 0.0f32);
+    let k = 1.0 - (-std::f32::consts::TAU * 120.0 / SAMPLE_RATE).exp();
+    for _ in 0..5 {
+        let mut e = 0.0f64;
+        for _ in 0..BAR / BLOCK_SIZE {
+            player.process(&mut l, &mut r);
+            for &x in &l {
+                a += (x - a) * k;
+                b += (a - b) * k;
+                e += (b as f64).powi(2);
+            }
+        }
+        lows.push(e);
+        while player.take_retired().is_some() {}
+    }
+    lows
+}
+
+#[test]
+fn a_blend_keeps_the_old_song_under_the_new_one_until_it_ends() {
+    let cut = kick_per_bar_after_swap(0.0);
+    let blend = kick_per_bar_after_swap(4.0);
+    // The chord leaves a little under 120 Hz too; a plain swap is that and
+    // no kick from the first bar on.
+    let chord = cut[4];
+    assert!(cut[0] < chord * 1.2, "{cut:?}");
+    // A four-bar blend: the kick plays through the first half, hands the low
+    // end over at the midpoint (the bass swap), and after four bars what is
+    // left is the chord alone.
+    assert!(blend[0] > chord * 5.0 && blend[1] > chord * 5.0, "{blend:?}");
+    assert!(blend[3] < blend[0] / 4.0, "no bass swap: {blend:?}");
+    assert!((blend[4] - chord).abs() < chord * 0.05, "the old engine outlived the blend: {blend:?}");
+}
+
+#[test]
+fn a_blend_retires_the_old_engine_when_it_ends() {
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    player.apply(planner.plan(DRUMS_ONLY, player.generation()).unwrap());
+    player.start();
+    let (mut l, mut r) = ([0.0f32; BLOCK_SIZE], [0.0f32; BLOCK_SIZE]);
+    let mut plan = planner.plan(CHORD_ONLY, player.generation()).unwrap();
+    if let Plan::Swap { blend_bars, .. } = &mut plan {
+        *blend_bars = 1.0;
+    }
+    player.apply(plan);
+    let mut retired = 0;
+    for _ in 0..(3 * BAR) / BLOCK_SIZE {
+        player.process(&mut l, &mut r);
+        while player.take_retired().is_some() {
+            retired += 1;
+        }
+    }
+    assert_eq!(player.swaps(), 1);
+    assert_eq!(retired, 1, "the old engine comes back for dropping once the blend is over");
+}

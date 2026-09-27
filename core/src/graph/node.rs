@@ -308,6 +308,7 @@ impl NodeSpec {
                     lfo_depth: lfo.depth,
                     lfo_bars: lfo.bars,
                     lfo_tick: 0,
+                    glide_to: 0.0,
                 })
             }
             NodeSpec::AutoPan { hz, bars, depth } => NodeKind::AutoPan { lfo: make_lfo(hz), bars, depth },
@@ -368,6 +369,7 @@ impl NodeSpec {
                     lfo_depth: lfo.depth,
                     lfo_bars: lfo.bars,
                     lfo_tick: 0,
+                    glide_to: 0.0,
                 })
             }
             NodeSpec::Mix => NodeKind::Mix,
@@ -469,6 +471,9 @@ pub struct ModLadder {
     pub lfo_depth: f32,
     pub lfo_bars: f32,
     pub lfo_tick: u32,
+    /// Where a knob is taking the cutoff, while it gets there; 0 when still.
+    /// See [`glide_cutoff`].
+    pub glide_to: f32,
 }
 
 impl ModLadder {
@@ -495,8 +500,18 @@ impl ModLadder {
     fn tick_cutoff(&mut self) {
         let has_env = self.env_depth > 0.0;
         let has_lfo = self.lfo_depth > 0.0;
-        if !(has_env || has_lfo) {
+        let gliding = self.glide_to > 0.0;
+        if !(has_env || has_lfo || gliding) {
             return;
+        }
+        if gliding {
+            self.lfo_tick = self.lfo_tick.wrapping_add(if has_lfo { 0 } else { 1 });
+            if !has_lfo && !has_env && !self.lfo_tick.is_multiple_of(8) {
+                return;
+            }
+            if self.lfo_tick.is_multiple_of(8) {
+                glide_cutoff(&mut self.base_cutoff, &mut self.glide_to);
+            }
         }
         let mut cutoff = self.base_cutoff;
         if has_env {
@@ -542,6 +557,23 @@ impl ModLadder {
     }
 }
 
+/// How far a gliding cutoff moves every 8 samples: a 10 ms time constant.
+const CUTOFF_GLIDE: f32 = 8.0 / (0.010 * SAMPLE_RATE);
+
+/// Move `base` a step towards `to`, along the octaves rather than the Hz, and
+/// stop there. A knob sends a few dozen values across a sweep; set straight,
+/// each one retunes the filter at once, and the steps are heard as a crackle
+/// on anything bright, like something being snapped.
+fn glide_cutoff(base: &mut f32, to: &mut f32) {
+    let ratio = *to / base.max(1.0);
+    if crate::math::abs(ratio - 1.0) < 0.001 {
+        *base = *to;
+        *to = 0.0;
+    } else {
+        *base *= crate::math::pow(ratio, CUTOFF_GLIDE);
+    }
+}
+
 /// Biquad filter with built-in filter envelope for per-note cutoff sweeps.
 pub struct ModBiquad {
     pub filter: BiquadFilter,
@@ -554,6 +586,9 @@ pub struct ModBiquad {
     pub lfo_depth: f32,
     pub lfo_bars: f32,
     pub lfo_tick: u32,
+    /// Where a knob is taking the cutoff, while it gets there; 0 when still.
+    /// See [`glide_cutoff`].
+    pub glide_to: f32,
 }
 
 impl ModBiquad {
@@ -580,8 +615,18 @@ impl ModBiquad {
     fn tick_cutoff(&mut self) {
         let has_env = self.env_depth > 0.0;
         let has_lfo = self.lfo_depth > 0.0;
-        if !(has_env || has_lfo) {
+        let gliding = self.glide_to > 0.0;
+        if !(has_env || has_lfo || gliding) {
             return;
+        }
+        if gliding {
+            self.lfo_tick = self.lfo_tick.wrapping_add(if has_lfo { 0 } else { 1 });
+            if !has_lfo && !has_env && !self.lfo_tick.is_multiple_of(8) {
+                return;
+            }
+            if self.lfo_tick.is_multiple_of(8) {
+                glide_cutoff(&mut self.base_cutoff, &mut self.glide_to);
+            }
         }
         let mut cutoff = self.base_cutoff;
         if has_env {
@@ -978,6 +1023,24 @@ impl NodeKind {
                 true
             }
             _ => false,
+        }
+    }
+
+    /// Like [`set_named`](Self::set_named), for a value arriving from a knob:
+    /// a cutoff glides there over a few milliseconds instead of jumping, so a
+    /// turn is heard as a sweep rather than a run of steps. Anything else is
+    /// set at once.
+    pub fn glide_named(&mut self, name: &str, value: f32) -> bool {
+        match (self, name) {
+            (NodeKind::Biquad(m), "cutoff") => {
+                m.glide_to = value.max(1.0);
+                true
+            }
+            (NodeKind::Ladder(m), "cutoff") => {
+                m.glide_to = value.max(1.0);
+                true
+            }
+            (node, _) => node.set_named(name, value),
         }
     }
 

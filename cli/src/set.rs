@@ -31,6 +31,9 @@ pub struct Step {
     pub phase: String,
     pub energy: Option<f32>,
     pub note: String,
+    /// `blend=8`: coming into this step in `set play`, the step before keeps
+    /// playing under it for this many bars, DJ style.
+    pub blend: Option<f32>,
 }
 
 impl Step {
@@ -43,8 +46,9 @@ impl Step {
 /// the file. Unknown keys are ignored rather than rejected: the header is a
 /// note to the tooling, not part of the language, and a set written by hand
 /// should not fail to play because someone added a word.
-fn parse_header(src: &str, default_bars: u32) -> (u32, String, Option<f32>, String) {
+fn parse_header(src: &str, default_bars: u32) -> (u32, String, Option<f32>, String, Option<f32>) {
     let (mut bars, mut phase, mut energy, mut note) = (default_bars, String::new(), None, String::new());
+    let mut blend = None;
     for line in src.lines() {
         let t = line.trim();
         if let Some(rest) = t.strip_prefix("# set-note:").or_else(|| t.strip_prefix("#set-note:")) {
@@ -64,11 +68,12 @@ fn parse_header(src: &str, default_bars: u32) -> (u32, String, Option<f32>, Stri
                 }
                 "phase" => phase = v.to_string(),
                 "energy" => energy = v.parse::<f32>().ok(),
+                "blend" => blend = v.parse::<f32>().ok().filter(|b| *b >= 0.0),
                 _ => {}
             }
         }
     }
-    (bars, phase, energy, note)
+    (bars, phase, energy, note, blend)
 }
 
 pub fn load(dir: &Path, default_bars: u32) -> Result<Vec<Step>, String> {
@@ -95,8 +100,8 @@ pub fn load(dir: &Path, default_bars: u32) -> Result<Vec<Step>, String> {
             // carried one would otherwise leak into every step that includes it.
             let raw = fs::read_to_string(&path).map_err(|e| format!("{}: {}", path.display(), e))?;
             let src = crate::include::Source::load(&path)?.text;
-            let (bars, phase, energy, note) = parse_header(&raw, default_bars);
-            Ok(Step { path, src, bars, phase, energy, note })
+            let (bars, phase, energy, note, blend) = parse_header(&raw, default_bars);
+            Ok(Step { path, src, bars, phase, energy, note, blend })
         })
         .collect()
 }
@@ -287,7 +292,9 @@ pub fn cmd(args: &[String]) {
             eprintln!("    tatum set render <dir> [-o out.wav] [--bars N]");
             eprintln!("    tatum set check  <dir> [--bars N] [--json]");
             eprintln!("    tatum set next   <dir> <candidate.synth> [--json]");
-            eprintln!("    tatum set play   <dir> [--phrase 8] [--ramp 4] [--device <name>] [--midi <name>]");
+            eprintln!(
+                "    tatum set play   <dir> [--phrase 8] [--ramp 4] [--blend 0] [--device <name>] [--midi <name>]"
+            );
             eprintln!();
             eprintln!("A set is a directory of numbered .synth files, each the whole rig at a");
             eprintln!("moment. `render` walks them with real hot swaps. `check` validates the");
@@ -314,7 +321,7 @@ fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
 /// multiple of `--phrase` bars; a tempo change between steps ramps over
 /// `--ramp` bars (0 jumps).
 fn cmd_play(args: &[String]) -> Result<(), String> {
-    let (mut dir, mut phrase, mut ramp) = (None, 8usize, 4.0f32);
+    let (mut dir, mut phrase, mut ramp, mut blend) = (None, 8usize, 4.0f32, 0.0f32);
     let (mut device, mut rate, mut midi) = (None, None, None);
     let mut i = 0;
     while i < args.len() {
@@ -332,6 +339,13 @@ fn cmd_play(args: &[String]) -> Result<(), String> {
                     .and_then(|v| v.parse().ok())
                     .filter(|&n: &f32| n >= 0.0)
                     .ok_or("--ramp needs a number of bars")?;
+                i += 1;
+            }
+            "--blend" => {
+                blend = value(i)
+                    .and_then(|v| v.parse().ok())
+                    .filter(|&n: &f32| n >= 0.0)
+                    .ok_or("--blend needs a number of bars")?;
                 i += 1;
             }
             "--device" | "-d" => {
@@ -354,7 +368,8 @@ fn cmd_play(args: &[String]) -> Result<(), String> {
     let dir = dir.ok_or("usage: tatum set play <dir> [--phrase 8] [--ramp 4]")?;
     let steps = load(Path::new(dir), DEFAULT_BARS)?;
     let first = steps[0].path.to_string_lossy().into_owned();
-    let nav = crate::setnav::SetNav::new(steps, phrase, ramp);
+    let mut nav = crate::setnav::SetNav::new(steps, phrase, ramp);
+    nav.blend_bars = blend;
     crate::live::run(&first, true, device, rate, midi, Default::default(), Some(nav))
 }
 
@@ -620,7 +635,7 @@ master { in > out }
     #[test]
     fn the_header_travels_in_the_file() {
         let src = format!("# set: bars=48 phase=build energy=5\n# set-note: reese in\n{RIG}");
-        let (bars, phase, energy, note) = parse_header(&src, 32);
+        let (bars, phase, energy, note, _) = parse_header(&src, 32);
         assert_eq!(bars, 48);
         assert_eq!(phase, "build");
         assert_eq!(energy, Some(5.0));
@@ -631,7 +646,7 @@ master { in > out }
     /// someone wrote by hand should not fail to play because of a stray word.
     #[test]
     fn a_missing_or_odd_header_falls_back_instead_of_failing() {
-        let (bars, phase, energy, note) = parse_header(RIG, 32);
+        let (bars, phase, energy, note, _) = parse_header(RIG, 32);
         assert_eq!((bars, energy), (32, None));
         assert!(phase.is_empty() && note.is_empty());
 
@@ -666,6 +681,7 @@ master { in > out }
             phase: String::new(),
             energy: None,
             note: String::new(),
+            blend: None,
         };
         let steps = vec![mk(0, RIG.to_string()), mk(1, RIG.replace("wet=0.0", "wet=1.0"))];
         let out = render_set(&steps).expect("renders");

@@ -546,6 +546,13 @@ rings out. A step that only changes values is sent on the line itself. A step at
 tempo starts at the tempo that was playing and ramps to its own over `--ramp` bars (4
 by default; 0 jumps). Knobs, toggled tracks and held pads carry from step to step.
 
+`--blend 8` mixes instead of handing over, the way a DJ does: the step that was playing
+keeps going under the new one for 8 bars while it fades out and the new one fades in,
+the two on the same tempo through the ramp, and the low end changes hands at the
+midpoint in 50 ms so two basses never play at once. A step can ask for its own with
+`# set: blend=8` in its header. It is for going between steps that have little in
+common; steps built on one rig hand over well on the line.
+
 The file of the step playing is watched like `tatum watch` watches one: save it and the
 edit plays. `q` or Ctrl-C quits and leaves the terminal as it was.
 

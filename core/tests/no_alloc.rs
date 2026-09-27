@@ -240,3 +240,36 @@ fn a_fast_edit_frees_nothing_on_the_audio_thread() {
     }
     assert_eq!(retired, 1, "the op list must come back for dropping");
 }
+
+/// A DJ-style blend runs two engines at once for bars: that path has to be
+/// as free of the allocator as a plain swap.
+#[test]
+fn a_blend_never_allocates() {
+    use tatum_core::live::{LivePlanner, LivePlayer, Plan};
+
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    player.apply(planner.plan(SONG, player.generation()).expect("compiles"));
+    player.start();
+    let mut l = [0.0f32; BLOCK_SIZE];
+    let mut r = [0.0f32; BLOCK_SIZE];
+    for _ in 0..16 {
+        player.process(&mut l, &mut r);
+    }
+    let edit = SONG.replace("module keys pad { cutoff 0.5 }", "module bass pad { cutoff 0.5 }");
+    let mut plan = planner.plan(&edit, player.generation()).expect("compiles");
+    if let Plan::Swap { blend_bars, .. } = &mut plan {
+        *blend_bars = 2.0;
+    }
+    reset();
+    counting(true);
+    player.apply(plan);
+    // Through the swap and the whole two-bar blend.
+    for _ in 0..3000 {
+        player.process(&mut l, &mut r);
+    }
+    counting(false);
+    assert_eq!(player.swaps(), 1);
+    let n = allocs();
+    assert_eq!(n, 0, "the blend path allocated {} times", n);
+}
