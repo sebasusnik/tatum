@@ -594,10 +594,13 @@ impl Module for FmModule {
     }
 
     fn note_off(&mut self, note: u8) {
+        // Release the voices still held on this note. One already releasing
+        // is skipped: a note struck again while its last strike is still
+        // fading has two voices on it, and taking the first match used to
+        // release the fading one again and leave the new one held forever.
         for voice in &mut self.voices {
-            if voice.active && voice.note == note {
+            if voice.active && voice.note == note && voice.ops[0].env.stage() != EnvStage::Release {
                 voice.note_off();
-                break;
             }
         }
     }

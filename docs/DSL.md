@@ -306,7 +306,7 @@ scene drop {
     reverb_mix = 0.3                     # wet level of the global sends for this scene
     delay_mix = 0.2
     reverb_freeze = 1                    # hold the reverb tail: no decay, no new input, for this scene
-    auto acid cutoff 0.2 > 0.6 > 0.2     # linear (2 values) or triangle (3 values)
+    auto acid cutoff 0.2 > 0.6 > 0.2     # linear (2 values), triangle (3), or a curve (4+, evenly spaced)
     auto drums level 1.0 > 0.0           # level fade: resolves a track name first, else an instrument name
     auto reverb_mix 0.1 > 0.5
     auto reverb_freeze 0 > 1             # freezes once the lane crosses 0.5
