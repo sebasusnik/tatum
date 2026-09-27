@@ -184,25 +184,44 @@ impl SongEngine {
 }
 
 /// Interpolate automation keyframes at a given progress (0.0 - 1.0).
+///
+/// The keyframes are spaced evenly over the scene and joined by straight
+/// lines: two are a ramp, three a triangle peaking at the midpoint, and more
+/// draw a curve, so `a > a > b > b` holds, rises through the middle half and
+/// holds again. The parser has always taken any number; the engine used to
+/// play a lane of four or more as its first value, flat.
 fn interpolate_automation(keyframes: &[f32], progress: f32) -> f32 {
     let p = progress.clamp(0.0, 1.0);
     match keyframes.len() {
         0 => 0.0,
         1 => keyframes[0],
-        2 => {
-            // Linear: start → end
-            keyframes[0] + (keyframes[1] - keyframes[0]) * p
+        n => {
+            let pos = p * (n - 1) as f32;
+            let i = (pos as usize).min(n - 2);
+            let t = pos - i as f32;
+            keyframes[i] + (keyframes[i + 1] - keyframes[i]) * t
         }
-        3 => {
-            // Triangle: start → peak (at midpoint) → end
-            if p < 0.5 {
-                let t = p * 2.0;
-                keyframes[0] + (keyframes[1] - keyframes[0]) * t
-            } else {
-                let t = (p - 0.5) * 2.0;
-                keyframes[1] + (keyframes[2] - keyframes[1]) * t
-            }
-        }
-        _ => keyframes[0], // shouldn't happen
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::interpolate_automation;
+
+    #[test]
+    fn two_and_three_keyframes_are_a_ramp_and_a_triangle() {
+        assert_eq!(interpolate_automation(&[0.2, 0.6], 0.25), 0.2 + 0.4 * 0.25);
+        assert_eq!(interpolate_automation(&[0.0, 1.0, 0.0], 0.5), 1.0);
+        assert_eq!(interpolate_automation(&[0.0, 1.0, 0.0], 0.75), 0.5);
+    }
+
+    #[test]
+    fn more_keyframes_draw_a_curve() {
+        let lane = [0.1, 0.1, 0.9, 0.9, 0.3];
+        assert_eq!(interpolate_automation(&lane, 0.0), 0.1);
+        assert_eq!(interpolate_automation(&lane, 0.2), 0.1);
+        assert!((interpolate_automation(&lane, 0.375) - 0.5).abs() < 1e-6);
+        assert_eq!(interpolate_automation(&lane, 0.6), 0.9);
+        assert_eq!(interpolate_automation(&lane, 1.0), 0.3);
     }
 }

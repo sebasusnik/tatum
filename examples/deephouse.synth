@@ -1,372 +1,548 @@
-# ╔═══════════════════════════════════════════════╗
-# ║  deephouse.synth — Deep House                 ║
-# ║  122 BPM, F minor, 4/4                        ║
-# ║  Uses: swing, humanize, accent/ghost syntax   ║
-# ╚═══════════════════════════════════════════════╝
-
-tempo 122
+# Deep House — C minor, 120 BPM, Cm11 / Dbmaj7, dark and hypnotic
+# Built from the bottom up: a deep kick, a sine-like sub holding the roots and
+# a growling bass above it that small speakers can hear. Over that, dub chords
+# filtered low with long echoes, a sixteenth sequence whose filter takes
+# sixteen bars to breathe, a tape-hiss bed, and a low choir that only comes in
+# for the break and the peak. The harmony never lifts: it leans on the
+# phrygian Db and comes back down.
+tempo 120
 meter 4/4
-scale F minor
-sidechain 0.35
-swing 0.58
-humanize 0.35 timing 0.2
+scale C minor
+swing 0.54
+humanize 0.04 timing 0.004
+sidechain 0.45 attack=2ms release=150ms
+
+delay sync=dotted_eighth feedback=0.5 filter=0.35
+reverb size=0.85 damp=0.65 predelay=30 sidechain=0.5
+
+reverb_return { in > highpass(400hz, 0.05) > lowpass(4khz, 0.05) > out }
+delay_return  { in > highpass(300hz, 0.05) > lowpass(2500hz, 0.05) > autopan(0.5, bars=4) > out }
 
 # ────────────────────────────────────────────────
-# MODULE INSTRUMENTS
+# MODULES
 # ────────────────────────────────────────────────
 
-# Deep sub bass: warm saw + sub sine, slow filter
-module bass deep_bass {
-    cutoff 45.8174hz
-    cutoff_env 296.454hz
-    resonance 0.55
-    glide 0.25
-    osc2_pitch -12st
+# A deep kick: tuned low, a long body, almost no click
+module beats deep {
+    kick_level 1.0
+    kick_decay 60%
+    kick_pitch 0.75x
+    kick_click 12%
+    kick_drive 30%
+    clap_level 0.55
+    clap_pan 0.05
+    hihat_level 0.45
+    hihat_decay 18%
+    hihat_pitch 0.9x
+    hihat_pan 0.3
+}
+
+# Rimshot: a dark wooden click
+module beats rim {
+    snare_level 0.6
+    snare_decay 3%
+    snare_pitch 1.5x
+    snare_snap 15%
+    snare_drive 10%
+    snare_pan -0.3
+}
+
+# Sub: a pure sine, an FM carrier with no modulation. Two oscillators at
+# the same pitch drift apart in phase and the sub's level wanders over the
+# song; one sine cannot
+module fm sub {
+    algorithm two_op
+    level 2.0
+    mod_index 0%
+    feedback 0%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op0_envelope 0.005 1.0 1.0 0.12
+    op1_envelope 0.005 1.0 1.0 0.12
+}
+
+# Bass: the growl on top of the sub, a saw and its octave plucked through a
+# low filter. The pluck is the attack that says where each note starts; the
+# octave instead of a detune keeps it from smearing
+module bass growl {
     osc1_wave saw
     osc2_wave saw
-    keytrack 0.4
-    attack 1.03874ms
-    decay 14.3008ms
-    sustain 0.7
-    release 3.1272ms
+    osc2_pitch 12st
+    cutoff 180hz
+    cutoff_env 1200hz
+    resonance 28%
+    glide 10%
+    attack 3ms
+    decay 110ms
+    sustain 20%
+    release 100ms
 }
 
-# Rhodes-style keys: FM warm electric piano
-module fm rhodes {
-    algorithm serial3_plus_carrier
-    mod_index 0.55
-    feedback 0.15
-    chorus_mix 0.3
-    attack 1.03874ms
-    decay 20.9128ms
-    sustain 0.45
-    release 6.6874ms
-    op0_envelope 0.003 0.35 0.3 0.4
-    op1_envelope 0.001 0.2 0.15 0.3
-}
-
-# Pad: lush detuned with chorus
-module keys lush_pad {
+# Dub chords: short and dark, most of what you hear is their echo
+module keys dub {
     voice_mode poly
-    cutoff 458.174hz
-    detune 0.12
-    chorus_mix 0.4
-    attack 437.345ms
-    decay 44.7214ms
-    sustain 0.75
-    release 2000ms
+    cutoff 700hz
+    resonance 35%
+    detune 8%
+    chorus_mix 0%
+    attack 3ms
+    decay 280ms
+    sustain 5%
+    release 300ms
+    lfo_target cutoff
+    lfo_sync bars_16
+    lfo_waveform triangle
+    lfo_depth 20%
 }
 
-# Drums
-module beats drums {
-    kick_level 1.0
-    kick_click 0.3
-    kick_decay 0.55
-    snare_level 0.85
-    snare_decay 0.35
-    snare_pan 0.05
-    hihat_level 0.75
-    hihat_pan 0.25
-    clap_level 0.8
-    clap_pan -0.1
+# Sequence: a resonant pluck in sixteenths; its filter breathes over 16 bars
+module keys seq {
+    voice_mode poly
+    cutoff 600hz
+    resonance 40%
+    detune 5%
+    chorus_mix 0%
+    attack 4ms
+    decay 150ms
+    sustain 0%
+    release 250ms
+    lfo_target cutoff
+    lfo_sync bars_16
+    lfo_waveform triangle
+    lfo_depth 35%
 }
 
-# Stab: short keys for offbeat chords
-module keys stab {
-    cutoff 550.846hz
-    attack 1ms
-    decay 2.48957ms
-    sustain 0.15
-    release 1.8369ms
+# Pad: a dark bed, slow in and slow out
+module keys murk {
+    voice_mode poly
+    cutoff 800hz
+    resonance 20%
+    detune 25%
+    chorus_mix 30%
+    attack 2s
+    decay 1s
+    sustain 85%
+    release 1s
+    lfo_target cutoff
+    lfo_sync bars_16
+    lfo_waveform triangle
+    lfo_depth 15%
+    vibrato_rate 0.5hz
+    vibrato_depth 4%
 }
 
-# ────────────────────────────────────────────────
-# PATTERNS
-# ────────────────────────────────────────────────
-
-# Bass: Fm groove — syncopated with ties for legato slides
-pattern bass_main {
-    F1:0.85(edepth=0.50, res=0.60) -  -  F1:0.5(edepth=0.30, res=0.45)
-    -  Eb1:0.7(edepth=0.45, res=0.55) ..  -
-    Ab1:0.75(edepth=0.48, res=0.58) -  F1:0.4(edepth=0.25, res=0.40) -
-    C1:0.6(edepth=0.40, res=0.50) -  -  Eb1:0.55(edepth=0.35, res=0.48)
+# Choir: a low unison voice, the vowel filter turns it from "oh" to "uh"
+module keys choir {
+    voice_mode unison
+    cutoff 1800hz
+    resonance 10%
+    detune 18%
+    chorus_mix 0%
+    attack 800ms
+    decay 1s
+    sustain 80%
+    release 1.2s
+    vibrato_rate 4.5hz
+    vibrato_depth 6%
 }
 
-# Bass: sparse intro
-pattern bass_intro {
-    F1:0.6 - .. -
-    - - - -
-    F1:0.5 - - -
-    - - - -
+# Rhodes, dark: the tine turned down, played low
+module fm rhodes {
+    algorithm dual_pairs
+    level 2.0
+    mod_index 25%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op2_ratio 1x
+    op3_ratio 14x
+    op0_envelope 0.002 1.2 0.2 0.6
+    op1_envelope 0.002 0.8 0.2 0.5
+    op2_envelope 0.002 1.0 0.1 0.5
+    op3_envelope 0.001 0.05 0.0 0.04
+    vibrato_rate 4.5hz
+    vibrato_depth 3%
 }
 
-# Bass: breakdown — held note
-pattern bass_hold {
-    F1:0.55 .. .. ..
-    ..      .. .. ..
-    ..      .. .. ..
-    ..      .. .. ..
+# Tape: feedback noise kept low and filtered, the air in the room
+module fm tape {
+    algorithm pair_plus_two
+    level 1.0
+    mod_index 100%
+    feedback 100%
+    waveform sine
+    op0_ratio 5.3x
+    op1_ratio 2.51x
+    op2_ratio 7.1x
+    op3_ratio 1.43x
+    op0_envelope 1.0 1.0 1.0 1.0
+    op1_envelope 1.0 1.0 1.0 1.0
+    op2_envelope 1.0 1.0 1.0 1.0
+    op3_envelope 1.0 1.0 1.0 1.0
+    op0_feedback 90%
+    lfo_target mod_index
+    lfo_sync bars_8
+    lfo_waveform triangle
+    lfo_depth 20%
 }
 
-# Bass: bridge with movement (Fm → Db → Eb → Fm)
-pattern bass_bridge {
-    F1:0.8(edepth=0.50, res=0.58) - - F1:0.45(edepth=0.30, res=0.42)
-    - Db1:0.7(edepth=0.45, res=0.52) .. -
-    Eb1:0.75(edepth=0.48, res=0.55) - Eb1:0.4(edepth=0.25, res=0.40) -
-    F1:0.65(edepth=0.42, res=0.50) - - C1:0.5(edepth=0.35, res=0.45)
-}
-
-# ── Drums: using accent (X), normal (x), ghost (o) ──
-
-pattern drums_intro {
-    kick:  X - - - x - - - x - - - - - - -
-    hihat: - - o - - - x - - - o - - - x -
-}
-
-pattern drums_main {
-    kick:  X - - - - - - x x - - - - - - -
-    snare: - - - - x - - - - - o - x - - -
-    hihat: o - x - o - x - o - x - o - x -
-    clap:  - - - - - - - - - - - - - - - x
-}
-
-pattern drums_groove {
-    kick:  X - - - - - - x x - - - - - - -
-    snare: - - - - x - o - - - o - X - - -
-    hihat: x o X o x o X o x o X o x o X o
-    clap:  - - - - - - - - - - - x - - - -
-}
-
-pattern drums_build {
-    kick:  X - - x - - x - X - - x x - x -
-    snare: - - - - X - - o - - - - X - - X
-    hihat: x o X o x o X o x o X o X X X X
-    clap:  - - - - - - - - - - - - - - x X
-}
-
-pattern drums_breakdown {
-    kick:  o - - - - - - - - - - - - - - -
-    hihat: - - o - - - x - - - o - - - x -
-}
-
-pattern drums_drop {
-    kick:    X - - - - - x - X - - - - - - x
-    snare:   - - - - X - - o - - o - X - - -
-    hihat:   X o x o X o x o X o x o X o x o
-    clap:    - - - - - - - - - - - - X - x X
-    openhat: - - - - - - - x - - - - - - - x
-}
-
-# Rhodes: Fm7 voicings — dreamy chords
-pattern rhodes_fm7 {
-    F3:0.5  - - -
-    - Ab3:0.45 - -
-    C4:0.55 - - Eb4:0.4
-    - - - -
-}
-
-# Rhodes: Dbmaj7 voicing
-pattern rhodes_db {
-    Db3:0.5 - - -
-    - F3:0.45 - -
-    Ab3:0.55 - - C4:0.4
-    - - - -
-}
-
-# Pad: sustained Fm chord (chord syntax)
-pattern pad_fm {
-    [F3 Ab3 C4]:0.35 .. .. ..
-    ..                .. .. ..
-    ..                .. .. ..
-    ..                .. .. ..
-}
-
-# Pad: Db major chord
-pattern pad_db {
-    [Db3 F3 Ab3]:0.35 .. .. ..
-    ..                 .. .. ..
-    ..                 .. .. ..
-    ..                 .. .. ..
-}
-
-# Stab: offbeat minor stabs
-pattern stab_off {
-    -       -       Ab4:0.55 -
-    -       -       -        -
-    -       -       Ab4:0.45 -
-    -       F4:0.5  -        -
-}
-
-# Empty
-pattern silence {
-    - - - -
-    - - - -
-    - - - -
-    - - - -
+# Bongos: low FM hits, tuned down to the key
+module fm bongo {
+    algorithm two_op
+    level 2.0
+    mod_index 25%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1.5x
+    op0_envelope 0.001 0.2 0.0 0.1
+    op1_envelope 0.001 0.04 0.0 0.03
+    lfo_target pitch
+    lfo_sync sixteenth
+    lfo_waveform saw
+    lfo_depth 6%
 }
 
 # ────────────────────────────────────────────────
-# BUS FX
+# DRUMS
 # ────────────────────────────────────────────────
 
-bus drumBus
+pattern beat_intro {
+    kick:    X - - -  X - - -  X - - -  X - - -
+    hat:     - - x -  - - x -  - - x -  - - x o
+}
 
+pattern beat_main {
+    kick:    X - - -  X - - -  X - - -  X - - -
+    clap:    - - - -  X - - -  - - - -  X - - -
+    hat:     o - x o  o - x o  o - x o  o - x o
+}
 
+# The peak: a ghost clap pushing into every other bar
+pattern beat_peak {
+    kick:    X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -
+    clap:    - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - o
+    hat:     o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o
+}
 
-drumBus {
-    in > compressor(-8.0, ratio=4.0, attack=8, release=60) > saturate(0.1) > master
+pattern beat_break {
+    hat:     - - x -  - - x -  - - x -  - - x -
+}
+
+pattern rim_332 {
+    snare:   - - - x  - - x -  - - - x  - - x -
+}
+
+# ────────────────────────────────────────────────
+# LOW END
+# ────────────────────────────────────────────────
+
+# Cm11 for two bars, the phrygian Db for one, back to C
+pattern sub_line {
+    - - C2:0.9 ..  .. .. - C2:0.7   .. .. - -  C2:0.8 .. .. -
+    - - C2:0.9 ..  .. .. - C2:0.7   .. .. - -  G1:0.8 .. .. -
+    - - Db2:0.9 .. .. .. - Db2:0.7  .. .. - -  Db2:0.8 .. .. -
+    - - C2:0.9 ..  .. .. - C2:0.7   .. .. - -  ~Bb1:0.8 .. ~G1:0.8 -
+}
+
+# ────────────────────────────────────────────────
+# HARMONY AND TEXTURE
+# ────────────────────────────────────────────────
+
+# One or two chords a bar; the dotted-eighth echo fills in the rest
+pattern dub_chords {
+    - - - -  - - [C3 Eb3 G3 Bb3 F4]:0.8 -   - - - -  - - - -
+    - - - -  - - [C3 Eb3 G3 Bb3 F4]:0.7 -   - - - [C3 Eb3 G3 Bb3 F4]:0.5  - - - -
+    - - - -  - - [Db3 F3 Ab3 C4]:0.8 -      - - - -  - - - -
+    - - - -  - - [C3 Eb3 G3 Bb3 F4]:0.7 -   - - - -  - - - -
+}
+
+# The same eight notes turning; the Db bar rubs against them on purpose
+pattern hypno {
+    C3:0.8 G3:0.5 Eb3:0.6 C3:0.5   Bb2:0.7 G3:0.5 C3:0.6 Eb3:0.5   C3:0.8 G3:0.5 Eb3:0.6 Bb3:0.5   G3:0.7 Eb3:0.5 C3:0.6 G2:0.5
+}
+
+# No root: the sub and the bass have it. The pad lives above them, on the
+# sevenths and ninths
+pattern murk_prog {
+    [G3 Bb3 D4 Eb4]:0.6 ..*31
+    [Ab3 C4 Eb4 F4]:0.6 ..*15
+    [G3 Bb3 D4 Eb4]:0.6 ..*15
+}
+
+pattern choir_line {
+    G3:0.7 ..*31
+    Ab3:0.7 ..*15
+    G3:0.7 ..*15
+}
+
+# The dark solo: low, few notes, room for the echo
+pattern solo {
+    - - G3:0.7 -   Bb3:0.6 - - C4:0.8   .. .. - -   Bb3:0.5 - G3:0.6 -
+    - - - -        Eb3:0.6 - F3:0.6 -   G3:0.7 .. .. ..   - - - -
+    - - Ab3:0.7 -  C4:0.6 - - Db4:0.8   .. .. C4:0.6 -    Ab3:0.6 - F3:0.5 -
+    G3:0.7 .. .. ..   - - - -   - - - -   - - - -
+}
+
+pattern tape_bed {
+    C4:0.6 ..*63
+}
+
+pattern bongos {
+    - - C3:0.6 -   - - - G3:0.4    - - C3:0.7 -   - - - -
+    - - C3:0.6 -   - G3:0.4 - -    - - C3:0.7 -   - - G3:0.5 G3:0.3
 }
 
 # ────────────────────────────────────────────────
 # TRACKS
 # ────────────────────────────────────────────────
 
-track bass {
-    play bass_main
-    using deep_bass
-    velocity 0.9
-    level 0.55
-    gate 0.9
-    pan 0.0
-    delay_send 0.05
-    reverb_send 0.08
-    out > drive(0.15) > master
-}
+bus drums
+drums { in > compressor(-8, ratio=2, attack=10, release=80, makeup=0db) > master }
 
 track drums {
-    play drums_main
-    using drums
+    play beat_main
+    using deep
+    level 0.8
     velocity 1.0
-    level 0.55
-    pan 0.0
-    out > drumBus
+    reverb_send 0.05
+    out > highpass(25hz, 0.05) > drums
+}
+
+track rim {
+    play rim_332
+    using rim
+    level 0.35
+    velocity 1.0
+    reverb_send 0.2
+    delay_send 0.12
+    out > highpass(300hz, 0.05) > lowpass(6khz, 0.05) > drums
+}
+
+track sub {
+    play sub_line
+    using sub
+    level 0.13
+    velocity 1.0
+    gate 0.85
+    sidechain 0.5
+    out > highpass(28hz, 0.05) > lowpass(120hz, 0.05) > master
+}
+
+track bass {
+    play sub_line
+    using growl
+    level 0.6
+    velocity 1.0
+    gate 0.8
+    sidechain 0.4
+    out > highpass(100hz, 0.05) > saturate(0.9) > lowpass(1800hz, 0.05) > highpass(55hz, 0.01) > master
+}
+
+track dub {
+    play dub_chords
+    using dub
+    level 0.3
+    velocity 1.0
+    gate 0.4
+    pan -0.2
+    delay_send 0.45
+    reverb_send 0.25
+    sidechain 0.5
+    out > highpass(220hz, 0.05) > master
+}
+
+track seq {
+    play hypno
+    using seq
+    level 0.16
+    velocity 1.0
+    gate 0.5
+    pan 0.3
+    delay_send 0.25
+    reverb_send 0.15
+    sidechain 0.45
+    out > highpass(300hz, 0.05) > autopan(0.3, bars=8) > master
+}
+
+track pad {
+    play murk_prog
+    using murk
+    level 0.16
+    velocity 1.0
+    reverb_send 0.45
+    sidechain 0.55
+    out > highpass(350hz, 0.05) > eq(low=-6) > autopan(0.4, bars=8) > master
+}
+
+track choir {
+    play choir_line
+    using choir
+    level 0.5
+    velocity 1.0
+    pan -0.1
+    reverb_send 0.5
+    delay_send 0.15
+    sidechain 0.4
+    out > highpass(300hz, 0.05) > vowel(o, u, bars=4, mix=0.8) > master
 }
 
 track rhodes {
-    play silence
+    play solo
     using rhodes
-    velocity 0.7
-    level 0.45
-    gate 0.6
-    pan -0.38
-    delay_send 0.15
+    level 0.14
+    velocity 1.0
+    gate 0.95
+    pan 0.2
     reverb_send 0.25
-    out > master
+    delay_send 0.3
+    sidechain 0.3
+    out > highpass(200hz, 0.05) > autopan(0.3, bars=2) > master
 }
 
-track pads {
-    play silence
-    using lush_pad
-    velocity 0.5
-    level 0.22
-    pan 0.0
-    reverb_send 0.35
-    out > master
+track tape {
+    play tape_bed
+    using tape
+    level 0.04
+    velocity 1.0
+    reverb_send 0.2
+    sidechain 0.3
+    out > highpass(500hz, 0.05) > lowpass(2500hz, 0.05, lfo_bars=16, lfo_depth=1200) > autopan(0.6, bars=16) > master
 }
 
-track stabs {
-    play silence
-    using stab
-    velocity 0.5
-    level 0.35
-    gate 0.2
-    pan 0.34
-    delay_send 0.25
+track bongo {
+    play bongos
+    using bongo
+    level 0.16
+    velocity 1.0
+    gate 0.5
+    pan -0.45
     reverb_send 0.15
-    out > master
+    out > highpass(100hz, 0.05) > master
 }
 
-# ────────────────────────────────────────────────
-# MASTER
-# ────────────────────────────────────────────────
-
-# gain(0.5) at the head of the master: what the engine used to take off this
-# song's fullest scene when it scaled every scene by 1/sqrt(its tracks). The
-# master chain is fed as it was; scenes with fewer tracks now play as written.
 master {
-    in > gain(0.5) > eq(low=3.5, mid=1.5, high=0.8) > compressor(-3.0, ratio=2.0, attack=10, release=100, makeup=10.1db) > out
+    in > lowpass(20000, 0.05) > eq(low=2, mid=-1, high=-1.5) > out
 }
 
 # ────────────────────────────────────────────────
 # SCENES
 # ────────────────────────────────────────────────
 
-# Intro: stripped back, kick + sparse bass
 scene intro {
-    track drums { play drums_intro using drums velocity 1.0 level 0.5 }
-    track bass  { play bass_intro  using deep_bass velocity 0.7 level 0.45 }
+    track drums { play beat_intro using deep }
+    track tape  { play tape_bed using tape }
 }
 
-# Buildup: add hats + rhodes
-scene buildup {
-    track drums  { play drums_build using drums     velocity 1.0 level 0.55 }
-    track bass   { play bass_intro  using deep_bass velocity 0.8 level 0.5 }
-    track rhodes { play rhodes_fm7  using rhodes    velocity 0.6 level 0.35 delay_send 0.15 reverb_send 0.25 pan -0.38 }
+# The floor drops away under the kick
+scene intro2 {
+    track drums { play beat_intro using deep }
+    track rim   { play rim_332 using rim }
+    track sub   { play sub_line using sub }
+    track bass  { play sub_line using growl }
+    track tape  { play tape_bed using tape }
 }
 
-# Main groove: full arrangement
-scene main {
-    auto deep_bass cutoff 0.12 > 0.18
-
-    track drums  { play drums_groove using drums     velocity 1.0 level 0.55 }
-    track bass   { play bass_main    using deep_bass velocity 0.9 level 0.55 }
-    track rhodes { play rhodes_fm7   using rhodes    velocity 0.7 level 0.45 delay_send 0.15 reverb_send 0.25 pan -0.38 }
-    track stabs { play stab_off     using stab      velocity 0.5 level 0.35 delay_send 0.25 reverb_send 0.15 pan 0.34 }
+scene flow {
+    auto dub cutoff 0.15 > 0.3
+    track drums { play beat_main using deep }
+    track rim   { play rim_332 using rim }
+    track sub   { play sub_line using sub }
+    track bass  { play sub_line using growl }
+    track dub   { play dub_chords using dub pan -0.2 }
+    track bongo { play bongos using bongo pan -0.45 }
+    track tape  { play tape_bed using tape }
 }
 
-# Breakdown: pads + sparse hats, no kick
-scene breakdown {
-    auto lush_pad cutoff 0.18 > 0.28 > 0.18
-
-    track drums { play drums_breakdown using drums    velocity 0.8 level 0.4 }
-    track bass  { play bass_hold       using deep_bass velocity 0.5 level 0.4 }
-    track pads { play pad_fm          using lush_pad  velocity 0.5 level 0.22 reverb_send 0.4 }
+# The sequence starts turning, its filter slowly opening
+scene hypnosis {
+    auto seq cutoff 0.15 > 0.35
+    track drums { play beat_main using deep }
+    track rim   { play rim_332 using rim }
+    track sub   { play sub_line using sub }
+    track bass  { play sub_line using growl }
+    track dub   { play dub_chords using dub pan -0.2 }
+    track seq   { play hypno using seq pan 0.3 }
+    track tape  { play tape_bed using tape }
 }
 
-# Bridge: movement, chord changes
-scene bridge {
-    auto deep_bass cutoff 0.10 > 0.22 > 0.10
-    auto deep_bass cutoff_env 0.35 > 0.60 > 0.35
-    auto lush_pad cutoff 0.18 > 0.26 > 0.18
-
-    track drums  { play drums_main   using drums     velocity 1.0 level 0.55 }
-    track bass   { play bass_bridge  using deep_bass velocity 0.85 level 0.55 }
-    track rhodes { play rhodes_db    using rhodes    velocity 0.65 level 0.4 delay_send 0.15 reverb_send 0.3 pan -0.38 }
-    track pads { play pad_db       using lush_pad  velocity 0.4 level 0.22 reverb_send 0.35 }
+# No kick: the sub keeps the pulse, the choir and the pad fill the room
+scene break {
+    reverb_mix = 0.5
+    auto seq cutoff 0.35 > 0.15
+    track drums { play beat_break using deep }
+    track sub   { play sub_line using sub }
+    track pad   { play murk_prog using murk }
+    track choir { play choir_line using choir pan -0.1 }
+    track seq   { play hypno using seq pan 0.3 }
+    track tape  { play tape_bed using tape }
 }
 
-# Drop: full energy, driving groove
-scene drop {
-    auto deep_bass cutoff 0.14 > 0.24
-
-    track drums  { play drums_drop  using drums     velocity 1.0 level 0.6 }
-    track bass   { play bass_main   using deep_bass velocity 0.95 level 0.6 }
-    track rhodes { play rhodes_fm7  using rhodes    velocity 0.75 level 0.45 delay_send 0.1 reverb_send 0.2 pan -0.38 }
-    track stabs { play stab_off    using stab      velocity 0.6  level 0.4  delay_send 0.2 reverb_send 0.1 pan 0.34 }
+scene return {
+    auto dub cutoff 0.25 > 0.4
+    auto seq cutoff 0.2 > 0.4
+    track drums { play beat_main using deep }
+    track rim   { play rim_332 using rim }
+    track sub   { play sub_line using sub }
+    track bass  { play sub_line using growl }
+    track dub   { play dub_chords using dub pan -0.2 }
+    track seq   { play hypno using seq pan 0.3 }
+    track pad   { play murk_prog using murk }
+    track bongo { play bongos using bongo pan -0.45 }
 }
 
-# Outro: fade down
+# Stripped to the low end: the dark Rhodes over kick, sub and bass
+scene deeper {
+    track drums  { play beat_intro using deep }
+    track rim    { play rim_332 using rim }
+    track sub    { play sub_line using sub }
+    track bass   { play sub_line using growl }
+    track rhodes { play solo using rhodes pan 0.2 }
+    track tape   { play tape_bed using tape }
+}
+
+scene peak {
+    auto dub cutoff 0.3 > 0.45 > 0.35
+    auto seq cutoff 0.3 > 0.5 > 0.3
+    track drums { play beat_peak using deep }
+    track rim   { play rim_332 using rim }
+    track sub   { play sub_line using sub }
+    track bass  { play sub_line using growl }
+    track dub   { play dub_chords using dub pan -0.2 }
+    track seq   { play hypno using seq pan 0.3 }
+    track pad   { play murk_prog using murk }
+    track choir { play choir_line using choir pan -0.1 }
+    track bongo { play bongos using bongo pan -0.45 }
+}
+
 scene outro {
-    auto deep_bass cutoff_env 0.45 > 0.20
-    auto deep_bass cutoff 0.12 > 0.06
-    auto lush_pad cutoff 0.18 > 0.09
-
-    track drums { play drums_intro using drums     velocity 0.9 level 0.45 }
-    track bass  { play bass_intro  using deep_bass velocity 0.6 level 0.4 }
-    track pads { play pad_fm      using lush_pad  velocity 0.3 level 0.22  reverb_send 0.4 }
+    auto dub cutoff 0.35 > 0.12
+    track drums { play beat_main using deep }
+    track rim   { play rim_332 using rim }
+    track sub   { play sub_line using sub }
+    track bass  { play sub_line using growl }
+    track dub   { play dub_chords using dub pan -0.2 }
+    track tape  { play tape_bed using tape }
 }
 
-# ────────────────────────────────────────────────
-# ARRANGEMENT (34 bars)
-# ────────────────────────────────────────────────
+# The growl leaves first, then the sub, and the song ends on the kick
+scene fade {
+    auto master cutoff 20000 > 800
+    auto sub level 0.13 > 0.0
+    track drums { play beat_intro using deep }
+    track sub   { play sub_line using sub }
+    track tape  { play tape_bed using tape }
+}
 
 arrange {
-    intro x4
-    buildup x4
-    main x4
-    breakdown x4
-    bridge x4
-    drop x8
-    outro x4
-    intro x2
+    intro x8
+    intro2 x8
+    flow x16
+    hypnosis x16
+    break x16
+    return x16
+    deeper x16
+    peak x16
+    outro x8
+    fade x8
 }

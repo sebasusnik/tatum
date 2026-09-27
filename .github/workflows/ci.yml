@@ -113,15 +113,13 @@ jobs:
     # `tatum audit` measures how much of each voice is not at a harmonic of
     # its note, and three songs have their numbers checked in -- nothing else
     # would notice a filter that began ringing or a saturator that got
-    # hotter. It is as much CPU as the rest of the suite together, and a
-    # runner for a private repo has two cores, so each song gets a runner of
-    # its own instead of sharing them with the other tests.
+    # hotter. It is as much CPU as the rest of the suite together, so each
+    # song gets a runner of its own instead of sharing them with the other
+    # tests.
     #
-    # It runs on main after a merge, not on pull requests: it is half the
-    # minutes of every run, and what it guards (the audit numbers of three
-    # songs) moves only when a sound changes, which the listening samples
-    # and the rest of the suite already catch before a merge.
-    if: github.event_name == 'push'
+    # It runs on pull requests too: a sound that moved is caught before the
+    # merge, not after. It used to run only on main to save the minutes of a
+    # private repo; the repo is public now and Actions minutes are free.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
