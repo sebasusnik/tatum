@@ -172,7 +172,10 @@ impl SongEngine {
                     }
                 }
                 AutoTarget::ReverbMix => self.reverb_wet_level = value,
-                AutoTarget::ReverbFreeze => self.send_reverb.set_freeze(value >= 0.5),
+                AutoTarget::ReverbFreeze => {
+                    self.freeze_set = value >= 0.5;
+                    self.apply_freeze();
+                }
                 AutoTarget::DelayMix => self.delay_wet_level = value,
             }
         }

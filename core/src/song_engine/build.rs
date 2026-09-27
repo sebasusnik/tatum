@@ -247,6 +247,8 @@ impl SongEngine {
                     bus_send: t.bus_send,
                     to_master: t.to_master,
                     delay_send: t.delay_send,
+                    muted: false,
+                    thrown: false,
                     reverb_send: t.reverb_send,
                     sidechain_amount: t.sidechain,
                     current_step: 0,
@@ -377,6 +379,8 @@ impl SongEngine {
             // happens on the audio thread, does not grow it.
             held: [crate::live::FastOp::Tempo(0.0); super::held::MAX_HELD],
             held_count: 0,
+            freeze_set: false,
+            freeze_pad: false,
             active_automations: Vec::with_capacity(song.scenes.iter().map(|s| s.automations.len()).max().unwrap_or(0)),
             scene_step: 0,
             scene_total_steps: 0,

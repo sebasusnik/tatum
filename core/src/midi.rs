@@ -178,13 +178,53 @@ pub struct Keys {
     pub mono: bool,
 }
 
-/// One pad: the drum channel note it answers to, and what it hits.
+/// One pad: the drum channel note it answers to, and what it does.
 #[derive(Debug, Clone, Copy)]
 pub struct Pad {
     pub note: u8,
-    pub track: usize,
-    /// The note the `beats` module plays that drum on.
-    pub drum: u8,
+    pub action: PadAction,
+}
+
+/// What a pad does. A drum is struck on the way down; `mute`, `throw` and
+/// `freeze` last while the pad is held; `toggle` flips on each hit; the
+/// last three move through a set and do nothing outside `tatum set play`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PadAction {
+    /// `pad 36 > kick kick`. `drum` is the note the `beats` module plays it on.
+    Drum {
+        track: usize,
+        drum: u8,
+    },
+    /// `pad 44 > mute kick`: silent while held.
+    Mute {
+        track: usize,
+    },
+    /// `pad 45 > toggle hats`: out on one hit, back on the next.
+    Toggle {
+        track: usize,
+    },
+    /// `pad 46 > throw stab`: the whole track into the delay while held.
+    Throw {
+        track: usize,
+    },
+    /// `pad 47 > freeze`: the reverb frozen while held.
+    Freeze,
+    /// `pad 48 > next`, `pad 49 > prev`, `pad 50 > step 3`.
+    Next,
+    Prev,
+    Step(usize),
+}
+
+impl PadAction {
+    /// A set move rather than something the engine does.
+    pub fn navigation(&self) -> bool {
+        matches!(self, PadAction::Next | PadAction::Prev | PadAction::Step(_))
+    }
+}
+
+/// What a pad line names, before any engine: the words after `>`.
+pub fn pad_words(target: &str) -> Vec<&str> {
+    target.split('.').collect()
 }
 
 /// Everything a `midi` block maps, resolved against one engine.
@@ -220,9 +260,23 @@ pub fn resolve_all(song: &Song, names: &Names) -> Controls {
                 controls.keys.push(Keys { track: t, instrument, mono });
             }
             MidiSource::Pad(note) => {
-                let Some((t, drum)) = m.target.split_once('.') else { continue };
-                let (Some(t), Some(drum)) = (track(t), crate::dsl::compiler::drum_note(drum)) else { continue };
-                controls.pads.push(Pad { note, track: t, drum });
+                let action = match pad_words(&m.target).as_slice() {
+                    ["freeze"] => Some(PadAction::Freeze),
+                    ["next"] => Some(PadAction::Next),
+                    ["prev"] => Some(PadAction::Prev),
+                    ["step", n] => n.parse::<usize>().ok().filter(|&n| n >= 1).map(PadAction::Step),
+                    ["mute", t] => track(t).map(|track| PadAction::Mute { track }),
+                    ["toggle", t] => track(t).map(|track| PadAction::Toggle { track }),
+                    ["throw", t] => track(t).map(|track| PadAction::Throw { track }),
+                    [t, drum] => match (track(t), crate::dsl::compiler::drum_note(drum)) {
+                        (Some(track), Some(drum)) => Some(PadAction::Drum { track, drum }),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                if let Some(action) = action {
+                    controls.pads.push(Pad { note, action });
+                }
             }
         }
     }

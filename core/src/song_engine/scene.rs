@@ -43,7 +43,8 @@ impl SongEngine {
             self.delay_wet_level = dmix;
         }
         // Freeze is per scene: it holds only where asked for.
-        self.send_reverb.set_freeze(scene.reverb_freeze.unwrap_or(false));
+        self.freeze_set = scene.reverb_freeze.unwrap_or(false);
+        self.send_reverb.set_freeze(self.freeze_set || self.freeze_pad);
 
         // Automation lanes are set up after the scene's tracks are activated
         // (targets resolve against the new layout, not the previous scene's).

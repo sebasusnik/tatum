@@ -93,6 +93,17 @@ pub enum FastOp {
     ReverbMix(f32),
     DelayMix(f32),
     ReverbFreeze(bool),
+    /// From a pad: silence a track while held (or until tapped again), send
+    /// it whole into the delay while held, freeze the reverb while held.
+    TrackMute {
+        track: usize,
+        muted: bool,
+    },
+    TrackThrow {
+        track: usize,
+        on: bool,
+    },
+    FreezeHold(bool),
     /// A track's send into the global reverb or delay, 0..1.
     TrackSend {
         track: usize,
@@ -281,6 +292,10 @@ pub struct LivePlanner {
     /// The last hand wins: a save that rebuilds the engine keeps these, and
     /// editing a knob's target in the text drops it, so the edit plays.
     knob_values: Vec<(u8, u8)>,
+    /// Tracks a `toggle` pad has taken out, by name.
+    muted: Vec<String>,
+    /// Pads held down right now, by note.
+    pads_down: Vec<u8>,
     /// Keys held down, oldest first, with the velocity each was struck at.
     /// A mono instrument plays the newest; letting it go falls back to the
     /// one before it, which is how a monosynth answers a keyboard.
@@ -308,6 +323,8 @@ impl LivePlanner {
             pending: None,
             next_generation: 1,
             knob_values: Vec::new(),
+            muted: Vec::new(),
+            pads_down: Vec::new(),
             held: Vec::new(),
             bend: 1.0,
             output_gain: None,
@@ -377,26 +394,100 @@ impl LivePlanner {
         Some(plans)
     }
 
-    /// A pad on the drum channel was hit. `None` when nothing is mapped to
-    /// it. Pads only strike: a drum is a hit, not a held note.
+    /// A pad on the drum channel went down (`velocity` above zero) or up.
+    /// `None` when nothing is mapped to it. A drum is struck on the way down;
+    /// `mute`, `throw` and `freeze` last until the pad comes up; `toggle`
+    /// flips on the way down. A set move (`next`, `step 3`) plans nothing
+    /// here: [`LivePlanner::pad_navigation`] says what it asks for.
     pub fn pad(&mut self, note: u8, velocity: u8, playing: Generation) -> Option<Vec<Plan>> {
         self.catch_up(playing);
         if !self.known().any(|k| k.controls.pads.iter().any(|p| p.note == note)) {
             return None;
         }
+        let down = velocity > 0;
         let velocity = velocity.min(127) as f32 / 127.0;
-        let mut plans = Vec::new();
-        if velocity > 0.0 {
-            for known in self.known() {
-                for pad in known.controls.pads.iter().filter(|p| p.note == note) {
-                    plans.push(Plan::Play {
-                        base: known.generation,
-                        op: FastOp::NoteOn { track: pad.track, note: pad.drum, velocity },
-                    });
+        self.pads_down.retain(|&n| n != note);
+        if down {
+            self.pads_down.push(note);
+        }
+        // A toggle flips once per hit, by track name, so every engine hears
+        // the same state and a rebuilt one inherits it.
+        let latest = self.pending.as_ref().or(self.running.as_ref());
+        let toggled: Vec<String> = latest
+            .map(|k| {
+                k.controls
+                    .pads
+                    .iter()
+                    .filter(|p| p.note == note)
+                    .filter_map(|p| match p.action {
+                        midi::PadAction::Toggle { track } => k.tracks.get(track).cloned(),
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if down {
+            for name in toggled {
+                match self.muted.iter().position(|m| *m == name) {
+                    Some(i) => {
+                        self.muted.remove(i);
+                    }
+                    None => self.muted.push(name),
                 }
             }
         }
+        let mut plans = Vec::new();
+        for known in self.known() {
+            for pad in known.controls.pads.iter().filter(|p| p.note == note) {
+                let op = match pad.action {
+                    midi::PadAction::Drum { track, drum } if down => {
+                        plans.push(Plan::Play {
+                            base: known.generation,
+                            op: FastOp::NoteOn { track, note: drum, velocity },
+                        });
+                        continue;
+                    }
+                    midi::PadAction::Mute { track } => FastOp::TrackMute { track, muted: down },
+                    midi::PadAction::Throw { track } => FastOp::TrackThrow { track, on: down },
+                    midi::PadAction::Freeze => FastOp::FreezeHold(down),
+                    midi::PadAction::Toggle { track } if down => {
+                        let muted = known.tracks.get(track).is_some_and(|n| self.muted.contains(n));
+                        FastOp::TrackMute { track, muted }
+                    }
+                    _ => continue,
+                };
+                plans.push(Plan::Control { base: known.generation, op });
+            }
+        }
         Some(plans)
+    }
+
+    /// The set move a pad asks for when it goes down, if it is mapped to one.
+    pub fn pad_navigation(&self, note: u8) -> Option<midi::PadAction> {
+        let latest = self.pending.as_ref().or(self.running.as_ref())?;
+        latest.controls.pads.iter().find(|p| p.note == note && p.action.navigation()).map(|p| p.action)
+    }
+
+    /// What the pads hold on a fresh engine: toggled tracks out, and whatever
+    /// a pad still pressed does.
+    fn pad_ops(&self, known: &Known) -> Vec<FastOp> {
+        let mut ops = Vec::new();
+        for name in &self.muted {
+            if let Some(track) = known.tracks.iter().position(|t| t == name) {
+                ops.push(FastOp::TrackMute { track, muted: true });
+            }
+        }
+        for &note in &self.pads_down {
+            for pad in known.controls.pads.iter().filter(|p| p.note == note) {
+                match pad.action {
+                    midi::PadAction::Mute { track } => ops.push(FastOp::TrackMute { track, muted: true }),
+                    midi::PadAction::Throw { track } => ops.push(FastOp::TrackThrow { track, on: true }),
+                    midi::PadAction::Freeze => ops.push(FastOp::FreezeHold(true)),
+                    _ => {}
+                }
+            }
+        }
+        ops
     }
 
     /// The pitch strip moved to `value`, 14 bits with 8192 at rest. It bends
@@ -517,6 +608,9 @@ impl LivePlanner {
             for op in known.knob_ops(cc, value) {
                 engine.hold(op);
             }
+        }
+        for op in self.pad_ops(&known) {
+            engine.hold(op);
         }
         for op in known.bend_ops(self.bend) {
             apply_op(&mut engine, op);
@@ -984,6 +1078,9 @@ pub(crate) fn apply_op(engine: &mut SongEngine, op: FastOp) {
         FastOp::DelayMix(mix) => engine.set_delay_mix(mix),
         FastOp::ReverbFreeze(on) => engine.set_reverb_freeze(on),
         FastOp::TrackSend { track, reverb, amount } => engine.set_track_send(track, reverb, amount),
+        FastOp::TrackMute { track, muted } => engine.set_track_muted(track, muted),
+        FastOp::TrackThrow { track, on } => engine.set_track_thrown(track, on),
+        FastOp::FreezeHold(on) => engine.set_freeze_pad(on),
         FastOp::NodeParam { track, node, param, value } => {
             engine.set_node_param(track, node, param, value);
         }

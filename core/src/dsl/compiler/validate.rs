@@ -64,6 +64,18 @@ pub(super) fn validate_midi(song: &Song) -> Vec<CompileError> {
                 _ => errors.push(err(String::from("the keys play one track: `keys > solo`"))),
             },
             MidiSource::Pad(_) => match words.as_slice() {
+                ["freeze"] | ["next"] | ["prev"] => {}
+                ["step", n] => {
+                    if !n.parse::<usize>().is_ok_and(|n| n >= 1) {
+                        errors.push(err(String::from("a set's steps count from 1: `pad 50 > step 3`")));
+                    }
+                }
+                ["step"] => errors.push(err(String::from("which step: `pad 50 > step 3`"))),
+                ["mute" | "toggle" | "throw", track] => {
+                    if module_of(track).is_none() {
+                        errors.push(err(format!("no track named '{}'", track)));
+                    }
+                }
                 [track, drum] => match module_of(track) {
                     None => errors.push(err(format!("no track named '{}'", track))),
                     Some((_, Some("beats"))) if drum_note(drum).is_some() => {}
@@ -76,7 +88,10 @@ pub(super) fn validate_midi(song: &Song) -> Vec<CompileError> {
                         track, module
                     ))),
                 },
-                _ => errors.push(err(String::from("a pad hits one drum of a track: `pad 36 > kick kick`"))),
+                _ => errors.push(err(String::from(
+                    "a pad hits a drum (`pad 36 > kick kick`), or does one of: mute <track>, toggle <track>, \
+throw <track>, freeze, next, prev, step <n>",
+                ))),
             },
             MidiSource::Cc(_) => match words.as_slice() {
                 ["reverb_mix"] | ["delay_mix"] | ["reverb_freeze"] | ["tempo"] => {}

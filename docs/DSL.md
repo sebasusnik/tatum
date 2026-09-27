@@ -493,6 +493,24 @@ A pad hits one drum of a `beats` track: `kick`, `snare`, `clap`, `hat`, `openhat
 `tom`, `tom2`, `tom3` or `crash`, as loud as it is struck. It sounds at once, not
 snapped to the grid.
 
+A pad can also do something to the mix:
+
+```
+midi {
+    pad 44 > mute kick         # the kick is out while the pad is held
+    pad 45 > toggle hats       # one hit takes the hats out, the next brings them back
+    pad 46 > throw stab        # the whole track into the delay while held; the repeats ring on
+    pad 47 > freeze            # the reverb frozen while held
+    pad 48 > next              # in `tatum set play`: the next step; also prev, step 3
+}
+```
+
+A muted or thrown track fades in 3 ms rather than cutting, and its level and sends are
+left alone, so letting go puts it back exactly where it was. A toggled track stays out
+through saves and scene changes until it is toggled back. Letting go of `freeze` returns
+the reverb to what the scene says, so it does not thaw a scene that froze it. A muted
+kick still drives the sidechain. The set moves do nothing in `watch`, which says so.
+
 Pads and the low keys send the same note numbers. What tells them apart is the
 channel: pads send on channel 10, the drum channel of General MIDI, and everything
 else is keys. A pad or a key that nothing is mapped to shows its number while you play

@@ -189,6 +189,13 @@ impl Parser {
                 self.recover_to_line_end();
                 continue;
             }
+            // `pad 50 > step 3`: the one target with a number in it.
+            if matches!(source, MidiSource::Pad(_)) && words == ["step"] {
+                if let Token::Number(n) = self.peek().clone() {
+                    self.advance();
+                    words.push(format!("{}", n as usize));
+                }
+            }
             let range = if matches!(source, MidiSource::Cc(_)) { self.parse_knob_range() } else { None };
             block.push(MidiMapDef { source, target: words.join("."), range, line });
         }

@@ -686,3 +686,138 @@ fn a_knob_on_a_node_that_is_not_there_is_a_compile_error() {
         assert!(text.contains(says), "{line}: {text}");
     }
 }
+
+const PADS: &str = r#"
+tempo 124
+module beats kit { kick_level 100% hihat_level 100% }
+module bass acid { cutoff 800hz }
+pattern beat {
+    kick: X - x - X - x -
+    hat:  x x x x x x x x
+}
+pattern line { 1.2 - 1.2 - 5.1 - 1.2 - }
+track drums { play beat using kit out > master }
+track bass  { play line using acid delay_send 0.1 out > master }
+scene a { reverb_freeze = 1 track drums { play beat using kit } track bass { play line using acid } }
+arrange { a x8 }
+midi {
+    pad 36 > drums kick
+    pad 44 > mute drums
+    pad 45 > toggle bass
+    pad 46 > throw bass
+    pad 47 > freeze
+    pad 48 > next
+    pad 50 > step 3
+}
+"#;
+
+fn heard_after(player: &mut LivePlayer, blocks: usize) -> f64 {
+    let (mut l, mut r) = ([0.0f32; BLOCK_SIZE], [0.0f32; BLOCK_SIZE]);
+    let mut e = 0.0f64;
+    for _ in 0..blocks {
+        player.process(&mut l, &mut r);
+        e += l.iter().map(|x| (*x as f64).powi(2)).sum::<f64>();
+    }
+    e
+}
+
+#[test]
+fn a_mute_pad_silences_the_track_while_held() {
+    let (mut planner, mut player) = session(PADS);
+    player.start();
+    let g = player.generation();
+    apply_all(&mut player, planner.pad(44, 100, g).unwrap());
+    let drums = track(player.engine().unwrap(), "drums");
+    assert!(player.engine().unwrap().track_muted(drums));
+    // The level is untouched: letting go puts it back where it was.
+    let level = player.engine().unwrap().track_level(drums);
+    apply_all(&mut player, planner.pad(44, 0, g).unwrap());
+    assert!(!player.engine().unwrap().track_muted(drums));
+    assert_eq!(player.engine().unwrap().track_level(drums), level);
+}
+
+#[test]
+fn a_toggled_track_stays_out_through_a_save_that_rebuilds() {
+    let (mut planner, mut player) = session(PADS);
+    player.start();
+    let g = player.generation();
+    apply_all(&mut player, planner.pad(45, 100, g).unwrap());
+    apply_all(&mut player, planner.pad(45, 0, g).unwrap());
+    let bass = track(player.engine().unwrap(), "bass");
+    assert!(player.engine().unwrap().track_muted(bass), "one hit takes it out");
+    let edited = format!("{}\npattern unused {{ 1.1 - - - }}\n", PADS);
+    player.apply(planner.plan(&edited, player.generation()).unwrap());
+    play_through_swap(&mut player);
+    assert!(player.engine().unwrap().track_muted(bass), "the rebuilt engine brought it back");
+    let g = player.generation();
+    apply_all(&mut player, planner.pad(45, 100, g).unwrap());
+    assert!(!player.engine().unwrap().track_muted(bass), "the next hit brings it back");
+}
+
+#[test]
+fn a_muted_track_is_not_heard() {
+    let solo = PADS.replace("track bass  { play line using acid delay_send 0.1 out > master }", "");
+    let solo = solo.replace("track bass { play line using acid }", "");
+    let solo = solo.replace("    pad 45 > toggle bass\n    pad 46 > throw bass\n", "");
+    let (mut planner, mut player) = session(&solo);
+    player.start();
+    let open = heard_after(&mut player, 200);
+    let g = player.generation();
+    apply_all(&mut player, planner.pad(44, 100, g).unwrap());
+    // Past the glide; then nothing but reverb tail.
+    heard_after(&mut player, 20);
+    let muted = heard_after(&mut player, 200);
+    assert!(muted < open * 0.1, "muted drums still heard: {muted} against {open}");
+}
+
+#[test]
+fn a_freeze_pad_lets_go_to_what_the_scene_says() {
+    // A scene that freezes stays frozen after the pad; one that does not
+    // thaws when the pad comes up.
+    for (src, after) in [(PADS.to_string(), true), (PADS.replace("reverb_freeze = 1 ", ""), false)] {
+        let (mut planner, mut player) = session(&src);
+        player.start();
+        play_blocks(&mut player, 4);
+        assert_eq!(player.engine().unwrap().reverb_frozen(), after);
+        let g = player.generation();
+        apply_all(&mut player, planner.pad(47, 100, g).unwrap());
+        assert!(player.engine().unwrap().reverb_frozen(), "held");
+        apply_all(&mut player, planner.pad(47, 0, g).unwrap());
+        assert_eq!(player.engine().unwrap().reverb_frozen(), after, "released");
+    }
+}
+
+#[test]
+fn a_throw_pad_sends_the_track_to_the_delay_while_held() {
+    let (mut planner, mut player) = session(PADS);
+    player.start();
+    let g = player.generation();
+    let bass = track(player.engine().unwrap(), "bass");
+    apply_all(&mut player, planner.pad(46, 100, g).unwrap());
+    assert!(player.engine().unwrap().track_thrown(bass));
+    apply_all(&mut player, planner.pad(46, 0, g).unwrap());
+    assert!(!player.engine().unwrap().track_thrown(bass));
+}
+
+#[test]
+fn set_moves_come_back_as_navigation_not_plans() {
+    use tatum_core::midi::PadAction;
+    let (mut planner, player) = session(PADS);
+    assert_eq!(planner.pad_navigation(48), Some(PadAction::Next));
+    assert_eq!(planner.pad_navigation(50), Some(PadAction::Step(3)));
+    assert_eq!(planner.pad_navigation(36), None);
+    assert!(planner.pad(48, 100, player.generation()).unwrap().is_empty());
+}
+
+#[test]
+fn a_pad_action_on_nothing_is_a_compile_error() {
+    for (line, says) in [
+        ("pad 44 > mute nobody", "no track named 'nobody'"),
+        ("pad 50 > step 0", "count from 1"),
+        ("pad 51 > jump", "or does one of"),
+    ] {
+        let src = format!("{}\nmidi {{\n  {}\n}}\n", SONG, line);
+        let err = SongEngine::from_source(&src).err().unwrap_or_else(|| panic!("{line} compiled"));
+        assert!(format!("{:?}", err).contains(says), "{line}: {err:?}");
+    }
+}

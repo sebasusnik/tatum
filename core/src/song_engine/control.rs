@@ -185,7 +185,8 @@ impl SongEngine {
 
     /// Hold the reverb tail: no decay and no new input while frozen.
     pub fn set_reverb_freeze(&mut self, frozen: bool) {
-        self.send_reverb.set_freeze(frozen);
+        self.freeze_set = frozen;
+        self.apply_freeze();
     }
 
     pub fn set_track_gate(&mut self, track_idx: usize, gate: f32) {
@@ -270,6 +271,43 @@ impl SongEngine {
         }
         self.humanize_velocity = velocity.clamp(0.0, 1.0);
         self.humanize_timing = timing.clamp(0.0, 1.0);
+    }
+
+    /// Freeze the reverb while a pad is held. Letting go returns it to what
+    /// the scene or a knob says, rather than unfreezing a scene that froze.
+    pub fn set_freeze_pad(&mut self, held: bool) {
+        self.freeze_pad = held;
+        self.apply_freeze();
+    }
+
+    pub(super) fn apply_freeze(&mut self) {
+        self.send_reverb.set_freeze(self.freeze_set || self.freeze_pad);
+    }
+
+    /// Silence a track without touching its level, from a pad.
+    pub fn set_track_muted(&mut self, track: usize, muted: bool) {
+        if let Some(t) = self.tracks.get_mut(track) {
+            t.muted = muted;
+        }
+    }
+
+    pub fn reverb_frozen(&self) -> bool {
+        self.send_reverb.is_frozen()
+    }
+
+    pub fn track_thrown(&self, track: usize) -> bool {
+        self.tracks.get(track).is_some_and(|t| t.thrown)
+    }
+
+    pub fn track_muted(&self, track: usize) -> bool {
+        self.tracks.get(track).is_some_and(|t| t.muted)
+    }
+
+    /// Send a whole track into the delay while a pad is held.
+    pub fn set_track_thrown(&mut self, track: usize, thrown: bool) {
+        if let Some(t) = self.tracks.get_mut(track) {
+            t.thrown = thrown;
+        }
     }
 
     /// A track's send into the reverb (`reverb`) or the delay, 0..1.

@@ -40,6 +40,13 @@ pub(super) struct TrackPlayback {
     pub(super) to_master: bool,
     pub(super) delay_send: f32,  // global delay send amount 0.0-1.0
     pub(super) reverb_send: f32, // global reverb send amount 0.0-1.0
+    /// Held silent from a pad: heard at no level, whatever `level` says, so
+    /// letting go puts it back exactly where the text or a fader had it.
+    pub(super) muted: bool,
+    /// Thrown into the delay from a pad: the whole track goes to the echo
+    /// while held, and the send falls back to `delay_send` on release, with
+    /// the repeats still ringing.
+    pub(super) thrown: bool,
     /// This track's own sidechain amount, or `None` to take the song's.
     /// `sidechain 0` used to mean "the song's amount" too, because the
     /// override was a float with 0 standing for unset, so a track written
@@ -139,10 +146,11 @@ impl TrackPlayback {
 
     /// Level, pan and sends as the track has them set.
     pub(super) fn target(&self) -> Heard {
+        let level = if self.muted { 0.0 } else { self.level };
         Heard {
-            left: self.level * self.pan_l,
-            right: self.level * self.pan_r,
-            delay: self.delay_send,
+            left: level * self.pan_l,
+            right: level * self.pan_r,
+            delay: if self.thrown { 1.0 } else { self.delay_send },
             reverb: self.reverb_send,
         }
     }

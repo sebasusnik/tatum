@@ -131,6 +131,10 @@ pub struct SongEngine {
 
     // Automation state
     active_automations: Vec<ActiveAutomation>,
+    /// The reverb's freeze as the text, a scene, `auto` or a knob set it,
+    /// and as a pad holds it: frozen while either is.
+    freeze_set: bool,
+    freeze_pad: bool,
     /// What the hands hold: see `held.rs`.
     held: [crate::live::FastOp; held::MAX_HELD],
     held_count: usize,

@@ -24,6 +24,9 @@ fn same_target(a: &FastOp, b: &FastOp) -> bool {
         | (TrackGate { track: x, .. }, TrackGate { track: y, .. }) => x == y,
         (NodeWet { track: t, node: n, .. }, NodeWet { track: u, node: m, .. }) => t == u && n == m,
         (TrackSend { track: t, reverb: r, .. }, TrackSend { track: u, reverb: s, .. }) => t == u && r == s,
+        (TrackMute { track: t, .. }, TrackMute { track: u, .. }) => t == u,
+        (TrackThrow { track: t, .. }, TrackThrow { track: u, .. }) => t == u,
+        (FreezeHold(_), FreezeHold(_)) => true,
         (NodeParam { track: t, node: n, param: p, .. }, NodeParam { track: u, node: m, param: q, .. }) => {
             t == u && n == m && p == q
         }

@@ -392,6 +392,10 @@ fn run(
                 Midi::Note { channel, note, velocity } => {
                     let generation = stats.generation.load(Ordering::Relaxed);
                     let pad = channel == DRUM_CHANNEL;
+                    if pad && velocity > 0 && planner.pad_navigation(note).is_some() {
+                        readings.push(format!("pad {}: moves through a set, in `tatum set play`", note));
+                        continue;
+                    }
                     let plans = if pad {
                         planner.pad(note, velocity, generation)
                     } else {
