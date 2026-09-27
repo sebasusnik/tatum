@@ -84,20 +84,24 @@ module keys chord {
     vibrato_depth 3%
 }
 
-# Sub: almost a sine.
+# Sub: almost a sine. Dry on purpose, as in dub_techno: a fast attack and
+# a filter pluck on each note, a short release, the track's filter open to
+# 700 Hz so the attack is heard, and a light sidechain so the kick does not
+# swallow it. Its old roughness came from its oscillators drifting out of
+# phase; with that gone it was all round.
 module bass sub {
     cutoff 165hz
-    cutoff_env 90hz
+    cutoff_env 700hz
     resonance 8%
     glide 24%
     osc1_wave saw
     osc2_wave saw
     osc2_pitch -12st
     keytrack 18%
-    attack 10ms
-    decay 450ms
-    sustain 72%
-    release 320ms
+    attack 2ms
+    decay 220ms
+    sustain 40%
+    release 120ms
 }
 
 # One kit for the whole set: the deep dub kick, a rim (the snare, tuned up
@@ -967,8 +971,8 @@ track sub {
     using sub
     level 0
     gate 0.92
-    sidechain 0.55
-    out > lowpass(200hz, 0.12) > saturate(0.18) > master
+    sidechain 0.2
+    out > saturate(0.3) > lowpass(700hz, 0.1) > highpass(30hz, 0.01) > master
 }
 
 track stab {
@@ -1202,7 +1206,7 @@ midi {
     cc 73 > beat level
     cc 75 > hats level
     cc 79 > bed level 0..0.7
-    cc 72 > sub level 0..0.8
+    cc 72 > sub level 0..1.05
     cc 80 > stab level 0..0.45
     cc 81 > bass level 0..0.9
     cc 81 > acid level 0..0.4
