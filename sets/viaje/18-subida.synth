@@ -1,13 +1,13 @@
 # set: bars=16 phase=subida energy=8
-# set-note: La subida: el bajo tartamudea, sube una sirena y el aire se llena; el bombo no para.
+# set-note: La subida: el 303 se abre del todo y termina martillando la tónica, un redoble de rim que va de negras a semicorcheas, sirena y aire, y un tiempo de silencio antes del pico.
 use "_rig.synth"
 tempo 134
 
 module beats kit { kick_decay 28% kick_pitch 0.88x kick_click 46% kick_drive 48% hihat_level 72% }
 
-track beat   { play kick_clap level 1.12 }
+track beat   { play kick_build16 level 1.12 }
 track hats   { play hat_16_open level 1.07 }
 track roll   { play roll_stutter level 0.67 }
-track acid   { play acid_riff level 1.09 }
+track acid   { play acid_rise16 level 1.09 }
 track siren  { play siren_hold level 0.29 }
 track air    { play air_hold level 1.2 }

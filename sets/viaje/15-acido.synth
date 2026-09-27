@@ -1,14 +1,14 @@
 # set: bars=32 phase=acido energy=6
-# set-note: Vuelve el bombo, más seco, y entra el 303 cerrado, respirando solo. Los acordes de Detroit quedan como un recuerdo.
+# set-note: El bombo firme, los hats de Detroit que siguen y el 303 que abre su filtro a lo largo de dieciséis compases: salta y repica en el 8, sube deslizando en el 16.
 use "_rig.synth"
 tempo 130
 
 module beats kit { kick_decay 32% kick_pitch 0.84x kick_click 38% kick_drive 42% hihat_level 72% }
 
 track bed    { level 0.12 }
-track beat   { play kick_roll level 1.05 }
-track hats   { play hat_off level 1.24 }
-track sub    { play sub_f level 0.47 }
+track beat   { play kick_acid8 level 1.05 }
+track hats   { play hat_off8 level 1.24 }
+track sub    { play sub_f8 level 0.47 }
 track under  { play ch_low level 0.1 }
 track chords { play ch_b level 0.15 }
-track acid   { play acid_low level 0.9 }
+track acid   { play acid_low16 level 0.9 }

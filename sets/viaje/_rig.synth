@@ -780,6 +780,167 @@ pattern dialup_scatter {
 pattern siren_hold { F3:0.5 ..*63 }
 pattern air_hold { F3:0.5 ..*63 }
 
+# ── The acid stretch, in phrases ──
+
+# The 303 of `acido`: its envelope opens over 16 bars; bar 8 jumps and ratchets, bar 16 slides up to the one.
+pattern acid_low16 {
+    F3:0.9(edepth=0.70) - F3:0.5(edepth=0.70) -  F4:0.7(edepth=0.70) - F3:0.5(edepth=0.70) -  F3:0.9(edepth=0.70) - Ab3:0.6(edepth=0.70) -  F3:0.7(edepth=0.70) ~Eb3:0.6 - F3:0.5(edepth=0.70)
+    F3:0.9(edepth=0.72) - F3:0.5(edepth=0.72) -  F4:0.7(edepth=0.72) - F3:0.5(edepth=0.72) -  F3:0.9(edepth=0.72) - C4:0.6(edepth=0.72) -  Bb3:0.7(edepth=0.72) ~Ab3:0.6 - F3:0.5(edepth=0.72)
+    F3:0.9(edepth=0.73) - F3:0.5(edepth=0.73) -  F4:0.7(edepth=0.73) - F3:0.5(edepth=0.73) -  F3:0.9(edepth=0.73) - Ab3:0.6(edepth=0.73) -  F3:0.7(edepth=0.73) ~Eb3:0.6 - F3:0.5(edepth=0.73)
+    F3:0.9(edepth=0.75) - F3:0.5(edepth=0.75) -  F4:0.7(edepth=0.75) - F3:0.5(edepth=0.75) -  F3:0.9(edepth=0.75) - C4:0.6(edepth=0.75) -  Bb3:0.7(edepth=0.75) ~Ab3:0.6 - F3:0.5(edepth=0.75)
+    F3:0.9(edepth=0.76) - F3:0.5(edepth=0.76) -  F4:0.7(edepth=0.76) - F3:0.5(edepth=0.76) -  F3:0.9(edepth=0.76) - Ab3:0.6(edepth=0.76) -  F3:0.7(edepth=0.76) ~Eb3:0.6 - F3:0.5(edepth=0.76)
+    F3:0.9(edepth=0.78) - F3:0.5(edepth=0.78) -  F4:0.7(edepth=0.78) - F3:0.5(edepth=0.78) -  F3:0.9(edepth=0.78) - C4:0.6(edepth=0.78) -  Bb3:0.7(edepth=0.78) ~Ab3:0.6 - F3:0.5(edepth=0.78)
+    F3:0.9(edepth=0.79) - F3:0.5(edepth=0.79) -  F4:0.7(edepth=0.79) - F3:0.5(edepth=0.79) -  F3:0.9(edepth=0.79) - Ab3:0.6(edepth=0.79) -  F3:0.7(edepth=0.79) ~Eb3:0.6 - F3:0.5(edepth=0.79)
+    F3:0.9(edepth=0.81) - F3:0.5(edepth=0.81) -  F4:0.8(edepth=0.81) - F4:0.6(edepth=0.81)*2 -  F3:0.9(edepth=0.81) - Ab3:0.6(edepth=0.81) -  F4:0.85(edepth=0.81) ~Eb4:0.6 F3:0.5(edepth=0.81) -
+    F3:0.9(edepth=0.83) - F3:0.5(edepth=0.83) -  F4:0.7(edepth=0.83) - F3:0.5(edepth=0.83) -  F3:0.9(edepth=0.83) - Ab3:0.6(edepth=0.83) -  F3:0.7(edepth=0.83) ~Eb3:0.6 - F3:0.5(edepth=0.83)
+    F3:0.9(edepth=0.84) - F3:0.5(edepth=0.84) -  F4:0.7(edepth=0.84) - F3:0.5(edepth=0.84) -  F3:0.9(edepth=0.84) - C4:0.6(edepth=0.84) -  Bb3:0.7(edepth=0.84) ~Ab3:0.6 - F3:0.5(edepth=0.84)
+    F3:0.9(edepth=0.86) - F3:0.5(edepth=0.86) -  F4:0.7(edepth=0.86) - F3:0.5(edepth=0.86) -  F3:0.9(edepth=0.86) - Ab3:0.6(edepth=0.86) -  F3:0.7(edepth=0.86) ~Eb3:0.6 - F3:0.5(edepth=0.86)
+    F3:0.9(edepth=0.87) - F3:0.5(edepth=0.87) -  F4:0.7(edepth=0.87) - F3:0.5(edepth=0.87) -  F3:0.9(edepth=0.87) - C4:0.6(edepth=0.87) -  Bb3:0.7(edepth=0.87) ~Ab3:0.6 - F3:0.5(edepth=0.87)
+    F3:0.9(edepth=0.89) - F3:0.5(edepth=0.89) -  F4:0.7(edepth=0.89) - F3:0.5(edepth=0.89) -  F3:0.9(edepth=0.89) - Ab3:0.6(edepth=0.89) -  F3:0.7(edepth=0.89) ~Eb3:0.6 - F3:0.5(edepth=0.89)
+    F3:0.9(edepth=0.90) - F3:0.5(edepth=0.90) -  F4:0.7(edepth=0.90) - F3:0.5(edepth=0.90) -  Ab3:0.8(edepth=0.90) ~Bb3:0.7 ~C4:0.75 -  ~Eb4:0.8 ~F4:0.85 F3:0.6(edepth=0.90) -
+}
+
+# The 303 carried on from the breather while the kick comes back, opening slowly.
+pattern acid_back16 {
+    F3:0.9(edepth=0.66) - F3:0.5(edepth=0.66) -  F4:0.7(edepth=0.66) - F3:0.5(edepth=0.66) -  F3:0.9(edepth=0.66) - Ab3:0.6(edepth=0.66) -  F3:0.7(edepth=0.66) ~Eb3:0.6 - F3:0.5(edepth=0.66)
+    F3:0.9(edepth=0.67) - F3:0.5(edepth=0.67) -  F4:0.7(edepth=0.67) - F3:0.5(edepth=0.67) -  F3:0.9(edepth=0.67) - C4:0.6(edepth=0.67) -  Bb3:0.7(edepth=0.67) ~Ab3:0.6 - F3:0.5(edepth=0.67)
+    F3:0.9(edepth=0.69) - F3:0.5(edepth=0.69) -  F4:0.7(edepth=0.69) - F3:0.5(edepth=0.69) -  F3:0.9(edepth=0.69) - Ab3:0.6(edepth=0.69) -  F3:0.7(edepth=0.69) ~Eb3:0.6 - F3:0.5(edepth=0.69)
+    F3:0.9(edepth=0.70) - F3:0.5(edepth=0.70) -  F4:0.7(edepth=0.70) - F3:0.5(edepth=0.70) -  F3:0.9(edepth=0.70) - C4:0.6(edepth=0.70) -  Bb3:0.7(edepth=0.70) ~Ab3:0.6 - F3:0.5(edepth=0.70)
+    F3:0.9(edepth=0.71) - F3:0.5(edepth=0.71) -  F4:0.7(edepth=0.71) - F3:0.5(edepth=0.71) -  F3:0.9(edepth=0.71) - Ab3:0.6(edepth=0.71) -  F3:0.7(edepth=0.71) ~Eb3:0.6 - F3:0.5(edepth=0.71)
+    F3:0.9(edepth=0.72) - F3:0.5(edepth=0.72) -  F4:0.7(edepth=0.72) - F3:0.5(edepth=0.72) -  F3:0.9(edepth=0.72) - C4:0.6(edepth=0.72) -  Bb3:0.7(edepth=0.72) ~Ab3:0.6 - F3:0.5(edepth=0.72)
+    F3:0.9(edepth=0.74) - F3:0.5(edepth=0.74) -  F4:0.7(edepth=0.74) - F3:0.5(edepth=0.74) -  F3:0.9(edepth=0.74) - Ab3:0.6(edepth=0.74) -  F3:0.7(edepth=0.74) ~Eb3:0.6 - F3:0.5(edepth=0.74)
+    F3:0.9(edepth=0.75) - F3:0.5(edepth=0.75) -  F4:0.7(edepth=0.75) - F3:0.5(edepth=0.75) -  F3:0.9(edepth=0.75) - C4:0.6(edepth=0.75) -  Bb3:0.7(edepth=0.75) ~Ab3:0.6 - F3:0.5(edepth=0.75)
+    F3:0.9(edepth=0.76) - F3:0.5(edepth=0.76) -  F4:0.7(edepth=0.76) - F3:0.5(edepth=0.76) -  F3:0.9(edepth=0.76) - Ab3:0.6(edepth=0.76) -  F3:0.7(edepth=0.76) ~Eb3:0.6 - F3:0.5(edepth=0.76)
+    F3:0.9(edepth=0.78) - F3:0.5(edepth=0.78) -  F4:0.7(edepth=0.78) - F3:0.5(edepth=0.78) -  F3:0.9(edepth=0.78) - C4:0.6(edepth=0.78) -  Bb3:0.7(edepth=0.78) ~Ab3:0.6 - F3:0.5(edepth=0.78)
+    F3:0.9(edepth=0.79) - F3:0.5(edepth=0.79) -  F4:0.7(edepth=0.79) - F3:0.5(edepth=0.79) -  F3:0.9(edepth=0.79) - Ab3:0.6(edepth=0.79) -  F3:0.7(edepth=0.79) ~Eb3:0.6 - F3:0.5(edepth=0.79)
+    F3:0.9(edepth=0.80) - F3:0.5(edepth=0.80) -  F4:0.7(edepth=0.80) - F3:0.5(edepth=0.80) -  F3:0.9(edepth=0.80) - C4:0.6(edepth=0.80) -  Bb3:0.7(edepth=0.80) ~Ab3:0.6 - F3:0.5(edepth=0.80)
+    F3:0.9(edepth=0.81) - F3:0.5(edepth=0.81) -  F4:0.7(edepth=0.81) - F3:0.5(edepth=0.81) -  F3:0.9(edepth=0.81) - Ab3:0.6(edepth=0.81) -  F3:0.7(edepth=0.81) ~Eb3:0.6 - F3:0.5(edepth=0.81)
+    F3:0.9(edepth=0.83) - F3:0.5(edepth=0.83) -  F4:0.7(edepth=0.83) - F3:0.5(edepth=0.83) -  F3:0.9(edepth=0.83) - C4:0.6(edepth=0.83) -  Bb3:0.7(edepth=0.83) ~Ab3:0.6 - F3:0.5(edepth=0.83)
+    F3:0.9(edepth=0.84) - F3:0.5(edepth=0.84) -  F4:0.7(edepth=0.84) - F3:0.5(edepth=0.84) -  F3:0.9(edepth=0.84) - Ab3:0.6(edepth=0.84) -  F3:0.7(edepth=0.84) ~Eb3:0.6 - F3:0.5(edepth=0.84)
+    F3:0.9(edepth=0.86) - F3:0.5(edepth=0.86) -  F4:0.7(edepth=0.86) - F3:0.5(edepth=0.86) -  F3:0.9(edepth=0.86) - C4:0.6(edepth=0.86) -  Bb3:0.7(edepth=0.86) ~Ab3:0.6 - F3:0.5(edepth=0.86)
+}
+
+# The riff over 16 bars: the envelope opens twice, the second half answers with ratchets.
+pattern acid_riff16 {
+    F3:0.95(edepth=0.74) ~F3:0.6 F4:0.8(edepth=0.74) -  F3:0.7(edepth=0.74) Eb4:0.75(edepth=0.74) - ~F4:0.7  F3:0.9(edepth=0.74) - C4:0.75(edepth=0.74) F3:0.5(edepth=0.74)  Ab3:0.8(edepth=0.74) - ~Bb3:0.7 F3:0.6(edepth=0.74)
+    F3:0.95(edepth=0.76) - F4:0.8(edepth=0.76) ~Eb4:0.7  - C4:0.75(edepth=0.76) F3:0.6(edepth=0.76) -  Db4:0.8(edepth=0.76) - ~C4:0.7 F3:0.6(edepth=0.76)  F3:0.9(edepth=0.76) Ab3:0.6(edepth=0.76) - ~C4:0.75
+    F3:0.95(edepth=0.79) ~F3:0.6 F4:0.8(edepth=0.79) -  F3:0.7(edepth=0.79) Eb4:0.75(edepth=0.79) - ~F4:0.7  F3:0.9(edepth=0.79) - C4:0.75(edepth=0.79) F3:0.5(edepth=0.79)  Ab3:0.8(edepth=0.79) - ~Bb3:0.7 F3:0.6(edepth=0.79)
+    F3:0.95(edepth=0.81) - F4:0.8(edepth=0.81) ~Eb4:0.7  - C4:0.75(edepth=0.81) F3:0.6(edepth=0.81) -  Db4:0.8(edepth=0.81) - ~C4:0.7 F3:0.6(edepth=0.81)  F3:0.9(edepth=0.81) Ab3:0.6(edepth=0.81) - ~C4:0.75
+    F3:0.95(edepth=0.83) ~F3:0.6 F4:0.8(edepth=0.83) -  F3:0.7(edepth=0.83) Eb4:0.75(edepth=0.83) - ~F4:0.7  F3:0.9(edepth=0.83) - C4:0.75(edepth=0.83) F3:0.5(edepth=0.83)  Ab3:0.8(edepth=0.83) - ~Bb3:0.7 F3:0.6(edepth=0.83)
+    F3:0.95(edepth=0.85) - F4:0.8(edepth=0.85) ~Eb4:0.7  - C4:0.75(edepth=0.85) F3:0.6(edepth=0.85) -  Db4:0.8(edepth=0.85) - ~C4:0.7 F3:0.6(edepth=0.85)  F3:0.9(edepth=0.85) Ab3:0.6(edepth=0.85) - ~C4:0.75
+    F3:0.95(edepth=0.88) ~F3:0.6 F4:0.8(edepth=0.88) -  F3:0.7(edepth=0.88) Eb4:0.75(edepth=0.88) - ~F4:0.7  F3:0.9(edepth=0.88) - C4:0.75(edepth=0.88) F3:0.5(edepth=0.88)  Ab3:0.8(edepth=0.88) - ~Bb3:0.7 F3:0.6(edepth=0.88)
+    F3:0.95(edepth=0.90) - F4:0.8(edepth=0.90) ~Eb4:0.7  - C4:0.75(edepth=0.90) F3:0.6(edepth=0.90) -  Db4:0.85(edepth=0.90) ~C4:0.7 Ab3:0.6(edepth=0.90)*2 -  F3:0.9(edepth=0.90) F4:0.8(edepth=0.90) - ~Eb4:0.75
+    F3:0.95(edepth=0.78) ~F3:0.6 F4:0.8(edepth=0.78) -  F3:0.7(edepth=0.78) Eb4:0.75(edepth=0.78) - ~F4:0.7  F3:0.9(edepth=0.78) - C4:0.75(edepth=0.78) F3:0.5(edepth=0.78)  F4:0.8(edepth=0.78)*2 - ~Eb4:0.7 C4:0.6(edepth=0.78)
+    F3:0.95(edepth=0.81) - F4:0.8(edepth=0.81) ~Eb4:0.7  - C4:0.75(edepth=0.81) F3:0.6(edepth=0.81) -  Db4:0.8(edepth=0.81) - ~C4:0.7 F3:0.6(edepth=0.81)  F3:0.9(edepth=0.81) Ab3:0.6(edepth=0.81) - ~C4:0.75
+    F3:0.95(edepth=0.84) ~F3:0.6 F4:0.8(edepth=0.84) -  F3:0.7(edepth=0.84) Eb4:0.75(edepth=0.84) - ~F4:0.7  F3:0.9(edepth=0.84) - C4:0.75(edepth=0.84) F3:0.5(edepth=0.84)  F4:0.8(edepth=0.84)*2 - ~Eb4:0.7 C4:0.6(edepth=0.84)
+    F3:0.95(edepth=0.87) - F4:0.8(edepth=0.87) ~Eb4:0.7  - C4:0.75(edepth=0.87) F3:0.6(edepth=0.87) -  Db4:0.8(edepth=0.87) - ~C4:0.7 F3:0.6(edepth=0.87)  F3:0.9(edepth=0.87) Ab3:0.6(edepth=0.87) - ~C4:0.75
+    F3:0.95(edepth=0.90) ~F3:0.6 F4:0.8(edepth=0.90) -  F3:0.7(edepth=0.90) Eb4:0.75(edepth=0.90) - ~F4:0.7  F3:0.9(edepth=0.90) - C4:0.75(edepth=0.90) F3:0.5(edepth=0.90)  F4:0.8(edepth=0.90)*2 - ~Eb4:0.7 C4:0.6(edepth=0.90)
+    F3:0.95(edepth=0.93) - F4:0.8(edepth=0.93) ~Eb4:0.7  - C4:0.75(edepth=0.93) F3:0.6(edepth=0.93) -  Db4:0.85(edepth=0.93) ~C4:0.7 Ab3:0.6(edepth=0.93)*2 -  F3:0.9(edepth=0.93) F4:0.8(edepth=0.93) - ~Eb4:0.75
+    F3:0.95(edepth=0.96) ~F3:0.6 F4:0.8(edepth=0.96) -  F3:0.7(edepth=0.96) Eb4:0.75(edepth=0.96) - ~F4:0.7  F3:0.9(edepth=0.96) - C4:0.75(edepth=0.96) F3:0.5(edepth=0.96)  Ab3:0.8(edepth=0.96) - ~Bb3:0.7 F3:0.6(edepth=0.96)
+    F3:0.95(edepth=0.86) - F4:0.8(edepth=0.86) ~Eb4:0.7  - C4:0.75(edepth=0.86) F3:0.6(edepth=0.86) -  Db4:0.8(edepth=0.86) - ~C4:0.7 F3:0.6(edepth=0.86)  F3:0.9(edepth=0.86) Ab3:0.6(edepth=0.86) - ~C4:0.75
+}
+
+# The rise: the envelope opens all the way, the last bars hammer the root, the last beats rest before the peak.
+pattern acid_rise16 {
+    F3:0.95(edepth=0.72) ~F3:0.6 F4:0.8(edepth=0.72) -  F3:0.7(edepth=0.72) Eb4:0.75(edepth=0.72) - ~F4:0.7  F3:0.9(edepth=0.72) - C4:0.75(edepth=0.72) F3:0.5(edepth=0.72)  Ab3:0.8(edepth=0.72) - ~Bb3:0.7 F3:0.6(edepth=0.72)
+    F3:0.95(edepth=0.74) - F4:0.8(edepth=0.74) ~Eb4:0.7  - C4:0.75(edepth=0.74) F3:0.6(edepth=0.74) -  Db4:0.8(edepth=0.74) - ~C4:0.7 F3:0.6(edepth=0.74)  F3:0.9(edepth=0.74) Ab3:0.6(edepth=0.74) - ~C4:0.75
+    F3:0.95(edepth=0.76) ~F3:0.6 F4:0.8(edepth=0.76) -  F3:0.7(edepth=0.76) Eb4:0.75(edepth=0.76) - ~F4:0.7  F3:0.9(edepth=0.76) - C4:0.75(edepth=0.76) F3:0.5(edepth=0.76)  Ab3:0.8(edepth=0.76) - ~Bb3:0.7 F3:0.6(edepth=0.76)
+    F3:0.95(edepth=0.78) - F4:0.8(edepth=0.78) ~Eb4:0.7  - C4:0.75(edepth=0.78) F3:0.6(edepth=0.78) -  Db4:0.8(edepth=0.78) - ~C4:0.7 F3:0.6(edepth=0.78)  F3:0.9(edepth=0.78) Ab3:0.6(edepth=0.78) - ~C4:0.75
+    F3:0.95(edepth=0.80) ~F3:0.6 F4:0.8(edepth=0.80) -  F3:0.7(edepth=0.80) Eb4:0.75(edepth=0.80) - ~F4:0.7  F3:0.9(edepth=0.80) - C4:0.75(edepth=0.80) F3:0.5(edepth=0.80)  Ab3:0.8(edepth=0.80) - ~Bb3:0.7 F3:0.6(edepth=0.80)
+    F3:0.95(edepth=0.82) - F4:0.8(edepth=0.82) ~Eb4:0.7  - C4:0.75(edepth=0.82) F3:0.6(edepth=0.82) -  Db4:0.8(edepth=0.82) - ~C4:0.7 F3:0.6(edepth=0.82)  F3:0.9(edepth=0.82) Ab3:0.6(edepth=0.82) - ~C4:0.75
+    F3:0.95(edepth=0.84) ~F3:0.6 F4:0.8(edepth=0.84) -  F3:0.7(edepth=0.84) Eb4:0.75(edepth=0.84) - ~F4:0.7  F3:0.9(edepth=0.84) - C4:0.75(edepth=0.84) F3:0.5(edepth=0.84)  Ab3:0.8(edepth=0.84) - ~Bb3:0.7 F3:0.6(edepth=0.84)
+    F3:0.95(edepth=0.86) - F4:0.8(edepth=0.86) ~Eb4:0.7  - C4:0.75(edepth=0.86) F3:0.6(edepth=0.86) -  Db4:0.8(edepth=0.86) - ~C4:0.7 F3:0.6(edepth=0.86)  F3:0.9(edepth=0.86) Ab3:0.6(edepth=0.86) - ~C4:0.75
+    F3:0.95(edepth=0.88) ~F3:0.6 F4:0.8(edepth=0.88) -  F3:0.7(edepth=0.88) Eb4:0.75(edepth=0.88) - ~F4:0.7  F3:0.9(edepth=0.88) - C4:0.75(edepth=0.88) F3:0.5(edepth=0.88)  Ab3:0.8(edepth=0.88) - ~Bb3:0.7 F3:0.6(edepth=0.88)
+    F3:0.95(edepth=0.90) - F4:0.8(edepth=0.90) ~Eb4:0.7  - C4:0.75(edepth=0.90) F3:0.6(edepth=0.90) -  Db4:0.8(edepth=0.90) - ~C4:0.7 F3:0.6(edepth=0.90)  F3:0.9(edepth=0.90) Ab3:0.6(edepth=0.90) - ~C4:0.75
+    F3:0.95(edepth=0.92) ~F3:0.6 F4:0.8(edepth=0.92) -  F3:0.7(edepth=0.92) Eb4:0.75(edepth=0.92) - ~F4:0.7  F3:0.9(edepth=0.92) - C4:0.75(edepth=0.92) F3:0.5(edepth=0.92)  Ab3:0.8(edepth=0.92) - ~Bb3:0.7 F3:0.6(edepth=0.92)
+    F3:0.95(edepth=0.94) - F4:0.8(edepth=0.94) ~Eb4:0.7  - C4:0.75(edepth=0.94) F3:0.6(edepth=0.94) -  Db4:0.8(edepth=0.94) - ~C4:0.7 F3:0.6(edepth=0.94)  F3:0.9(edepth=0.94) Ab3:0.6(edepth=0.94) - ~C4:0.75
+    F3:0.8(edepth=0.96) F3:0.45(edepth=0.96) F3:0.45(edepth=0.96) F3:0.45(edepth=0.96)  F3:0.8(edepth=0.96) F3:0.45(edepth=0.96) F3:0.45(edepth=0.96) F3:0.45(edepth=0.96)  F3:0.8(edepth=0.96) F3:0.45(edepth=0.96) F3:0.45(edepth=0.96) F3:0.45(edepth=0.96)  F3:0.8(edepth=0.96) F3:0.45(edepth=0.96) F3:0.45(edepth=0.96) F3:0.45(edepth=0.96)
+    F3:0.9(edepth=0.98) F3:0.55(edepth=0.98) F3:0.55(edepth=0.98) F3:0.55(edepth=0.98)  F3:0.9(edepth=0.98) F3:0.55(edepth=0.98) F3:0.55(edepth=0.98) F3:0.55(edepth=0.98)  F3:0.9(edepth=0.98) F3:0.55(edepth=0.98) F3:0.55(edepth=0.98) F3:0.55(edepth=0.98)  F3:0.9(edepth=0.98) F3:0.55(edepth=0.98) F3:0.55(edepth=0.98) F3:0.55(edepth=0.98)
+    F3:0.95(edepth=1.00) - F3:0.6(edepth=1.00) -  F4:0.9(edepth=1.00) - F3:0.6(edepth=1.00) -  - - - -  - - - -
+}
+
+# The peak's 303 over 16 bars, a turn at 8 and 16.
+pattern acid_peak16 {
+    F3:0.95(edepth=0.86) F3:0.5(edepth=0.86) F4:0.85(edepth=0.86) ~Eb4:0.7  F3:0.6(edepth=0.86) C4:0.8(edepth=0.86) F3:0.5(edepth=0.86) ~F4:0.75  F3:0.9(edepth=0.86) Ab3:0.6(edepth=0.86) C4:0.8(edepth=0.86) ~Db4:0.7  F3:0.6(edepth=0.86) F4:0.85(edepth=0.86) - ~Eb4:0.7
+    F3:0.95(edepth=0.88) F3:0.5(edepth=0.88) Ab3:0.8(edepth=0.88) ~Bb3:0.7  F3:0.6(edepth=0.88) Eb4:0.8(edepth=0.88) F3:0.5(edepth=0.88) ~F4:0.75  Db4:0.9(edepth=0.88) ~C4:0.7 F3:0.6(edepth=0.88) Ab3:0.7(edepth=0.88)  F3:0.6(edepth=0.88) C4:0.85(edepth=0.88) F4:0.7(edepth=0.88) ~Eb4:0.75
+    F3:0.95(edepth=0.90) F3:0.5(edepth=0.90) F4:0.85(edepth=0.90) ~Eb4:0.7  F3:0.6(edepth=0.90) C4:0.8(edepth=0.90) F3:0.5(edepth=0.90) ~F4:0.75  F3:0.9(edepth=0.90) Ab3:0.6(edepth=0.90) C4:0.8(edepth=0.90) ~Db4:0.7  F3:0.6(edepth=0.90) F4:0.85(edepth=0.90) - ~Eb4:0.7
+    F3:0.95(edepth=0.92) F3:0.5(edepth=0.92) Ab3:0.8(edepth=0.92) ~Bb3:0.7  F3:0.6(edepth=0.92) Eb4:0.8(edepth=0.92) F3:0.5(edepth=0.92) ~F4:0.75  Db4:0.9(edepth=0.92) ~C4:0.7 F3:0.6(edepth=0.92) Ab3:0.7(edepth=0.92)  F3:0.6(edepth=0.92) C4:0.85(edepth=0.92) F4:0.7(edepth=0.92) ~Eb4:0.75
+    F3:0.95(edepth=0.94) F3:0.5(edepth=0.94) F4:0.85(edepth=0.94) ~Eb4:0.7  F3:0.6(edepth=0.94) C4:0.8(edepth=0.94) F3:0.5(edepth=0.94) ~F4:0.75  F3:0.9(edepth=0.94) Ab3:0.6(edepth=0.94) C4:0.8(edepth=0.94) ~Db4:0.7  F3:0.6(edepth=0.94) F4:0.85(edepth=0.94) - ~Eb4:0.7
+    F3:0.95(edepth=0.96) F3:0.5(edepth=0.96) Ab3:0.8(edepth=0.96) ~Bb3:0.7  F3:0.6(edepth=0.96) Eb4:0.8(edepth=0.96) F3:0.5(edepth=0.96) ~F4:0.75  Db4:0.9(edepth=0.96) ~C4:0.7 F3:0.6(edepth=0.96) Ab3:0.7(edepth=0.96)  F3:0.6(edepth=0.96) C4:0.85(edepth=0.96) F4:0.7(edepth=0.96) ~Eb4:0.75
+    F3:0.95(edepth=0.94) F3:0.5(edepth=0.94) F4:0.85(edepth=0.94) ~Eb4:0.7  F3:0.6(edepth=0.94) C4:0.8(edepth=0.94) F3:0.5(edepth=0.94) ~F4:0.75  F3:0.9(edepth=0.94) Ab3:0.6(edepth=0.94) C4:0.8(edepth=0.94) ~Db4:0.7  F3:0.6(edepth=0.94) F4:0.85(edepth=0.94) - ~Eb4:0.7
+    F3:0.95(edepth=0.92) F3:0.5(edepth=0.92) F4:0.9(edepth=0.92) ~Eb4:0.7  F3:0.6(edepth=0.92) C4:0.7(edepth=0.92)*2 ~Db4:0.75 -  F3:0.95(edepth=0.92) F4:0.8(edepth=0.92) Ab4:0.85(edepth=0.92) ~F4:0.7  C4:0.7(edepth=0.92)*3 - F3:0.9(edepth=0.92) ~Eb4:0.75
+    F3:0.95(edepth=0.86) F3:0.5(edepth=0.86) F4:0.85(edepth=0.86) ~Eb4:0.7  F3:0.6(edepth=0.86) C4:0.8(edepth=0.86) F3:0.5(edepth=0.86) ~F4:0.75  F3:0.9(edepth=0.86) Ab3:0.6(edepth=0.86) C4:0.8(edepth=0.86) ~Db4:0.7  F3:0.6(edepth=0.86) F4:0.85(edepth=0.86) - ~Eb4:0.7
+    F3:0.95(edepth=0.88) F3:0.5(edepth=0.88) Ab3:0.8(edepth=0.88) ~Bb3:0.7  F3:0.6(edepth=0.88) Eb4:0.8(edepth=0.88) F3:0.5(edepth=0.88) ~F4:0.75  Db4:0.9(edepth=0.88) ~C4:0.7 F3:0.6(edepth=0.88) Ab3:0.7(edepth=0.88)  F3:0.6(edepth=0.88) C4:0.85(edepth=0.88) F4:0.7(edepth=0.88) ~Eb4:0.75
+    F3:0.95(edepth=0.90) F3:0.5(edepth=0.90) F4:0.85(edepth=0.90) ~Eb4:0.7  F3:0.6(edepth=0.90) C4:0.8(edepth=0.90) F3:0.5(edepth=0.90) ~F4:0.75  F3:0.9(edepth=0.90) Ab3:0.6(edepth=0.90) C4:0.8(edepth=0.90) ~Db4:0.7  F3:0.6(edepth=0.90) F4:0.85(edepth=0.90) - ~Eb4:0.7
+    F3:0.95(edepth=0.92) F3:0.5(edepth=0.92) Ab3:0.8(edepth=0.92) ~Bb3:0.7  F3:0.6(edepth=0.92) Eb4:0.8(edepth=0.92) F3:0.5(edepth=0.92) ~F4:0.75  Db4:0.9(edepth=0.92) ~C4:0.7 F3:0.6(edepth=0.92) Ab3:0.7(edepth=0.92)  F3:0.6(edepth=0.92) C4:0.85(edepth=0.92) F4:0.7(edepth=0.92) ~Eb4:0.75
+    F3:0.95(edepth=0.94) F3:0.5(edepth=0.94) F4:0.85(edepth=0.94) ~Eb4:0.7  F3:0.6(edepth=0.94) C4:0.8(edepth=0.94) F3:0.5(edepth=0.94) ~F4:0.75  F3:0.9(edepth=0.94) Ab3:0.6(edepth=0.94) C4:0.8(edepth=0.94) ~Db4:0.7  F3:0.6(edepth=0.94) F4:0.85(edepth=0.94) - ~Eb4:0.7
+    F3:0.95(edepth=0.96) F3:0.5(edepth=0.96) Ab3:0.8(edepth=0.96) ~Bb3:0.7  F3:0.6(edepth=0.96) Eb4:0.8(edepth=0.96) F3:0.5(edepth=0.96) ~F4:0.75  Db4:0.9(edepth=0.96) ~C4:0.7 F3:0.6(edepth=0.96) Ab3:0.7(edepth=0.96)  F3:0.6(edepth=0.96) C4:0.85(edepth=0.96) F4:0.7(edepth=0.96) ~Eb4:0.75
+    F3:0.95(edepth=0.94) F3:0.5(edepth=0.94) F4:0.85(edepth=0.94) ~Eb4:0.7  F3:0.6(edepth=0.94) C4:0.8(edepth=0.94) F3:0.5(edepth=0.94) ~F4:0.75  F3:0.9(edepth=0.94) Ab3:0.6(edepth=0.94) C4:0.8(edepth=0.94) ~Db4:0.7  F3:0.6(edepth=0.94) F4:0.85(edepth=0.94) - ~Eb4:0.7
+    F3:0.95(edepth=0.86) F3:0.5(edepth=0.86) F4:0.9(edepth=0.86) ~Eb4:0.7  F3:0.6(edepth=0.86) C4:0.7(edepth=0.86)*2 ~Db4:0.75 -  F3:0.95(edepth=0.86) F4:0.8(edepth=0.86) Ab4:0.85(edepth=0.86) ~F4:0.7  C4:0.7(edepth=0.86)*3 - F3:0.9(edepth=0.86) ~Eb4:0.75
+}
+
+# The way back: one kick a bar, then two, then four, louder all the way.
+pattern kick_rise16 {
+    kick: x:0.45 - - -  - - - -  - - - -  - - - -  x:0.5 - - -  - - - -  - - - -  - - - -  x:0.55 - - -  - - - -  - - - -  - - - -  x:0.6 - - -  - - - -  - - - -  - - - -  x:0.65 - - -  - - - -  x:0.60 - - -  - - - -  x:0.7 - - -  - - - -  x:0.65 - - -  - - - -  x:0.72 - - -  - - - -  x:0.67 - - -  - - - -  x:0.75 - - -  - - - -  x:0.70 - - -  - - - -  x:0.8 - - -  x:0.75 - - -  x:0.8 - - -  x:0.75 - - -  x:0.8 - - -  x:0.75 - - -  x:0.8 - - -  x:0.75 - - -  x:0.8 - - -  x:0.75 - - -  x:0.8 - - -  x:0.75 - - -  x:0.88 - - -  x:0.82 - - -  x:0.88 - - -  x:0.82 - - -  x:0.88 - - -  x:0.82 - - -  x:0.88 - - -  x:0.82 - - -  x:0.88 - - -  x:0.82 - - -  x:0.88 - - -  x:0.82 - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - x:0.5 -
+}
+
+# Hats back in the second half: ghosts, then the offbeat.
+pattern hat_rise16 {
+    hat: - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - o -  - - - -  - - o -  - - - -  - - o -  - - - -  - - o -  - - - -  - - o -  - - - -  - - o -  - - - -  - - o -  - - - -  - - o -  - - x:0.4 -  - - x:0.42 -  - - x:0.4 -  - - x:0.44 -  - - x:0.4 -  - - x:0.42 -  - - x:0.4 -  - - x:0.44 -  - - x:0.44 -  - - x:0.46 o?0.5  - - x:0.44 -  - - x:0.48 o  - - x:0.44 -  - - x:0.46 o?0.5  - - x:0.44 -  - - x:0.48 o
+}
+
+# The sub waits eight bars.
+pattern sub_rise16 {
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    F1:0.75 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.75 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.75 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.75 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.75 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.75 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.75 .. .. ..  .. .. .. ..  - - - -  - - - -
+    F1:0.75 .. .. ..  .. .. .. ..  - - - -  - - - -
+}
+
+# The acid kick: a ghost at the end of bar 4, bar 8 leaves its last beat out.
+pattern kick_acid8 {
+    kick: X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - x:0.45 -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  - - - -
+}
+
+# With the clap; bar 8 rolls it into the line.
+pattern kick_acidclap8 {
+    kick: X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - x:0.45 -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  - - - -
+    clap: - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.7*2 - x:0.8 x:0.6
+}
+
+# Sixteenths, an open hat at 4 and 7, the last beat of the phrase left empty.
+pattern hat_16_8 {
+    hat:     x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  x:0.55 x:0.3 x:0.66 x:0.3  - - - -
+    openhat: - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.42 -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.36 -  - - - -  - - - -  - - - -  - - - -  - - x:0.46 -  - - - -
+}
+
+# The rise: a rim roll over the last four bars, quarters to sixteenths, then silence on the last beat.
+pattern kick_build16 {
+    kick:  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  - - - -
+    clap:  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -
+    snare: - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  x:0.4 - - -  x:0.45 - - -  x:0.5 - - -  x:0.55 - - -  x:0.50 - x:0.52 -  x:0.54 - x:0.56 -  x:0.58 - x:0.60 -  x:0.62 - x:0.64 -  x:0.55 x:0.57 x:0.58 x:0.60  x:0.61 x:0.62 x:0.64 x:0.66  x:0.67 x:0.69 x:0.70 x:0.72  x:0.73 x:0.75 x:0.76 x:0.78  x:0.75 x:0.77 x:0.79 x:0.81  x:0.83 x:0.85 x:0.87 x:0.89  x:0.91 x:0.93 x:0.95 x:0.97  - - - -
+}
+
+# The peak over 16 bars: a crash on the one, fills at 8 and 16, the kick held back at the end.
+pattern kick_peak16 {
+    kick:  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - x:0.5  X - - -  X - - -  X - - -  X - - x:0.5  X - - -  X - - -  X - - -  X - - x:0.5  X - - -  X - - -  X - - -  X - - x:0.5  X - - -  X - - -  X - - -  X - - x:0.5  X - - -  X - - -  X - - -  X - - x:0.5  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - x:0.5  X - - -  X - - -  X - - -  X - - x:0.5  X - - -  X - - -  X - - -  X - - x:0.5  X - - -  X - - -  X - - -  X - - x:0.5  X - - -  X - - -  X - - -  X - - x:0.5  X - - -  X - - -  X - - -  X - - x:0.5  X - - -  X - - -  X - - -  X - - x:0.5  X - - -  X - - -  X - - -  - - - -
+    clap:  - - - -  x:0.8 - - -  - - - -  x:0.82 - - -  - - - -  x:0.8 - - -  - - - -  x:0.82 - - -  - - - -  x:0.8 - - -  - - - -  x:0.82 - - -  - - - -  x:0.8 - - -  - - - -  x:0.82 - - -  - - - -  x:0.8 - - -  - - - -  x:0.82 - - -  - - - -  x:0.8 - - -  - - - -  x:0.82 - - -  - - - -  x:0.8 - - -  - - - -  x:0.82 - - -  - - - -  x:0.8 - - -  - - - -  x:0.7*2 - x:0.82 -  - - - -  x:0.8 - - -  - - - -  x:0.82 - - -  - - - -  x:0.8 - - -  - - - -  x:0.82 - - -  - - - -  x:0.8 - - -  - - - -  x:0.82 - - -  - - - -  x:0.8 - - -  - - - -  x:0.82 - - -  - - - -  x:0.8 - - -  - - - -  x:0.82 - - -  - - - -  x:0.8 - - -  - - - -  x:0.82 - - -  - - - -  x:0.8 - - -  - - - -  x:0.82 - - -  - - - -  x:0.8 - - -  - - - -  x:0.85 - - -
+    snare: - - - x:0.2  - - - -  - - - x:0.18  - - - x:0.22  - - - x:0.2  - - - -  - - - x:0.18  - - - x:0.22  - - - x:0.2  - - - -  - - - x:0.18  - - - x:0.22  - - - x:0.2  - - - -  - - - x:0.18  - - - x:0.22  - - - x:0.2  - - - -  - - - x:0.18  - - - x:0.22  - - - x:0.2  - - - -  - - - x:0.18  - - - x:0.22  - - - x:0.2  - - - -  - - - x:0.18  - - - x:0.22  - - - -  - - - -  - - - -  o x:0.4 x:0.5 x:0.6  - - - x:0.2  - - - -  - - - x:0.18  - - - x:0.22  - - - x:0.2  - - - -  - - - x:0.18  - - - x:0.22  - - - x:0.2  - - - -  - - - x:0.18  - - - x:0.22  - - - x:0.2  - - - -  - - - x:0.18  - - - x:0.22  - - - x:0.2  - - - -  - - - x:0.18  - - - x:0.22  - - - x:0.2  - - - -  - - - x:0.18  - - - x:0.22  - - - x:0.2  - - - -  - - - x:0.18  - - - x:0.22  - - - -  - - - -  x:0.4 x:0.42 x:0.45 x:0.5  x:0.55 x:0.6 x:0.65 x:0.7
+    crash: x:0.5 - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -
+}
+
 # ════════════════════════════════════════════════════════
 # BUSES
 # ════════════════════════════════════════════════════════
