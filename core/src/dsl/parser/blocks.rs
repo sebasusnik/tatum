@@ -168,6 +168,7 @@ impl Parser {
                     Token::Velocity => String::from("velocity"),
                     Token::Mix => String::from("mix"),
                     Token::Master => String::from("master"),
+                    Token::Tempo => String::from("tempo"),
                     _ => break,
                 };
                 self.advance();
@@ -196,8 +197,9 @@ impl Parser {
         maps.extend(block);
     }
 
-    /// `200hz..4khz` after a knob's target, if one follows.
-    fn parse_knob_range(&mut self) -> Option<(RangeEnd, RangeEnd)> {
+    /// `200hz..4khz` after a knob's target, if one follows; or three points,
+    /// `20hz..20hz..2khz`, the middle one at half travel.
+    fn parse_knob_range(&mut self) -> Option<Vec<RangeEnd>> {
         let starts = match self.peek() {
             Token::Number(_) | Token::Quantity(_, _) => true,
             Token::Rest => matches!(self.peek_ahead(1), Token::Number(_) | Token::Quantity(_, _)),
@@ -221,8 +223,12 @@ impl Parser {
             return None;
         }
         self.advance();
-        let high = self.parse_range_end()?;
-        Some((low, high))
+        let mut ends = Vec::from([low, self.parse_range_end()?]);
+        if matches!(self.peek(), Token::Tie) {
+            self.advance();
+            ends.push(self.parse_range_end()?);
+        }
+        Some(ends)
     }
 
     fn parse_range_end(&mut self) -> Option<RangeEnd> {

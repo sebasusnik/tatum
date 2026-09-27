@@ -77,6 +77,12 @@ impl FxChain {
         }
     }
 
+    /// Set a named parameter on the node at `idx`. False if there is no such
+    /// node, or it has no such parameter.
+    pub(super) fn set_node_param(&mut self, idx: usize, name: &str, value: f32) -> bool {
+        self.nodes.get_mut(idx).is_some_and(|n| n.set_named(name, value))
+    }
+
     /// Set a named parameter on the first node that has it.
     pub(super) fn set_param(&mut self, name: &str, value: f32) -> bool {
         self.nodes.iter_mut().any(|n| n.set_named(name, value))

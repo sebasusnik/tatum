@@ -398,9 +398,21 @@ midi {
     cc 20 > bass lp wet        # <track> <node> wet: an effect switched in and out
     cc 21 > pad voice_mode     # a choice steps through its options
     cc 22 > reverb_mix         # also delay_mix, and reverb_freeze on a pad
+    cc 23 > stab delay_send    # <track> delay_send / reverb_send
+    cc 24 > bass lp cutoff     # <track> <node> <param>: a named insert
+    cc 25 > master cutoff      # master <param>: the first master node that has it
+    cc 26 > master dj cutoff   # master <node> <param>: one named with `as dj`
+    cc 27 > tempo 118..132     # the song's tempo, in BPM
     cc 74 > pad level          # one controller can move several things
 }
 ```
+
+A chain node answers to the parameters `auto master` sweeps: `cutoff` on a filter,
+`tilt`, `eq_low`/`eq_mid`/`eq_high`, `drive` on `saturate`, `gain`, and
+`comp_threshold`. With no range a cutoff knob runs 20 Hz to 20 kHz, evenly to the ear
+(each stretch of the knob is the same interval, not the same number of Hz), an EQ band
+±12 dB, `drive` 0..2 and a tempo 60..180 BPM. The master chain is counted without its
+`limiter`, which the engine leaves out.
 
 The target is written the way `auto` writes one, and resolves the same way: a name that
 is a track wins over a module of the same name, and a module parameter reaches every
@@ -432,6 +444,17 @@ A module parameter takes its own units, or a plain number as its line in the mod
 would; a level takes a gain, dB or %; a pan, a wet and the mixes take a number or %.
 A choice and `reverb_freeze` take no range. The sweep between the ends follows the
 parameter's own curve, so a cutoff range still opens evenly to the ear.
+
+A third value puts a point at half travel. That is how one knob becomes a DJ filter,
+darker to the left and thinner to the right, with both filters open in the middle:
+
+```
+master { in > lowpass(20khz, 0.1) as dj > highpass(20hz, 0.1) as hp > out }
+midi {
+    cc 70 > master dj cutoff 200hz..20khz..20khz
+    cc 70 > master hp cutoff 20hz..20hz..2khz
+}
+```
 
 Knobs and the text share the values:
 

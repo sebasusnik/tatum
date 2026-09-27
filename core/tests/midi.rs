@@ -577,3 +577,112 @@ fn a_level_range_takes_decibels() {
     let low = ops(&planner.knob(30, 0, player.generation()).plans);
     assert!(matches!(low[0], FastOp::TrackLevel { level, .. } if (level - 0.2512).abs() < 1e-3), "{low:?}");
 }
+
+/// A beat with bright hats and a master with a DJ filter pair on it: a
+/// lowpass that closes over the left half of one knob and a highpass that
+/// opens over the right. The limiter in front is left out of the built
+/// chain, which must not throw the node positions off.
+const DJ: &str = r#"
+tempo 124
+module beats kit { kick_level 100% hihat_level 100% }
+module bass acid { cutoff 800hz }
+pattern beat {
+    kick: X - x - X - x -
+    hat:  x x x x x x x x
+}
+pattern line { 1.2 - 1.2 - 5.1 - 1.2 - }
+track drums { play beat using kit out > master }
+track bass  { play line using acid delay_send 0.2 out > lowpass(2khz, 0.1) as lp > master }
+master { in > limiter > lowpass(20khz, 0.1) as dj > highpass(20hz, 0.1) as hp > tilt(0) > out }
+midi {
+    cc 70 > master dj cutoff 200hz..20khz..20khz
+    cc 70 > master hp cutoff 20hz..20hz..2khz
+    cc 71 > master tilt
+    cc 72 > bass lp cutoff 300hz..3khz
+    cc 73 > bass delay_send 0..50%
+    cc 74 > tempo 120..135
+}
+"#;
+
+fn node_value(op: &FastOp) -> (Option<usize>, usize, &'static str, f32) {
+    match op {
+        FastOp::NodeParam { track, node, param, value } => (*track, *node, param, *value),
+        other => panic!("not a node parameter: {:?}", other),
+    }
+}
+
+#[test]
+fn one_knob_sweeps_two_master_filters_dj_style() {
+    let (mut planner, player) = session(DJ);
+    let g = player.generation();
+    let left = ops(&planner.knob(70, 0, g).plans);
+    let mid = ops(&planner.knob(70, 64, g).plans);
+    let right = ops(&planner.knob(70, 127, g).plans);
+    // dj is the first node of the built chain (the limiter is left out), hp the second.
+    assert_eq!(node_value(&left[0]).1, 0);
+    assert_eq!(node_value(&left[1]).1, 1);
+    let close = |a: f32, b: f32| (a - b).abs() / b < 0.02;
+    assert!(close(node_value(&left[0]).3, 200.0) && close(node_value(&left[1]).3, 20.0), "{left:?}");
+    assert!(node_value(&mid[0]).3 > 18000.0 && node_value(&mid[1]).3 < 25.0, "{mid:?}");
+    assert!(close(node_value(&right[0]).3, 20000.0) && close(node_value(&right[1]).3, 2000.0), "{right:?}");
+}
+
+#[test]
+fn a_knob_on_a_master_filter_changes_what_comes_out() {
+    let hats = |value: u8| {
+        let (mut planner, mut player) = session(DJ);
+        player.start();
+        let g = player.generation();
+        apply_all(&mut player, planner.knob(70, value, g).plans);
+        let (mut l, mut r) = ([0.0f32; BLOCK_SIZE], [0.0f32; BLOCK_SIZE]);
+        let mut diff = 0.0f64;
+        for _ in 0..600 {
+            player.process(&mut l, &mut r);
+            // Sample-to-sample change: the top end, roughly.
+            diff += l.windows(2).map(|w| ((w[1] - w[0]) as f64).powi(2)).sum::<f64>();
+        }
+        diff
+    };
+    let (closed, open) = (hats(0), hats(64));
+    assert!(closed < open * 0.2, "the lowpass at 200 Hz barely changed the top: {closed} against {open}");
+}
+
+#[test]
+fn a_cutoff_knob_sweeps_evenly_to_the_ear() {
+    let (mut planner, player) = session(DJ);
+    let mid = ops(&planner.knob(72, 64, player.generation()).plans);
+    let (track, node, param, v) = node_value(&mid[0]);
+    assert_eq!((track, node, param), (Some(1), 0, "cutoff"));
+    // Halfway between 300 Hz and 3 kHz by ear is their geometric mean.
+    assert!((v - 950.0).abs() < 25.0, "{v}");
+}
+
+#[test]
+fn a_send_and_the_tempo_can_be_on_knobs() {
+    let (mut planner, mut player) = session(DJ);
+    player.start();
+    let g = player.generation();
+    let send = ops(&planner.knob(73, 127, g).plans);
+    assert!(matches!(send[0], FastOp::TrackSend { track: 1, reverb: false, amount } if (amount - 0.5).abs() < 1e-6));
+    apply_all(&mut player, planner.knob(74, 127, g).plans);
+    play_blocks(&mut player, 2);
+    assert!((player.engine().unwrap().tempo() - 135.0).abs() < 1e-3);
+}
+
+#[test]
+fn a_knob_on_a_node_that_is_not_there_is_a_compile_error() {
+    for (line, says) in [
+        ("cc 70 > master cutoff", "no lowpass"),
+        ("cc 70 > master dj cutoff", "no node named 'dj'"),
+        ("cc 70 > master volume", "moves one of"),
+        ("cc 72 > bass lp tilt", "'lp' is a lowpass, which has no 'tilt'"),
+        ("cc 72 > bass xx cutoff", "has no node named 'xx'"),
+        ("cc 73 > nope delay_send", "no track named 'nope'"),
+        ("cc 74 > tempo 10..200", "tempo runs from 20 to 999"),
+    ] {
+        let src = format!("{}\nmidi {{\n  {}\n}}\n", SONG, line);
+        let err = SongEngine::from_source(&src).err().unwrap_or_else(|| panic!("{line} compiled"));
+        let text = format!("{:?}", err);
+        assert!(text.contains(says), "{line}: {text}");
+    }
+}

@@ -93,6 +93,21 @@ pub enum FastOp {
     ReverbMix(f32),
     DelayMix(f32),
     ReverbFreeze(bool),
+    /// A track's send into the global reverb or delay, 0..1.
+    TrackSend {
+        track: usize,
+        reverb: bool,
+        amount: f32,
+    },
+    /// A named parameter of one node of an effect chain: a track's inserts,
+    /// or the master's when `track` is `None`. `param` is one of the names
+    /// `auto master` takes (`cutoff`, `tilt`, `drive`...).
+    NodeParam {
+        track: Option<usize>,
+        node: usize,
+        param: &'static str,
+        value: f32,
+    },
     /// A note from the keyboard or a pad, on the instrument a track plays.
     /// Only ever sent as [`Plan::Play`].
     NoteOn {
@@ -968,6 +983,10 @@ pub(crate) fn apply_op(engine: &mut SongEngine, op: FastOp) {
         FastOp::ReverbMix(mix) => engine.set_reverb_mix(mix),
         FastOp::DelayMix(mix) => engine.set_delay_mix(mix),
         FastOp::ReverbFreeze(on) => engine.set_reverb_freeze(on),
+        FastOp::TrackSend { track, reverb, amount } => engine.set_track_send(track, reverb, amount),
+        FastOp::NodeParam { track, node, param, value } => {
+            engine.set_node_param(track, node, param, value);
+        }
         FastOp::NoteOn { track, note, velocity } => engine.live_note_on(track, note, velocity),
         FastOp::NoteOff { track, note } => engine.live_note_off(track, note),
         FastOp::PitchBend { instrument, ratio } => engine.set_pitch_bend(instrument, ratio),

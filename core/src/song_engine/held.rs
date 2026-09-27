@@ -23,6 +23,10 @@ fn same_target(a: &FastOp, b: &FastOp) -> bool {
         | (TrackVelocity { track: x, .. }, TrackVelocity { track: y, .. })
         | (TrackGate { track: x, .. }, TrackGate { track: y, .. }) => x == y,
         (NodeWet { track: t, node: n, .. }, NodeWet { track: u, node: m, .. }) => t == u && n == m,
+        (TrackSend { track: t, reverb: r, .. }, TrackSend { track: u, reverb: s, .. }) => t == u && r == s,
+        (NodeParam { track: t, node: n, param: p, .. }, NodeParam { track: u, node: m, param: q, .. }) => {
+            t == u && n == m && p == q
+        }
         (ModuleParam { instrument: i, id: p, .. }, ModuleParam { instrument: j, id: q, .. }) => i == j && p == q,
         _ => false,
     }
@@ -80,6 +84,9 @@ impl SongEngine {
                 track_idx == track && node_idx == node
             }
             (AutoTarget::ReverbMix, FastOp::ReverbMix(_)) => true,
+            (AutoTarget::MasterParam { param_name }, FastOp::NodeParam { track: None, param, .. }) => {
+                param_name.as_str() == *param
+            }
             (AutoTarget::DelayMix, FastOp::DelayMix(_)) => true,
             (AutoTarget::ReverbFreeze, FastOp::ReverbFreeze(_)) => true,
             (

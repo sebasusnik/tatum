@@ -6,33 +6,59 @@
 //! per-block allocations that used to be here were invisible in every test.
 
 use std::alloc::{GlobalAlloc, Layout, System};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::cell::Cell;
 
-static ALLOCS: AtomicUsize = AtomicUsize::new(0);
-/// Frees, counted separately: a free takes the allocator's lock as much as an
-/// allocation does, but only the fast-edit test asks about them so far.
-static FREES: AtomicUsize = AtomicUsize::new(0);
-static COUNTING: AtomicBool = AtomicBool::new(false);
+// Per thread, not per process. The tests in this file run in parallel, and
+// with one counter for the whole process an allocation another test made
+// while this one was counting was blamed on this one: a fast edit "freed 123
+// times on the audio thread" once in a few runs. The audio path under test
+// runs on the thread that counts.
+thread_local! {
+    static COUNTING: Cell<bool> = const { Cell::new(false) };
+    static ALLOCS: Cell<usize> = const { Cell::new(0) };
+    /// Frees, counted separately: a free takes the allocator's lock as much
+    /// as an allocation does, but only the fast-edit test asks about them.
+    static FREES: Cell<usize> = const { Cell::new(0) };
+}
+
+/// Count one on `counter` if this thread is counting. `try_with`: the
+/// allocator also runs while a thread's locals are being torn down.
+fn tally(counter: &'static std::thread::LocalKey<Cell<usize>>) {
+    if COUNTING.try_with(|c| c.get()).unwrap_or(false) {
+        let _ = counter.try_with(|n| n.set(n.get() + 1));
+    }
+}
+
+fn counting(on: bool) {
+    COUNTING.with(|c| c.set(on));
+}
+
+fn reset() {
+    ALLOCS.with(|n| n.set(0));
+    FREES.with(|n| n.set(0));
+}
+
+fn allocs() -> usize {
+    ALLOCS.with(|n| n.get())
+}
+
+fn frees() -> usize {
+    FREES.with(|n| n.get())
+}
 
 struct Counting;
 
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if COUNTING.load(Ordering::Relaxed) {
-            ALLOCS.fetch_add(1, Ordering::Relaxed);
-        }
+        tally(&ALLOCS);
         unsafe { System.alloc(layout) }
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        if COUNTING.load(Ordering::Relaxed) {
-            FREES.fetch_add(1, Ordering::Relaxed);
-        }
+        tally(&FREES);
         unsafe { System.dealloc(ptr, layout) }
     }
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        if COUNTING.load(Ordering::Relaxed) {
-            ALLOCS.fetch_add(1, Ordering::Relaxed);
-        }
+        tally(&ALLOCS);
         unsafe { System.realloc(ptr, layout, new_size) }
     }
 }
@@ -98,8 +124,8 @@ fn rendering_blocks_never_allocates() {
         engine.process_block_stereo(&mut l, &mut r);
     }
 
-    ALLOCS.store(0, Ordering::Relaxed);
-    COUNTING.store(true, Ordering::Relaxed);
+    reset();
+    counting(true);
     // Long enough to cross every scene boundary in the arrangement, which is
     // where automation lanes are rebuilt and tracks are reassigned.
     let mut heard = false;
@@ -107,9 +133,9 @@ fn rendering_blocks_never_allocates() {
         engine.process_block_stereo(&mut l, &mut r);
         heard |= l.iter().any(|v| *v != 0.0);
     }
-    COUNTING.store(false, Ordering::Relaxed);
+    counting(false);
 
-    let n = ALLOCS.load(Ordering::Relaxed);
+    let n = allocs();
     assert_eq!(n, 0, "the audio path allocated {} times over 8000 blocks", n);
     assert!(heard, "rendered silence, so the test proved nothing");
 }
@@ -141,8 +167,8 @@ fn live_swap_never_allocates() {
     assert_ne!(edit_a, edit_b);
     let plan_a = planner.plan(&edit_a, player.generation()).expect("compiles");
 
-    ALLOCS.store(0, Ordering::Relaxed);
-    COUNTING.store(true, Ordering::Relaxed);
+    reset();
+    counting(true);
     assert_eq!(player.apply(plan_a), Applied::Queued);
     let mut swaps = 0;
     let mut blocks = 0;
@@ -152,9 +178,9 @@ fn live_swap_never_allocates() {
         }
         blocks += 1;
     }
-    COUNTING.store(false, Ordering::Relaxed);
+    counting(false);
     let plan_b = planner.plan(&edit_b, player.generation()).expect("compiles");
-    COUNTING.store(true, Ordering::Relaxed);
+    counting(true);
     assert_eq!(player.apply(plan_b), Applied::Queued);
     while swaps < 2 && blocks < 8000 {
         if player.process(&mut l, &mut r).is_some() {
@@ -166,10 +192,10 @@ fn live_swap_never_allocates() {
     for _ in 0..8 {
         player.process(&mut l, &mut r);
     }
-    COUNTING.store(false, Ordering::Relaxed);
+    counting(false);
 
     assert_eq!(swaps, 2, "both swaps must land");
-    let n = ALLOCS.load(Ordering::Relaxed);
+    let n = allocs();
     assert_eq!(n, 0, "the live swap path allocated {} times", n);
     let mut retired = 0;
     while player.take_retired().is_some() {
@@ -197,17 +223,16 @@ fn a_fast_edit_frees_nothing_on_the_audio_thread() {
     let edit = SONG.replace("module bass low { cutoff 0.4 }", "module bass low { cutoff 0.6 }");
     let plan = planner.plan(&edit, player.generation()).expect("compiles");
 
-    ALLOCS.store(0, Ordering::Relaxed);
-    FREES.store(0, Ordering::Relaxed);
-    COUNTING.store(true, Ordering::Relaxed);
+    reset();
+    counting(true);
     let applied = player.apply(plan);
     for _ in 0..16 {
         player.process(&mut l, &mut r);
     }
-    COUNTING.store(false, Ordering::Relaxed);
+    counting(false);
 
     assert_eq!(applied, Applied::Fast);
-    let (a, f) = (ALLOCS.load(Ordering::Relaxed), FREES.load(Ordering::Relaxed));
+    let (a, f) = (allocs(), frees());
     assert_eq!((a, f), (0, 0), "a fast edit allocated {} and freed {} times on the audio thread", a, f);
     let mut retired = 0;
     while player.take_retired().is_some() {

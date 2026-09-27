@@ -21,13 +21,110 @@ use crate::params::{self, ModuleKind, ParamSpec, Range};
 /// One thing a knob moves, resolved to engine indices.
 #[derive(Debug, Clone, Copy)]
 pub enum Move {
-    Module { instrument: usize, spec: &'static ParamSpec },
-    TrackLevel { track: usize },
-    TrackPan { track: usize },
-    NodeWet { track: usize, node: usize },
+    Module {
+        instrument: usize,
+        spec: &'static ParamSpec,
+    },
+    TrackLevel {
+        track: usize,
+    },
+    TrackPan {
+        track: usize,
+    },
+    NodeWet {
+        track: usize,
+        node: usize,
+    },
     ReverbMix,
     DelayMix,
     ReverbFreeze,
+    /// `stab delay_send`, `stab reverb_send`.
+    TrackSend {
+        track: usize,
+        reverb: bool,
+    },
+    /// `master cutoff`, `master dj cutoff`, `bass lp cutoff`: a parameter of
+    /// one node of an effect chain; `track` is `None` for the master.
+    NodeParam {
+        track: Option<usize>,
+        node: usize,
+        param: &'static str,
+    },
+    Tempo,
+}
+
+/// The parameters a knob can reach on a chain node: the ones `auto master`
+/// sweeps. Each with the stretch a knob with no range covers, in the value
+/// the node reads, and whether it sweeps geometrically (a cutoff: each turn
+/// of the knob is the same interval to the ear, not the same number of Hz).
+const NODE_PARAMS: &[(&str, f32, f32, bool)] = &[
+    ("cutoff", 20.0, 20000.0, true),
+    ("tilt", -1.0, 1.0, false),
+    ("eq_low", -12.0, 12.0, false),
+    ("eq_mid", -12.0, 12.0, false),
+    ("eq_high", -12.0, 12.0, false),
+    ("drive", 0.0, 2.0, false),
+    ("gain", 0.0, 1.0, false),
+    ("comp_threshold", -40.0, 0.0, false),
+];
+
+/// The widest a range on a node parameter may be written, which is what the
+/// node itself accepts.
+fn node_param_limits(param: &str) -> (f32, f32) {
+    match param {
+        "cutoff" => (20.0, 20000.0),
+        "tilt" => (-1.0, 1.0),
+        "eq_low" | "eq_mid" | "eq_high" => (-12.0, 12.0),
+        "drive" | "gain" => (0.0, 10.0),
+        _ => (-60.0, 0.0),
+    }
+}
+
+fn node_param(name: &str) -> Option<&'static (&'static str, f32, f32, bool)> {
+    NODE_PARAMS.iter().find(|p| p.0 == name)
+}
+
+/// The kinds of chain node that answer to a parameter, as the text names
+/// them. The same list `auto master` checks against.
+pub fn node_kinds_for(param: &str) -> &'static [&'static str] {
+    crate::dsl::compiler::master_auto_node_kinds(param)
+}
+
+/// Where a knob's travel lands: two points, or three with the middle one at
+/// half travel, as the engine reads the target. Three is what puts two
+/// filters on one knob, DJ style: the lowpass closes over the left half and
+/// the highpass opens over the right.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Span {
+    pub points: [f32; 3],
+    pub len: usize,
+    /// Sweep geometrically between points, for a cutoff.
+    pub log: bool,
+}
+
+impl Span {
+    fn two(lo: f32, hi: f32, log: bool) -> Self {
+        Self { points: [lo, hi, hi], len: 2, log }
+    }
+
+    /// The value at `x` along the travel, 0..1.
+    pub fn at(&self, x: f32) -> f32 {
+        let p = &self.points;
+        let (a, b, t) = if self.len == 3 {
+            if x < 0.5 {
+                (p[0], p[1], x * 2.0)
+            } else {
+                (p[1], p[2], x * 2.0 - 1.0)
+            }
+        } else {
+            (p[0], p[1], x)
+        };
+        if self.log && a > 0.0 && b > 0.0 {
+            a * crate::math::pow(b / a, t)
+        } else {
+            a + (b - a) * t
+        }
+    }
 }
 
 /// The names one engine answers to, which is all resolution needs. The
@@ -49,9 +146,9 @@ pub struct Knob {
     /// The target as the file writes it, dotted: `acid.cutoff`.
     pub target: String,
     pub moves: Vec<Move>,
-    /// Where the bottom and the top of the travel land, as the engine reads
-    /// the target; from `cc 74 > acid cutoff 200hz..4khz`. `None`: all of it.
-    pub span: Option<(f32, f32)>,
+    /// Where the travel lands, as the engine reads the target; from
+    /// `cc 74 > acid cutoff 200hz..4khz`. `None`: all of it.
+    pub span: Option<Span>,
 }
 
 impl Knob {
@@ -143,6 +240,31 @@ pub fn resolve(song: &Song, names: &Names, target: &str) -> Vec<Move> {
         ["reverb_mix"] => out.push(Move::ReverbMix),
         ["delay_mix"] => out.push(Move::DelayMix),
         ["reverb_freeze"] => out.push(Move::ReverbFreeze),
+        ["tempo"] => out.push(Move::Tempo),
+        [t, which @ ("delay_send" | "reverb_send")] => {
+            if let Some(t) = track(t) {
+                out.push(Move::TrackSend { track: t, reverb: *which == "reverb_send" });
+            }
+        }
+        ["master", param] if node_param(param).is_some() => {
+            if let Some(node) = master_node(song, None, param) {
+                out.push(Move::NodeParam { track: None, node, param: node_param(param).unwrap().0 });
+            }
+        }
+        ["master", label, param] if node_param(param).is_some() => {
+            if let Some(node) = master_node(song, Some(label), param) {
+                out.push(Move::NodeParam { track: None, node, param: node_param(param).unwrap().0 });
+            }
+        }
+        [t, label, param] if *param != "wet" && node_param(param).is_some() => {
+            if let Some(t) = track(t) {
+                let found =
+                    names.track_nodes.get(t).and_then(|nodes| nodes.iter().position(|l| l.as_deref() == Some(*label)));
+                if let Some(node) = found {
+                    out.push(Move::NodeParam { track: Some(t), node, param: node_param(param).unwrap().0 });
+                }
+            }
+        }
         [name, which @ ("level" | "pan")] => {
             let tracks: Vec<usize> = match track(name) {
                 Some(t) => Vec::from([t]),
@@ -189,6 +311,24 @@ pub fn resolve(song: &Song, names: &Names, target: &str) -> Vec<Move> {
     out
 }
 
+/// The master node a knob on `param` reaches, by its position in the chain
+/// the engine builds (which leaves out a `limiter`): the one named `label`,
+/// or with no label the first that has the parameter, as `auto master` picks.
+pub fn master_node(song: &Song, label: Option<&str>, param: &str) -> Option<usize> {
+    let kinds = node_kinds_for(param);
+    let chain = song.master.as_ref()?.chain.iter().filter(|n| n.kind != "limiter");
+    for (i, n) in chain.enumerate() {
+        let named = label.is_none_or(|l| n.label.as_deref() == Some(l));
+        if named && kinds.contains(&n.kind.as_str()) {
+            return Some(i);
+        }
+        if named && label.is_some() {
+            return None;
+        }
+    }
+    None
+}
+
 /// The value `target` has in the text, where the text gives it one. A knob
 /// forgets what it was turned to when this changes: the text was edited on
 /// purpose, and the edit should be what plays.
@@ -197,6 +337,9 @@ pub fn text_value(song: &Song, target: &str) -> Option<f32> {
     match words.as_slice() {
         [t, "level"] => song.tracks.iter().find(|d| &d.name == t)?.level,
         [t, "pan"] => song.tracks.iter().find(|d| &d.name == t)?.pan,
+        [t, "delay_send"] => song.tracks.iter().find(|d| &d.name == t)?.delay_send,
+        [t, "reverb_send"] => song.tracks.iter().find(|d| &d.name == t)?.reverb_send,
+        ["tempo"] => Some(song.globals.tempo),
         [t, node, "wet"] => {
             let def = song.tracks.iter().find(|d| &d.name == t)?;
             let n = def.routing.iter().find(|n| n.label.as_deref() == Some(*node))?;
@@ -218,26 +361,58 @@ pub fn text_value(song: &Song, target: &str) -> Option<f32> {
 }
 
 /// Where a knob's range, as written, lands on `target` as the engine reads
-/// it. The ends are in the units the text uses for that target: a module
-/// parameter takes its own (`200hz`, `40ms`, `60%`) or a plain number as its
-/// line in the module would; a level takes a gain (`0.8`), `-6db` or `%`; a
-/// pan, a wet and a mix take a number or `%`. The error is for `tatum check`.
-pub fn knob_span(song: &Song, target: &str, range: &(RangeEnd, RangeEnd)) -> Result<(f32, f32), String> {
+/// it: two ends, or three with the middle at half travel. The ends are in the
+/// units the text uses for that target: a module parameter takes its own
+/// (`200hz`, `40ms`, `60%`) or a plain number as its line in the module
+/// would; a level takes a gain (`0.8`), `-6db` or `%`; a pan, a send, a wet
+/// and a mix take a number or `%`; a node's cutoff takes Hz, its eq and
+/// threshold dB; `tempo` takes BPM. The error is for `tatum check`.
+pub fn knob_span(song: &Song, target: &str, range: &[RangeEnd]) -> Result<Span, String> {
+    if !(2..=3).contains(&range.len()) {
+        return Err(String::from("a knob's range has two ends, or three with the middle at half travel"));
+    }
     let words: Vec<&str> = target.split('.').collect();
     let spec = match words.as_slice() {
-        [module, param] if !matches!(*param, "level" | "pan") => song
-            .module_defs
-            .iter()
-            .find(|m| &m.name == module)
-            .and_then(|def| ModuleKind::from_str(&def.module_type))
-            .and_then(|kind| params::lookup(kind, param)),
+        [module, param] if !matches!(*param, "level" | "pan" | "delay_send" | "reverb_send") && *module != "master" => {
+            song.module_defs
+                .iter()
+                .find(|m| &m.name == module)
+                .and_then(|def| ModuleKind::from_str(&def.module_type))
+                .and_then(|kind| params::lookup(kind, param))
+        }
+        _ => None,
+    };
+    let node = match words.as_slice() {
+        ["master", p] | [_, _, p] if *p != "wet" => node_param(p),
         _ => None,
     };
     let end = |e: &RangeEnd| -> Result<f32, String> {
         let unit = e.unit.as_deref();
-        match (words.as_slice(), spec) {
-            (["reverb_freeze"], _) => Err(String::from("reverb_freeze is on or off; it takes no range")),
-            (_, Some(spec)) => {
+        match (words.as_slice(), spec, node) {
+            (["reverb_freeze"], _, _) => Err(String::from("reverb_freeze is on or off; it takes no range")),
+            (["tempo"], _, _) => match unit {
+                None | Some("bpm") if (20.0..=999.0).contains(&e.value) => Ok(e.value),
+                None => Err(String::from("tempo runs from 20 to 999")),
+                Some(u) => Err(format!("tempo takes beats per minute, not '{}'", u)),
+            },
+            (_, _, Some(&(param, _, _, _))) => {
+                let v = match (param, unit) {
+                    (_, None) => e.value,
+                    ("cutoff", Some("hz")) => e.value,
+                    ("cutoff", Some("khz")) => e.value * 1000.0,
+                    ("eq_low" | "eq_mid" | "eq_high" | "comp_threshold", Some("db")) => e.value,
+                    ("gain", Some("db")) => crate::math::pow(10.0, e.value / 20.0),
+                    ("tilt", Some("%")) => e.value / 100.0,
+                    (_, Some(u)) => return Err(format!("'{}' does not take '{}'", param, u)),
+                };
+                let (lo, hi) = node_param_limits(param);
+                if (lo..=hi).contains(&v) {
+                    Ok(v)
+                } else {
+                    Err(format!("{} is outside {}..{} for '{}'", e.value, lo, hi, param))
+                }
+            }
+            (_, Some(spec), _) => {
                 if let Range::Choice(_) = spec.range {
                     return Err(format!(
                         "'{}' is a choice; a knob steps through all of them, with no range",
@@ -254,7 +429,7 @@ pub fn knob_span(song: &Song, target: &str, range: &(RangeEnd, RangeEnd)) -> Res
                     Err(format!("{} is outside what '{}' takes", e.value, spec.name))
                 }
             }
-            ([_, "level"], _) => {
+            ([_, "level"], _, _) => {
                 let gain = match unit {
                     None => e.value,
                     Some("db") => crate::math::pow(10.0, e.value / 20.0),
@@ -267,7 +442,7 @@ pub fn knob_span(song: &Song, target: &str, range: &(RangeEnd, RangeEnd)) -> Res
                     Err(format!("a level runs from 0 to {} (+12 dB)", crate::song_engine::MAX_TRACK_LEVEL))
                 }
             }
-            (w, _) => {
+            (w, _, _) => {
                 let (lo, hi) = if matches!(w, [_, "pan"]) { (-1.0, 1.0) } else { (0.0, 1.0) };
                 let v = match unit {
                     None => e.value,
@@ -282,23 +457,31 @@ pub fn knob_span(song: &Song, target: &str, range: &(RangeEnd, RangeEnd)) -> Res
             }
         }
     };
-    Ok((end(&range.0)?, end(&range.1)?))
+    let mut points = [0.0f32; 3];
+    for (i, e) in range.iter().enumerate() {
+        points[i] = end(e)?;
+    }
+    if range.len() == 2 {
+        points[2] = points[1];
+    }
+    Ok(Span { points, len: range.len(), log: node.is_some_and(|n| n.3) })
 }
 
 /// Where a 7-bit controller value lands on a target, as the engine reads it.
-fn scaled(m: &Move, value: u8, span: Option<(f32, f32)>) -> f32 {
+fn scaled(m: &Move, value: u8, span: Option<Span>) -> f32 {
     let x = value.min(127) as f32 / 127.0;
-    // A range written with the knob: straight from one end to the other,
-    // in the values the engine reads, so a cutoff still sweeps along its
-    // own curve. Choices and the freeze switch have none.
-    if let Some((lo, hi)) = span {
+    // A range written with the knob: from one end to the other in the values
+    // the engine reads, so a module parameter still sweeps along its own
+    // curve and a node's cutoff geometrically. Choices and the freeze switch
+    // have none.
+    if let Some(span) = span {
         let continuous = match m {
             Move::Module { spec, .. } => !matches!(spec.range, Range::Choice(_)),
             Move::ReverbFreeze => false,
             _ => true,
         };
         if continuous {
-            return lo + (hi - lo) * x;
+            return span.at(x);
         }
     }
     match m {
@@ -319,7 +502,14 @@ fn scaled(m: &Move, value: u8, span: Option<(f32, f32)>) -> f32 {
         // loud as the file would have it at full.
         Move::TrackLevel { .. } => x,
         Move::TrackPan { .. } => x * 2.0 - 1.0,
-        Move::NodeWet { .. } | Move::ReverbMix | Move::DelayMix => x,
+        Move::NodeWet { .. } | Move::ReverbMix | Move::DelayMix | Move::TrackSend { .. } => x,
+        Move::NodeParam { param, .. } => {
+            let &(_, lo, hi, log) = node_param(param).expect("a known node parameter");
+            Span::two(lo, hi, log).at(x)
+        }
+        // `tatum check` wants a range on a tempo knob; with none it spans
+        // the tempos music is usually played at.
+        Move::Tempo => Span::two(60.0, 180.0, false).at(x),
         // Past half is on, which is also what a pad sending 0 and 127 means.
         Move::ReverbFreeze => {
             if value >= 64 {
@@ -340,6 +530,9 @@ fn op(m: &Move, v: f32) -> FastOp {
         Move::ReverbMix => FastOp::ReverbMix(v),
         Move::DelayMix => FastOp::DelayMix(v),
         Move::ReverbFreeze => FastOp::ReverbFreeze(v >= 0.5),
+        Move::TrackSend { track, reverb } => FastOp::TrackSend { track, reverb, amount: v },
+        Move::NodeParam { track, node, param } => FastOp::NodeParam { track, node, param, value: v },
+        Move::Tempo => FastOp::Tempo(v),
     }
 }
 
@@ -362,7 +555,12 @@ fn reading(m: &Move, v: f32) -> String {
                 format!("{}% {}", amount, if v < 0.0 { "L" } else { "R" })
             }
         }
-        Move::NodeWet { .. } | Move::ReverbMix | Move::DelayMix => percent(v),
+        Move::NodeWet { .. } | Move::ReverbMix | Move::DelayMix | Move::TrackSend { .. } => percent(v),
+        Move::NodeParam { param: "cutoff", .. } => params::write_amount(v, params::Unit::Hz),
+        Move::NodeParam { param: "eq_low" | "eq_mid" | "eq_high" | "comp_threshold", .. } => format!("{:+.1} dB", v),
+        Move::NodeParam { param: "gain", .. } => decibels(v),
+        Move::NodeParam { .. } => format!("{:.2}", v),
+        Move::Tempo => format!("{:.1} bpm", v),
         Move::ReverbFreeze => String::from(if v >= 0.5 { "frozen" } else { "off" }),
     }
 }

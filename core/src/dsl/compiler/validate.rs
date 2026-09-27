@@ -30,8 +30,9 @@ pub fn master_auto_node_kinds(param: &str) -> &'static [&'static str] {
 }
 
 /// What a knob can be put on, for error messages.
-const MIDI_TARGETS: &str =
-    "<module> <param>, <track> level, <track> pan, <track> <node> wet, reverb_mix, delay_mix or reverb_freeze";
+const MIDI_TARGETS: &str = "<module> <param>, <track> level, <track> pan, <track> delay_send, <track> reverb_send, \
+<track> <node> wet, <track> <node> <param>, master <param>, master <node> <param>, reverb_mix, delay_mix, \
+reverb_freeze or tempo";
 
 /// Validate `midi { }` against the song. A knob, a keyboard or a pad on
 /// something that does not exist is an error here rather than a control that
@@ -78,10 +79,33 @@ pub(super) fn validate_midi(song: &Song) -> Vec<CompileError> {
                 _ => errors.push(err(String::from("a pad hits one drum of a track: `pad 36 > kick kick`"))),
             },
             MidiSource::Cc(_) => match words.as_slice() {
-                ["reverb_mix"] | ["delay_mix"] | ["reverb_freeze"] => {}
-                ["master", _] => errors.push(err(String::from(
-                    "the master chain cannot be put on a knob yet; `auto master` can sweep it",
-                ))),
+                ["reverb_mix"] | ["delay_mix"] | ["reverb_freeze"] | ["tempo"] => {}
+                [track, "delay_send" | "reverb_send"] => {
+                    if !song.tracks.iter().any(|t| &t.name == track) {
+                        errors.push(err(format!("no track named '{}'", track)));
+                    }
+                }
+                ["master", param] => {
+                    if !MASTER_AUTO_PARAMS.contains(param) {
+                        errors
+                            .push(err(format!("a knob on the master moves one of {}", MASTER_AUTO_PARAMS.join(", "))));
+                    } else if crate::midi::master_node(song, None, param).is_none() {
+                        errors.push(err(format!(
+                            "the master chain has no {} node",
+                            master_auto_node_kinds(param).join(" or ")
+                        )));
+                    }
+                }
+                ["master", label, param] => {
+                    if !MASTER_AUTO_PARAMS.contains(param) {
+                        errors.push(err(format!("a knob on a node moves one of {}", MASTER_AUTO_PARAMS.join(", "))));
+                    } else if crate::midi::master_node(song, Some(label), param).is_none() {
+                        errors.push(err(format!(
+                            "the master chain has no node named '{}' that takes '{}'; name one with `> lowpass(...) as {}`",
+                            label, param, label
+                        )));
+                    }
+                }
                 [name, "level"] | [name, "pan"] => {
                     let is_track = song.tracks.iter().any(|t| &t.name == name);
                     let is_module = song.module_defs.iter().any(|m| &m.name == name)
@@ -90,6 +114,19 @@ pub(super) fn validate_midi(song: &Song) -> Vec<CompileError> {
                         errors.push(err(format!("no track or module named '{}'", name)));
                     }
                 }
+                [track, node, param] if *param != "wet" => match song.tracks.iter().find(|t| &t.name == track) {
+                    None => errors.push(err(format!("no track named '{}'", track))),
+                    Some(_) if !MASTER_AUTO_PARAMS.contains(param) => errors
+                        .push(err(format!("a knob on a node moves wet or one of {}", MASTER_AUTO_PARAMS.join(", ")))),
+                    Some(t) => match t.routing.iter().find(|n| n.label.as_deref() == Some(node)) {
+                        None => errors.push(err(format!(
+                            "track '{}' has no node named '{}'; name one with `> effect(...) as {}`",
+                            track, node, node
+                        ))),
+                        Some(n) if master_auto_node_kinds(param).contains(&n.kind.as_str()) => {}
+                        Some(n) => errors.push(err(format!("'{}' is a {}, which has no '{}'", node, n.kind, param))),
+                    },
+                },
                 [track, node, "wet"] => match song.tracks.iter().find(|t| &t.name == track) {
                     None => errors.push(err(format!("no track named '{}'", track))),
                     Some(t) if t.routing.iter().any(|n| n.label.as_deref() == Some(node)) => {}

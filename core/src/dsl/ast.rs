@@ -30,9 +30,10 @@ pub struct MidiMapDef {
     pub source: MidiSource,
     pub target: String,
     /// `cc 74 > acid cutoff 200hz..4khz`: where the bottom and the top of the
-    /// knob's travel land, in the target's units. Written high to low, the
-    /// knob works backwards. `None`: the target's whole range.
-    pub range: Option<(RangeEnd, RangeEnd)>,
+    /// knob's travel land, in the target's units, with an optional third
+    /// point in between for half travel (`20hz..20hz..2khz`). Written high to
+    /// low, the knob works backwards. `None`: the target's whole range.
+    pub range: Option<Vec<RangeEnd>>,
     /// Source line, for compile errors.
     pub line: usize,
 }

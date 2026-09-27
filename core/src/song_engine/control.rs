@@ -272,6 +272,33 @@ impl SongEngine {
         self.humanize_timing = timing.clamp(0.0, 1.0);
     }
 
+    /// A track's send into the reverb (`reverb`) or the delay, 0..1.
+    pub fn set_track_send(&mut self, track: usize, reverb: bool, amount: f32) {
+        if !amount.is_finite() {
+            return;
+        }
+        if let Some(t) = self.tracks.get_mut(track) {
+            let amount = amount.clamp(0.0, 1.0);
+            if reverb {
+                t.reverb_send = amount;
+            } else {
+                t.delay_send = amount;
+            }
+        }
+    }
+
+    /// A named parameter (`cutoff`, `tilt`, `drive`...) of one node of a
+    /// track's insert chain, or of the master chain when `track` is `None`.
+    pub fn set_node_param(&mut self, track: Option<usize>, node: usize, param: &str, value: f32) -> bool {
+        if !value.is_finite() {
+            return false;
+        }
+        match track {
+            None => self.master_fx.set_node_param(node, param, value),
+            Some(t) => self.tracks.get_mut(t).is_some_and(|t| t.insert_fx.set_node_param(node, param, value)),
+        }
+    }
+
     /// How much of the reverb return is heard, 0..1: a scene's
     /// `reverb_mix`, or where a knob left it.
     pub fn reverb_mix(&self) -> f32 {
