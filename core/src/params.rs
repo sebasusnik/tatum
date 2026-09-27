@@ -554,7 +554,7 @@ pub const BASS_PARAMS: &[ParamSpec] = &[
         Range::Unit,
         0.5,
         OSC_PITCH,
-        "Osc 2 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24 (steps of 1/48)"
+        "Osc 2 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24; a fraction detunes it (`0.1st` beats slowly against osc 1)"
     ),
     spec!(
         "osc3_pitch",
@@ -562,7 +562,7 @@ pub const BASS_PARAMS: &[ParamSpec] = &[
         Range::Unit,
         0.5,
         OSC_PITCH,
-        "Osc 3 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24 (steps of 1/48)"
+        "Osc 3 offset in semitones: 0.0 = -24, 0.5 = 0, 1.0 = +24; a fraction detunes it"
     ),
     spec!("osc1_wave", ParamId::Bass(BassParam::Osc1Wave), Range::Choice(OSC_WAVES), 0.0, "Osc 1 waveform"),
     spec!("osc2_wave", ParamId::Bass(BassParam::Osc2Wave), Range::Choice(OSC_WAVES), 0.0, "Osc 2 waveform"),

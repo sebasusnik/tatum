@@ -63,19 +63,23 @@ module keys chord {
 }
 
 # Sub: almost a sine. Cutoff below the second harmonic.
+# Dry on purpose: a fast attack and a filter pluck on each note, a short
+# release, the track's filter open to 700 Hz so the attack is heard, and a
+# light sidechain so the kick does not swallow it. Its old roughness came
+# from its oscillators drifting out of phase at random; that is gone.
 module bass sub {
     cutoff 165hz
-    cutoff_env 90hz
+    cutoff_env 700hz
     resonance 8%
     glide 24%
     osc1_wave saw
     osc2_wave saw
     osc2_pitch -12st
     keytrack 18%
-    attack 10ms
-    decay 450ms
-    sustain 72%
-    release 320ms
+    attack 2ms
+    decay 220ms
+    sustain 40%
+    release 120ms
 }
 
 # Deep kick, soft hat, and a rim that is a very short, high snare.
@@ -282,10 +286,10 @@ track beat {
 track sub {
     play sub_f
     using sub
-    level 0.67
+    level 0.9
     gate 0.92
-    sidechain 0.55
-    out > lowpass(200hz, 0.12) > saturate(0.18) > master
+    sidechain 0.2
+    out > saturate(0.3) > lowpass(700hz, 0.1) > highpass(30hz, 0.01) > master
 }
 
 track stab {
@@ -371,7 +375,7 @@ scene pulse {
     delay_mix = 0.32
     auto master cutoff 9000 > 14000
     track beat { play beat_kick using kit level 0.77 }
-    track sub  { play sub_long using sub level 0.56 }
+    track sub  { play sub_long using sub level 0.75 }
     track bed { play hiss_hold using hiss pan -0.38 }
 }
 
@@ -384,7 +388,7 @@ scene enter {
     auto chord cutoff 0.410 > 0.590            # 1.2kHz -> 3.2kHz
     auto stab level 0.09 > 0.29
     track beat { play beat_sparse using kit level 0.81 }
-    track sub  { play sub_f      using sub  level 0.59 }
+    track sub  { play sub_f      using sub  level 0.79 }
     track stab { play stab_half  using chord }
     track bed { play hiss_hold  using hiss pan -0.38 }
 }
@@ -395,7 +399,7 @@ scene deep {
     delay_mix = 0.58
     auto chord cutoff 0.590 > 0.640 > 0.545            # 3.2kHz -> 4.1kHz -> 2.4kHz
     track beat { play beat_main using kit level 0.84 }
-    track sub  { play sub_f     using sub  level 0.62 }
+    track sub  { play sub_f     using sub  level 0.83 }
     track stab { play stab_full using chord level 0.2914 }
     track bed { play hiss_hold using hiss pan -0.38 }
 }
@@ -407,7 +411,7 @@ scene dub {
     auto master tilt -0.16 > -0.34
     auto chord cutoff 0.560 > 0.618            # 2.7kHz -> 3.7kHz
     track beat { play beat_dub  using kit level 0.81 }
-    track sub  { play sub_dub   using sub  level 0.62 }
+    track sub  { play sub_dub   using sub  level 0.83 }
     track stab { play stab_dub  using chord level 0.3016 }
     track bed { play hiss_hold using hiss pan -0.38 }
 }
@@ -420,7 +424,7 @@ scene echoes {
     delay_mix = 0.7
     auto master tilt -0.34 > -0.2
     track beat       { play beat_thin  using kit level 0.70 }
-    track sub        { play sub_long   using sub level 0.56 }
+    track sub        { play sub_long   using sub level 0.75 }
     track ghostchord { play stab_ghost using chord pan 0.34 }
     track bed { play hiss_hold  using hiss pan -0.38 }
 }
@@ -432,7 +436,7 @@ scene return {
     auto master tilt -0.2 > -0.3
     auto chord cutoff 0.610 > 0.490            # 3.6kHz -> 1.9kHz
     track beat { play beat_main using kit level 0.84 }
-    track sub  { play sub_f     using sub  level 0.62 }
+    track sub  { play sub_f     using sub  level 0.83 }
     track stab { play stab_full using chord level 0.2914 }
     track bed { play hiss_hold using hiss pan -0.38 }
 }
@@ -446,7 +450,7 @@ scene fade {
     auto master cutoff 12000 > 900
     auto chord cutoff 0.490 > 0.370            # 1.9kHz -> 1.1kHz
     track beat { play beat_out  using kit  level 0.63 }
-    track sub  { play sub_out   using sub  level 0.53 }
+    track sub  { play sub_out   using sub  level 0.71 }
     track stab { play stab_out  using chord level 0.2111 }
     track bed { play hiss_out  using hiss pan -0.38 }
 }
