@@ -129,3 +129,30 @@ fn a_note_past_the_top_of_midi_is_an_error() {
     assert!(errs.iter().all(|e| e.starts_with("line 3:") && e.contains("above what MIDI can play")), "{:?}", errs);
     assert!(errs[0].contains("C999") && errs[1].contains("G#9") && errs[2].contains("D77"), "{:?}", errs);
 }
+
+#[test]
+fn a_setter_handed_nan_leaves_the_value_alone() {
+    // Knobs, the browser and MIDI maps call these at run time; a NaN used to
+    // pass `clamp` and poison the filter it reached.
+    let src = format!("tempo 120\nmodule bass xx {{ cutoff 1khz }}\n{}", TRACK);
+    let mut engine = SongEngine::from_source(&src).unwrap();
+    engine.start();
+    for v in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        engine.set_track_level(0, v);
+        engine.set_track_pan(0, v);
+        engine.set_track_velocity(0, v);
+        engine.set_track_gate(0, v);
+        engine.set_tempo(v);
+        engine.set_swing(v);
+        engine.set_humanize(v, v);
+        engine.set_reverb_mix(v);
+        engine.set_delay_mix(v);
+        engine.set_pitch_bend(0, v);
+        engine.set_output_gain(v);
+        assert!(!engine.set_module_param(0, "cutoff", v));
+    }
+    assert_eq!(engine.tempo(), 120.0);
+    let (l, r) = engine.render(2);
+    assert!(l.iter().chain(&r).all(|s| s.is_finite()));
+    assert!(l.iter().any(|s| s.abs() > 1e-3), "the track still plays");
+}

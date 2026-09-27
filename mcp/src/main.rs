@@ -121,17 +121,21 @@ fn main() {
     }
 }
 
+/// The example songs as they were when the server was built: an installed
+/// server has them without the repo. `SYNTH_EXAMPLES_DIR` reads a directory
+/// instead.
+const EMBEDDED_EXAMPLES: &[(&str, &str)] = include!(concat!(env!("OUT_DIR"), "/examples.rs"));
+
 /// Where to find examples and where to put renders.
 struct Ctx {
-    examples_dir: PathBuf,
+    /// `None`: the examples compiled in.
+    examples_dir: Option<PathBuf>,
     render_dir: PathBuf,
 }
 
 impl Ctx {
     fn from_env() -> Self {
-        let examples_dir = std::env::var("SYNTH_EXAMPLES_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples"));
+        let examples_dir = std::env::var("SYNTH_EXAMPLES_DIR").ok().map(PathBuf::from);
         let render_dir = std::env::var("SYNTH_RENDER_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| std::env::temp_dir().join("tatum-renders"));
@@ -329,50 +333,53 @@ fn tool_params(args: &Value) -> Result<String, String> {
     })
 }
 
-fn list_examples(ctx: &Ctx) -> Vec<(String, String)> {
+/// Every example as (name, source), sorted by name.
+fn example_sources(ctx: &Ctx) -> Vec<(String, String)> {
+    let Some(dir) = &ctx.examples_dir else {
+        return EMBEDDED_EXAMPLES.iter().map(|(n, s)| (n.to_string(), s.to_string())).collect();
+    };
     let mut out = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&ctx.examples_dir) {
+    if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) != Some("synth") {
                 continue;
             }
             let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
-            // First comment line that has words in it (skips box-drawing banners).
-            let first_line = std::fs::read_to_string(&path)
-                .ok()
-                .and_then(|s| {
-                    s.lines()
-                        .take(8)
-                        .map(|l| l.trim_start_matches('#').trim().trim_matches(|c: char| !c.is_alphanumeric()).trim().to_string())
-                        .find(|l| l.chars().filter(|c| c.is_alphabetic()).count() >= 4)
-                })
-                .unwrap_or_default();
-            out.push((name, first_line));
+            if let Ok(source) = std::fs::read_to_string(&path) {
+                out.push((name, source));
+            }
         }
     }
     out.sort();
     out
 }
 
+fn list_examples(ctx: &Ctx) -> Vec<(String, String)> {
+    example_sources(ctx).into_iter().map(|(name, source)| {
+        // First comment line that has words in it (skips box-drawing banners).
+        let first_line = source.lines()
+            .take(8)
+            .map(|l| l.trim_start_matches('#').trim().trim_matches(|c: char| !c.is_alphanumeric()).trim().to_string())
+            .find(|l| l.chars().filter(|c| c.is_alphabetic()).count() >= 4)
+            .unwrap_or_default();
+        (name, first_line)
+    }).collect()
+}
+
 fn tool_examples(ctx: &Ctx, args: &Value) -> Result<String, String> {
+    let examples = example_sources(ctx);
     match args.get("name").and_then(Value::as_str) {
-        Some(name) => {
-            if name.contains('/') || name.contains("..") {
-                return Err("invalid example name".into());
-            }
-            let path = ctx.examples_dir.join(format!("{}.synth", name));
-            std::fs::read_to_string(&path).map_err(|_| {
-                let names: Vec<String> = list_examples(ctx).into_iter().map(|(n, _)| n).collect();
-                format!("no example '{}'. Available: {}", name, names.join(", "))
-            })
-        }
+        Some(name) => examples.iter().find(|(n, _)| n == name).map(|(_, s)| s.clone()).ok_or_else(|| {
+            let names: Vec<&str> = examples.iter().map(|(n, _)| n.as_str()).collect();
+            format!("no example '{}'. Available: {}", name, names.join(", "))
+        }),
         None => {
-            let list = list_examples(ctx);
-            if list.is_empty() {
-                return Err(format!("no examples found in {} (set SYNTH_EXAMPLES_DIR)", ctx.examples_dir.display()));
+            if examples.is_empty() {
+                let dir = ctx.examples_dir.as_deref().map(|d| d.display().to_string()).unwrap_or_default();
+                return Err(format!("no examples found in {} (SYNTH_EXAMPLES_DIR)", dir));
             }
-            Ok(list.iter().map(|(n, d)| format!("- {}: {}", n, d)).collect::<Vec<_>>().join("\n"))
+            Ok(list_examples(ctx).iter().map(|(n, d)| format!("- {}: {}", n, d)).collect::<Vec<_>>().join("\n"))
         }
     }
 }
@@ -824,9 +831,13 @@ mod tests {
 
     fn ctx() -> Ctx {
         Ctx {
-            examples_dir: Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples"),
+            examples_dir: None,
             render_dir: std::env::temp_dir().join("tatum-mcp-tests"),
         }
+    }
+
+    fn example(name: &str) -> String {
+        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples").join(format!("{}.synth", name))).unwrap()
     }
 
     fn call(ctx: &Ctx, msg: Value) -> Value {
@@ -872,7 +883,7 @@ mod tests {
     #[test]
     fn check_and_render_an_example() {
         let c = ctx();
-        let src = std::fs::read_to_string(c.examples_dir.join("acid_arp.synth")).unwrap();
+        let src = example("acid_arp");
         let r = call(&c, json!({ "jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": { "name": "tatum_check", "arguments": { "source": src } } }));
         assert_eq!(r["result"]["isError"], false, "{}", r);
         let text = r["result"]["content"][0]["text"].as_str().unwrap();
@@ -896,7 +907,7 @@ mod tests {
     #[test]
     fn tools_write_only_inside_the_render_directory() {
         let c = ctx();
-        let src = std::fs::read_to_string(c.examples_dir.join("acid_arp.synth")).unwrap();
+        let src = example("acid_arp");
         let outside = std::env::temp_dir().join("tatum-mcp-escape.wav");
         let _ = std::fs::remove_file(&outside);
         for (tool, output) in [
@@ -935,7 +946,7 @@ mod tests {
     #[test]
     fn debug_takes_an_example_apart() {
         let c = ctx();
-        let src = std::fs::read_to_string(c.examples_dir.join("acid_arp.synth")).unwrap();
+        let src = example("acid_arp");
         let dir = c.render_dir.join("debug_test");
         let r = call(&c, json!({ "jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": { "name": "tatum_debug",
             "arguments": { "source": src, "output": "debug_test", "bars": "3-4", "mute": ["drums"] } } }));
@@ -964,6 +975,14 @@ mod tests {
         assert!(r["result"]["contents"][0]["text"].as_str().unwrap().contains("| `cutoff` |"));
         let r = call(&c, json!({ "jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": { "name": "tatum_examples", "arguments": { "name": "../secret" } } }));
         assert_eq!(r["result"]["isError"], true);
+    }
+
+    #[test]
+    fn the_compiled_in_examples_are_the_repo_examples() {
+        let embedded = example_sources(&ctx());
+        let on_disk = example_sources(&Ctx { examples_dir: Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples")), ..ctx() });
+        assert!(embedded.len() > 10);
+        assert_eq!(embedded, on_disk);
     }
 
     #[test]

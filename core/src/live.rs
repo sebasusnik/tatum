@@ -633,17 +633,24 @@ pub enum Applied {
 /// built for.
 type InheritMaps = Vec<(Generation, Inherit)>;
 
-/// An engine the player is done with. Drop it off the audio thread.
-pub struct Retired {
-    pub engine: Box<SongEngine>,
-    /// Never read: held so its memory is freed with the engine, off-thread.
+/// Something the player is done with: an engine and its inherit maps, or the
+/// op list of a plan it has applied. Drop it off the audio thread.
+pub struct Retired(
+    /// Never read: held so its memory is freed wherever this is dropped.
     #[allow(dead_code)]
-    maps: InheritMaps,
+    Spent,
+);
+
+// Never read: what it holds is only there to be freed with it.
+#[allow(dead_code)]
+enum Spent {
+    Engine(Box<SongEngine>, InheritMaps),
+    Ops(Vec<FastOp>),
 }
 
-/// Audio-thread half. Nothing in here allocates once constructed, except
-/// `apply` when handed more retired engines than it has room for, which then
-/// drops one in place rather than lose it.
+/// Audio-thread half. Nothing in here allocates or frees once constructed,
+/// except `apply` when handed more to retire than it has room for, which
+/// then drops one in place rather than lose it.
 pub struct LivePlayer {
     engine: Option<Box<SongEngine>>,
     generation: Generation,
@@ -687,8 +694,12 @@ impl LivePlayer {
     pub fn take_retired(&mut self) -> Option<Retired> { self.retired.pop() }
 
     fn retire(&mut self, engine: Box<SongEngine>, maps: Vec<(Generation, Inherit)>) {
+        self.discard(Spent::Engine(engine, maps));
+    }
+
+    fn discard(&mut self, spent: Spent) {
         if self.retired.len() < self.retired.capacity() {
-            self.retired.push(Retired { engine, maps });
+            self.retired.push(Retired(spent));
         }
         // Otherwise it drops here. The caller is not draining `take_retired`.
     }
@@ -705,13 +716,17 @@ impl LivePlayer {
                         _ => None,
                     }
                 };
-                match target {
+                let applied = match target {
                     Some(engine) => {
                         for op in &ops { apply_op(engine, *op); }
                         Applied::Fast
                     }
                     None => Applied::Stale,
-                }
+                };
+                // The list was allocated by the planner; it is freed with the
+                // retired engines, not here.
+                self.discard(Spent::Ops(ops));
+                applied
             }
             Plan::Control { base, op } => {
                 let target = if self.generation == base {

@@ -59,7 +59,9 @@ claude mcp add tatum -- /path/to/tatum/target/release/tatum-mcp
 
 Environment variables:
 
-- `SYNTH_EXAMPLES_DIR`: where `tatum_examples` looks (default: the repo's `examples/`).
+- `SYNTH_EXAMPLES_DIR`: a directory of `.synth` files for `tatum_examples` to serve
+  instead of the ones compiled into the server (the repo's `examples/` at build
+  time, so an installed server has them too).
 - `SYNTH_RENDER_DIR`: where `tatum_render` and `tatum_debug` write (default:
   `<tmp>/tatum-renders`). Their `output` is a name inside it (`song.wav`,
   `drafts/v2.wav`, `debug/take2`); absolute paths and `..` are refused, so a

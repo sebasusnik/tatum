@@ -9,6 +9,9 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 static ALLOCS: AtomicUsize = AtomicUsize::new(0);
+/// Frees, counted separately: a free takes the allocator's lock as much as an
+/// allocation does, but only the fast-edit test asks about them so far.
+static FREES: AtomicUsize = AtomicUsize::new(0);
 static COUNTING: AtomicBool = AtomicBool::new(false);
 
 struct Counting;
@@ -21,6 +24,9 @@ unsafe impl GlobalAlloc for Counting {
         unsafe { System.alloc(layout) }
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        if COUNTING.load(Ordering::Relaxed) {
+            FREES.fetch_add(1, Ordering::Relaxed);
+        }
         unsafe { System.dealloc(ptr, layout) }
     }
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
@@ -164,4 +170,40 @@ fn live_swap_never_allocates() {
     let mut retired = 0;
     while player.take_retired().is_some() { retired += 1; }
     assert_eq!(retired, 2, "both old engines must come back for dropping");
+}
+
+/// A value edit arrives as a list of ops the planner allocated. Applying it
+/// on the audio thread must not free the list there: it comes back through
+/// `take_retired` like an engine, to be dropped off-thread.
+#[test]
+fn a_fast_edit_frees_nothing_on_the_audio_thread() {
+    use tatum_core::live::{Applied, LivePlanner, LivePlayer};
+
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    assert_eq!(player.apply(planner.plan(SONG, player.generation()).expect("compiles")), Applied::Loaded);
+    player.start();
+    let mut l = [0.0f32; BLOCK_SIZE];
+    let mut r = [0.0f32; BLOCK_SIZE];
+    for _ in 0..16 {
+        player.process(&mut l, &mut r);
+    }
+    let edit = SONG.replace("module bass low { cutoff 0.4 }", "module bass low { cutoff 0.6 }");
+    let plan = planner.plan(&edit, player.generation()).expect("compiles");
+
+    ALLOCS.store(0, Ordering::Relaxed);
+    FREES.store(0, Ordering::Relaxed);
+    COUNTING.store(true, Ordering::Relaxed);
+    let applied = player.apply(plan);
+    for _ in 0..16 {
+        player.process(&mut l, &mut r);
+    }
+    COUNTING.store(false, Ordering::Relaxed);
+
+    assert_eq!(applied, Applied::Fast);
+    let (a, f) = (ALLOCS.load(Ordering::Relaxed), FREES.load(Ordering::Relaxed));
+    assert_eq!((a, f), (0, 0), "a fast edit allocated {} and freed {} times on the audio thread", a, f);
+    let mut retired = 0;
+    while player.take_retired().is_some() { retired += 1; }
+    assert_eq!(retired, 1, "the op list must come back for dropping");
 }
