@@ -256,7 +256,10 @@ fn cmd_render(args: &[String]) {
 
     engine.set_band_metering(true);
     engine.reset_meters();
-    let (out_l, out_r) = engine.render(render_bars);
+    // Listened to as it renders: what `tatum debug` would find, said here.
+    let mut listener = tatum_debug::Listener::new(&mut engine);
+    let (out_l, out_r) = engine.render_each(render_bars, |e, l, r| listener.feed(e, l, r));
+    let heard = listener.findings();
 
     if out_l.iter().chain(out_r.iter()).any(|v| !v.is_finite()) {
         eprintln!("error: render produced non-finite samples (an effect is unstable)");
@@ -375,6 +378,15 @@ fn cmd_render(args: &[String]) {
     );
 
     write_wav_stereo(&output_path, &out_l, &out_r, 44100);
+    if heard.is_empty() {
+        eprintln!("heard: no clicks, no noise between notes, nothing under 25 Hz or over 16 kHz.");
+    } else {
+        eprintln!("heard:");
+        for line in &heard {
+            eprintln!("  {line}");
+        }
+        eprintln!("  `tatum debug {path}` shows each one up close, with every part on its own.");
+    }
     eprintln!("done.");
 }
 

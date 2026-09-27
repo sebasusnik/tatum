@@ -206,6 +206,10 @@ loudest track) plus the low/mid/high balance of each section. Read it before tru
 mix: a track more than 30 dB down is inaudible, a section above 80% midrange sounds boxy,
 and a section at the limiter ceiling has had its dynamics flattened.
 
+Every render also says what it heard, the checks `tatum debug` makes, listened for in the
+same pass: clicks, noise between notes, energy under 25 Hz or over 16 kHz, a wave off
+centre. Each names the part and the bar; `tatum debug` shows it up close.
+
 **How loud the song is, is not the song's to set.** The engine ends every song in an
 output stage after the master chain: a gain that brings it to -18 LUFS, the loudness
 every song plays at, and a limiter that keeps its true peak (the wave between the

@@ -457,7 +457,9 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let mut engine = SongEngine::normalized(song);
     engine.set_band_metering(true);
     engine.reset_meters();
-    let (l, r) = engine.render(bars);
+    let mut listener = tatum_debug::Listener::new(&mut engine);
+    let (l, r) = engine.render_each(bars, |e, bl, br| listener.feed(e, bl, br));
+    let heard = listener.findings();
     // Per-track levels: post level and pan, before the master chain. Peak and
     // RMS both, because they rank differently: a sparse bass reads far below a
     // continuous drone on RMS while peaking higher, and trusting RMS alone once
@@ -690,6 +692,12 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
         ));
     }
 
+    if !heard.is_empty() {
+        hints.push(format!(
+            "heard in the render: {}. Run `tatum_debug` to see each one up close, with every part on its own.",
+            heard.join("; ")
+        ));
+    }
     let hint = if hints.is_empty() { Value::Null } else { json!(hints.join(" | ")) };
 
     Ok(serde_json::to_string_pretty(&json!({
@@ -709,6 +717,7 @@ fn tool_render(ctx: &Ctx, args: &Value) -> Result<String, String> {
             "crest_change_db": round1(crest_loss),
         },
         "stereo_width_above_250hz_pct": round1(mix_width),
+        "heard": heard,
         "sections": report,
         "tracks": track_report,
         "buses": bus_report,

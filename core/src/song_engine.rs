@@ -2584,6 +2584,13 @@ impl SongEngine {
 
     /// Render the entire song (or specified number of bars) to stereo buffers.
     pub fn render(&mut self, bars: u32) -> (Vec<f32>, Vec<f32>) {
+        self.render_each(bars, |_, _, _| {})
+    }
+
+    /// [`Self::render`], handing each block to `each` as it is made, with
+    /// the engine so its taps can be read: how `tatum render` listens for
+    /// clicks and noise in the same pass that writes the file.
+    pub fn render_each(&mut self, bars: u32, mut each: impl FnMut(&Self, &[f32], &[f32])) -> (Vec<f32>, Vec<f32>) {
         let total_samples = (bars as f32 * self.steps_per_bar as f32 * self.samples_per_step) as usize;
         let mut out_l = Vec::with_capacity(total_samples + BLOCK_SIZE);
         let mut out_r = Vec::with_capacity(total_samples + BLOCK_SIZE);
@@ -2596,6 +2603,7 @@ impl SongEngine {
             let mut bl = [0.0f32; BLOCK_SIZE];
             let mut br = [0.0f32; BLOCK_SIZE];
             self.process_block_stereo(&mut bl[..chunk], &mut br[..chunk]);
+            each(self, &bl[..chunk], &br[..chunk]);
             out_l.extend_from_slice(&bl[..chunk]);
             out_r.extend_from_slice(&br[..chunk]);
             rendered += chunk;

@@ -29,6 +29,10 @@ where the time actually goes:
 - `master`: crest factor entering the master chain and leaving the engine. A
   large drop means the master chain or the output limiter is eating the
   transients.
+- `heard`: what `tatum_debug` would find, listened for while rendering:
+  clicks, noise between notes, energy under 25 Hz or over 16 kHz, a wave off
+  centre. Each line names the parts and the bar; run `tatum_debug` for the
+  pictures.
 - `output_gain_db`: what the engine added or took off to bring the song to
   -18 LUFS. Every song plays at that loudness whatever its mix, so this is not
   a number to chase.

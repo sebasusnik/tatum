@@ -171,7 +171,7 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
     let columns = (end - start).div_ceil(hop);
 
     prepare_dir(&opts.out_dir)?;
-    let mut parts = plan_parts(&engine, opts.dry, hop, &opts.out_dir)?;
+    let mut parts = plan_parts(&engine, opts.dry, hop, Some(&opts.out_dir))?;
 
     // For each block fed: where it ended, and which tracks held a note.
     let mut held_log: Vec<(usize, Vec<bool>)> = Vec::new();
@@ -454,6 +454,105 @@ pub fn run(song: CompiledSong, title: &str, isolation: &Isolation, opts: &Option
     Ok(Outcome { report: r, sheet: sheet_path })
 }
 
+/// Listens to a render as it is made, for `tatum render` and `tatum_render`:
+/// the clicks, the noise between notes and the two ends of the range that
+/// [`run`] reports, found in the same pass that writes the file and written
+/// nowhere. Until this, they turned up only for whoever thought to run
+/// `tatum debug`. Two parts in each other's way need the fine spectrograms,
+/// which would make every render slow, so they stay in `run`.
+pub struct Listener {
+    parts: Vec<Part>,
+    held_log: Vec<(usize, Vec<bool>)>,
+    clock: Clock,
+    pos: usize,
+}
+
+/// A spectrogram column every tenth of a second: enough to tell hiss from a
+/// tone, and nearly free.
+const LISTEN_HOP: usize = SAMPLE_RATE as usize / 10;
+
+impl Listener {
+    /// Turns the engine's taps on; hand it every block from then on.
+    pub fn new(engine: &mut SongEngine) -> Listener {
+        engine.set_taps(true);
+        let parts = plan_parts(engine, false, LISTEN_HOP, None).expect("no files to open");
+        Listener { parts, held_log: Vec::new(), clock: Clock::new(engine), pos: 0 }
+    }
+
+    /// One block of the render: the mix, and the engine for its taps.
+    pub fn feed(&mut self, engine: &SongEngine, l: &[f32], r: &[f32]) {
+        let Some(taps) = engine.taps() else { return };
+        let n = l.len();
+        for p in self.parts.iter_mut() {
+            let (pl, pr) = p.source.pick(taps, l, r);
+            let _ = p.push(&pl[..n], &pr[..n]);
+        }
+        self.pos += n;
+        self.held_log.push((self.pos, taps.held.clone()));
+    }
+
+    /// One line per kind of problem heard, each naming the parts and where.
+    /// Empty when there is nothing to say.
+    pub fn findings(self) -> Vec<String> {
+        let Listener { parts, held_log, clock, .. } = self;
+        let at = |frame: usize| clock.at(frame * FRAME);
+        let mut out = Vec::new();
+
+        let clicks: Vec<String> = parts.iter()
+            .filter(|p| p.source != Source::Mix && !p.silent())
+            .filter_map(|p| {
+                let c = listen::clicks(&p.frames);
+                let first = c.first()?;
+                let more = if c.len() > 1 { format!(", {} in all", c.len()) } else { String::new() };
+                Some(format!("{} at {}{}", p.label, at(first.frame), more))
+            })
+            .collect();
+        if !clicks.is_empty() { out.push(format!("clicks: {}", clicks.join("; "))); }
+
+        let held = |ti: usize, frame: usize| -> bool {
+            let s = frame * FRAME;
+            let k = held_log.partition_point(|(e, _)| *e <= s);
+            held_log.get(k).is_some_and(|(_, h)| h[ti])
+        };
+        let floors: Vec<String> = parts.iter()
+            .filter_map(|p| {
+                let Source::Track(ti) = p.source else { return None };
+                if !p.tonal { return None }
+                let fl = listen::floors(&p.frames, &|f| held(ti, f));
+                let worst = fl.iter().max_by(|a, b| a.db.partial_cmp(&b.db).unwrap())?;
+                Some(format!("{} at {}, {:.0} dB, {}", p.label, at(worst.start), worst.db, floor_character(p, worst, LISTEN_HOP)))
+            })
+            .collect();
+        if !floors.is_empty() { out.push(format!("not quiet between notes: {}", floors.join("; "))); }
+
+        let share = |p: &Part, band: &Vec<f32>, over: f32| {
+            let s = listen::share_db(&p.frames, band);
+            (s >= over).then(|| format!("{} {:.0}%", p.label, 10f32.powf(s / 10.0) * 100.0))
+        };
+        let low: Vec<String> = parts.iter()
+            .filter(|p| p.source != Source::Mix)
+            .filter_map(|p| share(p, &p.frames.low, RUMBLE_SHARE_DB))
+            .collect();
+        if !low.is_empty() {
+            out.push(format!("under {:.0} Hz, where no speaker plays: {}", listen::RUMBLE_HZ, low.join(", ")));
+        }
+        let high: Vec<String> = parts.iter()
+            .filter(|p| p.tonal && matches!(p.source, Source::Track(_)))
+            .filter_map(|p| share(p, &p.frames.high, FIZZ_SHARE_DB))
+            .collect();
+        if !high.is_empty() {
+            out.push(format!("over {:.0} kHz on a tonal track: {}", listen::FIZZ_HZ / 1000.0, high.join(", ")));
+        }
+
+        let off: Vec<String> = parts.iter()
+            .filter(|p| p.samples > 0 && (p.sum / p.samples as f64).abs() > 0.01)
+            .map(|p| format!("{} ({:+.3})", p.label, p.sum / p.samples as f64))
+            .collect();
+        if !off.is_empty() { out.push(format!("off centre (DC): {}", off.join(", "))); }
+        out
+    }
+}
+
 /// A part under this level in a section is not playing in it.
 const PLAYING_DB: f32 = -70.0;
 /// A track this far under the loudest one in its section is buried: there,
@@ -581,7 +680,9 @@ fn prepare_dir(dir: &Path) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))
 }
 
-fn plan_parts(engine: &SongEngine, dry: bool, hop: usize, dir: &Path) -> Result<Vec<Part>, String> {
+/// Every part of the song, each with its own listening state; with a WAV
+/// file for each in `dir`, when there is one.
+fn plan_parts(engine: &SongEngine, dry: bool, hop: usize, dir: Option<&Path>) -> Result<Vec<Part>, String> {
     let mut specs: Vec<(String, String, Source, bool)> = Vec::new();
     for i in 0..engine.track_count() {
         let name = engine.track_name(i);
@@ -600,7 +701,10 @@ fn plan_parts(engine: &SongEngine, dry: bool, hop: usize, dir: &Path) -> Result<
     specs.push(("mix".into(), "mix".into(), Source::Mix, false));
     specs.into_iter().map(|(label, file, source, tonal)| {
         Ok(Part {
-            wav: Some(WavWriter::create(&dir.join(format!("{file}.wav")))?),
+            wav: match dir {
+                Some(dir) => Some(WavWriter::create(&dir.join(format!("{file}.wav")))?),
+                None => None,
+            },
             label, file, source, tonal,
             spec: Spectrogram::new(hop),
             frames: Frames::default(),
