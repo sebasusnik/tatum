@@ -14,14 +14,14 @@ humanize 0.25 timing 0.15
 # ────────────────────────────────────────────────
 
 module bass funk_bass {
-    cutoff 0.08
-    cutoff_env 0.7
+    cutoff 34.756hz
+    cutoff_env 1325.78hz
     resonance 0.75
     glide 0.15
     keytrack 0.5
-    osc2_pitch 0.25
+    osc2_pitch -12st
     osc1_wave saw
-    attack 0.0
+    attack 1ms
 }
 
 module fm clav {
@@ -34,7 +34,7 @@ module fm clav {
 # Pad: Am7 chord — poly mode, uses default ADSR (0.3s/0.5s/0.7/1.0s) matching reference
 module keys pad {
     voice_mode poly
-    cutoff 0.15
+    cutoff 399.052hz
     detune 0.10
     chorus_mix 0.2
 }
@@ -53,11 +53,11 @@ module beats drums {
 }
 
 module keys arp {
-    cutoff 0.15
-    attack 0.0
-    decay 0.15
+    cutoff 399.052hz
+    attack 1ms
+    decay 3.1272ms
     sustain 0.3
-    release 0.08
+    release 1.8369ms
 }
 
 # ────────────────────────────────────────────────

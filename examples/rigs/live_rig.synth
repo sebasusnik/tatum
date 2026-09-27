@@ -36,20 +36,20 @@ delay sync=dotted_eighth feedback=0.4
 module beats kit { kick_level 1.0 snare_level 0.7 hihat_level 0.5 hihat_pan 0.35 }
 module bass sub { cutoff 110hz sustain 0.9 }
 module bass reese { cutoff 480hz resonance 40% sustain 0.7 }
-module keys pad_warm { voice_mode poly cutoff 0.45 attack 0.8 release 0.9
+module keys pad_warm { voice_mode poly cutoff 1588.66hz attack 437.345ms release 935.25ms
                        lfo_target cutoff lfo_sync bars_8 lfo_depth 0.1 }
-module keys pad_glass { voice_mode poly cutoff 0.65 detune 0.3 attack 0.9 release 1.0
+module keys pad_glass { voice_mode poly cutoff 3990.52hz detune 0.3 attack 935.25ms release 2000ms
                         lfo_target cutoff lfo_sync bars_16 lfo_depth 0.12 }
 
 # The same instrument twice, voiced differently, so a set can cross from one to
 # the other with two faders instead of a swap.
 module fm rhodes_liquid { algorithm dual_pairs mod_index 0.28
-                          op0_ratio 0.032 op1_ratio 0.871 op2_ratio 0.032 op3_ratio 0.097
+                          op0_ratio 0.996x op1_ratio 14.0005x op2_ratio 0.996x op3_ratio 2.0035x
                           chorus_mix 0.3 }
 module fm rhodes_hard { algorithm two_op mod_index 0.55 feedback 0.2
-                        op0_ratio 0.032 op1_ratio 0.871 }
+                        op0_ratio 0.996x op1_ratio 14.0005x }
 module fm bell { algorithm pair_plus_two mod_index 0.7 feedback 0.3
-                 op0_ratio 0.13 op1_ratio 0.29 op2_ratio 0.42 op3_ratio 0.16 }
+                 op0_ratio 2.515x op1_ratio 4.995x op2_ratio 7.01x op3_ratio 2.98x }
 
 # ──────────────────────────────── parts
 

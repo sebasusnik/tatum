@@ -17,11 +17,11 @@ module fm bell {
     mod_index 0.45
     feedback 0.15
     waveform sine
-    op0_ratio 0.065
-    op1_ratio 0.194
+    op0_ratio 1.5075x
+    op1_ratio 3.507x
     op0_envelope 0.001 0.6 0.0 0.8
     op1_envelope 0.001 1.0 0.0 0.5
-    lfo_rate 0.04
+    lfo_rate 0.896hz
     lfo_depth 0.02
     lfo_target mod_index
 }
@@ -32,14 +32,14 @@ module fm scream {
     mod_index 0.82
     feedback 0.55
     waveform half_sine
-    op0_ratio 0.065
-    op1_ratio 0.10
+    op0_ratio 1.5075x
+    op1_ratio 2.05x
     op0_envelope 0.005 0.20 0.35 0.15
     op1_envelope 0.001 0.08 0.60 0.10
     chorus_mix 0.15
-    vibrato_rate 0.55
+    vibrato_rate 5.725hz
     vibrato_depth 0.12
-    lfo_rate 0.15
+    lfo_rate 3.085hz
     lfo_depth 0.10
     lfo_target mod_index
 }
@@ -50,10 +50,10 @@ module fm glitch {
     mod_index 0.65
     feedback 0.40
     waveform abs_sine
-    op0_ratio 0.065
-    op1_ratio 0.42
-    op2_ratio 0.29
-    op3_ratio 0.16
+    op0_ratio 1.5075x
+    op1_ratio 7.01x
+    op2_ratio 4.995x
+    op3_ratio 2.98x
     op0_envelope 0.0005 0.02 0.0 0.01
     op1_envelope 0.0005 0.04 0.0 0.02
     op2_envelope 0.0005 0.015 0.0 0.01
@@ -71,11 +71,11 @@ module fm evolve {
     op0_envelope 0.8 0.5 0.60 1.2
     op1_envelope 0.3 0.8 0.45 0.8
     op2_envelope 0.5 1.0 0.35 1.0
-    op0_ratio 0.065
-    op1_ratio 0.13
-    op2_ratio 0.065
+    op0_ratio 1.5075x
+    op1_ratio 2.515x
+    op2_ratio 1.5075x
     chorus_mix 0.55
-    lfo_rate 0.03
+    lfo_rate 0.697hz
     lfo_depth 0.15
     lfo_target mod_index
     lfo_waveform triangle
@@ -87,8 +87,8 @@ module fm acid {
     mod_index 0.70
     feedback 0.30
     waveform sine
-    op0_ratio 0.065
-    op1_ratio 0.065
+    op0_ratio 1.5075x
+    op1_ratio 1.5075x
     op0_envelope 0.001 0.10 0.0 0.05
     op1_envelope 0.001 0.06 0.0 0.03
     op1_feedback 0.25
@@ -100,10 +100,10 @@ module fm drone {
     mod_index 0.60
     feedback 0.50
     waveform sine
-    op0_ratio 0.065
-    op1_ratio 0.068
-    op2_ratio 0.19
-    op3_ratio 0.26
+    op0_ratio 1.5075x
+    op1_ratio 1.554x
+    op2_ratio 3.445x
+    op3_ratio 4.53x
     op0_envelope 1.5 0.5 0.70 2.0
     op1_envelope 1.2 0.8 0.65 1.5
     op2_envelope 0.8 0.6 0.50 1.8
@@ -111,7 +111,7 @@ module fm drone {
     op0_feedback 0.30
     op2_feedback 0.40
     chorus_mix 0.65
-    lfo_rate 0.02
+    lfo_rate 0.498hz
     lfo_depth 0.08
     lfo_target mod_index
     lfo_waveform saw
@@ -123,8 +123,8 @@ module fm subkick {
     mod_index 0.25
     feedback 0.05
     waveform sine
-    op0_ratio 0.032
-    op1_ratio 0.097
+    op0_ratio 0.996x
+    op1_ratio 2.0035x
     op0_envelope 0.001 0.25 0.0 0.08
     op1_envelope 0.001 0.015 0.0 0.01
 }
@@ -138,12 +138,12 @@ module beats kit {
 
     snare_level 1.10
     snare_decay 0.35
-    snare_pitch 0.60
+    snare_pitch 1.4x
     snare_drive 0.50
     snare_snap 0.75
 
     hihat_level 0.45
-    hihat_pitch 0.42
+    hihat_pitch 1.13x
     hihat_decay 0.30
 
     clap_level 0.65

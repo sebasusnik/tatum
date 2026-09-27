@@ -6,7 +6,7 @@ const SONG: &str = r#"
 tempo 120
 scale A minor
 sidechain 0.3
-module keys pad { cutoff 0.3 }
+module keys pad { cutoff 1khz }
 module beats kit { kick_level 1.0 }
 pattern hold { [1.3 3.3 5.3] .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. }
 pattern beat { kick: X - - - X - - - X - - - X - - - }
@@ -32,7 +32,7 @@ fn pad_lints(src: &str) -> Vec<&'static str> {
 #[test]
 fn static_pad_is_flagged_and_modulation_clears_it() {
     assert_eq!(pad_lints(SONG), vec!["static_pad"]);
-    let moving = SONG.replace("module keys pad { cutoff 0.3 }", "module keys pad { cutoff 0.3 lfo_target cutoff lfo_depth 0.2 }");
+    let moving = SONG.replace("module keys pad { cutoff 1khz }", "module keys pad { cutoff 1khz lfo_target cutoff lfo_depth 0.2 }");
     assert!(pad_lints(&moving).is_empty());
     // Automating only scene b still leaves scene a static, and the message says so
     let half = SONG.replace("scene b { track pad { play hold using pad } }", "scene b { auto pad cutoff 0.2 > 0.6 track pad { play hold using pad } }");
@@ -66,7 +66,7 @@ fn mix_and_arrangement_lints() {
 #[test]
 fn sidechain_without_kick_in_a_scene() {
     // scene b has no drums; the pad inherits the global sidechain
-    let l = lints(&SONG.replace("module keys pad { cutoff 0.3 }", "module keys pad { cutoff 0.3 lfo_target cutoff lfo_depth 0.2 }"));
+    let l = lints(&SONG.replace("module keys pad { cutoff 1khz }", "module keys pad { cutoff 1khz lfo_target cutoff lfo_depth 0.2 }"));
     assert_eq!(l, vec!["sidechain_without_kick"], "{:?}", l);
 }
 
@@ -100,4 +100,13 @@ fn riding_the_level_of_a_sustained_bed_is_flagged() {
         .replace("scene b { track pad { play hold using pad } }",
                  "scene b { track pad { play hold using pad level 0.80 } }");
     assert!(!lints(&src).contains(&"level_used_as_fader"), "{:?}", lints(&src));
+}
+
+#[test]
+fn a_knob_position_on_a_parameter_with_a_unit_is_flagged() {
+    let bare = SONG.replace("cutoff 1khz", "cutoff 0.3");
+    assert!(lints(&bare).contains(&"bare_number"));
+    assert!(!lints(SONG).contains(&"bare_number"));
+    // A parameter without a unit is fine as a number.
+    assert!(!lints(&SONG.replace("cutoff 1khz", "cutoff 1khz resonance 0.3")).contains(&"bare_number"));
 }

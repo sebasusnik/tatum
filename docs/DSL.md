@@ -64,7 +64,10 @@ is an error naming what the parameter does take, so `cutoff 20ms` does not quiet
 become 20. The `in units` column of PARAMS.md gives each parameter's span and its
 default in units.
 
-Write what you mean, in units, and let the float form be the output of a tool.
+Write what you mean, in units, and let the float form be the output of a tool. A plain
+number on a parameter that has a unit gets a `bare_number` warning with its value in
+units, and `tatum fmt --units song.synth` rewrites all of them in place. It writes each
+value with as few decimals as read back to the same knob, so the song sounds the same.
 Units are as precise as you write them; a resonant filter can hear the difference
 between `91.4hz` and `91.37hz`, so keep a digit more than feels necessary when you
 are matching an existing sound.
@@ -795,6 +798,7 @@ never moves" instead of only "this parses". Each one came from a real session.
 | `no_sidechain` | drums and tonal tracks with no ducking anywhere | the kick has to fight through the mix |
 | `sidechain_without_kick` | a scene ducks tracks but has no beats track | those tracks play unducked, so a breakdown can end up louder than the drop |
 | `single_scene` | more than 8 bars in one scene | no arrangement shape |
+| `bare_number` | a module parameter with a unit (Hz, ms, semitones, ratio) is written as a plain number | the number is where the knob sits, not what it does: `cutoff 0.1` says nothing a reader can hear. `tatum fmt --units` rewrites them all |
 | `master_limiter` | the master chain has a `limiter` | it is left out: the engine limits every song on its true peak, after the gain that levels it, so a limiter before that gain would limit a level that is about to change |
 | `chorus_beats` | a voice whose notes are **all** above ~530 Hz goes through `chorus_mix`, counting the octaves an `arp` lifts them by | a chorus reads a delay line whose length is moving, which resamples: the copy comes out detuned by about ±3.8%, and it then beats against the dry signal at `f × 0.038`. That is 3 Hz on a low E and 42 Hz on a C#6, and past about 20 Hz the ear stops hearing two tones and starts hearing roughness — which on a clean tone is indistinguishable from distortion. Chord tops are exempt, because the beat is buried under the notes below them — but **not** when an `arp` is playing them, since an arp sounds them one at a time and there is nothing underneath. A non-poly `keys` voice is exempt too: its chorus never runs |
 | `unused_module` / `unused_pattern` | defined but never played | usually a typo in a `using` or `play` name. A file with no `arrange` is a rig rather than a song, so three or more unplayed patterns come as one line: there they are the palette, not a mistake |

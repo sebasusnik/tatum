@@ -305,7 +305,14 @@ impl ParamSpec {
                     return Err(self.unit_help(suffix));
                 }
                 let real = value * factor;
-                let knob = self.curve.to_knob(real);
+                let mut knob = self.curve.to_knob(real);
+                // The curve goes through the engine's approximate `log`, so
+                // the top of a range written exactly (`attack 2s`) can land a
+                // hair past the end of the knob. That is the end of the knob.
+                if let Range::Unit = self.range {
+                    if (-1e-3..0.0).contains(&knob) { knob = 0.0 }
+                    if (1.0..1.0 + 1e-3).contains(&knob) { knob = 1.0 }
+                }
                 if !self.range.contains(knob) {
                     return Err(alloc::format!(
                         "'{}' = {}{} is outside {}",
@@ -315,6 +322,45 @@ impl ParamSpec {
                 Ok(knob)
             }
         }
+    }
+
+    /// A knob position written in this parameter's unit, with as few decimals
+    /// as read back to the same knob, or `None` when it has no unit. What
+    /// `tatum fmt --units` writes, so a song rewritten by it sounds the same.
+    pub fn write_in_units(&self, knob: f32) -> Option<String> {
+        let unit = self.curve.unit()?;
+        let suffix = unit.suffix();
+        let back = |real: f32| self.value_from_quantity(real, suffix).ok();
+        // The quantity the knob maps to does not read back as the same knob:
+        // the curves go through the engine's own `exp` and `log`, which do
+        // not quite invert each other, and the round trip moved a knob by up
+        // to 1e-4 -- enough to be heard drifting over a whole song. So the
+        // quantity is searched for, by what it reads back as.
+        let mut lo = self.curve.to_real(knob - 0.01);
+        let mut hi = self.curve.to_real(knob + 0.01);
+        let rising = back(hi).zip(back(lo)).is_none_or(|(h, l)| h >= l);
+        if !rising { core::mem::swap(&mut lo, &mut hi); }
+        for _ in 0..64 {
+            let mid = (lo + hi) * 0.5;
+            let below = match back(mid) {
+                Some(k) => k < knob,
+                None => mid < self.curve.to_real(knob),
+            };
+            if below == rising { lo = mid } else { hi = mid }
+        }
+        let real = (lo + hi) * 0.5;
+        let mut best = (f32::MAX, String::new());
+        for decimals in 0..=6 {
+            let mut text = alloc::format!("{:.*}", decimals, real);
+            if text.contains('.') {
+                text = String::from(text.trim_end_matches('0').trim_end_matches('.'));
+            }
+            let miss = text.parse::<f32>().ok().and_then(back)
+                .map_or(f32::MAX, |k| crate::math::abs(k - knob));
+            if miss < best.0 { best = (miss, text); }
+            if best.0 <= 1e-6 { break }
+        }
+        Some(alloc::format!("{}{suffix}", best.1))
     }
 
     fn unit_help(&self, suffix: &str) -> String {

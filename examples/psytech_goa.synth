@@ -28,21 +28,21 @@ delay_return  { in > highpass(420, 0.02) > lowpass(7khz, 0.02) > out }
 module beats kit {
     kick_level 1.0
     kick_decay 0.30
-    kick_pitch 0.47
+    kick_pitch 1.205x
     kick_click 0.82
     kick_drive 0.85
     kick_pan 0.0
 
     snare_level 0.45
     snare_decay 0.10
-    snare_pitch 0.42
+    snare_pitch 1.13x
     snare_snap 0.72
     snare_drive 0.45
     snare_pan -0.22
 
     hihat_level 0.92
     hihat_decay 0.24
-    hihat_pitch 0.74
+    hihat_pitch 1.61x
     hihat_pan 0.3
 
     clap_level 0.7
@@ -55,7 +55,7 @@ module beats kit {
 # osc1 so the saturation has a fundamental to chew on.
 module bass roll {
     cutoff 290hz
-    cutoff_env 0.44
+    cutoff_env 279.214hz
     resonance 52%
     glide 0.02
     keytrack 0.4
@@ -74,7 +74,7 @@ module bass roll {
 # harmonics, so the weight has to come from a layer that is never driven.
 module bass sub {
     cutoff 120hz
-    cutoff_env 0.05
+    cutoff_env 26.9857hz
     resonance 8%
     osc1_wave saw
     osc2_pitch 0st
@@ -89,7 +89,7 @@ module bass sub {
 # between the per-scene cutoff sweeps.
 module bass squelch {
     cutoff 600hz      # la automatizacion lo barre 120hz..3.2khz
-    cutoff_env 0.66
+    cutoff_env 1043.25hz
     resonance 87%
     glide 0.07
     keytrack 0.55
@@ -114,10 +114,10 @@ module fm clank {
     mod_index 0.9
     feedback 0.55
     waveform abs_sine
-    op0_ratio 0.41
-    op1_ratio 0.13
-    op2_ratio 0.27
-    op3_ratio 0.08
+    op0_ratio 6.855x
+    op1_ratio 2.515x
+    op2_ratio 4.685x
+    op3_ratio 1.74x
     op0_envelope 0.001 0.07 0.0 0.09
     op1_envelope 0.001 0.11 0.0 0.13
     op2_envelope 0.001 0.05 0.0 0.07
@@ -134,8 +134,8 @@ module fm zap {
     mod_index 0.95
     feedback 0.65
     waveform sine
-    op0_ratio 0.33
-    op1_ratio 0.1
+    op0_ratio 5.615x
+    op1_ratio 2.05x
     op0_envelope 0.001 0.03 0.0 0.02
     op1_envelope 0.001 0.04 0.0 0.03
     lfo_target pitch
@@ -152,15 +152,15 @@ module keys murk {
     chorus_mix 0.18
     cutoff 500hz      # la automatizacion lo barre 240hz..1.1khz
     resonance 8%
-    attack 1.0
-    decay 0.8
+    attack 2000ms
+    decay 437.345ms
     sustain 0.6
-    release 0.9
+    release 935.25ms
     lfo_target cutoff
     lfo_waveform triangle
     lfo_sync bars_8
     lfo_depth 0.2
-    vibrato_rate 0.12
+    vibrato_rate 1.64hz
     vibrato_depth 0.05
     level 0.42
 }
@@ -172,8 +172,8 @@ module fm smear {
     waveform half_sine
     mod_index 0.62
     feedback 0.4
-    op0_ratio 0.032
-    op1_ratio 0.129
+    op0_ratio 0.996x
+    op1_ratio 2.4995x
     op0_envelope 0.005 0.5 0.25 0.5
     op1_envelope 0.003 0.35 0.2 0.35
     lfo_target mod_index
@@ -188,10 +188,10 @@ module fm hiss {
     mod_index 0.62
     feedback 0.35
     waveform abs_sine
-    op0_ratio 0.49
-    op1_ratio 0.17
-    op2_ratio 0.35
-    op3_ratio 0.07
+    op0_ratio 8.095x
+    op1_ratio 3.135x
+    op2_ratio 5.925x
+    op3_ratio 1.585x
     op0_envelope 0.001 1.6 0.25 1.2
     op1_envelope 0.001 1.4 0.30 1.0
     op2_envelope 0.001 1.2 0.28 0.9

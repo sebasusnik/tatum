@@ -6,23 +6,23 @@ swing 0.54
 sidechain 0.35
 
 module bass acid {
-    cutoff 0.22
-    cutoff_env 0.85
+    cutoff 91.418hz
+    cutoff_env 3256.73hz
     resonance 0.82
     glide 0.18
     osc1_wave saw
-    osc2_pitch 0.5
-    attack 0.0
-    decay 0.35
+    osc2_pitch -0st
+    attack 1ms
+    decay 14.3008ms
     sustain 0.2
-    release 0.1
+    release 2.13847ms
 }
 
 module fm pluck {
     algorithm two_op
     waveform sine
     mod_index 0.55
-    op1_ratio 0.097
+    op1_ratio 2.0035x
     op0_envelope 0.001 0.18 0.0 0.12
     op1_envelope 0.001 0.08 0.0 0.05
 }
@@ -40,10 +40,10 @@ module keys wash {
     lfo_target cutoff
     lfo_waveform triangle
     lfo_sync free
-    lfo_rate 0.01
+    lfo_rate 0.299hz
     lfo_depth 0.1
-    attack 0.6
-    release 0.9
+    attack 95.635ms
+    release 935.25ms
 }
 
 module beats kit {

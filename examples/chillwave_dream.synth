@@ -14,15 +14,15 @@ humanize 0.15 timing 0.10
 # Warm pad — lush, detuned, dreamy, the signature chillwave wash
 module keys wash {
     voice_mode poly
-    cutoff 0.20
+    cutoff 502.377hz
     resonance 0.15
     detune 0.09
     chorus_mix 0.35
-    attack 0.6
-    decay 0.4
+    attack 95.635ms
+    decay 20.9128ms
     sustain 0.70
-    release 0.7
-    lfo_rate 0.04
+    release 204.513ms
+    lfo_rate 0.896hz
     lfo_depth 0.06
     lfo_target cutoff
     lfo_waveform sine
@@ -31,47 +31,47 @@ module keys wash {
 # Bright shimmer pad — higher register, airy
 module keys shimmer {
     voice_mode poly
-    cutoff 0.35
+    cutoff 1002.37hz
     resonance 0.10
     detune 0.06
     chorus_mix 0.40
-    attack 0.8
-    decay 0.3
+    attack 437.345ms
+    decay 9.7793ms
     sustain 0.55
-    release 0.8
-    lfo_rate 0.03
+    release 437.345ms
+    lfo_rate 0.697hz
     lfo_depth 0.04
     lfo_target cutoff
 }
 
 # Soft bass — round, warm, simple
 module bass warmth {
-    cutoff 0.15
-    cutoff_env 0.20
+    cutoff 56.368hz
+    cutoff_env 66.289hz
     resonance 0.18
     glide 0.12
     keytrack 0.3
     osc1_wave saw
-    osc2_pitch 0.50
-    attack 0.01
-    decay 0.25
+    osc2_pitch -0st
+    attack 1.07897ms
+    decay 6.6874ms
     sustain 0.70
-    release 0.10
-    lfo_rate 0.0
+    release 2.13847ms
+    lfo_rate 0.1hz
     lfo_depth 0.0
 }
 
 # Sub — deep and pillowy
 module bass pillow {
-    cutoff 0.06
-    cutoff_env 0.08
+    cutoff 30.2712hz
+    cutoff_env 32.2994hz
     resonance 0.10
     osc1_wave saw
-    osc2_pitch 0.50
-    attack 0.005
-    decay 0.20
+    osc2_pitch -0st
+    attack 1.03874ms
+    decay 4.57305ms
     sustain 0.85
-    release 0.08
+    release 1.8369ms
 }
 
 # FM bell — glassy, nostalgic, lo-fi bell tones
@@ -80,12 +80,12 @@ module fm glass {
     mod_index 0.30
     feedback 0.08
     waveform sine
-    op0_ratio 0.065
-    op1_ratio 0.194
+    op0_ratio 1.5075x
+    op1_ratio 3.507x
     op0_envelope 0.002 0.5 0.0 0.6
     op1_envelope 0.001 0.8 0.0 0.4
     chorus_mix 0.0
-    lfo_rate 0.03
+    lfo_rate 0.697hz
     lfo_depth 0.02
     lfo_target mod_index
 }
@@ -96,14 +96,14 @@ module fm nostalgia {
     mod_index 0.40
     feedback 0.12
     waveform sine
-    op0_ratio 0.065
-    op1_ratio 0.065
+    op0_ratio 1.5075x
+    op1_ratio 1.5075x
     op0_envelope 0.005 0.25 0.40 0.30
     op1_envelope 0.003 0.18 0.50 0.25
     chorus_mix 0.20
-    vibrato_rate 0.20
+    vibrato_rate 2.4hz
     vibrato_depth 0.06
-    lfo_rate 0.05
+    lfo_rate 1.095hz
     lfo_depth 0.03
     lfo_target mod_index
 }
@@ -113,18 +113,18 @@ module beats tape {
     kick_level 0.80
     kick_click 0.25
     kick_decay 0.20
-    kick_pitch 0.45
+    kick_pitch 1.175x
     kick_drive 0.15
 
     snare_level 0.70
     snare_decay 0.30
-    snare_pitch 0.50
+    snare_pitch 1.25x
     snare_drive 0.20
     snare_snap 0.35
     snare_pan 0.08
 
     hihat_level 0.40
-    hihat_pitch 0.38
+    hihat_pitch 1.07x
     hihat_pan 0.25
 
     clap_level 0.55

@@ -17,18 +17,18 @@ humanize 0.35 timing 0.2
 
 # Deep sub bass: warm saw + sub sine, slow filter
 module bass deep_bass {
-    cutoff 0.12
-    cutoff_env 0.45
+    cutoff 45.8174hz
+    cutoff_env 296.454hz
     resonance 0.55
     glide 0.25
-    osc2_pitch 0.25
+    osc2_pitch -12st
     osc1_wave saw
     osc2_wave saw
     keytrack 0.4
-    attack 0.005
-    decay 0.35
+    attack 1.03874ms
+    decay 14.3008ms
     sustain 0.7
-    release 0.15
+    release 3.1272ms
 }
 
 # Rhodes-style keys: FM warm electric piano
@@ -37,10 +37,10 @@ module fm rhodes {
     mod_index 0.55
     feedback 0.15
     chorus_mix 0.3
-    attack 0.005
-    decay 0.4
+    attack 1.03874ms
+    decay 20.9128ms
     sustain 0.45
-    release 0.25
+    release 6.6874ms
     op0_envelope 0.003 0.35 0.3 0.4
     op1_envelope 0.001 0.2 0.15 0.3
 }
@@ -48,13 +48,13 @@ module fm rhodes {
 # Pad: lush detuned with chorus
 module keys lush_pad {
     voice_mode poly
-    cutoff 0.18
+    cutoff 458.174hz
     detune 0.12
     chorus_mix 0.4
-    attack 0.8
-    decay 0.5
+    attack 437.345ms
+    decay 44.7214ms
     sustain 0.75
-    release 1.0
+    release 2000ms
 }
 
 # Drums
@@ -73,11 +73,11 @@ module beats drums {
 
 # Stab: short keys for offbeat chords
 module keys stab {
-    cutoff 0.22
-    attack 0.0
-    decay 0.12
+    cutoff 550.846hz
+    attack 1ms
+    decay 2.48957ms
     sustain 0.15
-    release 0.08
+    release 1.8369ms
 }
 
 # ────────────────────────────────────────────────

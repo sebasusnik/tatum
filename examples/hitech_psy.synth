@@ -13,48 +13,48 @@ humanize 0.02 timing 0.005
 
 # Psytrance bass — aggressive, biting, distorted rolling bass
 module bass psy {
-    cutoff 0.08
-    cutoff_env 0.75
+    cutoff 34.756hz
+    cutoff_env 1788.85hz
     resonance 0.62
     glide 0.02
     keytrack 0.5
     osc1_wave saw
-    osc2_pitch 0.506
-    attack 0.0
-    decay 0.06
+    osc2_pitch 0.288st
+    attack 1ms
+    decay 1.57784ms
     sustain 0.35
-    release 0.02
-    lfo_rate 0.0
+    release 1.16418ms
+    lfo_rate 0.1hz
     lfo_depth 0.0
 }
 
 # Sub — warm sine
 module bass sub {
-    cutoff 0.04
-    cutoff_env 0.05
+    cutoff 26.365hz
+    cutoff_env 26.9857hz
     resonance 0.08
     osc1_wave saw
-    osc2_pitch 0.50
-    attack 0.001
-    decay 0.12
+    osc2_pitch -0st
+    attack 1.00763ms
+    decay 2.48957ms
     sustain 0.92
-    release 0.03
+    release 1.25612ms
 }
 
 # Acid lead — screaming, aggressive filter sweep
 module bass acid_lead {
-    cutoff 0.08
-    cutoff_env 0.80
+    cutoff 34.756hz
+    cutoff_env 2413.67hz
     resonance 0.75
     glide 0.04
     keytrack 0.6
     osc1_wave saw
-    osc2_pitch 0.507
-    attack 0.001
-    decay 0.08
+    osc2_pitch 0.336st
+    attack 1.00763ms
+    decay 1.8369ms
     sustain 0.30
-    release 0.03
-    lfo_rate 0.06
+    release 1.25612ms
+    lfo_rate 1.294hz
     lfo_depth 0.12
     lfo_target cutoff
 }
@@ -65,13 +65,13 @@ module fm alien {
     mod_index 0.72
     feedback 0.45
     waveform half_sine
-    op0_ratio 0.065
-    op1_ratio 0.097
+    op0_ratio 1.5075x
+    op1_ratio 2.0035x
     op0_envelope 0.003 0.10 0.30 0.08
     op1_envelope 0.002 0.06 0.40 0.06
     op1_feedback 0.38
     chorus_mix 0.0
-    vibrato_rate 0.35
+    vibrato_rate 3.825hz
     vibrato_depth 0.08
 }
 
@@ -81,8 +81,8 @@ module fm psy_stab {
     mod_index 0.45
     feedback 0.20
     waveform sine
-    op0_ratio 0.065
-    op1_ratio 0.13
+    op0_ratio 1.5075x
+    op1_ratio 2.515x
     op0_envelope 0.002 0.06 0.10 0.05
     op1_envelope 0.001 0.04 0.15 0.03
     chorus_mix 0.0
@@ -94,17 +94,17 @@ module fm psyche {
     mod_index 0.65
     feedback 0.48
     waveform sine
-    op0_ratio 0.065
-    op1_ratio 0.042
-    op2_ratio 0.13
-    op3_ratio 0.097
+    op0_ratio 1.5075x
+    op1_ratio 1.151x
+    op2_ratio 2.515x
+    op3_ratio 2.0035x
     op0_envelope 0.5 0.6 0.40 0.8
     op1_envelope 0.3 0.4 0.50 0.6
     op2_envelope 0.4 0.5 0.45 0.7
     op3_envelope 0.2 0.3 0.55 0.5
     op0_feedback 0.40
     op2_feedback 0.45
-    lfo_rate 0.08
+    lfo_rate 1.692hz
     lfo_depth 0.22
     lfo_target mod_index
     lfo_waveform triangle
@@ -113,15 +113,15 @@ module fm psyche {
 # Dark wash pad — no chorus, pure dark drone
 module keys void {
     voice_mode poly
-    cutoff 0.05
+    cutoff 251.785hz
     resonance 8%
     detune 0.12
     chorus_mix 0.0
-    attack 1.0
-    decay 0.6
+    attack 2000ms
+    decay 95.635ms
     sustain 0.30
-    release 0.8
-    lfo_rate 0.015
+    release 437.345ms
+    lfo_rate 0.3985hz
     lfo_depth 0.04
     lfo_target cutoff
 }
@@ -129,15 +129,15 @@ module keys void {
 # Shimmer — subtle sparkle, no chorus
 module keys shimmer {
     voice_mode poly
-    cutoff 0.12
+    cutoff 347.56hz
     resonance 0.15
     detune 0.10
     chorus_mix 0.0
-    attack 0.9
-    decay 0.5
+    attack 935.25ms
+    decay 44.7214ms
     sustain 0.25
-    release 0.8
-    lfo_rate 0.025
+    release 437.345ms
+    lfo_rate 0.5975hz
     lfo_depth 0.03
     lfo_target cutoff
 }
@@ -152,10 +152,10 @@ module fm air {
     lfo_sync bars_8
     lfo_depth 22%
     waveform abs_sine
-    op0_ratio 0.47
-    op1_ratio 0.13
-    op2_ratio 0.31
-    op3_ratio 0.06
+    op0_ratio 7.785x
+    op1_ratio 2.515x
+    op2_ratio 5.305x
+    op3_ratio 1.43x
     op0_envelope 0.001 2.0 0.15 1.5
     op1_envelope 0.001 1.8 0.20 1.3
     op2_envelope 0.001 1.6 0.18 1.2
@@ -164,7 +164,7 @@ module fm air {
     op1_feedback 0.85
     op2_feedback 0.88
     op3_feedback 0.80
-    lfo_rate 0.0
+    lfo_rate 0.1hz
     lfo_depth 0.0
 }
 
@@ -174,10 +174,10 @@ module fm metal {
     mod_index 0.95
     feedback 0.70
     waveform abs_sine
-    op0_ratio 0.37
-    op1_ratio 0.11
-    op2_ratio 0.23
-    op3_ratio 0.07
+    op0_ratio 6.235x
+    op1_ratio 2.205x
+    op2_ratio 4.065x
+    op3_ratio 1.585x
     op0_envelope 0.001 0.08 0.0 0.10
     op1_envelope 0.001 0.12 0.0 0.15
     op2_envelope 0.001 0.06 0.0 0.08
@@ -194,13 +194,13 @@ module fm insects {
     mod_index 0.85
     feedback 0.58
     waveform half_sine
-    op0_ratio 0.29
-    op1_ratio 0.07
+    op0_ratio 4.995x
+    op1_ratio 1.585x
     op0_envelope 0.1 0.3 0.50 0.4
     op1_envelope 0.05 0.2 0.60 0.3
     op0_feedback 0.50
     op1_feedback 0.45
-    lfo_rate 0.14
+    lfo_rate 2.886hz
     lfo_depth 0.30
     lfo_target mod_index
     lfo_waveform square
@@ -212,10 +212,10 @@ module fm dialup {
     mod_index 0.92
     feedback 0.70
     waveform sine
-    op0_ratio 0.35
-    op1_ratio 0.09
-    op2_ratio 0.22
-    op3_ratio 0.14
+    op0_ratio 5.925x
+    op1_ratio 1.895x
+    op2_ratio 3.91x
+    op3_ratio 2.67x
     op0_envelope 0.001 0.03 0.0 0.02
     op1_envelope 0.001 0.04 0.0 0.03
     op2_envelope 0.001 0.02 0.0 0.02
@@ -223,7 +223,7 @@ module fm dialup {
     op0_feedback 0.45
     op1_feedback 0.55
     op2_feedback 0.40
-    lfo_rate 0.12
+    lfo_rate 2.488hz
     lfo_depth 0.25
     lfo_target mod_index
     lfo_waveform square
@@ -235,14 +235,14 @@ module fm siren {
     mod_index 0.60
     feedback 0.25
     waveform sine
-    op0_ratio 0.13
-    op1_ratio 0.065
+    op0_ratio 2.515x
+    op1_ratio 1.5075x
     op0_envelope 0.3 0.5 0.50 0.6
     op1_envelope 0.2 0.4 0.60 0.5
     chorus_mix 0.0
-    vibrato_rate 0.40
+    vibrato_rate 4.3hz
     vibrato_depth 0.15
-    lfo_rate 0.08
+    lfo_rate 1.692hz
     lfo_depth 0.18
     lfo_target mod_index
     lfo_waveform sine
@@ -253,18 +253,18 @@ module beats psy_kit {
     kick_level 0.9
     kick_click 0.70
     kick_decay 0.10
-    kick_pitch 0.46
+    kick_pitch 1.19x
     kick_drive 0.70
 
     snare_level 0.40
     snare_decay 0.10
-    snare_pitch 0.32
+    snare_pitch 0.98x
     snare_drive 0.60
     snare_snap 0.15
     snare_pan 0.0
 
     hihat_level 1.6
-    hihat_pitch 0.70
+    hihat_pitch 1.55x
     hihat_pan 0.22
     hihat_decay 0.22
 

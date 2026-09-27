@@ -19,30 +19,30 @@ sidechain 0.3
 #              ChorusMix 0.5, VibratoRate 0.15, VibratoDepth 0.12
 module keys pad {
     voice_mode poly
-    cutoff 0.10
+    cutoff 316.98hz
     detune 0.25
     chorus_mix 0.5
-    vibrato_rate 0.15
+    vibrato_rate 1.925hz
     vibrato_depth 0.12
 }
 
 # Arp voice — engine.keys2 driven by the ArpProcessor on track 4.
 module keys arp {
-    cutoff 0.15
-    attack 0.0
-    decay 0.15
+    cutoff 399.052hz
+    attack 1ms
+    decay 3.1272ms
     sustain 0.3
-    release 0.08
+    release 1.8369ms
 }
 
 # Smooth sub-heavy bass — square osc1 for the warm retro tone, long glide.
 # osc2_pitch 0.25 == (-12 + 24) / 48 == one octave down.
 module bass sub {
-    cutoff 0.12
-    cutoff_env 0.2
+    cutoff 45.8174hz
+    cutoff_env 66.289hz
     resonance 0.25
     glide 0.3
-    osc2_pitch 0.25
+    osc2_pitch -12st
     osc1_wave square
 }
 

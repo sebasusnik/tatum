@@ -23,18 +23,18 @@ delay sync=dotted_eighth feedback=0.35 filter=0.4
 module bass drone {
     # Sunn O))) lives in the low-mids, not the sub: the cutoff has to be open
     # enough for the square/saw harmonics to reach the distortion stages.
-    cutoff 0.42
-    cutoff_env 0.0
+    cutoff 363.94hz
+    cutoff_env 20hz
     resonance 0.7
     osc1_wave square
     osc2_wave saw
-    osc2_pitch 0.25
+    osc2_pitch -12st
     osc3_wave square
     osc3_pitch 7st   # the fifth of the power chord the patterns ask for
-    attack 0.32
-    decay 0.4
+    attack 11.3849ms
+    decay 20.9128ms
     sustain 0.95
-    release 0.85
+    release 639.55ms
     glide 0.1
     lfo_target cutoff
     lfo_waveform triangle
@@ -45,16 +45,16 @@ module bass drone {
 # The fundamental. Heavy distortion turns a fundamental into a harmonic
 # series, so the weight of the wall has to come from a clean layer underneath.
 module bass subwall {
-    cutoff 0.12
-    cutoff_env 0.0
+    cutoff 45.8174hz
+    cutoff_env 20hz
     resonance 0.12
     osc1_wave saw
-    osc2_pitch 0.5
-    osc3_pitch 0.5
-    attack 0.25
-    decay 0.5
+    osc2_pitch -0st
+    osc3_pitch -0st
+    attack 6.6874ms
+    decay 44.7214ms
     sustain 1.0
-    release 0.8
+    release 437.345ms
 }
 
 # Atmosphere: a metallic, slow-blooming FM texture. Sparse and drenched, it
@@ -64,8 +64,8 @@ module fm atmos {
     waveform half_sine
     mod_index 0.55
     feedback 0.42
-    op0_ratio 0.065
-    op1_ratio 0.29
+    op0_ratio 1.5075x
+    op1_ratio 4.995x
     op0_envelope 0.35 0.9 0.3 0.95
     op1_envelope 0.2 0.6 0.15 0.8
     level 2.2
@@ -79,19 +79,19 @@ module fm atmos {
 # saturated and phased for movement.
 module keys doomorgan {
     voice_mode poly
-    cutoff 0.44
+    cutoff 1517.16hz
     resonance 0.45
     detune 0.6          # wide: the two oscillators beat against each other
     chorus_mix 0.25
-    attack 0.55
-    decay 0.5
+    attack 65.398ms
+    decay 44.7214ms
     sustain 0.9
-    release 0.9
+    release 935.25ms
     lfo_target cutoff
     lfo_waveform triangle
     lfo_sync bars_8
     lfo_depth 0.12
-    vibrato_rate 0.2
+    vibrato_rate 2.4hz
     vibrato_depth 0.05
 }
 
@@ -99,7 +99,7 @@ module keys doomorgan {
 module beats kit {
     kick_level 1.0
     kick_decay 0.36     # enough body to read under the wall
-    kick_pitch 0.3
+    kick_pitch 0.95x
     kick_click 0.9      # the transient is what makes a kick audible, not more low end
     kick_drive 1.0
     snare_level 0.5
@@ -108,25 +108,25 @@ module beats kit {
     snare_pan -0.15
     hihat_level 0.6
     hihat_decay 0.2
-    hihat_pitch 0.44
+    hihat_pitch 1.16x
     hihat_pan 0.25
 }
 
 # Rolling 16th-note sub bassline that answers the kick.
 module bass pulse {
-    cutoff 0.34
-    cutoff_env 0.62
+    cutoff 209.426hz
+    cutoff_env 820.93hz
     resonance 0.5
     glide 0.03
     osc1_wave saw
     osc2_wave square
-    osc2_pitch 0.25     # one octave down: the weight
+    osc2_pitch -12st     # one octave down: the weight
     osc3_wave saw
-    osc3_pitch 0.5
-    attack 0.0
-    decay 0.18
+    osc3_pitch -0st
+    attack 1ms
+    decay 3.9281ms
     sustain 0.3
-    release 0.14
+    release 2.8983ms
 }
 
 # Tight metallic FM stab, interjecting between kicks in the drop.

@@ -26,20 +26,20 @@ module beats breaks {
     kick_level 1.0
     kick_click 0.55
     kick_decay 0.12
-    kick_pitch 0.42
+    kick_pitch 1.13x
     kick_drive 0.40
 
     # Snare: sharp crack, gritty body, wire sizzle tail
     snare_level 0.85
     snare_decay 0.40
-    snare_pitch 0.65
+    snare_pitch 1.475x
     snare_drive 0.65
     snare_snap 0.85
     snare_pan 0.05
 
     # Hats: metallic, smooth, organic variation
     hihat_level 0.48
-    hihat_pitch 0.40
+    hihat_pitch 1.1x
     hihat_pan 0.25
     hihat_decay 0.35
 
@@ -50,34 +50,34 @@ module beats breaks {
 
 # Reese bass — warm rolling jungle reese with midrange growl
 module bass reese {
-    cutoff 0.52
-    cutoff_env 0.28
+    cutoff 726.16hz
+    cutoff_env 107.055hz
     resonance 0.25
     glide 0.18
     keytrack 0.4
     osc1_wave saw
-    osc2_pitch 0.53
-    attack 0.0
-    decay 0.30
+    osc2_pitch 1.44st
+    attack 1ms
+    decay 9.7793ms
     sustain 0.80
-    release 0.12
-    lfo_rate 0.06
+    release 2.48957ms
+    lfo_rate 1.294hz
     lfo_depth 0.08
     lfo_target amplitude
 }
 
 # Sub — pure deep low end
 module bass sub {
-    cutoff 0.07
-    cutoff_env 0.15
+    cutoff 32.436hz
+    cutoff_env 49.129hz
     resonance 0.20
     glide 0.10
     osc1_wave saw
-    osc2_pitch 0.5
-    attack 0.0
-    decay 0.20
+    osc2_pitch -0st
+    attack 1ms
+    decay 4.57305ms
     sustain 0.90
-    release 0.05
+    release 1.46235ms
 }
 
 # FM stab — bright rave-inspired jungle stab
@@ -93,12 +93,12 @@ module fm atmo {
     algorithm dual_pairs
     mod_index 0.30
     feedback 0.10
-    attack 0.8
-    decay 0.5
+    attack 437.345ms
+    decay 44.7214ms
     sustain 0.55
-    release 0.8
+    release 437.345ms
     chorus_mix 0.65
-    lfo_rate 0.05
+    lfo_rate 1.095hz
     lfo_depth 0.04
     lfo_target mod_index
 }
@@ -106,12 +106,12 @@ module fm atmo {
 # Keys pad — dreamy, wide, warm and lush
 module keys dreampad {
     voice_mode poly
-    cutoff 0.25
+    cutoff 632.456hz
     detune 0.07
     chorus_mix 0
-    attack 0.4
-    release 0.6
-    lfo_rate 0.08
+    attack 20.9128ms
+    release 95.635ms
+    lfo_rate 1.692hz
     lfo_depth 0.15
     lfo_target cutoff
 }
@@ -122,8 +122,8 @@ module fm psylead {
     mod_index 0.30
     feedback 0.20
     op0_envelope 0.003 0.15 0.20 0.12
-    op1_ratio 0.06
-    lfo_rate 0.10
+    op1_ratio 1.43x
+    lfo_rate 2.09hz
     lfo_depth 0.05
     lfo_target pitch
 }

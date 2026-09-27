@@ -42,20 +42,20 @@ delay_return  { in > highpass(500, 0.02) > lowpass(6khz, 0.02) > out }
 # ──────────────────────────────── voices
 
 module beats kit {
-    kick_level 0.9  kick_click 0.7  kick_decay 0.1  kick_pitch 0.46  kick_drive 0.7
-    snare_level 0.4  snare_decay 0.1  snare_pitch 0.32  snare_drive 0.6  snare_snap 0.15
-    hihat_level 1.4  hihat_pitch 0.7  hihat_pan 0.22  hihat_decay 0.22
+    kick_level 0.9  kick_click 0.7  kick_decay 0.1  kick_pitch 1.19x  kick_drive 0.7
+    snare_level 0.4  snare_decay 0.1  snare_pitch 0.98x  snare_drive 0.6  snare_snap 0.15
+    hihat_level 1.4  hihat_pitch 1.55x  hihat_pan 0.22  hihat_decay 0.22
     clap_level 0.65  clap_pan 0.0
 }
 
 module bass sub_osc {
-    cutoff 110hz  cutoff_env 0.04  resonance 6%
+    cutoff 110hz  cutoff_env 25.4163hz  resonance 6%
     osc1_wave saw  osc2_pitch 0st  osc3_pitch 0st
     attack 1ms  decay 120ms  sustain 0.9  release 30ms
 }
 
 module bass roll_osc {
-    cutoff 280hz  cutoff_env 0.42  resonance 40%  glide 0.02  keytrack 0.4
+    cutoff 280hz  cutoff_env 247.682hz  resonance 40%  glide 0.02  keytrack 0.4
     osc1_wave saw  osc2_wave square  osc2_pitch -12st  osc3_wave saw
     attack 1ms  decay 60ms  sustain 0.18  release 20ms
 }
@@ -63,48 +63,48 @@ module bass roll_osc {
 # THE sequence. A plain square, almost no resonance, a hard short envelope:
 # the sound of a switch closing, not of a filter screaming.
 module bass seq_osc {
-    cutoff 1.1khz  cutoff_env 0.25  resonance 15%  glide 0.0  keytrack 0.3
+    cutoff 1.1khz  cutoff_env 89.443hz  resonance 15%  glide 0.0  keytrack 0.3
     osc1_wave square  osc2_wave square  osc2_pitch -12st
     attack 1ms  decay 45ms  sustain 0.0  release 15ms
 }
 
 # The counter-line, an octave up and rounder.
 module keys motif_keys {
-    voice_mode unison  detune 0.08  chorus_mix 0.12  cutoff 0.5  resonance 0.1
-    attack 2ms  decay 0.35  sustain 0.3  release 0.25
+    voice_mode unison  detune 0.08  chorus_mix 0.12  cutoff 2000hz  resonance 0.1
+    attack 2ms  decay 14.3008ms  sustain 0.3  release 6.6874ms
 }
 
 # The robot voice: a square run through a vowel filter on the track chain.
 module keys voc_keys {
-    voice_mode unison  detune 0.05  chorus_mix 0.1  cutoff 0.55  resonance 0.12
-    attack 5ms  decay 0.4  sustain 0.65  release 0.35
+    voice_mode unison  detune 0.05  chorus_mix 0.1  cutoff 2517.85hz  resonance 0.12
+    attack 5ms  decay 20.9128ms  sustain 0.65  release 14.3008ms
 }
 
 # Machine blips. Clean two-operator FM, harmonic ratios only: no clang.
 module fm bleep_fm {
     algorithm two_op  mod_index 0.28  feedback 0.0  waveform sine
-    op0_ratio 0.032  op1_ratio 0.13
+    op0_ratio 0.996x  op1_ratio 2.515x
     op0_envelope 0.001 0.06 0.0 0.04
     op1_envelope 0.001 0.04 0.0 0.03
 }
 
 # The low melodic line, doubled at the octave, the Trans-Europe engine.
 module bass robot_osc {
-    cutoff 700hz  cutoff_env 0.3  resonance 20%  glide 0.0  keytrack 0.35
+    cutoff 700hz  cutoff_env 120.684hz  resonance 20%  glide 0.0  keytrack 0.35
     osc1_wave square  osc2_wave saw  osc2_pitch 12st
     attack 1ms  decay 90ms  sustain 0.25  release 25ms
 }
 
 # A cold held chord. Two notes, no third, so it stays neutral machinery.
 module keys pad_keys {
-    voice_mode poly  detune 0.12  chorus_mix 0.18  cutoff 0.3  resonance 0.12
-    attack 0.7  decay 0.85  sustain 0.9  release 0.9
+    voice_mode poly  detune 0.12  chorus_mix 0.18  cutoff 796.214hz  resonance 0.12
+    attack 204.513ms  decay 639.55ms  sustain 0.9  release 935.25ms
     lfo_target cutoff  lfo_waveform triangle  lfo_sync bars_16  lfo_depth 0.12
 }
 
 module fm noise_fm {
     algorithm pair_plus_two  mod_index 0.55  feedback 0.3  waveform abs_sine
-    op0_ratio 0.49  op1_ratio 0.17  op2_ratio 0.35  op3_ratio 0.07
+    op0_ratio 8.095x  op1_ratio 3.135x  op2_ratio 5.925x  op3_ratio 1.585x
     op0_envelope 0.001 1.6 0.25 1.2
     op1_envelope 0.001 1.3 0.3 1.0
     lfo_target mod_index  lfo_waveform triangle  lfo_sync bars_4  lfo_depth 0.25

@@ -13,7 +13,7 @@ tempo 125
 scale C minor
 
 module keys pad {
-    cutoff 0.6
+    cutoff 3169.8hz
     resonance 8%
     chorus_mix 0.0          # the arp lifts this chord an octave (octaves=2)
                              # and plays it one note at a time, so the top
@@ -22,10 +22,10 @@ module keys pad {
                              # which is roughness, not width, and there is
                              # no chord sounding underneath to bury it.
                              # autopan on the track carries the width instead.
-    attack 0.01
-    decay 0.2
+    attack 1.07897ms
+    decay 4.57305ms
     sustain 0.4
-    release 0.15
+    release 3.1272ms
 }
 
 # C minor 7 (degrees 1 3 5 7 = C Eb G Bb), held for the whole bar via ties.

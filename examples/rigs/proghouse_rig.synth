@@ -45,21 +45,21 @@ delay_return  { in > highpass(420, 0.02) > lowpass(7khz, 0.02) > out }
 # ──────────────────────────────── voices
 
 module beats kit {
-    kick_level 0.95  kick_decay 0.3  kick_pitch 0.3  kick_click 0.3  kick_drive 0.25
+    kick_level 0.95  kick_decay 0.3  kick_pitch 0.95x  kick_click 0.3  kick_drive 0.25
     snare_level 0.0  snare_decay 0.2  snare_snap 0.5
-    hihat_level 0.55  hihat_decay 0.16  hihat_pitch 0.55  hihat_pan 0.3
+    hihat_level 0.55  hihat_decay 0.16  hihat_pitch 1.325x  hihat_pan 0.3
     clap_level 0.62  clap_pan -0.15
 }
 
 module bass sub_osc {
-    cutoff 105hz  cutoff_env 0.04  resonance 6%  glide 0.05
+    cutoff 105hz  cutoff_env 25.4163hz  resonance 6%  glide 0.05
     osc1_wave saw  osc2_pitch 0st  osc3_pitch 0st
     attack 4ms  decay 200ms  sustain 0.9  release 80ms
 }
 
 # The syncopated mid bass: round, not aggressive, and it ducks hard.
 module bass mid_osc {
-    cutoff 400hz  cutoff_env 0.35  resonance 22%  glide 0.04  keytrack 0.4
+    cutoff 400hz  cutoff_env 162.836hz  resonance 22%  glide 0.04  keytrack 0.4
     osc1_wave saw  osc2_wave saw  osc2_pitch -12st  osc3_wave saw  osc3_pitch 0.1st
     attack 3ms  decay 180ms  sustain 0.45  release 90ms
     lfo_target cutoff  lfo_waveform sine  lfo_sync bars_8  lfo_depth 0.12
@@ -67,16 +67,16 @@ module bass mid_osc {
 
 # The pad. Wide, warm, slow, and it is the thing you hear pumping.
 module keys pad_keys {
-    voice_mode poly  detune 0.16  chorus_mix 0.22  cutoff 0.34  resonance 0.1
-    attack 0.82  decay 0.9  sustain 0.92  release 1.0
+    voice_mode poly  detune 0.16  chorus_mix 0.22  cutoff 957.26hz  resonance 0.1
+    attack 509.15ms  decay 935.25ms  sustain 0.92  release 2000ms
     lfo_target cutoff  lfo_waveform sine  lfo_sync bars_16  lfo_depth 0.16
-    vibrato_rate 0.25  vibrato_depth 0.02
+    vibrato_rate 2.875hz  vibrato_depth 0.02
 }
 
 # The pluck, through a dotted-eighth delay on its chain. The genre's signature.
 module fm pluck_fm {
     algorithm two_op  mod_index 0.38  feedback 0.08  waveform sine
-    op0_ratio 0.032  op1_ratio 0.13
+    op0_ratio 0.996x  op1_ratio 2.515x
     op0_envelope 0.001 0.22 0.0 0.18
     op1_envelope 0.001 0.14 0.0 0.12
     chorus_mix 0.32
@@ -85,7 +85,7 @@ module fm pluck_fm {
 # An electric-piano chord voice for the warmer sections.
 module fm rhodes_fm {
     algorithm dual_pairs  mod_index 0.3  feedback 0.05  waveform sine
-    op0_ratio 0.032  op1_ratio 0.871  op2_ratio 0.032  op3_ratio 0.097
+    op0_ratio 0.996x  op1_ratio 14.0005x  op2_ratio 0.996x  op3_ratio 2.0035x
     op0_envelope 0.08 0.5 0.35 0.6
     op1_envelope 0.05 0.4 0.2 0.45
     chorus_mix 0.35
@@ -93,21 +93,21 @@ module fm rhodes_fm {
 
 # The lead: understated. It states a line and gets out of the way.
 module keys lead_keys {
-    voice_mode unison  detune 0.15  chorus_mix 0.28  cutoff 0.55  resonance 0.14
-    attack 25ms  decay 0.5  sustain 0.6  release 0.5
+    voice_mode unison  detune 0.15  chorus_mix 0.28  cutoff 2517.85hz  resonance 0.14
+    attack 25ms  decay 44.7214ms  sustain 0.6  release 44.7214ms
     lfo_target cutoff  lfo_waveform sine  lfo_sync bars_8  lfo_depth 0.14
-    vibrato_rate 0.3  vibrato_depth 0.03
+    vibrato_rate 3.35hz  vibrato_depth 0.03
 }
 
 module keys arp_keys {
-    voice_mode poly  detune 0.12  chorus_mix 0.2  cutoff 0.52  resonance 0.16
-    attack 2ms  decay 0.3  sustain 0.2  release 0.28
+    voice_mode poly  detune 0.12  chorus_mix 0.2  cutoff 2192.96hz  resonance 0.16
+    attack 2ms  decay 9.7793ms  sustain 0.2  release 8.4002ms
     lfo_target cutoff  lfo_waveform triangle  lfo_sync bars_12  lfo_depth 0.15
 }
 
 module fm air_fm {
     algorithm dual_pairs  mod_index 0.22  feedback 0.03  waveform sine
-    op0_ratio 0.032  op1_ratio 0.55  op2_ratio 0.032  op3_ratio 0.29
+    op0_ratio 0.996x  op1_ratio 9.025x  op2_ratio 0.996x  op3_ratio 4.995x
     op0_envelope 0.5 0.8 0.5 0.9
     op1_envelope 0.4 0.6 0.4 0.7
     chorus_mix 0.5
@@ -116,7 +116,7 @@ module fm air_fm {
 
 module fm sweep_fm {
     algorithm pair_plus_two  mod_index 0.5  feedback 0.25  waveform abs_sine
-    op0_ratio 0.49  op1_ratio 0.17  op2_ratio 0.35  op3_ratio 0.07
+    op0_ratio 8.095x  op1_ratio 3.135x  op2_ratio 5.925x  op3_ratio 1.585x
     op0_envelope 0.001 2.0 0.3 1.6
     op1_envelope 0.001 1.7 0.35 1.3
     lfo_target mod_index  lfo_waveform triangle  lfo_sync bars_8  lfo_depth 0.28

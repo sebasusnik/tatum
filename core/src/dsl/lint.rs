@@ -300,6 +300,25 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
         ));
     }
 
+    // ── bare_number: a knob position where a quantity was meant ──
+    let mut bare = Vec::new();
+    for m in &song.module_defs {
+        let Some(kind) = crate::params::ModuleKind::from_str(&m.module_type) else { continue };
+        for p in m.params.iter().filter(|p| p.bare) {
+            let Some(spec) = crate::params::lookup(kind, &p.name) else { continue };
+            let Some(units) = spec.write_in_units(p.value) else { continue };
+            bare.push(format!("`{} {}` is `{} {}` (module '{}', line {})", p.name, p.value, p.name, units, m.name, p.line));
+        }
+    }
+    if !bare.is_empty() {
+        let more = if bare.len() > 3 { format!(", and {} more", bare.len() - 3) } else { String::new() };
+        out.push(lint(
+            "bare_number",
+            format!("{} parameters are written as knob positions: {}{}", bare.len(), bare[..bare.len().min(3)].join("; "), more),
+            "A plain number on a parameter with a unit is where the knob sits, not what it does: `cutoff 0.1` says nothing a reader can hear. `tatum fmt --units <file>` rewrites every one of them in its unit, and the song sounds the same.",
+        ));
+    }
+
     // ── gain_comp_ignored: a setting the engine dropped ──
     if song.globals.gain_comp.is_some() {
         out.push(lint(

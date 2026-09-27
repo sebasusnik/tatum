@@ -1967,7 +1967,7 @@ impl Parser {
                         Some(spec) => match spec.value_from_name(&word) {
                             Some(value) => {
                                 self.advance();
-                                params.push(ModuleParam { name: key, value, line });
+                                params.push(ModuleParam { name: key, value, line, bare: false });
                             }
                             None => {
                                 let s = self.span();
@@ -1982,7 +1982,7 @@ impl Parser {
                         // Unknown param: let the compiler report it with a suggestion.
                         None => {
                             self.advance();
-                            params.push(ModuleParam { name: key, value: 0.0, line });
+                            params.push(ModuleParam { name: key, value: 0.0, line, bare: false });
                         }
                     }
                     continue;
@@ -1997,18 +1997,18 @@ impl Parser {
                         .and_then(|k| params::lookup(k, &key));
                     match spec {
                         Some(spec) => match spec.value_from_quantity(raw, &suffix) {
-                            Ok(value) => params.push(ModuleParam { name: key, value, line }),
+                            Ok(value) => params.push(ModuleParam { name: key, value, line, bare: false }),
                             Err(message) => self.errors.push(ParseError { line: l, col: c, message }),
                         },
                         // Unknown param: let the compiler name it with a suggestion.
-                        None => params.push(ModuleParam { name: key, value: raw, line }),
+                        None => params.push(ModuleParam { name: key, value: raw, line, bare: false }),
                     }
                     continue;
                 }
 
                 if let Some(val) = self.expect_number() {
                     let val = if negative { -val } else { val };
-                    params.push(ModuleParam { name: key, value: val, line });
+                    params.push(ModuleParam { name: key, value: val, line, bare: true });
                 }
             } else {
                 let sp = self.span();

@@ -13,7 +13,7 @@ delay sync=dotted_eighth feedback=0.6
 
 module beats kit { kick_level 1.0 }
 module keys pad { voice_mode poly attack 10ms release 100ms cutoff 500hz }
-module bass low { cutoff .1 }
+module bass low { cutoff 39.905hz }
 
 pattern beat { kick: X - - - X - x - X - - - X - - -
                hihat: - - x - - - x - - - x - - - x - }

@@ -307,6 +307,10 @@ pub struct ModuleParam {
     pub value: f32,
     /// Source line, for compile errors.
     pub line: usize,
+    /// Written as a plain number rather than in a unit or by name. On a
+    /// parameter with a real unit that number is a knob position, which the
+    /// lint asks to see written as what it means.
+    pub bare: bool,
 }
 
 /// Per-operator envelope for FM modules.

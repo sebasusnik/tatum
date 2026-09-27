@@ -14,21 +14,21 @@ sidechain 0.7
 
 # Rolling sustained C#2 drone. Filter opens/closes across the arrangement.
 module bass rollbass {
-    cutoff 0.15
-    cutoff_env 0.6
+    cutoff 56.368hz
+    cutoff_env 728.23hz
     resonance 0.5
     glide 0.15
-    osc2_pitch 0.75
+    osc2_pitch 12st
     osc1_wave saw
 }
 
 # THE ARP voice — short plucky Keys, cycles the C#m7 chord at 16ths.
 module keys arpvoice {
-    cutoff 0.15
-    attack 0.0
-    decay 0.15
+    cutoff 399.052hz
+    attack 1ms
+    decay 3.1272ms
     sustain 0.3
-    release 0.08
+    release 1.8369ms
 }
 
 # Metallic robotic percussive zaps — serial FM chain, ultra short envelopes.
@@ -46,7 +46,7 @@ module fm metal {
 # what actually renders, so that is what we replicate.
 module keys darkpad {
     voice_mode poly
-    cutoff 0.08
+    cutoff 289.088hz
     detune 0.2
     chorus_mix 0.3
 }

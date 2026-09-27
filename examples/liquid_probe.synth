@@ -9,7 +9,7 @@ reverb size=1.0 damp=0.25 predelay=40
 
 module keys cloud {
     voice_mode poly
-    cutoff 0.28
+    cutoff 726.156hz
     resonance 0.35
     detune 0.45
     chorus_mix 0.6
@@ -17,37 +17,37 @@ module keys cloud {
     lfo_waveform triangle
     lfo_sync bars_8       # one cycle every 8 bars
     lfo_depth 0.08
-    attack 1.0            # 2 s: no transient, the chord blooms
-    decay 0.8
+    attack 2000ms            # 2 s: no transient, the chord blooms
+    decay 437.345ms
     sustain 0.9
-    release 1.0
+    release 2000ms
 }
 
 module fm rhodes {
     algorithm two_op
     waveform sine
     mod_index 0.3
-    op1_ratio 0.871       # 14:1 tine
+    op1_ratio 14.0005x       # 14:1 tine
     op0_envelope 0.01 0.9 0.35 0.6
     op1_envelope 0.01 0.3 0.05 0.3
     chorus_mix 0.4
     lfo_target amplitude
     lfo_waveform sine
     lfo_sync free
-    lfo_rate 0.03         # ~0.7 Hz tremolo
+    lfo_rate 0.697hz         # ~0.7 Hz tremolo
     lfo_depth 0.15
 }
 
 module bass sub {
-    cutoff 0.1
-    cutoff_env 0.0
+    cutoff 39.905hz
+    cutoff_env 20hz
     resonance 0.05
     osc1_wave saw
-    osc2_pitch 0.5
-    attack 0.1
-    decay 0.5
+    osc2_pitch -0st
+    attack 2.13847ms
+    decay 44.7214ms
     sustain 0.9
-    release 0.3
+    release 9.7793ms
 }
 
 module beats kit {

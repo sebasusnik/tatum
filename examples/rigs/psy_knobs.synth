@@ -44,44 +44,44 @@ delay sync=dotted_eighth feedback=0.4 filter=0.5
 # ── Sounds, from hitech_psy ─────────────────────────────────────────────────
 
 module bass psy {
-    cutoff 0.08
-    cutoff_env 0.75
+    cutoff 34.756hz
+    cutoff_env 1788.85hz
     resonance 0.62
     glide 0.02
     keytrack 0.5
     osc1_wave saw
-    osc2_pitch 0.506
-    attack 0.0
-    decay 0.06
+    osc2_pitch 0.288st
+    attack 1ms
+    decay 1.57784ms
     sustain 0.35
-    release 0.02
+    release 1.16418ms
 }
 
 module bass sub {
-    cutoff 0.04
-    cutoff_env 0.05
+    cutoff 26.365hz
+    cutoff_env 26.9857hz
     resonance 0.08
     osc1_wave saw
-    osc2_pitch 0.50
-    attack 0.001
-    decay 0.12
+    osc2_pitch -0st
+    attack 1.00763ms
+    decay 2.48957ms
     sustain 0.92
-    release 0.03
+    release 1.25612ms
 }
 
 module bass acid_lead {
-    cutoff 0.08
-    cutoff_env 0.80
+    cutoff 34.756hz
+    cutoff_env 2413.67hz
     resonance 0.75
     glide 0.04
     keytrack 0.6
     osc1_wave saw
-    osc2_pitch 0.507
-    attack 0.001
-    decay 0.08
+    osc2_pitch 0.336st
+    attack 1.00763ms
+    decay 1.8369ms
     sustain 0.30
-    release 0.03
-    lfo_rate 0.06
+    release 1.25612ms
+    lfo_rate 1.294hz
     lfo_depth 0.12
     lfo_target cutoff
 }
@@ -89,18 +89,18 @@ module bass acid_lead {
 # The solo: the acid sound with vibrato for the mod strip, which the acid line
 # does not have, so bending the solo leaves the line alone.
 module bass solo_lead {
-    cutoff 0.08
-    cutoff_env 0.80
+    cutoff 34.756hz
+    cutoff_env 2413.67hz
     resonance 0.75
     glide 0.05
     keytrack 0.6
     osc1_wave saw
-    osc2_pitch 0.507
-    attack 0.001
-    decay 0.08
+    osc2_pitch 0.336st
+    attack 1.00763ms
+    decay 1.8369ms
     sustain 0.30
-    release 0.03
-    lfo_rate 0.06
+    release 1.25612ms
+    lfo_rate 1.294hz
     lfo_depth 0.12
     lfo_target cutoff
     vibrato_rate 5.5hz
@@ -112,17 +112,17 @@ module fm psyche {
     mod_index 0.65
     feedback 0.48
     waveform sine
-    op0_ratio 0.065
-    op1_ratio 0.042
-    op2_ratio 0.13
-    op3_ratio 0.097
+    op0_ratio 1.5075x
+    op1_ratio 1.151x
+    op2_ratio 2.515x
+    op3_ratio 2.0035x
     op0_envelope 0.5 0.6 0.40 0.8
     op1_envelope 0.3 0.4 0.50 0.6
     op2_envelope 0.4 0.5 0.45 0.7
     op3_envelope 0.2 0.3 0.55 0.5
     op0_feedback 0.40
     op2_feedback 0.45
-    lfo_rate 0.08
+    lfo_rate 1.692hz
     lfo_depth 0.22
     lfo_target mod_index
     lfo_waveform triangle
@@ -132,15 +132,15 @@ module beats psy_kit {
     kick_level 0.9
     kick_click 0.70
     kick_decay 0.10
-    kick_pitch 0.46
+    kick_pitch 1.19x
     kick_drive 0.70
     snare_level 0.40
     snare_decay 0.10
-    snare_pitch 0.32
+    snare_pitch 0.98x
     snare_drive 0.60
     snare_snap 0.15
     hihat_level 1.6
-    hihat_pitch 0.70
+    hihat_pitch 1.55x
     hihat_pan 0.22
     hihat_decay 0.22
     clap_level 0.70

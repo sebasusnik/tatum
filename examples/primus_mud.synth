@@ -28,33 +28,33 @@ groove primus_pocket {
 # on the track, not from this envelope.
 module bass slap {
     cutoff 420hz       # was 0.10 = 40 Hz: the filter sat below the fundamental
-    cutoff_env 0.85
+    cutoff_env 3256.73hz
     resonance 30%      # was 0.72; the ladder peak was parked in the mud
     glide 0.02
     keytrack 0.6
     osc1_wave saw
-    osc2_pitch 0.505
-    attack 0.0
-    decay 0.12
+    osc2_pitch 0.24st
+    attack 1ms
+    decay 2.48957ms
     sustain 0.45
-    release 0.06
-    lfo_rate 0.0
+    release 1.57784ms
+    lfo_rate 0.1hz
     lfo_depth 0.0
 }
 
 # Fingerstyle bass — rounder, deeper, for sustained lines
 module bass finger {
     cutoff 150hz       # was 0.18 = 71 Hz
-    cutoff_env 0.45
+    cutoff_env 296.454hz
     resonance 30%
     glide 0.08
     keytrack 0.4
     osc1_wave saw
-    osc2_pitch 0.50
-    attack 0.005
-    decay 0.25
+    osc2_pitch -0st
+    attack 1.03874ms
+    decay 6.6874ms
     sustain 0.65
-    release 0.10
+    release 2.13847ms
 }
 
 # Angular guitar — FM with bite, Larry LaLonde dissonance
@@ -64,8 +64,8 @@ module fm guitar {
     mod_index 0.72
     feedback 0.42
     waveform half_sine
-    op0_ratio 0.065
-    op1_ratio 0.097
+    op0_ratio 1.5075x
+    op1_ratio 2.0035x
     op0_envelope 0.002 0.15 0.25 0.10
     op1_envelope 0.001 0.10 0.40 0.08
     op1_feedback 0.30
@@ -78,8 +78,8 @@ module fm clean {
     mod_index 0.40
     feedback 0.15
     waveform sine
-    op0_ratio 0.065
-    op1_ratio 0.13
+    op0_ratio 1.5075x
+    op1_ratio 2.515x
     op0_envelope 0.001 0.08 0.0 0.05
     op1_envelope 0.001 0.05 0.0 0.03
     chorus_mix 0.18
@@ -91,10 +91,10 @@ module fm scrape {
     mod_index 0.90
     feedback 0.60
     waveform abs_sine
-    op0_ratio 0.42
-    op1_ratio 0.16
-    op2_ratio 0.29
-    op3_ratio 0.10
+    op0_ratio 7.01x
+    op1_ratio 2.98x
+    op2_ratio 4.995x
+    op3_ratio 2.05x
     op0_envelope 0.3 0.5 0.30 0.5
     op1_envelope 0.1 0.3 0.50 0.3
     op2_envelope 0.2 0.4 0.40 0.4
@@ -102,7 +102,7 @@ module fm scrape {
     op0_feedback 0.35
     op2_feedback 0.45
     chorus_mix 0.40
-    lfo_rate 0.06
+    lfo_rate 1.294hz
     lfo_depth 0.12
     lfo_target mod_index
     lfo_waveform saw
@@ -111,14 +111,14 @@ module fm scrape {
 # Sub layer — pure low end underneath the slap
 module bass sub {
     cutoff 100hz       # was 0.05 = 28 Hz, below the notes it was filtering
-    cutoff_env 0.10
+    cutoff_env 36.4113hz
     resonance 0.15
     osc1_wave saw
-    osc2_pitch 0.50
-    attack 0.002
-    decay 0.20
+    osc2_pitch -0st
+    attack 1.01532ms
+    decay 4.57305ms
     sustain 0.80
-    release 0.05
+    release 1.46235ms
 }
 
 # Drum kit — tight, punchy, busy Herb Alexander style
@@ -126,18 +126,18 @@ module beats kit {
     kick_level 1.0
     kick_click 0.40
     kick_decay 0.18
-    kick_pitch 0.32
+    kick_pitch 0.98x
     kick_drive 0.65
 
     snare_level 0.75
     snare_decay 0.22
-    snare_pitch 0.35
+    snare_pitch 1.025x
     snare_drive 0.70
     snare_snap 0.40
     snare_pan 0.12
 
     hihat_level 0.40
-    hihat_pitch 0.38
+    hihat_pitch 1.07x
     hihat_pan 0.45
     hihat_decay 0.25
 

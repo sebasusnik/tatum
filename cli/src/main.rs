@@ -1,4 +1,5 @@
 mod audit;
+mod fmt;
 mod debug;
 mod include;
 mod live;
@@ -24,6 +25,7 @@ fn main() {
         "audit" => audit::cmd(&args[2..]),
         "debug" => debug::cmd(&args[2..]),
         "params" => cmd_params(&args[2..]),
+        "fmt" => fmt::cmd(&args[2..]),
         "set" => set::cmd(&args[2..]),
         "play" => live::cmd(&args[2..], false),
         "watch" => live::cmd(&args[2..], true),
@@ -42,6 +44,7 @@ fn print_usage() {
 USAGE:
     tatum render <song.synth> [-o output.wav] [--bars N] [--solo a,b] [--mute c]
     tatum check <song.synth>
+    tatum fmt --units <song.synth>      rewrite knob positions (cutoff 0.1) in their units
     tatum params [bass|fm|keys|beats|track|fx] [--json]
     tatum play <song.synth> [--device <name>] [--rate <hz>] [--midi <name>]
     tatum set render <dir> [-o out.wav] | set check <dir> | set next <dir> <file>

@@ -16,21 +16,21 @@ reverb size=0.6 damp=0.45 predelay=18
 module beats brk {
     kick_level 1.0
     kick_decay 0.4
-    kick_pitch 0.3
+    kick_pitch 0.95x
     kick_click 0.45
     kick_drive 0.25
     kick_pan 0.0
 
     snare_level 0.85
     snare_decay 0.35
-    snare_pitch 0.4
+    snare_pitch 1.1x
     snare_drive 0.35
     snare_snap 0.55
     snare_pan -0.1
 
     hihat_level 0.65
     hihat_decay 0.2
-    hihat_pitch 0.45
+    hihat_pitch 1.175x
     hihat_pan 0.3
 
     clap_level 0.5
@@ -38,16 +38,16 @@ module beats brk {
 }
 
 module bass acid {
-    cutoff 0.18
-    cutoff_env 0.75
+    cutoff 69.347hz
+    cutoff_env 1788.85hz
     resonance 0.8
     glide 0.1
     osc1_wave saw
-    osc2_pitch 0.5
-    attack 0.0
-    decay 0.28
+    osc2_pitch -0st
+    attack 1ms
+    decay 8.4002ms
     sustain 0.35
-    release 0.15
+    release 3.1272ms
     keytrack 0.3
 }
 
@@ -56,8 +56,8 @@ module fm stab {
     mod_index 0.85
     feedback 0.3
     waveform sine
-    op0_ratio 0.1
-    op1_ratio 0.18
+    op0_ratio 2.05x
+    op1_ratio 3.29x
     op0_envelope 0.001 0.06 0.0 0.05
     op1_envelope 0.001 0.03 0.0 0.02
     chorus_mix 0.0
@@ -68,11 +68,11 @@ module fm siren {
     mod_index 0.4
     feedback 0.1
     waveform sine
-    op0_ratio 0.06
-    op1_ratio 0.09
+    op0_ratio 1.43x
+    op1_ratio 1.895x
     op0_envelope 0.3 0.4 0.6 0.6
     op1_envelope 0.2 0.3 0.5 0.4
-    lfo_rate 0.5
+    lfo_rate 10.05hz
     lfo_depth 0.5
     lfo_target pitch
     lfo_sync free
@@ -81,16 +81,16 @@ module fm siren {
 
 module keys darkpad {
     voice_mode poly
-    cutoff 0.2
+    cutoff 502.377hz
     resonance 0.35
     detune 0.3
     chorus_mix 0.15
     level 0.6
-    attack 0.6
-    decay 0.5
+    attack 95.635ms
+    decay 44.7214ms
     sustain 0.6
-    release 0.7
-    lfo_rate 0.1
+    release 204.513ms
+    lfo_rate 2.09hz
     lfo_depth 0.15
     lfo_target cutoff
 }

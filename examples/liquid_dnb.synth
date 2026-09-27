@@ -29,21 +29,21 @@ groove liquid {
 module beats brk {
     kick_level 0.92
     kick_decay 0.30
-    kick_pitch 0.2333       # 0.85x pitch
+    kick_pitch 0.84995x       # 0.85x pitch
     kick_click 0.32
     kick_drive 0.18
     kick_pan 0.0
 
     snare_level 0.85
     snare_decay 0.44
-    snare_pitch 0.3467      # 1.02x pitch
+    snare_pitch 1.02005x      # 1.02x pitch
     snare_drive 0.22
     snare_snap 0.58
     snare_pan -0.07
 
     hihat_level 0.40
     hihat_decay 0.26
-    hihat_pitch 0.4333      # 1.15x pitch
+    hihat_pitch 1.14995x      # 1.15x pitch
     hihat_pan 0.24
 
     clap_level 0.42
@@ -53,17 +53,17 @@ module beats brk {
 # Sub: a filtered saw that is effectively a sine. No drive anywhere near it.
 module bass sub {
     osc1_wave saw
-    osc2_pitch 0.5          # unison
-    osc3_pitch 0.5
-    cutoff 0.2468           # 110 Hz: the note passes, the harmonics do not
-    cutoff_env 0.0          # no filter movement at all
+    osc2_pitch -0st          # unison
+    osc3_pitch -0st
+    cutoff 110.01hz           # 110 Hz: the note passes, the harmonics do not
+    cutoff_env 20hz          # no filter movement at all
     resonance 0.04
     glide 0.05
     keytrack 0.0
-    attack 0.2117           # 5 ms
-    decay 0.7883            # 400 ms
+    attack 4.9984ms           # 5 ms
+    decay 400.13ms            # 400 ms
     sustain 0.94
-    release 0.6501          # 140 ms
+    release 139.959ms          # 140 ms
     vel_env 0.0
 }
 
@@ -72,17 +72,17 @@ module keys cloud {
     voice_mode poly
     detune 0.42
     chorus_mix 0.55
-    cutoff 0.2457           # 620 Hz
+    cutoff 620.055hz           # 620 Hz
     resonance 4%
-    attack 0.9328           # 1.2 s, no transient
-    decay 0.8949            # 900 ms
+    attack 1200.05ms           # 1.2 s, no transient
+    decay 899.69ms            # 900 ms
     sustain 0.86
-    release 0.9861          # 1.8 s
+    release 1799.47ms          # 1.8 s
     lfo_target cutoff
     lfo_waveform triangle
     lfo_sync bars_16
     lfo_depth 0.11
-    vibrato_rate 0.0421     # 0.9 Hz
+    vibrato_rate 0.89995hz     # 0.9 Hz
     vibrato_depth 0.04
 }
 
@@ -100,18 +100,18 @@ module fm chapa {
                             # detras de un resonante de Q alto no llega, se lo come
     feedback 0.0
     waveform sine
-    op0_ratio 0.032258      # 1x, portadora
-    op1_ratio 0.096774      # 2x armonico: limpio
-    op0_attack 0.0912       # 2 ms, el golpe que dispara el seguidor
-    op0_decay 0.8459        # 620 ms
+    op0_ratio 1x      # 1x, portadora
+    op1_ratio 2x      # 2x armonico: limpio
+    op0_attack 2.0001ms       # 2 ms, el golpe que dispara el seguidor
+    op0_decay 619.93ms        # 620 ms
     op0_sustain 0.12        # cae rapido: seco, no sostenido
-    op0_release 0.7504      # 300 ms
-    op1_attack 0.0          # 1 ms
-    op1_decay 0.7815        # 380 ms
+    op0_release 299.98ms      # 300 ms
+    op1_attack 1ms          # 1 ms
+    op1_decay 379.975ms        # 380 ms
     op1_sustain 0.10
-    op1_release 0.7211      # 240 ms
+    op1_release 240.09ms      # 240 ms
     chorus_mix 0.0
-    vibrato_rate 0.0316     # 0.8 Hz
+    vibrato_rate 0.8002hz     # 0.8 Hz
     vibrato_depth 0.02
     lfo_target mod_index
     lfo_sync bars_8
@@ -125,21 +125,21 @@ module fm air {
     mod_index 0.22
     feedback 0.05
     waveform sine
-    op0_ratio 0.032258      # 1x
-    op1_ratio 0.16129       # 3x
-    op0_attack 0.9706       # 1.6 s
-    op0_decay 0.9622        # 1.5 s
+    op0_ratio 1x      # 1x
+    op1_ratio 3x       # 3x
+    op0_attack 1599.48ms       # 1.6 s
+    op0_decay 1500.55ms        # 1.5 s
     op0_sustain 0.72
-    op0_release 1.0         # 2 s
-    op1_attack 0.9328       # 1.2 s
-    op1_decay 0.9328        # 1.2 s
+    op0_release 2000ms         # 2 s
+    op1_attack 1200.05ms       # 1.2 s
+    op1_decay 1200.05ms        # 1.2 s
     op1_sustain 0.55
-    op1_release 0.9706      # 1.6 s
+    op1_release 1599.48ms      # 1.6 s
     chorus_mix 0.60
     lfo_target mod_index
     lfo_sync bars_16
     lfo_depth 0.22
-    vibrato_rate 0.0105     # 0.6 Hz
+    vibrato_rate 0.59975hz     # 0.6 Hz
     vibrato_depth 0.05
 }
 
@@ -150,16 +150,16 @@ module fm glass {
     mod_index 0.40
     feedback 0.10
     waveform sine
-    op0_ratio 0.032258      # 1x
-    op1_ratio 0.419355      # 7x
-    op0_attack 0.0912       # 2 ms
-    op0_decay 0.7316        # 260 ms
+    op0_ratio 1x      # 1x
+    op1_ratio 7x      # 7x
+    op0_attack 2.0001ms       # 2 ms
+    op0_decay 260.036ms        # 260 ms
     op0_sustain 0.0
-    op0_release 0.7211      # 240 ms
-    op1_attack 0.0          # 1 ms
-    op1_decay 0.6501        # 140 ms
+    op0_release 240.09ms      # 240 ms
+    op1_attack 1ms          # 1 ms
+    op1_decay 139.959ms        # 140 ms
     op1_sustain 0.0
-    op1_release 0.6299      # 120 ms
+    op1_release 120.038ms      # 120 ms
     chorus_mix 0.25
     lfo_target mod_index
     lfo_sync bars_8
@@ -173,18 +173,18 @@ module fm lead {
     mod_index 0.30
     feedback 0.12
     waveform sine
-    op0_ratio 0.032258      # 1x
-    op1_ratio 0.096774      # 2x
-    op0_attack 0.5008       # 45 ms
-    op0_decay 0.8416        # 600 ms
+    op0_ratio 1x      # 1x
+    op1_ratio 2x      # 2x
+    op0_attack 44.994ms       # 45 ms
+    op0_decay 599.99ms        # 600 ms
     op0_sustain 0.46
-    op0_release 0.8619      # 700 ms
-    op1_attack 0.4475       # 30 ms
-    op1_decay 0.7883        # 400 ms
+    op0_release 700.1ms      # 700 ms
+    op1_attack 30.006ms       # 30 ms
+    op1_decay 400.13ms        # 400 ms
     op1_sustain 0.30
-    op1_release 0.8176      # 500 ms
+    op1_release 499.945ms      # 500 ms
     chorus_mix 0.25
-    vibrato_rate 0.4211     # 4.5 Hz
+    vibrato_rate 4.50045hz     # 4.5 Hz
     vibrato_depth 0.08
     lfo_target mod_index
     lfo_sync bars_4
