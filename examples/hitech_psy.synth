@@ -28,9 +28,10 @@ module bass psy {
     lfo_depth 0.0
 }
 
-# Sub — warm sine
+# Sub — warm sine. E1 (41 Hz), the lowest E a speaker plays: it was E0,
+# 21 Hz, with the filter at 26 Hz, and most of it sat under the speakers.
 module bass sub {
-    cutoff 26.365hz
+    cutoff 90hz
     cutoff_env 26.9857hz
     resonance 0.08
     osc1_wave saw
@@ -394,14 +395,14 @@ pattern acid_riff {
 # ── Sub ──
 
 pattern sub_pulse {
-    1.0:0.78  ..  -  -
+    1.1:0.78  ..  -  -
     -         -   ..  -
-    1.0:0.72  ..  -  -
+    1.1:0.72  ..  -  -
     -         -   -  -
 }
 
 pattern sub_hold {
-    1.0:0.72  ..  ..  ..
+    1.1:0.72  ..  ..  ..
     ..        ..  ..  ..
     ..        ..  ..  ..
     ..        ..  ..  ..
@@ -723,7 +724,8 @@ track alien {
     gate 0.30
     delay_send 0.15
     reverb_send 0.10
-    out > saturate(0.20) > master
+    # half_sine carries DC; take it out before the saturation.
+    out > highpass(60hz, 0.1) > saturate(0.20) > master
 }
 
 # Stab — dry and punchy, no reverb muddying it
@@ -771,7 +773,7 @@ track air {
     pan 0.10
     reverb_send 0.20
     delay_send 0.08
-    out > lowpass(3990) > master
+    out > highpass(250hz, 0.1) > lowpass(3990) > master
 }
 
 # Shimmer — subtle high end sparkle, wide
@@ -796,7 +798,9 @@ track metal {
     gate 0.08
     delay_send 0.12
     reverb_send 0.08
-    out > saturate(0.30) > master
+    # abs_sine is a rectified wave: it carries DC, and the feedback turns it
+    # into rumble. The highpass takes both out before the saturation.
+    out > highpass(150hz, 0.1) > saturate(0.30) > lowpass(12khz, 0.1) > master
 }
 
 # Insects — opposite pan from metal, texture layer
