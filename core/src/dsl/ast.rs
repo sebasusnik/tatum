@@ -358,7 +358,7 @@ pub struct OpEnvelopeDef {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AutomationDef {
     pub target: String,      // "funk_bass.cutoff" or "reverb_mix"
-    pub keyframes: Vec<f32>, // 2 = linear, 3 = triangle
+    pub keyframes: Vec<f32>, // evenly spaced: 2 = linear, 3 = triangle, more = a curve
 }
 
 /// Scene definition (for arrangement).
