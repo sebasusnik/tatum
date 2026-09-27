@@ -529,28 +529,28 @@ pattern stab_half8 {
     - - Fm9:0.6 -  - - - -  - - - -  - - - -
 }
 
-# Every offbeat; bar 4 pushes a hit late, bar 8 plays one and lets the throw answer.
+# Two offbeats a bar, not four: room between them for the echo. Bar 4 pushes one late, bar 8 plays one and lets the throw answer.
 pattern stab_full8 {
-    - - Fm9:0.72 -  - - Fm9:0.55 -  - - Fm9:0.66 -  - - Fm9:0.5 -
-    - - Fm9:0.7 -  - - Fm9:0.5 -  - - Fm9:0.64 -  - - Fm9:0.46 -
-    - - Fm9:0.72 -  - - Fm9:0.55 -  - - Fm9:0.66 -  - - Fm9:0.5 -
-    - - Fm9:0.7 -  - - Fm9:0.5 -  - - - Fm9:0.6  - - - -
-    - - Fm9:0.72 -  - - Fm9:0.55 -  - - Fm9:0.66 -  - - Fm9:0.5 -
-    - - Fm9:0.7 -  - - Fm9:0.5 -  - - Fm9:0.64 -  - - Fm9:0.46 -
-    - - Fm9:0.72 -  - - Fm9:0.55 -  - - Fm9:0.66 -  - - Fm9:0.5 -
+    - - Fm9:0.72 -  - - - -  - - Fm9:0.6 -  - - - -
+    - - Fm9:0.7 -  - - - -  - - Fm9:0.56 -  - - - -
+    - - Fm9:0.72 -  - - - -  - - Fm9:0.6 -  - - - -
+    - - Fm9:0.7 -  - - - -  - - - Fm9:0.58  - - - -
+    - - Fm9:0.72 -  - - - -  - - Fm9:0.6 -  - - - -
+    - - Fm9:0.7 -  - - Fm9:0.45 -  - - Fm9:0.56 -  - - - -
+    - - Fm9:0.72 -  - - - -  - - Fm9:0.6 -  - - - -
     - - Fm9:0.7 -  - - - -  - - - -  - - - -
 }
 
-# The one chord change, Fm9 to Dbmaj9, now twice a phrase.
+# The one chord change, Fm9 to Dbmaj9, twice a phrase; two hits a bar.
 pattern stab_dub8 {
-    - - Fm9:0.7 -  - - Fm9:0.5 -  - - Fm9:0.64 -  - - Fm9:0.46 -
-    - - Fm9:0.7 -  - - Fm9:0.5 -  - - Fm9:0.64 -  - - Fm9:0.46 -
-    - - Fm9:0.7 -  - - Fm9:0.5 -  - - Fm9:0.64 -  - - - -
-    - - Dbmaj9:0.66 -  - - Dbmaj9:0.5 -  - - Dbmaj9:0.6 -  - - Dbmaj9:0.44 -
-    - - Fm9:0.7 -  - - Fm9:0.5 -  - - Fm9:0.64 -  - - Fm9:0.46 -
-    - - Fm9:0.7 -  - - Fm9:0.5 -  - - - Fm9:0.6  - - - -
-    - - Dbmaj9:0.66 -  - - Dbmaj9:0.5 -  - - Dbmaj9:0.6 -  - - Dbmaj9:0.44 -
-    - - Dbmaj9:0.66 -  - - - -  - - Dbmaj9:0.5 -  - - - -
+    - - Fm9:0.7 -  - - - -  - - Fm9:0.58 -  - - - -
+    - - Fm9:0.7 -  - - - -  - - Fm9:0.56 -  - - - -
+    - - Fm9:0.7 -  - - - -  - - - Fm9:0.56  - - - -
+    - - Dbmaj9:0.66 -  - - - -  - - Dbmaj9:0.54 -  - - - -
+    - - Fm9:0.7 -  - - - -  - - Fm9:0.58 -  - - - -
+    - - Fm9:0.7 -  - - Fm9:0.44 -  - - Fm9:0.56 -  - - - -
+    - - Dbmaj9:0.66 -  - - - -  - - Dbmaj9:0.54 -  - - - -
+    - - Dbmaj9:0.66 -  - - - -  - - - -  - - - -
 }
 
 # One chord at the end of the phrase, thrown into the echo.
@@ -719,12 +719,13 @@ track stab {
     velocity 0.75
     pan -0.12
     delay_send 0.5
-    reverb_send 0.60
+    reverb_send 0.35
     sidechain 0.5
     out > highpass(300hz, 0.15)
         > lowpass(3.6khz, 0.12, lfo_bars=8, lfo_depth=1400)
         > compressor(-14, ratio=2.0, attack=15, release=200, makeup=3db)
         > saturate(0.2)
+        > autopan(0.8, bars=4)
         > master
 }
 
