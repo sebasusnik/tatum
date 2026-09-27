@@ -29,8 +29,21 @@ pub struct Song {
 pub struct MidiMapDef {
     pub source: MidiSource,
     pub target: String,
+    /// `cc 74 > acid cutoff 200hz..4khz`: where the bottom and the top of the
+    /// knob's travel land, in the target's units. Written high to low, the
+    /// knob works backwards. `None`: the target's whole range.
+    pub range: Option<(RangeEnd, RangeEnd)>,
     /// Source line, for compile errors.
     pub line: usize,
+}
+
+/// One end of a knob's range as written: `200hz`, `60%`, `-12db`, `0.8`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RangeEnd {
+    pub value: f32,
+    /// The unit written against the number, lowercase; `None` for a plain
+    /// number, which means what the same number means in the text.
+    pub unit: Option<String>,
 }
 
 /// What on the controller a `midi` line listens to.

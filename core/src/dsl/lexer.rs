@@ -243,7 +243,10 @@ pub fn tokenize(source: &str) -> Vec<Span> {
         // Number (including negative after context, and decimals)
         if ch.is_ascii_digit() || (ch == '.' && i + 1 < len && chars[i + 1].is_ascii_digit()) {
             let start = i;
-            while i < len && (chars[i].is_ascii_digit() || chars[i] == '.') {
+            // A `.` followed by another is a range or a tie (`0.1..0.6`), not
+            // part of the number: read as one, the whole run failed to parse
+            // and was dropped without a word.
+            while i < len && (chars[i].is_ascii_digit() || (chars[i] == '.' && chars.get(i + 1) != Some(&'.'))) {
                 i += 1;
             }
             let s: String = chars[start..i].iter().collect();

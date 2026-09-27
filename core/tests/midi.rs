@@ -511,3 +511,69 @@ fn a_value_written_in_the_text_lets_go_of_the_fader() {
     assert!(engine.held().is_empty(), "{:?}", engine.held());
     assert!(engine.track_level(track(engine, "bass")) > 0.0);
 }
+
+fn module_value(op: &FastOp) -> f32 {
+    match op {
+        FastOp::ModuleParam { value, .. } => *value,
+        other => panic!("not a module parameter: {:?}", other),
+    }
+}
+
+#[test]
+fn a_knob_with_a_range_sweeps_between_its_ends_in_the_targets_units() {
+    use tatum_core::params::{self, ModuleKind};
+    // One knob, three things, each over its own stretch: a macro. The level
+    // is written high to low, so that fader works backwards.
+    let src = format!(
+        "{}\nmidi {{\n  cc 74 > acid cutoff 200hz..4khz\n  cc 74 > acid resonance 10%..60%\n  cc 74 > bass level 0.8..0\n}}\n",
+        SONG
+    );
+    let (mut planner, player) = session(&src);
+    let g = player.generation();
+    let cutoff = params::lookup(ModuleKind::Bass, "cutoff").unwrap();
+    let at = |ops: &[FastOp], i: usize| ops[i];
+
+    let low = ops(&planner.knob(74, 0, g).plans);
+    let high = ops(&planner.knob(74, 127, g).plans);
+    assert_eq!(low.len(), 3, "{low:?}");
+    let want_low = cutoff.value_from_quantity(200.0, "hz").unwrap();
+    let want_high = cutoff.value_from_quantity(4.0, "khz").unwrap();
+    assert!((module_value(&at(&low, 0)) - want_low).abs() < 1e-5);
+    assert!((module_value(&at(&high, 0)) - want_high).abs() < 1e-5);
+    assert!((module_value(&at(&low, 1)) - 0.10).abs() < 1e-5);
+    assert!((module_value(&at(&high, 1)) - 0.60).abs() < 1e-5);
+    assert!(matches!(at(&low, 2), FastOp::TrackLevel { level, .. } if (level - 0.8).abs() < 1e-6));
+    assert!(matches!(at(&high, 2), FastOp::TrackLevel { level, .. } if level.abs() < 1e-6));
+
+    // Halfway is halfway between the ends, on the parameter's own curve.
+    let mid = ops(&planner.knob(74, 64, g).plans);
+    let v = module_value(&at(&mid, 0));
+    assert!(v > want_low && v < want_high);
+    let reading = planner.knob(74, 127, g).readings;
+    assert!(reading[0].contains("4") && reading[0].contains("khz"), "{reading:?}");
+}
+
+#[test]
+fn a_range_the_target_cannot_take_is_a_compile_error_on_its_line() {
+    for (line, says) in [
+        ("cc 74 > acid cutoff 20ms..40ms", "'cutoff'"),
+        ("cc 21 > pad voice_mode 0..1", "is a choice"),
+        ("cc 22 > reverb_freeze 0..1", "takes no range"),
+        ("cc 30 > bass level 0..9", "a level runs from 0 to"),
+        ("cc 10 > pad pan -2..1", "outside -1..1"),
+        ("cc 74 > acid cutoff 200hz 4khz", "two values with `..`"),
+    ] {
+        let src = format!("{}\nmidi {{\n  {}\n}}\n", SONG, line);
+        let err = SongEngine::from_source(&src).err().unwrap_or_else(|| panic!("{line} compiled"));
+        let text = format!("{:?}", err);
+        assert!(text.contains(says), "{line}: {text}");
+    }
+}
+
+#[test]
+fn a_level_range_takes_decibels() {
+    let src = format!("{}\nmidi {{\n  cc 30 > bass level -12db..0db\n}}\n", SONG);
+    let (mut planner, player) = session(&src);
+    let low = ops(&planner.knob(30, 0, player.generation()).plans);
+    assert!(matches!(low[0], FastOp::TrackLevel { level, .. } if (level - 0.2512).abs() < 1e-3), "{low:?}");
+}

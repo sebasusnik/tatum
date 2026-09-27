@@ -123,6 +123,11 @@ pub(super) fn validate_midi(song: &Song) -> Vec<CompileError> {
                 _ => errors.push(err(format!("a knob moves {}", MIDI_TARGETS))),
             },
         }
+        if let (MidiSource::Cc(_), Some(range)) = (map.source, &map.range) {
+            if let Err(msg) = crate::midi::knob_span(song, &map.target, range) {
+                errors.push(err(msg));
+            }
+        }
     }
     errors
 }

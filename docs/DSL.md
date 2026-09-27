@@ -416,6 +416,23 @@ shows what it reads in its units (`acid cutoff 1.2khz`, `pad level -6.0 dB`). A 
 that nothing is mapped to shows its number instead (`cc 74 = 90 (not mapped)`), which
 is how you find what your controller sends.
 
+A range after the target puts the knob's travel on a stretch of it, in the target's own
+units, and repeating the controller on several lines makes one knob a macro:
+
+```
+midi {
+    cc 74 > acid cutoff 200hz..4khz    # the bottom of the knob is 200 Hz, the top 4 kHz
+    cc 74 > acid resonance 10%..60%    # the same knob, over less of the resonance
+    cc 74 > dub level 0.8..0           # written high to low: this one works backwards
+    cc 7  > pad level -18db..0db
+}
+```
+
+A module parameter takes its own units, or a plain number as its line in the module
+would; a level takes a gain, dB or %; a pan, a wet and the mixes take a number or %.
+A choice and `reverb_freeze` take no range. The sweep between the ends follows the
+parameter's own curve, so a cutoff range still opens evenly to the ear.
+
 Knobs and the text share the values:
 
 - **The last hand wins.** A knob that has been moved holds its target: a save keeps

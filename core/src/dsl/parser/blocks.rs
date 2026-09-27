@@ -188,11 +188,69 @@ impl Parser {
                 self.recover_to_line_end();
                 continue;
             }
-            block.push(MidiMapDef { source, target: words.join("."), line });
+            let range = if matches!(source, MidiSource::Cc(_)) { self.parse_knob_range() } else { None };
+            block.push(MidiMapDef { source, target: words.join("."), range, line });
         }
         self.expect(&Token::RBrace);
         maps.retain(|m| !block.iter().any(|b| b.source == m.source));
         maps.extend(block);
+    }
+
+    /// `200hz..4khz` after a knob's target, if one follows.
+    fn parse_knob_range(&mut self) -> Option<(RangeEnd, RangeEnd)> {
+        let starts = match self.peek() {
+            Token::Number(_) | Token::Quantity(_, _) => true,
+            Token::Rest => matches!(self.peek_ahead(1), Token::Number(_) | Token::Quantity(_, _)),
+            _ => false,
+        };
+        if !starts {
+            return None;
+        }
+        let low = self.parse_range_end()?;
+        if !matches!(self.peek(), Token::Tie) {
+            let s = self.span().clone();
+            self.errors.push(ParseError {
+                line: s.line,
+                col: s.col,
+                message: format!(
+                    "midi: a knob's range is two values with `..` between them, like `200hz..4khz`, got {}",
+                    describe_token(&s.token)
+                ),
+            });
+            self.recover_to_line_end();
+            return None;
+        }
+        self.advance();
+        let high = self.parse_range_end()?;
+        Some((low, high))
+    }
+
+    fn parse_range_end(&mut self) -> Option<RangeEnd> {
+        let negative = matches!(self.peek(), Token::Rest);
+        if negative {
+            self.advance();
+        }
+        let sign = if negative { -1.0 } else { 1.0 };
+        match self.peek().clone() {
+            Token::Number(n) => {
+                self.advance();
+                Some(RangeEnd { value: sign * n, unit: None })
+            }
+            Token::Quantity(n, unit) => {
+                self.advance();
+                Some(RangeEnd { value: sign * n, unit: Some(unit) })
+            }
+            other => {
+                let s = self.span().clone();
+                self.errors.push(ParseError {
+                    line: s.line,
+                    col: s.col,
+                    message: format!("midi: expected a value for the knob's range, got {}", describe_token(&other)),
+                });
+                self.recover_to_line_end();
+                None
+            }
+        }
     }
 
     // ── Bus chain ──

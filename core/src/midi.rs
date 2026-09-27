@@ -14,7 +14,7 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::dsl::ast::{MidiSource, Param, Song};
+use crate::dsl::ast::{MidiSource, Param, RangeEnd, Song};
 use crate::live::FastOp;
 use crate::params::{self, ModuleKind, ParamSpec, Range};
 
@@ -49,19 +49,22 @@ pub struct Knob {
     /// The target as the file writes it, dotted: `acid.cutoff`.
     pub target: String,
     pub moves: Vec<Move>,
+    /// Where the bottom and the top of the travel land, as the engine reads
+    /// the target; from `cc 74 > acid cutoff 200hz..4khz`. `None`: all of it.
+    pub span: Option<(f32, f32)>,
 }
 
 impl Knob {
     /// The operations that put this knob at `value`.
     pub fn ops(&self, value: u8) -> impl Iterator<Item = FastOp> + '_ {
-        self.moves.iter().map(move |m| op(m, scaled(m, value)))
+        self.moves.iter().map(move |m| op(m, scaled(m, value, self.span)))
     }
 
     /// What the knob reads at `value`: `acid cutoff 1.2khz`, `pad level -6.0 dB`.
     pub fn reading(&self, value: u8) -> String {
         let label = self.target.replace('.', " ");
         match self.moves.first() {
-            Some(m) => format!("{} {}", label, reading(m, scaled(m, value))),
+            Some(m) => format!("{} {}", label, reading(m, scaled(m, value, self.span))),
             None => label,
         }
     }
@@ -105,7 +108,8 @@ pub fn resolve_all(song: &Song, names: &Names) -> Controls {
     for m in &song.midi {
         match m.source {
             MidiSource::Cc(cc) => {
-                controls.knobs.push(Knob { cc, target: m.target.clone(), moves: resolve(song, names, &m.target) })
+                let span = m.range.as_ref().and_then(|r| knob_span(song, &m.target, r).ok());
+                controls.knobs.push(Knob { cc, target: m.target.clone(), moves: resolve(song, names, &m.target), span })
             }
             MidiSource::Keys => {
                 let Some(t) = track(&m.target) else { continue };
@@ -213,9 +217,90 @@ pub fn text_value(song: &Song, target: &str) -> Option<f32> {
     }
 }
 
+/// Where a knob's range, as written, lands on `target` as the engine reads
+/// it. The ends are in the units the text uses for that target: a module
+/// parameter takes its own (`200hz`, `40ms`, `60%`) or a plain number as its
+/// line in the module would; a level takes a gain (`0.8`), `-6db` or `%`; a
+/// pan, a wet and a mix take a number or `%`. The error is for `tatum check`.
+pub fn knob_span(song: &Song, target: &str, range: &(RangeEnd, RangeEnd)) -> Result<(f32, f32), String> {
+    let words: Vec<&str> = target.split('.').collect();
+    let spec = match words.as_slice() {
+        [module, param] if !matches!(*param, "level" | "pan") => song
+            .module_defs
+            .iter()
+            .find(|m| &m.name == module)
+            .and_then(|def| ModuleKind::from_str(&def.module_type))
+            .and_then(|kind| params::lookup(kind, param)),
+        _ => None,
+    };
+    let end = |e: &RangeEnd| -> Result<f32, String> {
+        let unit = e.unit.as_deref();
+        match (words.as_slice(), spec) {
+            (["reverb_freeze"], _) => Err(String::from("reverb_freeze is on or off; it takes no range")),
+            (_, Some(spec)) => {
+                if let Range::Choice(_) = spec.range {
+                    return Err(format!(
+                        "'{}' is a choice; a knob steps through all of them, with no range",
+                        spec.name
+                    ));
+                }
+                let v = match unit {
+                    Some(u) => spec.value_from_quantity(e.value, u)?,
+                    None => e.value,
+                };
+                if spec.range.contains(v) {
+                    Ok(v)
+                } else {
+                    Err(format!("{} is outside what '{}' takes", e.value, spec.name))
+                }
+            }
+            ([_, "level"], _) => {
+                let gain = match unit {
+                    None => e.value,
+                    Some("db") => crate::math::pow(10.0, e.value / 20.0),
+                    Some("%") => e.value / 100.0,
+                    Some(u) => return Err(format!("a level takes a gain, dB or %, not '{}'", u)),
+                };
+                if (0.0..=crate::song_engine::MAX_TRACK_LEVEL).contains(&gain) {
+                    Ok(gain)
+                } else {
+                    Err(format!("a level runs from 0 to {} (+12 dB)", crate::song_engine::MAX_TRACK_LEVEL))
+                }
+            }
+            (w, _) => {
+                let (lo, hi) = if matches!(w, [_, "pan"]) { (-1.0, 1.0) } else { (0.0, 1.0) };
+                let v = match unit {
+                    None => e.value,
+                    Some("%") => e.value / 100.0,
+                    Some(u) => return Err(format!("this takes a plain number or %, not '{}'", u)),
+                };
+                if (lo..=hi).contains(&v) {
+                    Ok(v)
+                } else {
+                    Err(format!("{} is outside {}..{}", e.value, lo, hi))
+                }
+            }
+        }
+    };
+    Ok((end(&range.0)?, end(&range.1)?))
+}
+
 /// Where a 7-bit controller value lands on a target, as the engine reads it.
-fn scaled(m: &Move, value: u8) -> f32 {
+fn scaled(m: &Move, value: u8, span: Option<(f32, f32)>) -> f32 {
     let x = value.min(127) as f32 / 127.0;
+    // A range written with the knob: straight from one end to the other,
+    // in the values the engine reads, so a cutoff still sweeps along its
+    // own curve. Choices and the freeze switch have none.
+    if let Some((lo, hi)) = span {
+        let continuous = match m {
+            Move::Module { spec, .. } => !matches!(spec.range, Range::Choice(_)),
+            Move::ReverbFreeze => false,
+            _ => true,
+        };
+        if continuous {
+            return lo + (hi - lo) * x;
+        }
+    }
     match m {
         Move::Module { spec, .. } => match spec.range {
             Range::Unit => x,
