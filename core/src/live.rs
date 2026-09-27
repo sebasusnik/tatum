@@ -557,6 +557,14 @@ impl LivePlanner {
         self.knob_values.retain(|(cc, _)| !edited.contains(cc));
     }
 
+    /// Level every engine from now on by `gain` instead of measuring the
+    /// first song planned. A set measures all its steps and passes the gain
+    /// of the loudest: measured on a quiet opening step, the peak of the set
+    /// came out many dB too hot and was flattened by the limiter.
+    pub fn set_output_gain(&mut self, gain: f32) {
+        self.output_gain = Some(gain);
+    }
+
     /// Keep these tracks out of everything planned from now on. Set it before
     /// the first `plan`: it is part of what the file means, so changing it
     /// later shows up as an edit on the next save.

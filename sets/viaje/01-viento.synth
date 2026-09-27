@@ -1,0 +1,6 @@
+# set: bars=16 phase=viento energy=1
+# set-note: Solo el viento y un acorde lejos, tres ecos adentro. Nada que bailar todavía.
+use "_rig.synth"
+
+track bed  { level 0.6 }
+track stab { play stab_ghost level 0.2 velocity 0.6 sidechain 0.0 }

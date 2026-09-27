@@ -1,0 +1,547 @@
+# viaje — the rig for a one-hour set, played on an Arturia KeyLab Essential 49 mk3
+#
+# The journey starts in dub techno (the wind, one chord and its echoes) and
+# grows into Detroit (moving chords, a walking bass, a lead on the keys). Both
+# are in F minor, so the chords of one sit under the other. Every voice of the
+# whole set is here, most of them at `level 0`: a step is this rig plus what
+# it changes, so moving between steps changes a few things and never swaps
+# the whole instrument.
+#
+#   tatum set play sets/viaje --midi keylab
+#
+# Faders, left to right                 Knobs, left to right
+#   1 drums (kick, rim, clap)             1 dub chord: opens and throws into the echo
+#   2 hats                                2 walking bass: filter, squelch, bite
+#   3 wind                                3 Detroit chords: open
+#   4 sub                                 4 lead: filter and resonance
+#   5 dub chord                           5 tension: brighter master, more wind
+#   6 walking bass                        6 reverb amount
+#   7 Detroit chords                      7 kick length
+#   8 echo amount                         8 hat length
+#   9 DJ filter: centre open, down dark, up thin
+#                                         9 bell
+#
+# Pads, bottom row: drums out while held · hats in/out · dub chord into the
+# echo while held · reverb frozen while held.
+# Top row: clap · walking bass in/out · previous step · next step.
+# The keys play the lead, sliding between held keys; the pitch strip bends it.
+#
+# The KeyLab's knobs are endless and count from zero at power-up: the first
+# touch jumps a knob to where it physically is. The DJ filter is on a fader
+# for that reason: a fader's position is always the sound's.
+
+tempo 122
+meter 4/4
+scale F minor
+swing 0.52
+humanize 0.06 timing 0.012
+sidechain 0.42 attack=2ms release=130ms
+
+# The sends are half the instrument in dub: a dark dotted-eighth echo that
+# loses its top on every repeat, and a big room that breathes with the kick.
+delay sync=dotted_eighth feedback=0.68 filter=0.3 sidechain=0.35
+reverb size=0.82 damp=0.45 predelay=32 sidechain=0.5
+
+delay_return {
+    in > highpass(210hz, 0.2)
+       > lowpass(6khz, 0.1, lfo_bars=8, lfo_depth=2000)
+       > autopan(0.5, bars=8)
+       > out
+}
+reverb_return {
+    in > highpass(260hz, 0.15)
+       > lowpass(6.5khz, 0.1, lfo_bars=8, lfo_depth=2200)
+       > autopan(0.32, bars=8)
+       > out
+}
+
+# ════════════════════════════════════════════════════════
+# MODULES
+# ════════════════════════════════════════════════════════
+
+# ── From dub_techno ──
+
+# The chord: detuned, chorused, filtered to a mumble; what you hear is
+# mostly its echoes.
+module keys chord {
+    voice_mode poly
+    detune 22%
+    chorus_mix 55%
+    cutoff 1.7khz
+    resonance 26%
+    attack 14ms
+    decay 210ms
+    sustain 6%
+    release 260ms
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync bars_8
+    lfo_depth 14%
+    vibrato_rate 0.6hz
+    vibrato_depth 3%
+}
+
+# Sub: almost a sine.
+module bass sub {
+    cutoff 165hz
+    cutoff_env 90hz
+    resonance 8%
+    glide 24%
+    osc1_wave saw
+    osc2_wave saw
+    osc2_pitch -12st
+    keytrack 18%
+    attack 10ms
+    decay 450ms
+    sustain 72%
+    release 320ms
+}
+
+# One kit for the whole set: the deep dub kick, a rim (the snare, tuned up
+# and short), the 909 clap and the hats. Steps retune it as the set warms.
+module beats kit {
+    kick_level 100%
+    kick_decay 55%
+    kick_pitch 0.62x
+    kick_click 14%
+    kick_drive 30%
+    kick_pan 0%
+    snare_level -13db
+    snare_decay 5%
+    snare_pitch 1.75x
+    snare_drive 10%
+    snare_snap 58%
+    snare_pan -38%
+    clap_level 70%
+    clap_pan -14%
+    hihat_level 50%
+    hihat_decay 18%
+    hihat_pitch 1.4x
+    hihat_pan 36%
+}
+
+# The wind: band-passed noise that swells rather than starts.
+instrument hiss {
+    gain 0.9
+    noise() as n
+    n > bandpass(760, 0.22) as bp
+    bp > adsr(2.5, 1.0, 0.8, 3.0) as amp
+    amp > out
+}
+
+# ── From detroit ──
+
+module keys warmth {
+    voice_mode poly
+    detune 16%
+    chorus_mix 16%
+    cutoff 796.214hz
+    resonance 0.06
+    attack 82ms
+    decay 205ms
+    sustain 82%
+    release 277ms
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync bars_4
+    lfo_depth 10%
+    vibrato_rate 20%
+    vibrato_depth 2%
+}
+
+module keys stab {
+    voice_mode poly
+    detune 18%
+    chorus_mix 20%
+    cutoff 1.26khz
+    resonance 0.12
+    attack 1ms
+    decay 96ms
+    sustain 10%
+    release 31ms
+}
+
+module keys under {
+    voice_mode poly
+    detune 3%
+    cutoff 316.98hz
+    resonance 0.05
+    attack 205ms
+    decay 238ms
+    sustain 85%
+    release 437ms
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync bars_8
+    lfo_depth 8%
+}
+
+module bass walker {
+    cutoff 158.866hz
+    cutoff_env 46%
+    resonance 0.15
+    glide 5%
+    osc1_wave saw
+    osc2_wave square
+    osc2_pitch 0st
+    osc3_pitch -12st
+    keytrack 35%
+    attack 1.2ms
+    decay 71ms
+    sustain 55%
+    release 8ms
+    vel_env 40%
+}
+
+module fm bell {
+    algorithm two_op
+    waveform sine
+    mod_index 34%
+    feedback 10%
+    op0_ratio 0.996x
+    op1_ratio 2.0035x
+    op0_envelope 0.004 0.86 0.0 0.80
+    op1_envelope 0.002 0.55 0.0 0.40
+    vibrato_rate 25%
+    vibrato_depth 3%
+}
+
+# ── New: the lead the keys play ──
+
+# Two saws a hair apart through a resonant filter that opens on every note,
+# sliding between held keys. Mono, so a held key under a new one is where it
+# falls back to.
+module bass lead {
+    cutoff 900hz
+    cutoff_env 55%
+    resonance 38%
+    glide 22%
+    osc1_wave saw
+    osc2_wave saw
+    osc2_pitch 0.12st
+    keytrack 60%
+    attack 4ms
+    decay 380ms
+    sustain 55%
+    release 220ms
+    vel_env 35%
+}
+
+# ════════════════════════════════════════════════════════
+# PATTERNS
+# ════════════════════════════════════════════════════════
+
+pattern rest { -*16 }
+
+# ── Drums, split into the hits and the hats so a pad can take the hats out ──
+
+pattern kick_four { kick: X - - -  x - - -  X - - -  x - - - }
+pattern kick_rim {
+    kick:  X - - -  x - - -  X - - -  x - - -    X - - -  x - - -  X - - -  x - - -
+    snare: - - - -  - - - -  - - - -  - - - -    - - - -  - - o -  - - - -  - - - -
+}
+pattern kick_dub {
+    kick:  X - - -  x - - -  X - - -  x - - -    X - - -  x - - -  X - - -  x - - -
+    snare: - - - -  - - o -  - - - -  - - - -    - - - -  - - - -  - - - -  - - o:0.3 -
+}
+pattern kick_clap {
+    kick: X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap: - - - -  x:0.75 - - -  - - - -  x:0.75 - - -   - - - -  x:0.75 - - -  - - - -  x:0.80 - - -
+}
+pattern kick_full {
+    kick: X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - x:0.5
+    clap: - - - -  x:0.78 - - -  - - - -  x:0.78 - - -   - - - -  x:0.78 - - -  - - - -  x:0.85 - - o
+}
+
+pattern hat_ghost { hat: - - - -  - - o -  - - - -  - - o - }
+pattern hat_dub {
+    hat: - - o -  - - x -  - - o -  - - x -    - - o -  - - x -  - - o -  - - x:0.5 -
+}
+pattern hat_off {
+    hat: - - x:0.46 -  - - x:0.42 -  - - x:0.46 -  - - x:0.42 -   - - x:0.46 -  - - x:0.42 -  - - x:0.46 -  - - x:0.48 -
+}
+pattern hat_open {
+    hat:     - - x:0.48 -  - - x:0.44 -  - - x:0.48 -  - - x:0.44 -   - - x:0.48 -  - - x:0.44 -  - - x:0.48 -  - - x:0.50 -
+    openhat: - - - -  - - - -  - - - -  - - x:0.42 -   - - - -  - - - -  - - - -  - - x:0.48 -
+}
+
+# ── The dub chord, on the offbeat. Fm9 = F Ab C Eb G ──
+
+pattern stab_ghost { -  -  Fm9:0.6   -    -  -  -  -    -  -  -  -    -  -  -  - }
+pattern stab_half  { -  -  Fm9:0.68  -    -  -  -  -    -  -  Fm9:0.52  -    -  -  -  - }
+pattern stab_full  { -  -  Fm9:0.72  -    -  -  Fm9:0.55  -    -  -  Fm9:0.66  -    -  -  Fm9:0.5   - }
+pattern stab_dub {
+    -  -  Fm9:0.7   -    -  -  Fm9:0.5   -    -  -  Fm9:0.64  -    -  -  Fm9:0.46  -
+    -  -  Fm9:0.7   -    -  -  Fm9:0.5   -    -  -  Fm9:0.64  -    -  -  -  -
+    -  -  Fm9:0.68  -    -  -  Fm9:0.5   -    -  -  Fm9:0.62  -    -  -  Fm9:0.44  -
+    -  -  Dbmaj9:0.66 -  -  -  Dbmaj9:0.5 -   -  -  Dbmaj9:0.6 -   -  -  -  -
+}
+
+# ── Sub ──
+
+pattern sub_long { F1:0.7  ..*15 }
+pattern sub_f    { F1:0.8  ..*7   -*8 }
+pattern sub_dub {
+    F1:0.8  ..*7   -*8
+    F1:0.8  ..*7   -*8
+    F1:0.8  ..*7   -*8
+    Db1:0.75 ..*7  -*8
+}
+
+# ── The wind: one held note ──
+
+pattern hiss_hold { C3:0.7  ..*15 }
+
+# ── Detroit ──
+
+pattern ch_a {
+    Fm9:0.62     ..*31
+    Bbm9:0.60    ..*31
+    Eb9:0.58     ..*31
+    Abmaj9:0.62  ..*31
+}
+pattern ch_b {
+    Cm9:0.60   ..*31
+    Fm9:0.60   ..*31
+    Bbm9:0.58  ..*31
+    Ebm9:0.58  ..*31
+}
+pattern ch_low {
+    [F2 C3]:0.55   ..*31
+    [Bb2 F3]:0.55  ..*31
+    [Eb2 Bb2]:0.52 ..*31
+    [Ab2 Eb3]:0.55 ..*31
+}
+pattern ch_drone { [F2 C3]:0.5 ..*15 }
+pattern bs_intro {
+    F1:0.85 -  -  -    -  -  -  -    -  -  C2:0.50 -    -  -  -  -
+    F1:0.80 -  -  -    -  -  -  -    -  -  -  -    -  -  Ab1:0.45 -
+}
+pattern bs_a {
+    F1:0.90  -  -  -    -  -  -  Ab1:0.55    -  -  C2:0.70  -    -  -  -  -
+    F1:0.82  -  -  -    -  -  Eb2:0.58 -     -  -  F1:0.50  -    -  -  -  -
+    Bb1:0.90 -  -  -    -  -  -  Db2:0.55    -  -  F1:0.70  -    -  -  -  -
+    Bb1:0.82 -  -  -    -  -  Ab1:0.58 -     -  -  Bb1:0.50 -    -  -  -  -
+    Eb2:0.88 -  -  -    -  -  -  Db2:0.55    -  -  Bb1:0.70 -    -  -  -  -
+    Eb2:0.80 -  -  -    -  -  G1:0.58  -     -  -  Eb2:0.50 -    -  -  -  -
+    Ab1:0.90 -  -  -    -  -  -  C2:0.55     -  -  Eb2:0.70 -    -  -  -  -
+    Ab1:0.82 -  -  -    -  -  G1:0.58  -     -  -  Ab1:0.50 -    -  -  -  -
+}
+pattern st_a {
+    -  -  -  -    -  -  Fm9/4:0.50 -       -  -  -  -    -  -  Fm9/4:0.40 -
+    -  -  -  -    -  -  -  -                -  -  Fm9/4:0.45 -    -  -  -  -
+    -  -  -  -    -  -  Bbm9/4:0.50 -      -  -  -  -    -  -  Bbm9/4:0.40 -
+    -  -  -  -    -  -  -  -                -  -  Bbm9/4:0.45 -   -  -  -  -
+    -  -  -  -    -  -  Eb9/4:0.48 -       -  -  -  -    -  -  Eb9/4:0.38 -
+    -  -  -  -    -  -  -  -                -  -  Eb9/4:0.44 -    -  -  -  -
+    -  -  -  -    -  -  Abmaj9/4:0.50 -    -  -  -  -    -  -  Abmaj9/4:0.42 -
+    -  -  -  -    -  -  -  -                -  -  -  -    -  -  -  -
+}
+pattern bl_a {
+    -  -  -  -    -  -  -  -    -  -  -  -    Ab4:0.50 -  -  -
+    -  -  -  -    -  -  -  -    -  -  -  -    -  -  -  -
+    -  -  -  -    -  -  -  -    -  -  -  -    Db5:0.48 -  -  -
+    -  -  -  -    -  -  -  -    -  -  -  -    -  -  -  -
+    -  -  -  -    -  -  -  -    -  -  -  -    Bb4:0.46 -  -  -
+    -  -  -  -    -  -  -  -    -  -  -  -    -  -  -  -
+    -  -  -  -    -  -  -  -    -  -  -  -    C5:0.50  -  -  -
+    -  -  -  -    -  -  -  -    -  -  -  -    -  -  Eb5:0.40 -
+}
+
+# ════════════════════════════════════════════════════════
+# BUSES
+# ════════════════════════════════════════════════════════
+
+bus drums
+drums {
+    in > compressor(-14, ratio=2.8, attack=15, release=150, makeup=2db)
+       > saturate(0.35)
+       > lowpass(9khz, 0.1)
+       > master
+}
+
+# ════════════════════════════════════════════════════════
+# TRACKS — every voice of the set; a step brings them up
+# ════════════════════════════════════════════════════════
+
+track beat { play rest using kit level 0.9 sidechain 0.0 out > drums }
+track hats { play rest using kit level 0.8 sidechain 0.0 out > drums }
+
+track sub {
+    play rest
+    using sub
+    level 0
+    gate 0.92
+    sidechain 0.55
+    out > lowpass(200hz, 0.12) > saturate(0.18) > master
+}
+
+track stab {
+    play stab_ghost
+    using chord
+    level 0
+    gate 0.16
+    velocity 0.75
+    pan -0.12
+    delay_send 0.85
+    reverb_send 0.60
+    sidechain 0.5
+    out > highpass(300hz, 0.15)
+        > lowpass(3.6khz, 0.12, lfo_bars=8, lfo_depth=1400)
+        > compressor(-14, ratio=2.0, attack=15, release=200, makeup=3db)
+        > saturate(0.2)
+        > master
+}
+
+track bed {
+    play hiss_hold
+    using hiss
+    pan -0.38
+    level 0
+    reverb_send 0.3
+    delay_send 0.06
+    sidechain 0.35
+    out > highpass(300hz, 0.12)
+        > lowpass(2.2khz, 0.2, lfo_bars=8, lfo_depth=1400)
+        > autopan(0.5, bars=8)
+        > master
+}
+
+track bass {
+    play rest
+    using walker
+    velocity 0.92
+    level 0
+    gate 0.62
+    sidechain 0.55
+    out > saturate(0.7)
+        > highpass(32hz, 0.05)
+        > compressor(-18db, ratio=4, attack=2ms, release=90ms, makeup=6db)
+        > master
+}
+
+track chords {
+    play rest
+    using warmth
+    velocity 0.80
+    level 0
+    gate 1.0
+    sidechain 0.42
+    delay_send 0.14
+    reverb_send 0.30
+    out > highpass(190hz, 0.05)
+        > lowpass(2.6khz, 0.05, lfo_bars=12, lfo_depth=700)
+        > eq(mid=-1.5, high=0.8)
+        > autopan(0.65, bars=9)
+        > master
+}
+
+track under {
+    play rest
+    using under
+    velocity 0.70
+    level 0
+    gate 1.0
+    sidechain 0.30
+    reverb_send 0.12
+    out > highpass(45hz, 0.05) > lowpass(320hz, 0.05) > master
+}
+
+track stabs {
+    play rest
+    using stab
+    velocity 0.65
+    level 0
+    gate 0.30
+    pan 0.34
+    sidechain 0.35
+    delay_send 0.28
+    reverb_send 0.14
+    out > saturate(0.8) > highpass(400hz, 0.05) > master
+}
+
+track chime {
+    play rest
+    using bell
+    velocity 0.60
+    level 0
+    gate 0.90
+    pan -0.50
+    sidechain 0.25
+    delay_send 0.34
+    reverb_send 0.36
+    out > highpass(500hz, 0.05) > master
+}
+
+# The keys play this. A pattern of rests: only the hands sound it.
+track lead {
+    play rest
+    using lead
+    level 0.5
+    pan 0.1
+    sidechain 0.3
+    delay_send 0.32
+    reverb_send 0.22
+    out > highpass(120hz, 0.05) > saturate(0.3) > master
+}
+
+# ════════════════════════════════════════════════════════
+# MASTER — glue, and the DJ filter pair the ninth fader sweeps
+# ════════════════════════════════════════════════════════
+
+master {
+    in > tilt(-0.1)
+       > eq(low=1.6, mid=-0.8, high=-1.0)
+       > compressor(-8, ratio=1.6, attack=30, release=280, makeup=1db)
+       > lowpass(20khz, 0.1) as dj
+       > highpass(20hz, 0.1) as hp
+       > out
+}
+
+# ════════════════════════════════════════════════════════
+# THE KEYLAB
+# ════════════════════════════════════════════════════════
+
+midi {
+    # faders
+    cc 73 > beat level
+    cc 75 > hats level
+    cc 79 > bed level 0..0.7
+    cc 72 > sub level 0..0.8
+    cc 80 > stab level 0..0.45
+    cc 81 > bass level 0..0.9
+    cc 82 > chords level 0..0.3
+    cc 83 > delay_mix
+    cc 85 > master dj cutoff 150hz..20khz..20khz
+    cc 85 > master hp cutoff 20hz..20hz..3khz
+
+    # knobs
+    cc 74 > chord cutoff 400hz..3khz
+    cc 74 > stab delay_send 20%..95%
+    cc 71 > walker cutoff 120hz..900hz
+    cc 71 > walker cutoff_env 20%..75%
+    cc 71 > walker resonance 10%..45%
+    cc 76 > warmth cutoff 400hz..3khz
+    cc 77 > lead cutoff 500hz..5khz
+    cc 77 > lead resonance 20%..60%
+    cc 93 > master tilt -0.3..0.5
+    cc 93 > bed reverb_send 30%..80%
+    cc 18 > reverb_mix
+    cc 19 > kit kick_decay 25%..75%
+    cc 16 > kit hihat_decay 8%..55%
+    cc 17 > chime level 0..0.9
+
+    # keys and strips
+    keys > lead
+    cc 1 > lead resonance 20%..70%
+
+    # pads: bottom row, then top row
+    pad 36 > mute beat
+    pad 37 > toggle hats
+    pad 38 > throw stab
+    pad 39 > freeze
+    pad 40 > beat clap
+    pad 41 > toggle bass
+    pad 42 > prev
+    pad 43 > next
+}

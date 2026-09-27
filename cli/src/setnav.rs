@@ -467,3 +467,78 @@ mod demo {
         eprintln!("wrote {} ({:.0} s)", out, out_l.len() as f32 / SAMPLE_RATE);
     }
 }
+
+/// Not a check: a set played straight through, each step for the bars its
+/// header gives, moved on the way `set play` moves (phrase lines, tempo
+/// ramps), to hear a sketch without anyone at the controls.
+/// `TATUM_SET=sets/viaje TATUM_DEMO_OUT=out.wav cargo test -p tatum-cli
+/// --release walk_a_set -- --ignored`.
+#[cfg(test)]
+mod walk {
+    use super::*;
+    use tatum_core::live::LivePlayer;
+    use tatum_core::{BLOCK_SIZE, SAMPLE_RATE};
+
+    #[test]
+    #[ignore]
+    fn walk_a_set() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let dir = root.join(std::env::var("TATUM_SET").unwrap_or_else(|_| "sets/viaje".into()));
+        let steps = crate::set::load(&dir, 32).unwrap();
+        let gain = crate::set::set_gain(&steps).unwrap();
+        let phrase = 8;
+        // The bar each step is asked for: one phrase before its predecessor's
+        // bars run out, so it lands exactly on them.
+        let mut starts = Vec::new();
+        let mut at = 0usize;
+        for s in &steps {
+            starts.push(at);
+            at += s.bars as usize;
+        }
+        let end = at;
+        let mut nav = SetNav::new(steps, phrase, 4.0);
+        nav.blend_bars = std::env::var("TATUM_DEMO_BLEND").ok().and_then(|b| b.parse().ok()).unwrap_or(0.0);
+        let mut planner = LivePlanner::new();
+        planner.set_output_gain(gain);
+        let mut player = LivePlayer::new();
+        let first = Source::load(&nav.path()).unwrap();
+        player.apply(planner.plan(&first.text, player.generation()).unwrap());
+        player.start();
+        let (mut l, mut r) = ([0.0f32; BLOCK_SIZE], [0.0f32; BLOCK_SIZE]);
+        let (mut out_l, mut out_r) = (Vec::new(), Vec::new());
+        let mut asked = 1;
+        let mut marks = Vec::new();
+        loop {
+            let e = player.engine().unwrap();
+            let (bar, tempo, g) = (e.current_bar(), e.tempo(), player.generation());
+            if bar >= end {
+                break;
+            }
+            let now = out_l.len() as f32 / SAMPLE_RATE;
+            if asked < starts.len() && bar + phrase >= starts[asked] && bar < starts[asked] {
+                nav.ask(Move::Next, bar);
+                asked += 1;
+            }
+            let before = nav.current;
+            let (plans, _) = nav.tick(bar, tempo, g, now, &mut planner);
+            for p in plans {
+                player.apply(p);
+            }
+            if player.process(&mut l, &mut r).is_some() {
+                nav.landed(player.generation(), now);
+            }
+            if nav.current != before || (marks.is_empty() && out_l.is_empty()) {
+                marks.push((out_l.len() as f32 / SAMPLE_RATE, nav.describe(nav.current)));
+            }
+            while player.take_retired().is_some() {}
+            out_l.extend_from_slice(&l);
+            out_r.extend_from_slice(&r);
+        }
+        let out = std::env::var("TATUM_DEMO_OUT").unwrap_or_else(|_| "/tmp/tatum-set.wav".into());
+        std::fs::write(&out, tatum_core::wav::encode_stereo_16(&out_l, &out_r, SAMPLE_RATE as u32)).unwrap();
+        for (t, name) in marks {
+            eprintln!("{}:{:04.1}  {}", (t / 60.0) as u32, t % 60.0, name);
+        }
+        eprintln!("wrote {} ({:.0} s)", out, out_l.len() as f32 / SAMPLE_RATE);
+    }
+}

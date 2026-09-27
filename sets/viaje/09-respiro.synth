@@ -1,0 +1,12 @@
+# set: bars=16 phase=respiro energy=3
+# set-note: Se va la batería. Los acordes, la campana y el viento que vuelve; el bajo sostiene una nota.
+use "_rig.synth"
+tempo 128
+
+track bed    { level 0.3 }
+track beat   { play rest }
+track hats   { play rest }
+track under  { play ch_low level 0.12 }
+track bass   { play bs_intro level 0.45 }
+track chords { play ch_b level 0.2 }
+track chime  { play bl_a level 0.6 }

@@ -106,6 +106,24 @@ pub fn load(dir: &Path, default_bars: u32) -> Result<Vec<Step>, String> {
         .collect()
 }
 
+/// The output gain that brings the loudest step of the set to the engine's
+/// target. Every step plays at it, so a quiet intro stays quiet and the peak
+/// of the set is where one song would be, instead of each step levelled on
+/// its own or all of them on the first.
+pub fn set_gain(steps: &[Step]) -> Result<f32, String> {
+    let mut loudest: Option<f32> = None;
+    for step in steps {
+        let ast = tatum_core::dsl::parse(&step.src)
+            .map_err(|e| format!("{}: {}", step.name(), describe(&tatum_core::song_engine::DslError::Parse(e))))?;
+        let compiled = tatum_core::dsl::compiler::compile(&ast)
+            .map_err(|e| format!("{}: {}", step.name(), describe(&tatum_core::song_engine::DslError::Compile(e))))?;
+        if let Some(lufs) = SongEngine::loudness(&compiled) {
+            loudest = Some(loudest.map_or(lufs, |l: f32| l.max(lufs)));
+        }
+    }
+    Ok(tatum_core::output::gain_for(loudest))
+}
+
 /// Bars are the unit a set is written in, and a step can change the tempo, so
 /// the length of a bar has to come from the engine that is about to play it.
 fn samples_per_bar(e: &SongEngine) -> f64 {
@@ -128,6 +146,7 @@ pub struct Rendered {
 /// thing nobody notices until the set is an hour long.
 pub fn render_set(steps: &[Step]) -> Result<Rendered, String> {
     let mut planner = LivePlanner::new();
+    planner.set_output_gain(set_gain(steps)?);
     let mut player = LivePlayer::new();
     let first = planner
         .plan(&steps[0].src, player.generation())

@@ -1,0 +1,15 @@
+# set: bars=32 phase=detroit energy=6
+# set-note: El bombo se vuelve 909, entra el clap, el bajo camina los acordes y los acordes de Detroit se abren abajo del eco dub que se va.
+use "_rig.synth"
+tempo 126
+
+module beats kit { kick_decay 38% kick_pitch 0.8x kick_click 30% }
+
+track bed    { level 0.18 }
+track stab   { play stab_half level 0.14 }
+track beat   { play kick_clap level 0.95 }
+track hats   { play hat_off level 0.85 }
+track sub    { play rest level 0 }
+track under  { play ch_low level 0.12 }
+track bass   { play bs_a level 0.85 }
+track chords { play ch_a level 0.24 }

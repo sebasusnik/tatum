@@ -207,6 +207,9 @@ pub fn run(
     }
     let mut planner = LivePlanner::new();
     planner.isolate(isolation);
+    if let Some(nav) = &set {
+        planner.set_output_gain(crate::set::set_gain(&nav.steps)?);
+    }
     let mut player = LivePlayer::new();
     match planner.plan(&source.text, player.generation()) {
         Ok(plan) => {

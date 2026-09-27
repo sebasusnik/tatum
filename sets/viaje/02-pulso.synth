@@ -1,0 +1,8 @@
+# set: bars=16 phase=pulso energy=2
+# set-note: Entran el bombo y un sub largo. Todavía nada para tararear.
+use "_rig.synth"
+
+track bed  { level 0.5 }
+track stab { play stab_ghost level 0.14 velocity 0.6 }
+track beat { play kick_four level 0.6 }
+track sub  { play sub_long level 0.4 }
