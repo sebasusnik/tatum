@@ -8,6 +8,6 @@ module beats kit { kick_decay 28% kick_pitch 0.88x kick_click 46% kick_drive 48%
 track beat   { play kick_build16 level 1.12 }
 track hats   { play hat_16_open level 1.07 }
 track roll   { play roll_stutter level 0.67 }
-track acid   { play acid_rise16 level 1.09 }
+track acid   { play acid_rise16 level 0.61 }
 track siren  { play siren_hold level 0.29 }
 track air    { play air_hold level 1.2 }

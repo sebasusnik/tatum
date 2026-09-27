@@ -232,20 +232,22 @@ module bass lead {
 
 # ── From hitech_psy: the acid stretch ──
 
-# The 303: one saw into a resonant filter that a big envelope snaps open on
-# every note, slides where the pattern writes `~`. A slow LFO opens and closes
-# it over 16 bars so it breathes with no hand on it; knob 2 sets where.
+# The 303: a saw and a square an octave above into a resonant filter that
+# a big envelope snaps open on every note, slides where the pattern writes
+# `~`. The track drives it hard and filters what screams; a vowel filter
+# makes it talk. A slow LFO opens and closes it over 16 bars so it breathes
+# with no hand on it; knob 2 sets where.
 module bass squelch {
-    cutoff 340hz
+    cutoff 280hz
     cutoff_env 3.4khz
-    resonance 70%
+    resonance 86%
     glide 14%
     osc1_wave saw
-    osc2_wave saw
-    osc2_pitch 0.1st
+    osc2_wave square
+    osc2_pitch 12st
     keytrack 30%
     attack 1ms
-    decay 170ms
+    decay 130ms
     sustain 18%
     release 30ms
     vel_env 55%
@@ -1086,13 +1088,17 @@ track acid {
     using squelch
     level 0
     gate 0.55
-    pan 0.12
     sidechain 0.35
     delay_send 0.12
     reverb_send 0.06
-    out > saturate(0.45)
-        > highpass(90hz, 0.05)
-        > eq(low=0.6, mid=1.2, high=1.1)
+    # Each hit lands to one side and walks back to the centre.
+    out > highpass(120hz, 0.05)
+        > saturate(4.5)
+        > vowel(a, o, bars=4, mix=0.35)
+        > lowpass(6.2khz, 0.1)
+        > compressor(-22db, ratio=5, attack=3ms, release=50ms, makeup=6db)
+        > panenv(0.5, attack=5ms, release=200ms)
+        > eq(low=-1.5, mid=1, high=2.4)
         > master
 }
 
@@ -1199,7 +1205,7 @@ midi {
     cc 72 > sub level 0..0.8
     cc 80 > stab level 0..0.45
     cc 81 > bass level 0..0.9
-    cc 81 > acid level 0..0.7
+    cc 81 > acid level 0..0.4
     cc 82 > chords level 0..0.3
     cc 83 > delay_mix
     cc 85 > master dj cutoff 150hz..20khz..20khz
