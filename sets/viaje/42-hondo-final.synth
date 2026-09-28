@@ -1,4 +1,4 @@
-# set: bars=48 phase=hondo-final energy=5
+# set: bars=48 phase=13-regreso energy=5
 # set-note: El último dub, a 124: el sub que camina, los hats ocupados, el acorde un poco más abierto y la capa de detalle, que se va a ir antes que el bombo.
 use "_rig.synth"
 tempo 124

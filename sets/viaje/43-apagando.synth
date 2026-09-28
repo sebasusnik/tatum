@@ -1,4 +1,4 @@
-# set: bars=16 phase=apagando energy=3
+# set: bars=16 phase=13-regreso energy=3
 # set-note: Se apaga: el bombo pasa de cuatro golpes a dos, a uno, a ninguno; los hats y el sub se van con él; quedan el acorde dub y sus ecos.
 use "_rig.synth"
 tempo 122

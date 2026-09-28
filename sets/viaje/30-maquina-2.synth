@@ -1,4 +1,4 @@
-# set: bars=64 phase=maquina-2 energy=8
+# set: bars=64 phase=09-maquina energy=8
 # set-note: El segundo riff del 303, más denso y saltando de octava; un rim fantasma entre los claps; el bajo rodante recorre la F y sube a Ab y C al final de cada frase.
 use "_rig.synth"
 tempo 132

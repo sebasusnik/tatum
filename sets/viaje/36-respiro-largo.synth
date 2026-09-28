@@ -1,4 +1,4 @@
-# set: bars=48 phase=respiro-largo energy=3
+# set: bars=48 phase=11-pico energy=3
 # set-note: El respiro largo después del pico: sin batería, los acordes con su reverb, el viento y la estática, y lo que queda del pluck: tres notas por compás, apagadas, tiradas al eco.
 use "_rig.synth"
 tempo 135

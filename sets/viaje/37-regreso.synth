@@ -1,4 +1,4 @@
-# set: bars=16 phase=regreso energy=5
+# set: bars=16 phase=11-pico energy=5
 # set-note: El bombo vuelve de a poco, un golpe por compás, después dos, después cuatro; el 303 asoma cerrado y el acorde dub vuelve a tirar al eco.
 use "_rig.synth"
 tempo 135

@@ -1,4 +1,4 @@
-# set: bars=64 phase=detroit-2 energy=6
+# set: bars=64 phase=04-detroit energy=6
 # set-note: Detroit se oscurece: el bajo pasa a su segunda línea, sincopada y con saltos de octava; los acordes quedan de colchón oscuro y el metal contesta en el segundo compás. El shaker y el tick entran arriba.
 use "_rig.synth"
 tempo 126

@@ -1,11 +1,11 @@
-# set: bars=16 phase=quiebre energy=6
+# set: bars=16 phase=06-noche energy=6
 # set-note: El corte de Detroit: ocho compases sin bombo, el clap y el bajo empujando, el pluck con repiques y saltos de octava. El bombo vuelve de a poco, un redoble, un tiempo de silencio.
 use "_rig.synth"
 tempo 128
 
 module fm pluck { mod_index 46% }
 
-module beats kit { kick_decay 28% kick_pitch 0.8x kick_click 34% hihat_level 70% }
+module beats kit { kick_decay 34% kick_pitch 0.76x kick_click 30% kick_drive 40% hihat_level 70% }
 
 track bed     { play hiss_swell level 0.2 }
 track beat    { play kick_break16 level 1.0 }
