@@ -1,4 +1,4 @@
-# set: bars=32 phase=02-profundo energy=3 blend=16
+# set: bars=16 phase=02-profundo energy=3
 # set-note: El acorde cambia de ritmo: una figura con puntillo que va contra el bombo. El filtro se abre un poco y aparecen los tiros al eco.
 use "_rig.synth"
 

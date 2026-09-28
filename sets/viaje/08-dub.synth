@@ -1,4 +1,4 @@
-# set: bars=64 phase=02-profundo energy=5
+# set: bars=48 phase=02-profundo energy=5
 # set-note: El cambio de acorde (Fm9 a Dbmaj9) dos veces por frase, el eco empujado, toms que caen en el eco: el momento en que el eco manda.
 use "_rig.synth"
 
