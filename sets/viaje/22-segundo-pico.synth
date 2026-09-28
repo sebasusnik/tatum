@@ -1,0 +1,14 @@
+# set: bars=32 phase=segundo-pico energy=9
+# set-note: El segundo pico, todo junto: el 303, el bajo que camina, los acordes de Detroit y el acorde dub con su eco. Lo que se escuchó por separado en la hora, ahora de una vez.
+use "_rig.synth"
+tempo 135
+
+module beats kit { kick_decay 28% kick_pitch 0.88x kick_click 46% kick_drive 48% hihat_level 72% }
+
+track beat   { play kick_peak16 level 1.2 }
+track hats   { play hat_16_open level 1.32 }
+track bass   { play bs_ab16 level 0.96 }
+track acid   { play acid_riff16 level 0.63 }
+track chords { play ch_a level 0.18 }
+track stab   { play stab_dub8 level 0.24 delay_send 0.5 }
+track throw  { play throw_dub8 level 0.22 }

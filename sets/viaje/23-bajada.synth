@@ -1,0 +1,14 @@
+# set: bars=32 phase=bajada energy=5
+# set-note: La bajada: la batería se desarma de a poco, el 303 se cierra y se apaga, el acorde dub queda solo con sus ecos.
+use "_rig.synth"
+tempo 135
+
+module beats kit { kick_decay 32% kick_pitch 0.84x kick_click 38% kick_drive 42% hihat_level 60% }
+
+track bed    { play hiss_swell level 0.3 }
+track beat   { play kick_out16 level 1.0 }
+track hats   { play hat_out16 level 1.0 }
+track sub    { play sub_out16 level 0.6 }
+track acid   { play acid_close16 level 0.45 }
+track stab   { play stab_half8 level 0.22 delay_send 0.55 }
+track perc   { play perc_sparse8 level 0.45 }
