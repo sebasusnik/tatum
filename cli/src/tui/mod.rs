@@ -51,6 +51,9 @@ pub struct SongInfo {
     /// The song's own patterns, by name, and whether each is a drum pattern:
     /// what the help shows a track could play instead.
     pub patterns: Vec<(String, bool)>,
+    /// Every compiled pattern, transformed versions too, by the index the
+    /// engine plays them at: what the grid draws.
+    pub compiled: Vec<tatum_core::dsl::compiler::CompiledPattern>,
 }
 
 impl SongInfo {
@@ -80,6 +83,7 @@ impl SongInfo {
                 .filter(|p| !p.name.contains(" ["))
                 .map(|p| (p.name.clone(), !p.lanes.is_empty()))
                 .collect(),
+            compiled: compiled.patterns.clone(),
         })
     }
 
@@ -280,11 +284,17 @@ impl Screen {
             use edit::{Op, Toggle};
             let key = match k.code {
                 KeyCode::Char('c') if k.modifiers.contains(KeyModifiers::CONTROL) => Some(Key::Quit),
-                KeyCode::Esc if self.help => {
-                    self.help = false;
+                // Esc steps back -- the help, then the selection -- and never
+                // quits: a set is not ended by a stray key.
+                KeyCode::Esc => {
+                    if self.help {
+                        self.help = false;
+                    } else {
+                        self.selected = None;
+                    }
                     None
                 }
-                KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => Some(Key::Quit),
+                KeyCode::Char('q') | KeyCode::Char('Q') => Some(Key::Quit),
                 KeyCode::Char('?') => {
                     self.help = !self.help;
                     None
@@ -425,14 +435,180 @@ impl Screen {
         self.lanes(f.buffer_mut(), lanes, &active);
         self.bottom(f, bottom);
         let hint = if self.set.is_some() {
-            " space/→ next · ← back · 1-9 step · ↑↓ track · r f h e d [ ] + - x u transform · ? help · q quit"
+            " space/→ next · ← back · 1-9 step · ↑↓ track · r f h e d [ ] + - x u transform · Esc back · ? help · q quit"
         } else {
-            " ↑↓ track · r f h e d [ ] + - x u transform · ? help · q quit"
+            " ↑↓ track · r f h e d [ ] + - x u transform · Esc back · ? help · q quit"
         };
         f.render_widget(Paragraph::new(hint).style(Style::new().fg(DIM).bg(BG)), footer);
         if self.help {
             self.help_overlay(f, area);
         }
+    }
+
+    /// The chosen track's pattern as it plays this loop -- transformed when
+    /// the loop is -- one bar of it, with the step playing lit. Returns
+    /// whether it drew, so the knobs keep their place when nothing is chosen.
+    fn grid(&self, f: &mut Frame, area: Rect) -> bool {
+        use tatum_core::dsl::compiler::CompiledStep;
+        let (Some(song), Some(i)) = (self.song.as_ref(), self.selected) else { return false };
+        let (pat_idx, step) = self.telemetry.position(i);
+        let Some(pat) = song.compiled.get(pat_idx) else { return false };
+        let title = format!(
+            " {} · {} ",
+            song.tracks.get(i).map(String::as_str).unwrap_or(""),
+            song.plays.get(i).map(String::as_str).unwrap_or("")
+        );
+        let on = self.transformed.get(i).copied().unwrap_or(false);
+        let block = Block::new()
+            .borders(Borders::TOP)
+            .border_style(Style::new().fg(PANEL))
+            .title(Span::styled(title, Style::new().fg(if on { HOT } else { GOLD })))
+            .style(Style::new().bg(BG));
+        let inner = block.inner(area);
+        f.render_widget(block, area);
+        if inner.height < 2 || inner.width < 16 {
+            return true;
+        }
+        let buf = f.buffer_mut();
+        let len = pat.len().max(1);
+        let bar = (step / 16) * 16;
+        let shown = 16.min(len - bar.min(len - 1));
+        let cw = (inner.width as usize / 16).max(1);
+        let rows_px = (inner.height as usize - 1) * 2;
+        // Pixels: rows_px high, one column per cell.
+        let mut px = vec![vec![0.0f32; shown * cw]; rows_px];
+        let mut put = |row: usize, col: usize, v: f32| {
+            if row < rows_px && col < shown * cw {
+                px[row][col] = px[row][col].max(v);
+            }
+        };
+        let bright = |vel: f32| 0.55 + 0.45 * vel.clamp(0.0, 1.0);
+        if pat.lanes.is_empty() {
+            let window = &pat.steps[bar..bar + shown];
+            let notes = |s: &CompiledStep| -> Vec<u8> {
+                match s {
+                    CompiledStep::NoteOn { midi_note, .. } => vec![*midi_note],
+                    CompiledStep::Chord { notes, count, .. } => {
+                        notes[..*count as usize].iter().map(|n| n.midi_note).collect()
+                    }
+                    CompiledStep::Subdiv { notes, count, .. } => {
+                        notes[..*count as usize].iter().filter(|n| n.velocity > 0.0).map(|n| n.midi_note).collect()
+                    }
+                    _ => vec![],
+                }
+            };
+            let all: Vec<u8> = window.iter().flat_map(notes).collect();
+            let (lo, hi) = (all.iter().copied().min().unwrap_or(60), all.iter().copied().max().unwrap_or(60));
+            let row_of = |m: u8| {
+                if hi == lo {
+                    rows_px / 2
+                } else {
+                    (rows_px - 1) - ((m - lo) as usize * (rows_px - 1)) / (hi - lo) as usize
+                }
+            };
+            let mut held: Vec<u8> = Vec::new();
+            for (k, s) in window.iter().enumerate() {
+                match s {
+                    CompiledStep::NoteOn { midi_note, velocity, .. } => {
+                        for c in 0..cw {
+                            put(row_of(*midi_note), k * cw + c, bright(*velocity));
+                        }
+                        held = vec![*midi_note];
+                    }
+                    CompiledStep::Chord { notes: cn, count, .. } => {
+                        for n in &cn[..*count as usize] {
+                            for c in 0..cw {
+                                put(row_of(n.midi_note), k * cw + c, bright(n.velocity));
+                            }
+                        }
+                        held = cn[..*count as usize].iter().map(|n| n.midi_note).collect();
+                    }
+                    CompiledStep::Subdiv { notes: sn, count, .. } => {
+                        let n = *count as usize;
+                        for (j, note) in sn[..n].iter().enumerate() {
+                            if note.velocity > 0.0 {
+                                put(row_of(note.midi_note), k * cw + (j * cw) / n, bright(note.velocity));
+                            }
+                        }
+                        held = notes(s).last().map(|m| vec![*m]).unwrap_or_default();
+                    }
+                    CompiledStep::Tie => {
+                        for m in &held {
+                            for c in 0..cw {
+                                put(row_of(*m), k * cw + c, 0.3);
+                            }
+                        }
+                    }
+                    _ => held.clear(),
+                }
+            }
+        } else {
+            // A band of rows per drum, the first lane (the kick) at the bottom;
+            // a hit fills its step across the band.
+            let lanes = pat.lanes.len().min(rows_px);
+            for (li, lane) in pat.lanes.iter().take(lanes).enumerate() {
+                let top = rows_px - (li + 1) * rows_px / lanes;
+                let bottom = rows_px - li * rows_px / lanes;
+                let mut mark = |col: usize, v: f32| {
+                    for row in top..bottom {
+                        put(row, col, v);
+                    }
+                };
+                for (k, s) in lane.steps[bar..bar + shown].iter().enumerate() {
+                    match s {
+                        CompiledStep::DrumHit { velocity, .. } => {
+                            for c in 0..cw.saturating_sub(1).max(1) {
+                                mark(k * cw + c, bright(*velocity));
+                            }
+                        }
+                        CompiledStep::DrumSub { hits, count, .. } => {
+                            let n = *count as usize;
+                            for (j, h) in hits[..n].iter().enumerate() {
+                                if *h > 0.0 {
+                                    mark(k * cw + (j * cw) / n, bright(*h));
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        let playing = step.saturating_sub(bar);
+        for y in 0..rows_px / 2 {
+            for (x, (&top, &bottom)) in px[y * 2].iter().zip(&px[y * 2 + 1]).enumerate() {
+                if let Some(c) = buf.cell_mut((inner.x + x as u16, inner.y + y as u16)) {
+                    pixels(c, top, bottom, 0.05, self.glass);
+                    if x / cw == playing {
+                        let (fg, bg) = (lighten(c.fg), lighten(c.bg));
+                        c.set_fg(fg).set_bg(if bg == Color::Reset { PANEL } else { bg });
+                    }
+                }
+            }
+        }
+        // The count under it: the beats, and where the step is.
+        let y = inner.y + inner.height - 1;
+        for k in 0..shown {
+            let x = inner.x + (k * cw) as u16;
+            let (ch, color) = if k == playing {
+                ("▲", GOLD)
+            } else if k % 4 == 0 {
+                ("·", TEXT)
+            } else {
+                ("·", PANEL)
+            };
+            let label = if k % 4 == 0 && k != playing { format!("{}", k / 4 + 1) } else { ch.to_string() };
+            buf.set_string(x, y, label, Style::new().fg(color).bg(BG));
+        }
+        if len > 16 {
+            buf.set_string(
+                inner.x + (shown * cw) as u16 + 1,
+                y,
+                format!("bar {}/{}", bar / 16 + 1, len.div_ceil(16)),
+                Style::new().fg(DIM).bg(BG),
+            );
+        }
+        true
     }
 
     /// `?`: the words, the keys for them, and what the selected track could
@@ -811,6 +987,8 @@ impl Screen {
 
     fn bottom(&self, f: &mut Frame, area: Rect) {
         let [knobs, log] = Layout::horizontal([Constraint::Percentage(40), Constraint::Percentage(60)]).areas(area);
+        // A track chosen: its pattern takes the knobs' place.
+        let knobs = if self.grid(f, knobs) { Rect::default() } else { knobs };
         let block = |title: &str, color: Color| {
             Block::new()
                 .borders(Borders::TOP)

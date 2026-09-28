@@ -96,6 +96,15 @@ impl SongEngine {
         self.tracks.get(idx).map_or(0, |t| t.pattern_idx)
     }
 
+    /// Where a track is in the pattern it plays, as a step index into it.
+    pub fn track_step(&self, idx: usize) -> usize {
+        let Some(t) = self.tracks.get(idx) else { return 0 };
+        let len = self.patterns.get(t.pattern_idx).map_or(1, |p| p.len().max(1));
+        // The step about to play has already been counted; the one sounding
+        // is the one before it.
+        (t.step_in_loop() + len - 1) % len
+    }
+
     /// Whether a track whose `play` line changes loop by loop is on one of
     /// its transformed loops -- `every 4 rev` on the fourth, say -- for the
     /// live screen to light up.
