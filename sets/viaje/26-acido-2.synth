@@ -1,0 +1,13 @@
+# set: bars=64 phase=acido-2 energy=6
+# set-note: Otra línea del 303, con Db, G y C contra la F y más deslizamientos; el clap todavía no, un rim fantasma entre los golpes.
+use "_rig.synth"
+tempo 130
+
+module beats kit { kick_decay 32% kick_pitch 0.84x kick_click 38% kick_drive 42% hihat_level 72% }
+
+track bed    { level 0.1 }
+track beat   { play kick_acid8 level 1.05 }
+track hats   { play hat_16_8 level 0.95 }
+track sub    { play sub_f8 level 0.6 }
+track perc   { play perc_detroit8 level 0.45 delay_send 0.2 reverb_send 0.1 }
+track acid   { play acid_line2_16 level 0.52 }

@@ -1,4 +1,4 @@
-# set: bars=32 phase=acido energy=6
+# set: bars=64 phase=acido energy=6
 # set-note: El bombo firme, los hats de Detroit que siguen y el 303 que abre su filtro a lo largo de dieciséis compases: salta y repica en el 8, sube deslizando en el 16.
 use "_rig.synth"
 tempo 130

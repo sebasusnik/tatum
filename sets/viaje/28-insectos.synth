@@ -1,0 +1,12 @@
+# set: bars=48 phase=insectos energy=7
+# set-note: El segundo momento raro: un enjambre que zumba a ráfagas, sobre el bajo rodante y el 303 bajito. Tres compases zumbando, uno quieto, una figura que sube.
+use "_rig.synth"
+tempo 132
+
+module beats kit { kick_decay 30% kick_pitch 0.86x kick_click 42% kick_drive 45% hihat_level 72% }
+
+track beat    { play kick_acid8 level 1.12 }
+track hats    { play hat_16_8 level 1.0 }
+track roll    { play roll_f level 0.7 }
+track acid    { play acid_low16 level 0.42 }
+track insects { play insect_pulse8 level 0.85 }

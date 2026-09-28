@@ -1,4 +1,4 @@
-# set: bars=32 phase=respiro-largo energy=3
+# set: bars=64 phase=respiro-largo energy=3
 # set-note: El respiro largo después del pico: sin batería, los acordes de Detroit con toda su reverb, el viento que vuelve y la campana del dub como un recuerdo.
 use "_rig.synth"
 tempo 135

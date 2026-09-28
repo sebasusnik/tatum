@@ -1,7 +1,7 @@
-# set: bars=16 phase=rareza energy=7
+# set: bars=48 phase=rareza energy=7
 # set-note: Se va el clap: el 303 y el bajo rodante solos, y un módem que conversa en el costado.
 use "_rig.synth"
-tempo 132
+tempo 133
 
 module beats kit { kick_decay 30% kick_pitch 0.86x kick_click 42% kick_drive 45% hihat_level 72% }
 

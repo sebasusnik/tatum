@@ -1,4 +1,4 @@
-# set: bars=32 phase=pico energy=9
+# set: bars=64 phase=pico energy=9
 # set-note: El pico, lo más fuerte del set: crash al empezar, el 303 a pleno con giros en el 8 y el 16, el bajo recorre los acordes y vuelven los acordes y stabs de Detroit. Metal en ráfagas.
 use "_rig.synth"
 tempo 135

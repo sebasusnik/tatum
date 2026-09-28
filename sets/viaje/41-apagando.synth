@@ -1,0 +1,11 @@
+# set: bars=16 phase=apagando energy=3
+# set-note: Se apaga: el bombo pasa de cuatro golpes a dos, a uno, a ninguno; los hats y el sub se van con él; quedan el acorde dub y sus ecos.
+use "_rig.synth"
+tempo 122
+
+track bed   { play hiss_swell level 0.4 }
+track stab  { play stab_half8 level 0.22 delay_send 0.6 }
+track beat  { play kick_out16 level 0.8 }
+track hats  { play hat_out16 level 1.0 }
+track sub   { play sub_out16 level 0.55 }
+track perc  { play perc_sparse8 level 0.4 }

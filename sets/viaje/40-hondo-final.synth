@@ -1,0 +1,14 @@
+# set: bars=64 phase=hondo-final energy=5
+# set-note: El último dub, a 124: las dos campanas una tras otra, la pregunta y la respuesta; el sub que camina; el acorde un poco más abierto.
+use "_rig.synth"
+tempo 124
+
+module keys chord { cutoff 2.3khz }
+
+track bed   { play hiss_swell level 0.32 }
+track stab  { play stab_dub8 level 0.26 delay_send 0.5 }
+track beat  { play kick_dub8 level 0.8 }
+track hats  { play hat_dub16 level 1.12 }
+track sub   { play sub_move16 level 0.6 }
+track perc  { play perc_dub8 level 0.4 }
+track chime { play motif_both16 level 0.5 delay_send 0.6 }

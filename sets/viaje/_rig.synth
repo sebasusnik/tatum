@@ -318,6 +318,24 @@ module fm metal {
     op2_feedback 0.70
 }
 
+# An insect swarm, from hitech_psy: the set's second weird moment.
+module fm insects {
+    algorithm additive
+    mod_index 0.85
+    feedback 0.58
+    waveform half_sine
+    op0_ratio 4.995x
+    op1_ratio 1.585x
+    op0_envelope 0.1 0.3 0.50 0.4
+    op1_envelope 0.05 0.2 0.60 0.3
+    op0_feedback 0.50
+    op1_feedback 0.45
+    lfo_rate 2.886hz
+    lfo_depth 0.30
+    lfo_target mod_index
+    lfo_waveform square
+}
+
 # A modem shaking hands.
 module fm dialup {
     algorithm pair_plus_two
@@ -1207,6 +1225,145 @@ pattern st_b8 {
     - - - -  - - - -  - - Ebm9/4:0.45 -  - - - -
 }
 
+# ── The acid stretch, more of it ──
+
+# A second 303 line: Db, G and C against the F, more slides; turns at 8 and 16.
+pattern acid_line2_16 {
+    F3:0.9(edepth=0.72) - ~F4:0.7 -  Db4:0.8(edepth=0.72) - C4:0.6(edepth=0.72) ~Db4:0.7  - F3:0.9(edepth=0.72) - G3:0.6(edepth=0.72)  ~Ab3:0.7 - C4:0.8(edepth=0.72) -
+    F3:0.9(edepth=0.75) F3:0.5(edepth=0.75) - Eb4:0.75(edepth=0.75)  - ~F4:0.7 - C4:0.6(edepth=0.75)  Ab3:0.8(edepth=0.75) - ~G3:0.6 -  F3:0.9(edepth=0.75) - Db4:0.7(edepth=0.75) ~C4:0.6
+    F3:0.9(edepth=0.77) - ~F4:0.7 -  Db4:0.8(edepth=0.77) - C4:0.6(edepth=0.77) ~Db4:0.7  - F3:0.9(edepth=0.77) - G3:0.6(edepth=0.77)  ~Ab3:0.7 - C4:0.8(edepth=0.77) -
+    F3:0.9(edepth=0.80) F3:0.5(edepth=0.80) - Eb4:0.75(edepth=0.80)  - ~F4:0.7 - C4:0.6(edepth=0.80)  Ab3:0.8(edepth=0.80) - ~G3:0.6 -  F3:0.9(edepth=0.80) - Db4:0.7(edepth=0.80) ~C4:0.6
+    F3:0.9(edepth=0.82) - ~F4:0.7 -  Db4:0.8(edepth=0.82) - C4:0.6(edepth=0.82) ~Db4:0.7  - F3:0.9(edepth=0.82) - G3:0.6(edepth=0.82)  ~Ab3:0.7 - C4:0.8(edepth=0.82) -
+    F3:0.9(edepth=0.85) F3:0.5(edepth=0.85) - Eb4:0.75(edepth=0.85)  - ~F4:0.7 - C4:0.6(edepth=0.85)  Ab3:0.8(edepth=0.85) - ~G3:0.6 -  F3:0.9(edepth=0.85) - Db4:0.7(edepth=0.85) ~C4:0.6
+    F3:0.9(edepth=0.87) - ~F4:0.7 -  Db4:0.8(edepth=0.87) - C4:0.6(edepth=0.87) ~Db4:0.7  - F3:0.9(edepth=0.87) - G3:0.6(edepth=0.87)  ~Ab3:0.7 - C4:0.8(edepth=0.87) -
+    F3:0.95(edepth=0.90) - F4:0.8(edepth=0.90)*2 -  Eb4:0.8(edepth=0.90) - ~F4:0.7 -  C4:0.85(edepth=0.90) - ~Db4:0.7 -  F3:0.9(edepth=0.90) F3:0.6(edepth=0.90) Ab3:0.7(edepth=0.90) ~C4:0.75
+    F3:0.9(edepth=0.76) - ~F4:0.7 -  Db4:0.8(edepth=0.76) - C4:0.6(edepth=0.76) ~Db4:0.7  - F3:0.9(edepth=0.76) - G3:0.6(edepth=0.76)  ~Ab3:0.7 - C4:0.8(edepth=0.76) -
+    F3:0.9(edepth=0.79) F3:0.5(edepth=0.79) - Eb4:0.75(edepth=0.79)  - ~F4:0.7 - C4:0.6(edepth=0.79)  Ab3:0.8(edepth=0.79) - ~G3:0.6 -  F3:0.9(edepth=0.79) - Db4:0.7(edepth=0.79) ~C4:0.6
+    F3:0.9(edepth=0.83) - ~F4:0.7 -  Db4:0.8(edepth=0.83) - C4:0.6(edepth=0.83) ~Db4:0.7  - F3:0.9(edepth=0.83) - G3:0.6(edepth=0.83)  ~Ab3:0.7 - Eb4:0.85(edepth=0.83) -
+    F3:0.9(edepth=0.86) F3:0.5(edepth=0.86) - Eb4:0.75(edepth=0.86)  - ~F4:0.7 - C4:0.6(edepth=0.86)  Ab3:0.8(edepth=0.86) - ~G3:0.6 -  F3:0.9(edepth=0.86) - Db4:0.7(edepth=0.86) ~C4:0.6
+    F3:0.9(edepth=0.89) - ~F4:0.7 -  Db4:0.8(edepth=0.89) - C4:0.6(edepth=0.89) ~Db4:0.7  - F3:0.9(edepth=0.89) - G3:0.6(edepth=0.89)  ~Ab3:0.7 - C4:0.8(edepth=0.89) -
+    F3:0.9(edepth=0.93) F3:0.5(edepth=0.93) - Eb4:0.75(edepth=0.93)  - ~F4:0.7 - C4:0.6(edepth=0.93)  Ab3:0.8(edepth=0.93) - ~G3:0.6 -  F3:0.9(edepth=0.93) - Db4:0.7(edepth=0.93) ~C4:0.6
+    F3:0.9(edepth=0.96) - ~F4:0.7 -  Db4:0.8(edepth=0.96) - C4:0.6(edepth=0.96) ~Db4:0.7  - F3:0.9(edepth=0.96) - G3:0.6(edepth=0.96)  ~Ab3:0.7 - C4:0.8(edepth=0.96) -
+    F3:0.95(edepth=0.86) F4:0.7(edepth=0.86)*2 - Db4:0.8(edepth=0.86)*2  - C4:0.7(edepth=0.86) - Ab3:0.7(edepth=0.86)*2  G3:0.8(edepth=0.86) - ~Ab3:0.7 -  C4:0.9(edepth=0.86)*3 - ~F4:0.8 -
+}
+
+# The second riff: denser, jumping octaves; ratchets at 8, a run at 16.
+pattern acid_riff_b16 {
+    F3:0.95(edepth=0.74) F4:0.6(edepth=0.74) F3:0.5(edepth=0.74) Eb4:0.7(edepth=0.74)  F3:0.8(edepth=0.74) C4:0.6(edepth=0.74) F3:0.5(edepth=0.74) ~Db4:0.7  F3:0.9(edepth=0.74) F4:0.6(edepth=0.74) Ab3:0.5(edepth=0.74) C4:0.7(edepth=0.74)  F3:0.8(edepth=0.74) Eb4:0.6(edepth=0.74) ~F4:0.75 C4:0.5(edepth=0.74)
+    F3:0.95(edepth=0.77) - F4:0.6(edepth=0.77) Eb4:0.7(edepth=0.77)  - C4:0.6(edepth=0.77) F3:0.5(edepth=0.77) -  Db4:0.9(edepth=0.77) - C4:0.6(edepth=0.77) Ab3:0.7(edepth=0.77)  F3:0.8(edepth=0.77) - Eb4:0.6(edepth=0.77) ~F4:0.75
+    F3:0.95(edepth=0.79) F4:0.6(edepth=0.79) F3:0.5(edepth=0.79) Eb4:0.7(edepth=0.79)  F3:0.8(edepth=0.79) C4:0.6(edepth=0.79) F3:0.5(edepth=0.79) ~Db4:0.7  F3:0.9(edepth=0.79) F4:0.6(edepth=0.79) Ab3:0.5(edepth=0.79) C4:0.7(edepth=0.79)  F3:0.8(edepth=0.79) Eb4:0.6(edepth=0.79) ~F4:0.75 C4:0.5(edepth=0.79)
+    F3:0.95(edepth=0.82) - F4:0.6(edepth=0.82) Eb4:0.7(edepth=0.82)  - C4:0.6(edepth=0.82) F3:0.5(edepth=0.82) -  Db4:0.9(edepth=0.82) - C4:0.6(edepth=0.82) Ab3:0.7(edepth=0.82)  F3:0.8(edepth=0.82) - Eb4:0.6(edepth=0.82) ~F4:0.75
+    F3:0.95(edepth=0.84) F4:0.6(edepth=0.84) F3:0.5(edepth=0.84) Eb4:0.7(edepth=0.84)  F3:0.8(edepth=0.84) C4:0.6(edepth=0.84) F3:0.5(edepth=0.84) ~Db4:0.7  F3:0.9(edepth=0.84) F4:0.6(edepth=0.84) Ab3:0.5(edepth=0.84) C4:0.7(edepth=0.84)  F3:0.8(edepth=0.84) Eb4:0.6(edepth=0.84) ~F4:0.75 C4:0.5(edepth=0.84)
+    F3:0.95(edepth=0.87) - F4:0.6(edepth=0.87) Eb4:0.7(edepth=0.87)  - C4:0.6(edepth=0.87) F3:0.5(edepth=0.87) -  Db4:0.9(edepth=0.87) - C4:0.6(edepth=0.87) Ab3:0.7(edepth=0.87)  F3:0.8(edepth=0.87) - Eb4:0.6(edepth=0.87) ~F4:0.75
+    F3:0.95(edepth=0.89) F4:0.6(edepth=0.89) F3:0.5(edepth=0.89) Eb4:0.7(edepth=0.89)  F3:0.8(edepth=0.89) C4:0.6(edepth=0.89) F3:0.5(edepth=0.89) ~Db4:0.7  F3:0.9(edepth=0.89) F4:0.6(edepth=0.89) Ab3:0.5(edepth=0.89) C4:0.7(edepth=0.89)  F3:0.8(edepth=0.89) Eb4:0.6(edepth=0.89) ~F4:0.75 C4:0.5(edepth=0.89)
+    F3:0.95(edepth=0.92) F4:0.6(edepth=0.92) F3:0.5(edepth=0.92) Eb4:0.7(edepth=0.92)  F3:0.8(edepth=0.92) C4:0.6(edepth=0.92) F3:0.5(edepth=0.92) ~Db4:0.7  F3:0.9(edepth=0.92) F4:0.6(edepth=0.92)*2 Ab3:0.5(edepth=0.92) C4:0.7(edepth=0.92)*2  F3:0.8(edepth=0.92) Eb4:0.6(edepth=0.92) ~F4:0.75 -
+    F3:0.95(edepth=0.80) F4:0.6(edepth=0.80) F3:0.5(edepth=0.80) Eb4:0.7(edepth=0.80)  F3:0.8(edepth=0.80) C4:0.6(edepth=0.80) F3:0.5(edepth=0.80) ~Db4:0.7  F3:0.9(edepth=0.80) F4:0.6(edepth=0.80) Ab3:0.5(edepth=0.80) C4:0.7(edepth=0.80)  F3:0.8(edepth=0.80) Eb4:0.6(edepth=0.80) ~F4:0.75 C4:0.5(edepth=0.80)
+    F3:0.95(edepth=0.83) - F4:0.6(edepth=0.83) Eb4:0.7(edepth=0.83)  - C4:0.6(edepth=0.83) F3:0.5(edepth=0.83) -  Db4:0.9(edepth=0.83) - C4:0.6(edepth=0.83) Ab3:0.7(edepth=0.83)  F3:0.8(edepth=0.83) - Eb4:0.6(edepth=0.83) ~F4:0.75
+    F3:0.95(edepth=0.86) F4:0.6(edepth=0.86) F3:0.5(edepth=0.86) Eb4:0.7(edepth=0.86)  F3:0.8(edepth=0.86) C4:0.6(edepth=0.86) F3:0.5(edepth=0.86) ~Db4:0.7  F3:0.9(edepth=0.86) F4:0.6(edepth=0.86) Ab3:0.5(edepth=0.86) C4:0.7(edepth=0.86)  F3:0.8(edepth=0.86) Eb4:0.6(edepth=0.86) ~F4:0.75 C4:0.5(edepth=0.86)
+    F3:0.95(edepth=0.89) - F4:0.6(edepth=0.89) Eb4:0.7(edepth=0.89)  - C4:0.6(edepth=0.89) F3:0.5(edepth=0.89) -  Db4:0.9(edepth=0.89) - C4:0.6(edepth=0.89) Ab3:0.7(edepth=0.89)  F3:0.8(edepth=0.89) - Eb4:0.6(edepth=0.89) ~F4:0.75
+    F3:0.95(edepth=0.92) F4:0.6(edepth=0.92) F3:0.5(edepth=0.92) Eb4:0.7(edepth=0.92)  F3:0.8(edepth=0.92) C4:0.6(edepth=0.92) F3:0.5(edepth=0.92) ~Db4:0.7  F3:0.9(edepth=0.92) F4:0.6(edepth=0.92) Ab3:0.5(edepth=0.92) C4:0.7(edepth=0.92)  F3:0.8(edepth=0.92) Eb4:0.6(edepth=0.92) ~F4:0.75 C4:0.5(edepth=0.92)
+    F3:0.95(edepth=0.95) - F4:0.6(edepth=0.95) Eb4:0.7(edepth=0.95)  - C4:0.6(edepth=0.95) F3:0.5(edepth=0.95) -  Db4:0.9(edepth=0.95) - C4:0.6(edepth=0.95) Ab3:0.7(edepth=0.95)  F3:0.8(edepth=0.95) - Eb4:0.6(edepth=0.95) ~F4:0.75
+    F3:0.95(edepth=0.98) F4:0.6(edepth=0.98) F3:0.5(edepth=0.98) Eb4:0.7(edepth=0.98)  F3:0.8(edepth=0.98) C4:0.6(edepth=0.98) F3:0.5(edepth=0.98) ~Db4:0.7  F3:0.9(edepth=0.98) F4:0.6(edepth=0.98)*2 Ab3:0.5(edepth=0.98) C4:0.7(edepth=0.98)*2  F3:0.8(edepth=0.98) Eb4:0.6(edepth=0.98) ~F4:0.75 -
+    Ab3:0.9(edepth=0.86) - C4:0.7(edepth=0.86) Eb4:0.7(edepth=0.86)  F4:0.85(edepth=0.86) - ~Eb4:0.6 C4:0.6(edepth=0.86)  Db4:0.9(edepth=0.86) ~C4:0.7 Ab3:0.6(edepth=0.86) F3:0.6(edepth=0.86)  F4:0.9(edepth=0.86)*2 - Eb4:0.7(edepth=0.86)*3 -
+}
+
+# The tunnel: the root on every sixteenth, the accent every third step so it shifts against the bar and never repeats; the envelope opens over 24 bars and closes.
+pattern acid_tunnel32 {
+    F3:0.95(edepth=0.60) F3:0.42(edepth=0.60) F3:0.42(edepth=0.60) F3:0.95(edepth=0.60)  F3:0.42(edepth=0.60) F3:0.42(edepth=0.60) F3:0.95(edepth=0.60) F3:0.42(edepth=0.60)  F3:0.42(edepth=0.60) F3:0.95(edepth=0.60) F3:0.42(edepth=0.60) F3:0.42(edepth=0.60)  F3:0.95(edepth=0.60) F3:0.42(edepth=0.60) F3:0.42(edepth=0.60) F3:0.95(edepth=0.60)
+    F3:0.42(edepth=0.62) F3:0.42(edepth=0.62) F3:0.95(edepth=0.62) F3:0.42(edepth=0.62)  F3:0.42(edepth=0.62) F4:0.95(edepth=0.62) F3:0.42(edepth=0.62) F3:0.42(edepth=0.62)  F3:0.95(edepth=0.62) F3:0.42(edepth=0.62) F3:0.42(edepth=0.62) F3:0.95(edepth=0.62)  F3:0.42(edepth=0.62) F3:0.42(edepth=0.62) F3:0.95(edepth=0.62) F3:0.42(edepth=0.62)
+    F3:0.42(edepth=0.63) F3:0.95(edepth=0.63) F3:0.42(edepth=0.63) F3:0.42(edepth=0.63)  F3:0.95(edepth=0.63) F3:0.42(edepth=0.63) F3:0.42(edepth=0.63) F3:0.95(edepth=0.63)  F3:0.42(edepth=0.63) F3:0.42(edepth=0.63) F3:0.95(edepth=0.63) F3:0.42(edepth=0.63)  F3:0.42(edepth=0.63) F4:0.95(edepth=0.63) F3:0.42(edepth=0.63) F3:0.42(edepth=0.63)
+    F3:0.95(edepth=0.65) F3:0.42(edepth=0.65) F3:0.42(edepth=0.65) F3:0.95(edepth=0.65)  F3:0.42(edepth=0.65) F3:0.42(edepth=0.65) F3:0.95(edepth=0.65) F3:0.42(edepth=0.65)  F3:0.42(edepth=0.65) F3:0.95(edepth=0.65) F3:0.42(edepth=0.65) F3:0.42(edepth=0.65)  F3:0.95(edepth=0.65) F3:0.42(edepth=0.65) F3:0.42(edepth=0.65) F3:0.95(edepth=0.65)
+    F3:0.42(edepth=0.66) F3:0.42(edepth=0.66) F3:0.95(edepth=0.66) F3:0.42(edepth=0.66)  F3:0.42(edepth=0.66) F4:0.95(edepth=0.66) F3:0.42(edepth=0.66) F3:0.42(edepth=0.66)  F3:0.95(edepth=0.66) F3:0.42(edepth=0.66) F3:0.42(edepth=0.66) F3:0.95(edepth=0.66)  F3:0.42(edepth=0.66) F3:0.42(edepth=0.66) F3:0.95(edepth=0.66) F3:0.42(edepth=0.66)
+    F3:0.42(edepth=0.68) F3:0.95(edepth=0.68) F3:0.42(edepth=0.68) F3:0.42(edepth=0.68)  F3:0.95(edepth=0.68) F3:0.42(edepth=0.68) F3:0.42(edepth=0.68) F3:0.95(edepth=0.68)  F3:0.42(edepth=0.68) F3:0.42(edepth=0.68) F3:0.95(edepth=0.68) F3:0.42(edepth=0.68)  F3:0.42(edepth=0.68) F4:0.95(edepth=0.68) F3:0.42(edepth=0.68) F3:0.42(edepth=0.68)
+    F3:0.95(edepth=0.70) F3:0.42(edepth=0.70) F3:0.42(edepth=0.70) F3:0.95(edepth=0.70)  F3:0.42(edepth=0.70) F3:0.42(edepth=0.70) F3:0.95(edepth=0.70) F3:0.42(edepth=0.70)  F3:0.42(edepth=0.70) F3:0.95(edepth=0.70) F3:0.42(edepth=0.70) F3:0.42(edepth=0.70)  F3:0.95(edepth=0.70) F3:0.42(edepth=0.70) F3:0.42(edepth=0.70) F3:0.95(edepth=0.70)
+    F3:0.42(edepth=0.71) F3:0.42(edepth=0.71) F3:0.95(edepth=0.71) F3:0.42(edepth=0.71)  F3:0.42(edepth=0.71) F4:0.95(edepth=0.71) F3:0.42(edepth=0.71) F3:0.42(edepth=0.71)  F3:0.95(edepth=0.71) F3:0.42(edepth=0.71) F3:0.42(edepth=0.71) F3:0.95(edepth=0.71)  F3:0.42(edepth=0.71) F3:0.42(edepth=0.71) F3:0.95(edepth=0.71) F3:0.42(edepth=0.71)
+    F3:0.42(edepth=0.73) F3:0.95(edepth=0.73) F3:0.42(edepth=0.73) F3:0.42(edepth=0.73)  F3:0.95(edepth=0.73) F3:0.42(edepth=0.73) F3:0.42(edepth=0.73) F3:0.95(edepth=0.73)  F3:0.42(edepth=0.73) F3:0.42(edepth=0.73) F3:0.95(edepth=0.73) F3:0.42(edepth=0.73)  F3:0.42(edepth=0.73) F4:0.95(edepth=0.73) F3:0.42(edepth=0.73) F3:0.42(edepth=0.73)
+    F3:0.95(edepth=0.74) F3:0.42(edepth=0.74) F3:0.42(edepth=0.74) F3:0.95(edepth=0.74)  F3:0.42(edepth=0.74) F3:0.42(edepth=0.74) F3:0.95(edepth=0.74) F3:0.42(edepth=0.74)  F3:0.42(edepth=0.74) F3:0.95(edepth=0.74) F3:0.42(edepth=0.74) F3:0.42(edepth=0.74)  F3:0.95(edepth=0.74) F3:0.42(edepth=0.74) F3:0.42(edepth=0.74) F3:0.95(edepth=0.74)
+    F3:0.42(edepth=0.76) F3:0.42(edepth=0.76) F3:0.95(edepth=0.76) F3:0.42(edepth=0.76)  F3:0.42(edepth=0.76) F4:0.95(edepth=0.76) F3:0.42(edepth=0.76) F3:0.42(edepth=0.76)  F3:0.95(edepth=0.76) F3:0.42(edepth=0.76) F3:0.42(edepth=0.76) F3:0.95(edepth=0.76)  F3:0.42(edepth=0.76) F3:0.42(edepth=0.76) F3:0.95(edepth=0.76) F3:0.42(edepth=0.76)
+    F3:0.42(edepth=0.78) F3:0.95(edepth=0.78) F3:0.42(edepth=0.78) F3:0.42(edepth=0.78)  F3:0.95(edepth=0.78) F3:0.42(edepth=0.78) F3:0.42(edepth=0.78) F3:0.95(edepth=0.78)  F3:0.42(edepth=0.78) F3:0.42(edepth=0.78) F3:0.95(edepth=0.78) F3:0.42(edepth=0.78)  F3:0.42(edepth=0.78) F4:0.95(edepth=0.78) F3:0.42(edepth=0.78) F3:0.42(edepth=0.78)
+    F3:0.95(edepth=0.79) F3:0.42(edepth=0.79) F3:0.42(edepth=0.79) F3:0.95(edepth=0.79)  F3:0.42(edepth=0.79) F3:0.42(edepth=0.79) F3:0.95(edepth=0.79) F3:0.42(edepth=0.79)  F3:0.42(edepth=0.79) F3:0.95(edepth=0.79) F3:0.42(edepth=0.79) F3:0.42(edepth=0.79)  F3:0.95(edepth=0.79) F3:0.42(edepth=0.79) F3:0.42(edepth=0.79) F3:0.95(edepth=0.79)
+    F3:0.42(edepth=0.81) F3:0.42(edepth=0.81) F3:0.95(edepth=0.81) F3:0.42(edepth=0.81)  F3:0.42(edepth=0.81) F4:0.95(edepth=0.81) F3:0.42(edepth=0.81) F3:0.42(edepth=0.81)  F3:0.95(edepth=0.81) F3:0.42(edepth=0.81) F3:0.42(edepth=0.81) F3:0.95(edepth=0.81)  F3:0.42(edepth=0.81) F3:0.42(edepth=0.81) F3:0.95(edepth=0.81) F3:0.42(edepth=0.81)
+    F3:0.42(edepth=0.83) F3:0.95(edepth=0.83) F3:0.42(edepth=0.83) F3:0.42(edepth=0.83)  F3:0.95(edepth=0.83) F3:0.42(edepth=0.83) F3:0.42(edepth=0.83) F3:0.95(edepth=0.83)  F3:0.42(edepth=0.83) F3:0.42(edepth=0.83) F3:0.95(edepth=0.83) F3:0.42(edepth=0.83)  F3:0.42(edepth=0.83) F4:0.95(edepth=0.83) F3:0.42(edepth=0.83) F3:0.42(edepth=0.83)
+    F3:0.95(edepth=0.84) F3:0.42(edepth=0.84) F3:0.42(edepth=0.84) F3:0.95(edepth=0.84)  F3:0.42(edepth=0.84) F3:0.42(edepth=0.84) F3:0.95(edepth=0.84) F3:0.42(edepth=0.84)  F3:0.42(edepth=0.84) F3:0.95(edepth=0.84) F3:0.42(edepth=0.84) F3:0.42(edepth=0.84)  F3:0.95(edepth=0.84) F3:0.42(edepth=0.84) F3:0.42(edepth=0.84) F3:0.95(edepth=0.84)
+    F3:0.42(edepth=0.86) F3:0.42(edepth=0.86) F3:0.95(edepth=0.86) F3:0.42(edepth=0.86)  F3:0.42(edepth=0.86) F4:0.95(edepth=0.86) F3:0.42(edepth=0.86) F3:0.42(edepth=0.86)  F3:0.95(edepth=0.86) F3:0.42(edepth=0.86) F3:0.42(edepth=0.86) F3:0.95(edepth=0.86)  F3:0.42(edepth=0.86) F3:0.42(edepth=0.86) F3:0.95(edepth=0.86) F3:0.42(edepth=0.86)
+    F3:0.42(edepth=0.87) F3:0.95(edepth=0.87) F3:0.42(edepth=0.87) F3:0.42(edepth=0.87)  F3:0.95(edepth=0.87) F3:0.42(edepth=0.87) F3:0.42(edepth=0.87) F3:0.95(edepth=0.87)  F3:0.42(edepth=0.87) F3:0.42(edepth=0.87) F3:0.95(edepth=0.87) F3:0.42(edepth=0.87)  F3:0.42(edepth=0.87) F4:0.95(edepth=0.87) F3:0.42(edepth=0.87) F3:0.42(edepth=0.87)
+    F3:0.95(edepth=0.89) F3:0.42(edepth=0.89) F3:0.42(edepth=0.89) F3:0.95(edepth=0.89)  F3:0.42(edepth=0.89) F3:0.42(edepth=0.89) F3:0.95(edepth=0.89) F3:0.42(edepth=0.89)  F3:0.42(edepth=0.89) F3:0.95(edepth=0.89) F3:0.42(edepth=0.89) F3:0.42(edepth=0.89)  F3:0.95(edepth=0.89) F3:0.42(edepth=0.89) F3:0.42(edepth=0.89) F3:0.95(edepth=0.89)
+    F3:0.42(edepth=0.91) F3:0.42(edepth=0.91) F3:0.95(edepth=0.91) F3:0.42(edepth=0.91)  F3:0.42(edepth=0.91) F4:0.95(edepth=0.91) F3:0.42(edepth=0.91) F3:0.42(edepth=0.91)  F3:0.95(edepth=0.91) F3:0.42(edepth=0.91) F3:0.42(edepth=0.91) F3:0.95(edepth=0.91)  F3:0.42(edepth=0.91) F3:0.42(edepth=0.91) F3:0.95(edepth=0.91) F3:0.42(edepth=0.91)
+    F3:0.42(edepth=0.92) F3:0.95(edepth=0.92) F3:0.42(edepth=0.92) F3:0.42(edepth=0.92)  F3:0.95(edepth=0.92) F3:0.42(edepth=0.92) F3:0.42(edepth=0.92) F3:0.95(edepth=0.92)  F3:0.42(edepth=0.92) F3:0.42(edepth=0.92) F3:0.95(edepth=0.92) F3:0.42(edepth=0.92)  F3:0.42(edepth=0.92) F4:0.95(edepth=0.92) F3:0.42(edepth=0.92) F3:0.42(edepth=0.92)
+    F3:0.95(edepth=0.94) F3:0.42(edepth=0.94) F3:0.42(edepth=0.94) F3:0.95(edepth=0.94)  F3:0.42(edepth=0.94) F3:0.42(edepth=0.94) F3:0.95(edepth=0.94) F3:0.42(edepth=0.94)  F3:0.42(edepth=0.94) F3:0.95(edepth=0.94) F3:0.42(edepth=0.94) F3:0.42(edepth=0.94)  F3:0.95(edepth=0.94) F3:0.42(edepth=0.94) F3:0.42(edepth=0.94) F3:0.95(edepth=0.94)
+    F3:0.42(edepth=0.95) F3:0.42(edepth=0.95) F3:0.95(edepth=0.95) F3:0.42(edepth=0.95)  F3:0.42(edepth=0.95) F4:0.95(edepth=0.95) F3:0.42(edepth=0.95) F3:0.42(edepth=0.95)  F3:0.95(edepth=0.95) F3:0.42(edepth=0.95) F3:0.42(edepth=0.95) F3:0.95(edepth=0.95)  F3:0.42(edepth=0.95) F3:0.42(edepth=0.95) F3:0.95(edepth=0.95) F3:0.42(edepth=0.95)
+    F3:0.42(edepth=0.97) F3:0.95(edepth=0.97) F3:0.42(edepth=0.97) F3:0.42(edepth=0.97)  F3:0.95(edepth=0.97) F3:0.42(edepth=0.97) F3:0.42(edepth=0.97) F3:0.95(edepth=0.97)  F3:0.42(edepth=0.97) F3:0.42(edepth=0.97) F3:0.95(edepth=0.97) F3:0.42(edepth=0.97)  F3:0.42(edepth=0.97) F4:0.95(edepth=0.97) F3:0.42(edepth=0.97) F3:0.42(edepth=0.97)
+    F3:0.95(edepth=0.95) F3:0.42(edepth=0.95) F3:0.42(edepth=0.95) F3:0.95(edepth=0.95)  F3:0.42(edepth=0.95) F3:0.42(edepth=0.95) F3:0.95(edepth=0.95) F3:0.42(edepth=0.95)  F3:0.42(edepth=0.95) F3:0.95(edepth=0.95) F3:0.42(edepth=0.95) F3:0.42(edepth=0.95)  F3:0.95(edepth=0.95) F3:0.42(edepth=0.95) F3:0.42(edepth=0.95) F3:0.95(edepth=0.95)
+    F3:0.42(edepth=0.91) F3:0.42(edepth=0.91) F3:0.95(edepth=0.91) F3:0.42(edepth=0.91)  F3:0.42(edepth=0.91) F4:0.95(edepth=0.91) F3:0.42(edepth=0.91) F3:0.42(edepth=0.91)  F3:0.95(edepth=0.91) F3:0.42(edepth=0.91) F3:0.42(edepth=0.91) F3:0.95(edepth=0.91)  F3:0.42(edepth=0.91) F3:0.42(edepth=0.91) F3:0.95(edepth=0.91) F3:0.42(edepth=0.91)
+    F3:0.42(edepth=0.87) F3:0.95(edepth=0.87) F3:0.42(edepth=0.87) F3:0.42(edepth=0.87)  F3:0.95(edepth=0.87) F3:0.42(edepth=0.87) F3:0.42(edepth=0.87) F3:0.95(edepth=0.87)  F3:0.42(edepth=0.87) F3:0.42(edepth=0.87) F3:0.95(edepth=0.87) F3:0.42(edepth=0.87)  F3:0.42(edepth=0.87) F4:0.95(edepth=0.87) F3:0.42(edepth=0.87) F3:0.42(edepth=0.87)
+    F3:0.95(edepth=0.82) F3:0.42(edepth=0.82) F3:0.42(edepth=0.82) F3:0.95(edepth=0.82)  F3:0.42(edepth=0.82) F3:0.42(edepth=0.82) F3:0.95(edepth=0.82) F3:0.42(edepth=0.82)  F3:0.42(edepth=0.82) F3:0.95(edepth=0.82) F3:0.42(edepth=0.82) F3:0.42(edepth=0.82)  F3:0.95(edepth=0.82) F3:0.42(edepth=0.82) F3:0.42(edepth=0.82) F3:0.95(edepth=0.82)
+    F3:0.42(edepth=0.78) F3:0.42(edepth=0.78) F3:0.95(edepth=0.78) F3:0.42(edepth=0.78)  F3:0.42(edepth=0.78) F4:0.95(edepth=0.78) F3:0.42(edepth=0.78) F3:0.42(edepth=0.78)  F3:0.95(edepth=0.78) F3:0.42(edepth=0.78) F3:0.42(edepth=0.78) F3:0.95(edepth=0.78)  F3:0.42(edepth=0.78) F3:0.42(edepth=0.78) F3:0.95(edepth=0.78) F3:0.42(edepth=0.78)
+    F3:0.42(edepth=0.74) F3:0.95(edepth=0.74) F3:0.42(edepth=0.74) F3:0.42(edepth=0.74)  F3:0.95(edepth=0.74) F3:0.42(edepth=0.74) F3:0.42(edepth=0.74) F3:0.95(edepth=0.74)  F3:0.42(edepth=0.74) F3:0.42(edepth=0.74) F3:0.95(edepth=0.74) F3:0.42(edepth=0.74)  F3:0.42(edepth=0.74) F4:0.95(edepth=0.74) F3:0.42(edepth=0.74) F3:0.42(edepth=0.74)
+    F3:0.95(edepth=0.70) F3:0.42(edepth=0.70) F3:0.42(edepth=0.70) F3:0.95(edepth=0.70)  F3:0.42(edepth=0.70) F3:0.42(edepth=0.70) F3:0.95(edepth=0.70) F3:0.42(edepth=0.70)  F3:0.42(edepth=0.70) F3:0.95(edepth=0.70) F3:0.42(edepth=0.70) F3:0.42(edepth=0.70)  F3:0.95(edepth=0.70) F3:0.42(edepth=0.70) F3:0.42(edepth=0.70) F3:0.95(edepth=0.70)
+    F3:0.42(edepth=0.86) F3:0.42(edepth=0.86) F3:0.95(edepth=0.86) F3:0.42(edepth=0.86)  F3:0.42(edepth=0.86) F4:0.95(edepth=0.86) F3:0.42(edepth=0.86) F3:0.42(edepth=0.86)  F3:0.95(edepth=0.86) F3:0.42(edepth=0.86) F3:0.42(edepth=0.86) F3:0.95(edepth=0.86)  F3:0.42(edepth=0.86) F3:0.42(edepth=0.86) F3:0.95(edepth=0.86) F3:0.42(edepth=0.86)
+}
+
+# The acid kick and clap with a ghost rim between them, some there only sometimes.
+pattern kick_acidrim8 {
+    kick:  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - x:0.45 -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  - - - -
+    clap:  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.8 - - -  - - - -  x:0.78 - - -  - - - -  x:0.7*2 - x:0.8 x:0.6
+    snare: - - - o?0.5  - - - o:0.3  - - - o?0.5  - - - o:0.3  - - - o?0.5  - - - o:0.3  - - - o?0.5  - - - o:0.3  - - - o?0.5  - - - o:0.3  - - - o?0.5  - - - o:0.3  - - - o?0.5  - - - o:0.3  - - - o?0.5  - x:0.35 - o:0.3  - - - o?0.5  - - - o:0.3  - - - o?0.5  - - - o:0.3  - - - o?0.5  - - - o:0.3  - - - o?0.5  - - - o:0.3  - - - o?0.5  - - - o:0.3  - - - o?0.5  - - - o:0.3  - - - o?0.5  - - - o:0.3  - x:0.35 x:0.4 o?0.5  - - - o:0.3
+}
+
+# The swarm, in bursts: three bars buzzing, one quiet, a rising figure, three quiet.
+pattern insect_pulse8 {
+    F4:0.38 - F4:0.25 -  F4:0.35 - - F4:0.22  F4:0.38 - F4:0.25 -  F4:0.32 - - -
+    F4:0.38 - F4:0.25 -  F4:0.35 - - F4:0.22  F4:0.38 - F4:0.25 -  F4:0.32 - - -
+    F4:0.38 - F4:0.25 -  F4:0.35 - - F4:0.22  F4:0.38 - F4:0.25 -  F4:0.32 - - -
+    - - - -  - - - -  - - - -  - - - -
+    F4:0.38 - F4:0.25 -  Ab4:0.35 - - F4:0.22  C5:0.38 - F4:0.25 -  Eb5:0.32 - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+}
+
+# ── The way out, back to the dub ──
+
+# The 303 on the way down: its envelope closing and its accents softening over 16 bars, still playing.
+pattern acid_down16 {
+    F3:0.90(edepth=0.84) - F3:0.50(edepth=0.84) -  F4:0.70(edepth=0.84) - F3:0.50(edepth=0.84) -  F3:0.90(edepth=0.84) - Ab3:0.60(edepth=0.84) -  F3:0.70(edepth=0.84) ~Eb3:0.60 - F3:0.50(edepth=0.84)
+    F3:0.88(edepth=0.83) - F3:0.49(edepth=0.83) -  F4:0.69(edepth=0.83) - F3:0.49(edepth=0.83) -  F3:0.88(edepth=0.83) - C4:0.59(edepth=0.83) -  Bb3:0.69(edepth=0.83) ~Ab3:0.59 - F3:0.49(edepth=0.83)
+    F3:0.86(edepth=0.81) - F3:0.48(edepth=0.81) -  F4:0.67(edepth=0.81) - F3:0.48(edepth=0.81) -  F3:0.86(edepth=0.81) - Ab3:0.58(edepth=0.81) -  F3:0.67(edepth=0.81) ~Eb3:0.58 - F3:0.48(edepth=0.81)
+    F3:0.85(edepth=0.80) - F3:0.47(edepth=0.80) -  F4:0.66(edepth=0.80) - F3:0.47(edepth=0.80) -  F3:0.85(edepth=0.80) - C4:0.56(edepth=0.80) -  Bb3:0.66(edepth=0.80) ~Ab3:0.56 - F3:0.47(edepth=0.80)
+    F3:0.83(edepth=0.78) - F3:0.46(edepth=0.78) -  F4:0.64(edepth=0.78) - F3:0.46(edepth=0.78) -  F3:0.83(edepth=0.78) - Ab3:0.55(edepth=0.78) -  F3:0.64(edepth=0.78) ~Eb3:0.55 - F3:0.46(edepth=0.78)
+    F3:0.81(edepth=0.77) - F3:0.45(edepth=0.77) -  F4:0.63(edepth=0.77) - F3:0.45(edepth=0.77) -  F3:0.81(edepth=0.77) - C4:0.54(edepth=0.77) -  Bb3:0.63(edepth=0.77) ~Ab3:0.54 - F3:0.45(edepth=0.77)
+    F3:0.79(edepth=0.75) - F3:0.44(edepth=0.75) -  F4:0.62(edepth=0.75) - F3:0.44(edepth=0.75) -  F3:0.79(edepth=0.75) - Ab3:0.53(edepth=0.75) -  F3:0.62(edepth=0.75) ~Eb3:0.53 - F3:0.44(edepth=0.75)
+    F3:0.77(edepth=0.74) - F3:0.43(edepth=0.74) -  F4:0.60(edepth=0.74) - F3:0.43(edepth=0.74) -  F3:0.77(edepth=0.74) - C4:0.52(edepth=0.74) -  Bb3:0.60(edepth=0.74) ~Ab3:0.52 - F3:0.43(edepth=0.74)
+    F3:0.76(edepth=0.72) - F3:0.42(edepth=0.72) -  F4:0.59(edepth=0.72) - F3:0.42(edepth=0.72) -  F3:0.76(edepth=0.72) - Ab3:0.50(edepth=0.72) -  F3:0.59(edepth=0.72) ~Eb3:0.50 - F3:0.42(edepth=0.72)
+    F3:0.74(edepth=0.71) - F3:0.41(edepth=0.71) -  F4:0.57(edepth=0.71) - F3:0.41(edepth=0.71) -  F3:0.74(edepth=0.71) - C4:0.49(edepth=0.71) -  Bb3:0.57(edepth=0.71) ~Ab3:0.49 - F3:0.41(edepth=0.71)
+    F3:0.72(edepth=0.69) - F3:0.40(edepth=0.69) -  F4:0.56(edepth=0.69) - F3:0.40(edepth=0.69) -  F3:0.72(edepth=0.69) - Ab3:0.48(edepth=0.69) -  F3:0.56(edepth=0.69) ~Eb3:0.48 - F3:0.40(edepth=0.69)
+    F3:0.70(edepth=0.68) - F3:0.39(edepth=0.68) -  F4:0.55(edepth=0.68) - F3:0.39(edepth=0.68) -  F3:0.70(edepth=0.68) - C4:0.47(edepth=0.68) -  Bb3:0.55(edepth=0.68) ~Ab3:0.47 - F3:0.39(edepth=0.68)
+    F3:0.68(edepth=0.66) - F3:0.38(edepth=0.66) -  F4:0.53(edepth=0.66) - F3:0.38(edepth=0.66) -  F3:0.68(edepth=0.66) - Ab3:0.46(edepth=0.66) -  F3:0.53(edepth=0.66) ~Eb3:0.46 - F3:0.38(edepth=0.66)
+    F3:0.67(edepth=0.65) - F3:0.37(edepth=0.65) -  F4:0.52(edepth=0.65) - F3:0.37(edepth=0.65) -  F3:0.67(edepth=0.65) - C4:0.44(edepth=0.65) -  Bb3:0.52(edepth=0.65) ~Ab3:0.44 - F3:0.37(edepth=0.65)
+    F3:0.65(edepth=0.63) - F3:0.36(edepth=0.63) -  F4:0.50(edepth=0.63) - F3:0.36(edepth=0.63) -  F3:0.65(edepth=0.63) - Ab3:0.43(edepth=0.63) -  F3:0.50(edepth=0.63) ~Eb3:0.43 - F3:0.36(edepth=0.63)
+    F3:0.63(edepth=0.62) - F3:0.35(edepth=0.62) -  F4:0.49(edepth=0.62) - F3:0.35(edepth=0.62) -  F3:0.63(edepth=0.62) - C4:0.42(edepth=0.62) -  Bb3:0.49(edepth=0.62) ~Ab3:0.42 - F3:0.35(edepth=0.62)
+}
+
+# Both bell lines, one after the other: the first question and its answer.
+pattern motif_both16 {
+    - - Ab4:0.5 -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - G4:0.42 -  - - - -  - - F4:0.46 -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - Ab4:0.5 -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - C5:0.44 -  - - - -  - - Bb4:0.4 -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - C5:0.46 -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - Bb4:0.42 -  - - - -  - - Ab4:0.44 -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - Eb5:0.44 -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - Db5:0.4 -  - - - -  - - C5:0.46 -  - - Ab4:0.36 -
+    - - - -  - - - -  - - - -  - - - -
+}
+
 # ════════════════════════════════════════════════════════
 # BUSES
 # ════════════════════════════════════════════════════════
@@ -1399,6 +1556,18 @@ track chirp {
     delay_send 0.22
     reverb_send 0.08
     out > highpass(200hz, 0.1) > saturate(0.25) > master
+}
+
+track insects {
+    play rest
+    using insects
+    level 0
+    gate 0.5
+    pan -0.35
+    delay_send 0.2
+    reverb_send 0.15
+    # half_sine carries DC; take it out before anything else.
+    out > highpass(200hz, 0.1) > master
 }
 
 track siren {

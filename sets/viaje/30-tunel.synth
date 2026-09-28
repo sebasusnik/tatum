@@ -1,0 +1,11 @@
+# set: bars=64 phase=tunel energy=8
+# set-note: El túnel: el 303 en una sola nota, con el acento cada tres semicorcheas, que se corre contra el compás y nunca se repite igual; el filtro se abre durante veinticuatro compases y se cierra. Sin clap, hipnótico.
+use "_rig.synth"
+tempo 133
+
+module beats kit { kick_decay 28% kick_pitch 0.88x kick_click 44% kick_drive 46% hihat_level 72% }
+
+track beat   { play kick_acid8 level 1.15 }
+track hats   { play hat_16_8 level 0.9 }
+track roll   { play roll_f level 0.66 }
+track acid   { play acid_tunnel32 level 0.52 }
