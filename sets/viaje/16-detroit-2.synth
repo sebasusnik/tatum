@@ -1,0 +1,14 @@
+# set: bars=48 phase=detroit-2 energy=6
+# set-note: Detroit cambia de piel: el bajo pasa a otra línea, más sincopada y con saltos de octava; los acordes dejan de ser colchón y tocan golpes cortos; aparecen congas.
+use "_rig.synth"
+tempo 126
+
+module beats kit { kick_decay 30% kick_pitch 0.8x kick_click 30% hihat_level 70% hihat_decay 28% }
+
+track bed    { level 0.18 }
+track beat   { play kick_clap8 level 1.07 }
+track hats   { play hat_off8 level 2 }
+track perc   { play perc_conga8 level 0.8 delay_send 0.12 reverb_send 0.1 }
+track under  { play ch_low level 0.06 }
+track bass   { play bs_c16 level 0.82 }
+track chords { play ch_pulse level 0.3 }
