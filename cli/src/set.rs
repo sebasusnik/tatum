@@ -341,7 +341,7 @@ fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
 /// `--ramp` bars (0 jumps).
 fn cmd_play(args: &[String]) -> Result<(), String> {
     let (mut dir, mut phrase, mut ramp, mut blend) = (None, 8usize, 4.0f32, 0.0f32);
-    let (mut device, mut rate, mut midi, mut tui) = (None, None, None, false);
+    let (mut device, mut rate, mut midi, mut tui, mut glass) = (None, None, None, false, false);
     let mut i = 0;
     while i < args.len() {
         let value = |i: usize| args.get(i + 1).map(|s| s.as_str());
@@ -380,6 +380,10 @@ fn cmd_play(args: &[String]) -> Result<(), String> {
                 i += 1;
             }
             "--tui" => tui = true,
+            "--glass" => {
+                tui = true;
+                glass = true;
+            }
             other if other.starts_with('-') => return Err(format!("unknown flag '{}'", other)),
             other => dir = Some(other),
         }
@@ -390,7 +394,7 @@ fn cmd_play(args: &[String]) -> Result<(), String> {
     let first = steps[0].path.to_string_lossy().into_owned();
     let mut nav = crate::setnav::SetNav::new(steps, phrase, ramp);
     nav.blend_bars = blend;
-    crate::live::run(&first, true, device, rate, midi, Default::default(), Some(nav), tui)
+    crate::live::run(&first, true, device, rate, midi, Default::default(), Some(nav), tui, glass)
 }
 
 fn cmd_render(args: &[String]) -> Result<(), String> {

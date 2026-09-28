@@ -171,6 +171,12 @@ pub struct Screen {
     selected: Option<usize>,
     help: bool,
     transformed: Vec<bool>,
+    /// Paint sound with cell backgrounds only, one pixel per cell, so a
+    /// terminal that makes cell backgrounds translucent (Ghostty's
+    /// `background-opacity-cells`) shows the window behind all of it. The
+    /// half-block pixels put half the sound in the foreground, which stays
+    /// opaque.
+    pub glass: bool,
     bar: usize,
     step: usize,
     tempo: f32,
@@ -212,6 +218,7 @@ impl Screen {
             selected: None,
             help: false,
             transformed: Vec::new(),
+            glass: false,
             bar: 0,
             step: 0,
             tempo: 0.0,
@@ -651,7 +658,7 @@ impl Screen {
                 };
                 let (top, bottom) = (sample(y * 2), sample(y * 2 + 1));
                 if let Some(c) = buf.cell_mut((area.x + label_w + x as u16, area.y + y as u16)) {
-                    pixels(c, top, bottom, CLEAR_MIX);
+                    pixels(c, top, bottom, CLEAR_MIX, self.glass);
                 }
             }
         }
@@ -732,7 +739,7 @@ impl Screen {
                         t(col[band])
                     };
                     if let Some(c) = buf.cell_mut((area.x + label_w + x as u16, y0 + y as u16)) {
-                        pixels(c, pix(y * 2), pix(y * 2 + 1), CLEAR_LANE);
+                        pixels(c, pix(y * 2), pix(y * 2 + 1), CLEAR_LANE, self.glass);
                     }
                 }
             }
@@ -900,7 +907,14 @@ const CLEAR_LANE: f32 = 0.1;
 /// in its foreground and the cell's background the bottom one. A silent half
 /// is not painted, so when only the bottom one sounds the lower half block is
 /// used instead and the top stays clear.
-fn pixels(c: &mut ratatui::buffer::Cell, top: f32, bottom: f32, clear: f32) {
+fn pixels(c: &mut ratatui::buffer::Cell, top: f32, bottom: f32, clear: f32, glass: bool) {
+    if glass {
+        // One pixel a cell, the louder of the two, all of it background.
+        let v = top.max(bottom);
+        let bg = if v > clear { inferno(v) } else { Color::Reset };
+        c.set_char(' ').set_fg(Color::Reset).set_bg(bg);
+        return;
+    }
     match (top > clear, bottom > clear) {
         (true, true) => c.set_char('▀').set_fg(inferno(top)).set_bg(inferno(bottom)),
         (true, false) => c.set_char('▀').set_fg(inferno(top)).set_bg(Color::Reset),

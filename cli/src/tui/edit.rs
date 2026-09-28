@@ -362,7 +362,8 @@ mod demo {
     /// it. The keys change the live line.
     #[test]
     fn the_live_line_is_the_one_that_changes() {
-        let text = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/transform_demo.synth")).unwrap();
+        let text =
+            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/transform_demo.synth")).unwrap();
         let mut c = Clause::parse("rest").unwrap();
         c.apply(Op::Toggle(Toggle::EveryRev));
         let out = rewrite(&text, "acid", &c).unwrap();

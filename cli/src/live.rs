@@ -60,6 +60,7 @@ pub fn cmd(args: &[String], watch: bool) {
     let mut rate: Option<u32> = None;
     let mut midi: Option<&str> = None;
     let mut tui = false;
+    let mut glass = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -96,6 +97,12 @@ pub fn cmd(args: &[String], watch: bool) {
                 return;
             }
             "--tui" => tui = true,
+            // Sound painted with cell backgrounds only, for a terminal that
+            // makes them translucent (Ghostty: `background-opacity-cells`).
+            "--glass" => {
+                tui = true;
+                glass = true;
+            }
             other if other.starts_with('-') => {
                 eprintln!("error: unknown flag '{}'", other);
                 std::process::exit(1);
@@ -106,10 +113,10 @@ pub fn cmd(args: &[String], watch: bool) {
     }
     let Some(path) = path else {
         eprintln!("error: missing input file");
-        eprintln!("usage: tatum {} <song.synth> [--device <name>] [--midi <name>] [--tui]", verb);
+        eprintln!("usage: tatum {} <song.synth> [--device <name>] [--midi <name>] [--tui | --glass]", verb);
         std::process::exit(1);
     };
-    if let Err(msg) = run(path, watch, device, rate, midi, isolation, None, tui) {
+    if let Err(msg) = run(path, watch, device, rate, midi, isolation, None, tui, glass) {
         eprintln!("error: {}", msg);
         std::process::exit(1);
     }
@@ -205,6 +212,7 @@ pub fn run(
     isolation: tatum_core::dsl::isolate::Isolation,
     mut set: Option<crate::setnav::SetNav>,
     tui: bool,
+    glass: bool,
 ) -> Result<(), String> {
     let mut source = Source::load(std::path::Path::new(path))?;
     if !isolation.is_empty() {
@@ -371,6 +379,7 @@ pub fn run(
             let mut screen =
                 crate::tui::Screen::new(Arc::clone(t), format!("{}{}", device_desc, resampled), inputs.names.clone())
                     .map_err(|e| format!("cannot open the screen: {}", e))?;
+            screen.glass = glass;
             screen.say(format!("{} {}", verb(watch), path), crate::tui::Tone::Info);
             Ui::Screen(Box::new(screen))
         }
