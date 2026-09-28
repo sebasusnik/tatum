@@ -1,7 +1,9 @@
 # set: bars=16 phase=respiro energy=3
-# set-note: Se va la batería: los acordes, la campana y el viento que vuelve. En los últimos cuatro compases asoma el 303, cerrado, antes que el bombo.
+# set-note: Se va la batería: los acordes con su reverb, el viento, y el pluck apagado tirado al eco. En los últimos cuatro compases asoma el 303, cerrado, antes que el bombo.
 use "_rig.synth"
 tempo 128
+
+module fm pluck { mod_index 20% }
 
 track bed    { play hiss_swell level 0.3 }
 track beat   { play rest }
@@ -9,5 +11,5 @@ track hats   { play rest }
 track under  { play ch_low level 0.12 }
 track bass   { play bs_intro level 0.45 }
 track chords { play ch_b level 0.2 reverb_send 0.3 }
-track chime  { play bl_a level 0.6 }
 track acid   { play acid_tease16 level 0.28 }
+track pluck  { play pluck_d level 0.115 delay_send 0.45 }

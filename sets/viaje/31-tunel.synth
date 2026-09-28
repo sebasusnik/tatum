@@ -9,3 +9,5 @@ track beat   { play kick_acid8 level 1.15 }
 track hats   { play hat_16_8 level 0.9 }
 track roll   { play roll_f level 0.66 }
 track acid   { play acid_tunnel32 level 0.52 }
+track static { play static_bed level 0.05 }
+track shaker { play shake4 level 0.06 }

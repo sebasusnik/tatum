@@ -9,3 +9,5 @@ track hats  { play hat_dub8 level 1.1 }
 track sub   { play sub_dub8 level 0.75 }
 track perc  { play perc_dub8 level 0.5 }
 track throw { play throw_dub8 level 0.2 }
+track shaker { play shake4 level 0.05 }
+track tick   { play tick332 level 0.085 }

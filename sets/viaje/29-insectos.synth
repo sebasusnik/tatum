@@ -1,4 +1,4 @@
-# set: bars=48 phase=insectos energy=7
+# set: bars=32 phase=insectos energy=7
 # set-note: El segundo momento raro: un enjambre que zumba a ráfagas, sobre el bajo rodante y el 303 bajito. Tres compases zumbando, uno quieto, una figura que sube.
 use "_rig.synth"
 tempo 132

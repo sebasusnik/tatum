@@ -1,7 +1,9 @@
 # set: bars=64 phase=lleno energy=7
-# set-note: Detroit a pleno: crash al empezar, stabs que contestan, el hat abierto, remates cada ocho compases y uno largo al final de cada dieciséis.
+# set-note: Detroit a pleno: el crash al empezar, el pluck con su motivo más abierto, el metal contestando, el hat abierto, remates cada ocho compases y uno largo cada dieciséis.
 use "_rig.synth"
 tempo 128
+
+module fm pluck { mod_index 42% }
 
 module beats kit { kick_decay 28% kick_pitch 0.8x kick_click 34% hihat_level 70% }
 
@@ -12,5 +14,7 @@ track perc   { play perc_detroit8 level 0.41 delay_send 0.15 reverb_send 0.12 }
 track under  { play ch_low level 0.05 }
 track bass   { play bs_ab16 level 0.93 }
 track chords { play ch_a level 0.27 }
-track stabs  { play st_ab16 level 0.32 }
-track chime  { play bl_a level 0.81 }
+track shaker { play shake4 level 0.06 }
+track tick   { play tick332 level 0.076 }
+track pluck  { play pluck_a level 0.144 }
+track mstab  { play mstab_a level 0.13 }
