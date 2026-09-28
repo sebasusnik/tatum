@@ -8,6 +8,6 @@ track bed   { play hiss_swell level 0.28 }
 track stab  { play stab_dub8 level 0.27 delay_send 0.5 }
 track beat  { play kick_dub8 level 0.8 }
 track hats  { play hat_dub8 level 1.12 }
-track sub   { play sub_dub8 level 0.55 }
+track sub   { play sub_dub8 level 0.76 }
 track perc  { play perc_dub8 level 0.45 }
 track chime { play motif_dub level 0.55 delay_send 0.6 }
