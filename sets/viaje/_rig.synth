@@ -183,9 +183,12 @@ module keys under {
     lfo_depth 8%
 }
 
+# The walking bass. A saw and a square on the same note, in phase since the
+# bass fix, so its bite comes from the filter pluck on each note (700 Hz,
+# as dub_techno's sub) rather than from the oscillators drifting apart.
 module bass walker {
     cutoff 158.866hz
-    cutoff_env 46%
+    cutoff_env 700hz
     resonance 0.15
     glide 5%
     osc1_wave saw
