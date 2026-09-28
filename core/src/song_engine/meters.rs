@@ -139,6 +139,13 @@ impl SongEngine {
         self.tracks.get(idx).map_or([0.0; 5], |t| t.band.percentages())
     }
 
+    /// Energy in each of `analysis::BAND_NAMES` since the meters were last
+    /// reset, and how many samples it was summed over, so a live display can
+    /// turn it into a level per band rather than a share.
+    pub fn track_band_energy(&self, idx: usize) -> ([f64; 5], u64) {
+        self.tracks.get(idx).map_or(([0.0; 5], 0), |t| (t.band.energy(), t.meter_samples / 2))
+    }
+
     /// Index into `analysis::BAND_NAMES` of the band this track mostly occupies.
     pub fn track_dominant_band(&self, idx: usize) -> Option<usize> {
         self.tracks.get(idx).and_then(|t| t.band.dominant())

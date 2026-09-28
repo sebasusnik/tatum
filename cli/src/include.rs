@@ -93,26 +93,35 @@ impl Source {
     }
 
     pub fn print_errors(&self, err: &DslError) {
+        for line in self.error_lines(err) {
+            eprintln!("{}", line);
+        }
+    }
+
+    /// The errors as `print_errors` writes them, one line each.
+    pub fn error_lines(&self, err: &DslError) -> Vec<String> {
         let root = self.files[0].display();
+        let mut out = Vec::new();
         match err {
             DslError::Parse(errs) => {
-                eprintln!("{}: parse errors:", root);
+                out.push(format!("{}: parse errors:", root));
                 for e in errs {
-                    eprintln!("  {}: {}", self.where_is(e.line), e.message);
+                    out.push(format!("  {}: {}", self.where_is(e.line), e.message));
                 }
             }
             DslError::Compile(errs) => {
-                eprintln!("{}: compile errors:", root);
+                out.push(format!("{}: compile errors:", root));
                 for e in errs {
                     // Line 0: an error about the song as a whole, not a place in it.
                     if e.line == 0 {
-                        eprintln!("  {}", e.message)
+                        out.push(format!("  {}", e.message))
                     } else {
-                        eprintln!("  {}: {}", self.where_is(e.line), e.message)
+                        out.push(format!("  {}: {}", self.where_is(e.line), e.message))
                     }
                 }
             }
         }
+        out
     }
 }
 

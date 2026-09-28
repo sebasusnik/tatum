@@ -8,6 +8,7 @@ mod set;
 mod setnav;
 mod keys;
 mod resample;
+mod tui;
 
 use std::fs;
 use std::process;
@@ -30,6 +31,13 @@ fn main() {
         "set" => set::cmd(&args[2..]),
         "play" => live::cmd(&args[2..], false),
         "watch" => live::cmd(&args[2..], true),
+        // A picture of the live screen, for looking at it without a terminal.
+        "tui-shot" => {
+            if let Err(e) = tui::shot::cmd(&args[2..]) {
+                eprintln!("error: {}", e);
+                process::exit(1);
+            }
+        }
         "help" | "--help" | "-h" => print_usage(),
         other => {
             eprintln!("unknown command: {}", other);
