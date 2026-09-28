@@ -1,4 +1,4 @@
-# set: bars=16 phase=puente energy=5
+# set: bars=32 phase=puente energy=5
 # set-note: Detroit asoma por abajo: el acorde grave de fondo y el bajo que empieza a caminar, sobre el groove dub que sigue en sus frases.
 use "_rig.synth"
 tempo 124

@@ -1,0 +1,13 @@
+# set: bars=48 phase=hondo-2 energy=5
+# set-note: El dub en su punto más lleno: los hats más ocupados, el sub que camina de F a Ab, Db y Eb, y una segunda campana que le contesta a la primera.
+use "_rig.synth"
+
+module keys chord { cutoff 2.3khz }
+
+track bed   { play hiss_swell level 0.28 }
+track stab  { play stab_dub8 level 0.29 delay_send 0.5 }
+track beat  { play kick_dub8 level 0.86 }
+track hats  { play hat_dub16 level 1.2 }
+track sub   { play sub_move16 level 0.79 }
+track perc  { play perc_dub8 level 0.45 }
+track chime { play motif_dub2 level 0.54 delay_send 0.6 }
