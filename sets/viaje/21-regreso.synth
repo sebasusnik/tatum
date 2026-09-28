@@ -1,0 +1,14 @@
+# set: bars=16 phase=regreso energy=5
+# set-note: El bombo vuelve de a poco, un golpe por compás, después dos, después cuatro; el 303 asoma cerrado y el acorde dub vuelve a tirar al eco.
+use "_rig.synth"
+tempo 135
+
+module beats kit { kick_decay 28% kick_pitch 0.88x kick_click 46% kick_drive 48% hihat_level 72% }
+
+track bed    { play hiss_swell level 0.25 }
+track beat   { play kick_rise16 level 1.05 }
+track hats   { play hat_rise16 level 1.1 }
+track sub    { play sub_rise16 level 0.5 }
+track chords { play ch_b level 0.18 }
+track stab   { play stab_half8 level 0.2 delay_send 0.45 }
+track acid   { play acid_back16 level 0.36 }
