@@ -10,9 +10,11 @@ pub fn inferno(t: f32) -> Color {
     Color::Rgb(r, g, b)
 }
 
-pub const BG: Color = Color::Rgb(8, 7, 14);
+/// The terminal's own background, so a transparent window stays
+/// transparent behind the screen.
+pub const BG: Color = Color::Reset;
 pub const PANEL: Color = Color::Rgb(18, 15, 30);
-pub const DIM: Color = Color::Rgb(95, 80, 120);
+pub const DIM: Color = Color::Rgb(150, 138, 178);
 pub const TEXT: Color = Color::Rgb(220, 210, 235);
 pub const HOT: Color = Color::Rgb(249, 140, 10);
 pub const GOLD: Color = Color::Rgb(249, 201, 50);

@@ -498,7 +498,7 @@ impl Screen {
                 };
                 let (top, bottom) = (sample(y * 2), sample(y * 2 + 1));
                 if let Some(c) = buf.cell_mut((area.x + label_w + x as u16, area.y + y as u16)) {
-                    c.set_char('▀').set_fg(inferno(top)).set_bg(inferno(bottom));
+                    pixels(c, top, bottom, CLEAR_MIX);
                 }
             }
         }
@@ -579,7 +579,7 @@ impl Screen {
                         t(col[band])
                     };
                     if let Some(c) = buf.cell_mut((area.x + label_w + x as u16, y0 + y as u16)) {
-                        c.set_char('▀').set_fg(inferno(pix(y * 2))).set_bg(inferno(pix(y * 2 + 1)));
+                        pixels(c, pix(y * 2), pix(y * 2 + 1), CLEAR_LANE);
                     }
                 }
             }
@@ -698,7 +698,29 @@ fn step_name(file: &str) -> &str {
     }
 }
 
-/// A bar line over a cell: a quarter of the way to white.
+/// Below this a pixel is left to the terminal's own background: a
+/// transparent terminal stays transparent wherever nothing sounds, and only
+/// the sound is painted. The mix is always full of quiet energy, so it keeps
+/// only what has body; a lane is silent between its notes and keeps it all.
+const CLEAR_MIX: f32 = 0.3;
+const CLEAR_LANE: f32 = 0.1;
+
+/// Two stacked pixels in one cell: the upper half block carries the top one
+/// in its foreground and the cell's background the bottom one. A silent half
+/// is not painted, so when only the bottom one sounds the lower half block is
+/// used instead and the top stays clear.
+fn pixels(c: &mut ratatui::buffer::Cell, top: f32, bottom: f32, clear: f32) {
+    match (top > clear, bottom > clear) {
+        (true, true) => c.set_char('▀').set_fg(inferno(top)).set_bg(inferno(bottom)),
+        (true, false) => c.set_char('▀').set_fg(inferno(top)).set_bg(Color::Reset),
+        (false, true) => c.set_char('▄').set_fg(inferno(bottom)).set_bg(Color::Reset),
+        (false, false) => c.set_char(' ').set_fg(Color::Reset).set_bg(Color::Reset),
+    };
+}
+
+/// A bar line over a cell: a quarter of the way to white. A clear cell stays
+/// clear -- a line painted there is a dark stripe across the glass -- and the
+/// bar's number at the top still marks it.
 fn lighten(c: Color) -> Color {
     match c {
         Color::Rgb(r, g, b) => {
@@ -789,8 +811,9 @@ arrange { a x2 b x2 }
         assert!(shown.contains("silent  pad"), "the silent track is not listed:\n{shown}");
         // The spectrogram lit up somewhere: some cell is well above black.
         let lit = (0..buf.area.height).any(|y| {
-            (0..buf.area.width)
-                .any(|x| matches!(buf[(x, y)].fg, Color::Rgb(r, _, _) if r > 200) && buf[(x, y)].symbol() == "▀")
+            (0..buf.area.width).any(|x| {
+                matches!(buf[(x, y)].fg, Color::Rgb(r, _, _) if r > 200) && matches!(buf[(x, y)].symbol(), "▀" | "▄")
+            })
         });
         assert!(lit, "nothing in the spectrogram is lit");
     }

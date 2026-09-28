@@ -19,13 +19,14 @@ use super::{Screen, SongInfo, Telemetry, Tone};
 use crate::include::Source;
 
 const USAGE: &str =
-    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [-o shot.png]";
+    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--see-through] [-o shot.png]";
 const CELL_W: usize = 12;
 const CELL_H: usize = 24;
 
 pub fn cmd(args: &[String]) -> Result<(), String> {
     let (mut path, mut at, mut size, mut out) = (None, 20.0f32, (160u16, 48u16), "tui-shot.png".to_string());
     let mut step: usize = 1;
+    let mut see_through = false;
     let mut i = 0;
     while i < args.len() {
         let value = |i: usize| args.get(i + 1).cloned().ok_or(USAGE);
@@ -40,6 +41,9 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
                 size = (w.parse().map_err(|_| USAGE)?, h.parse().map_err(|_| USAGE)?);
                 i += 1;
             }
+            // Paint the terminal's own background as a wallpaper, to show
+            // what a transparent window lets through.
+            "--see-through" => see_through = true,
             "--step" => {
                 step = value(i)?.parse().map_err(|_| "--step needs a number")?;
                 i += 1;
@@ -108,7 +112,7 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     if let Some(e) = player.engine() {
         screen.position(e.current_bar(), e.global_step(), e.tempo());
     }
-    paint(&screen.snapshot(size.0, size.1)).save(Path::new(&out))?;
+    paint(&screen.snapshot(size.0, size.1), see_through).save(Path::new(&out))?;
     eprintln!("wrote {} ({}x{} cells, {:.1} s in)", out, size.0, size.1, at);
     Ok(())
 }
@@ -123,20 +127,33 @@ fn rgb(c: Color, fallback: [u8; 3]) -> [u8; 3] {
 
 /// Each cell as a CELL_W x CELL_H block: the half blocks as two colours, the
 /// few shapes the screen uses drawn as shapes, text in the pictures' font.
-fn paint(buf: &Buffer) -> Canvas {
+fn paint(buf: &Buffer, see_through: bool) -> Canvas {
     let area = buf.area;
     let mut c = Canvas::new(area.width as usize * CELL_W, area.height as usize * CELL_H);
     for y in 0..area.height {
         for x in 0..area.width {
             let cell = &buf[(x, y)];
             let (px, py) = (x as usize * CELL_W, y as usize * CELL_H);
-            let bg = rgb(cell.bg, [8, 7, 14]);
             let fg = rgb(cell.fg, [220, 210, 235]);
-            c.fill(px, py, CELL_W, CELL_H, bg);
+            if see_through && cell.bg == Color::Reset {
+                // A dusk-blue wallpaper, darker towards the bottom.
+                for yy in 0..CELL_H {
+                    let t = (py + yy) as f32 / (area.height as usize * CELL_H) as f32;
+                    let shade = [
+                        (40.0 + 30.0 * (1.0 - t)) as u8,
+                        (70.0 + 50.0 * (1.0 - t)) as u8,
+                        (110.0 + 60.0 * (1.0 - t)) as u8,
+                    ];
+                    c.fill(px, py + yy, CELL_W, 1, shade);
+                }
+            } else {
+                c.fill(px, py, CELL_W, CELL_H, rgb(cell.bg, [8, 7, 14]));
+            }
             let (cx, cy) = (px + CELL_W / 2, py + CELL_H / 2);
             match cell.symbol() {
                 " " | "" => {}
                 "▀" => c.fill(px, py, CELL_W, CELL_H / 2, fg),
+                "▄" => c.fill(px, py + CELL_H / 2, CELL_W, CELL_H / 2, fg),
                 "▔" => c.fill(px, py, CELL_W, 2, fg),
                 "▮" => c.fill(px + 3, py + 5, CELL_W - 6, CELL_H - 10, fg),
                 "●" => c.fill(cx - 4, cy - 4, 8, 8, fg),
