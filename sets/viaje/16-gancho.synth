@@ -9,12 +9,9 @@ module keys warmth { cutoff 900hz }
 
 module beats kit { kick_decay 28% kick_pitch 0.82x kick_click 38% hihat_level 70% hihat_decay 28% }
 
-track bed     { level 0.16 }
-track beat    { play kick_clap8 level 1.07 }
-track hats    { play hat_off8 level 2 }
-track perc    { play perc_detroit8 level 0.7 delay_send 0.15 reverb_send 0.12 }
-track under   { play ch_low level 0.06 }
-track bass    { play bs_ab16 level 0.95 }
-track chords { play ch_a level 0.15 }
-track pluck  { play pluck_a level 0.144 }
-track shaker { play shake4 level 0.07 }
+track beat   { play kick_gancho8 level 1.24 }
+track hats   { play hat_gancho8 level 1.493 }
+track perc    { play perc_detroit8 level 0.804 delay_send 0.15 reverb_send 0.12 }
+track bass    { play bs_ab16 level 1.091 }
+track pluck  { play pluck_a level 0.165 }
+track shaker { play shake_b level 0.08 }

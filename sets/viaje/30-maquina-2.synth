@@ -9,5 +9,4 @@ track beat   { play kick_acidrim8 level 1.16 }
 track hats   { play hat_16_8 level 1.1 }
 track roll   { play roll_move level 0.69 }
 track acid   { play acid_riff_b16 level 0.6 }
-track shaker { play shake4 level 0.08 }
-track ride   { play ride_off level 0.049 }
+track ride   { play ride_q level 0.05 }

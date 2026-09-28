@@ -6,6 +6,5 @@ tempo 133
 module beats kit { kick_decay 20% kick_pitch 1.0x kick_click 60% kick_drive 55% hihat_level 72% hihat_decay 12% hihat_pitch 1.7x }
 
 track acid   { play acid_riff_b16_bb level 0.55 }
-track shaker { play shake4 level 0.07 }
-track tick   { play tick332 level 0.085 }
+track tick   { play tick_off level 0.075 }
 track static { play static_bed level 0.05 }

@@ -7,14 +7,9 @@ module fm pluck { mod_index 42% }
 
 module beats kit { kick_decay 28% kick_pitch 0.82x kick_click 38% hihat_level 70% hihat_decay 28% }
 
-track bed    { level 0.12 }
-track beat   { play kick_full16 level 1.01 }
-track hats   { play hat_open8 level 1.29 }
-track perc   { play perc_detroit8 level 0.41 delay_send 0.15 reverb_send 0.12 }
-track under  { play ch_low level 0.05 }
-track bass   { play bs_ab16 level 0.93 }
-track chords { play ch_a level 0.27 }
-track shaker { play shake4 level 0.06 }
-track tick   { play tick332 level 0.076 }
-track pluck  { play pluck_a level 0.144 }
-track mstab  { play mstab_a level 0.13 }
+track beat   { play kick_gancho8 level 1.24 }
+track hats   { play hat_gancho8 level 1.493 }
+track bass   { play bs_ab16 level 1.068 }
+track shaker { play shake_b level 0.08 }
+track pluck  { play pluck_a level 0.165 }
+track mstab  { play mstab_a level 0.149 }

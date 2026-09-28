@@ -8,11 +8,11 @@ module fm pluck { mod_index 58% }
 module beats kit { kick_decay 28% kick_pitch 0.88x kick_click 46% kick_drive 48% hihat_level 72% }
 
 track beat    { play kick_peak16 level 1.15 }
-track hats    { play hat_16_open level 1.2 }
+track hats   { play hat_16_8 level 1.1 }
 track roll    { play roll_peak level 0.66 }
 track acid    { play acid_low16 level 0.44 }
 track throw   { play throw_dub8 level 0.2 }
 track pluck  { play pluck_c level 0.099 }
 track mstab  { play mstab_b level 0.13 }
-track shaker { play shake4 level 0.09 }
-track tick   { play tick332 level 0.085 }
+track shaker { play shake_c level 0.08 }
+track tick   { play tick_5 level 0.08 }

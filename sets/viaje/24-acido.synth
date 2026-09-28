@@ -5,11 +5,7 @@ tempo 130
 
 module beats kit { kick_decay 32% kick_pitch 0.84x kick_click 38% kick_drive 42% hihat_level 72% }
 
-track bed    { level 0.12 }
 track beat   { play kick_acid8 level 1.05 }
-track hats   { play hat_off8 level 1.24 }
+track hats   { play hat_acid8 level 1.2 }
 track sub    { play sub_f8 level 0.63 }
-track under  { play ch_low level 0.1 }
-track chords { play ch_b level 0.15 }
 track acid   { play acid_low16 level 0.5 }
-track tick   { play tick332 level 0.085 }

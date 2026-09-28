@@ -12,6 +12,5 @@ track acid   { play acid_peak16 level 0.61 delay_send 0.08 }
 track chords { play ch_a level 0.27 }
 track stabs  { play st_ab16 level 0.36 }
 track metal  { play metal_stutter level 0.95 }
-track shaker { play shake4 level 0.09 }
-track ride   { play ride_off level 0.049 }
-track tick   { play tick332 level 0.085 }
+track shaker { play shake_b level 0.08 }
+track ride   { play ride_q level 0.06 }

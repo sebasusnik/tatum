@@ -6,7 +6,6 @@ tempo 124
 module beats kit { kick_decay 46% kick_pitch 0.7x kick_click 22% kick_drive 38% }
 module keys chord { cutoff 1.6khz }
 
-track bed    { play hiss_swell level 0.34 }
 track stab   { play stab_half8_c level 0.26 delay_send 0.5 }
 track beat   { play kick_dub8 level 0.8 }
 track hats   { play hat_ghost8 level 1.6 }

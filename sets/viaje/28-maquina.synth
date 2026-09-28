@@ -10,5 +10,4 @@ track hats   { play hat_16_8 level 1.1 }
 track roll   { play roll_move level 0.69 }
 track acid   { play acid_riff16 level 0.6 }
 track metal  { play metal_hit level 1.1 }
-track shaker { play shake4 level 0.08 }
 track tick   { play tick332 level 0.085 }

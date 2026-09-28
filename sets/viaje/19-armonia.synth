@@ -7,12 +7,11 @@ module keys warmth { cutoff 1khz }
 
 module beats kit { kick_decay 34% kick_pitch 0.76x kick_click 30% kick_drive 40% hihat_level 70% }
 
-track bed    { level 0.12 }
 track beat   { play kick_full16 level 1.01 }
 track hats   { play hat_open8 level 1.29 }
 track under  { play rest level 0 }
 track bass   { play bs_b8 level 0.82 }
 track chords { play ch_b level 0.24 }
 track mstab  { play mstab_b level 0.14 }
-track ride   { play ride_off level 0.042 }
-track tick   { play tick332 level 0.085 }
+track ride   { play ride_off level 0.04 }
+track tick   { play tick_5 level 0.08 }

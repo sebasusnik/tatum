@@ -11,6 +11,4 @@ track beat  { play kick_dub8 level 0.8 }
 track hats  { play hat_dub16 level 1.12 }
 track sub   { play sub_move16 level 0.6 }
 track perc  { play perc_dub8 level 0.4 }
-track tick   { play tick332 level 0.085 }
-track ride   { play ride_off level 0.035 }
-track static { play static_bed level 0.04 }
+track shaker { play shake4 level 0.06 }

@@ -5,8 +5,7 @@ tempo 133
 
 module beats kit { kick_decay 20% kick_pitch 1.0x kick_click 60% kick_drive 55% hihat_level 72% hihat_decay 12% hihat_pitch 1.7x }
 
-track beat   { play kick_acid8 level 1.17 }
-track hats   { play hat_16_8 level 1.01 }
+track beat   { play kick_tunel8 level 1.1 }
 track roll   { play roll_f_bb level 0.7 }
 track acid   { play acid_riff16_bb level 0.61 }
 track chirp  { play dialup_scatter level 0.84 }

@@ -5,7 +5,6 @@ tempo 126
 
 module beats kit { kick_decay 30% kick_pitch 0.8x kick_click 30% hihat_level 70% hihat_decay 28% }
 
-track bed    { level 0.2 }
 track stab   { play rest level 0 }
 track beat   { play kick_clap8 level 1.07 }
 track hats   { play hat_off8 level 2 }
@@ -14,4 +13,3 @@ track perc   { play perc_detroit8 level 0.84 delay_send 0.15 reverb_send 0.12 }
 track under  { play ch_low level 0.08 }
 track bass   { play bs_ab16 level 0.95 }
 track chords { play ch_a level 0.24 }
-track tick   { play tick332 level 0.085 }

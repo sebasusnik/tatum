@@ -6,10 +6,9 @@ tempo 131
 module beats kit { kick_decay 55% kick_pitch 0.78x kick_click 40% kick_drive 35% hihat_level 66% hihat_decay 12% hihat_pitch 1.5x }
 module fm pluck { mod_index 58% }
 
-track beat   { play kick_acidrim8 level 1.05 }
-track hats   { play hat_16_8 level 1.0 }
-track roll   { play roll_move level 0.62 }
+track beat   { play kick_metal8 level 1.05 }
+track roll   { play roll_gal8 level 0.5 }
 track robot  { play pluck_c level 0.12 }
 track mstab  { play mstab_b level 0.12 }
-track shaker { play shake4 level 0.06 }
-track tick   { play tick332 level 0.08 }
+track shaker { play shake_c level 0.06 }
+track tick   { play tick_off level 0.075 }

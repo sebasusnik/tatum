@@ -5,10 +5,8 @@ tempo 129
 
 module beats kit { kick_decay 32% kick_pitch 0.84x kick_click 38% kick_drive 42% hihat_level 72% }
 
-track bed    { play hiss_swell level 0.2 }
 track beat   { play kick_rise16 level 1.0 }
 track hats   { play hat_rise16 level 1.1 }
 track sub    { play sub_rise16 level 0.56 }
-track under  { play ch_low level 0.1 }
 track chords { play ch_b level 0.18 }
 track acid   { play acid_back16 level 0.33 }

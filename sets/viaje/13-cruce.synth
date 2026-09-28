@@ -5,7 +5,6 @@ tempo 126
 
 module beats kit { hihat_level 70% hihat_decay 28% }
 
-track bed    { play hiss_swell level 0.23 }
 track stab   { play stab_ghost level 0.14 delay_send 0.3 }
 track beat   { play kick_clap8 level 0.84 }
 track hats   { play hat_off8 level 1.61 }

@@ -3,7 +3,6 @@
 use "_rig.synth"
 tempo 124
 
-track bed   { play hiss_swell level 0.26 }
 track stab  { play stab_half8 level 0.2 delay_send 0.35 }
 track beat  { play kick_dub8 level 0.8 }
 track hats  { play hat_dub8 level 1.0 }

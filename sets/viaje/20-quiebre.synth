@@ -7,7 +7,6 @@ module fm pluck { mod_index 46% }
 
 module beats kit { kick_decay 34% kick_pitch 0.76x kick_click 30% kick_drive 40% hihat_level 70% }
 
-track bed     { play hiss_swell level 0.2 }
 track beat    { play kick_break16 level 1.0 }
 track hats    { play hat_off8 level 1.6 }
 track under   { play ch_low level 0.05 }
