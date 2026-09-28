@@ -1,4 +1,4 @@
-# set: bars=64 phase=dub-vuelta energy=6
+# set: bars=64 phase=13-regreso energy=6
 # set-note: De vuelta al dub, a 128: el bombo profundo y el rim, el acorde dub con su cambio a Dbmaj9, los toms en el eco. El viaje empieza a cerrar el círculo.
 use "_rig.synth"
 tempo 128

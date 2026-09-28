@@ -1,4 +1,4 @@
-# set: bars=48 phase=acido-2 energy=6
+# set: bars=48 phase=07-acido energy=6
 # set-note: Otra línea del 303, con Db, G y C contra la F y más deslizamientos; todavía sin clap. El shaker y el tick marcan la grilla arriba.
 use "_rig.synth"
 tempo 130

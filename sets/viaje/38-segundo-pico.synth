@@ -1,4 +1,4 @@
-# set: bars=64 phase=segundo-pico energy=9
+# set: bars=64 phase=12-segundo energy=9
 # set-note: El segundo pico, todo junto: el 303, el bajo que camina, los acordes de Detroit y el acorde dub con su eco. Lo que se escuchó por separado en la hora, ahora de una vez.
 use "_rig.synth"
 tempo 135

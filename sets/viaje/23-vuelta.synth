@@ -1,4 +1,4 @@
-# set: bars=16 phase=vuelta energy=5
+# set: bars=16 phase=07-acido energy=5
 # set-note: La vuelta: el 303 sigue del respiro y el bombo vuelve de a poco, un golpe por compás, después dos, después cuatro. Los hats y el sub llegan en la segunda mitad; los acordes del respiro siguen sonando.
 use "_rig.synth"
 tempo 129

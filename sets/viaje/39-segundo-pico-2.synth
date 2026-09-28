@@ -1,4 +1,4 @@
-# set: bars=64 phase=segundo-pico-2 energy=9
+# set: bars=64 phase=12-segundo energy=9
 # set-note: El segundo pico sigue y vuelve el protagonista de Detroit: el pluck en semicorcheas sobre el 303 y el bajo rodante, el metal contestando, el acorde dub tirado al eco.
 use "_rig.synth"
 tempo 135

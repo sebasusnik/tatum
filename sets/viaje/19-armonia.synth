@@ -1,11 +1,11 @@
-# set: bars=64 phase=armonia energy=7
+# set: bars=64 phase=06-noche energy=7 blend=16
 # set-note: Detroit cambia de armonía (Cm9, Fm9, Bbm9, Ebm9) con su propia línea de bajo; el metal contesta con dos acordes y el ride marca el contratiempo.
 use "_rig.synth"
 tempo 128
 
 module keys warmth { cutoff 1khz }
 
-module beats kit { kick_decay 28% kick_pitch 0.8x kick_click 34% hihat_level 70% }
+module beats kit { kick_decay 34% kick_pitch 0.76x kick_click 30% kick_drive 40% hihat_level 70% }
 
 track bed    { level 0.12 }
 track beat   { play kick_full16 level 1.01 }

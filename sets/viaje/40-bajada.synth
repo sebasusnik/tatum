@@ -1,4 +1,4 @@
-# set: bars=32 phase=bajada energy=6
+# set: bars=32 phase=13-regreso energy=6 blend=16
 # set-note: La bajada: el tempo empieza a aflojar, el groove sigue firme pero sin clap, y el 303 se va cerrando y apagando mientras el acorde dub vuelve a asomar en sus ecos.
 use "_rig.synth"
 tempo 132

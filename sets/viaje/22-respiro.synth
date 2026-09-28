@@ -1,4 +1,4 @@
-# set: bars=16 phase=respiro energy=3
+# set: bars=16 phase=06-noche energy=3
 # set-note: Se va la batería: los acordes con su reverb, el viento, y el pluck apagado tirado al eco. En los últimos cuatro compases asoma el 303, cerrado, antes que el bombo.
 use "_rig.synth"
 tempo 128

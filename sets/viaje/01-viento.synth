@@ -1,4 +1,4 @@
-# set: bars=32 phase=viento energy=1
+# set: bars=32 phase=01-viento energy=1
 # set-note: Solo el viento, que crece en cada frase, y un acorde lejos hecho de ecos. Nada que bailar todavía.
 use "_rig.synth"
 

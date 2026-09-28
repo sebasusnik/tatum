@@ -1386,6 +1386,199 @@ pattern ride_off {
 # The air: one note held, the static breathing under a groove.
 pattern static_bed { F4:0.6 ..*63 }
 
+# ── Other keys: C minor for Eco, Bb minor for Túnel ──
+
+# stab_half8 in C minor, for Eco.
+pattern stab_half8_c {
+    - - Cm9:0.68 -  - - - -  - - Cm9:0.52 -  - - - -
+    - - Cm9:0.64 -  - - - -  - - - -  - - - -
+    - - Cm9:0.68 -  - - - -  - - Cm9:0.5 -  - - - -
+    - - Cm9:0.62 -  - - - Cm9:0.4  - - - -  - - - -
+    - - Cm9:0.68 -  - - - -  - - Cm9:0.52 -  - - - -
+    - - Cm9:0.64 -  - - - -  - - - -  - - - -
+    - - Cm9:0.68 -  - - - -  - - Cm9:0.5 -  - - - -
+    - - Cm9:0.6 -  - - - -  - - - -  - - - -
+}
+
+# stab_dub8 in C minor, for Eco.
+pattern stab_dub8_c {
+    - - Cm9:0.7 -  - - - -  - - Cm9:0.58 -  - - - -
+    - - Cm9:0.7 -  - - - -  - - Cm9:0.56 -  - - - -
+    - - Cm9:0.7 -  - - - -  - - - Cm9:0.56  - - - -
+    - - Abmaj9:0.66 -  - - - -  - - Abmaj9:0.54 -  - - - -
+    - - Cm9:0.7 -  - - - -  - - Cm9:0.58 -  - - - -
+    - - Cm9:0.7 -  - - Cm9:0.44 -  - - Cm9:0.56 -  - - - -
+    - - Abmaj9:0.66 -  - - - -  - - Abmaj9:0.54 -  - - - -
+    - - Abmaj9:0.66 -  - - - -  - - - -  - - - -
+}
+
+# stab_ghost in C minor, for Eco.
+pattern stab_ghost_c { -  -  Cm9:0.6   -    -  -  -  -    -  -  -  -    -  -  -  - }
+
+# throw8 in C minor, for Eco.
+pattern throw8_c {
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - Cm9:0.7 -  - - - -
+}
+
+# throw_dub8 in C minor, for Eco.
+pattern throw_dub8_c {
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - Cm9:0.6 -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - Abmaj9:0.7 -  - - - -
+}
+
+# sub_f8 in C minor, for Eco.
+pattern sub_f8_c {
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    C1:0.8 .. .. ..  .. .. .. ..  - - Eb1:0.6 ..  - - - -
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+}
+
+# sub_long in C minor, for Eco.
+pattern sub_long_c { C1:0.7  ..*15 }
+
+# sub_move16 in C minor, for Eco.
+pattern sub_move16_c {
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    Eb1:0.7 .. .. ..  .. .. .. ..  - - - -  - - - -
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    Ab0:0.75 .. .. ..  .. .. .. ..  - - - -  - - - -
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    C1:0.8 .. .. ..  .. .. .. ..  - - - -  - - - -
+    Eb1:0.7 .. .. ..  .. .. .. ..  - - - -  - - - -
+    Ab0:0.75 .. .. ..  .. .. .. ..  - - - -  - - - -
+    Ab0:0.75 .. .. ..  .. .. .. ..  - - - -  - - - -
+    Bb0:0.72 .. .. ..  .. .. .. ..  - - - -  - - - -
+    Bb0:0.7 .. .. ..  - - - -  G0:0.6 .. .. ..  - - - -
+}
+
+# acid_tunnel32 in Bb minor, for Túnel.
+pattern acid_tunnel32_bb {
+    Bb3:0.95(edepth=0.60) Bb3:0.42(edepth=0.60) Bb3:0.42(edepth=0.60) Bb3:0.95(edepth=0.60)  Bb3:0.42(edepth=0.60) Bb3:0.42(edepth=0.60) Bb3:0.95(edepth=0.60) Bb3:0.42(edepth=0.60)  Bb3:0.42(edepth=0.60) Bb3:0.95(edepth=0.60) Bb3:0.42(edepth=0.60) Bb3:0.42(edepth=0.60)  Bb3:0.95(edepth=0.60) Bb3:0.42(edepth=0.60) Bb3:0.42(edepth=0.60) Bb3:0.95(edepth=0.60)
+    Bb3:0.42(edepth=0.62) Bb3:0.42(edepth=0.62) Bb3:0.95(edepth=0.62) Bb3:0.42(edepth=0.62)  Bb3:0.42(edepth=0.62) Bb4:0.95(edepth=0.62) Bb3:0.42(edepth=0.62) Bb3:0.42(edepth=0.62)  Bb3:0.95(edepth=0.62) Bb3:0.42(edepth=0.62) Bb3:0.42(edepth=0.62) Bb3:0.95(edepth=0.62)  Bb3:0.42(edepth=0.62) Bb3:0.42(edepth=0.62) Bb3:0.95(edepth=0.62) Bb3:0.42(edepth=0.62)
+    Bb3:0.42(edepth=0.63) Bb3:0.95(edepth=0.63) Bb3:0.42(edepth=0.63) Bb3:0.42(edepth=0.63)  Bb3:0.95(edepth=0.63) Bb3:0.42(edepth=0.63) Bb3:0.42(edepth=0.63) Bb3:0.95(edepth=0.63)  Bb3:0.42(edepth=0.63) Bb3:0.42(edepth=0.63) Bb3:0.95(edepth=0.63) Bb3:0.42(edepth=0.63)  Bb3:0.42(edepth=0.63) Bb4:0.95(edepth=0.63) Bb3:0.42(edepth=0.63) Bb3:0.42(edepth=0.63)
+    Bb3:0.95(edepth=0.65) Bb3:0.42(edepth=0.65) Bb3:0.42(edepth=0.65) Bb3:0.95(edepth=0.65)  Bb3:0.42(edepth=0.65) Bb3:0.42(edepth=0.65) Bb3:0.95(edepth=0.65) Bb3:0.42(edepth=0.65)  Bb3:0.42(edepth=0.65) Bb3:0.95(edepth=0.65) Bb3:0.42(edepth=0.65) Bb3:0.42(edepth=0.65)  Bb3:0.95(edepth=0.65) Bb3:0.42(edepth=0.65) Bb3:0.42(edepth=0.65) Bb3:0.95(edepth=0.65)
+    Bb3:0.42(edepth=0.66) Bb3:0.42(edepth=0.66) Bb3:0.95(edepth=0.66) Bb3:0.42(edepth=0.66)  Bb3:0.42(edepth=0.66) Bb4:0.95(edepth=0.66) Bb3:0.42(edepth=0.66) Bb3:0.42(edepth=0.66)  Bb3:0.95(edepth=0.66) Bb3:0.42(edepth=0.66) Bb3:0.42(edepth=0.66) Bb3:0.95(edepth=0.66)  Bb3:0.42(edepth=0.66) Bb3:0.42(edepth=0.66) Bb3:0.95(edepth=0.66) Bb3:0.42(edepth=0.66)
+    Bb3:0.42(edepth=0.68) Bb3:0.95(edepth=0.68) Bb3:0.42(edepth=0.68) Bb3:0.42(edepth=0.68)  Bb3:0.95(edepth=0.68) Bb3:0.42(edepth=0.68) Bb3:0.42(edepth=0.68) Bb3:0.95(edepth=0.68)  Bb3:0.42(edepth=0.68) Bb3:0.42(edepth=0.68) Bb3:0.95(edepth=0.68) Bb3:0.42(edepth=0.68)  Bb3:0.42(edepth=0.68) Bb4:0.95(edepth=0.68) Bb3:0.42(edepth=0.68) Bb3:0.42(edepth=0.68)
+    Bb3:0.95(edepth=0.70) Bb3:0.42(edepth=0.70) Bb3:0.42(edepth=0.70) Bb3:0.95(edepth=0.70)  Bb3:0.42(edepth=0.70) Bb3:0.42(edepth=0.70) Bb3:0.95(edepth=0.70) Bb3:0.42(edepth=0.70)  Bb3:0.42(edepth=0.70) Bb3:0.95(edepth=0.70) Bb3:0.42(edepth=0.70) Bb3:0.42(edepth=0.70)  Bb3:0.95(edepth=0.70) Bb3:0.42(edepth=0.70) Bb3:0.42(edepth=0.70) Bb3:0.95(edepth=0.70)
+    Bb3:0.42(edepth=0.71) Bb3:0.42(edepth=0.71) Bb3:0.95(edepth=0.71) Bb3:0.42(edepth=0.71)  Bb3:0.42(edepth=0.71) Bb4:0.95(edepth=0.71) Bb3:0.42(edepth=0.71) Bb3:0.42(edepth=0.71)  Bb3:0.95(edepth=0.71) Bb3:0.42(edepth=0.71) Bb3:0.42(edepth=0.71) Bb3:0.95(edepth=0.71)  Bb3:0.42(edepth=0.71) Bb3:0.42(edepth=0.71) Bb3:0.95(edepth=0.71) Bb3:0.42(edepth=0.71)
+    Bb3:0.42(edepth=0.73) Bb3:0.95(edepth=0.73) Bb3:0.42(edepth=0.73) Bb3:0.42(edepth=0.73)  Bb3:0.95(edepth=0.73) Bb3:0.42(edepth=0.73) Bb3:0.42(edepth=0.73) Bb3:0.95(edepth=0.73)  Bb3:0.42(edepth=0.73) Bb3:0.42(edepth=0.73) Bb3:0.95(edepth=0.73) Bb3:0.42(edepth=0.73)  Bb3:0.42(edepth=0.73) Bb4:0.95(edepth=0.73) Bb3:0.42(edepth=0.73) Bb3:0.42(edepth=0.73)
+    Bb3:0.95(edepth=0.74) Bb3:0.42(edepth=0.74) Bb3:0.42(edepth=0.74) Bb3:0.95(edepth=0.74)  Bb3:0.42(edepth=0.74) Bb3:0.42(edepth=0.74) Bb3:0.95(edepth=0.74) Bb3:0.42(edepth=0.74)  Bb3:0.42(edepth=0.74) Bb3:0.95(edepth=0.74) Bb3:0.42(edepth=0.74) Bb3:0.42(edepth=0.74)  Bb3:0.95(edepth=0.74) Bb3:0.42(edepth=0.74) Bb3:0.42(edepth=0.74) Bb3:0.95(edepth=0.74)
+    Bb3:0.42(edepth=0.76) Bb3:0.42(edepth=0.76) Bb3:0.95(edepth=0.76) Bb3:0.42(edepth=0.76)  Bb3:0.42(edepth=0.76) Bb4:0.95(edepth=0.76) Bb3:0.42(edepth=0.76) Bb3:0.42(edepth=0.76)  Bb3:0.95(edepth=0.76) Bb3:0.42(edepth=0.76) Bb3:0.42(edepth=0.76) Bb3:0.95(edepth=0.76)  Bb3:0.42(edepth=0.76) Bb3:0.42(edepth=0.76) Bb3:0.95(edepth=0.76) Bb3:0.42(edepth=0.76)
+    Bb3:0.42(edepth=0.78) Bb3:0.95(edepth=0.78) Bb3:0.42(edepth=0.78) Bb3:0.42(edepth=0.78)  Bb3:0.95(edepth=0.78) Bb3:0.42(edepth=0.78) Bb3:0.42(edepth=0.78) Bb3:0.95(edepth=0.78)  Bb3:0.42(edepth=0.78) Bb3:0.42(edepth=0.78) Bb3:0.95(edepth=0.78) Bb3:0.42(edepth=0.78)  Bb3:0.42(edepth=0.78) Bb4:0.95(edepth=0.78) Bb3:0.42(edepth=0.78) Bb3:0.42(edepth=0.78)
+    Bb3:0.95(edepth=0.79) Bb3:0.42(edepth=0.79) Bb3:0.42(edepth=0.79) Bb3:0.95(edepth=0.79)  Bb3:0.42(edepth=0.79) Bb3:0.42(edepth=0.79) Bb3:0.95(edepth=0.79) Bb3:0.42(edepth=0.79)  Bb3:0.42(edepth=0.79) Bb3:0.95(edepth=0.79) Bb3:0.42(edepth=0.79) Bb3:0.42(edepth=0.79)  Bb3:0.95(edepth=0.79) Bb3:0.42(edepth=0.79) Bb3:0.42(edepth=0.79) Bb3:0.95(edepth=0.79)
+    Bb3:0.42(edepth=0.81) Bb3:0.42(edepth=0.81) Bb3:0.95(edepth=0.81) Bb3:0.42(edepth=0.81)  Bb3:0.42(edepth=0.81) Bb4:0.95(edepth=0.81) Bb3:0.42(edepth=0.81) Bb3:0.42(edepth=0.81)  Bb3:0.95(edepth=0.81) Bb3:0.42(edepth=0.81) Bb3:0.42(edepth=0.81) Bb3:0.95(edepth=0.81)  Bb3:0.42(edepth=0.81) Bb3:0.42(edepth=0.81) Bb3:0.95(edepth=0.81) Bb3:0.42(edepth=0.81)
+    Bb3:0.42(edepth=0.83) Bb3:0.95(edepth=0.83) Bb3:0.42(edepth=0.83) Bb3:0.42(edepth=0.83)  Bb3:0.95(edepth=0.83) Bb3:0.42(edepth=0.83) Bb3:0.42(edepth=0.83) Bb3:0.95(edepth=0.83)  Bb3:0.42(edepth=0.83) Bb3:0.42(edepth=0.83) Bb3:0.95(edepth=0.83) Bb3:0.42(edepth=0.83)  Bb3:0.42(edepth=0.83) Bb4:0.95(edepth=0.83) Bb3:0.42(edepth=0.83) Bb3:0.42(edepth=0.83)
+    Bb3:0.95(edepth=0.84) Bb3:0.42(edepth=0.84) Bb3:0.42(edepth=0.84) Bb3:0.95(edepth=0.84)  Bb3:0.42(edepth=0.84) Bb3:0.42(edepth=0.84) Bb3:0.95(edepth=0.84) Bb3:0.42(edepth=0.84)  Bb3:0.42(edepth=0.84) Bb3:0.95(edepth=0.84) Bb3:0.42(edepth=0.84) Bb3:0.42(edepth=0.84)  Bb3:0.95(edepth=0.84) Bb3:0.42(edepth=0.84) Bb3:0.42(edepth=0.84) Bb3:0.95(edepth=0.84)
+    Bb3:0.42(edepth=0.86) Bb3:0.42(edepth=0.86) Bb3:0.95(edepth=0.86) Bb3:0.42(edepth=0.86)  Bb3:0.42(edepth=0.86) Bb4:0.95(edepth=0.86) Bb3:0.42(edepth=0.86) Bb3:0.42(edepth=0.86)  Bb3:0.95(edepth=0.86) Bb3:0.42(edepth=0.86) Bb3:0.42(edepth=0.86) Bb3:0.95(edepth=0.86)  Bb3:0.42(edepth=0.86) Bb3:0.42(edepth=0.86) Bb3:0.95(edepth=0.86) Bb3:0.42(edepth=0.86)
+    Bb3:0.42(edepth=0.87) Bb3:0.95(edepth=0.87) Bb3:0.42(edepth=0.87) Bb3:0.42(edepth=0.87)  Bb3:0.95(edepth=0.87) Bb3:0.42(edepth=0.87) Bb3:0.42(edepth=0.87) Bb3:0.95(edepth=0.87)  Bb3:0.42(edepth=0.87) Bb3:0.42(edepth=0.87) Bb3:0.95(edepth=0.87) Bb3:0.42(edepth=0.87)  Bb3:0.42(edepth=0.87) Bb4:0.95(edepth=0.87) Bb3:0.42(edepth=0.87) Bb3:0.42(edepth=0.87)
+    Bb3:0.95(edepth=0.89) Bb3:0.42(edepth=0.89) Bb3:0.42(edepth=0.89) Bb3:0.95(edepth=0.89)  Bb3:0.42(edepth=0.89) Bb3:0.42(edepth=0.89) Bb3:0.95(edepth=0.89) Bb3:0.42(edepth=0.89)  Bb3:0.42(edepth=0.89) Bb3:0.95(edepth=0.89) Bb3:0.42(edepth=0.89) Bb3:0.42(edepth=0.89)  Bb3:0.95(edepth=0.89) Bb3:0.42(edepth=0.89) Bb3:0.42(edepth=0.89) Bb3:0.95(edepth=0.89)
+    Bb3:0.42(edepth=0.91) Bb3:0.42(edepth=0.91) Bb3:0.95(edepth=0.91) Bb3:0.42(edepth=0.91)  Bb3:0.42(edepth=0.91) Bb4:0.95(edepth=0.91) Bb3:0.42(edepth=0.91) Bb3:0.42(edepth=0.91)  Bb3:0.95(edepth=0.91) Bb3:0.42(edepth=0.91) Bb3:0.42(edepth=0.91) Bb3:0.95(edepth=0.91)  Bb3:0.42(edepth=0.91) Bb3:0.42(edepth=0.91) Bb3:0.95(edepth=0.91) Bb3:0.42(edepth=0.91)
+    Bb3:0.42(edepth=0.92) Bb3:0.95(edepth=0.92) Bb3:0.42(edepth=0.92) Bb3:0.42(edepth=0.92)  Bb3:0.95(edepth=0.92) Bb3:0.42(edepth=0.92) Bb3:0.42(edepth=0.92) Bb3:0.95(edepth=0.92)  Bb3:0.42(edepth=0.92) Bb3:0.42(edepth=0.92) Bb3:0.95(edepth=0.92) Bb3:0.42(edepth=0.92)  Bb3:0.42(edepth=0.92) Bb4:0.95(edepth=0.92) Bb3:0.42(edepth=0.92) Bb3:0.42(edepth=0.92)
+    Bb3:0.95(edepth=0.94) Bb3:0.42(edepth=0.94) Bb3:0.42(edepth=0.94) Bb3:0.95(edepth=0.94)  Bb3:0.42(edepth=0.94) Bb3:0.42(edepth=0.94) Bb3:0.95(edepth=0.94) Bb3:0.42(edepth=0.94)  Bb3:0.42(edepth=0.94) Bb3:0.95(edepth=0.94) Bb3:0.42(edepth=0.94) Bb3:0.42(edepth=0.94)  Bb3:0.95(edepth=0.94) Bb3:0.42(edepth=0.94) Bb3:0.42(edepth=0.94) Bb3:0.95(edepth=0.94)
+    Bb3:0.42(edepth=0.95) Bb3:0.42(edepth=0.95) Bb3:0.95(edepth=0.95) Bb3:0.42(edepth=0.95)  Bb3:0.42(edepth=0.95) Bb4:0.95(edepth=0.95) Bb3:0.42(edepth=0.95) Bb3:0.42(edepth=0.95)  Bb3:0.95(edepth=0.95) Bb3:0.42(edepth=0.95) Bb3:0.42(edepth=0.95) Bb3:0.95(edepth=0.95)  Bb3:0.42(edepth=0.95) Bb3:0.42(edepth=0.95) Bb3:0.95(edepth=0.95) Bb3:0.42(edepth=0.95)
+    Bb3:0.42(edepth=0.97) Bb3:0.95(edepth=0.97) Bb3:0.42(edepth=0.97) Bb3:0.42(edepth=0.97)  Bb3:0.95(edepth=0.97) Bb3:0.42(edepth=0.97) Bb3:0.42(edepth=0.97) Bb3:0.95(edepth=0.97)  Bb3:0.42(edepth=0.97) Bb3:0.42(edepth=0.97) Bb3:0.95(edepth=0.97) Bb3:0.42(edepth=0.97)  Bb3:0.42(edepth=0.97) Bb4:0.95(edepth=0.97) Bb3:0.42(edepth=0.97) Bb3:0.42(edepth=0.97)
+    Bb3:0.95(edepth=0.95) Bb3:0.42(edepth=0.95) Bb3:0.42(edepth=0.95) Bb3:0.95(edepth=0.95)  Bb3:0.42(edepth=0.95) Bb3:0.42(edepth=0.95) Bb3:0.95(edepth=0.95) Bb3:0.42(edepth=0.95)  Bb3:0.42(edepth=0.95) Bb3:0.95(edepth=0.95) Bb3:0.42(edepth=0.95) Bb3:0.42(edepth=0.95)  Bb3:0.95(edepth=0.95) Bb3:0.42(edepth=0.95) Bb3:0.42(edepth=0.95) Bb3:0.95(edepth=0.95)
+    Bb3:0.42(edepth=0.91) Bb3:0.42(edepth=0.91) Bb3:0.95(edepth=0.91) Bb3:0.42(edepth=0.91)  Bb3:0.42(edepth=0.91) Bb4:0.95(edepth=0.91) Bb3:0.42(edepth=0.91) Bb3:0.42(edepth=0.91)  Bb3:0.95(edepth=0.91) Bb3:0.42(edepth=0.91) Bb3:0.42(edepth=0.91) Bb3:0.95(edepth=0.91)  Bb3:0.42(edepth=0.91) Bb3:0.42(edepth=0.91) Bb3:0.95(edepth=0.91) Bb3:0.42(edepth=0.91)
+    Bb3:0.42(edepth=0.87) Bb3:0.95(edepth=0.87) Bb3:0.42(edepth=0.87) Bb3:0.42(edepth=0.87)  Bb3:0.95(edepth=0.87) Bb3:0.42(edepth=0.87) Bb3:0.42(edepth=0.87) Bb3:0.95(edepth=0.87)  Bb3:0.42(edepth=0.87) Bb3:0.42(edepth=0.87) Bb3:0.95(edepth=0.87) Bb3:0.42(edepth=0.87)  Bb3:0.42(edepth=0.87) Bb4:0.95(edepth=0.87) Bb3:0.42(edepth=0.87) Bb3:0.42(edepth=0.87)
+    Bb3:0.95(edepth=0.82) Bb3:0.42(edepth=0.82) Bb3:0.42(edepth=0.82) Bb3:0.95(edepth=0.82)  Bb3:0.42(edepth=0.82) Bb3:0.42(edepth=0.82) Bb3:0.95(edepth=0.82) Bb3:0.42(edepth=0.82)  Bb3:0.42(edepth=0.82) Bb3:0.95(edepth=0.82) Bb3:0.42(edepth=0.82) Bb3:0.42(edepth=0.82)  Bb3:0.95(edepth=0.82) Bb3:0.42(edepth=0.82) Bb3:0.42(edepth=0.82) Bb3:0.95(edepth=0.82)
+    Bb3:0.42(edepth=0.78) Bb3:0.42(edepth=0.78) Bb3:0.95(edepth=0.78) Bb3:0.42(edepth=0.78)  Bb3:0.42(edepth=0.78) Bb4:0.95(edepth=0.78) Bb3:0.42(edepth=0.78) Bb3:0.42(edepth=0.78)  Bb3:0.95(edepth=0.78) Bb3:0.42(edepth=0.78) Bb3:0.42(edepth=0.78) Bb3:0.95(edepth=0.78)  Bb3:0.42(edepth=0.78) Bb3:0.42(edepth=0.78) Bb3:0.95(edepth=0.78) Bb3:0.42(edepth=0.78)
+    Bb3:0.42(edepth=0.74) Bb3:0.95(edepth=0.74) Bb3:0.42(edepth=0.74) Bb3:0.42(edepth=0.74)  Bb3:0.95(edepth=0.74) Bb3:0.42(edepth=0.74) Bb3:0.42(edepth=0.74) Bb3:0.95(edepth=0.74)  Bb3:0.42(edepth=0.74) Bb3:0.42(edepth=0.74) Bb3:0.95(edepth=0.74) Bb3:0.42(edepth=0.74)  Bb3:0.42(edepth=0.74) Bb4:0.95(edepth=0.74) Bb3:0.42(edepth=0.74) Bb3:0.42(edepth=0.74)
+    Bb3:0.95(edepth=0.70) Bb3:0.42(edepth=0.70) Bb3:0.42(edepth=0.70) Bb3:0.95(edepth=0.70)  Bb3:0.42(edepth=0.70) Bb3:0.42(edepth=0.70) Bb3:0.95(edepth=0.70) Bb3:0.42(edepth=0.70)  Bb3:0.42(edepth=0.70) Bb3:0.95(edepth=0.70) Bb3:0.42(edepth=0.70) Bb3:0.42(edepth=0.70)  Bb3:0.95(edepth=0.70) Bb3:0.42(edepth=0.70) Bb3:0.42(edepth=0.70) Bb3:0.95(edepth=0.70)
+    Bb3:0.42(edepth=0.86) Bb3:0.42(edepth=0.86) Bb3:0.95(edepth=0.86) Bb3:0.42(edepth=0.86)  Bb3:0.42(edepth=0.86) Bb4:0.95(edepth=0.86) Bb3:0.42(edepth=0.86) Bb3:0.42(edepth=0.86)  Bb3:0.95(edepth=0.86) Bb3:0.42(edepth=0.86) Bb3:0.42(edepth=0.86) Bb3:0.95(edepth=0.86)  Bb3:0.42(edepth=0.86) Bb3:0.42(edepth=0.86) Bb3:0.95(edepth=0.86) Bb3:0.42(edepth=0.86)
+}
+
+# acid_riff16 in Bb minor, for Túnel.
+pattern acid_riff16_bb {
+    Bb3:0.95(edepth=0.74) ~Bb3:0.6 Bb4:0.8(edepth=0.74) -  Bb3:0.7(edepth=0.74) Ab4:0.75(edepth=0.74) - ~Bb4:0.7  Bb3:0.9(edepth=0.74) - F4:0.75(edepth=0.74) Bb3:0.5(edepth=0.74)  Db4:0.8(edepth=0.74) - ~Eb4:0.7 Bb3:0.6(edepth=0.74)
+    Bb3:0.95(edepth=0.76) - Bb4:0.8(edepth=0.76) ~Ab4:0.7  - F4:0.75(edepth=0.76) Bb3:0.6(edepth=0.76) -  Gb4:0.8(edepth=0.76) - ~F4:0.7 Bb3:0.6(edepth=0.76)  Bb3:0.9(edepth=0.76) Db4:0.6(edepth=0.76) - ~F4:0.75
+    Bb3:0.95(edepth=0.79) ~Bb3:0.6 Bb4:0.8(edepth=0.79) -  Bb3:0.7(edepth=0.79) Ab4:0.75(edepth=0.79) - ~Bb4:0.7  Bb3:0.9(edepth=0.79) - F4:0.75(edepth=0.79) Bb3:0.5(edepth=0.79)  Db4:0.8(edepth=0.79) - ~Eb4:0.7 Bb3:0.6(edepth=0.79)
+    Bb3:0.95(edepth=0.81) - Bb4:0.8(edepth=0.81) ~Ab4:0.7  - F4:0.75(edepth=0.81) Bb3:0.6(edepth=0.81) -  Gb4:0.8(edepth=0.81) - ~F4:0.7 Bb3:0.6(edepth=0.81)  Bb3:0.9(edepth=0.81) Db4:0.6(edepth=0.81) - ~F4:0.75
+    Bb3:0.95(edepth=0.83) ~Bb3:0.6 Bb4:0.8(edepth=0.83) -  Bb3:0.7(edepth=0.83) Ab4:0.75(edepth=0.83) - ~Bb4:0.7  Bb3:0.9(edepth=0.83) - F4:0.75(edepth=0.83) Bb3:0.5(edepth=0.83)  Db4:0.8(edepth=0.83) - ~Eb4:0.7 Bb3:0.6(edepth=0.83)
+    Bb3:0.95(edepth=0.85) - Bb4:0.8(edepth=0.85) ~Ab4:0.7  - F4:0.75(edepth=0.85) Bb3:0.6(edepth=0.85) -  Gb4:0.8(edepth=0.85) - ~F4:0.7 Bb3:0.6(edepth=0.85)  Bb3:0.9(edepth=0.85) Db4:0.6(edepth=0.85) - ~F4:0.75
+    Bb3:0.95(edepth=0.88) ~Bb3:0.6 Bb4:0.8(edepth=0.88) -  Bb3:0.7(edepth=0.88) Ab4:0.75(edepth=0.88) - ~Bb4:0.7  Bb3:0.9(edepth=0.88) - F4:0.75(edepth=0.88) Bb3:0.5(edepth=0.88)  Db4:0.8(edepth=0.88) - ~Eb4:0.7 Bb3:0.6(edepth=0.88)
+    Bb3:0.95(edepth=0.90) - Bb4:0.8(edepth=0.90) ~Ab4:0.7  - F4:0.75(edepth=0.90) Bb3:0.6(edepth=0.90) -  Gb4:0.85(edepth=0.90) ~F4:0.7 Db4:0.6(edepth=0.90)*2 -  Bb3:0.9(edepth=0.90) Bb4:0.8(edepth=0.90) - ~Ab4:0.75
+    Bb3:0.95(edepth=0.78) ~Bb3:0.6 Bb4:0.8(edepth=0.78) -  Bb3:0.7(edepth=0.78) Ab4:0.75(edepth=0.78) - ~Bb4:0.7  Bb3:0.9(edepth=0.78) - F4:0.75(edepth=0.78) Bb3:0.5(edepth=0.78)  Bb4:0.8(edepth=0.78)*2 - ~Ab4:0.7 F4:0.6(edepth=0.78)
+    Bb3:0.95(edepth=0.81) - Bb4:0.8(edepth=0.81) ~Ab4:0.7  - F4:0.75(edepth=0.81) Bb3:0.6(edepth=0.81) -  Gb4:0.8(edepth=0.81) - ~F4:0.7 Bb3:0.6(edepth=0.81)  Bb3:0.9(edepth=0.81) Db4:0.6(edepth=0.81) - ~F4:0.75
+    Bb3:0.95(edepth=0.84) ~Bb3:0.6 Bb4:0.8(edepth=0.84) -  Bb3:0.7(edepth=0.84) Ab4:0.75(edepth=0.84) - ~Bb4:0.7  Bb3:0.9(edepth=0.84) - F4:0.75(edepth=0.84) Bb3:0.5(edepth=0.84)  Bb4:0.8(edepth=0.84)*2 - ~Ab4:0.7 F4:0.6(edepth=0.84)
+    Bb3:0.95(edepth=0.87) - Bb4:0.8(edepth=0.87) ~Ab4:0.7  - F4:0.75(edepth=0.87) Bb3:0.6(edepth=0.87) -  Gb4:0.8(edepth=0.87) - ~F4:0.7 Bb3:0.6(edepth=0.87)  Bb3:0.9(edepth=0.87) Db4:0.6(edepth=0.87) - ~F4:0.75
+    Bb3:0.95(edepth=0.90) ~Bb3:0.6 Bb4:0.8(edepth=0.90) -  Bb3:0.7(edepth=0.90) Ab4:0.75(edepth=0.90) - ~Bb4:0.7  Bb3:0.9(edepth=0.90) - F4:0.75(edepth=0.90) Bb3:0.5(edepth=0.90)  Bb4:0.8(edepth=0.90)*2 - ~Ab4:0.7 F4:0.6(edepth=0.90)
+    Bb3:0.95(edepth=0.93) - Bb4:0.8(edepth=0.93) ~Ab4:0.7  - F4:0.75(edepth=0.93) Bb3:0.6(edepth=0.93) -  Gb4:0.85(edepth=0.93) ~F4:0.7 Db4:0.6(edepth=0.93)*2 -  Bb3:0.9(edepth=0.93) Bb4:0.8(edepth=0.93) - ~Ab4:0.75
+    Bb3:0.95(edepth=0.96) ~Bb3:0.6 Bb4:0.8(edepth=0.96) -  Bb3:0.7(edepth=0.96) Ab4:0.75(edepth=0.96) - ~Bb4:0.7  Bb3:0.9(edepth=0.96) - F4:0.75(edepth=0.96) Bb3:0.5(edepth=0.96)  Db4:0.8(edepth=0.96) - ~Eb4:0.7 Bb3:0.6(edepth=0.96)
+    Bb3:0.95(edepth=0.86) - Bb4:0.8(edepth=0.86) ~Ab4:0.7  - F4:0.75(edepth=0.86) Bb3:0.6(edepth=0.86) -  Gb4:0.8(edepth=0.86) - ~F4:0.7 Bb3:0.6(edepth=0.86)  Bb3:0.9(edepth=0.86) Db4:0.6(edepth=0.86) - ~F4:0.75
+}
+
+# acid_riff_b16 in Bb minor, for Túnel.
+pattern acid_riff_b16_bb {
+    Bb3:0.95(edepth=0.74) Bb4:0.6(edepth=0.74) Bb3:0.5(edepth=0.74) Ab4:0.7(edepth=0.74)  Bb3:0.8(edepth=0.74) F4:0.6(edepth=0.74) Bb3:0.5(edepth=0.74) ~Gb4:0.7  Bb3:0.9(edepth=0.74) Bb4:0.6(edepth=0.74) Db4:0.5(edepth=0.74) F4:0.7(edepth=0.74)  Bb3:0.8(edepth=0.74) Ab4:0.6(edepth=0.74) ~Bb4:0.75 F4:0.5(edepth=0.74)
+    Bb3:0.95(edepth=0.77) - Bb4:0.6(edepth=0.77) Ab4:0.7(edepth=0.77)  - F4:0.6(edepth=0.77) Bb3:0.5(edepth=0.77) -  Gb4:0.9(edepth=0.77) - F4:0.6(edepth=0.77) Db4:0.7(edepth=0.77)  Bb3:0.8(edepth=0.77) - Ab4:0.6(edepth=0.77) ~Bb4:0.75
+    Bb3:0.95(edepth=0.79) Bb4:0.6(edepth=0.79) Bb3:0.5(edepth=0.79) Ab4:0.7(edepth=0.79)  Bb3:0.8(edepth=0.79) F4:0.6(edepth=0.79) Bb3:0.5(edepth=0.79) ~Gb4:0.7  Bb3:0.9(edepth=0.79) Bb4:0.6(edepth=0.79) Db4:0.5(edepth=0.79) F4:0.7(edepth=0.79)  Bb3:0.8(edepth=0.79) Ab4:0.6(edepth=0.79) ~Bb4:0.75 F4:0.5(edepth=0.79)
+    Bb3:0.95(edepth=0.82) - Bb4:0.6(edepth=0.82) Ab4:0.7(edepth=0.82)  - F4:0.6(edepth=0.82) Bb3:0.5(edepth=0.82) -  Gb4:0.9(edepth=0.82) - F4:0.6(edepth=0.82) Db4:0.7(edepth=0.82)  Bb3:0.8(edepth=0.82) - Ab4:0.6(edepth=0.82) ~Bb4:0.75
+    Bb3:0.95(edepth=0.84) Bb4:0.6(edepth=0.84) Bb3:0.5(edepth=0.84) Ab4:0.7(edepth=0.84)  Bb3:0.8(edepth=0.84) F4:0.6(edepth=0.84) Bb3:0.5(edepth=0.84) ~Gb4:0.7  Bb3:0.9(edepth=0.84) Bb4:0.6(edepth=0.84) Db4:0.5(edepth=0.84) F4:0.7(edepth=0.84)  Bb3:0.8(edepth=0.84) Ab4:0.6(edepth=0.84) ~Bb4:0.75 F4:0.5(edepth=0.84)
+    Bb3:0.95(edepth=0.87) - Bb4:0.6(edepth=0.87) Ab4:0.7(edepth=0.87)  - F4:0.6(edepth=0.87) Bb3:0.5(edepth=0.87) -  Gb4:0.9(edepth=0.87) - F4:0.6(edepth=0.87) Db4:0.7(edepth=0.87)  Bb3:0.8(edepth=0.87) - Ab4:0.6(edepth=0.87) ~Bb4:0.75
+    Bb3:0.95(edepth=0.89) Bb4:0.6(edepth=0.89) Bb3:0.5(edepth=0.89) Ab4:0.7(edepth=0.89)  Bb3:0.8(edepth=0.89) F4:0.6(edepth=0.89) Bb3:0.5(edepth=0.89) ~Gb4:0.7  Bb3:0.9(edepth=0.89) Bb4:0.6(edepth=0.89) Db4:0.5(edepth=0.89) F4:0.7(edepth=0.89)  Bb3:0.8(edepth=0.89) Ab4:0.6(edepth=0.89) ~Bb4:0.75 F4:0.5(edepth=0.89)
+    Bb3:0.95(edepth=0.92) Bb4:0.6(edepth=0.92) Bb3:0.5(edepth=0.92) Ab4:0.7(edepth=0.92)  Bb3:0.8(edepth=0.92) F4:0.6(edepth=0.92) Bb3:0.5(edepth=0.92) ~Gb4:0.7  Bb3:0.9(edepth=0.92) Bb4:0.6(edepth=0.92)*2 Db4:0.5(edepth=0.92) F4:0.7(edepth=0.92)*2  Bb3:0.8(edepth=0.92) Ab4:0.6(edepth=0.92) ~Bb4:0.75 -
+    Bb3:0.95(edepth=0.80) Bb4:0.6(edepth=0.80) Bb3:0.5(edepth=0.80) Ab4:0.7(edepth=0.80)  Bb3:0.8(edepth=0.80) F4:0.6(edepth=0.80) Bb3:0.5(edepth=0.80) ~Gb4:0.7  Bb3:0.9(edepth=0.80) Bb4:0.6(edepth=0.80) Db4:0.5(edepth=0.80) F4:0.7(edepth=0.80)  Bb3:0.8(edepth=0.80) Ab4:0.6(edepth=0.80) ~Bb4:0.75 F4:0.5(edepth=0.80)
+    Bb3:0.95(edepth=0.83) - Bb4:0.6(edepth=0.83) Ab4:0.7(edepth=0.83)  - F4:0.6(edepth=0.83) Bb3:0.5(edepth=0.83) -  Gb4:0.9(edepth=0.83) - F4:0.6(edepth=0.83) Db4:0.7(edepth=0.83)  Bb3:0.8(edepth=0.83) - Ab4:0.6(edepth=0.83) ~Bb4:0.75
+    Bb3:0.95(edepth=0.86) Bb4:0.6(edepth=0.86) Bb3:0.5(edepth=0.86) Ab4:0.7(edepth=0.86)  Bb3:0.8(edepth=0.86) F4:0.6(edepth=0.86) Bb3:0.5(edepth=0.86) ~Gb4:0.7  Bb3:0.9(edepth=0.86) Bb4:0.6(edepth=0.86) Db4:0.5(edepth=0.86) F4:0.7(edepth=0.86)  Bb3:0.8(edepth=0.86) Ab4:0.6(edepth=0.86) ~Bb4:0.75 F4:0.5(edepth=0.86)
+    Bb3:0.95(edepth=0.89) - Bb4:0.6(edepth=0.89) Ab4:0.7(edepth=0.89)  - F4:0.6(edepth=0.89) Bb3:0.5(edepth=0.89) -  Gb4:0.9(edepth=0.89) - F4:0.6(edepth=0.89) Db4:0.7(edepth=0.89)  Bb3:0.8(edepth=0.89) - Ab4:0.6(edepth=0.89) ~Bb4:0.75
+    Bb3:0.95(edepth=0.92) Bb4:0.6(edepth=0.92) Bb3:0.5(edepth=0.92) Ab4:0.7(edepth=0.92)  Bb3:0.8(edepth=0.92) F4:0.6(edepth=0.92) Bb3:0.5(edepth=0.92) ~Gb4:0.7  Bb3:0.9(edepth=0.92) Bb4:0.6(edepth=0.92) Db4:0.5(edepth=0.92) F4:0.7(edepth=0.92)  Bb3:0.8(edepth=0.92) Ab4:0.6(edepth=0.92) ~Bb4:0.75 F4:0.5(edepth=0.92)
+    Bb3:0.95(edepth=0.95) - Bb4:0.6(edepth=0.95) Ab4:0.7(edepth=0.95)  - F4:0.6(edepth=0.95) Bb3:0.5(edepth=0.95) -  Gb4:0.9(edepth=0.95) - F4:0.6(edepth=0.95) Db4:0.7(edepth=0.95)  Bb3:0.8(edepth=0.95) - Ab4:0.6(edepth=0.95) ~Bb4:0.75
+    Bb3:0.95(edepth=0.98) Bb4:0.6(edepth=0.98) Bb3:0.5(edepth=0.98) Ab4:0.7(edepth=0.98)  Bb3:0.8(edepth=0.98) F4:0.6(edepth=0.98) Bb3:0.5(edepth=0.98) ~Gb4:0.7  Bb3:0.9(edepth=0.98) Bb4:0.6(edepth=0.98)*2 Db4:0.5(edepth=0.98) F4:0.7(edepth=0.98)*2  Bb3:0.8(edepth=0.98) Ab4:0.6(edepth=0.98) ~Bb4:0.75 -
+    Db4:0.9(edepth=0.86) - F4:0.7(edepth=0.86) Ab4:0.7(edepth=0.86)  Bb4:0.85(edepth=0.86) - ~Ab4:0.6 F4:0.6(edepth=0.86)  Gb4:0.9(edepth=0.86) ~F4:0.7 Db4:0.6(edepth=0.86) Bb3:0.6(edepth=0.86)  Bb4:0.9(edepth=0.86)*2 - Ab4:0.7(edepth=0.86)*3 -
+}
+
+# acid_rise16 in Bb minor, for Túnel.
+pattern acid_rise16_bb {
+    Bb3:0.95(edepth=0.72) ~Bb3:0.6 Bb4:0.8(edepth=0.72) -  Bb3:0.7(edepth=0.72) Ab4:0.75(edepth=0.72) - ~Bb4:0.7  Bb3:0.9(edepth=0.72) - F4:0.75(edepth=0.72) Bb3:0.5(edepth=0.72)  Db4:0.8(edepth=0.72) - ~Eb4:0.7 Bb3:0.6(edepth=0.72)
+    Bb3:0.95(edepth=0.74) - Bb4:0.8(edepth=0.74) ~Ab4:0.7  - F4:0.75(edepth=0.74) Bb3:0.6(edepth=0.74) -  Gb4:0.8(edepth=0.74) - ~F4:0.7 Bb3:0.6(edepth=0.74)  Bb3:0.9(edepth=0.74) Db4:0.6(edepth=0.74) - ~F4:0.75
+    Bb3:0.95(edepth=0.76) ~Bb3:0.6 Bb4:0.8(edepth=0.76) -  Bb3:0.7(edepth=0.76) Ab4:0.75(edepth=0.76) - ~Bb4:0.7  Bb3:0.9(edepth=0.76) - F4:0.75(edepth=0.76) Bb3:0.5(edepth=0.76)  Db4:0.8(edepth=0.76) - ~Eb4:0.7 Bb3:0.6(edepth=0.76)
+    Bb3:0.95(edepth=0.78) - Bb4:0.8(edepth=0.78) ~Ab4:0.7  - F4:0.75(edepth=0.78) Bb3:0.6(edepth=0.78) -  Gb4:0.8(edepth=0.78) - ~F4:0.7 Bb3:0.6(edepth=0.78)  Bb3:0.9(edepth=0.78) Db4:0.6(edepth=0.78) - ~F4:0.75
+    Bb3:0.95(edepth=0.80) ~Bb3:0.6 Bb4:0.8(edepth=0.80) -  Bb3:0.7(edepth=0.80) Ab4:0.75(edepth=0.80) - ~Bb4:0.7  Bb3:0.9(edepth=0.80) - F4:0.75(edepth=0.80) Bb3:0.5(edepth=0.80)  Db4:0.8(edepth=0.80) - ~Eb4:0.7 Bb3:0.6(edepth=0.80)
+    Bb3:0.95(edepth=0.82) - Bb4:0.8(edepth=0.82) ~Ab4:0.7  - F4:0.75(edepth=0.82) Bb3:0.6(edepth=0.82) -  Gb4:0.8(edepth=0.82) - ~F4:0.7 Bb3:0.6(edepth=0.82)  Bb3:0.9(edepth=0.82) Db4:0.6(edepth=0.82) - ~F4:0.75
+    Bb3:0.95(edepth=0.84) ~Bb3:0.6 Bb4:0.8(edepth=0.84) -  Bb3:0.7(edepth=0.84) Ab4:0.75(edepth=0.84) - ~Bb4:0.7  Bb3:0.9(edepth=0.84) - F4:0.75(edepth=0.84) Bb3:0.5(edepth=0.84)  Db4:0.8(edepth=0.84) - ~Eb4:0.7 Bb3:0.6(edepth=0.84)
+    Bb3:0.95(edepth=0.86) - Bb4:0.8(edepth=0.86) ~Ab4:0.7  - F4:0.75(edepth=0.86) Bb3:0.6(edepth=0.86) -  Gb4:0.8(edepth=0.86) - ~F4:0.7 Bb3:0.6(edepth=0.86)  Bb3:0.9(edepth=0.86) Db4:0.6(edepth=0.86) - ~F4:0.75
+    Bb3:0.95(edepth=0.88) ~Bb3:0.6 Bb4:0.8(edepth=0.88) -  Bb3:0.7(edepth=0.88) Ab4:0.75(edepth=0.88) - ~Bb4:0.7  Bb3:0.9(edepth=0.88) - F4:0.75(edepth=0.88) Bb3:0.5(edepth=0.88)  Db4:0.8(edepth=0.88) - ~Eb4:0.7 Bb3:0.6(edepth=0.88)
+    Bb3:0.95(edepth=0.90) - Bb4:0.8(edepth=0.90) ~Ab4:0.7  - F4:0.75(edepth=0.90) Bb3:0.6(edepth=0.90) -  Gb4:0.8(edepth=0.90) - ~F4:0.7 Bb3:0.6(edepth=0.90)  Bb3:0.9(edepth=0.90) Db4:0.6(edepth=0.90) - ~F4:0.75
+    Bb3:0.95(edepth=0.92) ~Bb3:0.6 Bb4:0.8(edepth=0.92) -  Bb3:0.7(edepth=0.92) Ab4:0.75(edepth=0.92) - ~Bb4:0.7  Bb3:0.9(edepth=0.92) - F4:0.75(edepth=0.92) Bb3:0.5(edepth=0.92)  Db4:0.8(edepth=0.92) - ~Eb4:0.7 Bb3:0.6(edepth=0.92)
+    Bb3:0.95(edepth=0.94) - Bb4:0.8(edepth=0.94) ~Ab4:0.7  - F4:0.75(edepth=0.94) Bb3:0.6(edepth=0.94) -  Gb4:0.8(edepth=0.94) - ~F4:0.7 Bb3:0.6(edepth=0.94)  Bb3:0.9(edepth=0.94) Db4:0.6(edepth=0.94) - ~F4:0.75
+    Bb3:0.8(edepth=0.96) Bb3:0.45(edepth=0.96) Bb3:0.45(edepth=0.96) Bb3:0.45(edepth=0.96)  Bb3:0.8(edepth=0.96) Bb3:0.45(edepth=0.96) Bb3:0.45(edepth=0.96) Bb3:0.45(edepth=0.96)  Bb3:0.8(edepth=0.96) Bb3:0.45(edepth=0.96) Bb3:0.45(edepth=0.96) Bb3:0.45(edepth=0.96)  Bb3:0.8(edepth=0.96) Bb3:0.45(edepth=0.96) Bb3:0.45(edepth=0.96) Bb3:0.45(edepth=0.96)
+    Bb3:0.9(edepth=0.98) Bb3:0.55(edepth=0.98) Bb3:0.55(edepth=0.98) Bb3:0.55(edepth=0.98)  Bb3:0.9(edepth=0.98) Bb3:0.55(edepth=0.98) Bb3:0.55(edepth=0.98) Bb3:0.55(edepth=0.98)  Bb3:0.9(edepth=0.98) Bb3:0.55(edepth=0.98) Bb3:0.55(edepth=0.98) Bb3:0.55(edepth=0.98)  Bb3:0.9(edepth=0.98) Bb3:0.55(edepth=0.98) Bb3:0.55(edepth=0.98) Bb3:0.55(edepth=0.98)
+    Bb3:0.95(edepth=1.00) - Bb3:0.6(edepth=1.00) -  Bb4:0.9(edepth=1.00) - Bb3:0.6(edepth=1.00) -  - - - -  - - - -
+}
+
+# roll_f in Bb minor, for Túnel.
+pattern roll_f_bb {
+    -  Bb1:0.78  Bb1:0.5  Bb1:0.64    -  Bb1:0.78  Bb1:0.5  Bb1:0.64    -  Bb1:0.78  Bb1:0.5  Bb1:0.64    -  Bb1:0.78  Bb1:0.5  Bb1:0.64
+}
+
+# roll_stutter in Bb minor, for Túnel.
+pattern roll_stutter_bb {
+    -  Bb1:0.8  Bb1:0.8  -    -  Bb1:0.8  Bb1:0.8  -    -  Bb1:0.8  Bb1:0.8  -    -  Bb1:0.8  Bb1:0.8  Bb1:0.5
+}
+
 # ════════════════════════════════════════════════════════
 # BUSES
 # ════════════════════════════════════════════════════════
@@ -1702,6 +1895,25 @@ track static {
     out > highpass(900hz, 0.05)
         > lowpass(3.5khz, 0.05, lfo_bars=16, lfo_depth=1500)
         > autopan(0.5, bars=16)
+        > master
+}
+
+# The pluck as a robot, for Metal: a vowel filter talking and a bitcrush.
+track robot {
+    play rest
+    using pluck
+    level 0
+    velocity 1.0
+    gate 0.7
+    pan -0.05
+    sidechain 0.3
+    delay_send 0.15
+    reverb_send 0.06
+    out > highpass(220hz, 0.05)
+        > vowel(a, o, bars=2, mix=0.4)
+        > bitcrush(10, 0.2, wet=0.25)
+        > panenv(0.4, release=200)
+        > lowpass(8khz, 0.05)
         > master
 }
 

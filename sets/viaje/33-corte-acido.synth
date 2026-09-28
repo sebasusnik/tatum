@@ -1,9 +1,11 @@
-# set: bars=16 phase=corte-acido energy=6
+# set: bars=16 phase=10-tunel energy=6
 # set-note: El corte antes de la subida: se van el bombo y el bajo, queda el 303 solo con su segundo riff, el tick y el shaker marcando la grilla. Después, la subida.
 use "_rig.synth"
 tempo 133
 
-track acid   { play acid_riff_b16 level 0.55 }
+module beats kit { kick_decay 20% kick_pitch 1.0x kick_click 60% kick_drive 55% hihat_level 72% hihat_decay 12% hihat_pitch 1.7x }
+
+track acid   { play acid_riff_b16_bb level 0.55 }
 track shaker { play shake4 level 0.07 }
 track tick   { play tick332 level 0.085 }
 track static { play static_bed level 0.05 }

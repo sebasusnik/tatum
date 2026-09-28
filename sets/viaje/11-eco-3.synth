@@ -1,0 +1,18 @@
+# set: bars=64 phase=03-eco energy=5
+# set-note: Eco lleno: el cambio de acorde (Cm9 a Abmaj9), el sub que camina en Do menor, los hats ocupados, la capa de detalle entera y la estática debajo.
+use "_rig.synth"
+tempo 124
+
+module beats kit { kick_decay 46% kick_pitch 0.7x kick_click 22% kick_drive 38% }
+module keys chord { cutoff 2.2khz }
+
+track bed    { play hiss_swell level 0.26 }
+track stab   { play stab_dub8_c level 0.28 delay_send 0.5 }
+track beat   { play kick_dub8 level 0.86 }
+track hats   { play hat_dub16 level 1.2 }
+track sub    { play sub_move16_c level 0.72 }
+track perc   { play perc_dub8 level 0.45 }
+track shaker { play shake4 level 0.07 }
+track tick   { play tick332 level 0.085 }
+track ride   { play ride_off level 0.04 }
+track static { play static_bed level 0.04 }

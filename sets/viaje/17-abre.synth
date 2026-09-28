@@ -1,11 +1,11 @@
-# set: bars=32 phase=abre energy=6
+# set: bars=32 phase=05-gancho energy=6
 # set-note: Tensión sin cortar el groove: el bajo se aquieta, los acordes se abren, y el pluck queda en tres notas por compás, esperando.
 use "_rig.synth"
 tempo 127
 
 module fm pluck { mod_index 28% }
 
-module beats kit { kick_decay 30% kick_pitch 0.8x kick_click 32% hihat_level 70% hihat_decay 28% }
+module beats kit { kick_decay 28% kick_pitch 0.82x kick_click 38% hihat_level 70% hihat_decay 28% }
 module keys warmth { cutoff 2.2khz }
 
 track bed    { play hiss_swell level 0.23 }
