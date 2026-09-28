@@ -7,6 +7,7 @@ pub mod diff;
 pub mod lint;
 pub mod chords;
 pub mod isolate;
+pub mod transform_words;
 
 use ast::Song;
 use error::ParseResult;

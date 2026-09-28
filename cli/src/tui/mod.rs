@@ -12,6 +12,7 @@
 //! 100 Hz / 1 kHz / 10 kHz lines, so the live screen and the pictures read
 //! the same way.
 
+pub mod edit;
 pub mod fft;
 pub mod palette;
 pub mod shot;
@@ -43,6 +44,13 @@ pub struct SongInfo {
     /// Scene name and length in bars, in arrangement order. Empty for a live
     /// set, which loops.
     pub scenes: Vec<(String, u32)>,
+    /// Each track's `play` line as written: `acid_riff16 every 4 rev`.
+    pub plays: Vec<String>,
+    /// Whether each track plays a drum pattern, for the palette.
+    pub drums: Vec<bool>,
+    /// The song's own patterns, by name, and whether each is a drum pattern:
+    /// what the help shows a track could play instead.
+    pub patterns: Vec<(String, bool)>,
 }
 
 impl SongInfo {
@@ -57,6 +65,20 @@ impl SongInfo {
                 .arrangement
                 .iter()
                 .filter_map(|&(i, n)| compiled.scenes.get(i).map(|s| (s.name.clone(), n)))
+                .collect(),
+            plays: compiled.tracks.iter().map(|t| t.play_text.clone()).collect(),
+            drums: compiled
+                .tracks
+                .iter()
+                .map(|t| compiled.patterns.get(t.pattern_idx).is_some_and(|p| !p.lanes.is_empty()))
+                .collect(),
+            // Transformed versions carry a ` [` in their name; they are not
+            // something to write on a line.
+            patterns: compiled
+                .patterns
+                .iter()
+                .filter(|p| !p.name.contains(" ["))
+                .map(|p| (p.name.clone(), !p.lanes.is_empty()))
                 .collect(),
         })
     }
@@ -88,12 +110,16 @@ pub struct SetView {
 }
 
 /// What a key asks for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Key {
     Quit,
     Next,
     Prev,
     Step(usize),
+    /// Change the selected track's `play` line.
+    Edit(edit::Op),
+    /// Put back what the last edit from the screen changed.
+    Undo,
 }
 
 #[derive(Clone, Copy)]
@@ -141,6 +167,10 @@ pub struct Screen {
     knobs: VecDeque<(Instant, String)>,
     error: Option<Vec<String>>,
     started: Instant,
+    /// The track the transform keys act on, by index.
+    selected: Option<usize>,
+    help: bool,
+    transformed: Vec<bool>,
     bar: usize,
     step: usize,
     tempo: f32,
@@ -179,6 +209,9 @@ impl Screen {
             knobs: VecDeque::new(),
             error: None,
             started: Instant::now(),
+            selected: None,
+            help: false,
+            transformed: Vec::new(),
             bar: 0,
             step: 0,
             tempo: 0.0,
@@ -237,17 +270,70 @@ impl Screen {
             if k.kind != KeyEventKind::Press {
                 continue;
             }
+            use edit::{Op, Toggle};
             let key = match k.code {
                 KeyCode::Char('c') if k.modifiers.contains(KeyModifiers::CONTROL) => Some(Key::Quit),
+                KeyCode::Esc if self.help => {
+                    self.help = false;
+                    None
+                }
                 KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => Some(Key::Quit),
+                KeyCode::Char('?') => {
+                    self.help = !self.help;
+                    None
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    self.select(-1);
+                    None
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    self.select(1);
+                    None
+                }
                 KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('n') => Some(Key::Next),
                 KeyCode::Left | KeyCode::Char('p') => Some(Key::Prev),
                 KeyCode::Char(c @ '1'..='9') => Some(Key::Step(c as usize - '0' as usize)),
+                KeyCode::Char('r') => Some(Key::Edit(Op::Toggle(Toggle::Rev))),
+                KeyCode::Char('f') => Some(Key::Edit(Op::Toggle(Toggle::Fast))),
+                KeyCode::Char('h') => Some(Key::Edit(Op::Toggle(Toggle::Slow))),
+                KeyCode::Char('e') => Some(Key::Edit(Op::Toggle(Toggle::EveryRev))),
+                KeyCode::Char('d') => Some(Key::Edit(Op::Degrade)),
+                KeyCode::Char(']') => Some(Key::Edit(Op::Shift(1))),
+                KeyCode::Char('[') => Some(Key::Edit(Op::Shift(-1))),
+                KeyCode::Char('+') | KeyCode::Char('=') => Some(Key::Edit(Op::Up(1))),
+                KeyCode::Char('-') => Some(Key::Edit(Op::Up(-1))),
+                KeyCode::Char('x') => Some(Key::Edit(Op::Clear)),
+                KeyCode::Char('u') => Some(Key::Undo),
                 _ => None,
             };
+            // A transform key with nothing selected picks the first lane.
+            if matches!(key, Some(Key::Edit(_))) && self.selected.is_none() {
+                self.select(1);
+            }
             out.extend(key);
         }
         out
+    }
+
+    /// Move the selection through the lanes on screen.
+    fn select(&mut self, by: i32) {
+        let active = self.active_lanes();
+        if active.is_empty() {
+            return;
+        }
+        let at = self.selected.and_then(|s| active.iter().position(|&a| a == s));
+        let next = match at {
+            None => 0,
+            Some(i) => (i as i32 + by).rem_euclid(active.len() as i32) as usize,
+        };
+        self.selected = Some(active[next]);
+    }
+
+    /// The selected track's name and `play` line.
+    pub fn selected_track(&self) -> Option<(String, String)> {
+        let song = self.song.as_ref()?;
+        let i = self.selected?;
+        Some((song.tracks.get(i)?.clone(), song.plays.get(i)?.clone()))
     }
 
     /// Read the telemetry and draw a frame.
@@ -260,6 +346,8 @@ impl Screen {
     }
 
     fn analyse(&mut self) {
+        let n = self.lanes.len().min(self.telemetry.tracks());
+        self.transformed = (0..n).map(|i| self.telemetry.transformed(i)).collect();
         if self.last_column.elapsed() < COLUMN {
             return;
         }
@@ -330,11 +418,76 @@ impl Screen {
         self.lanes(f.buffer_mut(), lanes, &active);
         self.bottom(f, bottom);
         let hint = if self.set.is_some() {
-            " space/→ next · ← back · 1-9 jump to a step · q quit · save the step to re-evaluate"
+            " space/→ next · ← back · 1-9 step · ↑↓ track · r f h e d [ ] + - x u transform · ? help · q quit"
         } else {
-            " save the file to re-evaluate it · q quit"
+            " ↑↓ track · r f h e d [ ] + - x u transform · ? help · q quit"
         };
         f.render_widget(Paragraph::new(hint).style(Style::new().fg(DIM).bg(BG)), footer);
+        if self.help {
+            self.help_overlay(f, area);
+        }
+    }
+
+    /// `?`: the words, the keys for them, and what the selected track could
+    /// play instead.
+    fn help_overlay(&self, f: &mut Frame, area: Rect) {
+        let w = area.width.clamp(40, 78);
+        let h = area.height.clamp(10, 26);
+        let pop = Rect { x: area.x + (area.width - w) / 2, y: area.y + (area.height - h) / 2, width: w, height: h };
+        let key = |k: &str, word: &str, what: &str| {
+            Line::from(vec![
+                Span::styled(format!(" {:<5}", k), Style::new().fg(GOLD).add_modifier(Modifier::BOLD)),
+                Span::styled(format!("{:<14}", word), Style::new().fg(HOT)),
+                Span::styled(what.to_string(), Style::new().fg(TEXT)),
+            ])
+        };
+        let mut lines = vec![
+            Line::styled(" ↑ ↓ choose a track; the keys change its `play` line in the file", Style::new().fg(DIM)),
+            Line::raw(""),
+            key("r", "rev", "the pattern backwards"),
+            key("f", "fast 2", "twice in the same length"),
+            key("h", "slow 2", "half speed, twice as long"),
+            key("[ ]", "shift -1 / 1", "a step earlier / later"),
+            key("- +", "up -1 / 1", "a degree of the scale down / up"),
+            key("e", "every 4 rev", "backwards on the last of every 4 loops"),
+            key("d", "degrade", "drop 25%, then 50% of the notes"),
+            key("x", "", "every transform off"),
+            key("u", "", "undo the last change made from here"),
+            Line::raw(""),
+            Line::styled(
+                " in the file: iter 4 · ply 2 · octave 1 · up 5st · sometimes 30% rev · play a, b",
+                Style::new().fg(DIM),
+            ),
+        ];
+        if let (Some(song), Some(i)) = (self.song.as_ref(), self.selected) {
+            let drum = song.drums.get(i).copied().unwrap_or(false);
+            let current = song.plays.get(i).and_then(|p| p.split([' ', ',']).next()).unwrap_or("");
+            let prefix = current.split('_').next().unwrap_or(current);
+            let mut same: Vec<&str> =
+                song.patterns.iter().filter(|(n, d)| *d == drum && n != current).map(|(n, _)| n.as_str()).collect();
+            same.sort_by_key(|n| !n.starts_with(prefix));
+            let mut line = format!(" {} could play: ", song.tracks.get(i).map(String::as_str).unwrap_or(""));
+            for n in same {
+                if line.chars().count() + n.len() + 3 > w as usize - 2 {
+                    line += "…";
+                    break;
+                }
+                line += n;
+                line += " · ";
+            }
+            lines.push(Line::raw(""));
+            lines.push(Line::styled(line.trim_end_matches(" · ").to_string(), Style::new().fg(OK)));
+        }
+        f.render_widget(ratatui::widgets::Clear, pop);
+        f.render_widget(
+            Paragraph::new(lines).block(
+                Block::bordered()
+                    .border_style(Style::new().fg(GOLD))
+                    .title(Span::styled(" transform a pattern  ·  ? or Esc closes ", Style::new().fg(GOLD)))
+                    .style(Style::new().bg(PANEL)),
+            ),
+            pop,
+        );
     }
 
     fn header(&self, f: &mut Frame, area: Rect) {
@@ -599,12 +752,39 @@ impl Screen {
             let lvl = ((peak_db + 48.0) / 48.0).clamp(0.0, 1.0);
             let active = lvl > 0.05;
             let label: String = name.chars().take(10).collect();
+            let selected = self.selected == Some(i);
             buf.set_string(
                 area.x + 1,
                 y0,
                 format!("{:<10}", label),
-                Style::new().fg(if active { TEXT } else { DIM }).bg(BG),
+                Style::new()
+                    .fg(if selected {
+                        GOLD
+                    } else if active {
+                        TEXT
+                    } else {
+                        DIM
+                    })
+                    .bg(BG)
+                    .add_modifier(if selected { Modifier::BOLD } else { Modifier::empty() }),
             );
+            if selected {
+                buf.set_string(area.x, y0, "▶", Style::new().fg(GOLD).bg(BG));
+            }
+            // What the `play` line does to the pattern, lit on the loops it
+            // changes: the second row of a lane, or a mark when there is one.
+            let play = song.plays.get(i).map(String::as_str).unwrap_or("");
+            let tail = play.split_once(' ').map(|(_, t)| t).unwrap_or("");
+            if !tail.is_empty() {
+                let on = self.transformed.get(i).copied().unwrap_or(false);
+                let style = Style::new().fg(if on { HOT } else { DIM }).bg(BG);
+                if lane_h >= 2 {
+                    let t: String = tail.chars().take(label_w as usize - 2).collect();
+                    buf.set_string(area.x + 1, y0 + 1, format!("⟲ {}", t), style);
+                } else if !selected {
+                    buf.set_string(area.x, y0, "⟲", style);
+                }
+            }
             let cells = 4usize;
             let lit = (lvl * cells as f32).round() as usize;
             for k in 0..cells {
@@ -674,6 +854,17 @@ impl Screen {
         let mut term = ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).expect("test backend");
         term.draw(|f| self.render(f)).expect("test backend");
         term.backend().buffer().clone()
+    }
+
+    /// For a picture: select a track by name and open the help, as the keys
+    /// would, and take the transform marks from the telemetry.
+    pub fn draw_offline(&mut self, select: Option<&str>, help: bool) {
+        if let (Some(name), Some(song)) = (select, self.song.as_ref()) {
+            self.selected = song.tracks.iter().position(|t| t == name);
+        }
+        self.help = help;
+        let n = self.lanes.len().min(self.telemetry.tracks());
+        self.transformed = (0..n).map(|i| self.telemetry.transformed(i)).collect();
     }
 
     pub fn column_period() -> Duration {

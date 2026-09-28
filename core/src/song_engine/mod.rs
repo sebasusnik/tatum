@@ -12,7 +12,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::dsl::compiler::{CompiledPattern, CompiledScene};
+use crate::dsl::compiler::{CompiledPattern, CompiledScene, PlayPlan};
 pub use crate::dsl::error::DslError;
 use crate::effects::delay::Delay;
 use crate::effects::reverb::Reverb;
@@ -60,6 +60,8 @@ pub struct SongEngine {
     inst_for: Vec<usize>,
     n_instruments: usize,
     patterns: Vec<CompiledPattern>,
+    /// The `play` plans the tracks and scene tracks index into.
+    plays: Vec<PlayPlan>,
 
     // Playback tracks
     tracks: Vec<TrackPlayback>,

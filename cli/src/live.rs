@@ -445,6 +445,8 @@ pub fn run(
     // every hit is sent, in the order it was played.
     let mut unsent: [Option<u8>; 128] = [None; 128];
     let mut unsent_bend: Option<u16> = None;
+    // What the screen's transform keys changed, newest last, to take back.
+    let mut undo: Vec<(std::path::PathBuf, String)> = Vec::new();
     // The screen redraws at about 30 frames a second; lines need no hurry.
     let poll_every = Duration::from_millis(if ui.is_screen() { 33 } else { 50 });
     let mut next_poll = Instant::now() + poll_every;
@@ -558,12 +560,33 @@ pub fn run(
         let mut quit = false;
         let mut keys: Vec<crate::keys::Key> = key_rx.try_iter().collect();
         if let Ui::Screen(screen) = &mut ui {
-            keys.extend(screen.keys().into_iter().map(|k| match k {
-                crate::tui::Key::Quit => crate::keys::Key::Quit,
-                crate::tui::Key::Next => crate::keys::Key::Next,
-                crate::tui::Key::Prev => crate::keys::Key::Prev,
-                crate::tui::Key::Step(n) => crate::keys::Key::Step(n),
-            }));
+            let watched = set.as_ref().map(|n| n.path()).unwrap_or_else(|| std::path::PathBuf::from(path));
+            for k in screen.keys() {
+                match k {
+                    crate::tui::Key::Quit => keys.push(crate::keys::Key::Quit),
+                    crate::tui::Key::Next => keys.push(crate::keys::Key::Next),
+                    crate::tui::Key::Prev => keys.push(crate::keys::Key::Prev),
+                    crate::tui::Key::Step(n) => keys.push(crate::keys::Key::Step(n)),
+                    // The screen writes the line in the file; the save is
+                    // picked up below like one from the editor.
+                    crate::tui::Key::Edit(op) => match edit_play(&watched, screen.selected_track(), op) {
+                        Ok((before, said)) => {
+                            undo.push((watched.clone(), before));
+                            screen.say(said, crate::tui::Tone::Good);
+                        }
+                        Err(e) => screen.say(e, crate::tui::Tone::Bad),
+                    },
+                    crate::tui::Key::Undo => match undo.pop() {
+                        Some((file, before)) => match std::fs::write(&file, before) {
+                            Ok(()) => screen.say("undone", crate::tui::Tone::Good),
+                            Err(e) => {
+                                screen.say(format!("cannot write {}: {}", file.display(), e), crate::tui::Tone::Bad)
+                            }
+                        },
+                        None => screen.say("nothing to undo", crate::tui::Tone::Info),
+                    },
+                }
+            }
         }
         for key in keys {
             let m = match key {
@@ -763,6 +786,22 @@ pub fn run(
         eprintln!("{} retired engines were dropped on the audio thread (main thread fell behind)", dropped_in_place);
     }
     Ok(())
+}
+
+/// Apply a transform key to the selected track's `play` line in `file`.
+/// Returns the file as it was, for undo, and what to tell the performer.
+fn edit_play(
+    file: &std::path::Path,
+    selected: Option<(String, String)>,
+    op: crate::tui::edit::Op,
+) -> Result<(String, String), String> {
+    let (track, play) = selected.ok_or("choose a track first with ↑ ↓")?;
+    let mut clause = crate::tui::edit::Clause::parse(&play).ok_or_else(|| format!("cannot read `play {}`", play))?;
+    clause.apply(op);
+    let before = std::fs::read_to_string(file).map_err(|e| format!("cannot read {}: {}", file.display(), e))?;
+    let after = crate::tui::edit::rewrite(&before, &track, &clause)?;
+    std::fs::write(file, &after).map_err(|e| format!("cannot write {}: {}", file.display(), e))?;
+    Ok((before, format!("{}: play {}", track, clause.text())))
 }
 
 /// Where the session's messages go: lines on stderr, or the screen.

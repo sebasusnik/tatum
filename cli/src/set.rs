@@ -417,7 +417,8 @@ fn cmd_render(args: &[String]) -> Result<(), String> {
     }
     let bytes = tatum_core::wav::encode_stereo_16(&rendered.l, &rendered.r, SAMPLE_RATE as u32);
     fs::write(&out, bytes).map_err(|e| format!("{}: {}", out, e))?;
-    eprintln!("wrote {} ({:.0}:{:02.0})", out, secs / 60.0, secs % 60.0);
+    // Whole minutes: `{:.0}` rounded 2:37 up to "3:37".
+    eprintln!("wrote {} ({}:{:02})", out, (secs / 60.0) as u32, (secs % 60.0) as u32);
     Ok(())
 }
 

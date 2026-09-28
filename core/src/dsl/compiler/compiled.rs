@@ -19,6 +19,9 @@ pub struct StepPLock {
     pub env_depth: Option<f32>,
     pub resonance: Option<f32>,
     pub gate: Option<f32>,
+    /// The chance the step sounds; `None` is always. Drawn from the track's
+    /// own random stream, so a song sounds the same every time it renders.
+    pub probability: Option<f32>,
 }
 
 /// Maximum notes in a single chord step.
@@ -72,8 +75,56 @@ pub enum CompiledStep {
         roll: u8,
         plock: StepPLock,
     },
+    /// `<x o - X>` on a drum lane: hits spread evenly across the step, each
+    /// at its own velocity; 0 is a rest.
+    DrumSub {
+        hits: [f32; MAX_SUBDIV],
+        count: u8,
+        plock: StepPLock,
+    },
     Rest,
     Tie,
+}
+
+impl CompiledStep {
+    /// A step that starts something, rather than holding or resting.
+    pub fn is_onset(&self) -> bool {
+        !matches!(self, CompiledStep::Rest | CompiledStep::Tie)
+    }
+}
+
+/// How a track chooses, loop by loop, which of its patterns plays: the
+/// patterns of `play a, b` and every transformed version of them, compiled
+/// ahead so the audio thread only ever reads steps.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlayPlan {
+    /// Pattern indices in mixed radix: `alternatives` first, then each
+    /// condition's states, in order.
+    pub variants: Vec<usize>,
+    pub alternatives: usize,
+    pub conditions: Vec<LoopCondition>,
+    /// The `play` line as written, for the live screen.
+    pub text: String,
+}
+
+/// What decides a loop's variant, per transform that is not always on.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LoopCondition {
+    /// On the last of every N loops.
+    Every(u32),
+    /// On a loop with this chance.
+    Chance(f32),
+    /// Loop k of N starts k/N of the way in: N states.
+    Iter(u8),
+}
+
+impl LoopCondition {
+    pub fn states(&self) -> usize {
+        match self {
+            LoopCondition::Every(_) | LoopCondition::Chance(_) => 2,
+            LoopCondition::Iter(n) => *n as usize,
+        }
+    }
 }
 
 /// A compiled drum lane: MIDI note + step sequence for one drum.
@@ -117,6 +168,11 @@ pub struct CompiledTrack {
     /// source is, which is the kick unless `sidechain ... from=` says otherwise.
     pub sidechain_source: Option<String>,
     pub arp: Option<ArpConfig>, // arpeggiator driven by the pattern's held notes
+    /// Index into `CompiledSong::plays` when the `play` line alternates or
+    /// transforms on some loops and not others. `None`: `pattern_idx` loops.
+    pub play: Option<usize>,
+    /// The `play` line as written, for the live screen.
+    pub play_text: String,
 }
 
 /// Compiled arpeggiator settings.
@@ -227,6 +283,8 @@ pub struct CompiledSong {
     pub buses: Vec<CompiledBus>,
     pub master: CompiledMaster,
     pub scenes: Vec<CompiledScene>,
+    /// Every track's and scene track's `PlayPlan`, by `CompiledTrack::play`.
+    pub plays: Vec<PlayPlan>,
     pub arrangement: Vec<(usize, u32)>, // (scene_idx, repeat_count)
     pub grooves: Vec<CompiledGroove>,
     /// Insert chains on the global send returns: `reverb_return { in > ... > out }`.

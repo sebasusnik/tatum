@@ -96,10 +96,21 @@ impl SongEngine {
         self.tracks.get(idx).map_or(0, |t| t.pattern_idx)
     }
 
+    /// Whether a track whose `play` line changes loop by loop is on one of
+    /// its transformed loops -- `every 4 rev` on the fourth, say -- for the
+    /// live screen to light up.
+    pub fn track_transformed(&self, idx: usize) -> bool {
+        let Some(t) = self.tracks.get(idx) else { return false };
+        let Some(plan) = t.play.and_then(|p| self.plays.get(p)) else { return false };
+        let per = (plan.variants.len() / plan.alternatives.max(1)).max(1);
+        plan.variants.iter().position(|&v| v == t.pattern_idx).is_some_and(|i| i % per != 0)
+    }
+
     pub fn set_track_pattern(&mut self, track_idx: usize, pattern_idx: usize) {
         if let Some(track) = self.tracks.get_mut(track_idx) {
             if pattern_idx < self.patterns.len() {
                 track.pattern_idx = pattern_idx;
+                track.play = None;
                 track.current_step = 0;
             }
         }

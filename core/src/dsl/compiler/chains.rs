@@ -55,10 +55,13 @@ pub(super) fn compile_fx_chain(
 
 // ── Scene compilation ──
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn compile_scene(
     scene: &SceneDef,
     inst_names: &[String],
-    patterns: &[CompiledPattern],
+    patterns: &mut Vec<CompiledPattern>,
+    plays: &mut Vec<super::compiled::PlayPlan>,
+    ctx: &super::transform::Ctx,
     buses: &[CompiledBus],
     global_tracks: &[CompiledTrack],
     samples_per_bar: f32,
@@ -73,7 +76,7 @@ pub(super) fn compile_scene(
                 scene.name, track_def.name
             )));
         }
-        let t = compile_track(track_def, inst_names, patterns, buses, defaults, samples_per_bar)?;
+        let t = compile_track(track_def, inst_names, patterns, plays, ctx, buses, defaults, samples_per_bar)?;
         // A scene track's own `out > ...` parses and compiles and is
         // then never applied: insert chains are built once per track
         // and the engine does not rebuild them on a scene change.

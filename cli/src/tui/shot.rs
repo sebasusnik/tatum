@@ -19,7 +19,7 @@ use super::{Screen, SongInfo, Telemetry, Tone};
 use crate::include::Source;
 
 const USAGE: &str =
-    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--see-through] [-o shot.png]";
+    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--see-through] [--select <track>] [--help] [-o shot.png]";
 const CELL_W: usize = 12;
 const CELL_H: usize = 24;
 
@@ -27,6 +27,8 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     let (mut path, mut at, mut size, mut out) = (None, 20.0f32, (160u16, 48u16), "tui-shot.png".to_string());
     let mut step: usize = 1;
     let mut see_through = false;
+    let mut select: Option<String> = None;
+    let mut help = false;
     let mut i = 0;
     while i < args.len() {
         let value = |i: usize| args.get(i + 1).cloned().ok_or(USAGE);
@@ -44,6 +46,11 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
             // Paint the terminal's own background as a wallpaper, to show
             // what a transparent window lets through.
             "--see-through" => see_through = true,
+            "--help" => help = true,
+            "--select" => {
+                select = Some(value(i)?);
+                i += 1;
+            }
             "--step" => {
                 step = value(i)?.parse().map_err(|_| "--step needs a number")?;
                 i += 1;
@@ -112,6 +119,7 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     if let Some(e) = player.engine() {
         screen.position(e.current_bar(), e.global_step(), e.tempo());
     }
+    screen.draw_offline(select.as_deref(), help);
     paint(&screen.snapshot(size.0, size.1), see_through).save(Path::new(&out))?;
     eprintln!("wrote {} ({}x{} cells, {:.1} s in)", out, size.0, size.1, at);
     Ok(())

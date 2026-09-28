@@ -89,6 +89,7 @@ impl SongEngine {
                 let arriving = !tp.sounding();
                 tp.instrument_idx = inst_idx;
                 tp.pattern_idx = st.pattern_idx;
+                tp.play = st.play;
                 tp.velocity = st.velocity;
                 tp.level = st.level;
                 tp.gate = st.gate;

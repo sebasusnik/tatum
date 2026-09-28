@@ -23,6 +23,10 @@ impl Parser {
     fn merge_track(old: &TrackDef, new: TrackDef) -> TrackDef {
         TrackDef {
             name: new.name,
+            // What a line plays and what is done to it go together: a new
+            // `play` brings its own transforms, and none means none.
+            play_also: if new.play.is_empty() { old.play_also.clone() } else { new.play_also },
+            transforms: if new.play.is_empty() { old.transforms.clone() } else { new.transforms },
             play: if new.play.is_empty() { old.play.clone() } else { new.play },
             using_instrument: if new.using_instrument.is_empty() {
                 old.using_instrument.clone()
@@ -42,6 +46,144 @@ impl Parser {
         }
     }
 
+    /// One transform after `play <pattern>`, or `None` at the first word that
+    /// is not one -- the track's next option. A word that looks like a
+    /// misspelt transform is an error that says which one.
+    fn parse_transform(&mut self, track: &str) -> Option<Transform> {
+        let Token::Ident(word) = self.peek().clone() else { return None };
+        let (line, col) = {
+            let at = self.span();
+            (at.line, at.col)
+        };
+        let err = |p: &mut Self, message: String| {
+            p.errors.push(ParseError { line, col, message: format!("track '{}': {}", track, message) });
+        };
+        let t = match word.as_str() {
+            "rev" => {
+                self.advance();
+                Transform::Rev
+            }
+            "palindrome" => {
+                self.advance();
+                Transform::Every(2, alloc::boxed::Box::new(Transform::Rev))
+            }
+            "fast" | "slow" | "ply" | "iter" => {
+                self.advance();
+                let (lo, hi) = if word == "iter" { (2, 8) } else { (2, 4) };
+                let n = self.signed_int().unwrap_or(0);
+                if n < lo || n > hi {
+                    err(self, format!("`{} {}`: takes {} to {}", word, n, lo, hi));
+                }
+                let n = n.clamp(lo, hi) as u8;
+                match word.as_str() {
+                    "fast" => Transform::Fast(n),
+                    "slow" => Transform::Slow(n),
+                    "ply" => Transform::Ply(n),
+                    _ => Transform::Iter(n),
+                }
+            }
+            "shift" => {
+                self.advance();
+                Transform::Shift(self.signed_int().unwrap_or(0))
+            }
+            "octave" => {
+                self.advance();
+                Transform::Octave(self.signed_int().unwrap_or(0))
+            }
+            "up" | "transpose" => {
+                self.advance();
+                let negative = matches!(self.peek(), Token::Rest);
+                if negative {
+                    self.advance();
+                }
+                let sign = if negative { -1 } else { 1 };
+                match self.peek().clone() {
+                    Token::Number(n) => {
+                        self.advance();
+                        // `transpose` counts semitones; `up` degrees unless it says `st`.
+                        Transform::Up { amount: sign * n as i32, semitones: word == "transpose" }
+                    }
+                    Token::Quantity(n, unit) if unit == "st" => {
+                        self.advance();
+                        Transform::Up { amount: sign * n as i32, semitones: true }
+                    }
+                    _ => {
+                        err(self, format!("`{}` needs a number: `up 2` is two degrees, `up 5st` five semitones", word));
+                        return None;
+                    }
+                }
+            }
+            "degrade" => {
+                self.advance();
+                Transform::Degrade(self.fraction().unwrap_or(0.5))
+            }
+            "every" => {
+                self.advance();
+                let n = self.signed_int().unwrap_or(0);
+                if n < 2 {
+                    err(self, format!("`every {}`: takes 2 or more loops", n));
+                }
+                match self.parse_transform(track) {
+                    Some(inner) => Transform::Every(n.max(2) as u32, alloc::boxed::Box::new(inner)),
+                    None => {
+                        err(self, format!("`every {}` needs a transform after it, like `every {} rev`", n, n));
+                        return None;
+                    }
+                }
+            }
+            "sometimes" => {
+                self.advance();
+                let p = self.fraction().unwrap_or(0.5);
+                match self.parse_transform(track) {
+                    Some(inner) => Transform::Sometimes(p, alloc::boxed::Box::new(inner)),
+                    None => {
+                        err(self, String::from("`sometimes` needs a transform after it, like `sometimes 30% rev`"));
+                        return None;
+                    }
+                }
+            }
+            other => {
+                if let Some(close) = crate::dsl::transform_words::closest(other) {
+                    err(self, format!("unknown transform '{}'. Did you mean '{}'?", other, close));
+                    self.advance();
+                    self.recover_to_line_end();
+                }
+                return None;
+            }
+        };
+        if matches!(t, Transform::Every(_, ref inner) | Transform::Sometimes(_, ref inner) if matches!(**inner, Transform::Every(..) | Transform::Sometimes(..)))
+        {
+            err(
+                self,
+                String::from(
+                    "`every` and `sometimes` take one plain transform after them, not another `every` or `sometimes`",
+                ),
+            );
+        }
+        Some(t)
+    }
+
+    /// An integer, with a leading `-` allowed.
+    fn signed_int(&mut self) -> Option<i32> {
+        let negative = matches!(self.peek(), Token::Rest);
+        if negative {
+            self.advance();
+        }
+        let n = self.expect_number()? as i32;
+        Some(if negative { -n } else { n })
+    }
+
+    /// `30%` or `0.3`.
+    fn fraction(&mut self) -> Option<f32> {
+        match self.peek().clone() {
+            Token::Quantity(n, unit) if unit == "%" => {
+                self.advance();
+                Some((n / 100.0).clamp(0.0, 1.0))
+            }
+            _ => self.expect_number().map(|n| n.clamp(0.0, 1.0)),
+        }
+    }
+
     pub(super) fn parse_track(&mut self, tracks: &mut Vec<TrackDef>) {
         let name = match self.expect_ident() {
             Some(n) => n,
@@ -54,6 +196,8 @@ impl Parser {
         let mut track = TrackDef {
             name,
             play: String::new(),
+            play_also: Vec::new(),
+            transforms: Vec::new(),
             using_instrument: String::new(),
             velocity: None,
             level: None,
@@ -78,6 +222,16 @@ impl Parser {
                     self.advance();
                     if let Some(pat) = self.expect_ident() {
                         track.play = pat;
+                    }
+                    // `play a, b, c`: one loop of each in turn.
+                    while matches!(self.peek(), Token::Comma) {
+                        self.advance();
+                        if let Some(pat) = self.expect_ident() {
+                            track.play_also.push(pat);
+                        }
+                    }
+                    while let Some(t) = self.parse_transform(&track.name) {
+                        track.transforms.push(t);
                     }
                 }
                 Token::Using => {

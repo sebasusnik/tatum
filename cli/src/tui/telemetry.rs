@@ -6,7 +6,7 @@
 //! Everything is lossy on purpose. A frame the screen misses is a frame not
 //! drawn, never a callback that waited.
 
-use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
 use tatum_core::song_engine::SongEngine;
 
@@ -25,6 +25,8 @@ pub struct Telemetry {
     /// Per track and band, the loudest mean power over one callback since the
     /// screen last looked.
     band: Box<[AtomicU32]>,
+    /// Per track, whether this loop is one its `play` line transforms.
+    transformed: Box<[AtomicBool]>,
     tracks: AtomicUsize,
 }
 
@@ -36,6 +38,7 @@ impl Telemetry {
             written: AtomicUsize::new(0),
             peak: atomics(MAX_TRACKS),
             band: atomics(MAX_TRACKS * BANDS),
+            transformed: (0..MAX_TRACKS).map(|_| AtomicBool::new(false)).collect::<Vec<_>>().into_boxed_slice(),
             tracks: AtomicUsize::new(0),
         }
     }
@@ -59,6 +62,7 @@ impl Telemetry {
         let n = engine.track_count().min(MAX_TRACKS);
         self.tracks.store(n, Ordering::Relaxed);
         for i in 0..n {
+            self.transformed[i].store(engine.track_transformed(i), Ordering::Relaxed);
             self.peak[i].fetch_max(engine.track_peak(i).abs().to_bits(), Ordering::Relaxed);
             let (energy, samples) = engine.track_band_energy(i);
             if samples > 0 {
@@ -81,6 +85,11 @@ impl Telemetry {
         for (i, o) in out.iter_mut().enumerate().take(n) {
             *o = f32::from_bits(self.ring[start.wrapping_add(i) % RING].load(Ordering::Relaxed));
         }
+    }
+
+    /// Whether track `i` is on a loop its `play` line transforms.
+    pub fn transformed(&self, i: usize) -> bool {
+        self.transformed.get(i).is_some_and(|t| t.load(Ordering::Relaxed))
     }
 
     pub fn tracks(&self) -> usize {

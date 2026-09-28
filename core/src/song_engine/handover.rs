@@ -4,7 +4,7 @@
 
 use crate::{math, SAMPLE_RATE};
 
-use super::sequencer::{PendingTrigger, MAX_PENDING_TRIGGERS};
+use super::sequencer::{pick, PendingTrigger, MAX_PENDING_TRIGGERS};
 use super::SongEngine;
 
 impl SongEngine {
@@ -110,6 +110,15 @@ impl SongEngine {
             let n = &mut self.tracks[i];
             let o = &mut old.tracks[j];
             core::mem::swap(&mut n.current_step, &mut o.current_step);
+            // A track that transforms by the loop keeps counting its loops
+            // across a save, so `every 4` does not start over on an edit.
+            core::mem::swap(&mut n.loop_start, &mut o.loop_start);
+            core::mem::swap(&mut n.loop_index, &mut o.loop_index);
+            if let Some(pi) = n.play {
+                if let Some(plan) = self.plays.get(pi) {
+                    n.pattern_idx = pick(plan, n.loop_index, &mut n.rng);
+                }
+            }
             core::mem::swap(&mut n.current_notes, &mut o.current_notes);
             core::mem::swap(&mut n.current_notes_count, &mut o.current_notes_count);
             core::mem::swap(&mut n.gate_samples_remaining, &mut o.gate_samples_remaining);

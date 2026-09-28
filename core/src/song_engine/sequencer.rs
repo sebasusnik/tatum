@@ -3,7 +3,7 @@
 
 use alloc::vec::Vec;
 
-use crate::dsl::compiler::{self, CompiledStep};
+use crate::dsl::compiler::{self, CompiledStep, LoopCondition, PlayPlan};
 use crate::primitives::arp_processor::ArpEvent;
 use crate::rng::Rng;
 use crate::math;
@@ -23,6 +23,33 @@ struct StepTiming {
 
 /// The arpeggiator holds at most this many notes (chord notes x octaves).
 const MAX_ARP_NOTES: usize = 16;
+
+/// Which of a plan's patterns loop `v` plays: the alternation first, then
+/// each condition -- `every` by the loop's number, `sometimes` by a draw from
+/// the track's own random stream, `iter` by the loop's place in its cycle.
+pub(super) fn pick(plan: &PlayPlan, v: u64, rng: &mut Rng) -> usize {
+    let mut idx = (v % plan.alternatives.max(1) as u64) as usize;
+    for c in &plan.conditions {
+        let state = match *c {
+            LoopCondition::Every(n) => (v % n as u64 == n as u64 - 1) as usize,
+            LoopCondition::Chance(p) => (rng.next_f32() < p) as usize,
+            LoopCondition::Iter(n) => (v % n as u64) as usize,
+        };
+        idx = idx * c.states() + state;
+    }
+    plan.variants.get(idx).copied().unwrap_or(plan.variants[0])
+}
+
+/// A step's chance of sounding, when it has one.
+fn step_probability(step: &CompiledStep) -> Option<f32> {
+    match step {
+        CompiledStep::NoteOn { plock, .. }
+        | CompiledStep::Chord { plock, .. }
+        | CompiledStep::Subdiv { plock, .. }
+        | CompiledStep::DrumSub { plock, .. } => plock.probability,
+        _ => None,
+    }
+}
 
 /// How many delayed drum hits can be in flight at once. A nudge resolves within a
 /// fraction of a step, so this is far above anything a pattern can produce.
@@ -162,6 +189,7 @@ impl SongEngine {
             if !self.tracks[ti].active {
                 continue;
             }
+            self.advance_play(ti);
 
             let pat_idx = self.tracks[ti].pattern_idx;
             if pat_idx >= self.patterns.len() {
@@ -176,10 +204,45 @@ impl SongEngine {
                 if lane_len == 0 {
                     continue;
                 }
-                let step_idx = self.tracks[ti].current_step % lane_len;
+                let step_idx = self.tracks[ti].step_in_loop() % lane_len;
                 let inst_idx = self.trigger_instrument(ti);
                 if inst_idx < self.instruments.len() {
                     for lane in &pattern.lanes {
+                        // Hits spread across the step, each at its own velocity.
+                        if let Some(CompiledStep::DrumSub { hits, count, plock }) = lane.steps.get(step_idx).copied() {
+                            if let Some(p) = plock.probability {
+                                if self.tracks[ti].rng.next_f32() > p {
+                                    continue;
+                                }
+                            }
+                            let n = (count as usize).clamp(1, compiler::MAX_SUBDIV);
+                            let interval = self.effective_step_samples(self.global_step) / n as f32;
+                            let nudge = (lane.nudge * self.samples_per_step).max(0.0);
+                            for (k, &h) in hits.iter().enumerate().take(n) {
+                                if h <= 0.0 {
+                                    continue;
+                                }
+                                let vel = Self::humanize_vel(
+                                    h * self.tracks[ti].velocity,
+                                    self.humanize_velocity,
+                                    &mut self.tracks[ti].rng,
+                                );
+                                let at = nudge + interval * k as f32;
+                                if at < 0.5 {
+                                    self.instruments[inst_idx].note_on(lane.midi_note, vel);
+                                } else {
+                                    Self::push_trigger(
+                                        &mut self.pending_triggers,
+                                        &mut self.instruments,
+                                        at,
+                                        inst_idx,
+                                        lane.midi_note,
+                                        vel,
+                                    );
+                                }
+                            }
+                            continue;
+                        }
                         if step_idx < lane.steps.len() {
                             if let CompiledStep::DrumHit { velocity, probability, roll, .. } = lane.steps[step_idx] {
                                 // Probability gate: skip hit if random exceeds probability
@@ -235,8 +298,20 @@ impl SongEngine {
                 continue;
             }
 
-            let step_idx = self.tracks[ti].current_step % pattern.steps.len();
-            let step = pattern.steps[step_idx];
+            let step_idx = self.tracks[ti].step_in_loop() % pattern.steps.len();
+            let mut step = pattern.steps[step_idx];
+            // `A2?0.5`, or a `degrade`: a step that does not sound this time
+            // is a rest, so what it would have cut off is cut off anyway.
+            if let Some(p) = step_probability(&step) {
+                if self.tracks[ti].rng.next_f32() > p {
+                    step = CompiledStep::Rest;
+                }
+            }
+            // A sequential pattern of hits plays a split hit as its first:
+            // the spread across the step is a drum-lane thing.
+            if let CompiledStep::DrumSub { hits, plock, .. } = step {
+                step = CompiledStep::DrumHit { velocity: hits[0], probability: 1.0, roll: 1, plock };
+            }
 
             let gate = self.tracks[ti].gate;
 
@@ -311,7 +386,10 @@ impl SongEngine {
                             let inst_idx = self.trigger_instrument(ti);
                             if inst_idx < self.instruments.len() {
                                 self.instruments[inst_idx].stage_plock(plock.cutoff, plock.env_depth, plock.resonance);
-                                self.instruments[inst_idx].note_on(subs[0].midi_note, vels[0]);
+                                // A note at velocity 0 is a gap in the run.
+                                if subs[0].velocity > 0.0 {
+                                    self.instruments[inst_idx].note_on(subs[0].midi_note, vels[0]);
+                                }
                                 for k in 1..n {
                                     Self::push_pending(
                                         &mut self.pending_triggers,
@@ -332,7 +410,7 @@ impl SongEngine {
                             // The step ends holding its LAST note, so a tie or a
                             // slide after it continues from where the run landed.
                             self.tracks[ti].current_notes[0] = subs[n - 1].midi_note;
-                            self.tracks[ti].current_notes_count = 1;
+                            self.tracks[ti].current_notes_count = (subs[n - 1].velocity > 0.0) as u8;
                             let step_gate = plock.gate.unwrap_or(gate);
                             self.tracks[ti].gate_samples_remaining = if next_is_tie {
                                 self.samples_per_step * 2.0
@@ -467,6 +545,8 @@ impl SongEngine {
                                 self.tracks[ti].gate_samples_remaining = self.current_step_duration * step_gate;
                             }
                         }
+                        // Turned into a DrumHit above.
+                        CompiledStep::DrumSub { .. } => {}
                         CompiledStep::Rest => {
                             Self::release_track_notes(&mut self.tracks[ti], &mut self.instruments);
                         }
@@ -479,6 +559,28 @@ impl SongEngine {
         }
 
         self.global_step += 1;
+    }
+
+    /// At the top of a loop, choose what a track with a `play` plan plays in
+    /// it. The first step of a scene starts the count again, as the pattern
+    /// always has; a track that caught up across a swap skips whole loops.
+    fn advance_play(&mut self, ti: usize) {
+        let Some(pi) = self.tracks[ti].play else { return };
+        let Some(plan) = self.plays.get(pi) else { return };
+        let t = &mut self.tracks[ti];
+        let len = |idx: usize| self.patterns.get(idx).map_or(1, |p| p.len().max(1));
+        if t.current_step == 0 || t.current_step < t.loop_start {
+            t.loop_start = t.current_step;
+            t.loop_index = 0;
+        } else if t.current_step - t.loop_start >= len(t.pattern_idx) {
+            while t.current_step - t.loop_start >= len(t.pattern_idx) {
+                t.loop_start += len(t.pattern_idx);
+                t.loop_index += 1;
+            }
+        } else {
+            return;
+        }
+        t.pattern_idx = pick(plan, t.loop_index, &mut t.rng);
     }
 
     /// Step handler for arp tracks: update the held notes, (re)start the arp,
@@ -525,6 +627,10 @@ impl SongEngine {
             CompiledStep::DrumHit { velocity, plock, .. } => {
                 notes[0] = 36;
                 (1, velocity, plock.gate)
+            }
+            CompiledStep::DrumSub { hits, plock, .. } => {
+                notes[0] = 36;
+                (1, hits[0], plock.gate)
             }
             CompiledStep::Rest => {
                 Self::release_track_notes(track, instruments);

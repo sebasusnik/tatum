@@ -215,6 +215,8 @@ pub struct PLock {
     pub env_depth: Option<f32>,
     pub resonance: Option<f32>,
     pub gate: Option<f32>,
+    /// `A2?0.5`: the chance the step sounds. `None` is always.
+    pub probability: Option<f32>,
 }
 
 /// A single step in a pattern.
@@ -227,6 +229,9 @@ pub enum Step {
     /// how a pattern gets finer than a sixteenth without changing the clock.
     /// `A4*3` parses to the same thing with the note repeated.
     Subdiv(Vec<NoteStep>),
+    /// `<x o - X>` on a drum lane: hits spread evenly inside one step, each
+    /// with its own velocity; 0 is a rest.
+    DrumSub(Vec<f32>),
     Rest,
     Tie,
 }
@@ -267,7 +272,11 @@ pub struct DrumStep {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TrackDef {
     pub name: String,
-    pub play: String,             // pattern name
+    pub play: String, // pattern name
+    /// `play a, b, c`: the patterns after the first, one loop each in turn.
+    pub play_also: Vec<String>,
+    /// `play a every 4 rev shift 2`: what is done to the pattern, in order.
+    pub transforms: Vec<Transform>,
     pub using_instrument: String, // instrument name
     pub velocity: Option<f32>,
     pub level: Option<f32>,               // track output level 0.0-1.0
@@ -279,6 +288,35 @@ pub struct TrackDef {
     pub sidechain: Option<f32>,           // per-track sidechain amount (overrides global)
     pub sidechain_source: Option<String>, // what ducks it; None = the global source
     pub arp: Option<ArpDef>,              // `arp up rate=16 gate=0.6 octaves=2`, `arp off`
+}
+
+/// A change made to a pattern on the `play` line. Each works on the
+/// pattern's events -- a note and its ties, a chord, a hit -- so a tied note
+/// is never cut in two. See `docs/DSL.md`, "Transforming a pattern".
+#[derive(Debug, Clone, PartialEq)]
+pub enum Transform {
+    /// The events in reverse order.
+    Rev,
+    /// The pattern N times in its own length (2..4).
+    Fast(u8),
+    /// Every step N steps long; the pattern N times longer.
+    Slow(u8),
+    /// Rotated N steps later; what falls off the end comes in at the start.
+    Shift(i32),
+    /// Up N degrees of the song's scale, or N semitones with `st`.
+    Up { amount: i32, semitones: bool },
+    /// Up N octaves.
+    Octave(i32),
+    /// Each event has this chance of not sounding.
+    Degrade(f32),
+    /// Each event played N times inside its step.
+    Ply(u8),
+    /// Loop k of N starts k/N of the way in.
+    Iter(u8),
+    /// The transform on the last of every N loops.
+    Every(u32, alloc::boxed::Box<Transform>),
+    /// The transform on a loop with this chance, decided loop by loop.
+    Sometimes(f32, alloc::boxed::Box<Transform>),
 }
 
 /// Arpeggiator settings on a track. The pattern supplies the held notes

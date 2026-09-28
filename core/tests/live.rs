@@ -431,3 +431,31 @@ fn a_blend_retires_the_old_engine_when_it_ends() {
     assert_eq!(player.swaps(), 1);
     assert_eq!(retired, 1, "the old engine comes back for dropping once the blend is over");
 }
+
+/// A `play` line that transforms by the loop keeps counting its loops across
+/// a save: `every 4 rev` still reverses the fourth bar, not the fourth after
+/// the edit. An edit that changes nothing audible has to be bit-identical.
+#[test]
+fn a_save_does_not_restart_the_loop_count() {
+    let song = LIVE.replace("play line using low", "play line every 4 rev using low");
+    let reference = render_straight(&song, 9);
+    let edited = with_unused_pattern(&song);
+    let (l, r, swaps) = render_live(&song, &[(BAR * 5 / 2, &edited)], 9);
+    assert!(!swaps.is_empty(), "the edit never landed");
+    assert_identical(&reference, &(l, r), "every 4 rev across a save");
+}
+
+/// Loops of different lengths cannot be counted back out of the step: the
+/// count itself has to cross the save. One bar, then two, alternating.
+#[test]
+fn a_save_keeps_the_place_in_loops_of_different_lengths() {
+    let song = format!(
+        "{}\npattern long {{ 1.5 - - - 1.3 - - - 1.1 - - - - - - -  1.5 - 1.3 - 1.1 - - - - - - - - - - - }}\n",
+        LIVE.replace("play line using low", "play line, long using low")
+    );
+    let reference = render_straight(&song, 11);
+    let edited = with_unused_pattern(&song);
+    let (l, r, swaps) = render_live(&song, &[(BAR * 9 / 2, &edited)], 11);
+    assert!(!swaps.is_empty(), "the edit never landed");
+    assert_identical(&reference, &(l, r), "alternating loops across a save");
+}
