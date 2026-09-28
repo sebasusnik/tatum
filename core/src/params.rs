@@ -513,7 +513,7 @@ pub const BASS_PARAMS: &[ParamSpec] = &[
         0.3,
         "Ladder resonance, self-oscillates near 1.0"
     ),
-    spec!("glide", ParamId::Bass(BassParam::Glide), Range::Unit, 0.058, "Portamento rate between notes (0 = instant)"),
+    spec!("glide", ParamId::Bass(BassParam::Glide), Range::Unit, 0.058, "Portamento speed on a slide. Higher is faster: 0 is the slowest, about 230 ms to get most of the way, 0.01 about 40 ms, the default about 8 ms, and from 0.2 up it is all but instant"),
     spec!("attack", ParamId::Bass(BassParam::Attack), Range::Unit, 0.211743, ENV_TIME, ENV_TIME_DOC),
     spec!("decay", ParamId::Bass(BassParam::Decay), Range::Unit, 0.697064, ENV_TIME, ENV_TIME_DOC),
     spec!("sustain", ParamId::Bass(BassParam::Sustain), Range::Unit, 0.8, "Amp envelope sustain level"),

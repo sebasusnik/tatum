@@ -261,6 +261,11 @@ impl SongEngine {
                     let next_step_idx = (step_idx + 1) % pattern.steps.len();
                     let next_continues = match pattern.steps[next_step_idx] {
                         CompiledStep::Tie => true,
+                        // A slide glides from the note this tie is holding. Let
+                        // the track gate go here and the note is released a
+                        // moment before the slide arrives, which then strikes
+                        // it as a new note: a retrigger, and no glide at all.
+                        CompiledStep::NoteOn { slide: true, .. } => true,
                         CompiledStep::NoteOn { midi_note, .. } => {
                             self.tracks[ti].current_notes_count == 1 && self.tracks[ti].current_notes[0] == midi_note
                         }

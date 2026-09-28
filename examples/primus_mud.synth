@@ -1,529 +1,339 @@
-# Primus — Les Claypool slap-funk madness
-# Percussive slap bass as lead, angular dissonant FM guitar, busy syncopated drums
-tempo 108
+# Primus Mud -- D, 96 BPM.
+#
+# The bass is the band. It plays the riff, the groove and the lead: a heavy
+# lurching line with octave pops, a slap section where the thumb, the muted
+# ghost notes and the popped octaves are three voices of one instrument, and
+# a tapped figure up the neck. It goes through an envelope filter, the Mu-Tron
+# move, so every note says "wow" as hard as it is played.
+#
+# The drums are dry and busy on the toms. The guitar is not a part: it is
+# three squeals off the whammy bar, dissonant, and then it is gone again.
+
+tempo 96
 meter 4/4
-scale E minor
-sidechain 0.0
-swing 0.54
-humanize 0.20 timing 0.12
-# Full compensation (the default) made the 2-bar interlude the loudest thing in the
-# track and the 6-track verse the quietest. 0.35 keeps a little of it, so a thin
-# scene is not a hole, without flattening the arrangement.
+scale D minor
+swing 0.52
+humanize 0.12
 
-groove primus_pocket {
-    snare nudge 0.006
-    kick nudge -0.008
-    hat swing 0.56 nudge 0.005
-}
+reverb size=0.28 damp=0.6 predelay=8
+delay sync=dotted_eighth feedback=0.35 filter=0.4
 
-# ────────────────────────────────────────────────
-# MODULES
-# ────────────────────────────────────────────────
+# ── Modules ─────────────────────────────────────
 
-# Slap bass — aggressive filter envelope, high resonance, percussive attack
-# The Claypool tone: bright slap transient, growly midrange, snappy release
-# The module's own filter envelope is fixed in the engine at 5 ms attack / 300 ms
-# decay to zero, whatever `decay` says, so the sweep always ends at the bare `cutoff`
-# and the note dies dark. Brightness has to come from the base cutoff and the autowah
-# on the track, not from this envelope.
-module bass slap {
-    cutoff 420hz       # was 0.10 = 40 Hz: the filter sat below the fundamental
-    cutoff_env 3256.73hz
-    resonance 30%      # was 0.72; the ladder peak was parked in the mud
-    glide 0.02
-    keytrack 0.6
+# The bass: a saw and a square at the same pitch, hollow and growling, bright
+# on the attack and quick to close, so each note is a pluck. Nothing under
+# the fundamental: the tone is in the mids, where it talks. Velocity opens the
+# filter: a thumb at 1.0 barks, a ghost at 0.3 is a thud.
+module bass claypool {
     osc1_wave saw
-    osc2_pitch 0.24st
+    osc2_wave square
+    osc2_pitch 0st
+    osc3_pitch 0.06st
+    cutoff 380hz
+    cutoff_env 2.8khz
+    resonance 0.32
+    vel_env 0.8
+    glide 0.01
     attack 1ms
-    decay 2.48957ms
+    decay 170ms
     sustain 0.45
-    release 1.57784ms
-    lfo_rate 0.1hz
-    lfo_depth 0.0
+    release 60ms
+    keytrack 0.3
 }
 
-# Fingerstyle bass — rounder, deeper, for sustained lines
-module bass finger {
-    cutoff 150hz       # was 0.18 = 71 Hz
-    cutoff_env 296.454hz
-    resonance 30%
-    glide 0.08
-    keytrack 0.4
-    osc1_wave saw
-    osc2_pitch -0st
-    attack 1.03874ms
-    decay 6.6874ms
-    sustain 0.65
-    release 2.13847ms
-}
-
-# Angular guitar — FM with bite, Larry LaLonde dissonance
-# High mod index, feedback, half-sine waveform for harsh harmonics
-module fm guitar {
-    algorithm additive
-    mod_index 0.72
-    feedback 0.42
-    waveform half_sine
-    op0_ratio 1.5075x
-    op1_ratio 2.0035x
-    op0_envelope 0.002 0.15 0.25 0.10
-    op1_envelope 0.001 0.10 0.40 0.08
-    op1_feedback 0.30
-    chorus_mix 0.10
-}
-
-# Clean guitar stab — shorter, cleaner FM for rhythmic accents
-module fm clean {
-    algorithm dual_pairs
-    mod_index 0.40
-    feedback 0.15
-    waveform sine
-    op0_ratio 1.5075x
-    op1_ratio 2.515x
-    op0_envelope 0.001 0.08 0.0 0.05
-    op1_envelope 0.001 0.05 0.0 0.03
-    chorus_mix 0.18
-}
-
-# Noise texture — weird atonal scraping, Primus interlude vibes
-module fm scrape {
-    algorithm pair_plus_two
-    mod_index 0.90
-    feedback 0.60
-    waveform abs_sine
-    op0_ratio 7.01x
-    op1_ratio 2.98x
-    op2_ratio 4.995x
-    op3_ratio 2.05x
-    op0_envelope 0.3 0.5 0.30 0.5
-    op1_envelope 0.1 0.3 0.50 0.3
-    op2_envelope 0.2 0.4 0.40 0.4
-    op3_envelope 0.05 0.2 0.35 0.2
-    op0_feedback 0.35
-    op2_feedback 0.45
-    chorus_mix 0.40
-    lfo_rate 1.294hz
-    lfo_depth 0.12
-    lfo_target mod_index
-    lfo_waveform saw
-}
-
-# Sub layer — pure low end underneath the slap
-module bass sub {
-    cutoff 100hz       # was 0.05 = 28 Hz, below the notes it was filtering
-    cutoff_env 36.4113hz
-    resonance 0.15
-    osc1_wave saw
-    osc2_pitch -0st
-    attack 1.01532ms
-    decay 4.57305ms
-    sustain 0.80
-    release 1.46235ms
-}
-
-# Drum kit — tight, punchy, busy Herb Alexander style
+# Dry kit: a round kick with little click, a snare that is mostly drum, hats
+# that are closed and short, and the toms up front.
 module beats kit {
     kick_level 1.0
-    kick_click 0.40
-    kick_decay 0.18
-    kick_pitch 0.98x
-    kick_drive 0.65
-
-    snare_level 0.75
-    snare_decay 0.22
-    snare_pitch 1.025x
-    snare_drive 0.70
-    snare_snap 0.40
-    snare_pan 0.12
-
-    hihat_level 0.40
-    hihat_pitch 1.07x
-    hihat_pan 0.45
-    hihat_decay 0.25
-
-    clap_level 0.55
-    clap_pan -0.40
+    kick_decay 0.28
+    kick_pitch 0.95x
+    kick_click 0.35
+    kick_drive 0.25
+    snare_level 0.9
+    snare_decay 0.32
+    snare_pitch 1.0x
+    snare_snap 0.5
+    snare_drive 0.3
+    snare_pan 0.05
+    hihat_level 0.5
+    hihat_decay 0.3
+    hihat_pitch 1.05x
+    hihat_pan 0.3
+    tom_pan -0.2
+    crash_pan -0.35
 }
 
-# ────────────────────────────────────────────────
-# PATTERNS
-# ────────────────────────────────────────────────
-
-# ── Slap bass — percussive, syncopated, funky ──
-
-# Main slap riff — bouncy E minor funk
-pattern slap_main {
-    E1:0.95  -        -   E1:0.55
-    -        G1:0.80  ..  -
-    A1:0.90  -        E1:0.50  -
-    -        B1:0.75  -   E1:0.65
+# The guitar: a square and a saw a hair apart, screaming, with the slowest
+# glide there is, so a slide is a whammy dive.
+module bass squeal {
+    osc1_wave square
+    osc2_wave saw
+    osc2_pitch 0.3st
+    osc3_pitch 7st
+    cutoff 2.2khz
+    cutoff_env 1.5khz
+    resonance 0.45
+    glide 0
+    attack 5ms
+    decay 900ms
+    sustain 0.8
+    release 400ms
+    vibrato_rate 6hz
+    vibrato_depth 0.25
 }
 
-# Variation — more ghost notes, slides
-pattern slap_groove {
-    E1:0.90  E1:0.35  -   G1:0.70
-    -        A1:0.85  ..  E1:0.40
-    B1:0.80  -        -   A1:0.60
-    G1:0.70  -        E1:0.90  -
+# ── Bass ────────────────────────────────────────
+
+# The riff. Two bars that lurch: the root, a pop an octave up, a step down,
+# then a chromatic crawl that never lands where the ear expects it.
+pattern mud {
+    D2:1.0 - D2:0.5 D3:0.9   - C3:0.8 - D2:0.95   ~Eb2:0.85 .. D2:0.6 -   A2:0.9 - Ab2:0.85 G2:0.8
+    D2:1.0 - D2:0.5 D3:0.9   - C3:0.8 - D2:0.95   F2:0.9 .. ~E2 ..   Eb2:0.85 - D2:0.7 -
 }
 
-# Choppy percussive muted slaps
-pattern slap_chop {
-    E1:0.85  -   E1:0.40 -
-    E1:0.80  -   E1:0.35 -
-    E1:0.85  -   G1:0.45 -
-    A1:0.75  -   E1:0.40 -
+# The same riff with the last beat turned into a fill, for the fourth bar of
+# a phrase.
+pattern mud_turn {
+    D2:1.0 - D2:0.5 D3:0.9   - C3:0.8 - D2:0.95   ~Eb2:0.85 .. D2:0.6 -   A2:0.9 - Ab2:0.85 G2:0.8
+    D2:1.0 - D2:0.5 D3:0.9   - C3:0.8 - D2:0.95   F2:0.9 F2:0.4(gate=0.2) Ab2:0.9 A2:0.95   C3:0.9 D3:1.0 ~Eb3 ..
 }
 
-# High register slap — popping harmonics
-pattern slap_pop {
-    E2:0.85  -        B1:0.60  -
-    -        G2:0.75  -        E2:0.50
-    A2:0.80  -        -        G2:0.55
-    E2:0.70  -        B1:0.80  -
+# Slap: thumb on the root, muted ghosts between (short gate, low velocity),
+# the octave popped. Sixteenths, and the ghosts are what makes it funk.
+pattern slap {
+    D2:1.0 D2:0.3(gate=0.2) D3:0.95 D2:0.3(gate=0.2)   D2:0.85 D2:0.3(gate=0.2) C3:0.9 D2:0.3(gate=0.2)   F2:0.95 D2:0.3(gate=0.2) G2:0.9 D2:0.3(gate=0.2)   Ab2:0.95 A2:0.85 D3:1.0 D2:0.3(gate=0.2)
+    D2:1.0 D2:0.3(gate=0.2) D3:0.95 D2:0.3(gate=0.2)   D2:0.85 D2:0.3(gate=0.2) C3:0.9 D2:0.3(gate=0.2)   Bb1:0.95 Bb1:0.3(gate=0.2) Bb2:0.9 A1:0.85   A2:0.95 A1:0.3(gate=0.2) ~Ab2 G2:0.8
 }
 
-# Walking line — fingerstyle, more legato
-pattern finger_walk {
-    E1:0.75  ..  G1:0.65  ..
-    A1:0.70  ..  B1:0.60  ..
-    C2:0.70  ..  B1:0.65  ..
-    A1:0.70  ..  G1:0.60  ..
+# Tapping up the neck: a D minor shape with a flat fifth in it, in triplet
+# runs inside the sixteenths so it rolls rather than marches.
+pattern tap {
+    <D3:0.8 A3:0.7 D4:0.9> -  <F3:0.7 A3:0.7 D4:0.8> -   <D3:0.8 Ab3:0.75 D4:0.9> -  <F3:0.7 Ab3:0.7 C4:0.8> -   <D3:0.8 A3:0.7 D4:0.9> -  <F3:0.7 A3:0.7 D4:0.8> -   <C3:0.8 G3:0.7 C4:0.9> -  <Eb3:0.75 G3:0.7 Bb3:0.8> -
+    <D3:0.8 A3:0.7 D4:0.9> -  <F3:0.7 A3:0.7 D4:0.8> -   <D3:0.8 Ab3:0.75 D4:0.9> -  <F3:0.7 Ab3:0.7 C4:0.8> -   <Bb2:0.8 F3:0.7 Bb3:0.9> -  <A2:0.8 E3:0.7 A3:0.9> -   <Ab2:0.85 Eb3:0.8 Ab3:0.9> -  D2:1.0 ..
 }
 
-# Sustained low E drone
-pattern bass_drone {
-    E1:0.70 .. .. ..
-    ..      .. .. ..
-    ..      .. .. ..
-    ..      .. .. ..
+# The stomp: half time, the root held and dragged down a semitone at a time.
+pattern stomp {
+    D2:1.0 .. .. ..   - - D2:0.85 ..   ~Db2:0.9 .. .. ..   C2:1.0 .. - -
+    D2:1.0 .. .. ..   - - D2:0.85 ..   Eb2:0.95 .. ~D2 ..   ~Db2 .. ~C2 ..
 }
 
-# Sub pattern — follows slap root notes
-pattern sub_follow {
-    E1:0.75  ..  -  E1:0.50
-    -        G1:0.60  ..  -
-    A1:0.70  ..  E1:0.45  -
-    -        B1:0.55  -  E1:0.60
+# The last bar: three hits and out.
+pattern ending {
+    D2:1.0 - - -   D2:1.0 - - -   D1:1.0 ..*7
 }
 
-pattern sub_hold {
-    E1:0.65 .. .. ..
-    ..      .. .. ..
-    ..      .. .. ..
-    ..      .. .. ..
+# ── Guitar ──────────────────────────────────────
+
+# Four bars, one gesture: a high tritone, then a dive off the bar.
+pattern squeal_dive {
+    Ab5:0.9 ..*7  ~A5 ..*3  ~G#5 ..*3
+    ..*8  ~D5 ..*3  ~A4 ..*3
+    ..*6  - -  -*8
+    -*16
 }
 
-# ── Angular guitar — dissonant, stabby ──
-
-# Main riff — clashing intervals, angular
-pattern guitar_angular {
-    E4:0.70   -  -  Bb4:0.55
-    -         -  B3:0.65  -
-    -         -  -  -
-    C4:0.60   -  -  -
+# The stomp's answer: two dissonant screams a semitone apart, eight bars.
+pattern squeal_stomp {
+    -*8  Eb5:0.9 ..*5 ~D5 ..
+    ..*8  - -  -*6
+    -*16  -*16
+    -*8  A5:0.85 ..*5 ~Ab5 ..
+    ..*4 ~Eb5 ..*3  - -  -*6
+    -*16  -*16
 }
 
-# Rhythmic muted chops
-pattern guitar_chop {
-    [E3 B3]:0.65  -  [E3 B3]:0.40  -
-    -             -  [F3 C4]:0.55  -
-    [E3 B3]:0.60  -  -             -
-    -             -  [E3 Bb3]:0.50  -
+# ── Drums ───────────────────────────────────────
+
+# The verse beat: the kick follows the bass's accents, the snare on two and
+# four with a ghost before each, the toms answering the riff's crawl.
+pattern verse {
+    kick:  X - - -  - - - x   - - x -  - x - -   X - - -  - - - x   - - X -  - - - -
+    snare: - - - -  X - - o   - - - -  X - o -   - - - -  X - - o   - - - -  X - - o
+    hat:   x - x -  x - x -   x - x -  x - x -   x - x -  x - x -   x - x -  x - x -
+    tom:   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -
+    tom2:  - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -
+    tom3:  - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -
+    crash: - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -
 }
 
-# Dissonant sustained chord — LaLonde weirdness
-pattern guitar_dissonant {
-    [E3 Bb3 D4 Ab4]:0.45 .. .. ..
-    ..                    .. .. ..
-    ..                    .. .. ..
-    ..                    .. .. ..
+# The same with the second bar's back half rolled round the toms.
+pattern verse_fill {
+    kick:  X - - -  - - - x   - - x -  - x - -   X - - -  - - - x   - - - -  - - - -
+    snare: - - - -  X - - o   - - - -  X - o -   - - - -  X - - o   - - - -  - - - -
+    hat:   x - x -  x - x -   x - x -  x - x -   x - x -  x - x -   - - - -  - - - -
+    tom:   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   X - x -  - - - -
+    tom2:  - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - x  X - x -
+    tom3:  - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - x
+    crash: - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -
 }
 
-# Clean stabs — short, rhythmic accents
-pattern clean_stab {
-    [E4 B4]:0.55   -  -  -
-    -              -  -  [G4 D5]:0.45
-    -              -  -  -
-    [E4 B4]:0.50   -  -  -
+# Under the slap: a tight funk beat, sixteenth hats with the accents moving.
+pattern funk {
+    kick:  X - - -  - - x -   - - X -  - - - -   X - - -  - - x -   - x - -  - - - -
+    snare: - - - -  X - - o   - o - -  X - - o   - - - -  X - - o   - o - -  X - o -
+    hat:   x o x o  x o x o   x o x o  x o x o   x o x o  x o x o   x o x o  x o x o
+    tom:   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -
+    tom2:  - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -
+    tom3:  - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -
+    crash: - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -
 }
 
-pattern clean_rhythmic {
-    E4:0.60  -  E4:0.40  -
-    -        -  G4:0.50  -
-    E4:0.55  -  -        -
-    B3:0.50  -  E4:0.55  -
+# Under the tapping: the toms carry it, the kick and snare step back.
+pattern toms {
+    kick:  X - - -  - - - -   - - - -  - - - -   X - - -  - - - -   - - - -  - - - -
+    snare: - - - -  - - - -   X - - -  - - - -   - - - -  - - - -   X - - -  - - o o
+    hat:   - - x -  - - x -   - - x -  - - x -   - - x -  - - x -   - - x -  - - x -
+    tom:   - - - x  - - - -   - - - -  - x - -   - - - x  - - - -   - - - -  - x - -
+    tom2:  - - - -  - x - -   - - - x  - - - -   - - - -  - x - -   - - - x  - - - -
+    tom3:  - - - -  - - - x   - - - -  - - - x   - - - -  - - - x   - - - -  - - - -
+    crash: - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -
 }
 
-# Noise/scrape texture
-pattern scrape_texture {
-    [E2 Bb2]:0.30 .. .. ..
-    ..            .. .. ..
-    ..            .. .. ..
-    ..            .. .. ..
+# Half time for the stomp: the kick doubling the bass, one crash a phrase.
+pattern heavy {
+    kick:  X - - -  - - X -   - - - -  X - - -   X - - -  - - X -   - - - -  X - x -
+    snare: - - - -  - - - -   X - - -  - - - -   - - - -  - - - -   X - - -  - - - -
+    hat:   x - - -  x - - -   x - - -  x - - -   x - - -  x - - -   x - - -  x - - -
+    tom:   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -
+    tom2:  - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -
+    tom3:  - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -
+    crash: - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -
 }
 
-pattern scrape_swell {
-    [E2 B2 F3]:0.25 .. .. ..
-    ..               .. .. ..
-    ..               .. .. ..
-    ..               .. .. ..
+# The intro's drums: toms alone, answering the bass.
+pattern tom_intro {
+    tom3:  X - - -  - - - -   - - - -  - - - -   X - - -  - - - -   - - x -  x - x -
+    tom2:  - - - -  - - x -   - - - -  - - - -   - - - -  - - x -   - - - -  - - - -
+    hat:   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -   - - - -  - - - -
 }
 
-# ── Drums — busy, syncopated, Herb Alexander ──
-
-# Intro — sparse but grooving
-pattern drums_sparse {
-    kick:  X  -  -  -  -  -  x:0.6  -  X  -  -  -  -  -  -  -
-    hat:   x  -  x  -  x  -  x     -  x  -  x  -  x  -  x  -
-    snare: -  -  -  -  X  -  -     -  -  -  -  -  X  -  -  -
+pattern hits {
+    kick:  X - - -  X - - -   X - - -  - - - -
+    snare: X - - -  X - - -   X - - -  - - - -
+    crash: X - - -  X - - -   X - - -  - - - -
 }
 
-# Main groove — syncopated kick, ghost snares, open hats
-pattern drums_groove {
-    kick:    X  -  -  x:0.5  -  -  x:0.7  -  X  -  x:0.4  -  -  -  x:0.6  -
-    snare:   -  -  g?0.30  -  X  -  g?0.35  -  -  g?0.25  -  -  X  -  g?0.30  o
-    hat:     x  x:0.5  x  x:0.6  -  x:0.7  x  x:0.5  x  x:0.5  x  x:0.6  -  x:0.7  x  x:0.5
-    openhat: -  -  -  -  -  -  x  -  -  -  -  -  -  -  x  -
+# One crash where the stomp lands, and nowhere else in it.
+pattern crash_once {
+    crash: X -*15  -*16  -*16  -*16  -*16  -*16  -*16  -*16
 }
 
-# Busy funk — double kicks, lots of ghost notes
-pattern drums_busy {
-    kick:    X  -  x:0.5  -  -  x:0.6  X  -  X  -  x:0.4  -  -  x:0.7  -  x:0.5
-    snare:   -  g?0.25  -  g?0.30  X  -  g?0.35  o  -  g?0.25  -  g?0.35  X  -  o  g?0.40
-    hat:     x  x:0.6  x:0.5  x  x:0.6  x:0.5  x  x:0.6  x  x:0.6  x:0.5  x  x:0.6  x:0.5  x  x:0.6
-    openhat: -  -  -  -  -  -  -  x  -  -  -  -  -  -  -  x
-    clap:    -  -  -  -  -  -  -  -  -  -  -  -  X  -  -  -
-}
+pattern rest { -*16 }
 
-# Half-time heavy
-pattern drums_halftime {
-    kick:  X  -  -  -  -  -  -  -  X  -  -  -  -  -  x:0.6  -
-    snare: -  -  -  -  -  -  -  -  -  -  -  -  X  -  -  -
-    hat:   x  x  x  x  x  x  x  x  x  x  x  x  x  x  x  x
-}
+# ── Tracks ──────────────────────────────────────
 
-# Fill — snare build
-pattern drums_fill {
-    kick:  X  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
-    snare: -  -  x  -  x  -  x*2  x  X  x*2  X  x*2  X  X*2  X*2  X*3
-    hat:   x  x  -  x  -  x  -   -  -  -    -  -    -  -    -    -
+track bass {
+    play rest
+    using claypool
+    level 0.8
+    gate 0.9
+    sidechain 0
+    reverb_send 0.04
+    out > highpass(40hz, 0.05)
+        > autowah(0.005, base=250hz, range=1600hz, peak=0.65, attack=3, release=140, lowpass)
+        > saturate(0.9) > eq(low=1.0, mid=2.5, high=-1.0) > master
 }
-
-# Breakdown — ride cymbal, minimal
-pattern drums_breakdown {
-    kick:    x:0.5  -  -  -  -  -  -  -  x:0.5  -  -  -  -  -  -  -
-    hat:     -      x  x  x  x  x  x  x  -      x  x  x  x  x  x  x
-}
-
-pattern silence {
-    - - - -
-    - - - -
-    - - - -
-    - - - -
-}
-
-# ────────────────────────────────────────────────
-# TRACKS
-# ────────────────────────────────────────────────
 
 track drums {
-    play silence
+    play rest
     using kit
-    velocity 1.0
-    level 0.68
-    out > saturate(0.10) > eq(low=0.5, mid=2.0, high=2.2) > compressor(-10, ratio=3, attack=8, release=40, makeup=3db) > master
+    level 1.0
+    reverb_send 0.12
+    sidechain 0
+    out > compressor(-12, ratio=3, attack=8, release=70, makeup=2db) > master
 }
 
-track slap {
-    play silence
-    using slap
-    velocity 1.0
-    level 0.52
-    gate 0.75
-    delay_send 0.05
-    # The snap of a slap bass lives at 2-3 kHz. saturate(0.30) is drive 0.3 on a 0..10
-    # scale, so it was doing almost nothing but costing crest; the autowah is what
-    # actually opens the top, and cutting 1 kHz keeps the extra brightness from
-    # reading as honk. Measured against the old chain: +6.7 dB at 2.5 kHz,
-    # -4.4 dB at 640 Hz, crest 11.8 -> 9.6.
-    out > autowah(0.9, base=450hz, range=4200hz, peak=0.35, attack=2, release=90) > eq(low=-1.5, mid=-1.0, high=3.0) > compressor(-8, ratio=3, attack=5, release=30, makeup=2db) > master
-}
-
-track finger {
-    play silence
-    using finger
-    velocity 1.0
-    level 0.38
-    gate 0.90
-    out > saturate(0.12) > lowpass(1260) > master
-}
-
-track sub {
-    play silence
-    using sub
-    velocity 1.0
-    level 0.20
-    sidechain 0.15
-    gate 0.85
-    out > master
+track crash {
+    play rest
+    using kit
+    level 0.45
+    reverb_send 0.15
+    sidechain 0
+    out > highpass(1.5khz, 0.05) > lowpass(9khz, 0.05) > master
 }
 
 track guitar {
-    play silence
-    using guitar
-    velocity 1.0
-    pan -0.62
-    level 0.28
-    gate 0.35
-    delay_send 0.20
-    reverb_send 0.12
-    out > saturate(0.30) > master
-}
-
-track clean {
-    play silence
-    using clean
-    velocity 1.0
-    pan 0.58
-    level 0.22
-    gate 0.12
-    delay_send 0.30
+    play rest
+    using squeal
+    level 0.25
+    pan 0.4
+    gate 0.95
+    delay_send 0.3
     reverb_send 0.25
-    out > chorus(0.15) > master
+    sidechain 0
+    out > saturate(2.5) > autowah(0.3, base=600hz, range=2500hz, peak=0.7, bandpass, wet=0.6)
+        > highpass(300hz, 0.05) > lowpass(6khz, 0.05) > master
 }
 
-track scrape {
-    play silence
-    using scrape
-    velocity 1.0
-    level 0.32
-    reverb_send 0.40
-    delay_send 0.20
-    out > highpass(180hz, 0.02) > autopan(0.55, bars=6) > master
-}
-
-# ────────────────────────────────────────────────
-# MASTER
-# ────────────────────────────────────────────────
-
-# gain(0.793) at the head of the master: what the engine used to take off this
-# song's fullest scene when it scaled every scene by 1/sqrt(its tracks). The
-# master chain is fed as it was; scenes with fewer tracks now play as written.
 master {
-    in > gain(0.793) > eq(low=-1.0, mid=2.0, high=1.5)
-       > compressor(-9, ratio=2.5, attack=12, release=90, makeup=5db)
+    in > compressor(-6, ratio=2, attack=25, release=120, makeup=1db)
+       > eq(low=0.5, mid=0, high=0.5)
        > out
 }
 
-# ────────────────────────────────────────────────
-# SCENES
-# ────────────────────────────────────────────────
+# ── Scenes ──────────────────────────────────────
 
-# INTRO: bass solo — just the slap, sparse drums
-scene intro {
-    track slap   { play slap_chop     using slap }
-    track drums  { play drums_sparse  using kit }
-    track sub    { play sub_hold      using sub }
+scene intro_bass {
+    track bass { play mud using claypool }
 }
 
-# BUILD: full groove enters, guitar hints
-scene build {
-    track slap    { play slap_main     using slap }
-    track drums   { play drums_groove  using kit }
-    track sub     { play sub_follow    using sub }
-    track guitar  { play guitar_angular using guitar }
+scene intro_toms {
+    track bass  { play mud using claypool }
+    track drums { play tom_intro using kit }
 }
 
-# FILL
-scene fill {
-    track drums { play drums_fill using kit }
-    track slap  { play slap_chop  using slap }
+scene verse {
+    track bass  { play mud using claypool }
+    track drums { play verse using kit }
 }
 
-# VERSE A: full band — slap lead, angular guitar, busy drums
-scene verse_a {
-    track slap    { play slap_main      using slap }
-    track drums   { play drums_busy     using kit }
-    track sub     { play sub_follow     using sub }
-    track guitar  { play guitar_chop    using guitar }
-    track clean   { play clean_stab     using clean }
+scene verse_turn {
+    track bass  { play mud_turn using claypool }
+    track drums { play verse_fill using kit }
 }
 
-# VERSE A2: variation — different bass line, dissonant guitar
-scene verse_a2 {
-    track slap    { play slap_groove    using slap }
-    track drums   { play drums_busy     using kit }
-    track sub     { play sub_follow     using sub }
-    track guitar  { play guitar_angular using guitar }
-    track clean   { play clean_rhythmic using clean }
+scene slap {
+    track bass  { play slap using claypool }
+    track drums { play funk using kit }
 }
 
-# BREAKDOWN: halftime, scrape texture, finger bass
-scene breakdown {
-    auto guitar mod_index 0.55 > 0.80 > 0.60
-    track finger  { play finger_walk      using finger level 0.30 }
-    track drums   { play drums_breakdown  using kit }
-    track scrape  { play scrape_texture   using scrape }
-    track guitar  { play guitar_dissonant using guitar level 0.26 }
-    track sub     { play sub_hold         using sub }
+scene stomp {
+    track bass   { play stomp using claypool }
+    track drums  { play heavy using kit }
+    track crash  { play crash_once using kit }
+    track guitar { play squeal_stomp using squeal pan 0.4 }
 }
 
-# INTERLUDE: weird noise, sparse
-scene interlude {
-    auto scrape mod_index 0.80 > 0.95 > 0.75
-    track scrape  { play scrape_swell    using scrape }
-    track drums   { play drums_halftime  using kit level 0.60 }
-    track slap    { play bass_drone      using finger level 0.24 }
+scene tapping {
+    track bass  { play tap using claypool velocity 0.7 }
+    track drums { play toms using kit }
 }
 
-# FILL 2
-scene fill2 {
-    track drums { play drums_fill  using kit }
-    track slap  { play slap_pop    using slap }
+# The one place the guitar gets the room: over the riff, a dive.
+scene dive {
+    track bass   { play mud using claypool }
+    track drums  { play verse using kit }
+    track guitar { play squeal_dive using squeal pan 0.4 }
 }
 
-# VERSE B: peak energy — popping bass, all elements
-scene verse_b {
-    track slap    { play slap_pop       using slap }
-    track drums   { play drums_busy     using kit }
-    track sub     { play sub_follow     using sub }
-    track guitar  { play guitar_chop    using guitar }
-    track clean   { play clean_rhythmic using clean }
-    track scrape  { play scrape_texture using scrape }
+scene out {
+    track bass  { play ending using claypool }
+    track drums { play hits using kit }
 }
-
-# VERSE B2: main slap returns, full chaos
-scene verse_b2 {
-    track slap    { play slap_groove    using slap }
-    track drums   { play drums_groove   using kit }
-    track sub     { play sub_follow     using sub }
-    track guitar  { play guitar_angular using guitar }
-    track clean   { play clean_stab     using clean }
-}
-
-# OUTRO: slowing down, bass solo fade
-scene outro {
-    track slap   { play slap_main     using slap }
-    track drums  { play drums_sparse  using kit }
-    track sub    { play sub_hold      using sub }
-    track scrape { play scrape_swell  using scrape }
-}
-
-# ────────────────────────────────────────────────
-# ARRANGEMENT (40 bars)
-# ────────────────────────────────────────────────
 
 arrange {
-    intro x4
-    build x4
-    fill x1
-    verse_a x4
-    verse_a2 x4
-    breakdown x4
-    interlude x2
-    fill2 x1
-    verse_b x4
-    verse_b2 x4
-    outro x8
+    intro_bass x4
+    intro_toms x4
+    verse x6
+    verse_turn x2
+    slap x8
+    stomp x8
+    verse x6
+    verse_turn x2
+    tapping x8
+    dive x4
+    slap x8
+    stomp x8
+    out x1
 }
