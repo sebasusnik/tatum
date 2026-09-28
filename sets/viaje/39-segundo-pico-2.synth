@@ -1,7 +1,9 @@
 # set: bars=64 phase=segundo-pico-2 energy=9
-# set-note: El segundo pico sigue y vuelve el gancho de Detroit: las cuerdas cantan sobre el 303 y el bajo rodante, los acordes en golpes cortos, el acorde dub tirado al eco.
+# set-note: El segundo pico sigue y vuelve el protagonista de Detroit: el pluck en semicorcheas sobre el 303 y el bajo rodante, el metal contestando, el acorde dub tirado al eco.
 use "_rig.synth"
 tempo 135
+
+module fm pluck { mod_index 58% }
 
 module beats kit { kick_decay 28% kick_pitch 0.88x kick_click 46% kick_drive 48% hihat_level 72% }
 
@@ -9,6 +11,8 @@ track beat    { play kick_peak16 level 1.15 }
 track hats    { play hat_16_open level 1.2 }
 track roll    { play roll_peak level 0.66 }
 track acid    { play acid_low16 level 0.44 }
-track chords  { play ch_pulse level 0.22 }
-track strings { play hook16 level 0.24 }
 track throw   { play throw_dub8 level 0.2 }
+track pluck  { play pluck_c level 0.099 }
+track mstab  { play mstab_b level 0.13 }
+track shaker { play shake4 level 0.09 }
+track tick   { play tick332 level 0.085 }

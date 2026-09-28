@@ -1,15 +1,18 @@
 # set: bars=64 phase=armonia energy=7
-# set-note: Detroit cambia de armonía: los acordes del respiro (Cm9, Fm9, Bbm9, Ebm9) con su propia línea de bajo y stabs. Un lugar nuevo antes del último pleno.
+# set-note: Detroit cambia de armonía (Cm9, Fm9, Bbm9, Ebm9) con su propia línea de bajo; el metal contesta con dos acordes y el ride marca el contratiempo.
 use "_rig.synth"
 tempo 128
+
+module keys warmth { cutoff 1khz }
 
 module beats kit { kick_decay 28% kick_pitch 0.8x kick_click 34% hihat_level 70% }
 
 track bed    { level 0.12 }
 track beat   { play kick_full16 level 1.01 }
 track hats   { play hat_open8 level 1.29 }
-track perc   { play perc_conga8 level 0.6 delay_send 0.12 reverb_send 0.1 }
 track under  { play rest level 0 }
 track bass   { play bs_b8 level 0.82 }
 track chords { play ch_b level 0.24 }
-track stabs  { play st_b8 level 0.32 }
+track mstab  { play mstab_b level 0.14 }
+track ride   { play ride_off level 0.042 }
+track tick   { play tick332 level 0.085 }

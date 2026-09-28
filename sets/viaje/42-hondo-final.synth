@@ -1,0 +1,16 @@
+# set: bars=48 phase=hondo-final energy=5
+# set-note: El último dub, a 124: el sub que camina, los hats ocupados, el acorde un poco más abierto y la capa de detalle, que se va a ir antes que el bombo.
+use "_rig.synth"
+tempo 124
+
+module keys chord { cutoff 2.3khz }
+
+track bed   { play hiss_swell level 0.32 }
+track stab  { play stab_dub8 level 0.26 delay_send 0.5 }
+track beat  { play kick_dub8 level 0.8 }
+track hats  { play hat_dub16 level 1.12 }
+track sub   { play sub_move16 level 0.6 }
+track perc  { play perc_dub8 level 0.4 }
+track tick   { play tick332 level 0.085 }
+track ride   { play ride_off level 0.035 }
+track static { play static_bed level 0.04 }

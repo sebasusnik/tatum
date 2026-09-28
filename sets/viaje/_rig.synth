@@ -19,7 +19,7 @@
 #   7 Detroit chords                      7 kick length
 #   8 echo amount                         8 hat length
 #   9 DJ filter: centre open, down dark, up thin
-#                                         9 bell
+#                                         9 pluck: brightness
 #
 # Pads, bottom row: drums out while held · hats in/out · dub chord into the
 # echo while held · reverb frozen while held.
@@ -33,26 +33,29 @@
 tempo 122
 meter 4/4
 scale F minor
-swing 0.52
-humanize 0.06 timing 0.012
-sidechain 0.42 attack=2ms release=130ms
+# A straight grid, no swing and no humanize: every hit where the clock says.
+# The precision is the style; the dub feel comes from the echoes, not from
+# loose timing.
+swing 0.5
+humanize 0.0 timing 0.0
+sidechain 0.42 attack=1ms release=100ms
 
 # The sends are half the instrument in dub: a dark dotted-eighth echo that
 # loses its top on every repeat, and a big room that breathes with the kick.
 # The echo is short-lived on purpose (feedback 0.55, not dub_techno's 0.74):
 # over most of an hour a long one wears the ear out. The `dub` step is where
 # it gets pushed.
-delay sync=dotted_eighth feedback=0.55 filter=0.3 sidechain=0.35
-reverb size=0.82 damp=0.45 predelay=32 sidechain=0.5
+delay sync=dotted_eighth feedback=0.5 filter=0.35 sidechain=0.35
+reverb size=0.62 damp=0.6 predelay=20 sidechain=0.5
 
 delay_return {
-    in > highpass(210hz, 0.2)
+    in > highpass(320hz, 0.2)
        > lowpass(6khz, 0.1, lfo_bars=8, lfo_depth=2000)
        > autopan(0.5, bars=8)
        > out
 }
 reverb_return {
-    in > highpass(260hz, 0.15)
+    in > highpass(420hz, 0.15)
        > lowpass(6.5khz, 0.1, lfo_bars=8, lfo_depth=2200)
        > autopan(0.32, bars=8)
        > out
@@ -140,8 +143,8 @@ instrument hiss {
 
 module keys warmth {
     voice_mode poly
-    detune 16%
-    chorus_mix 16%
+    detune 8%
+    chorus_mix 0%
     cutoff 1.25khz
     resonance 0.06
     attack 82ms
@@ -152,8 +155,8 @@ module keys warmth {
     lfo_waveform triangle
     lfo_sync bars_4
     lfo_depth 10%
-    vibrato_rate 20%
-    vibrato_depth 2%
+    vibrato_rate 0%
+    vibrato_depth 0%
 }
 
 module keys stab {
@@ -203,36 +206,105 @@ module bass walker {
     vel_env 40%
 }
 
-# Strings for Detroit's hook: slow to speak, wide, a little chorus.
-module keys strings {
-    voice_mode poly
-    detune 18%
-    chorus_mix 25%
-    cutoff 3.2khz
-    resonance 8%
-    attack 90ms
-    decay 400ms
-    sustain 80%
-    release 650ms
-    lfo_target cutoff
-    lfo_waveform triangle
-    lfo_sync bars_8
-    lfo_depth 10%
-    vibrato_rate 4.5hz
-    vibrato_depth 4%
+# ── Precision: the protagonist and the detail, all FM and short ──
+
+# The protagonist of Detroit and the way out: an FM pluck. An inharmonic
+# modulator (1.73) gives each note a metallic attack that decays into a warm
+# body; its brightness is the modulation index, which each step sets, and in
+# FM the velocity is brightness too, so the accents shape it.
+module fm pluck {
+    algorithm two_op
+    level 2.0
+    mod_index 42%
+    feedback 12%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1.73x
+    op0_envelope 0.001 0.24 0.0 0.1
+    op1_envelope 0.001 0.06 0.05 0.04
 }
 
-module fm bell {
-    algorithm two_op
+# Struck metal in a chord, answering the pluck.
+module fm mstab {
+    algorithm dual_pairs
+    level 1.8
+    mod_index 72%
+    feedback 22%
     waveform sine
-    mod_index 34%
-    feedback 10%
-    op0_ratio 0.996x
-    op1_ratio 2.0035x
-    op0_envelope 0.004 0.86 0.0 0.80
-    op1_envelope 0.002 0.55 0.0 0.40
-    vibrato_rate 25%
-    vibrato_depth 3%
+    op0_ratio 1x
+    op1_ratio 2.83x
+    op2_ratio 1x
+    op3_ratio 4.62x
+    op0_envelope 0.001 0.16 0.0 0.09
+    op1_envelope 0.001 0.09 0.0 0.05
+    op2_envelope 0.001 0.13 0.0 0.07
+    op3_envelope 0.001 0.05 0.0 0.04
+}
+
+# A tiny metal tick, high and short.
+module fm tick {
+    algorithm two_op
+    level 1.6
+    mod_index 70%
+    feedback 25%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 3.17x
+    op0_envelope 0.001 0.03 0.0 0.02
+    op1_envelope 0.001 0.018 0.0 0.01
+}
+
+# A shaker: a burst of FM noise, cut short and bright.
+module fm shaker {
+    algorithm pair_plus_two
+    level 1.2
+    mod_index 100%
+    feedback 100%
+    waveform sine
+    op0_ratio 6.7x
+    op1_ratio 5.1x
+    op2_ratio 9.3x
+    op3_ratio 2.63x
+    op0_envelope 0.002 0.04 0.0 0.03
+    op1_envelope 0.002 0.04 0.0 0.03
+    op2_envelope 0.002 0.04 0.0 0.03
+    op3_envelope 0.002 0.04 0.0 0.03
+    op0_feedback 90%
+}
+
+# A ride: inharmonic, a long shimmering tail.
+module fm ride {
+    algorithm two_op
+    level 1.4
+    mod_index 62%
+    feedback 20%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 4.61x
+    op0_envelope 0.001 0.5 0.0 0.35
+    op1_envelope 0.001 0.22 0.0 0.18
+}
+
+# Static: filtered feedback noise held for bars, the air under a groove.
+module fm static {
+    algorithm pair_plus_two
+    level 1.0
+    mod_index 100%
+    feedback 100%
+    waveform sine
+    op0_ratio 5.3x
+    op1_ratio 2.51x
+    op2_ratio 7.1x
+    op3_ratio 1.43x
+    op0_envelope 1.0 1.0 1.0 1.0
+    op1_envelope 1.0 1.0 1.0 1.0
+    op2_envelope 1.0 1.0 1.0 1.0
+    op3_envelope 1.0 1.0 1.0 1.0
+    op0_feedback 90%
+    lfo_target mod_index
+    lfo_sync bars_4
+    lfo_waveform triangle
+    lfo_depth 25%
 }
 
 # ── New: the lead the keys play ──
@@ -510,17 +582,6 @@ pattern st_a {
     -  -  -  -    -  -  Abmaj9/4:0.50 -    -  -  -  -    -  -  Abmaj9/4:0.42 -
     -  -  -  -    -  -  -  -                -  -  -  -    -  -  -  -
 }
-pattern bl_a {
-    -  -  -  -    -  -  -  -    -  -  -  -    Ab4:0.50 -  -  -
-    -  -  -  -    -  -  -  -    -  -  -  -    -  -  -  -
-    -  -  -  -    -  -  -  -    -  -  -  -    Db5:0.48 -  -  -
-    -  -  -  -    -  -  -  -    -  -  -  -    -  -  -  -
-    -  -  -  -    -  -  -  -    -  -  -  -    Bb4:0.46 -  -  -
-    -  -  -  -    -  -  -  -    -  -  -  -    -  -  -  -
-    -  -  -  -    -  -  -  -    -  -  -  -    C5:0.50  -  -  -
-    -  -  -  -    -  -  -  -    -  -  -  -    -  -  Eb5:0.40 -
-}
-
 # ── The dub block, in 8-bar phrases: something turns at the end of every one ──
 
 # Four on the floor; bar 8 leaves its last beat out.
@@ -649,18 +710,6 @@ pattern sub_dub8 {
 
 # The wind, struck again every 8 bars: it swells at each phrase.
 pattern hiss_swell { C3:0.7 ..*111 -*16 }
-
-# The dub's hook: a few bell notes, the echo does the rest.
-pattern motif_dub {
-    - - Ab4:0.5 -  - - - -  - - - -  - - - -
-    - - - -  - - - -  - - - -  - - - -
-    - - G4:0.42 -  - - - -  - - F4:0.46 -  - - - -
-    - - - -  - - - -  - - - -  - - - -
-    - - Ab4:0.5 -  - - - -  - - - -  - - - -
-    - - - -  - - - -  - - - -  - - - -
-    - - C5:0.44 -  - - - -  - - Bb4:0.4 -  - - - -
-    - - - -  - - - -  - - - -  - - - -
-}
 
 
 # ── Detroit, in phrases ──
@@ -1083,12 +1132,6 @@ pattern kick_rim8 {
     snare: - - - -  - - o -  - - - -  - - - -  - - - -  - - o -  - - - -  - - o?0.3 -  - - - -  - - o -  - - - -  - - - -  - - - -  - - o -  - - - o?0.4  - - - -  - - - -  - - o -  - - - -  - - - -  - - - -  - - o -  - - - -  - - o?0.3 -  - - - -  - - o -  - - - -  - - - -  - - - -  - - o -  - - - -  - x:0.35 - o
 }
 
-# Rain: rim drops on the off-sixteenths, each one there only some of the time, falling into the echo.
-pattern perc_rain8 {
-    snare: - o?0.2 - o?0.3  - o?0.15 - o?0.3  - o?0.2 - o?0.35  - o?0.2 - o?0.3  - o?0.2 - o?0.3  - o?0.15 - o?0.3  - o?0.2 - o?0.35  - o?0.2 - o?0.3  - o?0.2 - o?0.3  - o?0.15 - o?0.3  - o?0.2 - o?0.35  - o?0.2 - o?0.3  - o?0.2 - o?0.3  - o?0.15 - o?0.3  - o?0.2 - o?0.35  - o?0.2 - o?0.3  - o?0.2 - o?0.3  - o?0.15 - o?0.3  - o?0.2 - o?0.35  - o?0.2 - o?0.3  - o?0.2 - o?0.3  - o?0.15 - o?0.3  - o?0.2 - o?0.35  - o?0.2 - o?0.3  - o?0.2 - o?0.3  - o?0.15 - o?0.3  - o?0.2 - o?0.35  - o?0.2 - o?0.3  - o?0.2 - o?0.3  - o?0.15 - o?0.3  - o?0.2 - o?0.35  - o?0.2 - o?0.3
-    tom:   - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.4 -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.38 -  - - - -  - - x:0.42 -
-}
-
 # Half time: a kick on 1 and 3, the rim answering late, so the echoes have the bar.
 pattern kick_thin8 {
     kick:  X - - -  - - - -  x - - -  - - - -  X - - -  - - - -  x - - -  - - - -  X - - -  - - - -  x - - -  - - - -  X - - -  - - - -  x - - -  - - - -  X - - -  - - - -  x - - -  - - - -  X - - -  - - - -  x - - -  - - - -  X - - -  - - - -  x - - -  - - - -  X - - -  - - - -  - - - -  - - - -
@@ -1099,18 +1142,6 @@ pattern kick_thin8 {
 pattern hat_dub16 {
     hat:     - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - - x:0.55 o?0.35  - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - - x:0.55 o?0.35  - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - - x:0.55 o?0.35  - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - - x:0.55 o?0.35  - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - - x:0.55 o?0.35  - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - - x:0.55 o?0.35  - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - - x:0.55 o?0.35  - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - - x:0.55 o?0.35  - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - - x:0.55 o?0.35  - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - - x:0.55 o?0.35  - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - - x:0.55 o?0.35  - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - - x:0.55 o?0.35  - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - - x:0.55 o?0.35  - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - - x:0.55 o?0.35  - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - - x:0.55 o?0.35  - - o o?0.25  - - x:0.55 o?0.3  - - o o?0.25  - o x:0.55 o
     openhat: - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.42 -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.4 -  - - - -  - - x:0.46 -
-}
-
-# The bell answers itself: higher, falling back to the chord.
-pattern motif_dub2 {
-    - - C5:0.46 -  - - - -  - - - -  - - - -
-    - - - -  - - - -  - - - -  - - - -
-    - - Bb4:0.42 -  - - - -  - - Ab4:0.44 -  - - - -
-    - - - -  - - - -  - - - -  - - - -
-    - - Eb5:0.44 -  - - - -  - - - -  - - - -
-    - - - -  - - - -  - - - -  - - - -
-    - - Db5:0.4 -  - - - -  - - C5:0.46 -  - - Ab4:0.36 -
-    - - - -  - - - -  - - - -  - - - -
 }
 
 # The sub walks over 16 bars: up to Ab, down to Db, through Eb back to F.
@@ -1135,26 +1166,6 @@ pattern sub_move16 {
 
 # ── Detroit, more of it ──
 
-# Detroit's hook, for the strings: sixteen bars over Fm9, Bbm9, Eb9, Abmaj9; the second eight climb and come home.
-pattern hook16 {
-    C5:0.6 .. .. ..  .. .. Ab4:0.5 ..  Bb4:0.55 .. .. ..  C5:0.5 .. .. -
-    Eb5:0.6 .. .. ..  .. .. .. ..  C5:0.5 .. .. ..  .. .. - -
-    Db5:0.6 .. .. ..  .. .. C5:0.5 ..  Bb4:0.55 .. .. ..  .. .. - -
-    F4:0.5 .. .. ..  .. .. .. ..  Ab4:0.5 .. .. ..  Bb4:0.5 .. .. ..
-    G4:0.55 .. .. ..  Bb4:0.55 .. .. ..  Db5:0.6 .. .. ..  .. .. .. ..
-    C5:0.55 .. .. ..  .. .. Bb4:0.5 ..  .. .. .. ..  - - - -
-    C5:0.6 .. .. ..  Eb5:0.6 .. .. ..  G5:0.55 .. .. ..  .. .. .. ..
-    F5:0.55 .. .. ..  .. .. .. ..  Eb5:0.5 .. .. ..  .. .. .. ..
-    F5:0.6 .. .. ..  .. .. Eb5:0.5 ..  C5:0.55 .. .. ..  .. .. .. ..
-    Ab4:0.5 .. .. ..  .. .. .. ..  C5:0.5 .. .. ..  .. .. .. ..
-    Db5:0.6 .. .. ..  .. .. .. ..  F5:0.55 .. .. ..  .. .. .. ..
-    Eb5:0.55 .. .. ..  .. .. Db5:0.5 ..  C5:0.5 .. .. ..  .. .. .. ..
-    Bb4:0.55 .. .. ..  .. .. .. ..  Db5:0.55 .. .. ..  .. .. .. ..
-    G4:0.5 .. .. ..  .. .. .. ..  .. .. .. ..  .. .. .. ..
-    C5:0.55 .. .. ..  .. .. .. ..  Bb4:0.5 .. .. ..  .. .. .. ..
-    C5:0.5 .. .. ..  .. .. .. ..  .. .. .. ..  .. .. .. ..
-}
-
 # A second walking line: syncopated, jumping octaves, the last bar running back up to F.
 pattern bs_c16 {
     F1:0.9 - - F2:0.55  - - C2:0.6 -  F1:0.8 - - Eb2:0.5  - F2:0.6 - -
@@ -1175,25 +1186,6 @@ pattern bs_c16 {
     Ab1:0.85 - Bb1:0.6 -  C2:0.65 - Eb2:0.6 -  F2:0.7 - Eb2:0.55 -  C2:0.6 - Eb2:0.65 -
 }
 
-# The Detroit chords as short offbeat hits instead of a pad.
-pattern ch_pulse {
-    - - Fm9:0.62 ..  - - - -  - - Fm9:0.56 ..  - - - -
-    - - Fm9:0.58 ..  - - - Fm9:0.52  - - Fm9:0.56 ..  - - - -
-    - - Bbm9:0.6 ..  - - - -  - - Bbm9:0.54 ..  - - - -
-    - - Bbm9:0.56 ..  - - - Bbm9:0.50  - - Bbm9:0.54 ..  - - - -
-    - - Eb9:0.58 ..  - - - -  - - Eb9:0.52 ..  - - - -
-    - - Eb9:0.54 ..  - - - Eb9:0.48  - - Eb9:0.52 ..  - - - -
-    - - Abmaj9:0.62 ..  - - - -  - - Abmaj9:0.56 ..  - - - -
-    - - Abmaj9:0.58 ..  - - - Abmaj9:0.52  - - Abmaj9:0.56 ..  - - - -
-}
-
-# Congas out of the toms: a figure that sits between the claps, a run at the end of the phrase.
-pattern perc_conga8 {
-    tom:   - - - x:0.36  - - x:0.3 -  - - x:0.34 -  - - - -  - - - x:0.36  - - x:0.3 -  - - x:0.34 -  - - o?0.5 -  - - - x:0.36  - - x:0.3 -  - - x:0.34 -  - - - -  - - - x:0.36  - - x:0.3 -  - - x:0.34 -  - - - o  - - - x:0.36  - - x:0.3 -  - - x:0.34 -  - - - -  - - - x:0.36  - - x:0.3 -  - - x:0.34 -  - - o?0.5 -  - - - x:0.36  - - x:0.3 -  - - x:0.34 -  - - - -  - - - x:0.36  - - x:0.3 -  - - x:0.34 -  x:0.36 - x:0.4 -
-    tom2:  - - - -  - - - x:0.3  - - - -  - x:0.28 - -  - - - -  - - - x:0.3  - - - -  - x:0.28 - -  - - - -  - - - x:0.3  - - - -  - x:0.28 - -  - - - -  - - - x:0.3  - - - o?0.4  - x:0.28 - -  - - - -  - - - x:0.3  - - - -  - x:0.28 - -  - - - -  - - - x:0.3  - - - -  - x:0.28 - -  - - - -  - - - x:0.3  - - - -  - x:0.28 - -  - - - -  - - - x:0.3  - - - -  - x:0.28 - x:0.38
-    snare: - - - o?0.3  - - - -  - - - -  - - - -  - - - o?0.3  - - - -  - - - -  - - - -  - - - o?0.3  - - - -  - - - -  - - - -  - - - o?0.3  - - - -  - - - -  - - - -  - - - o?0.3  - - - -  - - - -  - - - -  - - - o?0.3  - - - -  - - - -  - - - -  - - - o?0.3  - - - -  - - - -  - - - -  - - - o?0.3  - - - -  - - - -  - - - -
-}
-
 # The Detroit break: eight bars without the kick, the clap and the bass carrying it; the kick back a bit at a time, a rim roll, a beat of silence.
 pattern kick_break16 {
     kick:  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  x:0.8 - - -  - - - -  - - - -  - - - -  x:0.8 - - -  - - - -  - - - -  - - - -  x:0.85 - - -  - - - -  x:0.8 - - -  - - - -  x:0.85 - - -  - - - -  x:0.8 - - -  - - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  - - - -
@@ -1211,18 +1203,6 @@ pattern bs_b8 {
     Bb1:0.85 - F1:0.55 -  - Bb1:0.6 - Bb2:0.5  - - Ab1:0.6 -  F1:0.55 - Db2:0.5 -
     Eb2:0.9 - - Eb1:0.55  - - Bb1:0.6 -  Eb2:0.8 - - Db2:0.5  - Eb1:0.6 - -
     Eb2:0.85 - Bb1:0.55 -  - Eb2:0.6 - Eb1:0.5  - - Db2:0.6 -  Bb1:0.55 - Gb1:0.5 -
-}
-
-# Stabs for the other harmony.
-pattern st_b8 {
-    - - - -  - - Cm9/4:0.5 -  - - - -  - - Cm9/4:0.4 -
-    - - - -  - - - -  - - Cm9/4:0.45 -  - - - -
-    - - - -  - - Fm9/4:0.5 -  - - - -  - - Fm9/4:0.4 -
-    - - - -  - - - -  - - Fm9/4:0.45 -  - - - -
-    - - - -  - - Bbm9/4:0.48 -  - - - -  - - Bbm9/4:0.38 -
-    - - - -  - - - -  - - Bbm9/4:0.43 -  - - - -
-    - - - -  - - Ebm9/4:0.5 -  - - - -  - - Ebm9/4:0.4 -
-    - - - -  - - - -  - - Ebm9/4:0.45 -  - - - -
 }
 
 # ── The acid stretch, more of it ──
@@ -1344,25 +1324,67 @@ pattern acid_down16 {
     F3:0.63(edepth=0.62) - F3:0.35(edepth=0.62) -  F4:0.49(edepth=0.62) - F3:0.35(edepth=0.62) -  F3:0.63(edepth=0.62) - C4:0.42(edepth=0.62) -  Bb3:0.49(edepth=0.62) ~Ab3:0.42 - F3:0.35(edepth=0.62)
 }
 
-# Both bell lines, one after the other: the first question and its answer.
-pattern motif_both16 {
-    - - Ab4:0.5 -  - - - -  - - - -  - - - -
-    - - - -  - - - -  - - - -  - - - -
-    - - G4:0.42 -  - - - -  - - F4:0.46 -  - - - -
-    - - - -  - - - -  - - - -  - - - -
-    - - Ab4:0.5 -  - - - -  - - - -  - - - -
-    - - - -  - - - -  - - - -  - - - -
-    - - C5:0.44 -  - - - -  - - Bb4:0.4 -  - - - -
-    - - - -  - - - -  - - - -  - - - -
-    - - C5:0.46 -  - - - -  - - - -  - - - -
-    - - - -  - - - -  - - - -  - - - -
-    - - Bb4:0.42 -  - - - -  - - Ab4:0.44 -  - - - -
-    - - - -  - - - -  - - - -  - - - -
-    - - Eb5:0.44 -  - - - -  - - - -  - - - -
-    - - - -  - - - -  - - - -  - - - -
-    - - Db5:0.4 -  - - - -  - - C5:0.46 -  - - Ab4:0.36 -
-    - - - -  - - - -  - - - -  - - - -
+# ── Precision: the pluck, the metal and the detail ──
+
+# The pluck's motif: the root and its octave, Eb and C against it, a slide into Db.
+pattern pluck_a {
+    F3:0.9 - F4:0.6 -  - F3:0.7 - Eb4:0.8  - - F3:0.9 -  C4:0.7 - ~Db4:0.8 -
+    F3:0.9 - F4:0.6 -  - F3:0.7 - Ab3:0.8  - - Bb3:0.8 -  ~C4:0.7 - F3:0.6 -
 }
+
+# The motif with ratchets and octave leaps; the Gb is the dark semitone above F.
+pattern pluck_b {
+    F3:0.9 F4:0.8*2 - Eb4:0.7  - F3:0.6 Ab4:0.9 -  F3:0.9 - C5:0.8 ~Db5:0.7  F3:0.9*3 - F4:0.8 -
+    F3:0.9 F4:0.8*2 - Eb4:0.7  - F3:0.6 Ab4:0.9 -  Db5:1.0 ~C5:0.8 - Gb4:0.9*2  F3:0.9 - ~F4:1.0 -
+}
+
+# The peak: every sixteenth.
+pattern pluck_c {
+    F3:0.9 F4:0.6 F3:0.7 Eb4:0.8  F3:0.9 F4:0.6 C5:0.8 F3:0.6  F3:0.9 F4:0.6 F3:0.7 Ab4:0.8  F3:0.9 Db5:0.9*2 F4:0.7 C5:0.9
+    F3:0.9 F4:0.6 F3:0.7 Eb4:0.8  F3:0.9 F4:0.6 C5:0.8 F3:0.6  Db5:1.0*3 ~C5:0.9 F4:0.7 Ab4:0.8  F3:0.9 Gb4:1.0*2 ~F4:0.9 F3:0.8
+}
+
+# What is left of the motif: three notes a bar.
+pattern pluck_d {
+    F3:0.9 - - -  - - F4:0.7 -  - - F3:0.8 -  - - - -
+    F3:0.9 - - -  - - Eb4:0.7 -  - - ~Gb3:0.8 -  - - - -
+}
+
+# Metal answering on the second bar: F, Ab and Db struck together.
+pattern mstab_a {
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - [F3 Ab3 Db4]:0.9 -  - - - -  - - [F3 Ab3 Db4]:0.7 -
+}
+
+# More of it, and a second chord a step down.
+pattern mstab_b {
+    - - - -  - - [F3 Ab3 Db4]:0.7 -  - - - -  - - - -
+    - - - -  - - [F3 Ab3 Db4]:0.9 -  - - [Eb3 Gb3 C4]:0.75 -  - - [F3 Ab3 Db4]:0.7 -
+}
+
+# A metal tick on a 3-3-2 against the four, ghosts coming and going over four bars.
+pattern tick332 {
+    F6:0.8 - - F6:0.6  - - F6:0.8 -  - F6:0.4 - F6:0.7  - F6:0.35 - -
+    F6:0.8 - - F6:0.6  - - F6:0.8 -  - - - F6:0.7  - - - -
+    F6:0.8 - - F6:0.6  - - F6:0.8 -  - - - F6:0.7  - - - -
+    F6:0.8 - - F6:0.6  - - F6:0.8 -  - F6:0.38 - F6:0.7  - F6:0.42 - -
+}
+
+# The shaker: sixteenths, the offbeat eighths accented, the ghosts coming and going.
+pattern shake4 {
+    C6:0.49 - C6:0.84 -  C6:0.52 C6:0.21 C6:0.82 -  C6:0.50 - C6:0.77 C6:0.37  C6:0.46 C6:0.33 C6:0.87 C6:0.28
+    C6:0.58 - C6:0.86 C6:0.23  C6:0.46 C6:0.36 C6:0.78 C6:0.33  C6:0.49 C6:0.21 C6:0.77 C6:0.34  C6:0.50 C6:0.32 C6:0.81 C6:0.36
+    C6:0.54 C6:0.31 C6:0.82 C6:0.35  C6:0.48 C6:0.22 C6:0.81 C6:0.23  C6:0.51 - C6:0.84 C6:0.31  C6:0.56 C6:0.34 C6:0.83 C6:0.29
+    C6:0.56 C6:0.29 C6:0.84 -  C6:0.54 C6:0.40 C6:0.86 C6:0.28  C6:0.53 - C6:0.82 -  C6:0.46 - C6:0.85 -
+}
+
+# The ride on the offbeat.
+pattern ride_off {
+    - - F5:0.6 -  - - F5:0.5 -  - - F5:0.6 -  - - F5:0.5 -
+}
+
+# The air: one note held, the static breathing under a groove.
+pattern static_bed { F4:0.6 ..*63 }
 
 # ════════════════════════════════════════════════════════
 # BUSES
@@ -1478,19 +1500,6 @@ track stabs {
     delay_send 0.28
     reverb_send 0.14
     out > saturate(0.8) > highpass(400hz, 0.05) > master
-}
-
-track chime {
-    play rest
-    using bell
-    velocity 0.60
-    level 0
-    gate 0.90
-    pan -0.50
-    sidechain 0.25
-    delay_send 0.34
-    reverb_send 0.36
-    out > highpass(500hz, 0.05) > master
 }
 
 # The keys play this. A pattern of rests: only the hands sound it.
@@ -1616,19 +1625,83 @@ track throw {
     out > highpass(300hz, 0.15) > lowpass(3khz, 0.12) > master
 }
 
-# The hook. Its own reverb is small on purpose: Detroit's mud was reverb.
-track strings {
+# ── Precision tracks ──
+
+# The pluck: its brightness moves with the step's mod_index; a vowel filter
+# that a step can open (wet) makes it talk.
+track pluck {
     play rest
-    using strings
+    using pluck
     level 0
-    gate 0.95
-    pan -0.18
+    velocity 1.0
+    gate 0.7
+    pan 0.1
     sidechain 0.3
-    delay_send 0.16
-    reverb_send 0.16
-    out > highpass(350hz, 0.05)
-        > lowpass(7khz, 0.05)
-        > autopan(0.3, bars=8)
+    delay_send 0.18
+    reverb_send 0.08
+    out > highpass(220hz, 0.05)
+        > vowel(a, e, bars=2, wet=0) as talk
+        > panenv(0.45, release=250)
+        > lowpass(9khz, 0.05)
+        > master
+}
+
+track mstab {
+    play rest
+    using mstab
+    level 0
+    velocity 1.0
+    gate 0.4
+    pan -0.3
+    delay_send 0.22
+    reverb_send 0.12
+    out > highpass(250hz, 0.05) > master
+}
+
+track tick {
+    play rest
+    using tick
+    level 0
+    velocity 1.0
+    gate 0.2
+    pan -0.4
+    reverb_send 0.1
+    delay_send 0.08
+    out > highpass(2khz, 0.05) > lowpass(12khz, 0.05) > master
+}
+
+track shaker {
+    play rest
+    using shaker
+    level 0
+    velocity 1.0
+    gate 0.2
+    pan 0.3
+    reverb_send 0.06
+    out > highpass(6khz, 0.05) > lowpass(14khz, 0.05) > autopan(0.4, hz=0.3) > master
+}
+
+track ride {
+    play rest
+    using ride
+    level 0
+    velocity 1.0
+    gate 0.5
+    pan -0.25
+    reverb_send 0.1
+    out > highpass(3khz, 0.05) > lowpass(12khz, 0.05) > master
+}
+
+track static {
+    play rest
+    using static
+    level 0
+    velocity 1.0
+    sidechain 0.6
+    reverb_send 0.15
+    out > highpass(900hz, 0.05)
+        > lowpass(3.5khz, 0.05, lfo_bars=16, lfo_depth=1500)
+        > autopan(0.5, bars=16)
         > master
 }
 
@@ -1640,6 +1713,7 @@ master {
     in > tilt(-0.1)
        > eq(low=1.6, mid=-0.8, high=-1.0)
        > compressor(-8, ratio=1.6, attack=30, release=280, makeup=1db)
+       > saturate(0.25)
        > lowpass(20khz, 0.1) as dj
        > highpass(20hz, 0.1) as hp
        > out
@@ -1679,7 +1753,7 @@ midi {
     cc 18 > reverb_mix
     cc 19 > kit kick_decay 25%..75%
     cc 16 > kit hihat_decay 8%..55%
-    cc 17 > chime level 0..0.9
+    cc 17 > pluck mod_index 15%..70%
 
     # keys and strips
     keys > lead
