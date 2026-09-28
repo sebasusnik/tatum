@@ -1,0 +1,9 @@
+# set: bars=32 phase=rim energy=2
+# set-note: Aparece el rim en el contratiempo del 2, con fantasmas que van y vienen. El acorde lejano se acerca un poco y sus ecos se estiran.
+use "_rig.synth"
+
+track bed  { play hiss_swell level 0.48 }
+track stab { play stab_ghost level 0.17 velocity 0.62 delay_send 0.6 }
+track beat { play kick_rim8 level 0.66 }
+track sub  { play sub_long level 0.51 }
+track perc { play perc_sparse8 level 0.45 }

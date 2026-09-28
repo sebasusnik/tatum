@@ -1,0 +1,12 @@
+# set: bars=32 phase=entra-2 energy=3
+# set-note: El acorde cambia de ritmo: una figura con puntillo que va contra el bombo. El filtro se abre un poco y aparecen los tiros al eco.
+use "_rig.synth"
+
+module keys chord { cutoff 2khz }
+
+track bed   { play hiss_swell level 0.4 }
+track stab  { play stab_dot8 level 0.24 delay_send 0.42 }
+track beat  { play kick_dub8 level 0.73 }
+track hats  { play hat_ghost8 level 1.6 }
+track sub   { play sub_f8 level 0.68 }
+track throw { play throw8 level 0.18 }

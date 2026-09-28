@@ -1,4 +1,4 @@
-# set: bars=32 phase=viento energy=1
+# set: bars=32 phase=viento-final energy=1
 # set-note: Vuelve el viento del principio. El último acorde se deshace en sus ecos y queda el viento solo, hasta apagarse.
 use "_rig.synth"
 tempo 135
