@@ -3,11 +3,13 @@
 use "_rig.synth"
 tempo 126
 
-track bed    { play hiss_swell level 0.22 }
+module beats kit { hihat_level 70% hihat_decay 28% }
+
+track bed    { play hiss_swell level 0.23 }
 track stab   { play stab_ghost level 0.14 delay_send 0.3 }
-track beat   { play kick_clap8 level 0.82 }
-track hats   { play hat_off8 level 0.8 }
+track beat   { play kick_clap8 level 0.84 }
+track hats   { play hat_off8 level 1.61 }
 track sub    { play sub_f level 0.3 }
-track under  { play ch_low level 0.12 }
-track bass   { play bs_a level 0.72 }
+track under  { play ch_low level 0.08 }
+track bass   { play bs_a level 0.74 }
 track chords { play ch_a level 0.14 }

@@ -142,7 +142,7 @@ module keys warmth {
     voice_mode poly
     detune 16%
     chorus_mix 16%
-    cutoff 796.214hz
+    cutoff 1.25khz
     resonance 0.06
     attack 82ms
     decay 205ms
@@ -1031,10 +1031,13 @@ track chords {
     gate 1.0
     sidechain 0.42
     delay_send 0.14
-    reverb_send 0.30
-    out > highpass(190hz, 0.05)
-        > lowpass(2.6khz, 0.05, lfo_bars=12, lfo_depth=700)
-        > eq(mid=-1.5, high=0.8)
+    # Its reverb was the loudest thing in the Detroit mix between 120 and
+    # 400 Hz: the mud. Less of it, the chord cut higher, and the top let
+    # through so it is heard above the bass rather than on top of it.
+    reverb_send 0.14
+    out > highpass(260hz, 0.05)
+        > lowpass(3.6khz, 0.05, lfo_bars=12, lfo_depth=900)
+        > eq(low=-1.5, mid=-1, high=1.5)
         > autopan(0.65, bars=9)
         > master
 }
@@ -1046,7 +1049,7 @@ track under {
     level 0
     gate 1.0
     sidechain 0.30
-    reverb_send 0.12
+    # Dry: a low pad in the reverb is mud.
     out > highpass(45hz, 0.05) > lowpass(320hz, 0.05) > master
 }
 
