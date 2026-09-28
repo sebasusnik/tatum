@@ -1,4 +1,4 @@
-# set: bars=32 phase=maquina energy=7
+# set: bars=64 phase=maquina energy=7
 # set-note: El bajo rueda, entra el clap con un redoble al final de cada frase y los hats a 16 que se callan en el último tiempo. El riff del 303 se abre dos veces y contesta con repiques; un golpe de metal suelto.
 use "_rig.synth"
 tempo 132

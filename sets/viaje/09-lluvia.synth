@@ -1,4 +1,4 @@
-# set: bars=48 phase=lluvia energy=4
+# set: bars=64 phase=lluvia energy=4
 # set-note: Lluvia: rims que caen al azar en las semicorcheas y se multiplican en el eco, sobre el groove dub. El acorde a medio tiempo y más oscuro.
 use "_rig.synth"
 

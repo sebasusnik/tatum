@@ -1,4 +1,4 @@
-# set: bars=48 phase=armonia energy=7
+# set: bars=64 phase=armonia energy=7
 # set-note: Detroit cambia de armonía: los acordes del respiro (Cm9, Fm9, Bbm9, Ebm9) con su propia línea de bajo y stabs. Un lugar nuevo antes del último pleno.
 use "_rig.synth"
 tempo 128
