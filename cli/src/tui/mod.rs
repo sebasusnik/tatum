@@ -640,7 +640,10 @@ impl Screen {
         if area.height < 2 || area.width < 8 {
             return;
         }
-        let rows = area.height as usize * 2;
+        // The last pixel row is left empty: a line one pixel high between
+        // the mix and the lanes, so the two read as separate pictures. A
+        // glass cell is one pixel, so there it is the whole last row.
+        let rows = if self.glass { (area.height as usize - 1) * 2 } else { area.height as usize * 2 - 1 };
         let label_w = 5u16;
         let w = area.width.saturating_sub(label_w) as usize;
         let t = |db: f32| (db - SPEC_FLOOR_DB) / (SPEC_TOP_DB - SPEC_FLOOR_DB);
@@ -649,6 +652,9 @@ impl Screen {
             for y in 0..area.height as usize {
                 let sample = |py: usize| {
                     let Some(col) = col else { return 0.0 };
+                    if py >= rows {
+                        return 0.0;
+                    }
                     // Top of the screen is the highest frequency.
                     let pos = 1.0 - (py as f32 + 0.5) / rows as f32;
                     let fbin = pos * (SPEC_BINS - 1) as f32;
