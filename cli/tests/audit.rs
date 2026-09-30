@@ -141,17 +141,17 @@ fn notes_too_low_to_resolve_are_not_called_dirty() {
 /// of the others.
 #[test]
 fn an_arpeggio_is_measured_but_not_checked_note_by_note() {
-    let src = format!(
+    let src = String::from(
         "tempo 120\nscale C minor\nhumanize 0\n\
-         module keys plink {{ voice_mode poly attack 1ms decay 0.2 sustain 0.0 }}\n\
-         module beats kit {{ }}\n\
-         pattern beat {{ kick: X - - - X - - - X - - - X - - - }}\n\
-         pattern c {{ [C4 Eb4 G4 Bb4]:0.8 ..*15 }}\n\
-         track kick {{ play beat using kit level 0.6 out > master }}\n\
-         track plink {{ play c using plink level 0.6 arp up rate=16 octaves=2 out > master }}\n\
-         scene a {{ track kick {{ play beat using kit level 0.6 }} track plink {{ play c using plink level 0.6 arp up rate=16 octaves=2 }} }}\n\
-         arrange {{ a x8 }}\n\
-         master {{ in > limiter(0.95) > out }}\n"
+         module keys plink { voice_mode poly attack 1ms decay 0.2 sustain 0.0 }\n\
+         module beats kit { }\n\
+         pattern beat { kick: X - - - X - - - X - - - X - - - }\n\
+         pattern c { [C4 Eb4 G4 Bb4]:0.8 ..*15 }\n\
+         track kick { play beat using kit level 0.6 out > master }\n\
+         track plink { play c using plink level 0.6 arp up rate=16 octaves=2 out > master }\n\
+         scene a { track kick { play beat using kit level 0.6 } track plink { play c using plink level 0.6 arp up rate=16 octaves=2 } }\n\
+         arrange { a x8 }\n\
+         master { in > limiter(0.95) > out }\n"
     );
     let out = audit(&src);
     assert!(out.contains("its arp puts several notes in every window"), "it should say why it stepped back:\n{out}");
@@ -164,17 +164,17 @@ fn an_arpeggio_is_measured_but_not_checked_note_by_note() {
 /// and its chorus is found anyway.
 #[test]
 fn an_arpeggio_is_still_compared_with_and_without_its_chorus() {
-    let src = format!(
+    let src = String::from(
         "tempo 120\nscale C minor\nhumanize 0\n\
-         module fm plink {{ level 2.0 algorithm dual_pairs mod_index 20% chorus_mix 35% }}\n\
-         module beats kit {{ }}\n\
-         pattern beat {{ kick: X - - - X - - - X - - - X - - - }}\n\
-         pattern c {{ [C5 Eb5 G5 Bb5]:0.8 ..*15 }}\n\
-         track kick {{ play beat using kit level 0.6 out > master }}\n\
-         track plink {{ play c using plink level 0.6 arp up rate=8 out > master }}\n\
-         scene a {{ track kick {{ play beat using kit level 0.6 }} track plink {{ play c using plink level 0.6 arp up rate=8 }} }}\n\
-         arrange {{ a x8 }}\n\
-         master {{ in > limiter(0.95) > out }}\n"
+         module fm plink { level 2.0 algorithm dual_pairs mod_index 20% chorus_mix 35% }\n\
+         module beats kit { }\n\
+         pattern beat { kick: X - - - X - - - X - - - X - - - }\n\
+         pattern c { [C5 Eb5 G5 Bb5]:0.8 ..*15 }\n\
+         track kick { play beat using kit level 0.6 out > master }\n\
+         track plink { play c using plink level 0.6 arp up rate=8 out > master }\n\
+         scene a { track kick { play beat using kit level 0.6 } track plink { play c using plink level 0.6 arp up rate=8 } }\n\
+         arrange { a x8 }\n\
+         master { in > limiter(0.95) > out }\n"
     );
     let out = audit(&src);
     assert!(out.contains("the chorus on `plink` accounts for"), "an arp still gets the comparison:\n{out}");
