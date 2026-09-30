@@ -14,6 +14,7 @@
 
 pub mod edit;
 pub mod fft;
+pub mod knobs;
 pub mod palette;
 pub mod shot;
 pub mod telemetry;
@@ -54,6 +55,10 @@ pub struct SongInfo {
     /// Every compiled pattern, transformed versions too, by the index the
     /// engine plays them at: what the grid draws.
     pub compiled: Vec<tatum_core::dsl::compiler::CompiledPattern>,
+    /// Per track, what a knob can be put on; and every knob the song maps,
+    /// with the target it moves, dotted.
+    pub knob_targets: Vec<Vec<knobs::Target>>,
+    pub knob_bindings: Vec<(u8, String)>,
 }
 
 impl SongInfo {
@@ -84,6 +89,8 @@ impl SongInfo {
                 .map(|p| (p.name.clone(), !p.lanes.is_empty()))
                 .collect(),
             compiled: compiled.patterns.clone(),
+            knob_targets: compiled.tracks.iter().map(|t| knobs::targets(&song, &t.name)).collect(),
+            knob_bindings: knobs::bindings(&song),
         })
     }
 
@@ -128,6 +135,16 @@ pub enum Key {
     Mute,
     /// Solo the chosen track, or take the solo off.
     Solo,
+    /// Keep, add or free a knob on what the knob list points at.
+    Knob(knobs::Change),
+}
+
+/// The knob list `k` opens for a track: where it points, and the knob last
+/// turned while it was open, with what that knob read.
+struct KnobList {
+    track: usize,
+    cursor: usize,
+    in_hand: Option<(u8, Option<String>)>,
 }
 
 #[derive(Clone, Copy)]
@@ -208,6 +225,7 @@ pub struct Screen {
     log_open: bool,
     /// The step ← → have moved to, not yet asked for: Enter goes.
     browse: Option<usize>,
+    knob_list: Option<KnobList>,
     transformed: Vec<bool>,
     muted: Vec<bool>,
     /// The tracks soloed from the keyboard, by name, for their mark.
@@ -270,6 +288,7 @@ impl Screen {
             help: false,
             log_open: false,
             browse: None,
+            knob_list: None,
             transformed: Vec::new(),
             muted: Vec::new(),
             soloed: Vec::new(),
@@ -338,7 +357,11 @@ impl Screen {
             if k.kind != KeyEventKind::Press {
                 continue;
             }
-            // The step list takes every key while it is open.
+            // The knob list, then the step list, take every key while open.
+            if let Some(key) = self.knob_key(k.code) {
+                out.extend(key);
+                continue;
+            }
             if let Some(key) = self.picker_key(k.code) {
                 out.extend(key);
                 continue;
@@ -370,6 +393,15 @@ impl Screen {
                     self.log_open = !self.log_open;
                     None
                 }
+                KeyCode::Char('k') => {
+                    if self.selected.is_none() {
+                        self.select(1);
+                    }
+                    if let Some(track) = self.selected {
+                        self.knob_list = Some(KnobList { track, cursor: 0, in_hand: None });
+                    }
+                    None
+                }
                 KeyCode::Char('g') | KeyCode::Tab => {
                     if let Some(set) = &self.set {
                         let cursor = set.next.map(|n| n.0).unwrap_or(set.current);
@@ -387,11 +419,11 @@ impl Screen {
                     self.extend(1);
                     None
                 }
-                KeyCode::Up | KeyCode::Char('k') => {
+                KeyCode::Up => {
                     self.select(-1);
                     None
                 }
-                KeyCode::Down | KeyCode::Char('j') => {
+                KeyCode::Down => {
                     self.select(1);
                     None
                 }
@@ -464,6 +496,75 @@ impl Screen {
             out.extend(key);
         }
         out
+    }
+
+    /// A key while the knob list is open: `Some` when the list took it, with
+    /// what it asks for when it asks for something.
+    fn knob_key(&mut self, code: KeyCode) -> Option<Option<Key>> {
+        let count = self.knob_list.as_ref().map(|l| self.targets_of(l.track).len())?;
+        let list = self.knob_list.as_mut()?;
+        let last = count.saturating_sub(1);
+        let key = match code {
+            KeyCode::Esc | KeyCode::Char('k') => {
+                self.knob_list = None;
+                None
+            }
+            KeyCode::Up => {
+                list.cursor = list.cursor.saturating_sub(1);
+                None
+            }
+            KeyCode::Down => {
+                list.cursor = (list.cursor + 1).min(last);
+                None
+            }
+            KeyCode::PageUp => {
+                list.cursor = list.cursor.saturating_sub(10);
+                None
+            }
+            KeyCode::PageDown => {
+                list.cursor = (list.cursor + 10).min(last);
+                None
+            }
+            KeyCode::Home => {
+                list.cursor = 0;
+                None
+            }
+            KeyCode::End => {
+                list.cursor = last;
+                None
+            }
+            KeyCode::Enter | KeyCode::Char('+') => match list.in_hand {
+                Some((cc, _)) if code == KeyCode::Enter => Some(Key::Knob(knobs::Change::Keep(cc))),
+                Some((cc, _)) => Some(Key::Knob(knobs::Change::Add(cc))),
+                None => {
+                    self.say("turn a knob first: the list keeps the last one turned", Tone::Info);
+                    None
+                }
+            },
+            KeyCode::Char('x') => Some(Key::Knob(knobs::Change::Free)),
+            KeyCode::Char('u') => Some(Key::Undo),
+            KeyCode::Char('q') => Some(Key::Quit),
+            _ => None,
+        };
+        Some(key)
+    }
+
+    fn targets_of(&self, track: usize) -> &[knobs::Target] {
+        self.song.as_ref().and_then(|s| s.knob_targets.get(track)).map(Vec::as_slice).unwrap_or(&[])
+    }
+
+    /// What the knob list points at, while it is open: what a knob turned
+    /// now should try, and what Enter keeps it on.
+    pub fn knob_target(&self) -> Option<knobs::Target> {
+        let list = self.knob_list.as_ref()?;
+        self.targets_of(list.track).get(list.cursor).cloned()
+    }
+
+    /// A knob was turned with the list open, reading `reading` on its target.
+    pub fn knob_turned(&mut self, cc: u8, reading: Option<String>) {
+        if let Some(list) = self.knob_list.as_mut() {
+            list.in_hand = Some((cc, reading));
+        }
     }
 
     /// A key while the step list is open: `Some` when the list took it, with
@@ -724,15 +825,17 @@ impl Screen {
             }
             None => {
                 let hint = if self.set.is_some() {
-                    " ← → look at a step · Enter goes · 1-9 go now · ? every key · l log · q quit"
+                    " ← → look at a step · Enter goes · 1-9 go now · k knobs · ? every key · q quit"
                 } else {
-                    " ? every key · l log · q quit"
+                    " k knobs · ? every key · l log · q quit"
                 };
                 f.render_widget(Paragraph::new(hint).style(Style::new().fg(DIM).bg(BG)), footer);
             }
         }
         if self.help {
             self.help_overlay(f, area);
+        } else if self.knob_list.is_some() {
+            self.knob_overlay(f, area);
         } else if self.log_open {
             self.log_overlay(f, area);
         }
@@ -907,6 +1010,62 @@ impl Screen {
 
     /// `?`: the words, the keys for them, and what the selected track could
     /// play instead.
+    fn knob_overlay(&self, f: &mut Frame, area: Rect) {
+        let (Some(list), Some(song)) = (self.knob_list.as_ref(), self.song.as_ref()) else { return };
+        let targets = self.targets_of(list.track);
+        let track = song.tracks.get(list.track).map(String::as_str).unwrap_or("");
+        let w = area.width.clamp(50, 96);
+        let h = area.height.clamp(10, 26).min(targets.len() as u16 + 6).max(8);
+        let pop = Rect { x: area.x + (area.width - w) / 2, y: area.y + (area.height - h) / 2, width: w, height: h };
+        let rows = h.saturating_sub(6) as usize;
+        let first = list.cursor.saturating_sub(rows / 2).min(targets.len().saturating_sub(rows));
+        let mut lines = vec![Line::styled(
+            " turn a knob: it moves the one marked, now · Enter keeps it there · + adds it · x frees",
+            Style::new().fg(DIM),
+        )];
+        lines.push(Line::raw(""));
+        let words_w = targets.iter().map(|t| t.words.chars().count()).max().unwrap_or(10).min(28);
+        for (i, t) in targets.iter().enumerate().skip(first).take(rows) {
+            let here = i == list.cursor;
+            let dotted = t.dotted();
+            let ccs: Vec<String> =
+                song.knob_bindings.iter().filter(|(_, d)| *d == dotted).map(|(cc, _)| format!("cc {}", cc)).collect();
+            let row = Style::new().bg(if here { GOLD } else { PANEL });
+            let fg = |c: Color| row.fg(if here { Color::Black } else { c });
+            // Inside the border: the mark, the words, the knobs, the rest.
+            let doc_w = (w as usize).saturating_sub(2 + 3 + words_w + 13);
+            lines.push(Line::from(vec![
+                Span::styled(if here { " ▸ " } else { "   " }, fg(GOLD)),
+                Span::styled(format!("{:<words_w$}", t.words), fg(TEXT).add_modifier(Modifier::BOLD)),
+                Span::styled(format!(" {:<12}", ccs.join(" ")), fg(HOT)),
+                Span::styled(format!("{:<doc_w$}", t.doc.chars().take(doc_w).collect::<String>()), fg(DIM)),
+            ]));
+        }
+        lines.push(Line::raw(""));
+        let hand = match &list.in_hand {
+            Some((cc, Some(reading))) => Line::styled(
+                format!(" in hand: cc {} → {}", cc, reading),
+                Style::new().fg(GOLD).add_modifier(Modifier::BOLD),
+            ),
+            Some((cc, None)) => Line::styled(format!(" in hand: cc {} · moves nothing here", cc), Style::new().fg(ERR)),
+            None if self.midi.is_empty() => {
+                Line::styled(" no midi input: plug a controller in to try", Style::new().fg(DIM))
+            }
+            None => Line::styled(" in hand: nothing yet · turn any knob", Style::new().fg(DIM)),
+        };
+        lines.push(hand);
+        f.render_widget(ratatui::widgets::Clear, pop);
+        f.render_widget(
+            Paragraph::new(lines).block(
+                Block::bordered()
+                    .border_style(Style::new().fg(GOLD))
+                    .title(Span::styled(format!(" knobs for {}  ·  k or Esc closes ", track), Style::new().fg(GOLD)))
+                    .style(Style::new().bg(PANEL)),
+            ),
+            pop,
+        );
+    }
+
     fn log_overlay(&self, f: &mut Frame, area: Rect) {
         let w = area.width.clamp(40, 100);
         // As tall as the log, up to most of the screen.
@@ -968,6 +1127,7 @@ impl Screen {
             key("d", "degrade", "drop 25%, then 50% of the notes"),
             key("x", "", "every transform off"),
             key("u", "", "undo the last change made from here"),
+            key("k", "knobs", "put a knob on the track: turn it to try, Enter keeps"),
             key("l", "log", "what happened this session"),
             Line::raw(""),
             Line::styled(
@@ -1449,6 +1609,15 @@ impl Screen {
         let mut term = ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).expect("test backend");
         term.draw(|f| self.render(f)).expect("test backend");
         term.backend().buffer().clone()
+    }
+
+    /// For a picture: the knob list open on the chosen track, pointing at
+    /// `n` and with `cc` in hand reading `reading`, as turning it would.
+    pub fn open_knobs(&mut self, n: usize, hand: Option<(u8, String)>) {
+        if let Some(track) = self.selected {
+            let in_hand = hand.map(|(cc, r)| (cc, Some(r)));
+            self.knob_list = Some(KnobList { track, cursor: n, in_hand });
+        }
     }
 
     /// For a picture: a track marked, as `v` would.

@@ -269,14 +269,17 @@ impl Known {
         self.resolve_controls();
     }
 
-    fn resolve_controls(&mut self) {
-        let names = midi::Names {
+    fn names(&self) -> midi::Names<'_> {
+        midi::Names {
             instruments: &self.instruments,
             tracks: &self.tracks,
             track_instruments: &self.track_instruments,
             track_nodes: &self.track_nodes,
-        };
-        self.controls = midi::resolve_all(&self.ast, &names);
+        }
+    }
+
+    fn resolve_controls(&mut self) {
+        self.controls = midi::resolve_all(&self.ast, &self.names());
     }
 
     /// Everything controller `cc` does to this engine at `value`.
@@ -609,6 +612,34 @@ impl LivePlanner {
         match self.knob_values.iter_mut().find(|(c, _)| *c == cc) {
             Some(slot) => slot.1 = value,
             None => self.knob_values.push((cc, value)),
+        }
+        turn
+    }
+
+    /// Controller at `value` put on `target` (`acid.cutoff`) as if a `midi`
+    /// line mapped it, without one: what trying a knob on a parameter before
+    /// keeping it sounds like. Not remembered: a swap puts the text's value
+    /// back until the knob is kept and turned again.
+    pub fn try_knob(&mut self, target: &str, value: u8, playing: Generation) -> KnobTurn {
+        self.catch_up(playing);
+        let mut turn = KnobTurn { plans: Vec::new(), readings: Vec::new() };
+        for (n, known) in self.known().enumerate() {
+            let names = known.names();
+            let knob = midi::Knob {
+                cc: 0,
+                target: target.into(),
+                moves: midi::resolve(&known.ast, &names, target),
+                span: None,
+            };
+            if knob.moves.is_empty() {
+                continue;
+            }
+            if n == 0 || turn.readings.is_empty() {
+                turn.readings = Vec::from([knob.reading(value)]);
+            }
+            for op in knob.ops(value) {
+                turn.plans.push(Plan::Control { base: known.generation, op });
+            }
         }
         turn
     }

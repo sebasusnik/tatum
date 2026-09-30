@@ -454,8 +454,9 @@ pub fn run(
     // every hit is sent, in the order it was played.
     let mut unsent: [Option<u8>; 128] = [None; 128];
     let mut unsent_bend: Option<u16> = None;
-    // What the screen's transform keys changed, newest last, to take back.
-    let mut undo: Vec<(std::path::PathBuf, String)> = Vec::new();
+    // What the screen's keys changed, newest last, to take back: every file
+    // one key touched, as it was before.
+    let mut undo: Vec<Vec<(std::path::PathBuf, String)>> = Vec::new();
     // The screen redraws at about 30 frames a second; lines need no hurry.
     let poll_every = Duration::from_millis(if ui.is_screen() { 33 } else { 50 });
     let mut next_poll = Instant::now() + poll_every;
@@ -536,7 +537,21 @@ pub fn run(
             let generation = stats.generation.load(Ordering::Relaxed);
             for (cc, slot) in unsent.iter_mut().enumerate() {
                 let Some(value) = *slot else { continue };
-                let turn = planner.knob(cc as u8, value, generation);
+                // With the knob list open, a knob tries the parameter the
+                // list points at instead of whatever it is mapped to.
+                let trying = match &ui {
+                    Ui::Screen(s) => s.knob_target(),
+                    Ui::Plain(_) => None,
+                };
+                let turn = match &trying {
+                    Some(t) => planner.try_knob(&t.dotted(), value, generation),
+                    None => planner.knob(cc as u8, value, generation),
+                };
+                if trying.is_some() {
+                    if let Ui::Screen(s) = &mut ui {
+                        s.knob_turned(cc as u8, turn.readings.first().cloned());
+                    }
+                }
                 let mut full = false;
                 for plan in turn.plans {
                     if let Err(TrySendError::Full(_)) = plan_tx.try_send(plan) {
@@ -580,7 +595,7 @@ pub fn run(
                     // picked up below like one from the editor.
                     crate::tui::Key::Edit(op) => match edit_play(&watched, screen.selected_tracks(), op) {
                         Ok((before, said)) => {
-                            undo.push((watched.clone(), before));
+                            undo.push(vec![(watched.clone(), before)]);
                             screen.say(said, crate::tui::Tone::Good);
                         }
                         Err(e) => screen.say(e, crate::tui::Tone::Bad),
@@ -611,13 +626,32 @@ pub fn run(
                         }
                         screen.soloed = planner.soloed().to_vec();
                     }
-                    crate::tui::Key::Undo => match undo.pop() {
-                        Some((file, before)) => match std::fs::write(&file, before) {
-                            Ok(()) => screen.say("undone", crate::tui::Tone::Good),
-                            Err(e) => {
-                                screen.say(format!("cannot write {}: {}", file.display(), e), crate::tui::Tone::Bad)
+                    // The knob list keeps a knob on something by writing its
+                    // `midi` line, where the song keeps its knobs.
+                    crate::tui::Key::Knob(change) => match screen.knob_target() {
+                        Some(target) => match crate::tui::knobs::write(&source.files, &target, change) {
+                            Ok((before, said)) => {
+                                undo.push(before);
+                                screen.say(said, crate::tui::Tone::Good);
                             }
+                            Err(e) => screen.say(e, crate::tui::Tone::Bad),
                         },
+                        None => screen.say("nothing to put a knob on", crate::tui::Tone::Info),
+                    },
+                    crate::tui::Key::Undo => match undo.pop() {
+                        Some(files) => {
+                            let failed: Vec<String> = files
+                                .into_iter()
+                                .filter_map(|(file, before)| {
+                                    std::fs::write(&file, before).err().map(|e| format!("{}: {}", file.display(), e))
+                                })
+                                .collect();
+                            if failed.is_empty() {
+                                screen.say("undone", crate::tui::Tone::Good);
+                            } else {
+                                screen.say(format!("cannot write {}", failed.join(", ")), crate::tui::Tone::Bad);
+                            }
+                        }
                         None => screen.say("nothing to undo", crate::tui::Tone::Info),
                     },
                 }

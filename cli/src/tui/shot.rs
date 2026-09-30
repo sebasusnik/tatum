@@ -19,7 +19,7 @@ use super::{Screen, SongInfo, Telemetry, Tone};
 use crate::include::Source;
 
 const USAGE: &str =
-    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--see-through] [--glass] [--select <track>] [--mute <track>] [--solo <track>] [--pick N] [--help] [--log] [--look N] [--mark <track>] [-o shot.png]";
+    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--see-through] [--glass] [--select <track>] [--mute <track>] [--solo <track>] [--pick N] [--help] [--log] [--look N] [--mark <track>] [--knobs N] [-o shot.png]";
 const CELL_W: usize = 12;
 const CELL_H: usize = 24;
 
@@ -33,6 +33,7 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     let mut log = false;
     let mut look: Option<usize> = None;
     let mut marks: Vec<String> = Vec::new();
+    let mut knob_row: Option<usize> = None;
     let mut mute: Vec<String> = Vec::new();
     let mut solo: Option<String> = None;
     let mut pick: Option<usize> = None;
@@ -58,6 +59,10 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
             "--log" => log = true,
             "--mute" => {
                 mute.push(value(i)?);
+                i += 1;
+            }
+            "--knobs" => {
+                knob_row = Some(value(i)?.parse().map_err(|_| "--knobs needs a row number")?);
                 i += 1;
             }
             "--mark" => {
@@ -168,6 +173,14 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
         screen.look_at(n);
     }
     screen.draw_offline(select.as_deref(), help);
+    // The knob list with cc 74 turned most of the way, as trying it would.
+    if let Some(n) = knob_row {
+        screen.open_knobs(n, None);
+        if let Some(target) = screen.knob_target() {
+            let turn = planner.try_knob(&target.dotted(), 96, player.generation());
+            screen.knob_turned(74, turn.readings.first().cloned());
+        }
+    }
     if log {
         screen.open_log();
     }

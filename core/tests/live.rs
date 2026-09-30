@@ -529,3 +529,42 @@ fn a_group_can_be_soloed() {
     let e = player.engine().unwrap();
     assert!((0..e.track_count()).all(|i| !e.track_muted(i)), "the same group again takes the solo off");
 }
+
+/// A knob tried on a parameter moves it at once, with no `midi` line: what
+/// the screen does while a knob is being chosen.
+#[test]
+fn a_knob_tried_on_a_track_moves_it_without_a_midi_line() {
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    let plan = planner.plan(LIVE, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json()));
+    player.apply(plan);
+    player.start();
+    let before = player.engine().unwrap().track_level(1);
+    let turn = planner.try_knob("bass.level", 0, player.generation());
+    assert!(!turn.plans.is_empty(), "the level should move");
+    assert!(turn.readings[0].starts_with("bass level"), "{:?}", turn.readings);
+    for p in turn.plans {
+        player.apply(p);
+    }
+    let after = player.engine().unwrap().track_level(1);
+    assert!(after < before, "level {} should drop below {}", after, before);
+    assert!(planner.try_knob("nothing.here", 64, player.generation()).plans.is_empty());
+}
+
+/// Keeping a knob writes a `midi` line: the save that brings it is taken
+/// without a swap, and the knob moves its target from then on.
+#[test]
+fn a_midi_line_added_on_a_save_maps_the_knob_at_once() {
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    let plan = planner.plan(LIVE, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json()));
+    player.apply(plan);
+    player.start();
+    assert!(planner.knob(74, 10, player.generation()).plans.is_empty());
+    let mapped = format!("{}\nmidi {{\n    cc 74 > bass level\n}}\n", LIVE);
+    let plan = planner.plan(&mapped, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json()));
+    assert!(!matches!(plan, Plan::Swap { .. }), "a new knob should not rebuild the song");
+    player.apply(plan);
+    let turn = planner.knob(74, 10, player.generation());
+    assert!(!turn.plans.is_empty(), "cc 74 should move the bass now");
+}
