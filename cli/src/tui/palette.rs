@@ -18,6 +18,8 @@ pub const DIM: Color = Color::Rgb(150, 138, 178);
 pub const TEXT: Color = Color::Rgb(220, 210, 235);
 pub const HOT: Color = Color::Rgb(249, 140, 10);
 pub const GOLD: Color = Color::Rgb(249, 201, 50);
+/// The keycap a step's key is drawn on.
+pub const KEYCAP: Color = Color::Rgb(62, 56, 88);
 pub const ERR: Color = Color::Rgb(255, 80, 80);
 pub const OK: Color = Color::Rgb(120, 220, 160);
 

@@ -31,7 +31,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::{DefaultTerminal, Frame};
 
-use palette::{inferno, BG, DIM, ERR, GOLD, HOT, OK, PANEL, TEXT};
+use palette::{inferno, BG, DIM, ERR, GOLD, HOT, KEYCAP, OK, PANEL, TEXT};
 pub use telemetry::Telemetry;
 use telemetry::BANDS;
 
@@ -1018,17 +1018,26 @@ impl Screen {
             } else {
                 Style::new().fg(DIM).bg(PANEL)
             };
-            // The step's number in the set, then its name.
-            let body: String = format!(" {} {}", i + 1, step_name(name)).chars().take(chip_w as usize - 3).collect();
-            let label = format!("{:<width$}", body, width = chip_w as usize - 2);
-            // The key that reaches the chip, dim before it.
+            // The key that reaches the chip, drawn as a keycap apart from it,
+            // so it never reads as part of the step's number.
             buf.set_string(
                 x,
                 area.y + 1,
                 format!("{}", slot + 1),
-                style.fg(if i == set.current || queued { Color::Black } else { DIM }),
+                Style::new().fg(TEXT).bg(KEYCAP).add_modifier(Modifier::BOLD),
             );
-            buf.set_string(x + 1, area.y + 1, &label, style);
+            // The step's number in the set, marked as one, then its name.
+            let width = chip_w as usize - 3;
+            let number = format!(" #{} ", i + 1);
+            let name: String = step_name(name).chars().take(width.saturating_sub(number.chars().count())).collect();
+            let label = format!("{:<width$}", name, width = width.saturating_sub(number.chars().count()));
+            buf.set_string(x + 2, area.y + 1, &number, style.add_modifier(Modifier::BOLD));
+            buf.set_string(
+                x + 2 + number.chars().count() as u16,
+                area.y + 1,
+                &label,
+                style.remove_modifier(Modifier::BOLD),
+            );
         }
         // More steps either side: an arrow says so.
         if self.view > 0 {
