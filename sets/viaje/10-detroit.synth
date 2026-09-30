@@ -12,5 +12,5 @@ track hats   { play hat_off8 level 2 }
 track sub    { play rest level 0 }
 track perc   { play perc_detroit8 level 0.84 delay_send 0.15 reverb_send 0.12 }
 track under  { play ch_low level 0.08 }
-track bass   { play bs_ab16 level 0.95 }
+track bass   { play bs_ab16 up -15 level 0.95 }
 track chords { play ch_a level 0.24 }
