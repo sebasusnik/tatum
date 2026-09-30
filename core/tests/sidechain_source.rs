@@ -66,7 +66,8 @@ fn ducking_follows_the_named_source_and_not_the_kick() {
     // two configurations at the same step keeps the pad's own envelope out of it.
     // Only the onsets: step 8 is the kick's, but the bass note from steps 4-7 is
     // still releasing there, so both configurations duck and neither wins.
-    for step in [0usize] {
+    {
+        let step = 0usize;
         assert!(
             kicked[step] < bassed[step] * 0.9,
             "step {}: the kick should duck harder than the bass does ({} vs {})\nkick {:?}\nbass {:?}",

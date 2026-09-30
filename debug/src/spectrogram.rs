@@ -144,14 +144,8 @@ mod tests {
             s.push((2.0 * std::f32::consts::PI * 1000.0 * i as f32 / SAMPLE_RATE).sin());
         }
         let c = s.columns() / 2;
-        let (row, &top) = (0..ROWS)
-            .map(|r| s.cell(c, r))
-            .collect::<Vec<_>>()
-            .iter()
-            .enumerate()
-            .max_by_key(|(_, v)| **v)
-            .map(|(r, v)| (r, v))
-            .unwrap();
+        let (row, &top) =
+            (0..ROWS).map(|r| s.cell(c, r)).collect::<Vec<_>>().iter().enumerate().max_by_key(|(_, v)| **v).unwrap();
         assert!((row_hz(row as f32) - 1000.0).abs() < 60.0, "row {row} = {} Hz", row_hz(row as f32));
         assert!(cell_db(top) > -2.0, "peak {} dB", cell_db(top));
         // and an octave away there is next to nothing

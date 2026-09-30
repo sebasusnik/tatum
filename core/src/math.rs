@@ -283,10 +283,10 @@ mod tests {
             (HALF_PI, 1.0),
             (PI, 0.0),
             (-HALF_PI, -1.0),
-            (PI / 6.0, 0.5),                // sin(30°)
-            (PI / 4.0, 0.7071067811865476), // sin(45°)
-            (PI / 3.0, 0.8660254037844386), // sin(60°)
-            (3.0 * PI, 0.0),                // sin(3π)
+            (PI / 6.0, 0.5),          // sin(30°)
+            (PI / 4.0, 0.707_106_77), // sin(45°)
+            (PI / 3.0, 0.866_025_4),  // sin(60°)
+            (3.0 * PI, 0.0),          // sin(3π)
         ];
         for (x, expected) in test_cases {
             let result = sin(x);
@@ -297,7 +297,7 @@ mod tests {
         assert!(abs(r) < 0.001, "sin(-π) = {}, expected ~0", r);
         // Large input
         let r = sin(100.0);
-        let expected = -0.5063656411097588_f32; // sin(100) reference
+        let expected = -0.506_365_66_f32; // sin(100) reference
         assert!(abs(r - expected) < 0.001, "sin(100) = {}, expected {}", r, expected);
     }
 
@@ -390,7 +390,7 @@ mod tests {
         assert!(abs(e0 - 1.0) < 0.01, "exp(0) should be 1, got {}", e0);
 
         let e1 = exp(1.0);
-        assert!(abs(e1 - 2.71828) < 0.05, "exp(1) should be ~2.718, got {}", e1);
+        assert!(abs(e1 - core::f32::consts::E) < 0.05, "exp(1) should be ~2.718, got {}", e1);
     }
 
     #[test]
@@ -399,6 +399,6 @@ mod tests {
         assert!(abs(s4 - 2.0) < 0.01, "sqrt(4) should be 2, got {}", s4);
 
         let s2 = sqrt(2.0);
-        assert!(abs(s2 - 1.41421) < 0.01, "sqrt(2) should be ~1.414, got {}", s2);
+        assert!(abs(s2 - core::f32::consts::SQRT_2) < 0.01, "sqrt(2) should be ~1.414, got {}", s2);
     }
 }

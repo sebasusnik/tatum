@@ -265,10 +265,8 @@ fn test_harmony_progression() {
         let bass_midi = if bass_note >= 12 { bass_note - 12 } else { bass_note };
         bass.note_on(bass_midi, 0.9);
 
-        for note_opt in &chord_notes {
-            if let Some(note) = note_opt {
-                keys.note_on(*note, 0.7);
-            }
+        for note in chord_notes.iter().flatten() {
+            keys.note_on(*note, 0.7);
         }
 
         let start = chord_idx * samples_per_chord;
@@ -288,10 +286,8 @@ fn test_harmony_progression() {
         }
 
         bass.note_off(bass_midi);
-        for note_opt in &chord_notes {
-            if let Some(note) = note_opt {
-                keys.note_off(*note);
-            }
+        for note in chord_notes.iter().flatten() {
+            keys.note_off(*note);
         }
     }
 
@@ -512,16 +508,16 @@ fn test_delay_tempo_sync() {
 
     let (first, _) = delay.process_stereo(1.0, 1.0);
     out[0] = first;
-    for i in 1..total {
+    for o in out.iter_mut().take(total).skip(1) {
         let (l, _) = delay.process_stereo(0.0, 0.0);
-        out[i] = l;
+        *o = l;
     }
 
     let mut peak_idx = 0;
     let mut peak_val = 0.0f32;
-    for i in (expected_samples - 100)..(expected_samples + 100) {
-        if out[i].abs() > peak_val {
-            peak_val = out[i].abs();
+    for (i, o) in out.iter().enumerate().take(expected_samples + 100).skip(expected_samples - 100) {
+        if o.abs() > peak_val {
+            peak_val = o.abs();
             peak_idx = i;
         }
     }
@@ -670,10 +666,10 @@ fn test_limiter_release_envelope() {
 
     const M: usize = 8000;
     let mut gains = [0.0f32; M];
-    for i in 0..M {
+    for g in gains.iter_mut() {
         let probe = 0.5;
         let (ol, _) = limiter.process_stereo(probe, probe);
-        gains[i] = ol / probe;
+        *g = ol / probe;
     }
 
     let early_gain = gains[100];
@@ -1291,9 +1287,9 @@ fn test_reverb_pre_delay_wav() {
     assert!(max_early < 0.01, "First {} samples should be quiet with 20ms pre-delay, max={}", check_end, max_early);
 
     let mut max_late = 0.0f32;
-    for i in (pre_delay_samples + 2000)..(pre_delay_samples + 8000).min(total) {
-        if samples_l[i].abs() > max_late {
-            max_late = samples_l[i].abs();
+    for s in samples_l.iter().take((pre_delay_samples + 8000).min(total)).skip(pre_delay_samples + 2000) {
+        if s.abs() > max_late {
+            max_late = s.abs();
         }
     }
     assert!(max_late > 0.001, "Should have reverb tail after pre-delay, max={}", max_late);
@@ -1430,21 +1426,19 @@ fn test_tilt_eq_spectral() {
     let len = (SAMPLE_RATE * 0.5) as usize;
 
     let mut signal = vec![0.0f32; len];
-    for i in 0..len {
+    for (i, x) in signal.iter_mut().enumerate().take(len) {
         let t = i as f32 / SAMPLE_RATE;
-        signal[i] = (TAU * 200.0 * t).sin() * 0.5 + (TAU * 2000.0 * t).sin() * 0.3 + (TAU * 8000.0 * t).sin() * 0.2;
+        *x = (TAU * 200.0 * t).sin() * 0.5 + (TAU * 2000.0 * t).sin() * 0.3 + (TAU * 8000.0 * t).sin() * 0.2;
     }
 
     let mut dark_eq = TiltEq::new(SAMPLE_RATE);
     dark_eq.set_tilt(1.0);
     let mut dark_crossings = 0u32;
     let mut prev = 0.0f32;
-    for i in 0..len {
-        let out = dark_eq.process_stereo(signal[i], signal[i]).0;
-        if i > 100 {
-            if (out >= 0.0) != (prev >= 0.0) {
-                dark_crossings += 1;
-            }
+    for (i, &x) in signal.iter().enumerate().take(len) {
+        let out = dark_eq.process_stereo(x, x).0;
+        if i > 100 && (out >= 0.0) != (prev >= 0.0) {
+            dark_crossings += 1;
         }
         prev = out;
     }
@@ -1453,12 +1447,10 @@ fn test_tilt_eq_spectral() {
     bright_eq.set_tilt(-1.0);
     let mut bright_crossings = 0u32;
     prev = 0.0;
-    for i in 0..len {
-        let out = bright_eq.process_stereo(signal[i], signal[i]).0;
-        if i > 100 {
-            if (out >= 0.0) != (prev >= 0.0) {
-                bright_crossings += 1;
-            }
+    for (i, &x) in signal.iter().enumerate().take(len) {
+        let out = bright_eq.process_stereo(x, x).0;
+        if i > 100 && (out >= 0.0) != (prev >= 0.0) {
+            bright_crossings += 1;
         }
         prev = out;
     }
@@ -1476,15 +1468,15 @@ fn test_three_band_eq_boost() {
     let len = (SAMPLE_RATE * 0.2) as usize;
 
     let mut signal = vec![0.0f32; len];
-    for i in 0..len {
+    for (i, x) in signal.iter_mut().enumerate().take(len) {
         let t = i as f32 / SAMPLE_RATE;
-        signal[i] = (TAU * 100.0 * t).sin() * 0.5;
+        *x = (TAU * 100.0 * t).sin() * 0.5;
     }
 
     let mut flat_eq = ThreeBandEq::new(SAMPLE_RATE);
     let mut flat_energy = 0.0f32;
-    for i in 0..len {
-        let out = flat_eq.process_stereo(signal[i], signal[i]).0;
+    for (i, &x) in signal.iter().enumerate().take(len) {
+        let out = flat_eq.process_stereo(x, x).0;
         if i > 200 {
             flat_energy += out * out;
         }
@@ -1493,8 +1485,8 @@ fn test_three_band_eq_boost() {
     let mut boost_eq = ThreeBandEq::new(SAMPLE_RATE);
     boost_eq.set_low(12.0);
     let mut boost_energy = 0.0f32;
-    for i in 0..len {
-        let out = boost_eq.process_stereo(signal[i], signal[i]).0;
+    for (i, &x) in signal.iter().enumerate().take(len) {
+        let out = boost_eq.process_stereo(x, x).0;
         if i > 200 {
             boost_energy += out * out;
         }
@@ -1513,9 +1505,9 @@ fn test_eq_flat_transparent() {
     let len = (SAMPLE_RATE * 0.1) as usize;
 
     let mut signal = vec![0.0f32; len];
-    for i in 0..len {
+    for (i, x) in signal.iter_mut().enumerate().take(len) {
         let t = i as f32 / SAMPLE_RATE;
-        signal[i] = (TAU * 440.0 * t).sin() * 0.5 + (TAU * 1000.0 * t).sin() * 0.3;
+        *x = (TAU * 440.0 * t).sin() * 0.5 + (TAU * 1000.0 * t).sin() * 0.3;
     }
 
     let mut tilt = TiltEq::new(SAMPLE_RATE);
@@ -1523,11 +1515,11 @@ fn test_eq_flat_transparent() {
 
     let warmup = 200;
     let mut max_diff = 0.0f32;
-    for i in 0..len {
-        let (tl, _) = tilt.process_stereo(signal[i], signal[i]);
+    for (i, &x) in signal.iter().enumerate().take(len) {
+        let (tl, _) = tilt.process_stereo(x, x);
         let (out, _) = eq3.process_stereo(tl, tl);
         if i >= warmup {
-            let diff = (out - signal[i]).abs();
+            let diff = (out - x).abs();
             if diff > max_diff {
                 max_diff = diff;
             }
