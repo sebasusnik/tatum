@@ -8,5 +8,5 @@ track bed   { play hiss_swell level 0.5 }
 track stab  { play stab_half8 level 0.3 delay_send 0.55 }
 track beat  { play kick_back16 level 0.76 }
 track hats  { play hat_ghost8 level 0.6 }
-track sub   { play sub_long level 0.46 }
+track sub   { play sub_long level 0.73 }
 track throw { play throw8 level 0.2 }

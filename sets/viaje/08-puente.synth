@@ -7,7 +7,7 @@ track bed   { play hiss_swell level 0.26 }
 track stab  { play stab_half8 level 0.2 delay_send 0.35 }
 track beat  { play kick_dub8 level 0.8 }
 track hats  { play hat_dub8 level 1.0 }
-track sub   { play sub_f8 level 0.36 }
+track sub   { play sub_f8 level 0.53 }
 track perc  { play perc_sparse8 level 0.45 }
 track under { play ch_low level 0.12 }
 track bass  { play bs_intro level 0.5 }
