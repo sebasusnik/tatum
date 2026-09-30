@@ -137,6 +137,19 @@ pub enum Tone {
     Bad,
 }
 
+impl Tone {
+    fn color(self) -> Color {
+        match self {
+            Tone::Info => TEXT,
+            Tone::Good => OK,
+            Tone::Bad => ERR,
+        }
+    }
+}
+
+/// Seconds the newest log line holds the footer before the keys come back.
+const NEWS_SECS: f32 = 4.0;
+
 /// The step list `g` opens: where the cursor is, and the number being typed.
 struct Picker {
     cursor: usize,
@@ -191,6 +204,8 @@ pub struct Screen {
     /// The track the transform keys act on, by index.
     selected: Option<usize>,
     help: bool,
+    /// The session log, open over everything, `l` toggles it.
+    log_open: bool,
     transformed: Vec<bool>,
     muted: Vec<bool>,
     /// The tracks soloed from the keyboard, by name, for their mark.
@@ -251,6 +266,7 @@ impl Screen {
             started: Instant::now(),
             selected: None,
             help: false,
+            log_open: false,
             transformed: Vec::new(),
             muted: Vec::new(),
             soloed: Vec::new(),
@@ -332,6 +348,8 @@ impl Screen {
                 KeyCode::Esc => {
                     if self.help {
                         self.help = false;
+                    } else if self.log_open {
+                        self.log_open = false;
                     } else {
                         self.selected = None;
                         self.marked.clear();
@@ -341,6 +359,10 @@ impl Screen {
                 KeyCode::Char('q') | KeyCode::Char('Q') => Some(Key::Quit),
                 KeyCode::Char('?') => {
                     self.help = !self.help;
+                    None
+                }
+                KeyCode::Char('l') => {
+                    self.log_open = !self.log_open;
                     None
                 }
                 KeyCode::Char('g') | KeyCode::Tab => {
@@ -648,14 +670,27 @@ impl Screen {
         self.spectrogram(f.buffer_mut(), spectrum);
         self.lanes(f.buffer_mut(), lanes, &active);
         self.bottom(f, bottom);
-        let hint = if self.set.is_some() {
-            " ← → choose a step · 1-9 the one on screen · ? every key · q quit"
-        } else {
-            " ? every key · q quit"
-        };
-        f.render_widget(Paragraph::new(hint).style(Style::new().fg(DIM).bg(BG)), footer);
+        // The newest word from the session shows here for a few seconds,
+        // then the keys come back; `l` has the whole log.
+        let now = self.started.elapsed().as_secs_f32();
+        match self.log.back().filter(|(t, _, _)| now - t < NEWS_SECS) {
+            Some((_, line, tone)) => {
+                let text: String = format!(" {}", line).chars().take(footer.width as usize).collect();
+                f.render_widget(Paragraph::new(text).style(Style::new().fg(tone.color()).bg(BG)), footer);
+            }
+            None => {
+                let hint = if self.set.is_some() {
+                    " ← → choose a step · 1-9 the one on screen · ? every key · l log · q quit"
+                } else {
+                    " ? every key · l log · q quit"
+                };
+                f.render_widget(Paragraph::new(hint).style(Style::new().fg(DIM).bg(BG)), footer);
+            }
+        }
         if self.help {
             self.help_overlay(f, area);
+        } else if self.log_open {
+            self.log_overlay(f, area);
         }
         self.picker_overlay(f, area);
     }
@@ -828,6 +863,36 @@ impl Screen {
 
     /// `?`: the words, the keys for them, and what the selected track could
     /// play instead.
+    fn log_overlay(&self, f: &mut Frame, area: Rect) {
+        let w = area.width.clamp(40, 100);
+        // As tall as the log, up to most of the screen.
+        let h = (self.log.len() as u16 + 2).clamp(4, area.height.clamp(8, 24));
+        let pop = Rect { x: area.x + (area.width - w) / 2, y: area.y + (area.height - h) / 2, width: w, height: h };
+        let lines: Vec<Line> = self
+            .log
+            .iter()
+            .rev()
+            .take(h.saturating_sub(2) as usize)
+            .rev()
+            .map(|(t, line, tone)| {
+                Line::from(vec![
+                    Span::styled(format!(" {:>4}:{:02} ", *t as u32 / 60, *t as u32 % 60), Style::new().fg(DIM)),
+                    Span::styled(line.clone(), Style::new().fg(tone.color())),
+                ])
+            })
+            .collect();
+        f.render_widget(ratatui::widgets::Clear, pop);
+        f.render_widget(
+            Paragraph::new(lines).block(
+                Block::bordered()
+                    .border_style(Style::new().fg(GOLD))
+                    .title(Span::styled(" session  ·  l or Esc closes ", Style::new().fg(GOLD)))
+                    .style(Style::new().bg(PANEL)),
+            ),
+            pop,
+        );
+    }
+
     fn help_overlay(&self, f: &mut Frame, area: Rect) {
         let w = area.width.clamp(40, 82);
         let h = area.height.clamp(10, 30);
@@ -856,6 +921,7 @@ impl Screen {
             key("d", "degrade", "drop 25%, then 50% of the notes"),
             key("x", "", "every transform off"),
             key("u", "", "undo the last change made from here"),
+            key("l", "log", "what happened this session"),
             Line::raw(""),
             Line::styled(
                 " in the file: iter 4 · ply 2 · octave 1 · up 5st · sometimes 30% rev · play a, b",
@@ -1274,9 +1340,14 @@ impl Screen {
     }
 
     fn bottom(&self, f: &mut Frame, area: Rect) {
-        let [knobs, log] = Layout::horizontal([Constraint::Percentage(40), Constraint::Percentage(60)]).areas(area);
-        // A track chosen: its pattern takes the knobs' place.
-        let knobs = if self.grid(f, knobs) { Rect::default() } else { knobs };
+        // The knobs always; beside them the error when the file has one,
+        // else the chosen track's pattern. The log is behind `l`.
+        let side = self.error.is_some() || self.selected.is_some();
+        let [knobs, right] = if side {
+            Layout::horizontal([Constraint::Percentage(35), Constraint::Percentage(65)]).areas(area)
+        } else {
+            [area, Rect::default()]
+        };
         let block = |title: &str, color: Color| {
             Block::new()
                 .borders(Borders::TOP)
@@ -1300,30 +1371,11 @@ impl Screen {
             let lines: Vec<Line> = err.iter().map(|l| Line::styled(format!(" {}", l), Style::new().fg(ERR))).collect();
             f.render_widget(
                 Paragraph::new(lines).block(block("error — still playing the last good version", ERR)),
-                log,
+                right,
             );
             return;
         }
-        let height = log.height.saturating_sub(1) as usize;
-        let lines: Vec<Line> = self
-            .log
-            .iter()
-            .rev()
-            .take(height)
-            .rev()
-            .map(|(t, line, tone)| {
-                let color = match tone {
-                    Tone::Info => TEXT,
-                    Tone::Good => OK,
-                    Tone::Bad => ERR,
-                };
-                Line::from(vec![
-                    Span::styled(format!(" {:>4}:{:02} ", *t as u32 / 60, *t as u32 % 60), Style::new().fg(DIM)),
-                    Span::styled(line.clone(), Style::new().fg(color)),
-                ])
-            })
-            .collect();
-        f.render_widget(Paragraph::new(lines).block(block("session", GOLD)), log);
+        self.grid(f, right);
     }
 }
 
@@ -1333,6 +1385,11 @@ impl Screen {
         let mut term = ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).expect("test backend");
         term.draw(|f| self.render(f)).expect("test backend");
         term.backend().buffer().clone()
+    }
+
+    /// For a picture: the session log open, as `l` would.
+    pub fn open_log(&mut self) {
+        self.log_open = true;
     }
 
     /// For a picture: the step list open at step `n`, as `g` and typing would.

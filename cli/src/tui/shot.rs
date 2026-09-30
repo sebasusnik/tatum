@@ -19,7 +19,7 @@ use super::{Screen, SongInfo, Telemetry, Tone};
 use crate::include::Source;
 
 const USAGE: &str =
-    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--see-through] [--glass] [--select <track>] [--mute <track>] [--solo <track>] [--pick N] [--help] [-o shot.png]";
+    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--see-through] [--glass] [--select <track>] [--mute <track>] [--solo <track>] [--pick N] [--help] [--log] [-o shot.png]";
 const CELL_W: usize = 12;
 const CELL_H: usize = 24;
 
@@ -30,6 +30,7 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     let mut glass = false;
     let mut select: Option<String> = None;
     let mut help = false;
+    let mut log = false;
     let mut mute: Vec<String> = Vec::new();
     let mut solo: Option<String> = None;
     let mut pick: Option<usize> = None;
@@ -52,6 +53,7 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
             "--see-through" => see_through = true,
             "--glass" => glass = true,
             "--help" => help = true,
+            "--log" => log = true,
             "--mute" => {
                 mute.push(value(i)?);
                 i += 1;
@@ -150,6 +152,9 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     }
     screen.glass = glass;
     screen.draw_offline(select.as_deref(), help);
+    if log {
+        screen.open_log();
+    }
     if let Some(n) = pick {
         screen.open_picker(n);
     }
