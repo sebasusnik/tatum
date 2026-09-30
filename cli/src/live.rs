@@ -46,6 +46,8 @@ struct Stats {
     /// The bar the engine is in, and its tempo as f32 bits, for a set to
     /// time its moves on.
     bar: AtomicU64,
+    /// The step the engine is on since it started, for the screen's beat.
+    step: AtomicU64,
     tempo: AtomicU64,
 }
 
@@ -57,6 +59,8 @@ pub fn cmd(args: &[String], watch: bool) {
     let mut device: Option<&str> = None;
     let mut rate: Option<u32> = None;
     let mut midi: Option<&str> = None;
+    let mut tui = false;
+    let mut glass = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -92,6 +96,13 @@ pub fn cmd(args: &[String], watch: bool) {
                 crate::midi::list();
                 return;
             }
+            "--tui" => tui = true,
+            // Sound painted with cell backgrounds only, for a terminal that
+            // makes them translucent (Ghostty: `background-opacity-cells`).
+            "--glass" => {
+                tui = true;
+                glass = true;
+            }
             other if other.starts_with('-') => {
                 eprintln!("error: unknown flag '{}'", other);
                 std::process::exit(1);
@@ -102,10 +113,10 @@ pub fn cmd(args: &[String], watch: bool) {
     }
     let Some(path) = path else {
         eprintln!("error: missing input file");
-        eprintln!("usage: tatum {} <song.synth> [--device <name>] [--midi <name>]", verb);
+        eprintln!("usage: tatum {} <song.synth> [--device <name>] [--midi <name>] [--tui | --glass]", verb);
         std::process::exit(1);
     };
-    if let Err(msg) = run(path, watch, device, rate, midi, isolation, None) {
+    if let Err(msg) = run(path, watch, device, rate, midi, isolation, None, tui, glass) {
         eprintln!("error: {}", msg);
         std::process::exit(1);
     }
@@ -190,6 +201,8 @@ fn open_device(wanted: Option<&str>) -> Result<cpal::Device, String> {
 
 /// The live session. With `set`, `path` is its first step, the file watched
 /// is whichever step plays, and the keys and pads move through the steps.
+/// With `tui` it runs on one full screen instead of printing lines.
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     path: &str,
     watch: bool,
@@ -198,6 +211,8 @@ pub fn run(
     midi_name: Option<&str>,
     isolation: tatum_core::dsl::isolate::Isolation,
     mut set: Option<crate::setnav::SetNav>,
+    tui: bool,
+    glass: bool,
 ) -> Result<(), String> {
     let mut source = Source::load(std::path::Path::new(path))?;
     if !isolation.is_empty() {
@@ -243,9 +258,14 @@ pub fn run(
         late: AtomicU64::new(0),
         frames: AtomicU64::new(0),
         bar: AtomicU64::new(0),
+        step: AtomicU64::new(0),
         tempo: AtomicU64::new(tempo.to_bits() as u64),
     });
     let stats_cb = Arc::clone(&stats);
+    // What the screen draws, written by the callback. Only with a screen:
+    // the per-band meters cost the audio thread work nobody would see.
+    let telemetry = tui.then(|| Arc::new(crate::tui::Telemetry::new()));
+    let telemetry_cb = telemetry.clone();
 
     player.start();
     let mut was_running = true;
@@ -268,6 +288,10 @@ pub fn run(
                         let _ = event_tx.try_send(Event::Applied(applied));
                     }
                 }
+                if let (Some(_), Some(e)) = (&telemetry_cb, player.engine_mut()) {
+                    // A new engine arrives with it off; setting it is a store.
+                    e.set_band_metering(true);
+                }
                 let mut l = [0.0f32; BLOCK_SIZE];
                 let mut r = [0.0f32; BLOCK_SIZE];
                 for chunk in data.chunks_mut(BLOCK_SIZE * 2) {
@@ -276,6 +300,9 @@ pub fn run(
                         None => {
                             if let Some(bar) = player.process(&mut l[..frames], &mut r[..frames]) {
                                 let _ = event_tx.try_send(Event::Swapped { bar });
+                            }
+                            if let Some(t) = &telemetry_cb {
+                                t.push(&l[..frames], &r[..frames]);
                             }
                         }
                         Some(rs) => {
@@ -286,6 +313,9 @@ pub fn run(
                                 let mut br = [0.0f32; BLOCK_SIZE];
                                 if let Some(bar) = player.process(&mut bl, &mut br) {
                                     let _ = event_tx.try_send(Event::Swapped { bar });
+                                }
+                                if let Some(t) = &telemetry_cb {
+                                    t.push(&bl, &br);
                                 }
                                 rs.push(&bl, &br);
                             }
@@ -299,6 +329,9 @@ pub fn run(
                         }
                     }
                 }
+                if let (Some(t), Some(e)) = (&telemetry_cb, player.engine_mut()) {
+                    t.meter(e);
+                }
                 while let Some(retired) = player.take_retired() {
                     if let Err(TrySendError::Full(_)) = retired_tx.try_send(retired) {
                         let _ = event_tx.try_send(Event::DroppedInPlace);
@@ -311,6 +344,7 @@ pub fn run(
                 stats_cb.generation.store(player.generation(), Ordering::Relaxed);
                 if let Some(e) = player.engine() {
                     stats_cb.bar.store(e.current_bar() as u64, Ordering::Relaxed);
+                    stats_cb.step.store(e.global_step() as u64, Ordering::Relaxed);
                     stats_cb.tempo.store(e.tempo().to_bits() as u64, Ordering::Relaxed);
                 }
                 stats_cb.callbacks.fetch_add(1, Ordering::Relaxed);
@@ -328,74 +362,84 @@ pub fn run(
         .map_err(|e| format!("cannot open output stream: {}", e))?;
     stream.play().map_err(|e| format!("cannot start output stream: {}", e))?;
 
-    eprintln!(
-        "{} {} on {}{}",
-        verb(watch),
-        path,
-        device_desc,
-        if rate == SAMPLE_RATE as u32 {
-            String::new()
-        } else {
-            format!(" (resampled {} -> {} Hz)", SAMPLE_RATE as u32, rate)
-        }
-    );
-    eprintln!(
-        "  {} BPM, {} tracks, {}",
-        tempo,
-        tracks,
-        if bars > 0 {
-            format!("{} bars arranged", bars)
-        } else {
-            "no arrangement: loops until you stop it".to_string()
-        }
-    );
+    let resampled = if rate == SAMPLE_RATE as u32 {
+        String::new()
+    } else {
+        format!(" (resampled {} -> {} Hz)", SAMPLE_RATE as u32, rate)
+    };
     // Every input is read even when the song maps no knob yet, so adding a
     // `midi` block while watching works without a restart.
     let (midi_tx, midi_rx) = channel::<Midi>();
     let inputs = crate::midi::open(midi_name, &midi_tx)?;
-    if !inputs.names.is_empty() && (planner.has_knobs() || midi_name.is_some()) {
-        eprintln!("  midi: {}", inputs.names.join(", "));
-    } else if inputs.names.is_empty() && planner.has_knobs() {
-        eprintln!("  midi: no input found; the knobs in this song are waiting for one");
-    }
     let (key_tx, key_rx) = channel::<crate::keys::Key>();
-    let _keys = match &set {
-        Some(nav) => {
-            eprintln!("  steps, {} bars to a phrase; a move lands on the next phrase line:", nav.phrase);
-            for i in 0..nav.steps.len() {
-                eprintln!("    {}", nav.describe(i));
-            }
-            eprintln!("  space or → next, ← back, 1-9 a step, q quit; save the playing step to re-evaluate it");
-            Some(crate::keys::spawn(key_tx))
-        }
-        None => {
-            eprintln!("  {}q + Enter to quit", if watch { "save the file to re-evaluate it; " } else { "" });
-            None
-        }
-    };
-
-    // stdin reader: `q` quits. A set reads single keys instead.
     let (quit_tx, quit_rx) = sync_channel::<()>(1);
-    let lines = set.is_none();
-    std::thread::spawn(move || {
-        if !lines {
-            return;
+
+    let mut ui = match &telemetry {
+        Some(t) => {
+            let mut screen =
+                crate::tui::Screen::new(Arc::clone(t), format!("{}{}", device_desc, resampled), inputs.names.clone())
+                    .map_err(|e| format!("cannot open the screen: {}", e))?;
+            screen.glass = glass;
+            screen.say(format!("{} {}", verb(watch), path), crate::tui::Tone::Info);
+            Ui::Screen(Box::new(screen))
         }
-        let stdin = std::io::stdin();
-        for line in stdin.lock().lines() {
-            match line {
-                Ok(l) if l.trim() == "q" => {
-                    let _ = quit_tx.send(());
-                    break;
+        None => Ui::Plain(Status::new()),
+    };
+    let _keys = if let Ui::Plain(_) = ui {
+        eprintln!("{} {} on {}{}", verb(watch), path, device_desc, resampled);
+        eprintln!(
+            "  {} BPM, {} tracks, {}",
+            tempo,
+            tracks,
+            if bars > 0 {
+                format!("{} bars arranged", bars)
+            } else {
+                "no arrangement: loops until you stop it".to_string()
+            }
+        );
+        if !inputs.names.is_empty() && (planner.has_knobs() || midi_name.is_some()) {
+            eprintln!("  midi: {}", inputs.names.join(", "));
+        } else if inputs.names.is_empty() && planner.has_knobs() {
+            eprintln!("  midi: no input found; the knobs in this song are waiting for one");
+        }
+        match &set {
+            Some(nav) => {
+                eprintln!("  steps, {} bars to a phrase; a move lands on the next phrase line:", nav.phrase);
+                for i in 0..nav.steps.len() {
+                    eprintln!("    {}", nav.describe(i));
                 }
-                Ok(_) => {}
-                Err(_) => break,
+                eprintln!("  space or → next, ← back, 1-9 a step, q quit; save the playing step to re-evaluate it");
+                Some(crate::keys::spawn(key_tx))
+            }
+            None => {
+                eprintln!("  {}q + Enter to quit", if watch { "save the file to re-evaluate it; " } else { "" });
+                // stdin reader: `q` quits.
+                std::thread::spawn(move || {
+                    let stdin = std::io::stdin();
+                    for line in stdin.lock().lines() {
+                        match line {
+                            Ok(l) if l.trim() == "q" => {
+                                let _ = quit_tx.send(());
+                                break;
+                            }
+                            Ok(_) => {}
+                            Err(_) => break,
+                        }
+                    }
+                });
+                None
             }
         }
-    });
+    } else {
+        None
+    };
+    let title = |source: &Source, set: &Option<crate::setnav::SetNav>| match set {
+        Some(nav) => nav.describe(nav.current),
+        None => source.files[0].file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default(),
+    };
+    ui.song(&title(&source, &set), &source);
 
     let started = Instant::now();
-    let mut status = Status::new();
     let mut last_mtime: Option<SystemTime> = source.newest_mtime();
     let mut swaps = 0u32;
     let mut fast = 0u32;
@@ -410,14 +454,19 @@ pub fn run(
     // every hit is sent, in the order it was played.
     let mut unsent: [Option<u8>; 128] = [None; 128];
     let mut unsent_bend: Option<u16> = None;
-    let poll_every = Duration::from_millis(50);
+    // What the screen's keys changed, newest last, to take back: every file
+    // one key touched, as it was before.
+    let mut undo: Vec<Vec<(std::path::PathBuf, String)>> = Vec::new();
+    // The screen redraws at about 30 frames a second; lines need no hurry.
+    let poll_every = Duration::from_millis(if ui.is_screen() { 33 } else { 50 });
     let mut next_poll = Instant::now() + poll_every;
     loop {
-        // MIDI wakes the loop at once; otherwise it runs every 50 ms.
+        // MIDI wakes the loop at once; otherwise it runs every poll.
         let first = match midi_rx.recv_timeout(next_poll.saturating_duration_since(Instant::now())) {
             Ok(event) => Some(event),
             Err(RecvTimeoutError::Timeout) | Err(RecvTimeoutError::Disconnected) => None,
         };
+        let now_s = || started.elapsed().as_secs_f32();
         let mut readings = Vec::new();
         for event in first.into_iter().chain(std::iter::from_fn(|| midi_rx.try_recv().ok())) {
             match event {
@@ -436,8 +485,8 @@ pub fn run(
                                         _ => crate::setnav::Move::Next,
                                     };
                                     let bar = stats.bar.load(Ordering::Relaxed) as usize;
-                                    status.close();
-                                    eprintln!("[{:7.2}s] {}", started.elapsed().as_secs_f32(), nav.ask(m, bar));
+                                    let said = nav.ask(m, bar);
+                                    ui.say(now_s(), &said, crate::tui::Tone::Info);
                                 }
                                 None => {
                                     readings.push(format!("pad {}: moves through a set, in `tatum set play`", note))
@@ -488,7 +537,21 @@ pub fn run(
             let generation = stats.generation.load(Ordering::Relaxed);
             for (cc, slot) in unsent.iter_mut().enumerate() {
                 let Some(value) = *slot else { continue };
-                let turn = planner.knob(cc as u8, value, generation);
+                // With the knob list open, a knob tries the parameter the
+                // list points at instead of whatever it is mapped to.
+                let trying = match &ui {
+                    Ui::Screen(s) => s.knob_target(),
+                    Ui::Plain(_) => None,
+                };
+                let turn = match &trying {
+                    Some(t) => planner.try_knob(&t.dotted(), value, generation),
+                    None => planner.knob(cc as u8, value, generation),
+                };
+                if trying.is_some() {
+                    if let Ui::Screen(s) = &mut ui {
+                        s.knob_turned(cc as u8, turn.readings.first().cloned());
+                    }
+                }
                 let mut full = false;
                 for plan in turn.plans {
                     if let Err(TrySendError::Full(_)) = plan_tx.try_send(plan) {
@@ -511,107 +574,210 @@ pub fn run(
             }
         }
         if !readings.is_empty() {
-            status.show(&readings.join("   "));
+            ui.readings(readings);
         }
         if Instant::now() < next_poll {
             continue;
         }
         next_poll = Instant::now() + poll_every;
 
-        if let Some(nav) = set.as_mut() {
-            let mut quit = false;
-            while let Ok(key) = key_rx.try_recv() {
-                let bar = stats.bar.load(Ordering::Relaxed) as usize;
-                let m = match key {
-                    crate::keys::Key::Quit => {
-                        quit = true;
-                        break;
+        let mut quit = false;
+        let mut keys: Vec<crate::keys::Key> = key_rx.try_iter().collect();
+        if let Ui::Screen(screen) = &mut ui {
+            let watched = set.as_ref().map(|n| n.path()).unwrap_or_else(|| std::path::PathBuf::from(path));
+            for k in screen.keys() {
+                match k {
+                    crate::tui::Key::Quit => keys.push(crate::keys::Key::Quit),
+                    crate::tui::Key::Next => keys.push(crate::keys::Key::Next),
+                    crate::tui::Key::Prev => keys.push(crate::keys::Key::Prev),
+                    crate::tui::Key::Step(n) => keys.push(crate::keys::Key::Step(n)),
+                    // The screen writes the line in the file; the save is
+                    // picked up below like one from the editor.
+                    crate::tui::Key::Edit(op) => match edit_play(&watched, screen.selected_tracks(), op) {
+                        Ok((before, said)) => {
+                            undo.push(vec![(watched.clone(), before)]);
+                            screen.say(said, crate::tui::Tone::Good);
+                        }
+                        Err(e) => screen.say(e, crate::tui::Tone::Bad),
+                    },
+                    // Mute and solo are a gesture, not part of the song: they
+                    // go straight to the engine, at once, and a save keeps them.
+                    crate::tui::Key::Mute | crate::tui::Key::Solo => {
+                        let names: Vec<String> = screen.selected_tracks().into_iter().map(|(n, _)| n).collect();
+                        let generation = stats.generation.load(Ordering::Relaxed);
+                        let plans = if names.is_empty() {
+                            Vec::new()
+                        } else if k == crate::tui::Key::Mute {
+                            // Each selected track flips on its own; each call
+                            // returns every track's state, so the last is all
+                            // that needs sending.
+                            let mut plans = Vec::new();
+                            for n in &names {
+                                plans = planner.toggle_mute(n, generation);
+                            }
+                            plans
+                        } else {
+                            planner.toggle_solo_group(&names, generation)
+                        };
+                        for plan in plans {
+                            if plan_tx.send(plan).is_err() {
+                                break;
+                            }
+                        }
+                        screen.soloed = planner.soloed().to_vec();
                     }
-                    crate::keys::Key::Next => crate::setnav::Move::Next,
-                    crate::keys::Key::Prev => crate::setnav::Move::Prev,
-                    crate::keys::Key::Step(n) => crate::setnav::Move::To(n),
-                };
-                status.close();
-                eprintln!("[{:7.2}s] {}", started.elapsed().as_secs_f32(), nav.ask(m, bar));
+                    // The knob list keeps a knob on something by writing its
+                    // `midi` line, where the song keeps its knobs.
+                    crate::tui::Key::Knob(change) => match screen.knob_target() {
+                        Some(target) => match crate::tui::knobs::write(&source.files, &target, change) {
+                            Ok((before, said)) => {
+                                undo.push(before);
+                                screen.say(said, crate::tui::Tone::Good);
+                            }
+                            Err(e) => screen.say(e, crate::tui::Tone::Bad),
+                        },
+                        None => screen.say("nothing to put a knob on", crate::tui::Tone::Info),
+                    },
+                    crate::tui::Key::Undo => match undo.pop() {
+                        Some(files) => {
+                            let failed: Vec<String> = files
+                                .into_iter()
+                                .filter_map(|(file, before)| {
+                                    std::fs::write(&file, before).err().map(|e| format!("{}: {}", file.display(), e))
+                                })
+                                .collect();
+                            if failed.is_empty() {
+                                screen.say("undone", crate::tui::Tone::Good);
+                            } else {
+                                screen.say(format!("cannot write {}", failed.join(", ")), crate::tui::Tone::Bad);
+                            }
+                        }
+                        None => screen.say("nothing to undo", crate::tui::Tone::Info),
+                    },
+                }
             }
-            if quit {
-                break;
+        }
+        for key in keys {
+            let m = match key {
+                crate::keys::Key::Quit => {
+                    quit = true;
+                    break;
+                }
+                crate::keys::Key::Next => crate::setnav::Move::Next,
+                crate::keys::Key::Prev => crate::setnav::Move::Prev,
+                crate::keys::Key::Step(n) => crate::setnav::Move::To(n),
+            };
+            if let Some(nav) = set.as_mut() {
+                let bar = stats.bar.load(Ordering::Relaxed) as usize;
+                let said = nav.ask(m, bar);
+                ui.say(now_s(), &said, crate::tui::Tone::Info);
             }
+        }
+        if quit {
+            break;
+        }
+        if let Some(nav) = set.as_mut() {
             let bar = stats.bar.load(Ordering::Relaxed) as usize;
             let tempo = f32::from_bits(stats.tempo.load(Ordering::Relaxed) as u32);
             let generation = stats.generation.load(Ordering::Relaxed);
             let before = nav.current;
-            let (plans, said) = nav.tick(bar, tempo, generation, started.elapsed().as_secs_f32(), &mut planner);
+            let (plans, said) = nav.tick(bar, tempo, generation, now_s(), &mut planner);
             for plan in plans {
                 if plan_tx.send(plan).is_err() {
                     break;
                 }
             }
             for line in said {
-                status.close();
-                eprintln!("[{:7.2}s] {}", started.elapsed().as_secs_f32(), line);
+                ui.say(now_s(), &line, crate::tui::Tone::Info);
             }
             if nav.current != before {
                 if let Ok(s) = Source::load(&nav.path()) {
                     source = s;
                     last_mtime = source.newest_mtime();
+                    ui.song(&nav.describe(nav.current), &source);
                 }
             }
             if let Some((step, bars)) = nav.waiting(bar) {
-                status.show(&format!(
+                let line = format!(
                     "bar {} · next {} in {} bar{}",
                     bar + 1,
                     nav.describe(step),
                     bars,
                     if bars == 1 { "" } else { "s" }
-                ));
+                );
+                ui.waiting(&line);
             }
         }
 
         // Everything the callback retired is freed here.
         while let Ok(_retired) = retired_rx.try_recv() {}
         while let Ok(ev) = event_rx.try_recv() {
-            status.close();
-            let t = started.elapsed().as_secs_f32();
+            let t = now_s();
             match ev {
                 Event::Applied(Applied::Fast) => {
                     fast += 1;
-                    eprintln!("[{:7.2}s] applied instantly", t);
+                    ui.say(t, "applied instantly", crate::tui::Tone::Good);
                 }
-                Event::Applied(Applied::Queued) => eprintln!("[{:7.2}s] queued for the next bar", t),
-                Event::Applied(Applied::Loaded) => eprintln!("[{:7.2}s] loaded (nothing was playing)", t),
-                Event::Applied(Applied::Unchanged) => eprintln!("[{:7.2}s] unchanged", t),
+                Event::Applied(Applied::Queued) => ui.say(t, "queued for the next bar", crate::tui::Tone::Info),
+                Event::Applied(Applied::Loaded) => ui.say(t, "loaded (nothing was playing)", crate::tui::Tone::Info),
+                Event::Applied(Applied::Unchanged) => ui.say(t, "unchanged", crate::tui::Tone::Info),
                 Event::Applied(Applied::Control) => {}
-                Event::Applied(Applied::Stale) => eprintln!("[{:7.2}s] BUG: plan was stale, edit lost; save again", t),
+                Event::Applied(Applied::Stale) => {
+                    ui.say(t, "BUG: plan was stale, edit lost; save again", crate::tui::Tone::Bad)
+                }
                 Event::Swapped { bar } => {
                     swaps += 1;
                     let landed = set.as_mut().and_then(|nav| nav.landed(stats.generation.load(Ordering::Relaxed), t));
                     match landed {
                         Some(line) => {
-                            eprintln!("[{:7.2}s] bar {}: {}", t, bar + 1, line);
+                            ui.say(t, &format!("bar {}: {}", bar + 1, line), crate::tui::Tone::Good);
                             if let Some(nav) = set.as_ref() {
                                 if let Ok(s) = Source::load(&nav.path()) {
                                     source = s;
                                     last_mtime = source.newest_mtime();
+                                    ui.song(&nav.describe(nav.current), &source);
                                 }
                             }
                         }
-                        None => eprintln!("[{:7.2}s] swapped at bar {}", t, bar),
+                        None => ui.say(t, &format!("swapped at bar {}", bar), crate::tui::Tone::Good),
                     }
                 }
                 Event::Finished => {
                     finished = true;
-                    eprintln!("[{:7.2}s] arrangement finished", t);
+                    ui.say(t, "arrangement finished", crate::tui::Tone::Info);
+                    if let Ui::Screen(screen) = &mut ui {
+                        screen.finished();
+                    }
                 }
                 Event::DroppedInPlace => {
                     dropped_in_place += 1;
                 }
             }
         }
+        if let Ui::Screen(screen) = &mut ui {
+            if let Some(nav) = set.as_ref() {
+                let bar = stats.bar.load(Ordering::Relaxed) as usize;
+                screen.set = Some(crate::tui::SetView {
+                    steps: nav.steps.iter().map(|s| s.name()).collect(),
+                    current: nav.current,
+                    next: nav.waiting(bar),
+                    phrase: nav.phrase,
+                });
+            }
+            screen.position(
+                stats.bar.load(Ordering::Relaxed) as usize,
+                stats.step.load(Ordering::Relaxed) as usize,
+                f32::from_bits(stats.tempo.load(Ordering::Relaxed) as u32),
+            );
+            if let Err(e) = screen.draw() {
+                drop(ui);
+                return Err(format!("cannot draw the screen: {}", e));
+            }
+        }
         if quit_rx.try_recv().is_ok() {
             break;
         }
-        if finished && !watch {
+        if finished && !watch && !ui.is_screen() {
             break;
         }
         if !watch {
@@ -630,9 +796,8 @@ pub fn run(
             Ok(s) => s,
             Err(e) if e.starts_with("cannot read") && !e.contains(':') => continue,
             Err(e) => {
-                status.close();
                 rejected += 1;
-                eprintln!("{}\n  (still playing the last good version)", e);
+                ui.rejected(vec![e]);
                 continue;
             }
         };
@@ -640,7 +805,6 @@ pub fn run(
             continue;
         }
         source = new_source;
-        status.close();
         let generation = stats.generation.load(Ordering::Relaxed);
         match planner.plan(&source.text, generation) {
             Ok(plan) => {
@@ -648,18 +812,19 @@ pub fn run(
                 if plan_tx.send(plan).is_err() {
                     break;
                 }
-                eprintln!("[{:7.2}s] saved: {}", started.elapsed().as_secs_f32(), kind);
+                ui.saved(now_s(), kind);
+                ui.song(&title(&source, &set), &source);
             }
             Err(err) => {
                 rejected += 1;
-                source.print_errors(&err);
-                eprintln!("  (still playing the last good version)");
+                ui.rejected(source.error_lines(&err));
             }
         }
     }
     drop(inputs);
     drop(stream);
-    status.close();
+    // Put the terminal back before the summary is printed on it.
+    drop(ui);
 
     let callbacks = stats.callbacks.load(Ordering::Relaxed);
     let frames = stats.frames.load(Ordering::Relaxed);
@@ -690,6 +855,113 @@ pub fn run(
         eprintln!("{} retired engines were dropped on the audio thread (main thread fell behind)", dropped_in_place);
     }
     Ok(())
+}
+
+/// Apply a transform key to the selected track's `play` line in `file`.
+/// Returns the file as it was, for undo, and what to tell the performer.
+fn edit_play(
+    file: &std::path::Path,
+    selected: Vec<(String, String)>,
+    op: crate::tui::edit::Op,
+) -> Result<(String, String), String> {
+    if selected.is_empty() {
+        return Err("choose a track first with ↑ ↓".into());
+    }
+    let before = std::fs::read_to_string(file).map_err(|e| format!("cannot read {}: {}", file.display(), e))?;
+    // Every selected track's line, in one save.
+    let mut after = before.clone();
+    let mut said = Vec::new();
+    for (track, play) in selected {
+        let mut clause =
+            crate::tui::edit::Clause::parse(&play).ok_or_else(|| format!("cannot read `play {}`", play))?;
+        clause.apply(op);
+        after = crate::tui::edit::rewrite(&after, &track, &clause)?;
+        said.push(format!("{}: play {}", track, clause.text()));
+    }
+    std::fs::write(file, &after).map_err(|e| format!("cannot write {}: {}", file.display(), e))?;
+    Ok((before, said.join("  ·  ")))
+}
+
+/// Where the session's messages go: lines on stderr, or the screen.
+enum Ui {
+    Plain(Status),
+    Screen(Box<crate::tui::Screen>),
+}
+
+impl Ui {
+    fn is_screen(&self) -> bool {
+        matches!(self, Ui::Screen(_))
+    }
+
+    fn say(&mut self, t: f32, line: &str, tone: crate::tui::Tone) {
+        match self {
+            Ui::Plain(status) => {
+                status.close();
+                eprintln!("[{:7.2}s] {}", t, line);
+            }
+            Ui::Screen(screen) => screen.say(line, tone),
+        }
+    }
+
+    fn readings(&mut self, readings: Vec<String>) {
+        match self {
+            Ui::Plain(status) => status.show(&readings.join("   ")),
+            Ui::Screen(screen) => {
+                for r in readings {
+                    screen.knob(r);
+                }
+            }
+        }
+    }
+
+    /// A step waiting for its phrase line. The screen shows it in the steps.
+    fn waiting(&mut self, line: &str) {
+        if let Ui::Plain(status) = self {
+            status.show(line);
+        }
+    }
+
+    fn saved(&mut self, t: f32, kind: &str) {
+        match self {
+            Ui::Plain(status) => {
+                status.close();
+                eprintln!("[{:7.2}s] saved: {}", t, kind);
+            }
+            Ui::Screen(screen) => {
+                screen.clear_error();
+                screen.say(format!("saved: {}", kind), crate::tui::Tone::Good);
+            }
+        }
+    }
+
+    fn rejected(&mut self, lines: Vec<String>) {
+        match self {
+            Ui::Plain(status) => {
+                status.close();
+                for l in lines {
+                    eprintln!("{}", l);
+                }
+                eprintln!("  (still playing the last good version)");
+            }
+            Ui::Screen(screen) => screen.error(lines),
+        }
+    }
+
+    fn song(&mut self, title: &str, source: &Source) {
+        if let Ui::Screen(screen) = self {
+            if let Some(info) = crate::tui::SongInfo::from_source(title, &source.text) {
+                screen.set_song(info);
+            }
+        }
+    }
+}
+
+impl Drop for Ui {
+    fn drop(&mut self) {
+        if let Ui::Plain(status) = self {
+            status.close();
+        }
+    }
 }
 
 fn verb(watch: bool) -> &'static str {

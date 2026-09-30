@@ -96,10 +96,36 @@ impl SongEngine {
         self.tracks.get(idx).map_or(0, |t| t.pattern_idx)
     }
 
+    /// The note a track is holding, if it is holding one: the latest of a
+    /// chord. For the live screen's colours.
+    pub fn track_note(&self, idx: usize) -> Option<u8> {
+        self.tracks.get(idx).filter(|t| t.current_notes_count > 0).map(|t| t.current_notes[0])
+    }
+
+    /// Where a track is in the pattern it plays, as a step index into it.
+    pub fn track_step(&self, idx: usize) -> usize {
+        let Some(t) = self.tracks.get(idx) else { return 0 };
+        let len = self.patterns.get(t.pattern_idx).map_or(1, |p| p.len().max(1));
+        // The step about to play has already been counted; the one sounding
+        // is the one before it.
+        (t.step_in_loop() + len - 1) % len
+    }
+
+    /// Whether a track whose `play` line changes loop by loop is on one of
+    /// its transformed loops -- `every 4 rev` on the fourth, say -- for the
+    /// live screen to light up.
+    pub fn track_transformed(&self, idx: usize) -> bool {
+        let Some(t) = self.tracks.get(idx) else { return false };
+        let Some(plan) = t.play.and_then(|p| self.plays.get(p)) else { return false };
+        let per = (plan.variants.len() / plan.alternatives.max(1)).max(1);
+        plan.variants.iter().position(|&v| v == t.pattern_idx).is_some_and(|i| i % per != 0)
+    }
+
     pub fn set_track_pattern(&mut self, track_idx: usize, pattern_idx: usize) {
         if let Some(track) = self.tracks.get_mut(track_idx) {
             if pattern_idx < self.patterns.len() {
                 track.pattern_idx = pattern_idx;
+                track.play = None;
                 track.current_step = 0;
             }
         }

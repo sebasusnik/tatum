@@ -47,13 +47,7 @@ pub fn write_wav(filename: &str, samples: &[f32], sample_rate: u32) {
     file.write_all(&data_size.to_le_bytes()).unwrap();
 
     let clamp = |s: f32| -> i16 {
-        let c = if s > 1.0 {
-            1.0
-        } else if s < -1.0 {
-            -1.0
-        } else {
-            s
-        };
+        let c = s.clamp(-1.0, 1.0);
         (c * 32767.0) as i16
     };
     for &s in samples {
@@ -91,13 +85,7 @@ pub fn write_wav_stereo(filename: &str, samples_l: &[f32], samples_r: &[f32], sa
 
     for i in 0..num_frames as usize {
         let clamp = |s: f32| -> i16 {
-            let c = if s > 1.0 {
-                1.0
-            } else if s < -1.0 {
-                -1.0
-            } else {
-                s
-            };
+            let c = s.clamp(-1.0, 1.0);
             (c * 32767.0) as i16
         };
         file.write_all(&clamp(samples_l[i]).to_le_bytes()).unwrap();

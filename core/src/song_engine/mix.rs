@@ -68,6 +68,11 @@ impl SongEngine {
                     if t.inst_idx < self.instruments.len() {
                         if t.slide && self.instruments[t.inst_idx].slide_to(t.midi_note, t.velocity) {
                             // glided, nothing to release
+                        } else if t.velocity <= 0.0 {
+                            // A gap in a run: the note before it stops, nothing starts.
+                            if t.release != NO_RELEASE {
+                                self.instruments[t.inst_idx].note_off(t.release);
+                            }
                         } else {
                             if t.release != NO_RELEASE {
                                 self.instruments[t.inst_idx].note_off(t.release);

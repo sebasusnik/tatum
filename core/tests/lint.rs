@@ -55,7 +55,7 @@ fn static_pad_is_flagged_and_modulation_clears_it() {
 
 #[test]
 fn mix_and_arrangement_lints() {
-    let dry = SONG.replace("reverb_send 0.3 ", "").replace("lfo", "lfo");
+    let dry = SONG.replace("reverb_send 0.3 ", "");
     assert!(lints(&dry).contains(&"dry_mix"));
     let no_sc = SONG.replace("sidechain 0.3\n", "");
     assert!(lints(&no_sc).contains(&"no_sidechain"));

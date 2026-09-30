@@ -21,12 +21,13 @@ mod notes;
 mod params;
 mod pattern;
 mod track;
+pub mod transform;
 mod validate;
 
 pub use compiled::{
     ArpConfig, ChordNote, CompiledAutomation, CompiledBus, CompiledGroove, CompiledGrooveLane, CompiledInstrumentKind,
     CompiledLane, CompiledMaster, CompiledPattern, CompiledScene, CompiledSong, CompiledStep, CompiledTrack, FmPreset,
-    ModulePreset, StepPLock, SubNote, MAX_CHORD_NOTES, MAX_SUBDIV,
+    ModulePreset, StepPLock, SubNote, MAX_CHORD_NOTES, MAX_SUBDIV, PlayPlan, LoopCondition,
 };
 pub use notes::{drum_note, note_in_midi_range, note_name_to_midi, resolve_note, scale_context};
 pub use validate::{master_auto_node_kinds, MASTER_AUTO_PARAMS};
@@ -138,10 +139,23 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
         }
     }
 
-    // 4. Compile tracks
+    // 4. Compile tracks. A `play` line that transforms its pattern adds the
+    // transformed versions to `patterns`, and a plan to `plays` when loops
+    // differ.
+    let ctx = transform::Ctx { intervals: &intervals, root: root_pc };
+    let mut plays = Vec::new();
     let mut tracks = Vec::new();
     for track_def in &song.tracks {
-        match compile_track(track_def, &instrument_names, &patterns, &buses, None, samples_per_bar) {
+        match compile_track(
+            track_def,
+            &instrument_names,
+            &mut patterns,
+            &mut plays,
+            &ctx,
+            &buses,
+            None,
+            samples_per_bar,
+        ) {
             Ok(t) => tracks.push(t),
             Err(e) => errors.push(e),
         }
@@ -199,7 +213,16 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     // 6. Compile scenes
     let mut scenes = Vec::new();
     for scene_def in &song.scenes {
-        match compile_scene(scene_def, &instrument_names, &patterns, &buses, &tracks, samples_per_bar) {
+        match compile_scene(
+            scene_def,
+            &instrument_names,
+            &mut patterns,
+            &mut plays,
+            &ctx,
+            &buses,
+            &tracks,
+            samples_per_bar,
+        ) {
             Ok(s) => scenes.push(s),
             Err(e) => errors.push(e),
         }
@@ -264,6 +287,7 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
         buses,
         master,
         scenes,
+        plays,
         arrangement,
         grooves,
         reverb_return,

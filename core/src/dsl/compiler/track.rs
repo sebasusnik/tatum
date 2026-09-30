@@ -12,16 +12,20 @@ use crate::math;
 use crate::graph::node::ChainStep;
 
 use super::chains::check_unique_labels;
-use super::compiled::{ArpConfig, CompiledBus, CompiledPattern, CompiledTrack};
+use super::compiled::{ArpConfig, CompiledBus, CompiledPattern, CompiledTrack, PlayPlan};
+use super::transform;
 use super::graph::node_def_to_spec;
 use super::params::named_param;
 
 // ── Track compilation ──
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn compile_track(
     track: &TrackDef,
     inst_names: &[String],
-    patterns: &[CompiledPattern],
+    patterns: &mut Vec<CompiledPattern>,
+    plays: &mut Vec<PlayPlan>,
+    ctx: &transform::Ctx,
     buses: &[CompiledBus],
     defaults: Option<&CompiledTrack>,
     samples_per_bar: f32,
@@ -31,10 +35,29 @@ pub(super) fn compile_track(
         message: format!("track '{}': unknown instrument '{}'", track.name, track.using_instrument),
     })?;
 
-    let pattern_idx = patterns.iter().position(|p| p.name == track.play).ok_or_else(|| CompileError {
-        line: 0,
-        message: format!("track '{}': unknown pattern '{}'", track.name, track.play),
-    })?;
+    let lookup = |name: &str| {
+        patterns.iter().position(|p| p.name == name).ok_or_else(|| CompileError {
+            line: 0,
+            message: format!("track '{}': unknown pattern '{}'", track.name, name),
+        })
+    };
+    let base = lookup(&track.play)?;
+    // A plain `play x` stays exactly what it always was: no new pattern.
+    let (pattern_idx, play, play_text) = if track.play_also.is_empty() && track.transforms.is_empty() {
+        (base, None, track.play.clone())
+    } else {
+        let mut bases = alloc::vec![base];
+        for name in &track.play_also {
+            bases.push(lookup(name)?);
+        }
+        let text = transform::describe(&track.play, &track.play_also, &track.transforms);
+        let (idx, plan) = transform::plan(&track.name, &bases, &track.transforms, text.clone(), patterns, ctx)?;
+        let play = plan.map(|p| {
+            plays.push(p);
+            plays.len() - 1
+        });
+        (idx, play, text)
+    };
 
     let velocity = track.velocity.unwrap_or_else(|| defaults.map(|d| d.velocity).unwrap_or(0.8));
     let level = track.level.unwrap_or_else(|| defaults.map(|d| d.level).unwrap_or(0.8));
@@ -115,6 +138,8 @@ pub(super) fn compile_track(
         sidechain: track.sidechain.or_else(|| defaults.and_then(|d| d.sidechain)),
         sidechain_source: track.sidechain_source.clone().or_else(|| defaults.and_then(|d| d.sidechain_source.clone())),
         arp,
+        play,
+        play_text,
     })
 }
 

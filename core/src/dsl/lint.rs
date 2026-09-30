@@ -523,7 +523,7 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
                     Step::Chord(c) => note(&c.plock),
                     Step::DrumHit(d) => note(&d.plock),
                     Step::Subdiv(ns) => ns.iter().for_each(|n| note(&n.plock)),
-                    Step::Rest | Step::Tie => {}
+                    Step::DrumSub(_) | Step::Rest | Step::Tie => {}
                 }
             }
             if count > 0 {

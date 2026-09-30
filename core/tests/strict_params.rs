@@ -169,8 +169,7 @@ fn one_top_level_mistake_yields_one_error() {
 
 #[test]
 fn unknown_drum_lane_is_an_error() {
-    let src =
-        BASE.replace("pattern p { 1.1:0.9 - - - }", "pattern p { kik: X - - - }").replace("using bell", "using bell");
+    let src = BASE.replace("pattern p { 1.1:0.9 - - - }", "pattern p { kik: X - - - }");
     let errs = compile_errors(&src);
     assert!(errs.iter().any(|e| e.contains("unknown drum lane 'kik'")), "{:?}", errs);
 }

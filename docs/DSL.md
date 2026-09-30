@@ -133,6 +133,9 @@ pattern riff { 1.2:0.9  -  ~5.2:0.8  ..  [1.3 3.3 5.3]:0.6  ..  ..  .. }
 | `<a b c>` | **subdivision**: those notes in sequence inside this ONE step, evenly spaced. Up to 8. Each one takes its own `:velocity` and its own `~`, and each releases the one before it, so a group is a run and not a chord. This is how a pattern gets finer than a sixteenth — steps are fixed at sixteen a bar, and the notes are spread across the step's *real* duration, so a subdivided step still swings. |
 | `a*3` | **ratchet**: the same note three times inside the step, the melodic spelling of the drum roll. Sugar for `<a a a>`. |
 | `Fm9` `Dbmaj7/2` `C7:0.6` | chord symbol: root, optional `#`/`b`, quality, optional `/octave` (default 3), then `:velocity` and `(locks)` as usual. Qualities: maj, m, 7, maj7, m7, 9, maj9, m9, add9, madd9, 6, m6, sus2, sus4, 7sus4, dim, dim7, m7b5, aug, 11, m11, 13, maj13, m13, 5, mmaj7. A note token with octave 7 or above (`C7`, `Ab9`) is read as a chord; for a power chord write `E5/3` (bare `E5` is the note). |
+| `A2?0.5` `1.3:0.8?0.25` `[A3 C4]?0.5` | the chance a note, degree or chord sounds this time, drawn from the track's own seeded stream, so a render is the same every time. Drum hits take it the same way (`x?0.4`) |
+| `x(3,8)` `C3(3,8)` `x(5,8,2)` | a Euclidean rhythm: 3 hits spread as evenly as 8 steps allow (`x - - x - - x -`), optionally rotated. Expands to that many steps |
+| `<x o - X>` on a drum lane | hits inside ONE step, each at its own velocity, `-` a gap: a flam, a 32nd ghost, a roll that swells instead of a machine gun |
 | `1.2:0.8(cutoff=0.4, edepth=0.3, res=0.6, gate=0.5)` | per-step parameter lock: `gate` on every module; the filter on `bass` (it stays until the next lock) and on `keys` and instrument graphs (that note only; `keys` has no filter envelope for `edepth`) |
 
 Drum patterns use labeled lanes:
@@ -167,6 +170,51 @@ past anything playable and is the cap. A group on a drum lane is a rest —
 `X` accent (velocity 1.0), `x` normal (0.8), `o` ghost (0.35), `x:0.6` explicit velocity, `x?0.5` probability, `x*2` roll.
 A lane line can be longer than one bar (32 steps = two bars); keep every lane the same length.
 Lane names: `kick`, `snare`, `clap`, `hat`, `openhat`, `tom`, `tom2`, `tom3`, `crash` (aliases `bd`, `sd`, `cp`, `hh`, `oh`, `lt`, `mt`, `ht`, `cr`). An unknown lane is a compile error.
+
+## Transforming a pattern
+
+A `play` line can change what its pattern does without rewriting it. The
+words go after the pattern's name and apply left to right; the track's other
+options follow as always:
+
+```
+track acid  { play acid_line rev }                    # backwards
+track acid  { play acid_line fast 2 }                 # twice in the same length
+track acid  { play acid_line every 4 rev }            # the 4th loop of every 4, backwards
+track hats  { play hats16 degrade 30% using kit }     # drops 30% of the hits
+track acid  { play acid_line, acid_answer up 2 }      # alternate loop by loop, two degrees up
+```
+
+| word | what it does |
+|------|--------------|
+| `rev` | the events in reverse order. A note keeps its ties; a run inside a step is reversed too |
+| `fast N` | the pattern N times (2-4) in its own length. Two things in one step become a run (`<a b>`); on a drum lane, hits inside the step |
+| `slow N` | every step N steps long; the loop is N times longer |
+| `shift N` | rotated N steps later (negative: earlier); what falls off the end comes in at the start |
+| `up N` / `up Nst` | N degrees of the song's scale, or N semitones. `transpose N` is `up Nst` |
+| `octave N` | N octaves |
+| `degrade P` | each event has chance P (`30%` or `0.3`) of not sounding |
+| `ply N` | each event N times inside its step |
+| `every N <word>` | the word on the **last** of every N loops: the turn at the end of a phrase |
+| `sometimes P <word>` | the word on a loop with chance P, decided loop by loop |
+| `iter N` | loop k of N starts k/N of the way in |
+| `palindrome` | forwards, then backwards (`every 2 rev`) |
+| `a, b, c` | one loop of each pattern in turn; they may differ in length |
+
+A loop is the pattern's own length as written: a two-bar pattern has
+two-bar loops. The count starts over at every scene, as the pattern does,
+and carries across a save in `tatum watch`, so `every 4` keeps its place
+while you edit around it. Inside `every` and `sometimes` a word keeps the
+loop's length (`every 4 slow 2` plays the first half, stretched).
+
+Everything is worked out when the file compiles: each version of the
+pattern is compiled ahead, and the audio thread only reads steps. A `play`
+line without these words compiles exactly as it always has.
+
+In a scene, a track's `play` line carries its own words; a scene that says
+`play x` plays `x` as written. `--tui` shows each track's words under its
+name, lit on the loops they change, and its keys write them into the file
+(`?` lists them).
 
 ## Tracks
 
@@ -427,6 +475,13 @@ travel is as loud as the file would have it at full. While a knob turns, the ter
 shows what it reads in its units (`acid cutoff 1.2khz`, `pad level -6.0 dB`). A knob
 that nothing is mapped to shows its number instead (`cc 74 = 90 (not mapped)`), which
 is how you find what your controller sends.
+
+With `--tui`, `k` does the writing for you: it lists what the chosen track offers a
+knob -- its module's parameters, its level, pan and sends, the named nodes of its
+chain -- and any knob turned while the list is open moves the one marked, at once, to
+try it. Enter keeps it there, `+` adds it to what the knob already moves, `x` takes
+every knob off it. The line goes into the first `midi` block of the song's files (in
+a set, the rig's), or a new one, and `u` takes it back.
 
 A range after the target puts the knob's travel on a stretch of it, in the target's own
 units, and repeating the controller on several lines makes one knob a macro:

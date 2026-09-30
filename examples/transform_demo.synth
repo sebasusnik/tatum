@@ -1,0 +1,117 @@
+# Transform demo -- a live set to play by changing words, not patterns.
+#
+# The rig is above the line; below it, one line per track saying what it
+# plays and what is done to it. `scripts/transform_demo.sh` edits only those
+# lines while `tatum watch examples/transform_demo.synth --tui` plays, and
+# so can you, by hand or with the screen's keys (? shows them).
+#
+# Dark and dry, 128 BPM: a kick, closed hats, a rolling bass, an acid line,
+# a two-chord stab and a metal hit. Every pattern is one or two bars, so a
+# transform is heard within a bar of the save.
+
+tempo 128
+meter 4/4
+scale F minor
+swing 0.53
+humanize 0.08
+sidechain 0.3 attack=1ms release=80ms
+
+delay sync=dotted_eighth feedback=0.4 filter=0.45
+reverb size=0.45 damp=0.55 predelay=12
+reverb_return { in > highpass(300hz, 0.05) > out }
+
+module beats kit {
+    kick_decay 26%
+    kick_pitch 0.9x
+    kick_click 40%
+    kick_drive 45%
+    snare_level 0.7
+    snare_snap 55%
+    hihat_level 0.55
+    hihat_decay 22%
+    hihat_pitch 1.15x
+    hihat_pan 0.2
+    clap_level 0.75
+}
+
+module bass rolling {
+    cutoff 170hz
+    cutoff_env 420hz
+    resonance 0.18
+    attack 1ms
+    decay 140ms
+    sustain 0.35
+    release 40ms
+}
+
+module bass acid {
+    cutoff 520hz
+    cutoff_env 2.4khz
+    resonance 0.78
+    vel_env 0.7
+    glide 0.02
+    attack 1ms
+    decay 180ms
+    sustain 0.2
+    release 50ms
+}
+
+module keys stab {
+    voice_mode poly
+    attack 1ms
+    decay 220ms
+    sustain 0
+    release 160ms
+    detune 0.18
+    cutoff 1.9khz
+    resonance 0.2
+    chorus_mix 0.15
+}
+
+module fm metal {
+    algorithm two_op
+    op1_ratio 3.53x
+    mod_index 0.7
+    feedback 0.3
+    op0_envelope 0.001 0.18 0.0 0.1
+    op1_envelope 0.001 0.12 0.0 0.08
+    level 1.6
+}
+
+pattern kick4 { kick: X - - -  X - - -  X - - -  X - - - }
+pattern hats { hat: - - x -  - - x -  - - x -  - - x x:0.6 }
+pattern hats16 { hat: x:0.5 x:0.35 x x:0.35  x:0.5 x:0.35 x x:0.35  x:0.5 x:0.35 x x:0.35  x:0.5 x:0.35 x x:0.4 }
+pattern clap { clap: - - - -  X - - -  - - - -  X - - - }
+
+pattern roll { - F1:0.9 F1:0.6 -  - F1:0.9 F1:0.6 -  - F1:0.9 F1:0.6 -  - Ab1:0.9 F1:0.6 - }
+
+pattern acid_line {
+    F2:0.95 - F3:0.8 -  Eb3:0.7 - F2:0.9 ~Ab2:0.8  - C3:0.8 - F2:0.7  Db3:0.9 - F3:0.8 -
+}
+pattern acid_answer {
+    F2:0.9 F2:0.5 - Ab2:0.8  - F3:0.9 - Eb3:0.7  F2:0.95 - C3:0.8 -  - Db3:0.9 ~C3:0.8 -
+}
+
+pattern stab_a { - - Fm/4:0.8 -  - - - -  - - - Fm/4:0.6  - - - - }
+pattern stab_b { - - - -  - - Dbmaj7/4:0.8 -  - - - -  - - Ebmaj7/4:0.7 - }
+
+pattern metal_hit { - - - -  - - - -  - - - -  - - - F4:0.9 }
+
+pattern rest { -*16 }
+
+track kick  { play kick4 using kit level 1.0 sidechain 0 out > master }
+track hats  { play hats using kit level 0.7 sidechain 0 out > highpass(300hz, 0.05) > master }
+track clap  { play rest using kit level 0.8 reverb_send 0.12 sidechain 0 out > master }
+track bass  { play roll using rolling level 0.8 gate 0.9 out > saturate(0.3) > master }
+track acid  { play rest using acid level 0.5 pan -0.2 delay_send 0.2 out > saturate(0.6) > highpass(120hz, 0.05) > master }
+track stab  { play rest using stab level 0.45 pan 0.3 delay_send 0.3 reverb_send 0.2 out > highpass(250hz, 0.05) > master }
+track metal { play rest using metal level 0.35 pan 0.4 delay_send 0.35 reverb_send 0.25 out > lowpass(9khz, 0.05) > master }
+
+# ── Below this line is what gets played live. ───────────────────────────
+track kick  { play kick4 }
+track hats  { play hats }
+track clap  { play rest }
+track bass  { play roll }
+track acid  { play rest }
+track stab  { play rest }
+track metal { play rest }

@@ -269,14 +269,17 @@ impl Known {
         self.resolve_controls();
     }
 
-    fn resolve_controls(&mut self) {
-        let names = midi::Names {
+    fn names(&self) -> midi::Names<'_> {
+        midi::Names {
             instruments: &self.instruments,
             tracks: &self.tracks,
             track_instruments: &self.track_instruments,
             track_nodes: &self.track_nodes,
-        };
-        self.controls = midi::resolve_all(&self.ast, &names);
+        }
+    }
+
+    fn resolve_controls(&mut self) {
+        self.controls = midi::resolve_all(&self.ast, &self.names());
     }
 
     /// Everything controller `cc` does to this engine at `value`.
@@ -299,8 +302,11 @@ pub struct LivePlanner {
     /// The last hand wins: a save that rebuilds the engine keeps these, and
     /// editing a knob's target in the text drops it, so the edit plays.
     knob_values: Vec<(u8, u8)>,
-    /// Tracks a `toggle` pad has taken out, by name.
+    /// Tracks a `toggle` pad or the keyboard has taken out, by name.
     muted: Vec<String>,
+    /// The tracks soloed from the keyboard, and what was muted before, to put
+    /// back when the solo comes off.
+    solo: Option<(Vec<String>, Vec<String>)>,
     /// Pads held down right now, by note.
     pads_down: Vec<u8>,
     /// Keys held down, oldest first, with the velocity each was struck at.
@@ -331,6 +337,7 @@ impl LivePlanner {
             next_generation: 1,
             knob_values: Vec::new(),
             muted: Vec::new(),
+            solo: None,
             pads_down: Vec::new(),
             held: Vec::new(),
             bend: 1.0,
@@ -469,6 +476,71 @@ impl LivePlanner {
         Some(plans)
     }
 
+    /// Mute a track, or bring it back, by name: the state a toggle pad keeps,
+    /// so a pad, a key and a save all see the same thing.
+    pub fn toggle_mute(&mut self, name: &str, playing: Generation) -> Vec<Plan> {
+        self.catch_up(playing);
+        match self.muted.iter().position(|m| m == name) {
+            Some(i) => {
+                self.muted.remove(i);
+            }
+            None => self.muted.push(String::from(name)),
+        }
+        self.mute_plans()
+    }
+
+    /// Solo a track: every other one muted. The same track again takes the
+    /// solo off and puts back what was muted before it; another track moves
+    /// the solo there.
+    pub fn toggle_solo(&mut self, name: &str, playing: Generation) -> Vec<Plan> {
+        self.toggle_solo_group(&[String::from(name)], playing)
+    }
+
+    /// Solo several tracks together: every track not among them muted. The
+    /// same group again takes the solo off; another group moves it.
+    pub fn toggle_solo_group(&mut self, names: &[String], playing: Generation) -> Vec<Plan> {
+        self.catch_up(playing);
+        let mut group: Vec<String> = names.to_vec();
+        group.sort();
+        group.dedup();
+        let before = match self.solo.take() {
+            Some((soloed, before)) if soloed == group => {
+                self.muted = before;
+                return self.mute_plans();
+            }
+            Some((_, before)) => before,
+            None => self.muted.clone(),
+        };
+        // The running engine and one waiting to take over list the same
+        // tracks, and a swap may add some: each name once.
+        let mut muted: Vec<String> = Vec::new();
+        for t in self.known().flat_map(|k| k.tracks.iter()) {
+            if !group.contains(t) && !muted.contains(t) {
+                muted.push(t.clone());
+            }
+        }
+        self.muted = muted;
+        self.solo = Some((group, before));
+        self.mute_plans()
+    }
+
+    /// The tracks soloed from the keyboard, if any are.
+    pub fn soloed(&self) -> &[String] {
+        self.solo.as_ref().map_or(&[], |(n, _)| n.as_slice())
+    }
+
+    /// Every track's mute as the planner has it, for every engine it knows.
+    fn mute_plans(&self) -> Vec<Plan> {
+        let mut plans = Vec::new();
+        for known in self.known() {
+            for (track, name) in known.tracks.iter().enumerate() {
+                let muted = self.muted.contains(name);
+                plans.push(Plan::Control { base: known.generation, op: FastOp::TrackMute { track, muted } });
+            }
+        }
+        plans
+    }
+
     /// The set move a pad asks for when it goes down, if it is mapped to one.
     pub fn pad_navigation(&self, note: u8) -> Option<midi::PadAction> {
         let latest = self.pending.as_ref().or(self.running.as_ref())?;
@@ -540,6 +612,34 @@ impl LivePlanner {
         match self.knob_values.iter_mut().find(|(c, _)| *c == cc) {
             Some(slot) => slot.1 = value,
             None => self.knob_values.push((cc, value)),
+        }
+        turn
+    }
+
+    /// Controller at `value` put on `target` (`acid.cutoff`) as if a `midi`
+    /// line mapped it, without one: what trying a knob on a parameter before
+    /// keeping it sounds like. Not remembered: a swap puts the text's value
+    /// back until the knob is kept and turned again.
+    pub fn try_knob(&mut self, target: &str, value: u8, playing: Generation) -> KnobTurn {
+        self.catch_up(playing);
+        let mut turn = KnobTurn { plans: Vec::new(), readings: Vec::new() };
+        for (n, known) in self.known().enumerate() {
+            let names = known.names();
+            let knob = midi::Knob {
+                cc: 0,
+                target: target.into(),
+                moves: midi::resolve(&known.ast, &names, target),
+                span: None,
+            };
+            if knob.moves.is_empty() {
+                continue;
+            }
+            if n == 0 || turn.readings.is_empty() {
+                turn.readings = Vec::from([knob.reading(value)]);
+            }
+            for op in knob.ops(value) {
+                turn.plans.push(Plan::Control { base: known.generation, op });
+            }
         }
         turn
     }

@@ -175,14 +175,66 @@ impl Parser {
                     } else {
                         None
                     };
+                    let chance = self.step_chance();
                     // Optional plock after chord
-                    let plock =
+                    let mut plock =
                         if matches!(self.peek(), Token::LParen) { self.parse_plock_params() } else { PLock::default() };
+                    plock.probability = chance;
                     current_row.push(Step::Chord(ChordStep { notes, velocity, plock }));
                 }
                 // `<B4 C#5 D5>` -- notes in sequence inside one step. The
                 // closing `>` lexes as Arrow; a routing chain never appears in
                 // a pattern body, so there is nothing to disambiguate.
+                // `<x o - X>` on a drum lane: hits across one step, each at
+                // its own velocity, a `-` a gap.
+                Token::LAngle if labeled_mode => {
+                    self.advance();
+                    let mut hits: Vec<f32> = Vec::new();
+                    loop {
+                        match self.peek().clone() {
+                            Token::Arrow => {
+                                self.advance();
+                                break;
+                            }
+                            Token::RBrace | Token::Eof | Token::Newline => break,
+                            Token::DrumHit | Token::DrumAccent | Token::DrumGhost => {
+                                let default = match self.peek() {
+                                    Token::DrumAccent => 1.0,
+                                    Token::DrumGhost => 0.35,
+                                    _ => 0.8,
+                                };
+                                self.advance();
+                                let v = if matches!(self.peek(), Token::Colon) {
+                                    self.advance();
+                                    self.expect_number().unwrap_or(default)
+                                } else {
+                                    default
+                                };
+                                hits.push(v);
+                            }
+                            Token::Rest => {
+                                self.advance();
+                                hits.push(0.0);
+                            }
+                            _ => {
+                                self.advance();
+                            }
+                        }
+                    }
+                    let sp = self.span();
+                    if hits.is_empty() || hits.len() > crate::dsl::compiler::MAX_SUBDIV {
+                        self.errors.push(ParseError {
+                            line: sp.line,
+                            col: sp.col,
+                            message: format!(
+                                "a drum group `<...>` holds 1 to {} hits and gaps",
+                                crate::dsl::compiler::MAX_SUBDIV
+                            ),
+                        });
+                    } else {
+                        current_row.push(Step::DrumSub(hits));
+                    }
+                }
                 Token::LAngle => {
                     self.advance();
                     let mut subs: Vec<NoteStep> = Vec::new();
@@ -279,14 +331,30 @@ impl Parser {
                     let n = n.clone();
                     self.check_note_range(&n);
                     self.advance();
+                    let chance = self.step_chance();
                     let velocity = if matches!(self.peek(), Token::Colon) {
                         self.advance();
                         self.expect_number()
                     } else {
                         None
                     };
-                    let plock =
+                    let chance = chance.or(self.step_chance());
+                    let euclid = self.euclid();
+                    let mut plock =
                         if matches!(self.peek(), Token::LParen) { self.parse_plock_params() } else { PLock::default() };
+                    plock.probability = chance;
+                    if let Some(hits) = euclid {
+                        let base = NoteStep {
+                            note: NoteRef::Absolute(n),
+                            velocity,
+                            plock,
+                            slide: core::mem::take(&mut pending_slide),
+                        };
+                        for hit in hits {
+                            current_row.push(if hit { Step::Note(base.clone()) } else { Step::Rest });
+                        }
+                        continue;
+                    }
                     // `A4*3` -- the same note three times inside the step. The
                     // drum lanes already spell a roll this way; this is the same
                     // idea for pitches, desugared into a subdivision group so the
@@ -314,23 +382,42 @@ impl Parser {
                     let degree = math::floor(v) as u8;
                     let octave = ((v - math::floor(v)) * 10.0 + 0.5) as u8;
                     if (1..=7).contains(&degree) {
+                        let chance = self.step_chance();
                         let velocity = if matches!(self.peek(), Token::Colon) {
                             self.advance();
                             self.expect_number()
                         } else {
                             None
                         };
-                        let plock = if matches!(self.peek(), Token::LParen) {
+                        let chance = chance.or(self.step_chance());
+                        let euclid = self.euclid();
+                        let mut plock = if matches!(self.peek(), Token::LParen) {
                             self.parse_plock_params()
                         } else {
                             PLock::default()
                         };
-                        current_row.push(Step::Note(NoteStep {
+                        plock.probability = chance;
+                        let base = NoteStep {
                             note: NoteRef::Degree(degree, octave),
                             velocity,
                             plock,
                             slide: core::mem::take(&mut pending_slide),
-                        }));
+                        };
+                        // `1.3*3`: a ratchet on a degree, as on a note name.
+                        let ratchet = self.parse_ratchet_count();
+                        if let Some(hits) = euclid {
+                            for hit in hits {
+                                current_row.push(if hit { Step::Note(base.clone()) } else { Step::Rest });
+                            }
+                        } else if ratchet > 1 {
+                            let mut subs = vec![base];
+                            for _ in 1..ratchet {
+                                subs.push(NoteStep { slide: false, ..subs[0].clone() });
+                            }
+                            current_row.push(Step::Subdiv(subs));
+                        } else {
+                            current_row.push(Step::Note(base));
+                        }
                     }
                 }
                 Token::DrumHit | Token::DrumAccent | Token::DrumGhost => {
@@ -362,9 +449,19 @@ impl Parser {
                     } else {
                         1
                     };
+                    let euclid = self.euclid();
                     let plock =
                         if matches!(self.peek(), Token::LParen) { self.parse_plock_params() } else { PLock::default() };
-                    current_row.push(Step::DrumHit(DrumStep { velocity, probability, roll, plock }));
+                    let hit = DrumStep { velocity, probability, roll, plock };
+                    match euclid {
+                        // `x(3,8)`: three hits spread as evenly as eight steps allow.
+                        Some(hits) => {
+                            for on in hits {
+                                current_row.push(if on { Step::DrumHit(hit.clone()) } else { Step::Rest });
+                            }
+                        }
+                        None => current_row.push(Step::DrumHit(hit)),
+                    }
                 }
                 Token::Rest => {
                     self.advance();
@@ -545,6 +642,48 @@ impl Parser {
                 message: format!("note {} is above what MIDI can play (G9 is the top)", name),
             });
         }
+    }
+
+    /// `?0.5` after a note: the chance it sounds.
+    fn step_chance(&mut self) -> Option<f32> {
+        if !matches!(self.peek(), Token::Question) {
+            return None;
+        }
+        self.advance();
+        self.expect_number().map(|p| p.clamp(0.0, 1.0))
+    }
+
+    /// `(3,8)` or `(3,8,2)` after a hit or a note: a Euclidean rhythm, `k`
+    /// onsets spread as evenly as `n` steps allow, rotated `r` steps. `(`
+    /// followed by a name is a lock instead, and is left alone.
+    fn euclid(&mut self) -> Option<Vec<bool>> {
+        if !matches!(self.peek(), Token::LParen) {
+            return None;
+        }
+        let Some(Token::Number(_)) = self.tokens.get(self.pos + 1).map(|t| t.token.clone()) else {
+            return None;
+        };
+        self.advance();
+        let k = self.expect_number().unwrap_or(0.0) as i64;
+        self.expect(&Token::Comma);
+        let n = self.expect_number().unwrap_or(0.0) as i64;
+        let r = if matches!(self.peek(), Token::Comma) {
+            self.advance();
+            self.expect_number().unwrap_or(0.0) as i64
+        } else {
+            0
+        };
+        self.expect(&Token::RParen);
+        if !(1..=64).contains(&n) || !(0..=n).contains(&k) {
+            let sp = self.span();
+            self.errors.push(ParseError {
+                line: sp.line,
+                col: sp.col,
+                message: format!("euclidean rhythm ({},{}): needs 0 <= hits <= steps <= 64", k, n),
+            });
+            return Some(Vec::new());
+        }
+        Some((0..n).map(|i| ((i - r).rem_euclid(n) * k) % n < k).collect())
     }
 
     /// `*N` after a note: repeat it N times inside the step. Returns 1 when

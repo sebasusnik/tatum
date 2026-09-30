@@ -431,3 +431,140 @@ fn a_blend_retires_the_old_engine_when_it_ends() {
     assert_eq!(player.swaps(), 1);
     assert_eq!(retired, 1, "the old engine comes back for dropping once the blend is over");
 }
+
+/// A `play` line that transforms by the loop keeps counting its loops across
+/// a save: `every 4 rev` still reverses the fourth bar, not the fourth after
+/// the edit. An edit that changes nothing audible has to be bit-identical.
+#[test]
+fn a_save_does_not_restart_the_loop_count() {
+    let song = LIVE.replace("play line using low", "play line every 4 rev using low");
+    let reference = render_straight(&song, 9);
+    let edited = with_unused_pattern(&song);
+    let (l, r, swaps) = render_live(&song, &[(BAR * 5 / 2, &edited)], 9);
+    assert!(!swaps.is_empty(), "the edit never landed");
+    assert_identical(&reference, &(l, r), "every 4 rev across a save");
+}
+
+/// Loops of different lengths cannot be counted back out of the step: the
+/// count itself has to cross the save. One bar, then two, alternating.
+#[test]
+fn a_save_keeps_the_place_in_loops_of_different_lengths() {
+    let song = format!(
+        "{}\npattern long {{ 1.5 - - - 1.3 - - - 1.1 - - - - - - -  1.5 - 1.3 - 1.1 - - - - - - - - - - - }}\n",
+        LIVE.replace("play line using low", "play line, long using low")
+    );
+    let reference = render_straight(&song, 11);
+    let edited = with_unused_pattern(&song);
+    let (l, r, swaps) = render_live(&song, &[(BAR * 9 / 2, &edited)], 11);
+    assert!(!swaps.is_empty(), "the edit never landed");
+    assert_identical(&reference, &(l, r), "alternating loops across a save");
+}
+
+/// Adding a word to a `play` line is an edit to what plays: it has to swap.
+/// Comparing the pattern's name alone took `play line rev` after `play line`
+/// for no change, and the screen showed a transform nobody heard.
+#[test]
+fn a_transform_added_on_a_save_is_heard() {
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    let plan = planner.plan(LIVE, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json()));
+    player.apply(plan);
+    player.start();
+    let edited = LIVE.replace("play line using low", "play line rev using low");
+    let plan = planner.plan(&edited, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json()));
+    // It used to come back `Fast` with nothing in it: "applied instantly",
+    // and nothing changed.
+    assert_eq!(player.apply(plan), Applied::Queued, "a transform added on a save has to swap on the next bar");
+}
+
+/// Mute and solo from the keyboard: a mute by name, a solo that mutes the
+/// rest, and the same solo again putting back what was muted before it.
+#[test]
+fn mute_and_solo_from_the_keyboard() {
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    let plan = planner.plan(LIVE, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json()));
+    player.apply(plan);
+    player.start();
+    let muted = |player: &LivePlayer| -> Vec<bool> {
+        let e = player.engine().unwrap();
+        (0..e.track_count()).map(|i| e.track_muted(i)).collect()
+    };
+    // kick, bass, pad
+    for p in planner.toggle_mute("pad", player.generation()) {
+        player.apply(p);
+    }
+    assert_eq!(muted(&player), vec![false, false, true]);
+    for p in planner.toggle_solo("bass", player.generation()) {
+        player.apply(p);
+    }
+    assert_eq!(muted(&player), vec![true, false, true]);
+    assert_eq!(planner.soloed(), ["bass".to_string()]);
+    for p in planner.toggle_solo("bass", player.generation()) {
+        player.apply(p);
+    }
+    assert_eq!(muted(&player), vec![false, false, true], "the solo off puts back the mute from before it");
+    for p in planner.toggle_mute("pad", player.generation()) {
+        player.apply(p);
+    }
+    assert_eq!(muted(&player), vec![false, false, false]);
+}
+
+/// A group soloed together: only its tracks sound.
+#[test]
+fn a_group_can_be_soloed() {
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    let plan = planner.plan(LIVE, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json()));
+    player.apply(plan);
+    let group = ["kick".to_string(), "pad".to_string()];
+    for p in planner.toggle_solo_group(&group, player.generation()) {
+        player.apply(p);
+    }
+    let e = player.engine().unwrap();
+    assert_eq!((0..e.track_count()).map(|i| e.track_muted(i)).collect::<Vec<_>>(), vec![false, true, false]);
+    for p in planner.toggle_solo_group(&group, player.generation()) {
+        player.apply(p);
+    }
+    let e = player.engine().unwrap();
+    assert!((0..e.track_count()).all(|i| !e.track_muted(i)), "the same group again takes the solo off");
+}
+
+/// A knob tried on a parameter moves it at once, with no `midi` line: what
+/// the screen does while a knob is being chosen.
+#[test]
+fn a_knob_tried_on_a_track_moves_it_without_a_midi_line() {
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    let plan = planner.plan(LIVE, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json()));
+    player.apply(plan);
+    player.start();
+    let before = player.engine().unwrap().track_level(1);
+    let turn = planner.try_knob("bass.level", 0, player.generation());
+    assert!(!turn.plans.is_empty(), "the level should move");
+    assert!(turn.readings[0].starts_with("bass level"), "{:?}", turn.readings);
+    for p in turn.plans {
+        player.apply(p);
+    }
+    let after = player.engine().unwrap().track_level(1);
+    assert!(after < before, "level {} should drop below {}", after, before);
+    assert!(planner.try_knob("nothing.here", 64, player.generation()).plans.is_empty());
+}
+
+/// Keeping a knob writes a `midi` line: the save that brings it is taken
+/// without a swap, and the knob moves its target from then on.
+#[test]
+fn a_midi_line_added_on_a_save_maps_the_knob_at_once() {
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    let plan = planner.plan(LIVE, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json()));
+    player.apply(plan);
+    player.start();
+    assert!(planner.knob(74, 10, player.generation()).plans.is_empty());
+    let mapped = format!("{}\nmidi {{\n    cc 74 > bass level\n}}\n", LIVE);
+    let plan = planner.plan(&mapped, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json()));
+    assert!(!matches!(plan, Plan::Swap { .. }), "a new knob should not rebuild the song");
+    player.apply(plan);
+    let turn = planner.knob(74, 10, player.generation());
+    assert!(!turn.plans.is_empty(), "cc 74 should move the bass now");
+}

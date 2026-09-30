@@ -112,6 +112,9 @@ fn dump_funk_dsl_compiled() {
                     }
                     print!(")");
                 }
+                CompiledStep::DrumSub { hits, count, .. } => {
+                    print!("    [{:2}] DrumSub({:?})", si, &hits[..*count as usize]);
+                }
                 CompiledStep::Rest => {
                     print!("    [{:2}] Rest", si);
                 }

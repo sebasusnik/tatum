@@ -54,6 +54,14 @@ pub(super) struct TrackPlayback {
     pub(super) sidechain_amount: Option<f32>,
     // Step sequencer state
     pub(super) current_step: usize,
+    /// Index into the engine's `plays` when the `play` line differs loop by
+    /// loop; `None` loops `pattern_idx` as it always has.
+    pub(super) play: Option<usize>,
+    /// The step the current loop began on, and which loop it is, for a
+    /// track with a `play` plan. Loops of different lengths add up, so the
+    /// loop is counted rather than divided out of `current_step`.
+    pub(super) loop_start: usize,
+    pub(super) loop_index: u64,
     pub(super) current_notes: [u8; compiler::MAX_CHORD_NOTES], // active MIDI notes (0 = unused)
     pub(super) current_notes_count: u8,
     pub(super) gate_samples_remaining: f32,
@@ -139,6 +147,16 @@ pub(super) fn pan_gains(pan: f32) -> (f32, f32) {
 }
 
 impl TrackPlayback {
+    /// Where the track is inside its loop, before the modulo: counted from
+    /// the loop's own start when the `play` line changes loop by loop.
+    pub(super) fn step_in_loop(&self) -> usize {
+        if self.play.is_some() {
+            self.current_step.saturating_sub(self.loop_start)
+        } else {
+            self.current_step
+        }
+    }
+
     /// Playing, or on its way out after a scene dropped it.
     pub(super) fn sounding(&self) -> bool {
         self.active || self.leaving > 0

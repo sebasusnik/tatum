@@ -22,7 +22,7 @@ use tatum_core::live::{LivePlanner, LivePlayer, Plan};
 use tatum_core::song_engine::SongEngine;
 use tatum_core::{BLOCK_SIZE, SAMPLE_RATE};
 
-const DEFAULT_BARS: u32 = 32;
+pub const DEFAULT_BARS: u32 = 32;
 
 pub struct Step {
     pub path: PathBuf,
@@ -341,7 +341,7 @@ fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
 /// `--ramp` bars (0 jumps).
 fn cmd_play(args: &[String]) -> Result<(), String> {
     let (mut dir, mut phrase, mut ramp, mut blend) = (None, 8usize, 4.0f32, 0.0f32);
-    let (mut device, mut rate, mut midi) = (None, None, None);
+    let (mut device, mut rate, mut midi, mut tui, mut glass) = (None, None, None, false, false);
     let mut i = 0;
     while i < args.len() {
         let value = |i: usize| args.get(i + 1).map(|s| s.as_str());
@@ -379,6 +379,11 @@ fn cmd_play(args: &[String]) -> Result<(), String> {
                 midi = Some(value(i).ok_or("--midi needs part of an input's name")?);
                 i += 1;
             }
+            "--tui" => tui = true,
+            "--glass" => {
+                tui = true;
+                glass = true;
+            }
             other if other.starts_with('-') => return Err(format!("unknown flag '{}'", other)),
             other => dir = Some(other),
         }
@@ -389,7 +394,7 @@ fn cmd_play(args: &[String]) -> Result<(), String> {
     let first = steps[0].path.to_string_lossy().into_owned();
     let mut nav = crate::setnav::SetNav::new(steps, phrase, ramp);
     nav.blend_bars = blend;
-    crate::live::run(&first, true, device, rate, midi, Default::default(), Some(nav))
+    crate::live::run(&first, true, device, rate, midi, Default::default(), Some(nav), tui, glass)
 }
 
 fn cmd_render(args: &[String]) -> Result<(), String> {
@@ -416,7 +421,8 @@ fn cmd_render(args: &[String]) -> Result<(), String> {
     }
     let bytes = tatum_core::wav::encode_stereo_16(&rendered.l, &rendered.r, SAMPLE_RATE as u32);
     fs::write(&out, bytes).map_err(|e| format!("{}: {}", out, e))?;
-    eprintln!("wrote {} ({:.0}:{:02.0})", out, secs / 60.0, secs % 60.0);
+    // Whole minutes: `{:.0}` rounded 2:37 up to "3:37".
+    eprintln!("wrote {} ({}:{:02})", out, (secs / 60.0) as u32, (secs % 60.0) as u32);
     Ok(())
 }
 
