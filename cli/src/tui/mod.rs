@@ -206,7 +206,7 @@ pub struct Screen {
     help: bool,
     /// The session log, open over everything, `l` toggles it.
     log_open: bool,
-    /// The step ← → and 1-9 have moved to, not yet asked for: Enter goes.
+    /// The step ← → have moved to, not yet asked for: Enter goes.
     browse: Option<usize>,
     transformed: Vec<bool>,
     muted: Vec<bool>,
@@ -397,8 +397,8 @@ impl Screen {
                     self.select(1);
                     None
                 }
-                // ← → and 1-9 only look through the set; Enter asks for the
-                // step looked at. Space goes straight to the next one.
+                // ← → only look through the set; Enter asks for the step
+                // looked at. 1-9 and space go straight there.
                 KeyCode::Right => {
                     self.browse_by(1);
                     None
@@ -411,12 +411,14 @@ impl Screen {
                     let count = self.set.as_ref().map_or(0, |s| s.steps.len());
                     let step = self.view + (c as usize - '1' as usize);
                     if step < count {
-                        self.browse = Some(step);
+                        self.browse = None;
                         // It is on screen already: the row stays where the
                         // number was pressed.
                         self.followed = Some(step);
+                        Some(Key::Step(step + 1))
+                    } else {
+                        None
                     }
-                    None
                 }
                 KeyCode::Enter => self.browse.take().map(|b| Key::Step(b + 1)),
                 KeyCode::Char(' ') | KeyCode::Char('n') => Some(Key::Next),
@@ -707,7 +709,7 @@ impl Screen {
             }
             None => {
                 let hint = if self.set.is_some() {
-                    " ← → 1-9 look at a step · Enter goes · ? every key · l log · q quit"
+                    " ← → look at a step · Enter goes · 1-9 go now · ? every key · l log · q quit"
                 } else {
                     " ? every key · l log · q quit"
                 };
@@ -933,7 +935,7 @@ impl Screen {
         };
         let mut lines = vec![
             key("← →", "a step", "look at the one before / after, through the whole set"),
-            key("1-9", "a step", "look at the one in that place on screen"),
+            key("1-9", "a step", "go to the one in that place on screen"),
             key("Enter", "go", "to the step looked at, on the next phrase · Esc stays"),
             key("space", "next step", "g or Tab: every step, to pick one"),
             key("↑ ↓", "a track", "shift ↑ ↓ adds tracks · Esc back"),
