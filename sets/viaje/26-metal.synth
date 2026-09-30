@@ -1,0 +1,14 @@
+# set: bars=48 phase=08-metal energy=7 blend=16
+# set-note: Se calla el 303 y vuelve el protagonista de Detroit, oscurecido: el pluck con repiques y saltos de octava, el metal contestando, el bajo rodante y el rim fantasma entre los claps. Un descanso del 303 sin bajar la energía.
+use "_rig.synth"
+tempo 131
+
+module beats kit { kick_decay 55% kick_pitch 0.78x kick_click 40% kick_drive 35% hihat_level 66% hihat_decay 12% hihat_pitch 1.5x }
+module fm pluck { mod_index 50% }
+
+track beat   { play kick_metal8 level 1.05 }
+track roll   { play roll_gal8 level 0.5 }
+track pluck  { play pluck_b level 0.15 }
+track mstab  { play mstab_b level 0.12 }
+track shaker { play shake_c level 0.06 }
+track tick   { play tick_off level 0.075 }

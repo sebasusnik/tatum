@@ -1,0 +1,15 @@
+# set: bars=64 phase=04-detroit energy=6
+# set-note: Detroit se oscurece: el bajo pasa a su segunda línea, sincopada y con saltos de octava; los acordes quedan de colchón oscuro y el metal contesta en el segundo compás. El shaker y el tick entran arriba.
+use "_rig.synth"
+tempo 126
+
+module keys warmth { cutoff 950hz }
+
+module beats kit { kick_decay 30% kick_pitch 0.8x kick_click 30% hihat_level 70% hihat_decay 28% }
+
+track beat   { play kick_clap8 level 1.07 }
+track hats   { play hat_off8 level 2 }
+track bass   { play bs_c16 level 0.82 }
+track chords { play ch_a level 0.16 }
+track mstab  { play mstab_a level 0.14 }
+track ride   { play ride_q level 0.04 }

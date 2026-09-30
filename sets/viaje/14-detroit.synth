@@ -1,11 +1,10 @@
-# set: bars=32 phase=detroit energy=6
+# set: bars=64 phase=04-detroit energy=6
 # set-note: El bombo se vuelve 909 y los acordes se abren. El bajo contesta cada dieciséis compases, entra la percusión de Detroit y cada frase cierra con un remate.
 use "_rig.synth"
 tempo 126
 
 module beats kit { kick_decay 30% kick_pitch 0.8x kick_click 30% hihat_level 70% hihat_decay 28% }
 
-track bed    { level 0.2 }
 track stab   { play rest level 0 }
 track beat   { play kick_clap8 level 1.07 }
 track hats   { play hat_off8 level 2 }

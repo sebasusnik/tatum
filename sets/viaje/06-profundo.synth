@@ -1,8 +1,7 @@
-# set: bars=32 phase=profundo energy=4
-# set-note: El groove dub entero en frases de ocho: el rim contesta, un acorde se corre, y al final de cada frase un acorde tirado al eco.
+# set: bars=48 phase=02-profundo energy=4
+# set-note: El groove dub entero en frases de ocho: el rim contesta, un acorde se corre, un acorde tirado al eco al final de cada frase. Aparece un tick metálico en 3-3-2, bajito.
 use "_rig.synth"
 
-track bed   { play hiss_swell level 0.32 }
 track stab  { play stab_full8 level 0.25 delay_send 0.4 }
 track beat  { play kick_dub8 level 0.76 }
 track hats  { play hat_dub8 level 1.1 }

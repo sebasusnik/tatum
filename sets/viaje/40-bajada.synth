@@ -1,0 +1,14 @@
+# set: bars=32 phase=13-regreso energy=6 blend=16
+# set-note: La bajada: el tempo empieza a aflojar, el groove sigue firme pero sin clap, y el 303 se va cerrando y apagando mientras el acorde dub vuelve a asomar en sus ecos.
+use "_rig.synth"
+tempo 132
+
+module beats kit { kick_decay 32% kick_pitch 0.84x kick_click 38% kick_drive 42% hihat_level 66% }
+
+track bed    { play hiss_swell level 0.26 }
+track beat   { play kick_acid8 level 1.02 }
+track hats   { play hat_off8 level 1.15 }
+track sub    { play sub_f8 level 0.6 }
+track acid   { play acid_down16 level 0.45 }
+track stab   { play stab_half8 level 0.2 delay_send 0.55 }
+track perc   { play perc_sparse8 level 0.45 }

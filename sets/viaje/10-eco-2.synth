@@ -1,0 +1,15 @@
+# set: bars=32 phase=03-eco energy=5
+# set-note: Eco a medio tiempo: el bombo en 1 y 3, el acorde casi no toca y suena su eco, los toms cayendo en el eco.
+use "_rig.synth"
+tempo 124
+
+module beats kit { kick_decay 46% kick_pitch 0.7x kick_click 22% kick_drive 38% }
+module keys chord { cutoff 1.8khz }
+
+track stab   { play stab_ghost_c level 0.24 delay_send 0.8 }
+track beat   { play kick_thin8 level 0.82 }
+track hats   { play hat_ghost8 level 1.5 }
+track sub    { play sub_long_c level 0.5 }
+track perc   { play perc_dub8 level 0.5 }
+track throw  { play throw_dub8_c level 0.2 }
+track tick   { play tick332 level 0.075 }

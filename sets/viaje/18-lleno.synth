@@ -1,0 +1,15 @@
+# set: bars=64 phase=05-gancho energy=7
+# set-note: Detroit a pleno: el crash al empezar, el pluck con su motivo más abierto, el metal contestando, el hat abierto, remates cada ocho compases y uno largo cada dieciséis.
+use "_rig.synth"
+tempo 128
+
+module fm pluck { mod_index 42% }
+
+module beats kit { kick_decay 28% kick_pitch 0.82x kick_click 38% hihat_level 70% hihat_decay 28% }
+
+track beat   { play kick_gancho8 level 1.24 }
+track hats   { play hat_gancho8 level 1.493 }
+track bass   { play bs_ab16 level 1.068 }
+track shaker { play shake_b level 0.08 }
+track pluck  { play pluck_a level 0.165 }
+track mstab  { play mstab_a level 0.149 }

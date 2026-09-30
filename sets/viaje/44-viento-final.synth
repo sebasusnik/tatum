@@ -1,0 +1,7 @@
+# set: bars=32 phase=13-regreso energy=1
+# set-note: Vuelve el viento del principio. El último acorde se deshace en sus ecos y queda el viento solo, hasta apagarse.
+use "_rig.synth"
+tempo 122
+
+track bed  { play hiss_last level 0.6 }
+track stab { play stab_last16 level 0.22 velocity 0.6 sidechain 0.0 delay_send 0.7 }

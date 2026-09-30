@@ -1,4 +1,4 @@
-# set: bars=32 phase=entra energy=3
+# set: bars=16 phase=01-viento energy=3
 # set-note: El acorde se acerca a medio tiempo y contesta a destiempo en el compás 4; hats fantasma que nunca son iguales; el sub sube una vez por frase.
 use "_rig.synth"
 

@@ -1,0 +1,14 @@
+# set: bars=64 phase=08-metal energy=5
+# set-note: Metal a fondo: el pluck hecho robot, con un filtro de vocales que habla y un bitcrush, en semicorcheas; el metal contestando, el bombo largo y tonal.
+use "_rig.synth"
+tempo 131
+
+module beats kit { kick_decay 55% kick_pitch 0.78x kick_click 40% kick_drive 35% hihat_level 66% hihat_decay 12% hihat_pitch 1.5x }
+module fm pluck { mod_index 58% }
+
+track beat   { play kick_metal8 level 1.05 }
+track roll   { play roll_gal8 level 0.5 }
+track robot  { play pluck_c level 0.12 }
+track mstab  { play mstab_b level 0.12 }
+track shaker { play shake_c level 0.06 }
+track tick   { play tick_off level 0.075 }
