@@ -206,6 +206,8 @@ pub struct Screen {
     help: bool,
     /// The session log, open over everything, `l` toggles it.
     log_open: bool,
+    /// The step ← → and 1-9 have moved to, not yet asked for: Enter goes.
+    browse: Option<usize>,
     transformed: Vec<bool>,
     muted: Vec<bool>,
     /// The tracks soloed from the keyboard, by name, for their mark.
@@ -267,6 +269,7 @@ impl Screen {
             selected: None,
             help: false,
             log_open: false,
+            browse: None,
             transformed: Vec::new(),
             muted: Vec::new(),
             soloed: Vec::new(),
@@ -350,6 +353,8 @@ impl Screen {
                         self.help = false;
                     } else if self.log_open {
                         self.log_open = false;
+                    } else if self.browse.is_some() {
+                        self.browse = None;
                     } else {
                         self.selected = None;
                         self.marked.clear();
@@ -392,16 +397,30 @@ impl Screen {
                     self.select(1);
                     None
                 }
-                // ← → mark the step to go to, one at a time through the
-                // whole set; the steps on screen follow the mark.
-                KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('n') => Some(Key::Next),
-                KeyCode::Left | KeyCode::Char('p') => Some(Key::Prev),
-                KeyCode::Char(c @ '1'..='9') => {
-                    let slot = c as usize - '1' as usize;
-                    let count = self.set.as_ref().map_or(0, |s| s.steps.len());
-                    let step = self.view + slot;
-                    (step < count).then_some(Key::Step(step + 1))
+                // ← → and 1-9 only look through the set; Enter asks for the
+                // step looked at. Space goes straight to the next one.
+                KeyCode::Right => {
+                    self.browse_by(1);
+                    None
                 }
+                KeyCode::Left => {
+                    self.browse_by(-1);
+                    None
+                }
+                KeyCode::Char(c @ '1'..='9') => {
+                    let count = self.set.as_ref().map_or(0, |s| s.steps.len());
+                    let step = self.view + (c as usize - '1' as usize);
+                    if step < count {
+                        self.browse = Some(step);
+                        // It is on screen already: the row stays where the
+                        // number was pressed.
+                        self.followed = Some(step);
+                    }
+                    None
+                }
+                KeyCode::Enter => self.browse.take().map(|b| Key::Step(b + 1)),
+                KeyCode::Char(' ') | KeyCode::Char('n') => Some(Key::Next),
+                KeyCode::Char('p') => Some(Key::Prev),
                 KeyCode::Char('r') => Some(Key::Edit(Op::Toggle(Toggle::Rev))),
                 KeyCode::Char('f') => Some(Key::Edit(Op::Toggle(Toggle::Fast))),
                 KeyCode::Char('h') => Some(Key::Edit(Op::Toggle(Toggle::Slow))),
@@ -523,11 +542,19 @@ impl Screen {
         );
     }
 
-    /// Keep the step marked to go to -- or the one playing, when none is --
-    /// among the nine on screen, with one to spare on each side.
+    /// Look one step further along the set, from the step looked at, else
+    /// the one queued, else the one playing.
+    fn browse_by(&mut self, by: isize) {
+        let Some(set) = &self.set else { return };
+        let from = self.browse.or(set.next.map(|n| n.0)).unwrap_or(set.current);
+        self.browse = Some(from.saturating_add_signed(by).min(set.steps.len().saturating_sub(1)));
+    }
+
+    /// Keep the step looked at -- else the one queued, else the one playing
+    /// -- among the nine on screen, with one to spare on each side.
     fn follow(&mut self) {
         let Some(set) = &self.set else { return };
-        let target = set.next.map(|n| n.0).unwrap_or(set.current);
+        let target = self.browse.or(set.next.map(|n| n.0)).unwrap_or(set.current);
         if self.followed == Some(target) {
             return;
         }
@@ -680,7 +707,7 @@ impl Screen {
             }
             None => {
                 let hint = if self.set.is_some() {
-                    " ← → choose a step · 1-9 the one on screen · ? every key · l log · q quit"
+                    " ← → 1-9 look at a step · Enter goes · ? every key · l log · q quit"
                 } else {
                     " ? every key · l log · q quit"
                 };
@@ -905,8 +932,9 @@ impl Screen {
             ])
         };
         let mut lines = vec![
-            key("← →", "a step", "mark the one before / after, through the whole set"),
-            key("1-9", "a step", "the one in that place on screen"),
+            key("← →", "a step", "look at the one before / after, through the whole set"),
+            key("1-9", "a step", "look at the one in that place on screen"),
+            key("Enter", "go", "to the step looked at, on the next phrase · Esc stays"),
             key("space", "next step", "g or Tab: every step, to pick one"),
             key("↑ ↓", "a track", "shift ↑ ↓ adds tracks · Esc back"),
             key("m s", "mute / solo", "the chosen tracks, at once, not written"),
@@ -1083,6 +1111,9 @@ impl Screen {
             let queued = set.next.map(|n| n.0) == Some(i);
             let style = if i == set.current {
                 Style::new().fg(Color::Black).bg(GOLD).add_modifier(Modifier::BOLD)
+            } else if self.browse == Some(i) {
+                // Looked at, not asked for: white until Enter.
+                Style::new().fg(Color::Black).bg(TEXT)
             } else if queued {
                 // Flashes on the beat while it waits.
                 if (self.step / 4).is_multiple_of(2) {
@@ -1138,9 +1169,15 @@ impl Screen {
                 ),
                 HOT,
             ),
+            None if self.browse.is_some() => (String::new(), DIM),
             None => (format!("   ← → to choose where to go · phrase {} bars", set.phrase), DIM),
         };
         buf.set_string(x, area.y, &going, Style::new().fg(color));
+        if let Some(b) = self.browse.filter(|&b| Some(b) != set.next.map(|n| n.0)) {
+            let x = x + going.chars().count() as u16;
+            let look = format!("   ◇ {}/{} {} · Enter goes, Esc stays", b + 1, total, step_name(&set.steps[b]));
+            buf.set_string(x, area.y, &look, Style::new().fg(TEXT));
+        }
     }
 
     fn spectrogram(&self, buf: &mut Buffer, area: Rect) {
@@ -1385,6 +1422,11 @@ impl Screen {
         let mut term = ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).expect("test backend");
         term.draw(|f| self.render(f)).expect("test backend");
         term.backend().buffer().clone()
+    }
+
+    /// For a picture: step `n` looked at, as ← → would leave it.
+    pub fn look_at(&mut self, n: usize) {
+        self.browse = Some(n.saturating_sub(1));
     }
 
     /// For a picture: the session log open, as `l` would.
