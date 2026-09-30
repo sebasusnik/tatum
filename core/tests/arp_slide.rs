@@ -122,6 +122,33 @@ fn slide_song_renders_without_retrigger_clicks() {
     assert!(peak > 0.01 && peak <= 1.0, "peak={}", peak);
 }
 
+/// A slide after a tied note glides from it at any track gate. The last tie
+/// used to apply the gate, so under 1.0 the note was let go an instant before
+/// the slide arrived and the slide was struck as a new note: the pitch jumped
+/// to it instead of gliding.
+#[test]
+fn a_slide_after_a_tie_glides_from_the_held_note() {
+    let song = r#"
+tempo 120
+module bass b { attack 1ms sustain 1.0 cutoff 300hz cutoff_env 20hz resonance 0 glide 0 }
+pattern p { A2:1.0 ..*7 ~A3 ..*7 }
+track t { play p using b level 0.8 gate 0.85 }
+scene s { track t { play p using b gate 0.85 } }
+arrange { s x1 }
+"#;
+    let mut engine = SongEngine::from_source(song).unwrap();
+    engine.start();
+    engine.render_steps(8);
+    let (l, _) = engine.render_steps(1);
+    // Rising zero crossings over the first 40 ms of the slide step: 110 Hz
+    // is A2, 220 Hz is A3. The slowest glide is still well short of A3 here;
+    // a re-struck note is already there.
+    let window = (0.040 * tatum_core::SAMPLE_RATE) as usize;
+    let crossings = l[..window].windows(2).filter(|w| w[0] < 0.0 && w[1] >= 0.0).count();
+    let hz = crossings as f32 / 0.040;
+    assert!(hz < 190.0, "the slide jumped to {hz} Hz instead of gliding up from 110");
+}
+
 #[test]
 fn diff_treats_pattern_and_scene_edits_as_structural() {
     let old = dsl::parse(SONG).unwrap();

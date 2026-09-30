@@ -212,7 +212,6 @@ pattern beat_peak {
 }
 
 pattern beat_rise {
-    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  - - - -
     hat:     x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o
     snare:   o - - -  o - - -  o - - -  o - - -   o - - -  o - - -  o - - -  o - - -   o - o -  o - o -  o - o -  o - o -   x - o -  x - o -  x - o -  x - o -   x o x o  x o x o  x o x o  x o x o   x o x o  x o x o  x o x o  x o x o   x x x x  x x x x  x x x x  x x x x   X*2 X*2 X*2 X*2  X*2 X*2 X*2 X*2  X*3 X*3 X*3 X*3  X*4 X*4 - -
 }
@@ -257,6 +256,12 @@ pattern hook_d {
 pattern roll {
     - - F1:0.9 -   - - F1:0.8 -   - - F1:0.9 -   - - F1:0.8 -
     - - F1:0.9 -   - - F1:0.8 -   - - F1:0.9 -   - - F1:0.8 Ab1:0.6
+}
+
+# The peak's bass: it rolls on every sixteenth the kick leaves free
+pattern roll_peak {
+    - F1:0.7 F1:0.9 F1:0.6   - F1:0.7 F1:0.9 F1:0.6   - F1:0.7 F1:0.9 F1:0.6   - F1:0.7 F1:0.9 F1:0.6
+    - F1:0.7 F1:0.9 F1:0.6   - F1:0.7 F1:0.9 F1:0.6   - F1:0.7 F1:0.9 F1:0.6   - F1:0.7 Ab1:0.9 F1:0.6
 }
 
 pattern stabs {
@@ -416,7 +421,7 @@ track static {
 }
 
 master {
-    in > lowpass(20000, 0.05) > saturate(0.3) > eq(low=1, high=0.5) > out
+    in > highpass(20hz, 0.05) > saturate(0.3) > eq(low=1, high=0.5) > out
 }
 
 # ────────────────────────────────────────────────
@@ -471,9 +476,7 @@ scene slam {
     track bass  { play roll using roller }
     track hook  { play hook_b using hook pan 0.1 }
     track click { play clicks using click pan -0.4 }
-    track stab  { play stabs using stab pan -0.3 }
     track shaker { play shake using shaker pan 0.3 }
-    track ride { play ride_off using ride pan -0.25 }
     track air { play static_bed using static }
 }
 
@@ -490,28 +493,31 @@ scene break {
     track static { play static_bed using static }
 }
 
-# Eight bars: the roll folds in, the hats stutter, the hook rises into the crush
+# Eight bars with no kick and no bass: the roll folds in, the hats stutter,
+# the low end drains away and the hook rises into the crush
 scene rise {
     auto master drive 0.17 > 0.28
+    auto master cutoff 20 > 60 > 150 > 400
+    auto drums level 0.8 > 1.0
     auto machine stutter_rate 0.1 > 0.8
     auto hook mod_index 0.25 > 0.65
     auto hook.crush wet 0.00 > 0.30
     auto hook.talk wet 0.00 > 0.00
     track drums  { play beat_rise using machine }
-    track bass   { play roll using roller }
     track hook   { play hook_b using hook pan 0.1 }
     track static { play static_bed using static }
     track shaker { play shake using shaker pan 0.3 }
 }
 
 scene peak {
+    auto master cutoff 20 > 20
     auto master drive 0.28 > 0.30 > 0.28
     auto machine stutter_rate 0 > 0
     auto hook mod_index 0.58 > 0.68 > 0.6 > 0.7 > 0.62
     auto hook.crush wet 0.20 > 0.05 > 0.25 > 0.05 > 0.30 > 0.10
     auto hook.talk wet 0.00 > 0.00 > 0.20 > 0.00 > 0.00
     track drums { play beat_peak using machine }
-    track bass  { play roll using roller }
+    track bass  { play roll_peak using roller }
     track hook  { play hook_c using hook pan 0.1 }
     track stab  { play stabs using stab pan -0.3 }
     track click { play clicks using click pan -0.4 }
