@@ -935,14 +935,23 @@ impl Screen {
         const RECENT: usize = 150;
         (0..self.lanes.len())
             .filter(|&i| {
-                // A muted track keeps its lane, so it can be brought back.
+                // A muted track keeps its lane, so it can be brought back,
+                // but only when it would be playing something: a solo mutes
+                // every other track, the silent ones too.
                 if self.muted.get(i).copied().unwrap_or(false) {
-                    return true;
+                    return self.would_play(i);
                 }
                 let hist = &self.lanes[i];
                 hist.iter().rev().take(RECENT).any(|col| col.iter().any(|&db| db > LANE_FLOOR_DB + 6.0))
             })
             .collect()
+    }
+
+    /// Whether the pattern track `i` is on has a note or a hit in it.
+    fn would_play(&self, i: usize) -> bool {
+        let Some(song) = self.song.as_ref() else { return false };
+        let Some(pat) = song.compiled.get(self.telemetry.position(i).0) else { return false };
+        pat.steps.iter().any(|s| s.is_onset()) || pat.lanes.iter().any(|l| l.steps.iter().any(|s| s.is_onset()))
     }
 
     fn current_scene(&self) -> Option<(String, usize, u32)> {
