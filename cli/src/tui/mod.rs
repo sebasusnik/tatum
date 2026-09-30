@@ -124,6 +124,10 @@ pub enum Key {
     Edit(edit::Op),
     /// Put back what the last edit from the screen changed.
     Undo,
+    /// Mute or unmute the chosen track.
+    Mute,
+    /// Solo the chosen track, or take the solo off.
+    Solo,
 }
 
 #[derive(Clone, Copy)]
@@ -131,6 +135,12 @@ pub enum Tone {
     Info,
     Good,
     Bad,
+}
+
+/// The step list `g` opens: where the cursor is, and the number being typed.
+struct Picker {
+    cursor: usize,
+    typed: String,
 }
 
 /// Log-spaced rows of the spectrogram, before they are fitted to the screen.
@@ -175,6 +185,13 @@ pub struct Screen {
     selected: Option<usize>,
     help: bool,
     transformed: Vec<bool>,
+    muted: Vec<bool>,
+    /// The tracks soloed from the keyboard, by name, for their mark.
+    pub soloed: Vec<String>,
+    /// Tracks added to the selection with Shift+↑↓, besides `selected`.
+    marked: Vec<usize>,
+    /// `g`: the list of every step of the set, to go to any of them.
+    picker: Option<Picker>,
     /// Paint sound with cell backgrounds only, one pixel per cell, so a
     /// terminal that makes cell backgrounds translucent (Ghostty's
     /// `background-opacity-cells`) shows the window behind all of it. The
@@ -222,6 +239,10 @@ impl Screen {
             selected: None,
             help: false,
             transformed: Vec::new(),
+            muted: Vec::new(),
+            soloed: Vec::new(),
+            marked: Vec::new(),
+            picker: None,
             glass: false,
             bar: 0,
             step: 0,
@@ -281,6 +302,11 @@ impl Screen {
             if k.kind != KeyEventKind::Press {
                 continue;
             }
+            // The step list takes every key while it is open.
+            if let Some(key) = self.picker_key(k.code) {
+                out.extend(key);
+                continue;
+            }
             use edit::{Op, Toggle};
             let key = match k.code {
                 KeyCode::Char('c') if k.modifiers.contains(KeyModifiers::CONTROL) => Some(Key::Quit),
@@ -291,6 +317,7 @@ impl Screen {
                         self.help = false;
                     } else {
                         self.selected = None;
+                        self.marked.clear();
                     }
                     None
                 }
@@ -299,11 +326,30 @@ impl Screen {
                     self.help = !self.help;
                     None
                 }
+                KeyCode::Char('g') | KeyCode::Tab => {
+                    if let Some(set) = &self.set {
+                        let cursor = set.next.map(|n| n.0).unwrap_or(set.current);
+                        self.picker = Some(Picker { cursor, typed: String::new() });
+                    }
+                    None
+                }
+                // Shift+↑↓ adds the next track to the selection; ↑↓ alone
+                // moves it and leaves one track chosen.
+                KeyCode::Up if k.modifiers.contains(KeyModifiers::SHIFT) => {
+                    self.extend(-1);
+                    None
+                }
+                KeyCode::Down if k.modifiers.contains(KeyModifiers::SHIFT) => {
+                    self.extend(1);
+                    None
+                }
                 KeyCode::Up | KeyCode::Char('k') => {
+                    self.marked.clear();
                     self.select(-1);
                     None
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
+                    self.marked.clear();
                     self.select(1);
                     None
                 }
@@ -321,15 +367,114 @@ impl Screen {
                 KeyCode::Char('-') => Some(Key::Edit(Op::Up(-1))),
                 KeyCode::Char('x') => Some(Key::Edit(Op::Clear)),
                 KeyCode::Char('u') => Some(Key::Undo),
+                KeyCode::Char('m') => Some(Key::Mute),
+                KeyCode::Char('s') => Some(Key::Solo),
                 _ => None,
             };
-            // A transform key with nothing selected picks the first lane.
-            if matches!(key, Some(Key::Edit(_))) && self.selected.is_none() {
+            // A track key with nothing selected picks the first lane.
+            if matches!(key, Some(Key::Edit(_) | Key::Mute | Key::Solo)) && self.selected.is_none() {
                 self.select(1);
             }
             out.extend(key);
         }
         out
+    }
+
+    /// A key while the step list is open: `Some` when the list took it, with
+    /// the step it asks for when that is what the key did.
+    fn picker_key(&mut self, code: KeyCode) -> Option<Option<Key>> {
+        let count = self.set.as_ref().map_or(0, |s| s.steps.len());
+        let picker = self.picker.as_mut()?;
+        if count == 0 {
+            self.picker = None;
+            return Some(None);
+        }
+        match code {
+            KeyCode::Esc | KeyCode::Char('g') | KeyCode::Tab => self.picker = None,
+            KeyCode::Up | KeyCode::Char('k') => {
+                picker.cursor = (picker.cursor + count - 1) % count;
+                picker.typed.clear();
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                picker.cursor = (picker.cursor + 1) % count;
+                picker.typed.clear();
+            }
+            KeyCode::PageUp => picker.cursor = picker.cursor.saturating_sub(10),
+            KeyCode::PageDown => picker.cursor = (picker.cursor + 10).min(count - 1),
+            KeyCode::Home => picker.cursor = 0,
+            KeyCode::End => picker.cursor = count - 1,
+            // Typing a number moves to it: `1` then `4` is step 14.
+            KeyCode::Char(c @ '0'..='9') => {
+                picker.typed.push(c);
+                if picker.typed.parse::<usize>().map_or(true, |n| n > count) {
+                    picker.typed = c.to_string();
+                }
+                if let Ok(n) = picker.typed.parse::<usize>() {
+                    if (1..=count).contains(&n) {
+                        picker.cursor = n - 1;
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                picker.typed.pop();
+            }
+            KeyCode::Enter => {
+                let step = picker.cursor + 1;
+                self.picker = None;
+                return Some(Some(Key::Step(step)));
+            }
+            _ => {}
+        }
+        Some(None)
+    }
+
+    /// Every step of the set, the one playing and the one queued marked, to
+    /// choose where to go.
+    fn picker_overlay(&self, f: &mut Frame, area: Rect) {
+        let (Some(picker), Some(set)) = (self.picker.as_ref(), self.set.as_ref()) else { return };
+        let w = area.width.clamp(30, 60);
+        let h = area.height.saturating_sub(4).clamp(6, (set.steps.len() as u16) + 3);
+        let pop = Rect { x: area.x + (area.width - w) / 2, y: area.y + (area.height - h) / 2, width: w, height: h };
+        let rows = (h - 3) as usize;
+        let first = picker.cursor.saturating_sub(rows / 2).min(set.steps.len().saturating_sub(rows));
+        let mut lines: Vec<Line> = Vec::new();
+        for (i, name) in set.steps.iter().enumerate().skip(first).take(rows) {
+            let queued = set.next.map(|n| n.0) == Some(i);
+            let mark = if i == set.current {
+                "▶ playing"
+            } else if queued {
+                "· next"
+            } else {
+                ""
+            };
+            let here = i == picker.cursor;
+            let style = if here {
+                Style::new().fg(Color::Black).bg(GOLD).add_modifier(Modifier::BOLD)
+            } else if i == set.current {
+                Style::new().fg(GOLD)
+            } else if queued {
+                Style::new().fg(HOT)
+            } else {
+                Style::new().fg(TEXT)
+            };
+            let label = format!(" {:>3}  {:<24}{:>10} ", i + 1, step_name(name), mark);
+            lines.push(Line::styled(label, style));
+        }
+        let typed = if picker.typed.is_empty() { String::new() } else { format!("  go to {}", picker.typed) };
+        lines.push(Line::styled(format!(" ↑↓ or a number · Enter goes there · Esc{}", typed), Style::new().fg(DIM)));
+        f.render_widget(ratatui::widgets::Clear, pop);
+        f.render_widget(
+            Paragraph::new(lines).block(
+                Block::bordered()
+                    .border_style(Style::new().fg(GOLD))
+                    .title(Span::styled(
+                        format!(" go to a step · {} steps · lands on the next phrase ", set.steps.len()),
+                        Style::new().fg(GOLD),
+                    ))
+                    .style(Style::new().bg(PANEL)),
+            ),
+            pop,
+        );
     }
 
     /// Move the selection through the lanes on screen.
@@ -346,11 +491,32 @@ impl Screen {
         self.selected = Some(active[next]);
     }
 
-    /// The selected track's name and `play` line.
-    pub fn selected_track(&self) -> Option<(String, String)> {
-        let song = self.song.as_ref()?;
-        let i = self.selected?;
-        Some((song.tracks.get(i)?.clone(), song.plays.get(i)?.clone()))
+    /// Keep the track chosen now in the selection and move to the next one.
+    fn extend(&mut self, by: i32) {
+        if let Some(i) = self.selected {
+            if !self.marked.contains(&i) {
+                self.marked.push(i);
+            }
+        }
+        self.select(by);
+        if let Some(i) = self.selected {
+            if !self.marked.contains(&i) {
+                self.marked.push(i);
+            }
+        }
+    }
+
+    /// Every selected track, name and `play` line: the one the cursor is on
+    /// first, then those added with Shift.
+    pub fn selected_tracks(&self) -> Vec<(String, String)> {
+        let Some(song) = self.song.as_ref() else { return Vec::new() };
+        let mut idx: Vec<usize> = self.selected.into_iter().collect();
+        for &m in &self.marked {
+            if !idx.contains(&m) {
+                idx.push(m);
+            }
+        }
+        idx.into_iter().filter_map(|i| Some((song.tracks.get(i)?.clone(), song.plays.get(i)?.clone()))).collect()
     }
 
     /// Read the telemetry and draw a frame.
@@ -365,6 +531,7 @@ impl Screen {
     fn analyse(&mut self) {
         let n = self.lanes.len().min(self.telemetry.tracks());
         self.transformed = (0..n).map(|i| self.telemetry.transformed(i)).collect();
+        self.muted = (0..n).map(|i| self.telemetry.muted(i)).collect();
         if self.last_column.elapsed() < COLUMN {
             return;
         }
@@ -435,14 +602,15 @@ impl Screen {
         self.lanes(f.buffer_mut(), lanes, &active);
         self.bottom(f, bottom);
         let hint = if self.set.is_some() {
-            " space/→ next · ← back · 1-9 step · ↑↓ track · r f h e d [ ] + - x u transform · Esc back · ? help · q quit"
+            " space/→ next · ← back · 1-9 or g step · ↑↓ track · m mute · s solo · r f h e d [ ] + - x u transform · Esc back · ? help · q quit"
         } else {
-            " ↑↓ track · r f h e d [ ] + - x u transform · Esc back · ? help · q quit"
+            " ↑↓ track · m mute · s solo · r f h e d [ ] + - x u transform · Esc back · ? help · q quit"
         };
         f.render_widget(Paragraph::new(hint).style(Style::new().fg(DIM).bg(BG)), footer);
         if self.help {
             self.help_overlay(f, area);
         }
+        self.picker_overlay(f, area);
     }
 
     /// The chosen track's pattern as it plays this loop -- transformed when
@@ -635,6 +803,8 @@ impl Screen {
             key("e", "every 4 rev", "backwards on the last of every 4 loops"),
             key("d", "degrade", "drop 25%, then 50% of the notes"),
             key("x", "", "every transform off"),
+            key("m", "mute", "the track out, or back (at once, not written)"),
+            key("s", "solo", "only this track; again to take it off"),
             key("u", "", "undo the last change made from here"),
             Line::raw(""),
             Line::styled(
@@ -715,6 +885,10 @@ impl Screen {
         const RECENT: usize = 150;
         (0..self.lanes.len())
             .filter(|&i| {
+                // A muted track keeps its lane, so it can be brought back.
+                if self.muted.get(i).copied().unwrap_or(false) {
+                    return true;
+                }
                 let hist = &self.lanes[i];
                 hist.iter().rev().take(RECENT).any(|col| col.iter().any(|&db| db > LANE_FLOOR_DB + 6.0))
             })
@@ -941,7 +1115,7 @@ impl Screen {
             let lvl = ((peak_db + 48.0) / 48.0).clamp(0.0, 1.0);
             let active = lvl > 0.05;
             let label: String = name.chars().take(10).collect();
-            let selected = self.selected == Some(i);
+            let selected = self.selected == Some(i) || self.marked.contains(&i);
             buf.set_string(
                 area.x + 1,
                 y0,
@@ -960,6 +1134,24 @@ impl Screen {
             if selected {
                 buf.set_string(area.x, y0, "▶", Style::new().fg(GOLD).bg(BG));
             }
+            // M on a muted lane, S on the soloed one, where the meter was.
+            let is_muted = self.muted.get(i).copied().unwrap_or(false);
+            let is_solo = self.soloed.contains(name);
+            if is_solo {
+                buf.set_string(
+                    area.x + 11,
+                    y0,
+                    " S  ",
+                    Style::new().fg(Color::Black).bg(GOLD).add_modifier(Modifier::BOLD),
+                );
+            } else if is_muted {
+                buf.set_string(
+                    area.x + 11,
+                    y0,
+                    " M  ",
+                    Style::new().fg(Color::Black).bg(ERR).add_modifier(Modifier::BOLD),
+                );
+            }
             // What the `play` line does to the pattern, lit on the loops it
             // changes: the second row of a lane, or a mark when there is one.
             let play = song.plays.get(i).map(String::as_str).unwrap_or("");
@@ -974,7 +1166,7 @@ impl Screen {
                     buf.set_string(area.x, y0, "⟲", style);
                 }
             }
-            let cells = 4usize;
+            let cells = if is_muted || is_solo { 0 } else { 4usize };
             let lit = (lvl * cells as f32).round() as usize;
             for k in 0..cells {
                 let color = if k < lit { inferno(0.45 + 0.55 * (k as f32 / cells as f32)) } else { PANEL };
@@ -1047,6 +1239,11 @@ impl Screen {
         term.backend().buffer().clone()
     }
 
+    /// For a picture: the step list open at step `n`, as `g` and typing would.
+    pub fn open_picker(&mut self, n: usize) {
+        self.picker = Some(Picker { cursor: n.saturating_sub(1), typed: n.to_string() });
+    }
+
     /// For a picture: select a track by name and open the help, as the keys
     /// would, and take the transform marks from the telemetry.
     pub fn draw_offline(&mut self, select: Option<&str>, help: bool) {
@@ -1056,6 +1253,7 @@ impl Screen {
         self.help = help;
         let n = self.lanes.len().min(self.telemetry.tracks());
         self.transformed = (0..n).map(|i| self.telemetry.transformed(i)).collect();
+        self.muted = (0..n).map(|i| self.telemetry.muted(i)).collect();
     }
 
     pub fn column_period() -> Duration {

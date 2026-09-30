@@ -578,13 +578,39 @@ pub fn run(
                     crate::tui::Key::Step(n) => keys.push(crate::keys::Key::Step(n)),
                     // The screen writes the line in the file; the save is
                     // picked up below like one from the editor.
-                    crate::tui::Key::Edit(op) => match edit_play(&watched, screen.selected_track(), op) {
+                    crate::tui::Key::Edit(op) => match edit_play(&watched, screen.selected_tracks(), op) {
                         Ok((before, said)) => {
                             undo.push((watched.clone(), before));
                             screen.say(said, crate::tui::Tone::Good);
                         }
                         Err(e) => screen.say(e, crate::tui::Tone::Bad),
                     },
+                    // Mute and solo are a gesture, not part of the song: they
+                    // go straight to the engine, at once, and a save keeps them.
+                    crate::tui::Key::Mute | crate::tui::Key::Solo => {
+                        let names: Vec<String> = screen.selected_tracks().into_iter().map(|(n, _)| n).collect();
+                        let generation = stats.generation.load(Ordering::Relaxed);
+                        let plans = if names.is_empty() {
+                            Vec::new()
+                        } else if k == crate::tui::Key::Mute {
+                            // Each selected track flips on its own; each call
+                            // returns every track's state, so the last is all
+                            // that needs sending.
+                            let mut plans = Vec::new();
+                            for n in &names {
+                                plans = planner.toggle_mute(n, generation);
+                            }
+                            plans
+                        } else {
+                            planner.toggle_solo_group(&names, generation)
+                        };
+                        for plan in plans {
+                            if plan_tx.send(plan).is_err() {
+                                break;
+                            }
+                        }
+                        screen.soloed = planner.soloed().to_vec();
+                    }
                     crate::tui::Key::Undo => match undo.pop() {
                         Some((file, before)) => match std::fs::write(&file, before) {
                             Ok(()) => screen.say("undone", crate::tui::Tone::Good),
@@ -801,16 +827,25 @@ pub fn run(
 /// Returns the file as it was, for undo, and what to tell the performer.
 fn edit_play(
     file: &std::path::Path,
-    selected: Option<(String, String)>,
+    selected: Vec<(String, String)>,
     op: crate::tui::edit::Op,
 ) -> Result<(String, String), String> {
-    let (track, play) = selected.ok_or("choose a track first with ↑ ↓")?;
-    let mut clause = crate::tui::edit::Clause::parse(&play).ok_or_else(|| format!("cannot read `play {}`", play))?;
-    clause.apply(op);
+    if selected.is_empty() {
+        return Err("choose a track first with ↑ ↓".into());
+    }
     let before = std::fs::read_to_string(file).map_err(|e| format!("cannot read {}: {}", file.display(), e))?;
-    let after = crate::tui::edit::rewrite(&before, &track, &clause)?;
+    // Every selected track's line, in one save.
+    let mut after = before.clone();
+    let mut said = Vec::new();
+    for (track, play) in selected {
+        let mut clause =
+            crate::tui::edit::Clause::parse(&play).ok_or_else(|| format!("cannot read `play {}`", play))?;
+        clause.apply(op);
+        after = crate::tui::edit::rewrite(&after, &track, &clause)?;
+        said.push(format!("{}: play {}", track, clause.text()));
+    }
     std::fs::write(file, &after).map_err(|e| format!("cannot write {}: {}", file.display(), e))?;
-    Ok((before, format!("{}: play {}", track, clause.text())))
+    Ok((before, said.join("  ·  ")))
 }
 
 /// Where the session's messages go: lines on stderr, or the screen.

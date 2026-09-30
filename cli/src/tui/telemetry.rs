@@ -27,6 +27,8 @@ pub struct Telemetry {
     band: Box<[AtomicU32]>,
     /// Per track, whether this loop is one its `play` line transforms.
     transformed: Box<[AtomicBool]>,
+    /// Per track, whether it is muted (a key or a pad).
+    muted: Box<[AtomicBool]>,
     /// Per track, the pattern playing and the step in it.
     pattern: Box<[AtomicU32]>,
     step: Box<[AtomicU32]>,
@@ -42,6 +44,7 @@ impl Telemetry {
             peak: atomics(MAX_TRACKS),
             band: atomics(MAX_TRACKS * BANDS),
             transformed: (0..MAX_TRACKS).map(|_| AtomicBool::new(false)).collect::<Vec<_>>().into_boxed_slice(),
+            muted: (0..MAX_TRACKS).map(|_| AtomicBool::new(false)).collect::<Vec<_>>().into_boxed_slice(),
             pattern: atomics(MAX_TRACKS),
             step: atomics(MAX_TRACKS),
             tracks: AtomicUsize::new(0),
@@ -69,6 +72,7 @@ impl Telemetry {
         for i in 0..n {
             self.transformed[i].store(engine.track_transformed(i), Ordering::Relaxed);
             self.pattern[i].store(engine.track_pattern(i) as u32, Ordering::Relaxed);
+            self.muted[i].store(engine.track_muted(i), Ordering::Relaxed);
             self.step[i].store(engine.track_step(i) as u32, Ordering::Relaxed);
             self.peak[i].fetch_max(engine.track_peak(i).abs().to_bits(), Ordering::Relaxed);
             let (energy, samples) = engine.track_band_energy(i);
@@ -97,6 +101,11 @@ impl Telemetry {
     /// Whether track `i` is on a loop its `play` line transforms.
     pub fn transformed(&self, i: usize) -> bool {
         self.transformed.get(i).is_some_and(|t| t.load(Ordering::Relaxed))
+    }
+
+    /// Whether track `i` is muted.
+    pub fn muted(&self, i: usize) -> bool {
+        self.muted.get(i).is_some_and(|m| m.load(Ordering::Relaxed))
     }
 
     /// The pattern track `i` plays and the step it is on.

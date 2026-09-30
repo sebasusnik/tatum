@@ -476,3 +476,56 @@ fn a_transform_added_on_a_save_is_heard() {
     // and nothing changed.
     assert_eq!(player.apply(plan), Applied::Queued, "a transform added on a save has to swap on the next bar");
 }
+
+/// Mute and solo from the keyboard: a mute by name, a solo that mutes the
+/// rest, and the same solo again putting back what was muted before it.
+#[test]
+fn mute_and_solo_from_the_keyboard() {
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    let plan = planner.plan(LIVE, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json()));
+    player.apply(plan);
+    player.start();
+    let muted = |player: &LivePlayer| -> Vec<bool> {
+        let e = player.engine().unwrap();
+        (0..e.track_count()).map(|i| e.track_muted(i)).collect()
+    };
+    // kick, bass, pad
+    for p in planner.toggle_mute("pad", player.generation()) {
+        player.apply(p);
+    }
+    assert_eq!(muted(&player), vec![false, false, true]);
+    for p in planner.toggle_solo("bass", player.generation()) {
+        player.apply(p);
+    }
+    assert_eq!(muted(&player), vec![true, false, true]);
+    assert_eq!(planner.soloed(), ["bass".to_string()]);
+    for p in planner.toggle_solo("bass", player.generation()) {
+        player.apply(p);
+    }
+    assert_eq!(muted(&player), vec![false, false, true], "the solo off puts back the mute from before it");
+    for p in planner.toggle_mute("pad", player.generation()) {
+        player.apply(p);
+    }
+    assert_eq!(muted(&player), vec![false, false, false]);
+}
+
+/// A group soloed together: only its tracks sound.
+#[test]
+fn a_group_can_be_soloed() {
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    let plan = planner.plan(LIVE, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json()));
+    player.apply(plan);
+    let group = ["kick".to_string(), "pad".to_string()];
+    for p in planner.toggle_solo_group(&group, player.generation()) {
+        player.apply(p);
+    }
+    let e = player.engine().unwrap();
+    assert_eq!((0..e.track_count()).map(|i| e.track_muted(i)).collect::<Vec<_>>(), vec![false, true, false]);
+    for p in planner.toggle_solo_group(&group, player.generation()) {
+        player.apply(p);
+    }
+    let e = player.engine().unwrap();
+    assert!((0..e.track_count()).all(|i| !e.track_muted(i)), "the same group again takes the solo off");
+}

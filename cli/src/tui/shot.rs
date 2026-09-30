@@ -19,7 +19,7 @@ use super::{Screen, SongInfo, Telemetry, Tone};
 use crate::include::Source;
 
 const USAGE: &str =
-    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--see-through] [--glass] [--select <track>] [--help] [-o shot.png]";
+    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--see-through] [--glass] [--select <track>] [--mute <track>] [--solo <track>] [--pick N] [--help] [-o shot.png]";
 const CELL_W: usize = 12;
 const CELL_H: usize = 24;
 
@@ -30,6 +30,9 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     let mut glass = false;
     let mut select: Option<String> = None;
     let mut help = false;
+    let mut mute: Vec<String> = Vec::new();
+    let mut solo: Option<String> = None;
+    let mut pick: Option<usize> = None;
     let mut i = 0;
     while i < args.len() {
         let value = |i: usize| args.get(i + 1).cloned().ok_or(USAGE);
@@ -49,6 +52,18 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
             "--see-through" => see_through = true,
             "--glass" => glass = true,
             "--help" => help = true,
+            "--mute" => {
+                mute.push(value(i)?);
+                i += 1;
+            }
+            "--pick" => {
+                pick = Some(value(i)?.parse().map_err(|_| "--pick needs a step number")?);
+                i += 1;
+            }
+            "--solo" => {
+                solo = Some(value(i)?);
+                i += 1;
+            }
             "--select" => {
                 select = Some(value(i)?);
                 i += 1;
@@ -95,6 +110,18 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     screen.say(format!("watching {}", path), Tone::Info);
     screen.say("saved: parameter change, applied instantly", Tone::Good);
 
+    // Mutes as the keys make them, through the same planner.
+    let mut plans = Vec::new();
+    for m in &mute {
+        plans.extend(planner.toggle_mute(m, player.generation()));
+    }
+    if let Some(s) = &solo {
+        plans.extend(planner.toggle_solo(s, player.generation()));
+    }
+    for p in plans {
+        player.apply(p);
+    }
+    screen.soloed = planner.soloed().to_vec();
     let column = (Screen::column_period().as_secs_f32() * SAMPLE_RATE) as usize;
     let total = (at * SAMPLE_RATE) as usize;
     let (mut done, mut since) = (0usize, 0usize);
@@ -123,6 +150,9 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     }
     screen.glass = glass;
     screen.draw_offline(select.as_deref(), help);
+    if let Some(n) = pick {
+        screen.open_picker(n);
+    }
     paint(&screen.snapshot(size.0, size.1), see_through, glass).save(Path::new(&out))?;
     eprintln!("wrote {} ({}x{} cells, {:.1} s in)", out, size.0, size.1, at);
     Ok(())
