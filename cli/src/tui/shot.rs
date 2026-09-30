@@ -19,7 +19,7 @@ use super::{Screen, SongInfo, Telemetry, Tone};
 use crate::include::Source;
 
 const USAGE: &str =
-    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--see-through] [--glass] [--select <track>] [--mute <track>] [--solo <track>] [--pick N] [--help] [--log] [--look N] [-o shot.png]";
+    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--see-through] [--glass] [--select <track>] [--mute <track>] [--solo <track>] [--pick N] [--help] [--log] [--look N] [--mark <track>] [-o shot.png]";
 const CELL_W: usize = 12;
 const CELL_H: usize = 24;
 
@@ -32,6 +32,7 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     let mut help = false;
     let mut log = false;
     let mut look: Option<usize> = None;
+    let mut marks: Vec<String> = Vec::new();
     let mut mute: Vec<String> = Vec::new();
     let mut solo: Option<String> = None;
     let mut pick: Option<usize> = None;
@@ -57,6 +58,10 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
             "--log" => log = true,
             "--mute" => {
                 mute.push(value(i)?);
+                i += 1;
+            }
+            "--mark" => {
+                marks.push(value(i)?);
                 i += 1;
             }
             "--look" => {
@@ -156,6 +161,9 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
         screen.position(e.current_bar(), e.global_step(), e.tempo());
     }
     screen.glass = glass;
+    for m in &marks {
+        screen.mark(m);
+    }
     if let Some(n) = look {
         screen.look_at(n);
     }

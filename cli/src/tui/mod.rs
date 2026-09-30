@@ -377,8 +377,8 @@ impl Screen {
                     }
                     None
                 }
-                // Shift+↑↓ adds the next track to the selection; ↑↓ alone
-                // moves it and leaves one track chosen.
+                // ↑↓ move the cursor and leave the marks; v marks the track
+                // under it, Shift+↑↓ marks as it moves, a marks every lane.
                 KeyCode::Up if k.modifiers.contains(KeyModifiers::SHIFT) => {
                     self.extend(-1);
                     None
@@ -388,13 +388,32 @@ impl Screen {
                     None
                 }
                 KeyCode::Up | KeyCode::Char('k') => {
-                    self.marked.clear();
                     self.select(-1);
                     None
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
-                    self.marked.clear();
                     self.select(1);
+                    None
+                }
+                KeyCode::Char('v') => {
+                    if self.selected.is_none() {
+                        self.select(1);
+                    }
+                    if let Some(i) = self.selected {
+                        match self.marked.iter().position(|&m| m == i) {
+                            Some(at) => {
+                                self.marked.remove(at);
+                            }
+                            None => self.marked.push(i),
+                        }
+                    }
+                    None
+                }
+                KeyCode::Char('a') => {
+                    self.marked = self.active_lanes();
+                    if self.selected.is_none() {
+                        self.select(1);
+                    }
                     None
                 }
                 // ← → only look through the set; Enter asks for the step
@@ -599,16 +618,12 @@ impl Screen {
         }
     }
 
-    /// Every selected track, name and `play` line: the one the cursor is on
-    /// first, then those added with Shift.
+    /// The tracks a key acts on, name and `play` line: the marked ones when
+    /// there are any, else the one under the cursor.
     pub fn selected_tracks(&self) -> Vec<(String, String)> {
         let Some(song) = self.song.as_ref() else { return Vec::new() };
-        let mut idx: Vec<usize> = self.selected.into_iter().collect();
-        for &m in &self.marked {
-            if !idx.contains(&m) {
-                idx.push(m);
-            }
-        }
+        let idx: Vec<usize> =
+            if self.marked.is_empty() { self.selected.into_iter().collect() } else { self.marked.clone() };
         idx.into_iter().filter_map(|i| Some((song.tracks.get(i)?.clone(), song.plays.get(i)?.clone()))).collect()
     }
 
@@ -928,7 +943,7 @@ impl Screen {
         let pop = Rect { x: area.x + (area.width - w) / 2, y: area.y + (area.height - h) / 2, width: w, height: h };
         let key = |k: &str, word: &str, what: &str| {
             Line::from(vec![
-                Span::styled(format!(" {:<7}", k), Style::new().fg(GOLD).add_modifier(Modifier::BOLD)),
+                Span::styled(format!(" {:<10}", k), Style::new().fg(GOLD).add_modifier(Modifier::BOLD)),
                 Span::styled(format!("{:<14}", word), Style::new().fg(HOT)),
                 Span::styled(what.to_string(), Style::new().fg(TEXT)),
             ])
@@ -938,8 +953,10 @@ impl Screen {
             key("1-9", "a step", "go to the one in that place on screen"),
             key("Enter", "go", "to the step looked at, on the next phrase · Esc stays"),
             key("space", "next step", "g or Tab: every step, to pick one"),
-            key("↑ ↓", "a track", "shift ↑ ↓ adds tracks · Esc back"),
-            key("m s", "mute / solo", "the chosen tracks, at once, not written"),
+            key("↑ ↓", "a track", "move the cursor · Esc clears the marks"),
+            key("v", "mark", "the track under the cursor, any of them · a marks all"),
+            key("shift ↑ ↓", "mark", "the tracks passed over"),
+            key("m s", "mute / solo", "the marked tracks, else the cursor's, at once"),
             Line::raw(""),
             Line::styled(" the chosen tracks' `play` lines, written in the file:", Style::new().fg(DIM)),
             key("r", "rev", "the pattern backwards"),
@@ -1316,13 +1333,17 @@ impl Screen {
             let lvl = ((peak_db + 48.0) / 48.0).clamp(0.0, 1.0);
             let active = lvl > 0.05;
             let label: String = name.chars().take(10).collect();
-            let selected = self.selected == Some(i) || self.marked.contains(&i);
+            let cursor = self.selected == Some(i);
+            let marked = self.marked.contains(&i);
+            let selected = cursor || marked;
             buf.set_string(
                 area.x + 1,
                 y0,
                 format!("{:<10}", label),
                 Style::new()
-                    .fg(if selected {
+                    .fg(if marked {
+                        HOT
+                    } else if cursor {
                         GOLD
                     } else if active {
                         TEXT
@@ -1332,8 +1353,12 @@ impl Screen {
                     .bg(BG)
                     .add_modifier(if selected { Modifier::BOLD } else { Modifier::empty() }),
             );
-            if selected {
-                buf.set_string(area.x, y0, "▶", Style::new().fg(GOLD).bg(BG));
+            // ▶ the cursor, ● a mark: the keys act on the marks when there
+            // are any, else on the cursor.
+            if cursor {
+                buf.set_string(area.x, y0, "▶", Style::new().fg(if marked { HOT } else { GOLD }).bg(BG));
+            } else if marked {
+                buf.set_string(area.x, y0, "●", Style::new().fg(HOT).bg(BG));
             }
             // M on a muted lane, S on the soloed one, where the meter was.
             let is_muted = self.muted.get(i).copied().unwrap_or(false);
@@ -1424,6 +1449,13 @@ impl Screen {
         let mut term = ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).expect("test backend");
         term.draw(|f| self.render(f)).expect("test backend");
         term.backend().buffer().clone()
+    }
+
+    /// For a picture: a track marked, as `v` would.
+    pub fn mark(&mut self, name: &str) {
+        if let Some(i) = self.song.as_ref().and_then(|s| s.tracks.iter().position(|t| t == name)) {
+            self.marked.push(i);
+        }
     }
 
     /// For a picture: step `n` looked at, as ← → would leave it.
