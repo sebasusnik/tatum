@@ -143,6 +143,9 @@ struct Picker {
     typed: String,
 }
 
+/// Steps of a set on screen at once, one per number key.
+const STEPS_SHOWN: usize = 9;
+
 /// Log-spaced rows of the spectrogram, before they are fitted to the screen.
 const SPEC_BINS: usize = 160;
 const SPEC_LOW_HZ: f32 = 30.0;
@@ -192,6 +195,10 @@ pub struct Screen {
     marked: Vec<usize>,
     /// `g`: the list of every step of the set, to go to any of them.
     picker: Option<Picker>,
+    /// The first step of the nine on screen, which 1-9 reach; ← → move it.
+    view: usize,
+    /// The step playing when `view` last followed it.
+    followed: Option<usize>,
     /// Paint sound with cell backgrounds only, one pixel per cell, so a
     /// terminal that makes cell backgrounds translucent (Ghostty's
     /// `background-opacity-cells`) shows the window behind all of it. The
@@ -243,6 +250,8 @@ impl Screen {
             soloed: Vec::new(),
             marked: Vec::new(),
             picker: None,
+            view: 0,
+            followed: None,
             glass: false,
             bar: 0,
             step: 0,
@@ -353,9 +362,24 @@ impl Screen {
                     self.select(1);
                     None
                 }
-                KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('n') => Some(Key::Next),
-                KeyCode::Left | KeyCode::Char('p') => Some(Key::Prev),
-                KeyCode::Char(c @ '1'..='9') => Some(Key::Step(c as usize - '0' as usize)),
+                KeyCode::Char(' ') | KeyCode::Char('n') => Some(Key::Next),
+                KeyCode::Char('p') => Some(Key::Prev),
+                // ← → move the nine steps on screen; 1-9 go to the one under
+                // the number.
+                KeyCode::Right => {
+                    self.browse(1);
+                    None
+                }
+                KeyCode::Left => {
+                    self.browse(-1);
+                    None
+                }
+                KeyCode::Char(c @ '1'..='9') => {
+                    let slot = c as usize - '1' as usize;
+                    let count = self.set.as_ref().map_or(0, |s| s.steps.len());
+                    let step = self.view + slot;
+                    (step < count).then_some(Key::Step(step + 1))
+                }
                 KeyCode::Char('r') => Some(Key::Edit(Op::Toggle(Toggle::Rev))),
                 KeyCode::Char('f') => Some(Key::Edit(Op::Toggle(Toggle::Fast))),
                 KeyCode::Char('h') => Some(Key::Edit(Op::Toggle(Toggle::Slow))),
@@ -477,6 +501,26 @@ impl Screen {
         );
     }
 
+    /// Move the steps on screen by `by`, keeping nine in view.
+    fn browse(&mut self, by: i32) {
+        let count = self.set.as_ref().map_or(0, |s| s.steps.len());
+        let last = count.saturating_sub(STEPS_SHOWN);
+        self.view = (self.view as i32 + by).clamp(0, last as i32) as usize;
+    }
+
+    /// When the step playing changes and falls out of view, bring it in.
+    fn follow(&mut self) {
+        let Some(set) = &self.set else { return };
+        if self.followed == Some(set.current) {
+            return;
+        }
+        self.followed = Some(set.current);
+        if set.current < self.view || set.current >= self.view + STEPS_SHOWN {
+            let last = set.steps.len().saturating_sub(STEPS_SHOWN);
+            self.view = set.current.saturating_sub(1).min(last);
+        }
+    }
+
     /// Move the selection through the lanes on screen.
     fn select(&mut self, by: i32) {
         let active = self.active_lanes();
@@ -522,6 +566,7 @@ impl Screen {
     /// Read the telemetry and draw a frame.
     pub fn draw(&mut self) -> io::Result<()> {
         self.analyse();
+        self.follow();
         let Some(mut term) = self.term.take() else { return Ok(()) };
         let result = term.draw(|f| self.render(f)).map(|_| ());
         self.term = Some(term);
@@ -602,9 +647,9 @@ impl Screen {
         self.lanes(f.buffer_mut(), lanes, &active);
         self.bottom(f, bottom);
         let hint = if self.set.is_some() {
-            " space/→ next · ← back · 1-9 or g step · ↑↓ track · m mute · s solo · r f h e d [ ] + - x u transform · Esc back · ? help · q quit"
+            " 1-9 go to a step · ← → more steps · ? every key · q quit"
         } else {
-            " ↑↓ track · m mute · s solo · r f h e d [ ] + - x u transform · Esc back · ? help · q quit"
+            " ? every key · q quit"
         };
         f.render_widget(Paragraph::new(hint).style(Style::new().fg(DIM).bg(BG)), footer);
         if self.help {
@@ -782,19 +827,24 @@ impl Screen {
     /// `?`: the words, the keys for them, and what the selected track could
     /// play instead.
     fn help_overlay(&self, f: &mut Frame, area: Rect) {
-        let w = area.width.clamp(40, 78);
-        let h = area.height.clamp(10, 26);
+        let w = area.width.clamp(40, 82);
+        let h = area.height.clamp(10, 30);
         let pop = Rect { x: area.x + (area.width - w) / 2, y: area.y + (area.height - h) / 2, width: w, height: h };
         let key = |k: &str, word: &str, what: &str| {
             Line::from(vec![
-                Span::styled(format!(" {:<5}", k), Style::new().fg(GOLD).add_modifier(Modifier::BOLD)),
+                Span::styled(format!(" {:<7}", k), Style::new().fg(GOLD).add_modifier(Modifier::BOLD)),
                 Span::styled(format!("{:<14}", word), Style::new().fg(HOT)),
                 Span::styled(what.to_string(), Style::new().fg(TEXT)),
             ])
         };
         let mut lines = vec![
-            Line::styled(" ↑ ↓ choose a track; the keys change its `play` line in the file", Style::new().fg(DIM)),
+            key("1-9", "go to a step", "the one under the number, on the next phrase"),
+            key("← →", "more steps", "slide the nine on screen along the set"),
+            key("space", "next step", "g or Tab: every step, to pick one"),
+            key("↑ ↓", "a track", "shift ↑ ↓ adds tracks · Esc back"),
+            key("m s", "mute / solo", "the chosen tracks, at once, not written"),
             Line::raw(""),
+            Line::styled(" the chosen tracks' `play` lines, written in the file:", Style::new().fg(DIM)),
             key("r", "rev", "the pattern backwards"),
             key("f", "fast 2", "twice in the same length"),
             key("h", "slow 2", "half speed, twice as long"),
@@ -803,8 +853,6 @@ impl Screen {
             key("e", "every 4 rev", "backwards on the last of every 4 loops"),
             key("d", "degrade", "drop 25%, then 50% of the notes"),
             key("x", "", "every transform off"),
-            key("m", "mute", "the track out, or back (at once, not written)"),
-            key("s", "solo", "only this track; again to take it off"),
             key("u", "", "undo the last change made from here"),
             Line::raw(""),
             Line::styled(
@@ -836,7 +884,7 @@ impl Screen {
             Paragraph::new(lines).block(
                 Block::bordered()
                     .border_style(Style::new().fg(GOLD))
-                    .title(Span::styled(" transform a pattern  ·  ? or Esc closes ", Style::new().fg(GOLD)))
+                    .title(Span::styled(" every key  ·  ? or Esc closes ", Style::new().fg(GOLD)))
                     .style(Style::new().bg(PANEL)),
             ),
             pop,
@@ -948,15 +996,13 @@ impl Screen {
     }
 
     fn steps(&self, buf: &mut Buffer, area: Rect, set: &SetView) {
-        let mut x = area.x + 1;
-        // Scroll so the step playing is on screen.
-        let first = set.current.saturating_sub(3);
-        for (i, name) in set.steps.iter().enumerate().skip(first) {
-            let label = format!(" {} {} ", i + 1, step_name(name));
-            let w = label.chars().count() as u16;
-            if x + w > area.x + area.width {
-                break;
-            }
+        // Nine chips of one width, each with the key that reaches it; ← →
+        // slide them along the set.
+        let chip_w = (area.width.saturating_sub(2) / STEPS_SHOWN as u16).max(6);
+        for slot in 0..STEPS_SHOWN {
+            let i = self.view + slot;
+            let Some(name) = set.steps.get(i) else { break };
+            let x = area.x + 1 + slot as u16 * chip_w;
             let queued = set.next.map(|n| n.0) == Some(i);
             let style = if i == set.current {
                 Style::new().fg(Color::Black).bg(GOLD).add_modifier(Modifier::BOLD)
@@ -970,8 +1016,25 @@ impl Screen {
             } else {
                 Style::new().fg(DIM).bg(PANEL)
             };
-            buf.set_string(x, area.y + 1, &label, style);
-            x += w + 1;
+            // The key and the name: the step's own number is in the line
+            // above and in the full list (g), and a name cut short says less.
+            let body: String = format!(" {}", step_name(name)).chars().take(chip_w as usize - 3).collect();
+            let label = format!("{:<width$}", body, width = chip_w as usize - 2);
+            // The key, then the step: `3 vuelta`.
+            buf.set_string(
+                x,
+                area.y + 1,
+                format!("{}", slot + 1),
+                style.add_modifier(Modifier::BOLD).fg(if i == set.current || queued { Color::Black } else { GOLD }),
+            );
+            buf.set_string(x + 1, area.y + 1, &label, style);
+        }
+        // More steps either side: an arrow says so.
+        if self.view > 0 {
+            buf.set_string(area.x, area.y + 1, "‹", Style::new().fg(GOLD));
+        }
+        if self.view + STEPS_SHOWN < set.steps.len() {
+            buf.set_string(area.x + area.width - 1, area.y + 1, "›", Style::new().fg(GOLD));
         }
         let status = match set.next {
             Some((n, bars)) => format!(
@@ -981,7 +1044,14 @@ impl Screen {
                 if bars == 1 { "" } else { "s" },
                 set.phrase
             ),
-            None => format!(" step {} of {} · phrase {} bars", set.current + 1, set.steps.len(), set.phrase),
+            None => format!(
+                " step {} of {} · steps {}-{} on keys 1-9 · phrase {} bars",
+                set.current + 1,
+                set.steps.len(),
+                self.view + 1,
+                (self.view + STEPS_SHOWN).min(set.steps.len()),
+                set.phrase
+            ),
         };
         buf.set_string(area.x, area.y, &status, Style::new().fg(if set.next.is_some() { HOT } else { DIM }));
     }
@@ -1254,6 +1324,7 @@ impl Screen {
         let n = self.lanes.len().min(self.telemetry.tracks());
         self.transformed = (0..n).map(|i| self.telemetry.transformed(i)).collect();
         self.muted = (0..n).map(|i| self.telemetry.muted(i)).collect();
+        self.follow();
     }
 
     pub fn column_period() -> Duration {
