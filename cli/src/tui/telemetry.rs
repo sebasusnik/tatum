@@ -27,6 +27,8 @@ pub struct Telemetry {
     band: Box<[AtomicU32]>,
     /// Per track, whether this loop is one its `play` line transforms.
     transformed: Box<[AtomicBool]>,
+    /// Per track, the note it holds plus one; 0 when it holds none.
+    note: Box<[AtomicU32]>,
     /// Per track, whether it is muted (a key or a pad).
     muted: Box<[AtomicBool]>,
     /// Per track, the pattern playing and the step in it.
@@ -47,6 +49,7 @@ impl Telemetry {
             muted: (0..MAX_TRACKS).map(|_| AtomicBool::new(false)).collect::<Vec<_>>().into_boxed_slice(),
             pattern: atomics(MAX_TRACKS),
             step: atomics(MAX_TRACKS),
+            note: atomics(MAX_TRACKS),
             tracks: AtomicUsize::new(0),
         }
     }
@@ -73,6 +76,10 @@ impl Telemetry {
             self.transformed[i].store(engine.track_transformed(i), Ordering::Relaxed);
             self.pattern[i].store(engine.track_pattern(i) as u32, Ordering::Relaxed);
             self.muted[i].store(engine.track_muted(i), Ordering::Relaxed);
+            // A note struck and let go inside one callback still colours it.
+            if let Some(n) = engine.track_note(i) {
+                self.note[i].store(n as u32 + 1, Ordering::Relaxed);
+            }
             self.step[i].store(engine.track_step(i) as u32, Ordering::Relaxed);
             self.peak[i].fetch_max(engine.track_peak(i).abs().to_bits(), Ordering::Relaxed);
             let (energy, samples) = engine.track_band_energy(i);
@@ -101,6 +108,14 @@ impl Telemetry {
     /// Whether track `i` is on a loop its `play` line transforms.
     pub fn transformed(&self, i: usize) -> bool {
         self.transformed.get(i).is_some_and(|t| t.load(Ordering::Relaxed))
+    }
+
+    /// The note track `i` last held, taken and cleared once a frame.
+    pub fn take_note(&self, i: usize) -> Option<u8> {
+        match self.note.get(i).map(|n| n.swap(0, Ordering::Relaxed)) {
+            Some(0) | None => None,
+            Some(n) => Some((n - 1) as u8),
+        }
     }
 
     /// Whether track `i` is muted.

@@ -96,6 +96,12 @@ impl SongEngine {
         self.tracks.get(idx).map_or(0, |t| t.pattern_idx)
     }
 
+    /// The note a track is holding, if it is holding one: the latest of a
+    /// chord. For the live screen's colours.
+    pub fn track_note(&self, idx: usize) -> Option<u8> {
+        self.tracks.get(idx).filter(|t| t.current_notes_count > 0).map(|t| t.current_notes[0])
+    }
+
     /// Where a track is in the pattern it plays, as a step index into it.
     pub fn track_step(&self, idx: usize) -> usize {
         let Some(t) = self.tracks.get(idx) else { return 0 };

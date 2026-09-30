@@ -178,6 +178,10 @@ pub struct Screen {
     bar_marks: VecDeque<Option<usize>>,
     marked_bar: Option<usize>,
     lanes: Vec<VecDeque<[f32; BANDS]>>,
+    /// Per lane and column, the note the track held: the lane's colour.
+    lane_notes: Vec<VecDeque<Option<u8>>>,
+    /// The note each track held last, so a tail keeps its note's colour.
+    last_note: Vec<Option<u8>>,
     lane_peak: Vec<f32>,
     last_column: Instant,
     log: VecDeque<(f32, String, Tone)>,
@@ -237,6 +241,8 @@ impl Screen {
             bar_marks: VecDeque::with_capacity(HISTORY),
             marked_bar: None,
             lanes: Vec::new(),
+            lane_notes: Vec::new(),
+            last_note: Vec::new(),
             lane_peak: Vec::new(),
             last_column: Instant::now(),
             log: VecDeque::new(),
@@ -263,6 +269,8 @@ impl Screen {
     pub fn set_song(&mut self, song: SongInfo) {
         if self.song.as_ref().map(|s| &s.tracks) != Some(&song.tracks) {
             self.lanes = vec![VecDeque::with_capacity(HISTORY); song.tracks.len()];
+            self.lane_notes = vec![VecDeque::with_capacity(HISTORY); song.tracks.len()];
+            self.last_note = vec![None; song.tracks.len()];
             self.lane_peak = vec![0.0; song.tracks.len()];
         }
         self.song = Some(song);
@@ -362,18 +370,10 @@ impl Screen {
                     self.select(1);
                     None
                 }
-                KeyCode::Char(' ') | KeyCode::Char('n') => Some(Key::Next),
-                KeyCode::Char('p') => Some(Key::Prev),
-                // ← → move the nine steps on screen; 1-9 go to the one under
-                // the number.
-                KeyCode::Right => {
-                    self.browse(1);
-                    None
-                }
-                KeyCode::Left => {
-                    self.browse(-1);
-                    None
-                }
+                // ← → mark the step to go to, one at a time through the
+                // whole set; the steps on screen follow the mark.
+                KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('n') => Some(Key::Next),
+                KeyCode::Left | KeyCode::Char('p') => Some(Key::Prev),
                 KeyCode::Char(c @ '1'..='9') => {
                     let slot = c as usize - '1' as usize;
                     let count = self.set.as_ref().map_or(0, |s| s.steps.len());
@@ -501,24 +501,22 @@ impl Screen {
         );
     }
 
-    /// Move the steps on screen by `by`, keeping nine in view.
-    fn browse(&mut self, by: i32) {
-        let count = self.set.as_ref().map_or(0, |s| s.steps.len());
-        let last = count.saturating_sub(STEPS_SHOWN);
-        self.view = (self.view as i32 + by).clamp(0, last as i32) as usize;
-    }
-
-    /// When the step playing changes and falls out of view, bring it in.
+    /// Keep the step marked to go to -- or the one playing, when none is --
+    /// among the nine on screen, with one to spare on each side.
     fn follow(&mut self) {
         let Some(set) = &self.set else { return };
-        if self.followed == Some(set.current) {
+        let target = set.next.map(|n| n.0).unwrap_or(set.current);
+        if self.followed == Some(target) {
             return;
         }
-        self.followed = Some(set.current);
-        if set.current < self.view || set.current >= self.view + STEPS_SHOWN {
-            let last = set.steps.len().saturating_sub(STEPS_SHOWN);
-            self.view = set.current.saturating_sub(1).min(last);
+        self.followed = Some(target);
+        let last = set.steps.len().saturating_sub(STEPS_SHOWN);
+        if target < self.view + 1 {
+            self.view = target.saturating_sub(1);
+        } else if target + 2 > self.view + STEPS_SHOWN {
+            self.view = (target + 2).saturating_sub(STEPS_SHOWN);
         }
+        self.view = self.view.min(last);
     }
 
     /// Move the selection through the lanes on screen.
@@ -611,6 +609,10 @@ impl Screen {
                 *d = 10.0 * (p + 1e-12).log10();
             }
             push_capped(&mut self.lanes[i], db);
+            if let Some(n) = self.telemetry.take_note(i) {
+                self.last_note[i] = Some(n);
+            }
+            push_capped(&mut self.lane_notes[i], self.last_note[i]);
             // A meter that falls slowly, the way a needle does.
             self.lane_peak[i] = peak.max(self.lane_peak[i] * 0.85);
         }
@@ -647,7 +649,7 @@ impl Screen {
         self.lanes(f.buffer_mut(), lanes, &active);
         self.bottom(f, bottom);
         let hint = if self.set.is_some() {
-            " 1-9 go to a step · ← → more steps · ? every key · q quit"
+            " ← → choose a step · 1-9 the one on screen · ? every key · q quit"
         } else {
             " ? every key · q quit"
         };
@@ -838,8 +840,8 @@ impl Screen {
             ])
         };
         let mut lines = vec![
-            key("1-9", "go to a step", "the one under the number, on the next phrase"),
-            key("← →", "more steps", "slide the nine on screen along the set"),
+            key("← →", "a step", "mark the one before / after, through the whole set"),
+            key("1-9", "a step", "the one in that place on screen"),
             key("space", "next step", "g or Tab: every step, to pick one"),
             key("↑ ↓", "a track", "shift ↑ ↓ adds tracks · Esc back"),
             key("m s", "mute / solo", "the chosen tracks, at once, not written"),
@@ -1016,16 +1018,15 @@ impl Screen {
             } else {
                 Style::new().fg(DIM).bg(PANEL)
             };
-            // The key and the name: the step's own number is in the line
-            // above and in the full list (g), and a name cut short says less.
-            let body: String = format!(" {}", step_name(name)).chars().take(chip_w as usize - 3).collect();
+            // The step's number in the set, then its name.
+            let body: String = format!(" {} {}", i + 1, step_name(name)).chars().take(chip_w as usize - 3).collect();
             let label = format!("{:<width$}", body, width = chip_w as usize - 2);
-            // The key, then the step: `3 vuelta`.
+            // The key that reaches the chip, dim before it.
             buf.set_string(
                 x,
                 area.y + 1,
                 format!("{}", slot + 1),
-                style.add_modifier(Modifier::BOLD).fg(if i == set.current || queued { Color::Black } else { GOLD }),
+                style.fg(if i == set.current || queued { Color::Black } else { DIM }),
             );
             buf.set_string(x + 1, area.y + 1, &label, style);
         }
@@ -1036,24 +1037,26 @@ impl Screen {
         if self.view + STEPS_SHOWN < set.steps.len() {
             buf.set_string(area.x + area.width - 1, area.y + 1, "›", Style::new().fg(GOLD));
         }
-        let status = match set.next {
-            Some((n, bars)) => format!(
-                " ▸ {} lands in {} bar{}  (phrase {})",
-                step_name(&set.steps[n]),
-                bars,
-                if bars == 1 { "" } else { "s" },
-                set.phrase
+        // Where you stand in the whole set, and where you are going.
+        let total = set.steps.len();
+        let here = format!(" ▶ {}/{} {}", set.current + 1, total, step_name(&set.steps[set.current]));
+        buf.set_string(area.x, area.y, &here, Style::new().fg(GOLD).add_modifier(Modifier::BOLD));
+        let x = area.x + here.chars().count() as u16;
+        let (going, color) = match set.next {
+            Some((n, bars)) => (
+                format!(
+                    "   →  {}/{} {}  in {} bar{}",
+                    n + 1,
+                    total,
+                    step_name(&set.steps[n]),
+                    bars,
+                    if bars == 1 { "" } else { "s" }
+                ),
+                HOT,
             ),
-            None => format!(
-                " step {} of {} · steps {}-{} on keys 1-9 · phrase {} bars",
-                set.current + 1,
-                set.steps.len(),
-                self.view + 1,
-                (self.view + STEPS_SHOWN).min(set.steps.len()),
-                set.phrase
-            ),
+            None => (format!("   ← → to choose where to go · phrase {} bars", set.phrase), DIM),
         };
-        buf.set_string(area.x, area.y, &status, Style::new().fg(if set.next.is_some() { HOT } else { DIM }));
+        buf.set_string(x, area.y, &going, Style::new().fg(color));
     }
 
     fn spectrogram(&self, buf: &mut Buffer, area: Rect) {
@@ -1154,9 +1157,12 @@ impl Screen {
                 break;
             }
             let hist = &self.lanes[i];
+            let notes = &self.lane_notes[i];
+            let drum = song.drums.get(i).copied().unwrap_or(false);
             let rows = lane_h * 2;
             for x in 0..w {
                 let col = (hist.len() + x).checked_sub(w).and_then(|j| hist.get(j));
+                let note = (notes.len() + x).checked_sub(w).and_then(|j| notes.get(j)).copied().flatten();
                 for y in 0..lane_h {
                     let pix = |py: usize| {
                         let Some(col) = col else { return 0.0 };
@@ -1165,7 +1171,9 @@ impl Screen {
                         t(col[band])
                     };
                     if let Some(c) = buf.cell_mut((area.x + label_w + x as u16, y0 + y as u16)) {
-                        pixels(c, pix(y * 2), pix(y * 2 + 1), CLEAR_LANE, self.glass);
+                        pixels_with(c, pix(y * 2), pix(y * 2 + 1), CLEAR_LANE, self.glass, |t| {
+                            lane_colour(t, note, drum)
+                        });
                     }
                 }
             }
@@ -1361,19 +1369,48 @@ const CLEAR_LANE: f32 = 0.1;
 /// is not painted, so when only the bottom one sounds the lower half block is
 /// used instead and the top stays clear.
 fn pixels(c: &mut ratatui::buffer::Cell, top: f32, bottom: f32, clear: f32, glass: bool) {
+    pixels_with(c, top, bottom, clear, glass, inferno);
+}
+
+/// `pixels` with the colour of a level chosen by `colour`.
+fn pixels_with(
+    c: &mut ratatui::buffer::Cell,
+    top: f32,
+    bottom: f32,
+    clear: f32,
+    glass: bool,
+    colour: impl Fn(f32) -> Color,
+) {
     if glass {
         // One pixel a cell, the louder of the two, all of it background.
         let v = top.max(bottom);
-        let bg = if v > clear { inferno(v) } else { Color::Reset };
+        let bg = if v > clear { colour(v) } else { Color::Reset };
         c.set_char(' ').set_fg(Color::Reset).set_bg(bg);
         return;
     }
     match (top > clear, bottom > clear) {
-        (true, true) => c.set_char('▀').set_fg(inferno(top)).set_bg(inferno(bottom)),
-        (true, false) => c.set_char('▀').set_fg(inferno(top)).set_bg(Color::Reset),
-        (false, true) => c.set_char('▄').set_fg(inferno(bottom)).set_bg(Color::Reset),
+        (true, true) => c.set_char('▀').set_fg(colour(top)).set_bg(colour(bottom)),
+        (true, false) => c.set_char('▀').set_fg(colour(top)).set_bg(Color::Reset),
+        (false, true) => c.set_char('▄').set_fg(colour(bottom)).set_bg(Color::Reset),
         (false, false) => c.set_char(' ').set_fg(Color::Reset).set_bg(Color::Reset),
     };
+}
+
+/// A lane's colour: the hue of the note it plays -- the twelve notes around
+/// the colour wheel, C red, E yellow-green, G# blue-violet -- and the level
+/// as brightness. A drum, which has no note, is a cool cyan; a track that has
+/// not played a note yet, grey. The mix above keeps the heat colours, so the
+/// two are never read as one picture.
+fn lane_colour(t: f32, note: Option<u8>, drum: bool) -> Color {
+    let v = t.clamp(0.0, 1.0).powf(0.8);
+    let (hue, sat) = match (drum, note) {
+        (true, _) => (190.0, 0.45),
+        (false, Some(n)) => ((n % 12) as f32 * 30.0, 0.75),
+        (false, None) => (0.0, 0.0),
+    };
+    // A bright level washes towards white, the way the heat ramp tops out.
+    let sat = sat * (1.0 - 0.35 * (v - 0.75).max(0.0) / 0.25);
+    palette::hsv(hue, sat, v)
 }
 
 /// A bar line over a cell: a quarter of the way to white. A clear cell stays

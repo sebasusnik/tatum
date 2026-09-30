@@ -20,3 +20,21 @@ pub const HOT: Color = Color::Rgb(249, 140, 10);
 pub const GOLD: Color = Color::Rgb(249, 201, 50);
 pub const ERR: Color = Color::Rgb(255, 80, 80);
 pub const OK: Color = Color::Rgb(120, 220, 160);
+
+/// Hue in degrees, saturation and value in 0..1.
+pub fn hsv(h: f32, s: f32, v: f32) -> Color {
+    let c = v * s;
+    let hp = (h.rem_euclid(360.0)) / 60.0;
+    let x = c * (1.0 - (hp % 2.0 - 1.0).abs());
+    let (r, g, b) = match hp as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = v - c;
+    let byte = |u: f32| ((u + m) * 255.0).round().clamp(0.0, 255.0) as u8;
+    Color::Rgb(byte(r), byte(g), byte(b))
+}
