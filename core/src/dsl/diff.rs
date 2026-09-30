@@ -235,7 +235,13 @@ pub fn diff(old: &Song, new: &Song) -> Vec<DslChange> {
         // Which pattern a track plays is quantized to the bar like any other
         // edit to what is played (docs/DSL.md, livecoding semantics). It used
         // to switch instantly and restart the pattern from step 0 mid-bar.
-        if old_track.play != new_track.play {
+        // What is done to the pattern is part of what it plays: `play x rev`
+        // after `play x` is a different pattern, and comparing the name alone
+        // took the edit for no change at all.
+        if old_track.play != new_track.play
+            || old_track.play_also != new_track.play_also
+            || old_track.transforms != new_track.transforms
+        {
             changes.push(DslChange::StructuralChange);
             return changes;
         }

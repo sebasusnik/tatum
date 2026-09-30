@@ -459,3 +459,20 @@ fn a_save_keeps_the_place_in_loops_of_different_lengths() {
     assert!(!swaps.is_empty(), "the edit never landed");
     assert_identical(&reference, &(l, r), "alternating loops across a save");
 }
+
+/// Adding a word to a `play` line is an edit to what plays: it has to swap.
+/// Comparing the pattern's name alone took `play line rev` after `play line`
+/// for no change, and the screen showed a transform nobody heard.
+#[test]
+fn a_transform_added_on_a_save_is_heard() {
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    let plan = planner.plan(LIVE, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json()));
+    player.apply(plan);
+    player.start();
+    let edited = LIVE.replace("play line using low", "play line rev using low");
+    let plan = planner.plan(&edited, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json()));
+    // It used to come back `Fast` with nothing in it: "applied instantly",
+    // and nothing changed.
+    assert_eq!(player.apply(plan), Applied::Queued, "a transform added on a save has to swap on the next bar");
+}
