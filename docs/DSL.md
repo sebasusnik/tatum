@@ -476,6 +476,13 @@ shows what it reads in its units (`acid cutoff 1.2khz`, `pad level -6.0 dB`). A 
 that nothing is mapped to shows its number instead (`cc 74 = 90 (not mapped)`), which
 is how you find what your controller sends.
 
+With `--tui`, `k` does the writing for you: it lists what the chosen track offers a
+knob -- its module's parameters, its level, pan and sends, the named nodes of its
+chain -- and any knob turned while the list is open moves the one marked, at once, to
+try it. Enter keeps it there, `+` adds it to what the knob already moves, `x` takes
+every knob off it. The line goes into the first `midi` block of the song's files (in
+a set, the rig's), or a new one, and `u` takes it back.
+
 A range after the target puts the knob's travel on a stretch of it, in the target's own
 units, and repeating the controller on several lines makes one knob a macro:
 
