@@ -6,7 +6,7 @@
 tatum set play sets/hiperespacio --auto --tui
 ```
 
-- `--auto`: el set avanza solo, igual que en `hiperespacio-tocado.mp3`. Vos solo hacés los gestos; A8/A7 siguen saltando si querés.
+- `--auto`: el set avanza solo, igual que en `hiperespacio-tocado.mp3`. Vos solo hacés los gestos; espacio o → y ← en la compu siguen saltando si querés.
 - **Debajo de los pasos, la TUI muestra un renglón de práctica:**
   - `bar 17/24 · ●●○○` dice en qué compás del paso estás y en qué tiempo.
   - `▶ ...` (resaltado) es el gesto que va en este compás.

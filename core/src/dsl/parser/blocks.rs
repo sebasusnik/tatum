@@ -96,11 +96,12 @@ impl Parser {
     /// rule the rest of the language follows, so a set step can remap one
     /// knob of the rig it `use`s. Inside one block, a source named twice
     /// moves both targets.
-    pub(super) fn parse_midi(&mut self, maps: &mut Vec<MidiMapDef>) {
+    pub(super) fn parse_midi(&mut self, maps: &mut Vec<MidiMapDef>, perform: &mut PerformSetup) {
         if !self.expect(&Token::LBrace) {
             return;
         }
         let mut block: Vec<MidiMapDef> = Vec::new();
+        let mut zones: Vec<ZoneDef> = Vec::new();
         loop {
             self.skip_newlines();
             if self.at_block_end() {
@@ -108,13 +109,28 @@ impl Parser {
             }
             let line = self.span().line;
             let word = match self.peek() {
-                Token::Ident(w) if w == "cc" || w == "keys" || w == "pad" => w.clone(),
+                Token::Ident(w) if w == "cc" || w == "keys" || w == "pad" || w == "key" => w.clone(),
+                Token::Ident(w) if w == "zone" => {
+                    self.advance();
+                    if let Some(z) = self.parse_zone(line) {
+                        zones.retain(|o| o.kind != z.kind);
+                        zones.push(z);
+                    }
+                    continue;
+                }
+                Token::Ident(w) if w == "lock" => {
+                    self.advance();
+                    if let Some(l) = self.parse_lock() {
+                        perform.lock = Some(l);
+                    }
+                    continue;
+                }
                 other => {
                     let s = self.span().clone();
                     self.errors.push(ParseError {
                         line: s.line, col: s.col,
                         message: format!(
-                            "midi: expected `cc <number> > <target>`, `keys > <track>` or `pad <note> > <track> <drum>`, got {}",
+                            "midi: expected `cc <number> > <target>`, `keys > <track>`, `pad <note> > <track> <drum>`, `key <note> > <action>`, `zone <triggers|bass|lead> <low>..<high>` or `lock <snap|white|off>`, got {}",
                             describe_token(other)),
                     });
                     self.recover_to_line_end();
@@ -125,15 +141,24 @@ impl Parser {
             let source = if word == "keys" {
                 MidiSource::Keys
             } else {
-                let what = if word == "cc" { "a controller number" } else { "a pad's note" };
+                let what = match word.as_str() {
+                    "cc" => "a controller number",
+                    "key" => "a key's note",
+                    _ => "a pad's note",
+                };
                 match self.peek().clone() {
                     Token::Number(n) if (0.0..=127.0).contains(&n) && (n as u8) as f32 == n => {
                         self.advance();
-                        if word == "cc" {
-                            MidiSource::Cc(n as u8)
-                        } else {
-                            MidiSource::Pad(n as u8)
+                        match word.as_str() {
+                            "cc" => MidiSource::Cc(n as u8),
+                            "key" => MidiSource::Key(n as u8),
+                            _ => MidiSource::Pad(n as u8),
                         }
+                    }
+                    // `key C1 > ...`: a key by its name.
+                    Token::Note(name) if word == "key" && crate::dsl::compiler::note_in_midi_range(&name) => {
+                        self.advance();
+                        MidiSource::Key(crate::dsl::compiler::note_name_to_midi(&name))
                     }
                     other => {
                         let s = self.span().clone();
@@ -161,7 +186,10 @@ impl Parser {
             let mut words: Vec<String> = Vec::new();
             loop {
                 let word = match self.peek() {
-                    Token::Ident(w) if (w == "cc" || w == "pad") && matches!(self.peek_ahead(1), Token::Number(_)) => {
+                    Token::Ident(w)
+                        if (w == "cc" || w == "pad" || w == "key")
+                            && matches!(self.peek_ahead(1), Token::Number(_)) =>
+                    {
                         break
                     }
                     Token::Ident(w) if w == "keys" && matches!(self.peek_ahead(1), Token::Arrow) => break,
@@ -175,7 +203,7 @@ impl Parser {
                     Token::Tempo => String::from("tempo"),
                     Token::Play => String::from("play"),
                     // `pad 40 > play grinder C2`: the note a pad plays.
-                    Token::Note(n) if matches!(source, MidiSource::Pad(_)) => n.clone(),
+                    Token::Note(n) if matches!(source, MidiSource::Pad(_) | MidiSource::Key(_)) => n.clone(),
                     _ => break,
                 };
                 self.advance();
@@ -187,6 +215,7 @@ impl Parser {
                     MidiSource::Cc(_) => "`acid cutoff` or `pad level`",
                     MidiSource::Keys => "a track, like `solo`",
                     MidiSource::Pad(_) => "a track and a drum, like `kick kick`",
+                    MidiSource::Key(_) => "what the key does, like `hold riser` or `mute bass`",
                 };
                 self.errors.push(ParseError {
                     line: s.line,
@@ -197,14 +226,14 @@ impl Parser {
                 continue;
             }
             // `pad 50 > step 3`: the one target with a number in it.
-            if matches!(source, MidiSource::Pad(_)) && words == ["step"] {
+            if matches!(source, MidiSource::Pad(_) | MidiSource::Key(_)) && words == ["step"] {
                 if let Token::Number(n) = self.peek().clone() {
                     self.advance();
                     words.push(format!("{}", n as usize));
                 }
             }
             // `pad 38 > repeat 1/16`: a division, read as the fraction it is.
-            if matches!(source, MidiSource::Pad(_)) && words == ["repeat"] {
+            if matches!(source, MidiSource::Pad(_) | MidiSource::Key(_)) && words == ["repeat"] {
                 if let (Token::Number(a), Token::Slash, Token::Number(b)) =
                     (self.peek().clone(), self.peek_ahead(1).clone(), self.peek_ahead(2).clone())
                 {
@@ -219,6 +248,413 @@ impl Parser {
         self.expect(&Token::RBrace);
         maps.retain(|m| !block.iter().any(|b| b.source == m.source));
         maps.extend(block);
+        perform.zones.retain(|z| !zones.iter().any(|n| n.kind == z.kind));
+        perform.zones.extend(zones);
+    }
+
+    /// `snap`, `white` or `off`, after `lock`.
+    fn parse_lock(&mut self) -> Option<crate::perform::scale::Lock> {
+        let s = self.span().clone();
+        let lock = match self.peek() {
+            Token::Ident(w) => crate::perform::scale::Lock::from_word(w),
+            _ => None,
+        };
+        match lock {
+            Some(l) => {
+                self.advance();
+                Some(l)
+            }
+            None => {
+                self.errors.push(ParseError {
+                    line: s.line,
+                    col: s.col,
+                    message: format!(
+                        "lock: snap (to the nearest note of the scale), white (the white keys are the degrees) or off, got {}",
+                        describe_token(&s.token)
+                    ),
+                });
+                self.recover_to_line_end();
+                None
+            }
+        }
+    }
+
+    /// A note as a zone writes it: a MIDI number or a name, `48` or `C2`.
+    fn parse_zone_note(&mut self) -> Option<u8> {
+        let s = self.span().clone();
+        let n = match &s.token {
+            Token::Number(n) if (0.0..=127.0).contains(n) && (*n as u8) as f32 == *n => Some(*n as u8),
+            Token::Note(name) if crate::dsl::compiler::note_in_midi_range(name) => {
+                Some(crate::dsl::compiler::note_name_to_midi(name))
+            }
+            _ => None,
+        };
+        match n {
+            Some(n) => {
+                self.advance();
+                Some(n)
+            }
+            None => {
+                self.errors.push(ParseError {
+                    line: s.line,
+                    col: s.col,
+                    message: format!(
+                        "zone: a note is a MIDI number from 0 to 127 or a name like C2, got {}",
+                        describe_token(&s.token)
+                    ),
+                });
+                self.recover_to_line_end();
+                None
+            }
+        }
+    }
+
+    /// `zone bass 48..59 > bass roll kick=drums`, after `zone`.
+    fn parse_zone(&mut self, line: usize) -> Option<ZoneDef> {
+        let s = self.span().clone();
+        let kind = match &s.token {
+            Token::Ident(w) => ZoneKind::from_word(w),
+            _ => None,
+        };
+        let Some(kind) = kind else {
+            self.errors.push(ParseError {
+                line: s.line,
+                col: s.col,
+                message: format!("zone: triggers, bass or lead, got {}", describe_token(&s.token)),
+            });
+            self.recover_to_line_end();
+            return None;
+        };
+        self.advance();
+        let low = self.parse_zone_note()?;
+        if !matches!(self.peek(), Token::Tie) {
+            let s = self.span().clone();
+            self.errors.push(ParseError {
+                line: s.line,
+                col: s.col,
+                message: format!(
+                    "zone: the lowest and the highest note with `..` between them, like `48..59`, got {}",
+                    describe_token(&s.token)
+                ),
+            });
+            self.recover_to_line_end();
+            return None;
+        }
+        self.advance();
+        let high = self.parse_zone_note()?;
+        if high < low {
+            self.errors.push(ParseError {
+                line: s.line,
+                col: s.col,
+                message: format!("zone {}: {}..{} runs downwards; write the lowest note first", kind.word(), low, high),
+            });
+        }
+        let play = if matches!(self.peek(), Token::Arrow) {
+            self.advance();
+            Some(self.parse_zone_play(kind)?)
+        } else {
+            None
+        };
+        Some(ZoneDef { kind, low: low.min(high), high: high.max(low), play, line })
+    }
+
+    /// `bass roll kick=drums` after a zone's `>`: the track, then how.
+    fn parse_zone_play(&mut self, kind: ZoneKind) -> Option<ZonePlay> {
+        let s = self.span().clone();
+        let track = match &s.token {
+            Token::Ident(w) => w.clone(),
+            _ => {
+                self.errors.push(ParseError {
+                    line: s.line,
+                    col: s.col,
+                    message: format!("{}: the track the zone plays, got {}", kind.word(), describe_token(&s.token)),
+                });
+                self.recover_to_line_end();
+                return None;
+            }
+        };
+        self.advance();
+        let mut play = ZonePlay { track, roll: false, kick: None };
+        loop {
+            let s = self.span().clone();
+            match &s.token {
+                Token::Ident(w) if w == "roll" || w == "notes" => {
+                    play.roll = w == "roll";
+                    self.advance();
+                }
+                Token::Ident(w) if w == "kick" && matches!(self.peek_ahead(1), Token::Eq) => {
+                    self.pos += 2;
+                    match self.peek().clone() {
+                        Token::Ident(t) => {
+                            self.advance();
+                            play.kick = Some(t);
+                        }
+                        other => {
+                            let s = self.span().clone();
+                            self.errors.push(ParseError {
+                                line: s.line,
+                                col: s.col,
+                                message: format!(
+                                    "kick=: the drum track whose kick a roll strikes, got {}",
+                                    describe_token(&other)
+                                ),
+                            });
+                            self.recover_to_line_end();
+                            return None;
+                        }
+                    }
+                }
+                Token::Newline | Token::Eof | Token::RBrace => break,
+                // The next mapping on the same line.
+                Token::Ident(w) if matches!(w.as_str(), "cc" | "pad" | "key" | "keys" | "zone" | "lock") => break,
+                other => {
+                    self.errors.push(ParseError {
+                        line: s.line,
+                        col: s.col,
+                        message: format!(
+                            "{}: after the track, `roll` or `notes`, and `kick=<track>`; got {}",
+                            kind.word(),
+                            describe_token(other)
+                        ),
+                    });
+                    self.recover_to_line_end();
+                    return None;
+                }
+            }
+        }
+        if play.kick.is_some() && !play.roll {
+            self.errors.push(ParseError {
+                line: s.line,
+                col: s.col,
+                message: String::from("kick= goes with `roll`: it is the kick on the beat the roll leaves for it"),
+            });
+        }
+        if play.roll && kind != ZoneKind::Bass {
+            self.errors.push(ParseError {
+                line: s.line,
+                col: s.col,
+                message: String::from("`roll` is for the bass zone"),
+            });
+        }
+        Some(play)
+    }
+
+    // ── Performance scenes ──
+    // perform drop {
+    //     scale E phrygian_dominant      the zones keep to this; with none, the song's
+    //     lock white                     snap, white or off
+    //     bass > bass roll kick=drums    what the bass zone plays, and how
+    //     lead > zapper                  what the lead zone plays
+    //     set reverb_mix 20%             a value put in place as the scene comes in
+    // }
+
+    /// After `perform`. A later block with the same name replaces it.
+    pub(super) fn parse_perform(&mut self, setup: &mut PerformSetup) {
+        let line = self.span().line;
+        let Some(name) = self.expect_ident() else {
+            self.recover_to_line_end();
+            return;
+        };
+        if !self.expect(&Token::LBrace) {
+            return;
+        }
+        let mut def = PerformDef { name, scale: None, lock: None, bass: None, lead: None, sets: Vec::new(), line };
+        loop {
+            self.skip_newlines();
+            if self.at_block_end() {
+                break;
+            }
+            let s = self.span().clone();
+            match s.token.clone() {
+                Token::Scale => {
+                    self.advance();
+                    let root = self.expect_ident();
+                    let kind = self.expect_ident();
+                    if let (Some(root), Some(kind)) = (root, kind) {
+                        def.scale = Some(ScaleDef { root, kind });
+                    } else {
+                        self.recover_to_line_end();
+                    }
+                }
+                Token::Ident(w) if w == "lock" => {
+                    self.advance();
+                    def.lock = self.parse_lock();
+                }
+                Token::Ident(w) if (w == "bass" || w == "lead") && matches!(self.peek_ahead(1), Token::Arrow) => {
+                    self.pos += 2;
+                    let kind = if w == "bass" { ZoneKind::Bass } else { ZoneKind::Lead };
+                    let play = self.parse_zone_play(kind);
+                    if kind == ZoneKind::Bass {
+                        def.bass = play;
+                    } else {
+                        def.lead = play;
+                    }
+                }
+                Token::Ident(w) if w == "set" => {
+                    self.advance();
+                    let mut words: Vec<String> = Vec::new();
+                    loop {
+                        let word = match self.peek() {
+                            Token::Ident(w) => w.clone(),
+                            Token::Level => String::from("level"),
+                            Token::Pan => String::from("pan"),
+                            Token::Mix => String::from("mix"),
+                            Token::Master => String::from("master"),
+                            Token::Tempo => String::from("tempo"),
+                            _ => break,
+                        };
+                        self.advance();
+                        words.push(word);
+                    }
+                    if words.is_empty() {
+                        self.errors.push(ParseError {
+                            line: s.line,
+                            col: s.col,
+                            message: String::from("set: a target and a value, like `set reverb_mix 20%`"),
+                        });
+                        self.recover_to_line_end();
+                        continue;
+                    }
+                    if let Some(value) = self.parse_range_end() {
+                        def.sets.retain(|p| p.target != words.join("."));
+                        def.sets.push(PerformSet { target: words.join("."), value, line: s.line });
+                    }
+                }
+                other => {
+                    self.errors.push(ParseError {
+                        line: s.line,
+                        col: s.col,
+                        message: format!(
+                            "perform: scale, lock, `bass > <track>`, `lead > <track>` or `set <target> <value>`, got {}",
+                            describe_token(&other)
+                        ),
+                    });
+                    self.recover_to_line_end();
+                }
+            }
+        }
+        self.expect(&Token::RBrace);
+        setup.scenes.retain(|o| o.name != def.name);
+        setup.scenes.push(def);
+    }
+
+    // ── The computer's keys ──
+    // keyboard {
+    //     f1 > perform intro     a scene, on the next bar (or what `quantize` says)
+    //     space > next           the set: next, prev, step 3
+    //     quantize bar           bar, phrase (8 bars) or a number of bars
+    // }
+
+    /// After `keyboard`. A later binding of the same key replaces it.
+    pub(super) fn parse_keyboard(&mut self, setup: &mut PerformSetup) {
+        if !self.expect(&Token::LBrace) {
+            return;
+        }
+        loop {
+            self.skip_newlines();
+            if self.at_block_end() {
+                break;
+            }
+            let s = self.span().clone();
+            if matches!(&s.token, Token::Ident(w) if w == "quantize") && !matches!(self.peek_ahead(1), Token::Arrow) {
+                self.advance();
+                let q = self.span().clone();
+                let bars = match &q.token {
+                    Token::Ident(w) if w == "bar" => Some(1),
+                    Token::Ident(w) if w == "phrase" => Some(8),
+                    Token::Number(n) if *n >= 1.0 && (*n as u32) as f32 == *n => Some(*n as u32),
+                    _ => None,
+                };
+                match bars {
+                    Some(b) => {
+                        self.advance();
+                        setup.scene_bars = Some(b);
+                    }
+                    None => {
+                        self.errors.push(ParseError {
+                            line: q.line,
+                            col: q.col,
+                            message: format!(
+                                "quantize: bar, phrase (8 bars) or a whole number of bars, got {}",
+                                describe_token(&q.token)
+                            ),
+                        });
+                        self.recover_to_line_end();
+                    }
+                }
+                continue;
+            }
+            let key = match &s.token {
+                Token::Ident(w) => Some(w.to_ascii_lowercase()),
+                Token::Note(n) => Some(n.to_ascii_lowercase()),
+                Token::Number(n) if (0.0..=9.0).contains(n) && (*n as u8) as f32 == *n => Some(format!("{}", *n as u8)),
+                Token::DrumHit | Token::DrumAccent => Some(String::from("x")),
+                Token::DrumGhost(c) => Some(String::from(*c)),
+                Token::Play => Some(String::from("play")),
+                _ => None,
+            };
+            let Some(key) = key.filter(|k| crate::perform::key_name_ok(k)) else {
+                self.errors.push(ParseError {
+                    line: s.line,
+                    col: s.col,
+                    message: format!(
+                        "keyboard: a key is a letter, a digit, f1..f12, space, tab, enter, left, right, up or down; got {}",
+                        describe_token(&s.token)
+                    ),
+                });
+                self.recover_to_line_end();
+                continue;
+            };
+            self.advance();
+            if !self.expect(&Token::Arrow) {
+                self.recover_to_line_end();
+                continue;
+            }
+            let a = self.span().clone();
+            let action = match &a.token {
+                Token::Ident(w) if w == "perform" => {
+                    self.advance();
+                    self.expect_ident().map(KeyAction::Perform)
+                }
+                Token::Ident(w) if w == "next" => {
+                    self.advance();
+                    Some(KeyAction::Next)
+                }
+                Token::Ident(w) if w == "prev" => {
+                    self.advance();
+                    Some(KeyAction::Prev)
+                }
+                Token::Ident(w) if w == "step" => {
+                    self.advance();
+                    match self.peek().clone() {
+                        Token::Number(n) if n >= 1.0 && (n as usize) as f32 == n => {
+                            self.advance();
+                            Some(KeyAction::Step(n as usize))
+                        }
+                        _ => None,
+                    }
+                }
+                _ => None,
+            };
+            match action {
+                Some(action) => {
+                    setup.keyboard.retain(|b| b.key != key);
+                    setup.keyboard.push(KeyBinding { key, action, line: s.line });
+                }
+                None => {
+                    self.errors.push(ParseError {
+                        line: a.line,
+                        col: a.col,
+                        message: format!(
+                            "keyboard: a key does `perform <scene>`, `next`, `prev` or `step <n>`; got {}",
+                            describe_token(&a.token)
+                        ),
+                    });
+                    self.recover_to_line_end();
+                }
+            }
+        }
+        self.expect(&Token::RBrace);
     }
 
     /// `q=bar`, `q=beat`, `q=1/8`, `q=1/16` or `q=off` after a pad's target.
@@ -245,8 +681,8 @@ impl Parser {
             return None;
         };
         let first = words.first().map(String::as_str);
-        if !matches!(source, MidiSource::Pad(_)) {
-            err(self, String::from("midi: q= quantizes a pad; a knob or the keys act at once"));
+        if !matches!(source, MidiSource::Pad(_) | MidiSource::Key(_)) {
+            err(self, String::from("midi: q= quantizes a pad or a trigger key; a knob or the keys act at once"));
         } else if matches!(first, Some("repeat" | "next" | "prev" | "step")) {
             err(self, format!(
                 "midi: `{}` already waits for its line (a repeat for its division, a set move for the phrase); it takes no q=",

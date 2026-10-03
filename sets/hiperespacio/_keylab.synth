@@ -1,0 +1,68 @@
+# hiperespacio — the KeyLab Essential 49 mk3 as a performer splits it
+#
+# Every number here is the controller's, as Arturia ships it, and every one
+# is an assumption until `tatum midi monitor sets/hiperespacio` shows it:
+# press each key, pad and knob once and read what arrives. The octave
+# buttons move the keyboard by twelve notes; move the zones with them.
+#
+#   36..47  triggers  the lowest octave: each key does one thing (below)
+#   48..59  bass      held, the track's own bass rolls the note on the three
+#                     sixteenths after each beat, in place of its line
+#   60..84  lead      the scene's lead or sound, kept to the scale
+#
+# Scenes change what the zones play; F1-F4 call them, on the next bar.
+# The set moves only from the computer: space or → next, ← back.
+
+use "_voces.synth"
+
+midi {
+    zone triggers 36..47
+    zone bass     48..59 > bass roll
+    zone lead     60..84 > kpluck
+    lock snap
+
+    key 36 > play kruido              # C   riser: noise that climbs while held
+    key 37 > play kimpact q=beat      # C#  impact, on the beat
+    key 38 > mute drums q=bar         # D   drums out while held, back on the one
+    key 39 > mute bass q=bar          # D#  bass out while held
+    key 42 > hold kfill q=beat        # F#  snare roll while held
+    key 43 > throw kpluck             # G   the lead into the echo while held,
+    key 43 > throw kzap               #     whichever the scene plays
+    key 43 > throw klaser
+    key 43 > throw kvox
+    key 44 > freeze                   # G#  the reverb frozen while held
+    # E, F, A, A#, B: filter cut, sweep, tape stop and two free -- stage 3.
+}
+
+perform intro {
+    bass > bass roll
+    lead > kpluck
+    set kpluck delay_send 35%
+}
+
+perform build {
+    bass > bass roll
+    lead > kzap
+    set kzap delay_send 30%
+}
+
+perform drop {
+    bass > bass roll
+    lead > klaser
+    set klaser delay_send 22%
+}
+
+# In a break the kick is gone: a held bass key brings it back with the roll.
+perform break {
+    bass > bass roll kick=drums
+    lead > kvox
+    set kvox reverb_send 50%
+}
+
+keyboard {
+    f1 > perform intro
+    f2 > perform build
+    f3 > perform drop
+    f4 > perform break
+    quantize bar
+}

@@ -181,6 +181,22 @@ impl SongEngine {
         }
     }
 
+    /// Roll `note` on `track` in place of its pattern, from the next
+    /// sixteenth: the three after each beat, and on the beat the kick of
+    /// `kick` (track, drum note) if given. `None` stops it, and the pattern
+    /// plays on from where it has got to.
+    pub fn set_roll(&mut self, track: usize, roll: Option<(u8, f32)>, kick: Option<(usize, u8)>) {
+        if let Some(t) = self.tracks.get_mut(track) {
+            t.roll =
+                roll.map(|(note, velocity)| super::track::LiveRoll { note, velocity: velocity.clamp(0.0, 1.0), kick });
+        }
+    }
+
+    /// The note a track is rolling, if a key holds one.
+    pub fn track_roll(&self, track: usize) -> Option<u8> {
+        self.tracks.get(track).and_then(|t| t.roll).map(|r| r.note)
+    }
+
     /// Bend instrument `inst_idx` by `ratio` of its frequency (1.0 is none).
     pub fn set_pitch_bend(&mut self, inst_idx: usize, ratio: f32) {
         if !ratio.is_finite() {

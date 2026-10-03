@@ -14,7 +14,8 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::dsl::ast::{MidiSource, Param, RangeEnd, Song};
+use crate::dsl::ast::{MidiSource, Param, RangeEnd, Song, ZoneKind, ZonePlay};
+use crate::perform::scale::{Lock, Scale};
 use crate::live::FastOp;
 use crate::params::{self, ModuleKind, ParamSpec, Range};
 
@@ -245,11 +246,12 @@ pub fn pad_words(target: &str) -> Vec<&str> {
     target.split('.').collect()
 }
 
-/// The tracks a `pad N > hold <track>` line keeps out until the pad is held.
+/// The tracks a `pad N > hold <track>` (or `key N > hold`) line keeps out
+/// until the pad or key is held.
 pub fn held_out(song: &Song) -> Vec<String> {
     song.midi
         .iter()
-        .filter(|m| matches!(m.source, MidiSource::Pad(_)))
+        .filter(|m| matches!(m.source, MidiSource::Pad(_) | MidiSource::Key(_)))
         .filter_map(|m| m.target.strip_prefix("hold.").map(String::from))
         .collect()
 }
@@ -318,12 +320,106 @@ pub fn play_note(song: &Song, track: &str, written: Option<&str>) -> Option<u8> 
     }
 }
 
+/// A track a key zone plays, resolved to engine indices.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ZoneTarget {
+    pub track: usize,
+    pub instrument: usize,
+    /// One note at a time: the bass zone always, the lead zone on a `bass`
+    /// module.
+    pub mono: bool,
+    pub roll: bool,
+    /// The kick a roll strikes on the beat: track and drum note.
+    pub kick: Option<(usize, u8)>,
+}
+
+/// A stretch of the keyboard, by MIDI note, both ends in it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Zone {
+    pub kind: ZoneKind,
+    pub low: u8,
+    pub high: u8,
+    /// What it plays until a scene says otherwise.
+    pub play: Option<ZoneTarget>,
+}
+
+impl Zone {
+    pub fn contains(&self, note: u8) -> bool {
+        (self.low..=self.high).contains(&note)
+    }
+}
+
+/// A `perform` block resolved against one engine.
+#[derive(Debug, Clone)]
+pub struct Scene {
+    pub name: String,
+    pub scale: Option<Scale>,
+    pub lock: Option<Lock>,
+    pub bass: Option<ZoneTarget>,
+    pub lead: Option<ZoneTarget>,
+    /// Its `set` lines, each a knob with its value at the bottom of its
+    /// travel: `ops(0)` puts it in place.
+    pub sets: Vec<Knob>,
+}
+
 /// Everything a `midi` block maps, resolved against one engine.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Controls {
     pub knobs: Vec<Knob>,
     pub keys: Vec<Keys>,
     pub pads: Vec<Pad>,
+    /// `key` lines: keys of the trigger zone, which act like pads.
+    pub triggers: Vec<Pad>,
+    pub zones: Vec<Zone>,
+    pub scenes: Vec<Scene>,
+    /// How the bass and lead zones keep to the scale, unless a scene says.
+    pub lock: Lock,
+    /// The song's scale; a scene may name its own.
+    pub scale: Option<Scale>,
+}
+
+impl Default for Controls {
+    fn default() -> Self {
+        Self {
+            knobs: Vec::new(),
+            keys: Vec::new(),
+            pads: Vec::new(),
+            triggers: Vec::new(),
+            zones: Vec::new(),
+            scenes: Vec::new(),
+            lock: Lock::Snap,
+            scale: None,
+        }
+    }
+}
+
+impl Controls {
+    pub fn scene(&self, name: &str) -> Option<&Scene> {
+        self.scenes.iter().find(|s| s.name == name)
+    }
+
+    /// The zone a key on the keyboard channel falls in.
+    pub fn zone_of(&self, note: u8) -> Option<&Zone> {
+        self.zones.iter().find(|z| z.contains(note))
+    }
+
+    /// What zone `kind` plays under `scene`: the scene's track, or the
+    /// zone's own.
+    pub fn zone_target(&self, kind: ZoneKind, scene: Option<&str>) -> Option<ZoneTarget> {
+        let sc = scene.and_then(|n| self.scene(n));
+        let from_scene = match kind {
+            ZoneKind::Bass => sc.and_then(|s| s.bass),
+            ZoneKind::Lead => sc.and_then(|s| s.lead),
+            ZoneKind::Triggers => None,
+        };
+        from_scene.or_else(|| self.zones.iter().find(|z| z.kind == kind).and_then(|z| z.play))
+    }
+
+    /// The scale and lock the zones keep to under `scene`.
+    pub fn lock_under(&self, scene: Option<&str>) -> (Option<Scale>, Lock) {
+        let sc = scene.and_then(|n| self.scene(n));
+        (sc.and_then(|s| s.scale).or(self.scale), sc.and_then(|s| s.lock).unwrap_or(self.lock))
+    }
 }
 
 /// Every `midi { }` mapping in `song`, resolved against one engine. A knob
@@ -350,36 +446,93 @@ pub fn resolve_all(song: &Song, names: &Names) -> Controls {
                     .is_some_and(|d| d.module_type == "bass");
                 controls.keys.push(Keys { track: t, instrument, mono });
             }
-            MidiSource::Pad(note) => {
-                let action = match pad_words(&m.target).as_slice() {
-                    ["freeze"] => Some(PadAction::Freeze),
-                    ["next"] => Some(PadAction::Next),
-                    ["prev"] => Some(PadAction::Prev),
-                    ["step", n] => n.parse::<usize>().ok().filter(|&n| n >= 1).map(PadAction::Step),
-                    ["mute", t] => track(t).map(|track| PadAction::Mute { track }),
-                    ["toggle", t] => track(t).map(|track| PadAction::Toggle { track }),
-                    ["throw", t] => track(t).map(|track| PadAction::Throw { track }),
-                    ["hold", t] => track(t).map(|track| PadAction::Hold { track }),
-                    ["repeat", d] => repeat_division(d).map(|sixteenths| PadAction::Repeat { sixteenths }),
-                    ["play", t, rest @ ..] if rest.len() <= 1 => {
-                        match (track(t), play_note(song, t, rest.first().copied())) {
-                            (Some(track), Some(note)) => Some(PadAction::Play { track, note }),
-                            _ => None,
-                        }
+            MidiSource::Pad(note) | MidiSource::Key(note) => {
+                if let Some(action) = pad_action(song, &track, &m.target) {
+                    let pad = Pad { note, action, quantize: m.quantize };
+                    if matches!(m.source, MidiSource::Key(_)) {
+                        controls.triggers.push(pad);
+                    } else {
+                        controls.pads.push(pad);
                     }
-                    [t, drum] => match (track(t), crate::dsl::compiler::drum_note(drum)) {
-                        (Some(track), Some(drum)) => Some(PadAction::Drum { track, drum }),
-                        _ => None,
-                    },
-                    _ => None,
-                };
-                if let Some(action) = action {
-                    controls.pads.push(Pad { note, action, quantize: m.quantize });
                 }
             }
         }
     }
+    let target = |play: &ZonePlay| zone_target(song, names, play);
+    controls.zones = song
+        .perform
+        .zones
+        .iter()
+        .map(|z| Zone { kind: z.kind, low: z.low, high: z.high, play: z.play.as_ref().and_then(target) })
+        .collect();
+    controls.lock = song.perform.lock.unwrap_or(Lock::Snap);
+    controls.scale = song.globals.scale.as_ref().and_then(|d| Scale::named(&d.root, &d.kind));
+    controls.scenes = song
+        .perform
+        .scenes
+        .iter()
+        .map(|sc| Scene {
+            name: sc.name.clone(),
+            scale: sc.scale.as_ref().and_then(|d| Scale::named(&d.root, &d.kind)),
+            lock: sc.lock,
+            bass: sc.bass.as_ref().and_then(target),
+            lead: sc.lead.as_ref().and_then(target),
+            sets: sc
+                .sets
+                .iter()
+                .map(|set| {
+                    let ends = [set.value.clone(), set.value.clone()];
+                    Knob {
+                        cc: 0,
+                        target: set.target.clone(),
+                        moves: resolve(song, names, &set.target),
+                        span: knob_span(song, &set.target, &ends).ok(),
+                    }
+                })
+                .collect(),
+        })
+        .collect();
     controls
+}
+
+/// What a pad or a trigger key line does, resolved: `None` when it names
+/// something this engine does not have.
+fn pad_action(song: &Song, track: &impl Fn(&str) -> Option<usize>, target: &str) -> Option<PadAction> {
+    match pad_words(target).as_slice() {
+        ["freeze"] => Some(PadAction::Freeze),
+        ["next"] => Some(PadAction::Next),
+        ["prev"] => Some(PadAction::Prev),
+        ["step", n] => n.parse::<usize>().ok().filter(|&n| n >= 1).map(PadAction::Step),
+        ["mute", t] => track(t).map(|track| PadAction::Mute { track }),
+        ["toggle", t] => track(t).map(|track| PadAction::Toggle { track }),
+        ["throw", t] => track(t).map(|track| PadAction::Throw { track }),
+        ["hold", t] => track(t).map(|track| PadAction::Hold { track }),
+        ["repeat", d] => repeat_division(d).map(|sixteenths| PadAction::Repeat { sixteenths }),
+        ["play", t, rest @ ..] if rest.len() <= 1 => match (track(t), play_note(song, t, rest.first().copied())) {
+            (Some(track), Some(note)) => Some(PadAction::Play { track, note }),
+            _ => None,
+        },
+        [t, drum] => match (track(t), crate::dsl::compiler::drum_note(drum)) {
+            (Some(track), Some(drum)) => Some(PadAction::Drum { track, drum }),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// A zone's track in this engine: `None` when the engine has no such track
+/// or it plays no instrument.
+fn zone_target(song: &Song, names: &Names, play: &ZonePlay) -> Option<ZoneTarget> {
+    let t = names.tracks.iter().position(|n| *n == play.track)?;
+    let instrument = *names.track_instruments.get(t).filter(|&&i| i != usize::MAX)?;
+    let module = song.tracks.iter().find(|d| d.name == play.track).map(|d| d.using_instrument.as_str());
+    let mono =
+        song.module_defs.iter().find(|d| Some(d.name.as_str()) == module).is_some_and(|d| d.module_type == "bass");
+    let kick = play.kick.as_ref().and_then(|k| {
+        let kt = names.tracks.iter().position(|n| n == k)?;
+        Some((kt, crate::dsl::compiler::drum_note("kick")?))
+    });
+    Some(ZoneTarget { track: t, instrument, mono, roll: play.roll, kick })
 }
 
 /// What `target` moves in the engine `names` describes. Resolves the way

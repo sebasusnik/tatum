@@ -46,8 +46,8 @@ Bank A (36–43), performance:
 | A4 | 39 | `freeze` the reverb (base) |
 | A5 | 40 | `repeat 1/8` — DJ roll |
 | A6 | 41 | `repeat 1/16` — tighter roll |
-| A7 | 42 | `prev` step (base) |
-| A8 | 43 | `next` step (base) |
+| A7 | 42 | free (was `prev`: the set moves from the computer now) |
+| A8 | 43 | free (was `next`) |
 
 Bank B (44–51), the track's sounds:
 
@@ -77,3 +77,47 @@ Bank B (44–51), the track's sounds:
 Every rig writes `q=` on the pads that need a steady hand: A1 kick out `q=bar`,
 B3 crash `q=beat`, A3/B1/B6 `q=1/16`, B2/B4 `q=beat`. Press or let go roughly in
 time and it lands on the line (docs/DSL.md, "Keys and pads").
+
+## The keyboard (`_keylab.synth`)
+
+The keys are split by MIDI note into three zones. The numbers are Arturia's
+defaults with the octave buttons centred; `tatum midi monitor sets/hiperespacio`
+shows what yours send.
+
+| zone | notes | what it does |
+|---|---|---|
+| triggers | 36–47 (the lowest C to B) | each key does one thing, below |
+| bass | 48–59 | held, the track's own `bass` rolls that note on the three sixteenths after each beat, in place of its line; let go and the line comes back |
+| lead | 60–84 | the scene's voice, every note kept to the track's scale (`lock snap`: a key outside it plays the nearest note in it, the lower one on a tie) |
+
+Triggers:
+
+| key | note | action |
+|---|---|---|
+| C | 36 | `play kruido` — noise that climbs for as long as it is held |
+| C# | 37 | `play kimpact` — a crash of noise, on the beat |
+| D | 38 | `mute drums` — out while held, back on the one |
+| D# | 39 | `mute bass` — out while held |
+| E | 40 | free — the filter cut comes in stage 3 |
+| F | 41 | free — the sweep comes in stage 3 |
+| F# | 42 | `hold kfill` — a snare roll in straight sixteenths while held |
+| G | 43 | `throw` the lead (whichever the scene plays) into the echo |
+| G# | 44 | `freeze` the reverb |
+| A | 45 | free — tape stop comes in stage 3 |
+| A# / B | 46 / 47 | free |
+
+Scenes, from the computer's keys only, each landing on the next bar:
+
+| key | scene | bass zone | lead zone |
+|---|---|---|---|
+| F1 | intro | `bass` roll | `kpluck`, a dark FM pluck |
+| F2 | build | `bass` roll | `kzap`, the zap that falls every sixteenth |
+| F3 | drop | `bass` roll | `klaser`, the serial-FM laser |
+| F4 | break | `bass` roll **with its own kick** on the beat | `kvox`, a pad through a vowel filter |
+
+The roll plays through the track's fader: in a step where `bass` is at level 0
+(a breakdown, or T04's drop, where the gallop is the bass) a held bass key is
+silent. Stage 3's roles will let a step say which track is its bass.
+
+The set moves from the computer: space or → next, ← back, 1–9 a step on
+screen, g the list. No pad or key of the controller moves it.

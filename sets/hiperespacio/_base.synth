@@ -8,7 +8,7 @@
 # bass, another signature, another room. Tracks are mixed like records, with
 # `# set: blend=` on the first step of each one.
 #
-#   tatum set play sets/hiperespacio --midi keylab
+#   tatum set play sets/hiperespacio --tui
 #
 # This file holds only what every track shares: the grid, the sidechain, the
 # default sends, the drum bus and the master. A track overrides any of it by
@@ -42,13 +42,14 @@ master {
 }
 
 # The KeyLab: what every track has (layout in CONTROLES.md). A track's rig
-# adds its own faders, knobs and pads.
+# adds its own faders, knobs and pads. The keyboard's zones, voices and
+# scenes are in _keylab.synth. The set moves from the computer's keys only.
 midi {
     cc 82 > reverb_mix
     cc 83 > delay_mix
     cc 85 > master dj cutoff 150hz..20khz..20khz
     cc 85 > master hp cutoff 20hz..20hz..3khz
     pad 39 > freeze
-    pad 42 > prev
-    pad 43 > next
 }
+
+use "_keylab.synth"

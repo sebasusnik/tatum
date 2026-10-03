@@ -674,6 +674,85 @@ the note it answers to. An Arturia KeyLab Essential mk3 sends, by Arturia's defa
 to shows its number, which is the quickest way to check yours. A pad or a key that nothing is mapped to shows its number while you play
 (`pad 44 (not mapped)`).
 
+### Zones, scenes and the computer's keys
+
+A performer splits the keyboard: the lowest octave for things that happen, a
+stretch for the bass, the rest for a lead. Zones are written by MIDI note
+(or a note name), so moving them after the octave buttons is one line each:
+
+```
+midi {
+    zone triggers 36..47              # each key does one thing: `key` lines
+    zone bass     48..59 > bass roll  # held, `bass` rolls the note
+    zone lead     60..84 > zap        # the lead plays `zap`
+    lock snap                         # snap (default), white or off
+
+    key 36 > play riser               # anything a pad does, on a key
+    key 38 > mute drums q=bar
+    key 42 > hold fill q=beat
+}
+```
+
+A `key` line takes every action a `pad` line takes, `q=` included, except the
+set moves: the set moves from the computer's keys. With a trigger zone, a
+`key` outside it is an error.
+
+The bass zone plays one note at a time. With `roll`, a held key plays the
+note on the three sixteenths after each beat of the track named, in place of
+its pattern, from the next sixteenth: the psytrance roll, under the hand.
+Letting go gives the pattern back. `kick=drums` also strikes the kick of a
+`beats` track on each beat, for bringing a groove into a break. Without
+`roll` (`> sub notes`) the key plays the note held. The lead zone plays chords
+on a `keys` or `fm` track and one note at a time on a `bass` one.
+
+`lock` keeps both zones in the song's scale: `snap` moves a key outside it
+to the nearest note in it (the lower one when two are as near), `white` makes
+the white keys the scale's degrees from C (C the root, D the second...) and
+the black keys silent, and `off` plays what is pressed.
+
+A `perform` block is a scene of the performance. It changes what the zones
+play and the scale they keep to, and puts values in place as it comes in
+(the same targets and units a knob takes):
+
+```
+perform break {
+    scale E phrygian_dominant         # with none, the song's
+    lock white
+    bass > sub notes
+    lead > vox
+    set master dj cutoff 20khz
+    set drums level 0
+}
+
+keyboard {
+    f1 > perform intro
+    f4 > perform break
+    space > next                      # also prev, step 3
+    quantize bar                      # bar, phrase (8 bars) or a number of bars
+}
+```
+
+A scene is called from the computer's keys only, never from the controller,
+and comes in on the next bar (or what `quantize` says, counted from the
+step's first bar in a set): its `set` values land on the sample of the line,
+and a key held through the change sounds on where it started until let go.
+The `keyboard` block names letters, digits, `f1`..`f12`, `space`, `tab`,
+`enter` and the arrows; a key it binds does that instead of what the screen
+does with it, and `q` always quits. A set step can bring a scene in as it
+lands with `# set: perform=drop`, and a performance script can call one with
+`perform drop`.
+
+The scales a `scale` line and a scene take are `major`, `minor`, `dorian`,
+`phrygian`, `lydian`, `mixolydian`, `locrian`, `harmonic_minor`,
+`phrygian_dominant`, `hungarian_minor` and `double_harmonic` (and `ionian`,
+`aeolian`). Any other name is an error.
+
+`tatum midi monitor [<song or set>] [--midi <name>]` prints every message the
+controller sends, one a line: the port, the channel, what it is (note, pad,
+cc, pitch strip, aftertouch, program change), its bytes, and, given a song or
+a set, what the `midi` block, the zones and the trigger keys do with it. It is
+the way to find out which numbers a controller sends before writing them down.
+
 ### Everything else
 
 `render` ignores the block, so a song with a `midi` block renders exactly as one
@@ -688,7 +767,7 @@ A set is a directory of numbered `.synth` files, each the whole rig at one momen
 (`sets/` has three). `tatum set play <dir>` plays it with a controller in hand:
 
 ```
-tatum set play sets/mine --phrase 8 --ramp 4 --midi keylab
+tatum set play sets/mine --phrase 8 --ramp 4
 ```
 
 It starts on the first step. The space bar (or `n`, or →) asks for the next one, ←

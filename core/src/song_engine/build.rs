@@ -249,6 +249,7 @@ impl SongEngine {
                     delay_send: t.delay_send,
                     muted: false,
                     thrown: false,
+                    roll: None,
                     reverb_send: t.reverb_send,
                     sidechain_amount: t.sidechain,
                     current_step: 0,

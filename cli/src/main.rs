@@ -31,6 +31,7 @@ fn main() {
         "set" => set::cmd(&args[2..]),
         "play" => live::cmd(&args[2..], false),
         "watch" => live::cmd(&args[2..], true),
+        "midi" => midi::cmd(&args[2..]),
         // A picture of the live screen, for looking at it without a terminal.
         "tui-shot" => {
             if let Err(e) = tui::shot::cmd(&args[2..]) {
@@ -61,6 +62,7 @@ USAGE:
     tatum audit <song.synth> [--bars N] [--json] [--strict]
     tatum debug <song.synth> [--bars N | A-B] [--dry] [-o dir] [--solo a,b] [--mute c]
     tatum watch <song.synth> [--device <name>] [--rate <hz>] [--midi <name>]
+    tatum midi monitor [<song.synth> | <set dir> [--step N]] [--midi <name>] | midi list
 
 COMMANDS:
     render    Parse, compile, and render a .synth file to WAV
@@ -77,6 +79,11 @@ COMMANDS:
               knobs and faders on parameters, the keys on a track, the pads on
               drums. Every MIDI input is read unless --midi names one;
               --list-midi shows them.
+    midi      `monitor` prints every message the controller sends (notes,
+              pads, knobs, the pitch strip, aftertouch, program changes) with
+              its channel and bytes, and, given a song or a set, what its
+              `midi` block, zones and trigger keys do with it. Check here what
+              numbers a controller really sends before mapping them.
     audit     Render every tonal track on its own and dry, and report per
               note how much of its energy is NOT at a harmonic of the note
               the pattern asked for. Two comparisons come out of that: a note

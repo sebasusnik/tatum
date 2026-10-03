@@ -30,7 +30,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::dsl::ast::{ChainNode, Quantize, Song};
+use crate::dsl::ast::{ChainNode, Quantize, Song, ZoneKind};
 use crate::dsl::compiler::CompiledSong;
 use crate::dsl::diff::{self, DslChange};
 use crate::midi;
@@ -136,6 +136,15 @@ pub enum FastOp {
         instrument: usize,
         ratio: f32,
     },
+    /// A key held in a roll zone: `note` rolled on `track` from the next
+    /// sixteenth, in place of its pattern; velocity 0 stops it. `kick` is
+    /// the drum track and note struck on each beat.
+    Roll {
+        track: usize,
+        note: u8,
+        velocity: f32,
+        kick: Option<(usize, u8)>,
+    },
 }
 
 /// What a new engine takes over from the one it replaces, by index in the new
@@ -211,16 +220,33 @@ pub enum Plan {
     Repeat(Option<f32>),
     /// A pad written with `q=`: `inner` waits for the next line of `grid`,
     /// on the audio thread, which is the only place that knows where the
-    /// line is. `pad` and `down` pair a release with its press.
+    /// line is. `pad` and `down` pair a release with its press; a trigger
+    /// key is its note with the top bit set, so it never pairs with a pad.
     Quantized { grid: Quantize, pad: u8, down: bool, inner: Deferred },
+    /// `inner` on the line where bar `bar` starts, counted as the engine
+    /// counts them; a bar already started acts at once. What a scene called
+    /// from the computer puts in place, on its bar.
+    AtBar { bar: usize, inner: Deferred },
 }
 
 /// What a quantized pad does when its line comes: a [`Plan::Control`] or a
 /// [`Plan::Play`], held without anything to free.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Deferred {
-    Control { base: Generation, op: FastOp },
-    Play { base: Generation, op: FastOp },
+    Control {
+        base: Generation,
+        op: FastOp,
+    },
+    Play {
+        base: Generation,
+        op: FastOp,
+    },
+    /// A value as the text would write it: it lets go of a knob holding
+    /// the same target, as a `Plan::Fast` does.
+    Set {
+        base: Generation,
+        op: FastOp,
+    },
 }
 
 impl Plan {
@@ -233,6 +259,7 @@ impl Plan {
             Plan::Play { .. } => "play",
             Plan::Repeat(_) => "repeat",
             Plan::Quantized { .. } => "quantized",
+            Plan::AtBar { .. } => "at bar",
         }
     }
 }
@@ -316,6 +343,73 @@ impl Known {
     }
 }
 
+/// A key held in the bass or lead zone, with what it sounds on: by track
+/// name, so the note lets go where it started even after a scene has
+/// changed what the zone plays, or a rebuild has moved the track's index.
+#[derive(Debug, Clone, PartialEq)]
+struct ZoneNote {
+    key: u8,
+    /// The note after the scale lock.
+    note: u8,
+    velocity: f32,
+    track: String,
+    roll: bool,
+    /// One note at a time on this track.
+    mono: bool,
+    /// The drum track whose kick a roll strikes.
+    kick: Option<String>,
+}
+
+impl ZoneNote {
+    fn same_sound(a: Option<&ZoneNote>, b: Option<&ZoneNote>) -> bool {
+        match (a, b) {
+            (Some(a), Some(b)) => a.track == b.track && a.note == b.note,
+            (None, None) => true,
+            _ => false,
+        }
+    }
+
+    /// The roll this note asks of `known`, or the stop when `on` is false.
+    fn roll_op(&self, known: &Known, on: bool) -> Option<FastOp> {
+        let track = known.tracks.iter().position(|t| *t == self.track)?;
+        let kick = self
+            .kick
+            .as_ref()
+            .and_then(|k| Some((known.tracks.iter().position(|t| t == k)?, crate::dsl::compiler::drum_note("kick")?)));
+        Some(if on {
+            FastOp::Roll { track, note: self.note, velocity: self.velocity, kick }
+        } else {
+            FastOp::Roll { track, note: 0, velocity: 0.0, kick: None }
+        })
+    }
+
+    fn note_op(&self, known: &Known, on: bool) -> Option<FastOp> {
+        let track = known.tracks.iter().position(|t| *t == self.track)?;
+        Some(if on {
+            FastOp::NoteOn { track, note: self.note, velocity: self.velocity }
+        } else {
+            FastOp::NoteOff { track, note: self.note }
+        })
+    }
+}
+
+/// Which of the two ways to hit something: the pads, or the keys of the
+/// keyboard's trigger zone.
+#[derive(Clone, Copy)]
+enum Bank {
+    Pads,
+    Keys,
+}
+
+impl Bank {
+    fn of(self, controls: &midi::Controls) -> &[midi::Pad] {
+        match self {
+            Bank::Pads => &controls.pads,
+            Bank::Keys => &controls.triggers,
+        }
+    }
+}
+
 /// Control-thread half. Owns the ASTs of what plays and what is queued.
 pub struct LivePlanner {
     running: Option<Known>,
@@ -332,6 +426,13 @@ pub struct LivePlanner {
     solo: Option<(Vec<String>, Vec<String>)>,
     /// Pads held down right now, by note.
     pads_down: Vec<u8>,
+    /// Keys of the trigger zone held down, by note.
+    keys_down: Vec<u8>,
+    /// The scene playing, by name; `None` before any.
+    scene: Option<String>,
+    /// Keys held in the bass zone and the lead zone, oldest first.
+    bass_held: Vec<ZoneNote>,
+    lead_held: Vec<ZoneNote>,
     /// Keys held down, oldest first, with the velocity each was struck at.
     /// A mono instrument plays the newest; letting it go falls back to the
     /// one before it, which is how a monosynth answers a keyboard.
@@ -366,6 +467,10 @@ impl LivePlanner {
             muted: Vec::new(),
             solo: None,
             pads_down: Vec::new(),
+            keys_down: Vec::new(),
+            scene: None,
+            bass_held: Vec::new(),
+            lead_held: Vec::new(),
             held: Vec::new(),
             bend: 1.0,
             output_gain: None,
@@ -404,6 +509,15 @@ impl LivePlanner {
     /// when the song maps no keys.
     pub fn key(&mut self, note: u8, velocity: u8, playing: Generation) -> Option<Vec<Plan>> {
         self.catch_up(playing);
+        let latest = self.pending.as_ref().or(self.running.as_ref())?;
+        if latest.controls.triggers.iter().any(|t| t.note == note) {
+            return self.hit(Bank::Keys, note, velocity);
+        }
+        match latest.controls.zone_of(note).map(|z| z.kind) {
+            Some(ZoneKind::Triggers) => return None,
+            Some(kind) => return Some(self.zone_key(kind, note, velocity)),
+            None => {}
+        }
         if self.known().all(|k| k.controls.keys.is_empty()) {
             return None;
         }
@@ -451,22 +565,36 @@ impl LivePlanner {
     /// here: [`LivePlanner::pad_navigation`] says what it asks for.
     pub fn pad(&mut self, note: u8, velocity: u8, playing: Generation) -> Option<Vec<Plan>> {
         self.catch_up(playing);
-        if !self.known().any(|k| k.controls.pads.iter().any(|p| p.note == note)) {
+        self.hit(Bank::Pads, note, velocity)
+    }
+
+    /// A pad, or a key of the trigger zone, which does what a pad does.
+    fn hit(&mut self, bank: Bank, note: u8, velocity: u8) -> Option<Vec<Plan>> {
+        if !self.known().any(|k| bank.of(&k.controls).iter().any(|p| p.note == note)) {
             return None;
         }
         let down = velocity > 0;
         let velocity = velocity.min(127) as f32 / 127.0;
-        self.pads_down.retain(|&n| n != note);
+        let held = match bank {
+            Bank::Pads => &mut self.pads_down,
+            Bank::Keys => &mut self.keys_down,
+        };
+        held.retain(|&n| n != note);
         if down {
-            self.pads_down.push(note);
+            held.push(note);
         }
+        // What the player pairs a quantized release with: a key never with
+        // the pad of the same number.
+        let line_id = match bank {
+            Bank::Pads => note,
+            Bank::Keys => note | 0x80,
+        };
         // A toggle flips once per hit, by track name, so every engine hears
         // the same state and a rebuilt one inherits it.
         let latest = self.pending.as_ref().or(self.running.as_ref());
         let toggled: Vec<String> = latest
             .map(|k| {
-                k.controls
-                    .pads
+                bank.of(&k.controls)
                     .iter()
                     .filter(|p| p.note == note)
                     .filter_map(|p| match p.action {
@@ -493,7 +621,7 @@ impl LivePlanner {
             .pending
             .as_ref()
             .or(self.running.as_ref())
-            .and_then(|k| k.controls.pads.iter().find(|p| p.note == note))
+            .and_then(|k| bank.of(&k.controls).iter().find(|p| p.note == note))
             .and_then(|p| match p.action {
                 midi::PadAction::Repeat { sixteenths } => Some(sixteenths),
                 _ => None,
@@ -502,7 +630,7 @@ impl LivePlanner {
             plans.push(Plan::Repeat(down.then_some(sixteenths)));
         }
         for known in self.known() {
-            for pad in known.controls.pads.iter().filter(|p| p.note == note) {
+            for pad in bank.of(&known.controls).iter().filter(|p| p.note == note) {
                 let base = known.generation;
                 let plan = match pad.action {
                     midi::PadAction::Drum { track, drum } if down => {
@@ -532,10 +660,10 @@ impl LivePlanner {
                 };
                 plans.push(match (pad.quantize, plan) {
                     (Some(grid), Plan::Play { base, op }) => {
-                        Plan::Quantized { grid, pad: note, down, inner: Deferred::Play { base, op } }
+                        Plan::Quantized { grid, pad: line_id, down, inner: Deferred::Play { base, op } }
                     }
                     (Some(grid), Plan::Control { base, op }) => {
-                        Plan::Quantized { grid, pad: note, down, inner: Deferred::Control { base, op } }
+                        Plan::Quantized { grid, pad: line_id, down, inner: Deferred::Control { base, op } }
                     }
                     (_, plan) => plan,
                 });
@@ -601,12 +729,14 @@ impl LivePlanner {
     /// pad on it held down, or a `hold` pad on it not held.
     fn muted_now(&self, known: &Known, track: usize) -> bool {
         let toggled = known.tracks.get(track).is_some_and(|n| self.muted.contains(n));
-        let pads = known.controls.pads.iter().any(|p| match p.action {
-            midi::PadAction::Mute { track: t } => t == track && self.pads_down.contains(&p.note),
-            midi::PadAction::Hold { track: t } => t == track && !self.pads_down.contains(&p.note),
-            _ => false,
-        });
-        toggled || pads
+        let out = |list: &[midi::Pad], down: &[u8]| {
+            list.iter().any(|p| match p.action {
+                midi::PadAction::Mute { track: t } => t == track && down.contains(&p.note),
+                midi::PadAction::Hold { track: t } => t == track && !down.contains(&p.note),
+                _ => false,
+            })
+        };
+        toggled || out(&known.controls.pads, &self.pads_down) || out(&known.controls.triggers, &self.keys_down)
     }
 
     /// Every track's mute as the planner has it, for every engine it knows.
@@ -642,16 +772,198 @@ impl LivePlanner {
                 ops.push(FastOp::TrackMute { track, muted: true });
             }
         }
-        for &note in &self.pads_down {
-            for pad in known.controls.pads.iter().filter(|p| p.note == note) {
-                match pad.action {
-                    midi::PadAction::Throw { track } => ops.push(FastOp::TrackThrow { track, on: true }),
-                    midi::PadAction::Freeze => ops.push(FastOp::FreezeHold(true)),
-                    _ => {}
-                }
+        let down =
+            self.pads_down.iter().flat_map(|&n| known.controls.pads.iter().filter(move |p| p.note == n)).chain(
+                self.keys_down.iter().flat_map(|&n| known.controls.triggers.iter().filter(move |p| p.note == n)),
+            );
+        for pad in down {
+            match pad.action {
+                midi::PadAction::Throw { track } => ops.push(FastOp::TrackThrow { track, on: true }),
+                midi::PadAction::Freeze => ops.push(FastOp::FreezeHold(true)),
+                _ => {}
             }
         }
+        // A roll held across a rebuild keeps rolling on the new engine.
+        if let Some(op) = self.bass_held.last().filter(|h| h.roll).and_then(|h| h.roll_op(known, true)) {
+            ops.push(op);
+        }
         ops
+    }
+
+    /// A key in the bass or lead zone: kept to the scene's scale, and
+    /// played on the zone's track as the scene has it. The bass zone and a
+    /// lead on a `bass` module play one note at a time, the newest held; a
+    /// roll rolls it.
+    fn zone_key(&mut self, kind: ZoneKind, note: u8, velocity: u8) -> Vec<Plan> {
+        let Some(latest) = self.pending.as_ref().or(self.running.as_ref()) else { return Vec::new() };
+        let scene = self.scene.as_deref();
+        let stack = match kind {
+            ZoneKind::Bass => &mut self.bass_held,
+            _ => &mut self.lead_held,
+        };
+        let before = stack.last().cloned();
+        let mut released = None;
+        if velocity > 0 {
+            let Some(t) = latest.controls.zone_target(kind, scene) else { return Vec::new() };
+            let (scale, lock) = latest.controls.lock_under(scene);
+            let out = match scale {
+                Some(s) => s.lock(lock, note),
+                None => Some(note),
+            };
+            // A black key under `lock white` plays nothing.
+            let Some(out) = out else { return Vec::new() };
+            let name = |i: usize| latest.tracks.get(i).cloned();
+            let Some(track) = name(t.track) else { return Vec::new() };
+            stack.retain(|h| h.key != note);
+            stack.push(ZoneNote {
+                key: note,
+                note: out,
+                velocity: velocity.min(127) as f32 / 127.0,
+                track,
+                roll: t.roll,
+                mono: kind == ZoneKind::Bass || t.mono,
+                kick: t.kick.and_then(|k| name(k.0)),
+            });
+        } else {
+            let Some(i) = stack.iter().position(|h| h.key == note) else { return Vec::new() };
+            released = Some(stack.remove(i));
+        }
+        let after = stack.last().cloned();
+        let mut plans = Vec::new();
+        for known in self.known() {
+            let base = known.generation;
+            let mut control = |op: Option<FastOp>| {
+                if let Some(op) = op {
+                    plans.push(Plan::Control { base, op });
+                }
+            };
+            let mut ops: Vec<FastOp> = Vec::new();
+            // What sounds is the newest held key, on a mono track or a
+            // roll; on a poly track, every key held.
+            let mono = after.as_ref().or(before.as_ref()).is_some_and(|h| h.mono || h.roll);
+            if mono {
+                if ZoneNote::same_sound(before.as_ref(), after.as_ref()) {
+                    continue;
+                }
+                if let Some(b) = &before {
+                    let moved_track = after.as_ref().is_none_or(|a| a.track != b.track);
+                    if b.roll && moved_track {
+                        control(b.roll_op(known, false));
+                    } else if !b.roll && (moved_track || after.as_ref().is_some_and(|a| a.roll)) {
+                        ops.extend(b.note_op(known, false));
+                    }
+                }
+                match &after {
+                    Some(a) if a.roll => control(a.roll_op(known, true)),
+                    // A newer key, or back to the one before: a bass glides.
+                    Some(a) => ops.extend(a.note_op(known, true)),
+                    None => {}
+                }
+            } else if let Some(r) = &released {
+                // Two keys can snap to one note: it stops when the last does.
+                let held = match kind {
+                    ZoneKind::Bass => &self.bass_held,
+                    _ => &self.lead_held,
+                };
+                if !held.iter().any(|h| h.track == r.track && h.note == r.note) {
+                    ops.extend(r.note_op(known, false));
+                }
+            } else if let Some(a) = &after {
+                ops.extend(a.note_op(known, true));
+            }
+            plans.extend(ops.into_iter().map(|op| Plan::Play { base, op }));
+        }
+        plans
+    }
+
+    /// The song as the latest engine has it.
+    pub fn song(&self) -> Option<&Song> {
+        self.pending.as_ref().or(self.running.as_ref()).map(|k| &k.ast)
+    }
+
+    /// The scenes the song has, in the order written.
+    pub fn scene_names(&self) -> Vec<String> {
+        self.pending
+            .as_ref()
+            .or(self.running.as_ref())
+            .map(|k| k.ast.perform.scenes.iter().map(|s| s.name.clone()).collect())
+            .unwrap_or_default()
+    }
+
+    /// The scene playing.
+    pub fn scene(&self) -> Option<&str> {
+        self.scene.as_deref()
+    }
+
+    /// A short line for the screen: `drop · E phrygian_dominant · roll`.
+    pub fn describe_scene(&self, name: &str) -> String {
+        let Some(k) = self.pending.as_ref().or(self.running.as_ref()) else { return String::from(name) };
+        let Some(sc) = k.ast.perform.scenes.iter().find(|s| s.name == name) else { return String::from(name) };
+        let scale = sc.scale.as_ref().or(k.ast.globals.scale.as_ref());
+        let mut out = String::from(name);
+        if let Some(s) = scale {
+            out.push_str(&alloc::format!(" · {} {}", s.root, s.kind));
+        }
+        if let Some(b) = &sc.bass {
+            out.push_str(&alloc::format!(" · bass {}{}", b.track, if b.roll { " roll" } else { "" }));
+        }
+        if let Some(l) = &sc.lead {
+            out.push_str(&alloc::format!(" · lead {}", l.track));
+        }
+        out
+    }
+
+    /// Scene `name`'s `set` values, to land on bar `bar` as the engine
+    /// counts bars (`None`: at once). Sent when the scene is asked for, so
+    /// they wait on the audio thread and land on the sample of the line.
+    /// `None` when the song has no such scene.
+    pub fn scene_values(&mut self, name: &str, bar: Option<usize>, playing: Generation) -> Option<Vec<Plan>> {
+        self.catch_up(playing);
+        self.pending.as_ref().or(self.running.as_ref())?.controls.scene(name)?;
+        let mut plans = Vec::new();
+        for known in self.known() {
+            let base = known.generation;
+            let Some(sc) = known.controls.scene(name) else { continue };
+            let ops: Vec<FastOp> = sc.sets.iter().flat_map(|k| k.ops(0)).collect();
+            match bar {
+                Some(bar) => {
+                    for op in ops {
+                        plans.push(Plan::AtBar { bar, inner: Deferred::Set { base, op } });
+                    }
+                }
+                None if !ops.is_empty() => plans.push(Plan::Fast { base, ops }),
+                None => {}
+            }
+        }
+        Some(plans)
+    }
+
+    /// Scene `name` takes the keyboard: what the zones play and the scale
+    /// they keep to change from the next key. A key already held sounds on
+    /// where it started until it is let go, so a note played on the line
+    /// is not cut. `None` when the song has no such scene.
+    pub fn enter_scene(&mut self, name: &str, playing: Generation) -> Option<Vec<Plan>> {
+        self.catch_up(playing);
+        self.pending.as_ref().or(self.running.as_ref())?.controls.scene(name)?;
+        self.scene = Some(String::from(name));
+        Some(Vec::new())
+    }
+
+    /// The song's `keyboard` bindings, and how many bars a scene called
+    /// from them waits for (1: the next bar).
+    pub fn keyboard(&self) -> (Vec<crate::dsl::ast::KeyBinding>, u32) {
+        match self.pending.as_ref().or(self.running.as_ref()) {
+            Some(k) => (k.ast.perform.keyboard.clone(), k.ast.perform.scene_bars.unwrap_or(1).max(1)),
+            None => (Vec::new(), 1),
+        }
+    }
+
+    /// Whether the song has scenes or binds computer keys.
+    pub fn has_keyboard(&self) -> bool {
+        self.pending
+            .as_ref()
+            .or(self.running.as_ref())
+            .is_some_and(|k| !k.ast.perform.keyboard.is_empty() || !k.ast.perform.scenes.is_empty())
     }
 
     /// The pitch strip moved to `value`, 14 bits with 8192 at rest. It bends
@@ -1233,9 +1545,12 @@ pub struct LivePlayer {
     clock: u64,
     /// Quantized pad actions waiting for their line, with the sample it is.
     waiting: [Option<(u64, Deferred)>; MAX_WAITING],
-    /// Per pad note, the line its last press landed on (or will) and the
-    /// division it was on, so a release is never earlier than the next one.
-    pressed: [Option<(u64, u64)>; 128],
+    /// Per pad note (and trigger key, with the top bit set), the line its
+    /// last press landed on (or will) and the division it was on, so a
+    /// release is never earlier than the next one.
+    pressed: [Option<(u64, u64)>; 256],
+    /// Actions waiting for the start of a bar, by the bar's number.
+    at_bar: [Option<(usize, Deferred)>; MAX_WAITING],
 }
 
 impl Default for LivePlayer {
@@ -1259,7 +1574,8 @@ impl LivePlayer {
             repeat: Repeat::new(),
             clock: 0,
             waiting: [None; MAX_WAITING],
-            pressed: [None; 128],
+            pressed: [None; 256],
+            at_bar: [None; MAX_WAITING],
         }
     }
 
@@ -1356,6 +1672,14 @@ impl LivePlayer {
                 self.quantize(grid, pad, down, inner);
                 Applied::Control
             }
+            Plan::AtBar { bar, inner } => {
+                match self.at_bar.iter_mut().find(|w| w.is_none()) {
+                    Some(free) => *free = Some((bar, inner)),
+                    None => self.apply_deferred(inner),
+                }
+                self.schedule_bars();
+                Applied::Control
+            }
             Plan::Repeat(Some(sixteenths)) => {
                 if let Some(e) = self.engine.as_deref() {
                     let step = SAMPLE_RATE * 60.0 / e.tempo().max(1.0) / 4.0;
@@ -1409,7 +1733,7 @@ impl LivePlayer {
         } else {
             (self.clock + until, self.clock + until)
         };
-        let slot = &mut self.pressed[pad as usize & 127];
+        let slot = &mut self.pressed[pad as usize];
         if down {
             *slot = Some((line, div));
         } else if let Some((pressed, d)) = *slot {
@@ -1430,8 +1754,55 @@ impl LivePlayer {
         let plan = match inner {
             Deferred::Control { base, op } => Plan::Control { base, op },
             Deferred::Play { base, op } => Plan::Play { base, op },
+            Deferred::Set { base, op } => {
+                let target = if self.generation == base {
+                    self.engine.as_deref_mut()
+                } else {
+                    match self.pending.as_mut() {
+                        Some((e, g, _)) if *g == base => Some(e.as_mut()),
+                        _ => None,
+                    }
+                };
+                if let Some(engine) = target {
+                    engine.release(op);
+                }
+                return;
+            }
         };
         self.apply(plan);
+    }
+
+    /// Move what waits for a bar onto the sample of its line once that line
+    /// is the next one; a bar already begun acts at once. Counted where the
+    /// playing engine counts, so a tempo ramp cannot put it off the line.
+    fn schedule_bars(&mut self) {
+        let Some(e) = self.engine.as_deref().filter(|e| e.running()) else {
+            // Nothing is playing: there is no line to wait for.
+            for i in 0..MAX_WAITING {
+                if let Some((_, inner)) = self.at_bar[i].take() {
+                    self.apply_deferred(inner);
+                }
+            }
+            return;
+        };
+        let line = e.next_bar_line();
+        let until = e.samples_until_grid(e.steps_per_bar() as f32) as u64;
+        for i in 0..MAX_WAITING {
+            let Some((bar, inner)) = self.at_bar[i] else { continue };
+            if bar > line {
+                continue;
+            }
+            self.at_bar[i] = None;
+            let at = if bar < line { self.clock } else { self.clock + until };
+            if at <= self.clock {
+                self.apply_deferred(inner);
+                continue;
+            }
+            match self.waiting.iter_mut().find(|w| w.is_none()) {
+                Some(free) => *free = Some((at, inner)),
+                None => self.apply_deferred(inner),
+            }
+        }
     }
 
     /// Apply every waiting action whose line has come, in the order queued.
@@ -1461,7 +1832,8 @@ impl LivePlayer {
     pub fn stop(&mut self) {
         self.repeat.state = RepeatState::Off;
         self.waiting = [None; MAX_WAITING];
-        self.pressed = [None; 128];
+        self.pressed = [None; 256];
+        self.at_bar = [None; MAX_WAITING];
         if let Some(e) = self.engine.as_mut() {
             e.reset();
         }
@@ -1488,6 +1860,9 @@ impl LivePlayer {
         let mut done = 0;
         let mut swapped = None;
         loop {
+            if self.at_bar.iter().any(|w| w.is_some()) {
+                self.schedule_bars();
+            }
             self.release_due();
             if done >= len {
                 break;
@@ -1659,5 +2034,8 @@ pub(crate) fn apply_op(engine: &mut SongEngine, op: FastOp) {
         FastOp::NoteOn { track, note, velocity } => engine.live_note_on(track, note, velocity),
         FastOp::NoteOff { track, note } => engine.live_note_off(track, note),
         FastOp::PitchBend { instrument, ratio } => engine.set_pitch_bend(instrument, ratio),
+        FastOp::Roll { track, note, velocity, kick } => {
+            engine.set_roll(track, (velocity > 0.0).then_some((note, velocity)), kick)
+        }
     }
 }

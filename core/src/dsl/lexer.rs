@@ -43,11 +43,11 @@ pub enum Token {
     /// parameter it belongs to, because the same number means different things
     /// on a cutoff and on a gain.
     Quantity(f32, String),
-    Note(String), // A1, C#4, G0
-    DrumHit,      // x  (normal velocity 0.8)
-    DrumAccent,   // X  (accent velocity 1.0)
-    DrumGhost,    // o  (ghost note velocity 0.35)
-    Rest,         // -
+    Note(String),    // A1, C#4, G0
+    DrumHit,         // x  (normal velocity 0.8)
+    DrumAccent,      // X  (accent velocity 1.0)
+    DrumGhost(char), // o or g  (ghost note velocity 0.35)
+    Rest,            // -
     /// `<` opens a subdivision group: `<B4 C#5 D5>` splits one step into
     /// three. The closing `>` lexes as Arrow, which never appears inside a
     /// pattern body, so there is no ambiguity with a routing chain.
@@ -305,7 +305,11 @@ pub fn tokenize(source: &str) -> Vec<Span> {
                 continue;
             }
             if word == "o" || word == "g" {
-                tokens.push(Span { token: Token::DrumGhost, line, col: start_col });
+                tokens.push(Span {
+                    token: Token::DrumGhost(if word == "g" { 'g' } else { 'o' }),
+                    line,
+                    col: start_col,
+                });
                 col += word_len;
                 continue;
             }

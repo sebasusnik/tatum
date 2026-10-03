@@ -197,10 +197,10 @@ impl Parser {
                                 break;
                             }
                             Token::RBrace | Token::Eof | Token::Newline => break,
-                            Token::DrumHit | Token::DrumAccent | Token::DrumGhost => {
+                            Token::DrumHit | Token::DrumAccent | Token::DrumGhost(_) => {
                                 let default = match self.peek() {
                                     Token::DrumAccent => 1.0,
-                                    Token::DrumGhost => 0.35,
+                                    Token::DrumGhost(_) => 0.35,
                                     _ => 0.8,
                                 };
                                 self.advance();
@@ -420,10 +420,10 @@ impl Parser {
                         }
                     }
                 }
-                Token::DrumHit | Token::DrumAccent | Token::DrumGhost => {
+                Token::DrumHit | Token::DrumAccent | Token::DrumGhost(_) => {
                     let default_vel = match self.peek() {
                         Token::DrumAccent => 1.0,
-                        Token::DrumGhost => 0.35,
+                        Token::DrumGhost(_) => 0.35,
                         _ => 0.8, // DrumHit
                     };
                     self.advance();

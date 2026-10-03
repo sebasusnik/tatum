@@ -24,6 +24,116 @@ pub struct Song {
     /// no scenes, each over its own number of bars from the first bar this
     /// text plays. A song with scenes keeps its lanes in them.
     pub automations: Vec<AutomationDef>,
+    /// The keyboard as a performer splits it, the scenes that change what
+    /// it plays, and the computer keys that call them. Read by a live
+    /// session, like `midi`.
+    pub perform: PerformSetup,
+}
+
+/// `zone`, `lock` and `key` lines of the `midi` blocks, the `perform`
+/// blocks and the `keyboard` block, as the text has them after every
+/// redefinition.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct PerformSetup {
+    pub zones: Vec<ZoneDef>,
+    /// `lock snap`: how the bass and lead zones keep to the scale.
+    pub lock: Option<crate::perform::scale::Lock>,
+    pub scenes: Vec<PerformDef>,
+    pub keyboard: Vec<KeyBinding>,
+    /// `quantize bar` in the `keyboard` block: where a scene called from the
+    /// computer comes in, in bars. `None`: the next bar.
+    pub scene_bars: Option<u32>,
+}
+
+/// `zone bass 48..59 > bass roll kick=drums`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ZoneDef {
+    pub kind: ZoneKind,
+    /// Lowest and highest MIDI note, both in the zone.
+    pub low: u8,
+    pub high: u8,
+    /// What the zone plays until a scene says otherwise. A trigger zone
+    /// plays nothing itself: its keys are `key` lines.
+    pub play: Option<ZonePlay>,
+    pub line: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZoneKind {
+    /// Each key does something: `key 36 > hold riser`.
+    Triggers,
+    /// One note at a time, rolled or not.
+    Bass,
+    /// The rest: a lead, or sounds.
+    Lead,
+}
+
+impl ZoneKind {
+    pub fn from_word(w: &str) -> Option<Self> {
+        match w {
+            "triggers" => Some(Self::Triggers),
+            "bass" => Some(Self::Bass),
+            "lead" => Some(Self::Lead),
+            _ => None,
+        }
+    }
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Triggers => "triggers",
+            Self::Bass => "bass",
+            Self::Lead => "lead",
+        }
+    }
+}
+
+/// The track a zone plays, and how.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ZonePlay {
+    pub track: String,
+    /// `roll`: a held key rolls the note on the three sixteenths after each
+    /// beat, in place of the track's own pattern.
+    pub roll: bool,
+    /// `kick=drums`: a roll also strikes this track's kick on each beat.
+    pub kick: Option<String>,
+}
+
+/// `perform drop { ... }`: one scene of a performance.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PerformDef {
+    pub name: String,
+    /// The scale the zones keep to; `None`, the song's.
+    pub scale: Option<ScaleDef>,
+    pub lock: Option<crate::perform::scale::Lock>,
+    pub bass: Option<ZonePlay>,
+    pub lead: Option<ZonePlay>,
+    /// `set reverb_mix 20%`: values put in place when the scene comes in.
+    pub sets: Vec<PerformSet>,
+    pub line: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PerformSet {
+    /// Dotted, as a knob's: `master.dj.cutoff`.
+    pub target: String,
+    pub value: RangeEnd,
+    pub line: usize,
+}
+
+/// `f1 > perform intro` in the `keyboard` block.
+#[derive(Debug, Clone, PartialEq)]
+pub struct KeyBinding {
+    /// As written, lowercase: `f1`, `a`, `space`, `left`.
+    pub key: String,
+    pub action: KeyAction,
+    pub line: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum KeyAction {
+    Perform(String),
+    Next,
+    Prev,
+    Step(usize),
 }
 
 /// One line of a `midi { }` block. The target is stored joined with dots, the
@@ -106,6 +216,9 @@ pub enum MidiSource {
     /// `pad 36 > kick kick`: one note on the drum channel, channel 10, which
     /// is where General MIDI puts drums and where pads send.
     Pad(u8),
+    /// `key 36 > hold riser`: one key of the keyboard's trigger zone, which
+    /// does what a pad does instead of playing a note.
+    Key(u8),
 }
 
 #[derive(Debug, Clone, PartialEq)]

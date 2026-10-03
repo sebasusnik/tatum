@@ -34,10 +34,164 @@ const MIDI_TARGETS: &str = "<module> <param>, <track> level, <track> pan, <track
 <track> <node> wet, <track> <node> <param>, master <param>, master <node> <param>, reverb_mix, delay_mix, \
 reverb_freeze or tempo";
 
+/// Zones, scenes and the computer's keys against the song: a scene that
+/// plays a track the rig does not have is caught by `tatum check`, not on
+/// stage.
+pub(super) fn validate_perform(song: &Song) -> Vec<CompileError> {
+    use crate::perform::scale;
+    let p = &song.perform;
+    let mut errors = Vec::new();
+    let kind_of = |track: &str| -> Option<Option<&str>> {
+        let t = song.tracks.iter().find(|t| t.name == track)?;
+        Some(song.module_defs.iter().find(|m| m.name == t.using_instrument).map(|m| m.module_type.as_str()))
+    };
+    let check_play = |errors: &mut Vec<CompileError>, line: usize, head: &str, play: &ZonePlay| {
+        match kind_of(&play.track) {
+            None => errors.push(CompileError::at(line, format!("{}: no track named '{}'", head, play.track))),
+            Some(Some("beats")) => errors.push(CompileError::at(
+                line,
+                format!("{}: '{}' plays drums; a key zone plays notes", head, play.track),
+            )),
+            Some(_) => {}
+        }
+        if let Some(k) = &play.kick {
+            match kind_of(k) {
+                None => errors.push(CompileError::at(line, format!("{}: kick={}: no track named '{}'", head, k, k))),
+                Some(Some("beats")) => {}
+                Some(_) => errors.push(CompileError::at(
+                    line,
+                    format!("{}: kick={}: '{}' is not a drum kit; the roll strikes a `beats` track's kick", head, k, k),
+                )),
+            }
+        }
+    };
+    for (i, z) in p.zones.iter().enumerate() {
+        for o in &p.zones[..i] {
+            if z.low <= o.high && o.low <= z.high {
+                errors.push(CompileError::at(
+                    z.line,
+                    format!(
+                        "zone {} {}..{} overlaps zone {} {}..{}",
+                        z.kind.word(),
+                        z.low,
+                        z.high,
+                        o.kind.word(),
+                        o.low,
+                        o.high
+                    ),
+                ));
+            }
+        }
+        match (&z.play, z.kind) {
+            (Some(_), ZoneKind::Triggers) => errors.push(CompileError::at(
+                z.line,
+                String::from("zone triggers: its keys are `key` lines, like `key 36 > hold riser`; it plays no track"),
+            )),
+            (Some(play), _) => check_play(&mut errors, z.line, &format!("zone {}", z.kind.word()), play),
+            (None, _) => {}
+        }
+    }
+    for sc in &p.scenes {
+        let head = format!("perform {}", sc.name);
+        if let Some(def) = &sc.scale {
+            if scale::Scale::named(&def.root, &def.kind).is_none() {
+                let known: Vec<&str> = scale::names().collect();
+                errors.push(CompileError::at(
+                    sc.line,
+                    format!(
+                        "{}: scale {} {}: a root like E or F#, and one of {}",
+                        head,
+                        def.root,
+                        def.kind,
+                        known.join(", ")
+                    ),
+                ));
+            }
+        }
+        for (play, kind) in [(&sc.bass, ZoneKind::Bass), (&sc.lead, ZoneKind::Lead)] {
+            if let Some(play) = play {
+                check_play(&mut errors, sc.line, &format!("{}: {}", head, kind.word()), play);
+                if !p.zones.iter().any(|z| z.kind == kind) {
+                    errors.push(CompileError::at(
+                        sc.line,
+                        format!(
+                            "{}: there is no {} zone; add one to `midi`, like `zone {} 48..59`",
+                            head,
+                            kind.word(),
+                            kind.word()
+                        ),
+                    ));
+                }
+            }
+        }
+        let maps: Vec<MidiMapDef> = sc
+            .sets
+            .iter()
+            .map(|set| MidiMapDef {
+                source: MidiSource::Cc(0),
+                target: set.target.clone(),
+                range: Some(alloc::vec![set.value.clone(), set.value.clone()]),
+                quantize: None,
+                line: set.line,
+            })
+            .collect();
+        errors.extend(validate_maps(song, &maps, |_, words| format!("{}: set {}", head, words)));
+    }
+    for b in &p.keyboard {
+        if b.key == "q" {
+            errors.push(CompileError::at(b.line, String::from("keyboard: q quits; bind another key")));
+        }
+        if let KeyAction::Perform(name) = &b.action {
+            if !p.scenes.iter().any(|s| &s.name == name) {
+                let known: Vec<&str> = p.scenes.iter().map(|s| s.name.as_str()).collect();
+                errors.push(CompileError::at(
+                    b.line,
+                    if known.is_empty() {
+                        format!(
+                            "keyboard: {} > perform {}: no scene; write one with `perform {} {{ ... }}`",
+                            b.key, name, name
+                        )
+                    } else {
+                        format!(
+                            "keyboard: {} > perform {}: no such scene (there are {})",
+                            b.key,
+                            name,
+                            known.join(", ")
+                        )
+                    },
+                ));
+            }
+        }
+    }
+    errors
+}
+
+/// The `scale` line names a root and a scale the table knows: an unknown one
+/// used to play as C major without a word.
+pub(super) fn validate_scale(song: &Song) -> Vec<CompileError> {
+    use crate::perform::scale;
+    let Some(def) = &song.globals.scale else { return Vec::new() };
+    let mut errors = Vec::new();
+    if scale::root_pc(&def.root).is_none() {
+        errors.push(CompileError::new(format!("scale: '{}' is not a root; write one like E, F# or Bb", def.root)));
+    }
+    if scale::intervals(&def.kind).is_none() {
+        let known: Vec<&str> = scale::names().collect();
+        errors.push(CompileError::new(format!("scale: '{}' is not a scale; one of {}", def.kind, known.join(", "))));
+    }
+    errors
+}
+
 /// Validate `midi { }` against the song. A knob, a keyboard or a pad on
 /// something that does not exist is an error here rather than a control that
 /// silently does nothing on stage.
 pub(super) fn validate_midi(song: &Song) -> Vec<CompileError> {
+    validate_maps(song, &song.midi, |source, words| format!("midi: {} > {}", source, words))
+}
+
+/// `maps` against `song`, each error headed by what `head` makes of the
+/// line's source and target.
+fn validate_maps(song: &Song, maps: &[MidiMapDef], head: impl Fn(&str, &str) -> String) -> Vec<CompileError> {
     let mut errors = Vec::new();
     // The module a track plays, as written: its name and its kind.
     let module_of = |track: &str| -> Option<(&str, Option<&str>)> {
@@ -45,14 +199,22 @@ pub(super) fn validate_midi(song: &Song) -> Vec<CompileError> {
         let kind = song.module_defs.iter().find(|m| m.name == t.using_instrument).map(|m| m.module_type.as_str());
         Some((t.using_instrument.as_str(), kind))
     };
-    for map in &song.midi {
+    for map in maps {
         let words: Vec<&str> = map.target.split('.').collect();
         let source = match map.source {
             MidiSource::Cc(cc) => format!("cc {}", cc),
             MidiSource::Keys => String::from("keys"),
             MidiSource::Pad(n) => format!("pad {}", n),
+            MidiSource::Key(n) => format!("key {}", n),
         };
-        let err = |msg: String| CompileError::at(map.line, format!("midi: {} > {}: {}", source, words.join(" "), msg));
+        let err = |msg: String| CompileError::at(map.line, format!("{}: {}", head(&source, &words.join(" ")), msg));
+        if let (MidiSource::Key(n), Some(z)) =
+            (map.source, song.perform.zones.iter().find(|z| z.kind == ZoneKind::Triggers))
+        {
+            if !(z.low..=z.high).contains(&n) {
+                errors.push(err(format!("{} is outside the trigger zone, {}..{}", n, z.low, z.high)));
+            }
+        }
         match map.source {
             MidiSource::Keys => match words.as_slice() {
                 [track] => match module_of(track) {
@@ -63,7 +225,10 @@ pub(super) fn validate_midi(song: &Song) -> Vec<CompileError> {
                 },
                 _ => errors.push(err(String::from("the keys play one track: `keys > solo`"))),
             },
-            MidiSource::Pad(_) => match words.as_slice() {
+            MidiSource::Key(_) if matches!(words.first(), Some(&("next" | "prev" | "step"))) => errors.push(err(
+                String::from("the set moves from the computer's keys, not the controller: `keyboard { space > next }`"),
+            )),
+            MidiSource::Pad(_) | MidiSource::Key(_) => match words.as_slice() {
                 ["freeze"] | ["next"] | ["prev"] => {}
                 ["step", n] => {
                     if !n.parse::<usize>().is_ok_and(|n| n >= 1) {

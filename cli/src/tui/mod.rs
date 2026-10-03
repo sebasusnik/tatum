@@ -142,6 +142,26 @@ pub enum Key {
     Solo,
     /// Keep, add or free a knob on what the knob list points at.
     Knob(knobs::Change),
+    /// A key the song's `keyboard` block binds: it goes to the session
+    /// before anything the screen would do with it.
+    Named(crate::keys::KeyName),
+}
+
+/// A key as the `keyboard` block names it.
+fn key_name(code: KeyCode) -> Option<crate::keys::KeyName> {
+    use crate::keys::KeyName;
+    Some(match code {
+        KeyCode::Char(' ') => KeyName::Space,
+        KeyCode::Char(c) if c.is_ascii_alphanumeric() => KeyName::Char(c),
+        KeyCode::F(n) => KeyName::F(n),
+        KeyCode::Tab => KeyName::Tab,
+        KeyCode::Enter => KeyName::Enter,
+        KeyCode::Left => KeyName::Left,
+        KeyCode::Right => KeyName::Right,
+        KeyCode::Up => KeyName::Up,
+        KeyCode::Down => KeyName::Down,
+        _ => return None,
+    })
 }
 
 /// The knob list `k` opens for a track: where it points, and the knob last
@@ -228,6 +248,10 @@ pub struct Screen {
     help: bool,
     /// The session log, open over everything, `l` toggles it.
     log_open: bool,
+    /// `i`: every MIDI message as it arrives, with what the song does with
+    /// it. Kept while closed, so opening it shows what just came in.
+    midi_open: bool,
+    midi_log: VecDeque<(f32, String, Option<String>)>,
     /// The step ← → have moved to, not yet asked for: Enter goes.
     browse: Option<usize>,
     knob_list: Option<KnobList>,
@@ -249,6 +273,12 @@ pub struct Screen {
     /// half-block pixels put half the sound in the foreground, which stays
     /// opaque.
     pub glass: bool,
+    /// The keys the song's `keyboard` block binds, by name: they go to the
+    /// session instead of doing what the screen does with them.
+    pub bound: Vec<String>,
+    /// The performance scene, and the one called that waits for its bar:
+    /// `drop`, `drop → break @ 33`.
+    pub perform: Option<String>,
     bar: usize,
     step: usize,
     tempo: f32,
@@ -292,12 +322,16 @@ impl Screen {
             selected: None,
             help: false,
             log_open: false,
+            midi_open: false,
+            midi_log: VecDeque::new(),
             browse: None,
             knob_list: None,
             transformed: Vec::new(),
             muted: Vec::new(),
             soloed: Vec::new(),
             marked: Vec::new(),
+            bound: Vec::new(),
+            perform: None,
             picker: None,
             view: 0,
             followed: None,
@@ -371,6 +405,10 @@ impl Screen {
                 out.extend(key);
                 continue;
             }
+            if let Some(name) = key_name(k.code).filter(|n| self.bound.contains(&n.word())) {
+                out.push(Key::Named(name));
+                continue;
+            }
             use edit::{Op, Toggle};
             let key = match k.code {
                 KeyCode::Char('c') if k.modifiers.contains(KeyModifiers::CONTROL) => Some(Key::Quit),
@@ -381,6 +419,8 @@ impl Screen {
                         self.help = false;
                     } else if self.log_open {
                         self.log_open = false;
+                    } else if self.midi_open {
+                        self.midi_open = false;
                     } else if self.browse.is_some() {
                         self.browse = None;
                     } else {
@@ -396,6 +436,10 @@ impl Screen {
                 }
                 KeyCode::Char('l') => {
                     self.log_open = !self.log_open;
+                    None
+                }
+                KeyCode::Char('i') => {
+                    self.midi_open = !self.midi_open;
                     None
                 }
                 KeyCode::Char('k') => {
@@ -832,9 +876,9 @@ impl Screen {
             }
             None => {
                 let hint = if self.set.is_some() {
-                    " ← → look at a step · Enter goes · 1-9 go now · k knobs · ? every key · q quit"
+                    " ← → look at a step · Enter goes · 1-9 go now · k knobs · i midi in · ? every key · q quit"
                 } else {
-                    " k knobs · ? every key · l log · q quit"
+                    " k knobs · i midi in · ? every key · l log · q quit"
                 };
                 f.render_widget(Paragraph::new(hint).style(Style::new().fg(DIM).bg(BG)), footer);
             }
@@ -845,6 +889,8 @@ impl Screen {
             self.knob_overlay(f, area);
         } else if self.log_open {
             self.log_overlay(f, area);
+        } else if self.midi_open {
+            self.midi_overlay(f, area);
         }
         self.picker_overlay(f, area);
     }
@@ -1103,6 +1149,60 @@ impl Screen {
         );
     }
 
+    /// A MIDI message came in: `what` is what the song does with it.
+    pub fn midi_in(&mut self, t: f32, message: String, what: Option<String>) {
+        if self.midi_log.len() >= 200 {
+            self.midi_log.pop_front();
+        }
+        self.midi_log.push_back((t, message, what));
+    }
+
+    fn midi_overlay(&self, f: &mut Frame, area: Rect) {
+        let w = area.width.clamp(40, 110);
+        let h = area.height.clamp(8, 30);
+        let pop = Rect { x: area.x + (area.width - w) / 2, y: area.y + (area.height - h) / 2, width: w, height: h };
+        let rows = h.saturating_sub(2) as usize;
+        let mut lines: Vec<Line> = if self.midi_log.is_empty() {
+            vec![
+                Line::raw(""),
+                Line::styled("  nothing yet: press a key, hit a pad, turn a knob", Style::new().fg(DIM)),
+                Line::styled("  (nothing at all: the controller is not reaching tatum)", Style::new().fg(DIM)),
+            ]
+        } else {
+            Vec::new()
+        };
+        lines.extend(self.midi_log.iter().rev().take(rows).rev().map(|(t, message, what)| {
+            let mut spans = vec![
+                Span::styled(format!(" {:>6.1}s ", t), Style::new().fg(DIM)),
+                Span::styled(format!("{:<36}", message), Style::new().fg(TEXT)),
+            ];
+            match what {
+                Some(w) if w.contains("not mapped") || w.contains("outside") || w.contains("not used") => {
+                    spans.push(Span::styled(format!("→ {}", w), Style::new().fg(DIM)))
+                }
+                Some(w) => spans.push(Span::styled(format!("→ {}", w), Style::new().fg(GOLD))),
+                None => {}
+            }
+            Line::from(spans)
+        }));
+        f.render_widget(ratatui::widgets::Clear, pop);
+        f.render_widget(
+            Paragraph::new(lines).block(
+                Block::bordered()
+                    .border_style(Style::new().fg(GOLD))
+                    .title(Span::styled(
+                        format!(
+                            " midi in · {} ·  i or Esc closes ",
+                            if self.midi.is_empty() { "no input found".to_string() } else { self.midi.join(", ") }
+                        ),
+                        Style::new().fg(GOLD),
+                    ))
+                    .style(Style::new().bg(PANEL)),
+            ),
+            pop,
+        );
+    }
+
     fn help_overlay(&self, f: &mut Frame, area: Rect) {
         let w = area.width.clamp(40, 82);
         let h = area.height.clamp(10, 30);
@@ -1136,6 +1236,7 @@ impl Screen {
             key("u", "", "undo the last change made from here"),
             key("k", "knobs", "put a knob on the track: turn it to try, Enter keeps"),
             key("l", "log", "what happened this session"),
+            key("i", "midi in", "every message the controller sends, and what it does here"),
             Line::raw(""),
             Line::styled(
                 " in the file: iter 4 · ply 2 · octave 1 · up 5st · sometimes 30% rev · play a, b",
@@ -1195,6 +1296,10 @@ impl Screen {
             spans.push(Span::styled("  ▸ ", Style::new().fg(DIM)));
             spans.push(Span::styled(scene, Style::new().fg(HOT).add_modifier(Modifier::BOLD)));
             spans.push(Span::styled(format!(" {}/{}", self.bar + 1 - start, len), Style::new().fg(DIM)));
+        }
+        if let Some(perform) = &self.perform {
+            spans.push(Span::styled("  ⚑ ", Style::new().fg(DIM)));
+            spans.push(Span::styled(perform.clone(), Style::new().fg(GOLD).add_modifier(Modifier::BOLD)));
         }
         if self.finished {
             spans.push(Span::styled("  ■ finished", Style::new().fg(DIM)));
@@ -1881,6 +1986,24 @@ arrange { a x2 b x2 }
             })
         });
         assert!(lit, "nothing in the spectrogram is lit");
+    }
+
+    #[test]
+    fn i_opens_what_the_controller_sends() {
+        let telemetry = Arc::new(Telemetry::new());
+        let mut screen =
+            Screen::headless(Arc::clone(&telemetry), "test".into(), vec!["KL Essential 49 mk3 MIDI".into()]);
+        screen.set_song(SongInfo::from_source("demo.synth", SONG).unwrap());
+        screen.midi_open = true;
+        let shown = text(&screen.snapshot(120, 40));
+        assert!(shown.contains("nothing yet"), "an empty monitor says so:\n{shown}");
+        screen.midi_in(1.5, "note  36 C2   on  vel 100".into(), Some("trigger key: play ruido".into()));
+        screen.midi_in(2.0, "cc 113  = 127".into(), Some("not mapped".into()));
+        let shown = text(&screen.snapshot(120, 40));
+        assert!(shown.contains("midi in · KL Essential 49 mk3 MIDI"), "no title:\n{shown}");
+        assert!(shown.contains("note  36 C2"), "the note is not listed:\n{shown}");
+        assert!(shown.contains("→ trigger key: play ruido"), "what it does is not shown:\n{shown}");
+        assert!(shown.contains("cc 113  = 127") && shown.contains("→ not mapped"));
     }
 
     #[test]

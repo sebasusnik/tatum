@@ -17,6 +17,7 @@ pub mod dsl;
 pub mod song_engine;
 pub mod live;
 pub mod midi;
+pub mod perform;
 pub mod params;
 pub mod wav;
 pub mod analysis;
