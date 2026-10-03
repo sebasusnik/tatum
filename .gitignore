@@ -10,6 +10,12 @@ web/
 # Renders are artifacts, not source. The .synth file is the master;
 # anything you can regenerate by running it does not belong here.
 *.wav
+*.mp3
+*.flac
+*.ogg
+*.aif
+*.aiff
+*.m4a
 test_output/
 core/test_output/
 
