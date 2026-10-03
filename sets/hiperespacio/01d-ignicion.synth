@@ -1,0 +1,7 @@
+# set: bars=8 phase=01-ignicion energy=4
+# set-note: the kick lands in the hole with a crash, the bass comes in shut under it; the pad stays, the turbine is gone
+use "_t01.synth"
+
+track drums { play land level 0.9 }
+track pad   { level 0.14 }
+track bass  { play roll_shut level 1.1 }

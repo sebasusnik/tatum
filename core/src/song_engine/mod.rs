@@ -12,7 +12,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::dsl::compiler::{CompiledPattern, CompiledScene, PlayPlan};
+use crate::dsl::compiler::{CompiledAutomation, CompiledPattern, CompiledScene, PlayPlan};
 pub use crate::dsl::error::DslError;
 use crate::effects::delay::Delay;
 use crate::effects::reverb::Reverb;
@@ -76,6 +76,8 @@ pub struct SongEngine {
 
     // Master FX chain
     master_fx: FxChain,
+    /// `as <name>` per master node, for `auto master <name> <param>`.
+    master_labels: Vec<Option<automation::InlineName>>,
     /// Loudness and the true-peak ceiling, after the master chain: see `output`.
     output: OutputStage,
     reverb_return: FxChain,
@@ -142,6 +144,11 @@ pub struct SongEngine {
     held_count: usize,
     scene_step: usize,
     scene_total_steps: usize,
+    /// Top-level `auto ... over N` lanes, of a song without scenes.
+    lanes: Vec<CompiledAutomation>,
+    /// The step they started on: 0 for a render, the swap bar's first step
+    /// when this engine took over from another. See `automation.rs`.
+    lane_origin: usize,
 
     // Arrangement
     scenes: Vec<CompiledScene>,

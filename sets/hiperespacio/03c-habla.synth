@@ -1,0 +1,10 @@
+# set: bars=16 phase=03-tribu energy=6
+# set-note: the clap goes into the dark room and the drone talks once (bars 5-14), cut before the next section
+# cue: 5 B1 apretado + K3 ↑ de a poco · dron que habla
+# cue: 8.75 suelta B1 (K3 al medio)
+use "_t03.synth"
+
+track toms  { play tm_main level 0.55 }
+track bass  { play hol_b level 0.8 }
+track clap  { play cl_main level 0.9 }
+track talk  { play talk_1 level 0.2 }

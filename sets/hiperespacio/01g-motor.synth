@@ -1,0 +1,13 @@
+# set: bars=32 phase=01-ignicion energy=5
+# set-note: the full floor: open hat, rim ghosts, turns at 8 and 16; the bass open with its octave kicks; one throttle blip from the turbine closes the phrase
+# cue: 15 A1 apretado · kick fuera
+# cue: 17 suelta A1
+use "_t01.synth"
+
+track drums { play full level 0.92 }
+track bass  { play roll_open level 1.15 }
+track pad   { level 0 }
+track wind  { level 0 }
+track perc  { play tok_a every 2 rev level 0.15 }
+track grind { play grind_blip level 0.09 }
+module fm turbina { op1_ratio 3.5x op2_ratio 6.06x op3_ratio 9.5x lfo_rate 20hz lfo_depth 20% mod_index 60% }

@@ -1,0 +1,6 @@
+# set: bars=32 phase=04-acido energy=6
+# set-note: DJ outro: kick, hats, open hat, a few ghosts and the thinned roll; no acid, nothing tonal on top
+use "_t04.synth"
+
+track drums { play a4_out }
+track bass  { play rl_out level 1.5 }

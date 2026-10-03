@@ -1,0 +1,8 @@
+# set: bars=16 phase=05-maquina energy=8
+# set-note: The robot steps out and the room is all machine: busy ticks, the glitch hats at their busiest, the ratchet bass; the kit back to its main groove.
+use "_t05.synth"
+
+track drums  { play m_main, m_main, m_main, m_drive_turn }
+track glitch { play g_b level 0.8 }
+track ticks  { play t_busy, t_busy, t_busy, t_332_turn level 0.3 }
+track bass   { play b_mach, b_mach, b_mach, b_mach_turn }

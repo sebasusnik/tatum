@@ -1,0 +1,6 @@
+# set: bars=32 phase=07-tunel energy=7 blend=32
+# set-note: T07 tunel mixes in: tight clicky kick, ticking hat, the hollow tube roll closed and opening over 32 bars; nothing else tonal
+use "_t07.synth"
+tempo 144
+
+auto tube cutoff 0.17 > 0.21 > 0.253 over 32

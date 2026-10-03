@@ -1,0 +1,11 @@
+# set: bars=16 phase=06-hondo energy=7
+# set-note: The clap, last of the kit, lands on two and four; the roll back to straight; the drone's dirt swells and ebbs, higher each time.
+use "_t06.synth"
+
+track drums { play k_clap, k_clap, k_clap, k_clap_turn }
+track ride  { play rd_push level 1.8 }
+track drone { level 0.11 }
+track rub   { level 0.05 }
+auto drone.crush wet 0.18 > 0.28 > 0.2 > 0.3 over 16
+auto rub.crush wet 0.1 > 0.2 > 0.15 > 0.22 over 16
+auto abyss mod_index 0.44 > 0.5 > 0.46 > 0.52 over 16

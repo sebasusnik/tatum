@@ -1,5 +1,12 @@
 //! Automation lanes: `auto` targets resolved once when a scene starts, and
 //! evaluated once per block while it plays.
+//!
+//! A song without scenes has its lanes at the top level, each `over` its own
+//! number of bars. They have no scene to span, so they are counted from the
+//! step the engine started on (`lane_origin`): bar 0 for a render, the swap
+//! bar for an engine that took over from another, which is what makes a set
+//! step's build start on the step's own first bar. Past its length a lane
+//! holds its last value for as long as the text keeps looping.
 
 use super::track::MAX_TRACK_LEVEL;
 use super::SongEngine;
@@ -34,13 +41,19 @@ impl InlineName {
     }
 }
 
-/// A running automation lane within a scene. `keyframes` points back into
-/// `scenes[scene_idx].automations[auto_idx]` rather than copying them: applying a
-/// scene happens on the audio thread.
+/// A running automation lane. The keyframes stay where they were compiled,
+/// in a scene or in the song's top-level lanes, and the lane points back at
+/// them rather than copying: starting one happens on the audio thread.
 pub(super) struct ActiveAutomation {
     pub(super) target: AutoTarget,
-    pub(super) scene_idx: usize,
-    pub(super) auto_idx: usize,
+    pub(super) source: LaneSource,
+}
+
+pub(super) enum LaneSource {
+    /// `scenes[scene].automations[lane]`, over the scene.
+    Scene { scene: usize, lane: usize },
+    /// `lanes[lane]`, over its own `over N` bars from `lane_origin`.
+    Top { lane: usize },
 }
 
 /// Resolved automation target.
@@ -50,6 +63,11 @@ pub(super) enum AutoTarget {
         param_name: InlineName,
     },
     MasterParam {
+        param_name: InlineName,
+    },
+    /// `master <node> <param>`: the named node, resolved to its position.
+    MasterNodeParam {
+        node_idx: usize,
         param_name: InlineName,
     },
     TrackLevel {
@@ -80,6 +98,14 @@ impl SongEngine {
                     let param = &target[dot_pos + 1..];
 
                     if name == "master" {
+                        if let Some((label, p)) = param.split_once('.') {
+                            let node_idx = self
+                                .master_labels
+                                .iter()
+                                .position(|l| l.as_ref().is_some_and(|l| l.as_str() == label))?;
+                            return InlineName::new(p)
+                                .map(|param_name| AutoTarget::MasterNodeParam { node_idx, param_name });
+                        }
                         return InlineName::new(param).map(|param_name| AutoTarget::MasterParam { param_name });
                     }
 
@@ -121,11 +147,24 @@ impl SongEngine {
         }
     }
 
+    /// Resolve the top-level lanes and start them. Called where the engine
+    /// starts, which may be on the audio thread: the list reuses its capacity.
+    pub(super) fn start_lanes(&mut self) {
+        let mut active = core::mem::take(&mut self.active_automations);
+        active.clear();
+        for lane in 0..self.lanes.len() {
+            if let Some(target) = self.resolve_auto_target(&self.lanes[lane].target) {
+                active.push(ActiveAutomation { target, source: LaneSource::Top { lane } });
+            }
+        }
+        self.active_automations = active;
+    }
+
     /// Automation, evaluated once per block. It used to run in `advance_step`,
     /// which meant a sweep moved in sixteenth-note stairs: eight jumps a second
     /// on a resonant filter, which is heard as steps rather than a sweep.
     pub(super) fn apply_automation(&mut self) {
-        if self.scene_total_steps == 0 || self.active_automations.is_empty() {
+        if self.active_automations.is_empty() {
             return;
         }
         let within_step = if self.current_step_duration > 0.0 {
@@ -133,13 +172,35 @@ impl SongEngine {
         } else {
             0.0
         };
-        let progress = ((self.scene_step as f32 + within_step) / self.scene_total_steps as f32).clamp(0.0, 1.0);
+        let scene_progress = if self.scene_total_steps > 0 {
+            Some(((self.scene_step as f32 + within_step) / self.scene_total_steps as f32).clamp(0.0, 1.0))
+        } else {
+            None
+        };
+        // Steps played since the lanes started. `global_step` is the next
+        // step to fire, so while step `k` sounds it reads `k + 1`; before the
+        // first one fires (an engine waiting on a swap's bar line) nothing
+        // has elapsed.
+        let top_elapsed = match self.global_step.checked_sub(self.lane_origin + 1) {
+            Some(steps) => steps as f32 + within_step,
+            None => 0.0,
+        };
         let lanes = core::mem::take(&mut self.active_automations);
         for auto_lane in &lanes {
             if self.holds_auto(&auto_lane.target) {
                 continue;
             }
-            let keyframes = &self.scenes[auto_lane.scene_idx].automations[auto_lane.auto_idx].keyframes;
+            let (keyframes, progress) = match auto_lane.source {
+                LaneSource::Scene { scene, lane } => match scene_progress {
+                    Some(p) => (&self.scenes[scene].automations[lane].keyframes, p),
+                    None => continue,
+                },
+                LaneSource::Top { lane } => {
+                    let l = &self.lanes[lane];
+                    let steps = (l.over.unwrap_or(1).max(1) as usize * self.steps_per_bar).max(1);
+                    (&l.keyframes, (top_elapsed / steps as f32).clamp(0.0, 1.0))
+                }
+            };
             let value = interpolate_automation(keyframes, progress);
             match &auto_lane.target {
                 AutoTarget::InstrumentParam { instrument_idx, param_name } => {
@@ -160,6 +221,9 @@ impl SongEngine {
                 }
                 AutoTarget::MasterParam { param_name } => {
                     self.master_fx.set_param(param_name.as_str(), value);
+                }
+                AutoTarget::MasterNodeParam { node_idx, param_name } => {
+                    self.master_fx.set_node_param(*node_idx, param_name.as_str(), value);
                 }
                 AutoTarget::TrackNodeWet { track_idx, node_idx } => {
                     if let Some(t) = self.tracks.get_mut(*track_idx) {

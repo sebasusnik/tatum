@@ -1,0 +1,10 @@
+# set: bars=32 phase=02-orbita energy=6
+# set-note: the clap lands and the pluck plays its motif, brightening over the 32 bars as its index climbs
+# cue: 15 B4 apretado · ratchets al eco
+# cue: 17 suelta B4
+use "_t02.synth"
+
+track drums { play o_main }
+track bass  { level 1.6 }
+track pluck { play pl_a level 0.26 }
+auto orbita mod_index 0.38 > 0.5 over 32

@@ -1,0 +1,7 @@
+# set: bars=16 phase=05-maquina energy=7
+# set-note: The robot speaks: the formant stab's fixed E cell arrives, the kit goes to its main pattern with clap and rim.
+use "_t05.synth"
+
+track drums  { play m_main, m_main, m_main, m_main_turn }
+track glitch { play g_sparse level 0.9 }
+track robo   { play r_a, r_a, r_a, r_a_turn level 0.45 }

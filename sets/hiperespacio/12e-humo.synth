@@ -1,0 +1,10 @@
+# set: bars=8 phase=12-estela energy=2
+# set-note: no kick, no bass: a hat ticking far off, the pad and the wind, the room opening
+use "_t12.synth"
+
+auto reverb_mix 0.3 > 0.55 over 8
+
+track drums { play d_tick level 0.6 }
+track bass  { level 0 }
+track pad   { play void level 0.26 }
+track wind  { play breath level 0.3 }

@@ -1,0 +1,10 @@
+# set: bars=24 phase=08-amoladora energy=8
+# set-note: sustain one notch down: glitch drums, the broken gallop with gaps and octaves, plain rims; the zaps are gone again
+# cue: 1 suelta A1
+# cue: 17 B1 apretado + K3 de 0 a fondo · AMOLADORA: ralentí → grito → corte
+# cue: 20.75 suelta B1 (K3 al medio)
+use "_t08.synth"
+
+track drums { play g8_glitch }
+track bass  { play b8_broken }
+track rims  { level 0.64 }

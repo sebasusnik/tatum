@@ -115,7 +115,7 @@ pub(super) fn compile_scene(
     let automations: Vec<CompiledAutomation> = scene
         .automations
         .iter()
-        .map(|a| CompiledAutomation { target: a.target.clone(), keyframes: a.keyframes.clone() })
+        .map(|a| CompiledAutomation { target: a.target.clone(), keyframes: a.keyframes.clone(), over: None })
         .collect();
 
     Ok(CompiledScene {

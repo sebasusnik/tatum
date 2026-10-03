@@ -20,6 +20,10 @@ pub struct Song {
     /// `midi { cc 74 > acid cutoff }`: which controller moves what. Read by a
     /// live session and ignored by a render.
     pub midi: Vec<MidiMapDef>,
+    /// `auto <target> a > b over 8` outside any scene: lanes of a song with
+    /// no scenes, each over its own number of bars from the first bar this
+    /// text plays. A song with scenes keeps its lanes in them.
+    pub automations: Vec<AutomationDef>,
 }
 
 /// One line of a `midi { }` block. The target is stored joined with dots, the
@@ -34,8 +38,52 @@ pub struct MidiMapDef {
     /// point in between for half travel (`20hz..20hz..2khz`). Written high to
     /// low, the knob works backwards. `None`: the target's whole range.
     pub range: Option<Vec<RangeEnd>>,
+    /// `pad 44 > mute drums q=bar`: the pad's press and release wait for the
+    /// next line of this grid. `None` acts at once.
+    pub quantize: Option<Quantize>,
     /// Source line, for compile errors.
     pub line: usize,
+}
+
+/// The grid a quantized pad lands on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Quantize {
+    Bar,
+    Beat,
+    Eighth,
+    Sixteenth,
+}
+
+impl Quantize {
+    pub fn from_word(w: &str) -> Option<Option<Self>> {
+        match w {
+            "bar" => Some(Some(Self::Bar)),
+            "beat" => Some(Some(Self::Beat)),
+            "1/8" => Some(Some(Self::Eighth)),
+            "1/16" => Some(Some(Self::Sixteenth)),
+            "off" => Some(None),
+            _ => None,
+        }
+    }
+
+    /// The division in sixteenths, given how many a bar has.
+    pub fn sixteenths(self, steps_per_bar: usize) -> f32 {
+        match self {
+            Self::Bar => steps_per_bar.max(1) as f32,
+            Self::Beat => 4.0,
+            Self::Eighth => 2.0,
+            Self::Sixteenth => 1.0,
+        }
+    }
+
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Bar => "bar",
+            Self::Beat => "beat",
+            Self::Eighth => "1/8",
+            Self::Sixteenth => "1/16",
+        }
+    }
 }
 
 /// One end of a knob's range as written: `200hz`, `60%`, `-12db`, `0.8`.
@@ -392,11 +440,14 @@ pub struct OpEnvelopeDef {
     pub r: f32,
 }
 
-/// Automation definition within a scene.
+/// An `auto` lane: in a scene, or at the top level of a song without scenes.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AutomationDef {
     pub target: String,      // "funk_bass.cutoff" or "reverb_mix"
     pub keyframes: Vec<f32>, // evenly spaced: 2 = linear, 3 = triangle, more = a curve
+    /// `over 8`: the lane's length in bars. Only a top-level lane has one,
+    /// and it must; a scene lane spans its scene.
+    pub over: Option<u32>,
 }
 
 /// Scene definition (for arrangement).

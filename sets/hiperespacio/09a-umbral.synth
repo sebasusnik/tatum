@@ -1,0 +1,8 @@
+# set: bars=32 phase=09-nebulosa energy=5 blend=32
+# set-note: T09 comes in under T08's F# outro with only its round low kick, a ticking hat and the hollow square roll on E; nothing else tonal yet.
+use "_t09.synth"
+tempo 145
+
+track drums { play d_intro level 0.8 }
+track perc  { play d_intro_hats level 0.8 }
+track bass  { play roll_e }

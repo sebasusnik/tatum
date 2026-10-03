@@ -1,0 +1,8 @@
+# set: bars=16 phase=04-acido energy=6
+# set-note: the second riff, octave leaps and the b2 on top, further open; the kit gets busier and drops a beat in bar 4
+# cue: 16.5 A3 throw del ácido (medio compás)
+use "_t04.synth"
+
+track drums { play a4_busy }
+track bass  { play rl_b level 1.5 }
+track acid  { play acid_squeal16 level 1.0 }

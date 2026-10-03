@@ -1,0 +1,14 @@
+# set: bars=16 phase=09-breath energy=2
+# set-note: The room freezes on the bells and holds them; the pad opens upward into higher Hijaz voicings, a faint tom pulse and hat under the fog.
+# cue: 7 A4 apretado · sala congelada
+# cue: 11 suelta A4
+use "_t09.synth"
+
+auto reverb_freeze 0 > 1 over 2
+
+track drums { play d_pulse level 0.5 }
+track perc  { play d_pulse_hats level 0.5 }
+track bass  { level 0 }
+track oud   { level 0 }
+track veil  { play veil_high level 0.055 }
+track chime { play chime_line level 0 }

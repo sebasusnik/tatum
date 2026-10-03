@@ -1,0 +1,16 @@
+# set: bars=16 phase=12-estela energy=5
+# set-note: the grinder is still at full RPM from the peak, holds six bars and spins DOWN to a third; T01's hollow pad comes back under it
+use "_t12.synth"
+
+auto rotor op0_ratio 0.0968 > 0.0968 > 0.0968 > 0.0968 > 0.0968 > 0.0968 > 0.0968 > 0.0839 > 0.0684 > 0.0542 > 0.0426 > 0.0323 > 0.0245 > 0.0181 > 0.0129 > 0.0103 > 0.009 over 16
+auto rotor op1_ratio 0.1626 > 0.1626 > 0.1626 > 0.1626 > 0.1626 > 0.1626 > 0.1626 > 0.1431 > 0.1197 > 0.0983 > 0.0807 > 0.0652 > 0.0535 > 0.0437 > 0.0359 > 0.032 > 0.0301 over 16
+auto rotor op2_ratio 0.2929 > 0.2929 > 0.2929 > 0.2929 > 0.2929 > 0.2929 > 0.2929 > 0.2604 > 0.2214 > 0.1856 > 0.1563 > 0.1303 > 0.1108 > 0.0946 > 0.0815 > 0.075 > 0.0718 over 16
+auto rotor op3_ratio 0.0968 > 0.0968 > 0.0968 > 0.0968 > 0.0968 > 0.0968 > 0.0968 > 0.0839 > 0.0684 > 0.0542 > 0.0426 > 0.0323 > 0.0245 > 0.0181 > 0.0129 > 0.0103 > 0.009 over 16
+auto rotor mod_index 0.6 > 0.6 > 0.6 > 0.6 > 0.6 > 0.6 > 0.6 > 0.56 > 0.52 > 0.48 > 0.45 > 0.42 > 0.4 > 0.38 > 0.36 > 0.35 > 0.35 over 16
+auto grind level 0.098 > 0.098 > 0.098 > 0.098 > 0.098 > 0.098 > 0.098 > 0.095 > 0.091 > 0.084 > 0.077 > 0.07 > 0.063 > 0.059 > 0.056 > 0.052 > 0.049 over 16
+auto pad level 0.05 > 0.16 over 16
+
+track drums { play d_ride, d_ride, d_ride, d_ride_turn level 0.5 }
+track bass  { play b_roll, b_roll, b_roll, b_roll_turn level 0.4 }
+track grind { play grind_hold level 0.1 }
+track pad   { play void level 0.05 }

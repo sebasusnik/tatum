@@ -1,0 +1,9 @@
+# set: bars=2 phase=05-maquina energy=6
+# set-note: The machine jams for two bars: one kick, bass out, hats packing to ratchets, the robot stuck on one syllable, a beat of nothing, a rim roll.
+# cue: 2.5 B5 roll 1/32 · suelta todo en el 1
+use "_t05.synth"
+
+track drums  { play m_stutter }
+track bass   { play b_rest }
+track ticks  { level 0 }
+track robo   { play r_jam level 0.45 }

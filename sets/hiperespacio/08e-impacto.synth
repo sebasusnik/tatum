@@ -1,0 +1,9 @@
+# set: bars=32 phase=08-amoladora energy=9
+# set-note: the landing: crash, the gallop, the zaps busy for the first time, glitch rims; the peak of the track
+# cue: 1 B3 crash · cae después del hueco
+use "_t08.synth"
+
+track drums { play g8_land }
+track bass  { play b8_gallop }
+track rims  { play g8_rims_glitch level 0.64 }
+track zap   { play z8_busy level 0.24 }

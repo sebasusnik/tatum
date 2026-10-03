@@ -1,0 +1,7 @@
+# set: bars=32 phase=07-outro energy=7
+# set-note: T07 outro for mixing: main kit, ticks, the plain roll; no arp, pad, lead or riser
+use "_t07.synth"
+
+track drums { play t7_main }
+track bass  { play t7_roll_in }
+track ticks { level 0.9 }

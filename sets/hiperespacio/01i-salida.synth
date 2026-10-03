@@ -1,0 +1,9 @@
+# set: bars=32 phase=01-ignicion energy=5
+# set-note: the way out for the next record: kick, tick, open hat, rim, the tok, the plain open roll; nothing tonal but the bass
+use "_t01.synth"
+
+track drums { play strip level 0.88 }
+track bass  { play roll_strip level 1.0 }
+track pad   { level 0 }
+track wind  { level 0 }
+track perc  { play tok_a level 0.12 }

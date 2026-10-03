@@ -1,0 +1,10 @@
+# set: bars=8 phase=02-orbita energy=3
+# set-note: Release 1: the floor is gone, the bass shut to one dull note a beat, the pluck alone throwing into the echo
+use "_t02.synth"
+
+track drums  { play o_hole level 0.6 }
+track shaker { level 0 }
+track bass   { play low_hole level 1.5 }
+track pluck  { play pl_alone level 0.55 delay_send 0.55 reverb_send 0.2 }
+module bass orb { cutoff 45hz cutoff_env 150hz }
+auto orbita mod_index 0.5 > 0.36 over 8

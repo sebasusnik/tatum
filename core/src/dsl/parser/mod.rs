@@ -328,7 +328,11 @@ impl Parser {
             arrangement: Vec::new(),
             grooves: Vec::new(),
             midi: Vec::new(),
+            automations: Vec::new(),
         };
+        // Where the first top-level `auto` is, for the error if the song
+        // turns out to have scenes.
+        let mut first_auto: Option<(usize, usize)> = None;
 
         loop {
             self.skip_newlines();
@@ -390,6 +394,12 @@ impl Parser {
                     self.advance();
                     self.parse_scene(&mut song.scenes);
                 }
+                Token::Auto => {
+                    let s = self.span();
+                    first_auto.get_or_insert((s.line, s.col));
+                    self.advance();
+                    self.parse_automation(&mut song.automations, true);
+                }
                 // A bare identifier followed by { could be a bus chain or groove block
                 Token::Ident(ref name) if name == "gain_comp" => {
                     self.advance();
@@ -424,6 +434,18 @@ impl Parser {
                     self.recover_to_line_end();
                 }
             }
+        }
+
+        // A song with scenes has somewhere for a lane to live and a length
+        // for it; one outside them would have neither a start nor an owner.
+        if let (Some((line, col)), false) = (first_auto, song.scenes.is_empty()) {
+            self.errors.push(ParseError {
+                line,
+                col,
+                message: String::from(
+                    "a top-level `auto` is for a song without scenes; this one has scenes, so put the lane inside the scene it belongs to (`scene build { auto ... }`), where it runs over the scene",
+                ),
+            });
         }
 
         if self.errors.is_empty() {

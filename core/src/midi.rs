@@ -183,6 +183,8 @@ pub struct Keys {
 pub struct Pad {
     pub note: u8,
     pub action: PadAction,
+    /// `q=bar`: press and release wait for the line. See `LivePlayer`.
+    pub quantize: Option<crate::dsl::ast::Quantize>,
 }
 
 /// What a pad does. A drum is struck on the way down; `mute`, `throw` and
@@ -209,6 +211,22 @@ pub enum PadAction {
     },
     /// `pad 47 > freeze`: the reverb frozen while held.
     Freeze,
+    /// `pad 40 > play grinder C2`: the track's instrument plays `note` while
+    /// the pad is held, through the track's chain, fader and sends.
+    Play {
+        track: usize,
+        note: u8,
+    },
+    /// `pad 41 > hold riser`: the inverse of `mute`, the track silent until
+    /// the pad is held and sounding its pattern while it is.
+    Hold {
+        track: usize,
+    },
+    /// `pad 38 > repeat 1/16`: a beat repeat on the whole output while held,
+    /// one division long, in sixteenths (4, 2, 1 or 0.5).
+    Repeat {
+        sixteenths: f32,
+    },
     /// `pad 48 > next`, `pad 49 > prev`, `pad 50 > step 3`.
     Next,
     Prev,
@@ -225,6 +243,79 @@ impl PadAction {
 /// What a pad line names, before any engine: the words after `>`.
 pub fn pad_words(target: &str) -> Vec<&str> {
     target.split('.').collect()
+}
+
+/// The tracks a `pad N > hold <track>` line keeps out until the pad is held.
+pub fn held_out(song: &Song) -> Vec<String> {
+    song.midi
+        .iter()
+        .filter(|m| matches!(m.source, MidiSource::Pad(_)))
+        .filter_map(|m| m.target.strip_prefix("hold.").map(String::from))
+        .collect()
+}
+
+/// `song` as a live session starts it, with no hand on the controller: every
+/// track a `hold` pad keeps out pulled to `level 0`, everywhere it is defined,
+/// and the level lanes that would bring it back dropped. What measures a song
+/// for a live session measures this, since this is what it hears; a render
+/// of the file, which ignores the `midi` block, does not. True when it
+/// changed anything.
+pub fn at_rest(song: &mut Song) -> bool {
+    let out = held_out(song);
+    if out.is_empty() {
+        return false;
+    }
+    let level_of_held = |target: &str| target.strip_suffix(".level").is_some_and(|t| out.iter().any(|o| o == t));
+    for t in song.tracks.iter_mut().chain(song.scenes.iter_mut().flat_map(|s| s.tracks.iter_mut())) {
+        if out.contains(&t.name) {
+            t.level = Some(0.0);
+        }
+    }
+    for sc in song.scenes.iter_mut() {
+        sc.automations.retain(|a| !level_of_held(&a.target));
+    }
+    song.automations.retain(|a| !level_of_held(&a.target));
+    true
+}
+
+/// `1/4`, `1/8`, `1/16`, `1/32` as sixteenths: the lengths a `repeat` pad
+/// loops. Longer is a different gesture (a loop, not a roll), shorter is a
+/// buzz the grid cannot place.
+pub fn repeat_division(word: &str) -> Option<f32> {
+    match word {
+        "1/4" => Some(4.0),
+        "1/8" => Some(2.0),
+        "1/16" => Some(1.0),
+        "1/32" => Some(0.5),
+        _ => None,
+    }
+}
+
+/// The note a `play` pad sounds: the one written (`C2`, `F#3`, or a drum
+/// name on a `beats` track), else the scale's root -- in octave 2 on a
+/// `bass` module, where a bass line lives, and octave 3 on anything else --
+/// or the kick on a kit. `None` when what is written is neither.
+pub fn play_note(song: &Song, track: &str, written: Option<&str>) -> Option<u8> {
+    let kind = song
+        .tracks
+        .iter()
+        .find(|t| t.name == track)
+        .and_then(|t| song.module_defs.iter().find(|m| m.name == t.using_instrument))
+        .map(|m| m.module_type.as_str());
+    match (written, kind) {
+        (Some(w), Some("beats")) => crate::dsl::compiler::drum_note(w),
+        (Some(w), _) => {
+            let first = w.chars().next()?;
+            (matches!(first.to_ascii_uppercase(), 'A'..='G') && crate::dsl::compiler::note_in_midi_range(w))
+                .then(|| crate::dsl::compiler::note_name_to_midi(w))
+        }
+        (None, Some("beats")) => crate::dsl::compiler::drum_note("kick"),
+        (None, kind) => {
+            let (_, root) = crate::dsl::compiler::scale_context(song);
+            let octave: u8 = if kind == Some("bass") { 2 } else { 3 };
+            Some(12 * (octave + 1) + root % 12)
+        }
+    }
 }
 
 /// Everything a `midi` block maps, resolved against one engine.
@@ -268,6 +359,14 @@ pub fn resolve_all(song: &Song, names: &Names) -> Controls {
                     ["mute", t] => track(t).map(|track| PadAction::Mute { track }),
                     ["toggle", t] => track(t).map(|track| PadAction::Toggle { track }),
                     ["throw", t] => track(t).map(|track| PadAction::Throw { track }),
+                    ["hold", t] => track(t).map(|track| PadAction::Hold { track }),
+                    ["repeat", d] => repeat_division(d).map(|sixteenths| PadAction::Repeat { sixteenths }),
+                    ["play", t, rest @ ..] if rest.len() <= 1 => {
+                        match (track(t), play_note(song, t, rest.first().copied())) {
+                            (Some(track), Some(note)) => Some(PadAction::Play { track, note }),
+                            _ => None,
+                        }
+                    }
                     [t, drum] => match (track(t), crate::dsl::compiler::drum_note(drum)) {
                         (Some(track), Some(drum)) => Some(PadAction::Drum { track, drum }),
                         _ => None,
@@ -275,7 +374,7 @@ pub fn resolve_all(song: &Song, names: &Names) -> Controls {
                     _ => None,
                 };
                 if let Some(action) = action {
-                    controls.pads.push(Pad { note, action });
+                    controls.pads.push(Pad { note, action, quantize: m.quantize });
                 }
             }
         }

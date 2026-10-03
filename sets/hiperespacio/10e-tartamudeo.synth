@@ -1,0 +1,11 @@
+# set: bars=4 phase=10-gap energy=7
+# set-note: The 4-bar stutter gap: kick, clap and bass out, the screamer and the snare stutter the root through a crusher and roll back in.
+use "_t10.synth"
+
+auto acid.crush wet 0.2 > 0.7 over 4
+
+track drums  { play g_stut level 0.55 }
+track perc  { play g_stut_hats level 0.9 }
+track bass   { level 0 }
+track acid   { play scr_stut }
+track needle { level 0 }

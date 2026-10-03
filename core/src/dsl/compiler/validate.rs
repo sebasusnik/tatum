@@ -71,7 +71,27 @@ pub(super) fn validate_midi(song: &Song) -> Vec<CompileError> {
                     }
                 }
                 ["step"] => errors.push(err(String::from("which step: `pad 50 > step 3`"))),
-                ["mute" | "toggle" | "throw", track] => {
+                ["repeat", d] => {
+                    if crate::midi::repeat_division(d).is_none() {
+                        errors.push(err(format!("a repeat is 1/4, 1/8, 1/16 or 1/32 of a bar, got '{}'", d)));
+                    }
+                }
+                ["repeat"] => errors.push(err(String::from("how long a repeat: `pad 38 > repeat 1/16`"))),
+                ["play", track, rest @ ..] if rest.len() <= 1 => match module_of(track) {
+                    None => errors.push(err(format!("no track named '{}'", track))),
+                    Some((_, kind)) => {
+                        if crate::midi::play_note(song, track, rest.first().copied()).is_none() {
+                            errors.push(err(match kind {
+                                Some("beats") => format!(
+                                    "'{}' is not a drum (kick, snare, clap, hat, openhat, tom, tom2, tom3, crash)",
+                                    rest[0]
+                                ),
+                                _ => format!("'{}' is not a note: write one like C2 or F#3", rest[0]),
+                            }));
+                        }
+                    }
+                },
+                ["mute" | "toggle" | "throw" | "hold", track] => {
                     if module_of(track).is_none() {
                         errors.push(err(format!("no track named '{}'", track)));
                     }
@@ -90,7 +110,7 @@ pub(super) fn validate_midi(song: &Song) -> Vec<CompileError> {
                 },
                 _ => errors.push(err(String::from(
                     "a pad hits a drum (`pad 36 > kick kick`), or does one of: mute <track>, toggle <track>, \
-throw <track>, freeze, next, prev, step <n>",
+throw <track>, hold <track>, play <track> [<note>], repeat <1/4|1/8|1/16|1/32>, freeze, next, prev, step <n>",
                 ))),
             },
             MidiSource::Cc(_) => match words.as_slice() {
@@ -187,112 +207,129 @@ throw <track>, freeze, next, prev, step <n>",
 /// Validate `auto <target> ...` lanes against tracks, instruments and the param registry.
 pub(super) fn validate_automations(song: &Song) -> Vec<CompileError> {
     let mut errors = Vec::new();
-    for scene in &song.scenes {
-        for auto in &scene.automations {
-            let target = auto.target.as_str();
-            if target == "reverb_mix" || target == "delay_mix" || target == "reverb_freeze" {
+    // Each lane with who owns it, for the message, and the tracks a scene
+    // redefines, which a `<track>.<node> wet` looks at first. A top-level
+    // lane has only the song's own tracks.
+    let lanes = song
+        .scenes
+        .iter()
+        .flat_map(|sc| sc.automations.iter().map(move |a| (format!("scene '{}': ", sc.name), &sc.tracks[..], a)))
+        .chain(song.automations.iter().map(|a| (String::new(), &[][..], a)));
+    for (owner, scene_tracks, auto) in lanes {
+        let target = auto.target.as_str();
+        if target == "reverb_mix" || target == "delay_mix" || target == "reverb_freeze" {
+            continue;
+        }
+        let (name, param) = match target.find('.') {
+            Some(i) => (&target[..i], &target[i + 1..]),
+            None => {
+                errors.push(CompileError::new(format!(
+                    "{}automation target '{}' must be reverb_mix, delay_mix, <track> level or <module> <param>",
+                    owner, target
+                )));
                 continue;
             }
-            let (name, param) = match target.find('.') {
-                Some(i) => (&target[..i], &target[i + 1..]),
-                None => {
+        };
+        // `master <node> <param>`: one named node of the master chain, the
+        // way a knob names it, for a chain with two filters on it.
+        if let Some((label, p)) = param.split_once('.').filter(|_| name == "master") {
+            if !MASTER_AUTO_PARAMS.contains(&p) {
+                errors.push(CompileError::new(format!(
+                    "{}automation — a master node moves one of {}",
+                    owner,
+                    MASTER_AUTO_PARAMS.join(", ")
+                )));
+            } else if crate::midi::master_node(song, Some(label), p).is_none() {
+                errors.push(CompileError::new(format!(
+                    "{}automation — the master chain has no node named '{}' that takes '{}'; name one with `> lowpass(...) as {}`",
+                    owner, label, p, label
+                )));
+            }
+            continue;
+        }
+        if name == "master" {
+            let needed = master_auto_node_kinds(param);
+            if needed.is_empty() {
+                errors.push(CompileError::new(format!(
+                    "{}automation — master has no parameter '{}' (expected {})",
+                    owner,
+                    param,
+                    MASTER_AUTO_PARAMS.join(", ")
+                )));
+            } else if !song.master.as_ref().is_some_and(|m| m.chain.iter().any(|n| needed.contains(&n.kind.as_str()))) {
+                errors.push(CompileError::new(format!(
+                    "{}automation — `auto master {}` needs a {} node in the master chain",
+                    owner,
+                    param,
+                    needed.join(" or ")
+                )));
+            }
+            continue;
+        }
+        // `<track>.<node> wet`: sweeping an effect in or out over a scene.
+        // Checked here so a misspelled node name is an error at compile
+        // time rather than an automation that silently does nothing.
+        if let Some(node) = param.strip_suffix(".wet") {
+            // A scene track inherits the top-level chain when it does not
+            // write one, so an empty scene routing is not "no chain".
+            let routing = scene_tracks
+                .iter()
+                .find(|t| t.name == name && !t.routing.is_empty())
+                .or_else(|| song.tracks.iter().find(|t| t.name == name))
+                .map(|t| &t.routing);
+            match routing {
+                Some(r) if r.iter().any(|n| n.label.as_deref() == Some(node)) => continue,
+                Some(_) => {
+                    let named: Vec<&str> = routing.into_iter().flatten().filter_map(|n| n.label.as_deref()).collect();
                     errors.push(CompileError::new(format!(
-                        "scene '{}': automation target '{}' must be reverb_mix, delay_mix, <track> level or <module> <param>",
-                        scene.name, target
+                        "{}automation target '{}' — track '{}' has no node named '{}'{}",
+                        owner,
+                        target,
+                        name,
+                        node,
+                        if named.is_empty() {
+                            String::from("; name one with `> effect(...) as <name>`")
+                        } else {
+                            format!(" (it has {})", named.join(", "))
+                        }
                     )));
                     continue;
                 }
-            };
-            if name == "master" {
-                let needed = master_auto_node_kinds(param);
-                if needed.is_empty() {
+                None => {
                     errors.push(CompileError::new(format!(
-                        "scene '{}': automation — master has no parameter '{}' (expected {})",
-                        scene.name,
-                        param,
-                        MASTER_AUTO_PARAMS.join(", ")
+                        "{}automation target '{}' — no track named '{}'",
+                        owner, target, name
                     )));
-                } else if !song
-                    .master
-                    .as_ref()
-                    .is_some_and(|m| m.chain.iter().any(|n| needed.contains(&n.kind.as_str())))
-                {
-                    errors.push(CompileError::new(format!(
-                        "scene '{}': automation — `auto master {}` needs a {} node in the master chain",
-                        scene.name,
-                        param,
-                        needed.join(" or ")
-                    )));
+                    continue;
                 }
-                continue;
             }
-            // `<track>.<node> wet`: sweeping an effect in or out over a scene.
-            // Checked here so a misspelled node name is an error at compile
-            // time rather than an automation that silently does nothing.
-            if let Some(node) = param.strip_suffix(".wet") {
-                // A scene track inherits the top-level chain when it does not
-                // write one, so an empty scene routing is not "no chain".
-                let routing = scene
-                    .tracks
-                    .iter()
-                    .find(|t| t.name == name && !t.routing.is_empty())
-                    .or_else(|| song.tracks.iter().find(|t| t.name == name))
-                    .map(|t| &t.routing);
-                match routing {
-                    Some(r) if r.iter().any(|n| n.label.as_deref() == Some(node)) => continue,
-                    Some(_) => {
-                        let named: Vec<&str> =
-                            routing.into_iter().flatten().filter_map(|n| n.label.as_deref()).collect();
+        }
+        let is_track = scene_tracks.iter().chain(song.tracks.iter()).any(|t| t.name == name);
+        let module = song.module_defs.iter().find(|m| m.name == name);
+        let is_graph = song.instruments.iter().any(|i| i.name == name);
+        if param == "level" && (is_track || module.is_some() || is_graph) {
+            continue;
+        }
+        match module {
+            Some(m) => {
+                if let Some(kind) = ModuleKind::from_str(&m.module_type) {
+                    if params::lookup(kind, param).is_none() {
                         errors.push(CompileError::new(format!(
-                            "scene '{}': automation target '{}' — track '{}' has no node named '{}'{}",
-                            scene.name,
-                            target,
-                            name,
-                            node,
-                            if named.is_empty() {
-                                String::from("; name one with `> effect(...) as <name>`")
-                            } else {
-                                format!(" (it has {})", named.join(", "))
-                            }
+                            "{}automation — {}",
+                            owner,
+                            unknown_param_message(kind, name, param)
                         )));
-                        continue;
-                    }
-                    None => {
-                        errors.push(CompileError::new(format!(
-                            "scene '{}': automation target '{}' — no track named '{}'",
-                            scene.name, target, name
-                        )));
-                        continue;
                     }
                 }
             }
-            let is_track = scene.tracks.iter().chain(song.tracks.iter()).any(|t| t.name == name);
-            let module = song.module_defs.iter().find(|m| m.name == name);
-            let is_graph = song.instruments.iter().any(|i| i.name == name);
-            if param == "level" && (is_track || module.is_some() || is_graph) {
-                continue;
-            }
-            match module {
-                Some(m) => {
-                    if let Some(kind) = ModuleKind::from_str(&m.module_type) {
-                        if params::lookup(kind, param).is_none() {
-                            errors.push(CompileError::new(format!(
-                                "scene '{}': automation — {}",
-                                scene.name,
-                                unknown_param_message(kind, name, param)
-                            )));
-                        }
-                    }
-                }
-                None if is_graph => errors.push(CompileError::new(format!(
-                    "scene '{}': automation target '{}' — graph instruments have no named params (only level)",
-                    scene.name, target
-                ))),
-                None => errors.push(CompileError::new(format!(
-                    "scene '{}': automation target '{}' — no module or track named '{}'",
-                    scene.name, target, name
-                ))),
-            }
+            None if is_graph => errors.push(CompileError::new(format!(
+                "{}automation target '{}' — graph instruments have no named params (only level)",
+                owner, target
+            ))),
+            None => errors.push(CompileError::new(format!(
+                "{}automation target '{}' — no module or track named '{}'",
+                owner, target, name
+            ))),
         }
     }
     errors

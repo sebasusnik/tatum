@@ -1,0 +1,7 @@
+# set: bars=32 phase=06-hondo energy=7 blend=32
+# set-note: T06 comes in under T05's outro: the rounder kick with rims only (no hats yet), the offbeat ride, the deep roll with its filter nearly shut.
+tempo 143
+use "_t06.synth"
+
+track drums { play k_rim, k_rim, k_rim, k_rim_turn }
+track ride  { play rd_off level 1.8 }

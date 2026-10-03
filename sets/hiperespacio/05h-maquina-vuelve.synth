@@ -1,0 +1,8 @@
+# set: bars=16 phase=05-maquina energy=8
+# set-note: The robot returns on its leaping cell, the drums drive again, ticks back to plain 3-3-2 so the stab has the air.
+use "_t05.synth"
+
+track drums  { play m_drive, m_drive, m_drive, m_drive_turn }
+track glitch { play g_a level 0.9 }
+track bass   { play b_mach, b_mach, b_mach, b_mach_turn }
+track robo   { play r_b, r_b, r_c, r_b_turn level 0.45 }

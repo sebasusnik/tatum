@@ -1,0 +1,6 @@
+# set: bars=4 phase=03-tribu energy=4
+# set-note: the gap: kit and bass out, the three toms alone packing tighter into the one
+use "_t03.synth"
+
+track drums { play t3_rest }
+track toms  { play tm_solo level 0.6 }

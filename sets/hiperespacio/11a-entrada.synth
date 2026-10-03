@@ -1,0 +1,10 @@
+# set: bars=32 phase=11-singularidad energy=7 blend=32
+# set-note: T11 enters under T10's outro: the hardest kick of the set, a tick kit and the saw+square roll, the roll's filter opening over 32 bars
+use "_t11.synth"
+tempo 147
+
+auto sing cutoff 0.159 > 0.2256 over 32
+
+track drums { play beat_in, beat_in, beat_in, beat_in_turn level 0.7 }
+track perc  { play perc_a level 0.5 }
+track bass  { play roll_s, roll_s, roll_s, roll_turn level 0.68 }

@@ -1,0 +1,10 @@
+# set: bars=16 phase=10-hipervelocidad energy=9
+# set-note: Straighter drive drums, the gallop goes to triple ratchets, the screamer back to its first riff; shard's first gesture, three stabs at bar 4 and a burst at bar 8.
+use "_t10.synth"
+
+track drums  { play g_drive level 0.95 }
+track perc  { play g_drive_hats level 0.95 }
+track bass   { play gal_b }
+track acid   { play scr_a }
+track needle { level 0 }
+track shard  { play shard_hit level 0.85 }

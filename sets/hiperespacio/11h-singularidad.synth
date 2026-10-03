@@ -1,0 +1,16 @@
+# set: bars=16 phase=11-drop energy=10
+# set-note: FINAL DROP: crash, the octave-bounce roll never heard before, the lead's call with its machine-gun answer, the haze full (F# + G rub), the acid screaming wide open
+# cue: 1 B3 crash · ¡DROP FINAL!
+use "_t11.synth"
+
+auto haze level 0.092 > 0.106 > 0.099 > 0.112 over 16
+auto haze_hi level 0.04 > 0.046 over 16
+auto haze.crush wet 0.05 > 0.12 > 0.06 > 0.15 over 16
+auto grit cutoff 0.5147 > 0.5927 over 16
+
+track drums   { play beat_land, beat_peak, beat_peak, beat_peak_turn level 0.78 }
+track bass    { play roll_oct, roll_oct, roll_oct, roll_oct_turn level 0.82 }
+track lead    { play lead_cr, lead_cr, lead_cr, lead_cr_turn level 0.24 }
+track haze    { play haze_root level 0.092 }
+track haze_hi { play haze_rub level 0.04 }
+track acid    { play acid_drop level 0.36 }

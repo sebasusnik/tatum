@@ -1,0 +1,7 @@
+# set: bars=16 phase=07-tunel energy=7
+# set-note: the floor: main kit with clap and open hat, the tunnel roll with its walking accent and b2 turn, metal ticks in
+use "_t07.synth"
+
+track drums { play t7_main }
+track bass  { play t7_roll }
+track ticks { level 1.0 }

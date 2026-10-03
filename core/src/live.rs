@@ -30,7 +30,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::dsl::ast::{ChainNode, Song};
+use crate::dsl::ast::{ChainNode, Quantize, Song};
 use crate::dsl::compiler::CompiledSong;
 use crate::dsl::diff::{self, DslChange};
 use crate::midi;
@@ -149,6 +149,9 @@ pub struct Inherit {
     pub buses: Vec<Option<usize>>,
     pub instruments: Vec<Option<usize>>,
     pub tracks: Vec<Option<usize>>,
+    /// The top-level `auto` lanes are the same and keep their progress
+    /// rather than starting again at the swap. Never for a set's steps.
+    pub lanes: bool,
 }
 
 impl Inherit {
@@ -160,11 +163,13 @@ impl Inherit {
             buses: vec![None; compiled.buses.len()],
             instruments: vec![None; compiled.instruments.len()],
             tracks: vec![None; compiled.tracks.len()],
+            lanes: false,
         }
     }
 
     pub fn is_complete(&self) -> bool {
         self.sends
+            && self.lanes
             && self.master
             && self.buses.iter().all(|m| m.is_some())
             && self.instruments.iter().all(|m| m.is_some())
@@ -200,6 +205,22 @@ pub enum Plan {
     /// arriving -- and a queued engine never holds a note that would start
     /// sounding at the bar line.
     Play { base: Generation, op: FastOp },
+    /// A beat repeat on the player's output: `Some(sixteenths)` arms one,
+    /// to start on the next division of that length; `None` lets go. It
+    /// belongs to the player, not to an engine, so it rolls on across a swap.
+    Repeat(Option<f32>),
+    /// A pad written with `q=`: `inner` waits for the next line of `grid`,
+    /// on the audio thread, which is the only place that knows where the
+    /// line is. `pad` and `down` pair a release with its press.
+    Quantized { grid: Quantize, pad: u8, down: bool, inner: Deferred },
+}
+
+/// What a quantized pad does when its line comes: a [`Plan::Control`] or a
+/// [`Plan::Play`], held without anything to free.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Deferred {
+    Control { base: Generation, op: FastOp },
+    Play { base: Generation, op: FastOp },
 }
 
 impl Plan {
@@ -210,6 +231,8 @@ impl Plan {
             Plan::Swap { .. } => "swap",
             Plan::Control { .. } => "control",
             Plan::Play { .. } => "play",
+            Plan::Repeat(_) => "repeat",
+            Plan::Quantized { .. } => "quantized",
         }
     }
 }
@@ -321,6 +344,10 @@ pub struct LivePlanner {
     /// The output gain measured when the song was loaded. Edits keep it: a
     /// song that re-levelled itself on every save would move under the hands.
     output_gain: Option<f32>,
+    /// Every new text starts its top-level lanes on the bar it takes over,
+    /// even a lane it shares with the text before: a set's steps, each of
+    /// which is its own moment. Off, an unchanged lane keeps its progress.
+    restart_lanes: bool,
 }
 
 impl Default for LivePlanner {
@@ -343,7 +370,16 @@ impl LivePlanner {
             bend: 1.0,
             output_gain: None,
             isolation: Default::default(),
+            restart_lanes: false,
         }
+    }
+
+    /// Plan for a set: each text is a step, and its `auto ... over N` lanes
+    /// start on the step's first bar even when the step before had the same
+    /// line. A step with lanes therefore always takes over with a swap,
+    /// which is what gives it a first bar.
+    pub fn restart_lanes(&mut self) {
+        self.restart_lanes = true;
     }
 
     /// A queued swap that the player reports as landed becomes what runs.
@@ -451,26 +487,58 @@ impl LivePlanner {
             }
         }
         let mut plans = Vec::new();
+        // A repeat is the player's, not an engine's: one plan, from the
+        // latest mapping.
+        let repeat = self
+            .pending
+            .as_ref()
+            .or(self.running.as_ref())
+            .and_then(|k| k.controls.pads.iter().find(|p| p.note == note))
+            .and_then(|p| match p.action {
+                midi::PadAction::Repeat { sixteenths } => Some(sixteenths),
+                _ => None,
+            });
+        if let Some(sixteenths) = repeat {
+            plans.push(Plan::Repeat(down.then_some(sixteenths)));
+        }
         for known in self.known() {
             for pad in known.controls.pads.iter().filter(|p| p.note == note) {
-                let op = match pad.action {
+                let base = known.generation;
+                let plan = match pad.action {
                     midi::PadAction::Drum { track, drum } if down => {
-                        plans.push(Plan::Play {
-                            base: known.generation,
-                            op: FastOp::NoteOn { track, note: drum, velocity },
-                        });
-                        continue;
+                        Plan::Play { base, op: FastOp::NoteOn { track, note: drum, velocity } }
                     }
-                    midi::PadAction::Mute { track } => FastOp::TrackMute { track, muted: down },
-                    midi::PadAction::Throw { track } => FastOp::TrackThrow { track, on: down },
-                    midi::PadAction::Freeze => FastOp::FreezeHold(down),
+                    midi::PadAction::Play { track, note } => {
+                        let op = if down {
+                            FastOp::NoteOn { track, note, velocity }
+                        } else {
+                            FastOp::NoteOff { track, note }
+                        };
+                        Plan::Play { base, op }
+                    }
+                    // Every way a pad takes a track out, asked together, so
+                    // letting go of one does not undo another still held.
+                    midi::PadAction::Mute { track } | midi::PadAction::Hold { track } => {
+                        Plan::Control { base, op: FastOp::TrackMute { track, muted: self.muted_now(known, track) } }
+                    }
+                    midi::PadAction::Throw { track } => {
+                        Plan::Control { base, op: FastOp::TrackThrow { track, on: down } }
+                    }
+                    midi::PadAction::Freeze => Plan::Control { base, op: FastOp::FreezeHold(down) },
                     midi::PadAction::Toggle { track } if down => {
-                        let muted = known.tracks.get(track).is_some_and(|n| self.muted.contains(n));
-                        FastOp::TrackMute { track, muted }
+                        Plan::Control { base, op: FastOp::TrackMute { track, muted: self.muted_now(known, track) } }
                     }
                     _ => continue,
                 };
-                plans.push(Plan::Control { base: known.generation, op });
+                plans.push(match (pad.quantize, plan) {
+                    (Some(grid), Plan::Play { base, op }) => {
+                        Plan::Quantized { grid, pad: note, down, inner: Deferred::Play { base, op } }
+                    }
+                    (Some(grid), Plan::Control { base, op }) => {
+                        Plan::Quantized { grid, pad: note, down, inner: Deferred::Control { base, op } }
+                    }
+                    (_, plan) => plan,
+                });
             }
         }
         Some(plans)
@@ -529,16 +597,34 @@ impl LivePlanner {
         self.solo.as_ref().map_or(&[], |(n, _)| n.as_slice())
     }
 
+    /// Whether a track is out right now: toggled or soloed out, a `mute`
+    /// pad on it held down, or a `hold` pad on it not held.
+    fn muted_now(&self, known: &Known, track: usize) -> bool {
+        let toggled = known.tracks.get(track).is_some_and(|n| self.muted.contains(n));
+        let pads = known.controls.pads.iter().any(|p| match p.action {
+            midi::PadAction::Mute { track: t } => t == track && self.pads_down.contains(&p.note),
+            midi::PadAction::Hold { track: t } => t == track && !self.pads_down.contains(&p.note),
+            _ => false,
+        });
+        toggled || pads
+    }
+
     /// Every track's mute as the planner has it, for every engine it knows.
     fn mute_plans(&self) -> Vec<Plan> {
         let mut plans = Vec::new();
         for known in self.known() {
-            for (track, name) in known.tracks.iter().enumerate() {
-                let muted = self.muted.contains(name);
+            for (track, _) in known.tracks.iter().enumerate() {
+                let muted = self.muted_now(known, track);
                 plans.push(Plan::Control { base: known.generation, op: FastOp::TrackMute { track, muted } });
             }
         }
         plans
+    }
+
+    /// The grid a pad waits for, if it is quantized: for a status line.
+    pub fn pad_quantize(&self, note: u8) -> Option<Quantize> {
+        let latest = self.pending.as_ref().or(self.running.as_ref())?;
+        latest.controls.pads.iter().find(|p| p.note == note).and_then(|p| p.quantize)
     }
 
     /// The set move a pad asks for when it goes down, if it is mapped to one.
@@ -551,15 +637,14 @@ impl LivePlanner {
     /// a pad still pressed does.
     fn pad_ops(&self, known: &Known) -> Vec<FastOp> {
         let mut ops = Vec::new();
-        for name in &self.muted {
-            if let Some(track) = known.tracks.iter().position(|t| t == name) {
+        for track in 0..known.tracks.len() {
+            if self.muted_now(known, track) {
                 ops.push(FastOp::TrackMute { track, muted: true });
             }
         }
         for &note in &self.pads_down {
             for pad in known.controls.pads.iter().filter(|p| p.note == note) {
                 match pad.action {
-                    midi::PadAction::Mute { track } => ops.push(FastOp::TrackMute { track, muted: true }),
                     midi::PadAction::Throw { track } => ops.push(FastOp::TrackThrow { track, on: true }),
                     midi::PadAction::Freeze => ops.push(FastOp::FreezeHold(true)),
                     _ => {}
@@ -688,7 +773,8 @@ impl LivePlanner {
                 return Ok(Plan::Unchanged);
             }
             let changes = diff::diff(&latest.ast, &ast);
-            if !diff::has_structural_change(&changes) {
+            let restarts = self.restart_lanes && !ast.automations.is_empty();
+            if !restarts && !diff::has_structural_change(&changes) {
                 if let Some(ops) = resolve_fast(&changes, &ast, &compiled, &latest.instruments) {
                     latest.set_ast(ast);
                     return Ok(Plan::Fast { base: latest.generation, ops });
@@ -701,12 +787,13 @@ impl LivePlanner {
         let gain = match self.output_gain {
             Some(g) => g,
             None => {
-                let lufs = if self.isolation.is_empty() {
+                // As the session will start it: a track a `hold` pad keeps
+                // out is not in the measurement.
+                let mut rest = crate::dsl::parse(source).map_err(DslError::Parse)?;
+                let lufs = if self.isolation.is_empty() && !midi::at_rest(&mut rest) {
                     SongEngine::loudness(&compiled)
                 } else {
-                    let full = crate::dsl::parse(source)
-                        .map_err(DslError::Parse)
-                        .and_then(|a| crate::dsl::compiler::compile(&a).map_err(DslError::Compile))?;
+                    let full = crate::dsl::compiler::compile(&rest).map_err(DslError::Compile)?;
                     SongEngine::loudness(&full)
                 };
                 *self.output_gain.insert(crate::output::gain_for(lufs))
@@ -732,7 +819,7 @@ impl LivePlanner {
         }
         let mut inherit = Vec::with_capacity(2);
         for old in self.running.iter().chain(self.pending.iter()) {
-            inherit.push((old.generation, inherit_map(old, &known)));
+            inherit.push((old.generation, inherit_map(old, &known, self.restart_lanes)));
         }
         if self.running.is_none() {
             self.running = Some(known);
@@ -833,15 +920,40 @@ fn nth_same(names: &[String], own: &[String], at: usize) -> Option<usize> {
     names.iter().enumerate().filter(|(_, n)| *n == name).nth(k).map(|(i, _)| i)
 }
 
+/// Every `auto` target a song writes, in its scenes and at the top level.
+fn automated(song: &Song) -> impl Iterator<Item = &str> {
+    song.scenes.iter().flat_map(|s| s.automations.iter()).chain(song.automations.iter()).map(|a| a.target.as_str())
+}
+
 /// What the new song can take over from `old`, by name and definition.
-fn inherit_map(old: &Known, known: &Known) -> Inherit {
+fn inherit_map(old: &Known, known: &Known, restart_lanes: bool) -> Inherit {
     let o = &old.ast;
     let new = &known.ast;
+
+    // A lane moves a value inside something that carries over by `mem::swap`:
+    // a module's parameter, a master node's, a node's wet. Where the old text
+    // automated it and the new one does not, the piece would arrive holding
+    // wherever the lane left it instead of what the new text writes. It is
+    // rebuilt from the text instead, as if its definition had changed.
+    // Levels, the send mixes and freeze belong to the new engine already.
+    let mut master_moved = false;
+    let mut moved_modules: Vec<&str> = Vec::new();
+    let mut moved_tracks: Vec<&str> = Vec::new();
+    for target in automated(o).filter(|t| !automated(new).any(|n| n == *t)) {
+        let Some((name, param)) = target.split_once('.') else { continue };
+        if name == "master" {
+            master_moved = true;
+        } else if param.ends_with(".wet") {
+            moved_tracks.push(name);
+        } else if param != "level" {
+            moved_modules.push(name);
+        }
+    }
     let sends = o.globals.send_delay == new.globals.send_delay
         && o.globals.send_reverb == new.globals.send_reverb
         && chain_of(o, "reverb_return") == chain_of(new, "reverb_return")
         && chain_of(o, "delay_return") == chain_of(new, "delay_return");
-    let master = o.master == new.master;
+    let master = o.master == new.master && !master_moved;
 
     let buses = known
         .buses
@@ -854,8 +966,9 @@ fn inherit_map(old: &Known, known: &Known) -> Inherit {
 
     let instruments = (0..known.instruments.len())
         .map(|i| {
+            let name = known.instruments[i].as_str();
             let j = nth_same(&old.instruments, &known.instruments, i)?;
-            same_instrument(o, new, &known.instruments[i]).then_some(j)
+            (same_instrument(o, new, name) && !moved_modules.contains(&name)).then_some(j)
         })
         .collect::<Vec<_>>();
 
@@ -873,7 +986,7 @@ fn inherit_map(old: &Known, known: &Known) -> Inherit {
         .iter()
         .enumerate()
         .map(|(i, name)| {
-            if !composition_same {
+            if !composition_same || moved_tracks.contains(&name.as_str()) {
                 return None;
             }
             let j = old.tracks.iter().position(|n| n == name)?;
@@ -895,7 +1008,8 @@ fn inherit_map(old: &Known, known: &Known) -> Inherit {
         })
         .collect::<Vec<_>>();
 
-    Inherit { sends, master, buses, instruments, tracks }
+    let lanes = !restart_lanes && o.automations == new.automations;
+    Inherit { sends, master, buses, instruments, tracks, lanes }
 }
 
 /// What `LivePlayer::apply` did with a plan.
@@ -975,6 +1089,124 @@ struct Blend {
     split_new: Split,
 }
 
+/// The longest a beat repeat can hold: a quarter note at the slowest tempo
+/// the engine takes, 20 BPM.
+const REPEAT_MAX: usize = (SAMPLE_RATE * 60.0 / 20.0) as usize;
+
+/// Each pass of a repeat fades in and out over this many samples, so the
+/// seam where the end of the slice meets its start does not click.
+const REPEAT_EDGE: usize = 32;
+
+/// Letting go of a repeat crossfades back to the live mix over this long.
+const REPEAT_RELEASE: usize = 256;
+
+#[derive(Clone, Copy, PartialEq)]
+enum RepeatState {
+    Off,
+    /// Pressed: waiting `wait` samples for the next division line.
+    Armed {
+        wait: usize,
+        len: usize,
+    },
+    /// Copying one division of the output while it plays live.
+    Capturing {
+        at: usize,
+        len: usize,
+    },
+    /// Playing the slice over and over; `release` counts the way back out.
+    Looping {
+        at: usize,
+        len: usize,
+        release: Option<usize>,
+    },
+}
+
+/// A DJ roll: one division of the output, caught on the grid and looped
+/// while the pad is held. The engine keeps playing underneath, so letting
+/// go lands back where the song has got to, not where the roll began. Its
+/// buffer is allocated with the player, so a pad never allocates.
+struct Repeat {
+    l: Vec<f32>,
+    r: Vec<f32>,
+    state: RepeatState,
+}
+
+impl Repeat {
+    fn new() -> Self {
+        Self { l: vec![0.0; REPEAT_MAX], r: vec![0.0; REPEAT_MAX], state: RepeatState::Off }
+    }
+
+    fn press(&mut self, wait: usize, len: usize) {
+        let len = len.clamp(2 * REPEAT_EDGE, REPEAT_MAX);
+        self.state = match self.state {
+            // Another division while one rolls: the slice already caught,
+            // cut to the new length, as a beat repeat does going 1/8 to 1/16.
+            RepeatState::Looping { at, len: old, release: None } => {
+                let len = len.min(old);
+                RepeatState::Looping { at: at % len, len, release: None }
+            }
+            _ => RepeatState::Armed { wait, len },
+        };
+    }
+
+    fn release(&mut self) {
+        self.state = match self.state {
+            RepeatState::Looping { at, len, release: None } => RepeatState::Looping { at, len, release: Some(0) },
+            RepeatState::Looping { .. } => self.state,
+            _ => RepeatState::Off,
+        };
+    }
+
+    fn process(&mut self, out_l: &mut [f32], out_r: &mut [f32]) {
+        if self.state == RepeatState::Off {
+            return;
+        }
+        for i in 0..out_l.len() {
+            if let RepeatState::Armed { wait, len } = self.state {
+                if wait > 0 {
+                    self.state = RepeatState::Armed { wait: wait - 1, len };
+                    continue;
+                }
+                self.state = RepeatState::Capturing { at: 0, len };
+            }
+            match self.state {
+                RepeatState::Capturing { at, len } => {
+                    self.l[at] = out_l[i];
+                    self.r[at] = out_r[i];
+                    self.state = if at + 1 >= len {
+                        RepeatState::Looping { at: 0, len, release: None }
+                    } else {
+                        RepeatState::Capturing { at: at + 1, len }
+                    };
+                }
+                RepeatState::Looping { at, len, release } => {
+                    let edge = (at.min(len - 1 - at) as f32 / REPEAT_EDGE as f32).min(1.0);
+                    let live = release.map_or(0.0, |r| r as f32 / REPEAT_RELEASE as f32);
+                    out_l[i] = self.l[at] * edge * (1.0 - live) + out_l[i] * live;
+                    out_r[i] = self.r[at] * edge * (1.0 - live) + out_r[i] * live;
+                    self.state = match release {
+                        Some(r) if r + 1 >= REPEAT_RELEASE => RepeatState::Off,
+                        _ => RepeatState::Looping { at: (at + 1) % len, len, release: release.map(|r| r + 1) },
+                    };
+                    if self.state == RepeatState::Off {
+                        return;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+/// How many quantized pad actions can wait for their line at once: two
+/// engines' worth of every pad on a controller, down and up.
+const MAX_WAITING: usize = 64;
+
+/// A quantized pad that arrives within this share of a division after its
+/// line counts as that line, and acts at once: the player was just late.
+/// Later than that it waits for the next line.
+pub const QUANTIZE_FORGIVENESS: f32 = 0.25;
+
 /// Audio-thread half. Nothing in here allocates or frees once constructed,
 /// except `apply` when handed more to retire than it has room for, which
 /// then drops one in place rather than lose it.
@@ -994,6 +1226,16 @@ pub struct LivePlayer {
     /// Swaps that found no inherit map for the running generation. Bookkeeping
     /// makes this impossible; it is counted so a regression is visible.
     blind_swaps: u32,
+    /// A `repeat` pad's roll over the whole output.
+    repeat: Repeat,
+    /// Samples rendered since the player was made: the clock quantized pads
+    /// are queued against.
+    clock: u64,
+    /// Quantized pad actions waiting for their line, with the sample it is.
+    waiting: [Option<(u64, Deferred)>; MAX_WAITING],
+    /// Per pad note, the line its last press landed on (or will) and the
+    /// division it was on, so a release is never earlier than the next one.
+    pressed: [Option<(u64, u64)>; 128],
 }
 
 impl Default for LivePlayer {
@@ -1014,6 +1256,10 @@ impl LivePlayer {
             retired: Vec::with_capacity(8),
             swaps: 0,
             blind_swaps: 0,
+            repeat: Repeat::new(),
+            clock: 0,
+            waiting: [None; MAX_WAITING],
+            pressed: [None; 128],
         }
     }
 
@@ -1106,6 +1352,24 @@ impl LivePlayer {
                 }
                 Applied::Control
             }
+            Plan::Quantized { grid, pad, down, inner } => {
+                self.quantize(grid, pad, down, inner);
+                Applied::Control
+            }
+            Plan::Repeat(Some(sixteenths)) => {
+                if let Some(e) = self.engine.as_deref() {
+                    let step = SAMPLE_RATE * 60.0 / e.tempo().max(1.0) / 4.0;
+                    let wait = e.samples_until_grid(sixteenths);
+                    if wait != usize::MAX {
+                        self.repeat.press(wait, (step * sixteenths) as usize);
+                    }
+                }
+                Applied::Control
+            }
+            Plan::Repeat(None) => {
+                self.repeat.release();
+                Applied::Control
+            }
             Plan::Swap { engine, generation, inherit, blend_bars } => {
                 if let Some((e, _, m)) = self.pending.take() {
                     self.retire(e, m);
@@ -1125,6 +1389,68 @@ impl LivePlayer {
         }
     }
 
+    /// Put a quantized pad action on its line. Press: the next line of the
+    /// grid, or the one just passed if it is within the forgiveness window.
+    /// Release: the same, but never before the line after its press, so a
+    /// tap lasts a division and a release cannot overtake its press.
+    fn quantize(&mut self, grid: Quantize, pad: u8, down: bool, inner: Deferred) {
+        let Some(e) = self.engine.as_deref().filter(|e| e.running()) else {
+            self.apply_deferred(inner);
+            return;
+        };
+        let sixteenths = grid.sixteenths(e.steps_per_bar());
+        let div = (SAMPLE_RATE * 60.0 / e.tempo().max(1.0) / 4.0 * sixteenths) as u64;
+        let until = e.samples_until_grid(sixteenths) as u64;
+        let since = div.saturating_sub(until);
+        let (mut at, line) = if until == 0 {
+            (self.clock, self.clock)
+        } else if (since as f32) <= QUANTIZE_FORGIVENESS * div as f32 {
+            (self.clock, self.clock.saturating_sub(since))
+        } else {
+            (self.clock + until, self.clock + until)
+        };
+        let slot = &mut self.pressed[pad as usize & 127];
+        if down {
+            *slot = Some((line, div));
+        } else if let Some((pressed, d)) = *slot {
+            at = at.max(pressed + d);
+        }
+        if at <= self.clock {
+            self.apply_deferred(inner);
+            return;
+        }
+        match self.waiting.iter_mut().find(|w| w.is_none()) {
+            Some(free) => *free = Some((at, inner)),
+            // Full: it acts now rather than not at all.
+            None => self.apply_deferred(inner),
+        }
+    }
+
+    fn apply_deferred(&mut self, inner: Deferred) {
+        let plan = match inner {
+            Deferred::Control { base, op } => Plan::Control { base, op },
+            Deferred::Play { base, op } => Plan::Play { base, op },
+        };
+        self.apply(plan);
+    }
+
+    /// Apply every waiting action whose line has come, in the order queued.
+    fn release_due(&mut self) {
+        for i in 0..MAX_WAITING {
+            if let Some((at, inner)) = self.waiting[i] {
+                if at <= self.clock {
+                    self.waiting[i] = None;
+                    self.apply_deferred(inner);
+                }
+            }
+        }
+    }
+
+    /// Quantized pad actions waiting for their line.
+    pub fn waiting_pads(&self) -> usize {
+        self.waiting.iter().filter(|w| w.is_some()).count()
+    }
+
     pub fn start(&mut self) {
         if let Some(e) = self.engine.as_mut() {
             e.start();
@@ -1133,6 +1459,9 @@ impl LivePlayer {
 
     /// Stop. A queued engine takes over at once, with nothing to inherit.
     pub fn stop(&mut self) {
+        self.repeat.state = RepeatState::Off;
+        self.waiting = [None; MAX_WAITING];
+        self.pressed = [None; 128];
         if let Some(e) = self.engine.as_mut() {
             e.reset();
         }
@@ -1151,8 +1480,29 @@ impl LivePlayer {
     }
 
     /// Render one block of at most `BLOCK_SIZE` frames. Returns the bar a
-    /// queued engine took over on, if it happened inside this block.
+    /// queued engine took over on, if it happened inside this block. A
+    /// quantized pad whose line falls inside the block splits it there, so
+    /// it acts on the sample of the line, not at the next block.
     pub fn process(&mut self, out_l: &mut [f32], out_r: &mut [f32]) -> Option<usize> {
+        let len = out_l.len().min(out_r.len()).min(BLOCK_SIZE);
+        let mut done = 0;
+        let mut swapped = None;
+        loop {
+            self.release_due();
+            if done >= len {
+                break;
+            }
+            let next = self.waiting.iter().flatten().map(|(at, _)| (at - self.clock) as usize).min();
+            let chunk = next.map_or(len - done, |n| n.clamp(1, len - done));
+            let s = self.process_span(&mut out_l[done..done + chunk], &mut out_r[done..done + chunk]);
+            swapped = swapped.or(s);
+            self.clock += chunk as u64;
+            done += chunk;
+        }
+        swapped
+    }
+
+    fn process_span(&mut self, out_l: &mut [f32], out_r: &mut [f32]) -> Option<usize> {
         let len = out_l.len().min(out_r.len()).min(BLOCK_SIZE);
         let (out_l, out_r) = (&mut out_l[..len], &mut out_r[..len]);
         let Some(engine) = self.engine.as_mut() else {
@@ -1173,6 +1523,7 @@ impl LivePlayer {
         // What the previous engine still owns fades out on top.
         self.render_fade(out_l, out_r);
         self.render_blend(out_l, out_r);
+        self.repeat.process(out_l, out_r);
         swapped
     }
 

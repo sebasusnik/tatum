@@ -1,0 +1,22 @@
+# set: bars=8 phase=01-ignicion energy=3
+# set-note: the ignition: the turbine spins up over eight bars (RPM curve on its ratios, putter speeding into a whine), the hat packs tighter, the wind rises; everything cuts on the last beat
+use "_t01.synth"
+
+track drums { play tick_rise level 0.6 }
+track wind  { play swell_cut }
+track pad   { level 0.15 }
+track grind { play grind_ignite level 0.0525 }
+
+# The RPM curve, a point every half bar: it catches, stalls for a moment in
+# bar 2, then climbs; the ratios drag the modulators out of tune with the
+# carrier, the putter speeds up until it is a whine, the index and the level
+# rise with it. The pattern cuts it on the last beat.
+auto turbina op1_ratio 0.0323 > 0.0355 > 0.0419 > 0.0371 > 0.0452 > 0.0548 > 0.0645 > 0.0758 > 0.0887 > 0.1032 > 0.1177 > 0.1323 > 0.1484 > 0.1645 > 0.1806 > 0.1935 > 0.1935 over 8
+auto turbina op2_ratio 0.0329 > 0.0394 > 0.0525 > 0.0427 > 0.059 > 0.0785 > 0.0981 > 0.1209 > 0.1469 > 0.1763 > 0.2056 > 0.2349 > 0.2675 > 0.3001 > 0.3326 > 0.3587 > 0.3587 over 8
+auto turbina op3_ratio 0.0645 > 0.0748 > 0.0955 > 0.08 > 0.1058 > 0.1368 > 0.1677 > 0.2039 > 0.2452 > 0.2916 > 0.3381 > 0.3845 > 0.4361 > 0.4877 > 0.5394 > 0.5806 > 0.5806 over 8
+auto turbina lfo_rate 0.196 > 0.2121 > 0.2442 > 0.2201 > 0.2603 > 0.3085 > 0.3568 > 0.4131 > 0.4774 > 0.5497 > 0.6221 > 0.6945 > 0.7749 > 0.8553 > 0.9357 > 1 > 1 over 8
+auto turbina lfo_depth 0.45 > 0.4434 > 0.4302 > 0.4401 > 0.4236 > 0.4038 > 0.384 > 0.3609 > 0.3345 > 0.3048 > 0.2751 > 0.2454 > 0.2124 > 0.1794 > 0.1464 > 0.12 > 0.12 over 8
+auto turbina mod_index 0.4 > 0.4044 > 0.4132 > 0.4066 > 0.4176 > 0.4308 > 0.444 > 0.4594 > 0.477 > 0.4968 > 0.5166 > 0.5364 > 0.5584 > 0.5804 > 0.6024 > 0.62 > 0.62 over 8
+auto grind level 0.0525 > 0.0532 > 0.0547 > 0.0536 > 0.0555 > 0.0577 > 0.06 > 0.0626 > 0.0656 > 0.069 > 0.0724 > 0.0758 > 0.0795 > 0.0833 > 0.087 > 0.09 > 0.09 over 8
+auto wind level 0.3 > 0.3 > 0.36 over 8
+auto vacio mod_index 0.26 > 0.5 over 8

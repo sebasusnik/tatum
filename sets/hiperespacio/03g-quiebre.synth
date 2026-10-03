@@ -1,0 +1,11 @@
+# set: bars=16 phase=03-tribu energy=6
+# set-note: broken variation: the kick drops beats in bars 4 and 8, sixteenth hats, busy toms, a last short drone answer
+# cue: 7 A1 apretado · kick fuera
+# cue: 9 suelta A1
+use "_t03.synth"
+
+track drums { play t3_broke }
+track toms  { play tm_busy level 0.55 }
+track bass  { play hol_b level 0.8 }
+track clap  { play cl_ghost level 0.9 }
+track talk  { play talk_3 level 0.2 }

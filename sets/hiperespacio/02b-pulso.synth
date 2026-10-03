@@ -1,0 +1,7 @@
+# set: bars=16 phase=02-orbita energy=5
+# set-note: the open hat takes the off-beat, the shaker goes to sixteenths with its accent on the e; the pluck appears as two strokes a bar, dark
+use "_t02.synth"
+
+track drums { play o_open }
+track pluck { play pl_sparse level 0.2 }
+module fm orbita { mod_index 36% }

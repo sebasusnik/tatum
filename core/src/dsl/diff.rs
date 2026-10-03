@@ -275,6 +275,9 @@ pub fn diff(old: &Song, new: &Song) -> Vec<DslChange> {
         || old.master != new.master
         || old.scenes != new.scenes
         || old.arrangement != new.arrangement
+        // A lane starts on the first bar its text plays, which only a new
+        // engine has: one added, removed or changed goes through the swap.
+        || old.automations != new.automations
         || old.grooves != new.grooves
     {
         changes.push(DslChange::StructuralChange);

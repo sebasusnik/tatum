@@ -1,0 +1,6 @@
+# set: bars=16 phase=04-acido energy=6
+# set-note: the drive kit with snare ghosts; the 303 wakes up closed on its base filter
+use "_t04.synth"
+
+track bass  { play rl_a level 1.5 }
+track acid  { play acid_low level 1.0 }

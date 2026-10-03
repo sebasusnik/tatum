@@ -1,0 +1,9 @@
+# set: bars=16 phase=09-nebulosa energy=6
+# set-note: The oud turns into ratchets and octave jumps over the busy then the clap groove, the Hijaz pad rises underneath.
+use "_t09.synth"
+
+track drums { play d_busy, d_main }
+track perc  { play d_busy_hats, d_main_hats }
+track bass  { play roll_hijaz }
+track oud   { play oud_busy level 0.72 }
+track veil  { play veil_walk level 0.1 }

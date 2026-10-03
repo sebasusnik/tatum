@@ -1,0 +1,12 @@
+# set: bars=32 phase=09-nebulosa energy=6
+# set-note: New groove before the breath: the toms double up in a zaffa pattern under sixteenth hats, the oud cell climbs E, G#, B, C to ratcheted high E and its filter opens across the 32 bars; ends on a tom fill with the last kick gone.
+use "_t09.synth"
+
+# oud cutoff 520 Hz to 1.4 kHz (auto takes the knob value)
+auto oud cutoff 0.472 > 0.615 over 32
+
+track drums { play d_zaffa, d_zaffa, d_zaffa, d_busy level 0.66 }
+track perc  { play d_zaffa_hats, d_zaffa_hats, d_zaffa_hats, d_busy_hats level 0.66 }
+track bass  { play roll_hijaz, roll_gap }
+track oud   { play oud_main, oud_rise level 0.62 }
+track veil  { play veil_walk level 0.1 }

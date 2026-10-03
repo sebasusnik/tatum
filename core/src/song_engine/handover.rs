@@ -37,6 +37,30 @@ impl SongEngine {
         total as usize
     }
 
+    /// Samples until the next line of a grid `sixteenths` long: a quarter
+    /// note is 4, a thirty-second 0.5. A beat repeat starts on one. Assumes
+    /// no timing humanization, like [`Self::samples_until_bar`].
+    pub fn samples_until_grid(&self, sixteenths: f32) -> usize {
+        if !self.running {
+            return usize::MAX;
+        }
+        let until_step = self.samples_until_step();
+        if sixteenths < 1.0 {
+            // Half a step: the middle of the one sounding, or the next step.
+            let half = self.current_step_duration * 0.5;
+            let to_half = half - self.sample_counter - 1.0;
+            return if to_half >= 0.0 { to_half as usize } else { until_step as usize };
+        }
+        let n = (sixteenths as usize).max(1);
+        let mut total = until_step;
+        let mut step = self.global_step;
+        while !step.is_multiple_of(n) {
+            step += 1;
+            total += self.effective_step_samples(step);
+        }
+        total as usize
+    }
+
     /// Bar the next step to fire belongs to. On a bar line this is the bar
     /// about to start, while `current_bar` still reads the one that ended.
     pub fn bar_of_next_step(&self) -> usize {
@@ -56,6 +80,8 @@ impl SongEngine {
         }
         self.start_from_bar(bar - 1);
         self.global_step = bar * self.steps_per_bar;
+        // Its lanes start on the bar it takes over on, not the one before.
+        self.lane_origin = self.global_step;
         if !self.arrangement.is_empty() {
             self.scene_step = (self.arrangement_bar_count as usize + 1) * self.steps_per_bar;
         }
@@ -179,6 +205,12 @@ impl SongEngine {
         // the song, so the level does not move while it is being played, and
         // the limiter's look-ahead holds the old engine's last 1.7 ms.
         core::mem::swap(&mut self.output, &mut old.output);
+        // Lanes the edit did not touch keep their progress: a save in the
+        // middle of an eight-bar sweep does not start it again. `lanes` is
+        // false for a set's steps, whose lanes start with the step.
+        if map.lanes {
+            self.lane_origin = old.lane_origin;
+        }
         // Smoothed and random state continues regardless of what changed: a
         // gain ramp restarting or the humanize sequence rewinding is audible.
         core::mem::swap(&mut self.timing_rng, &mut old.timing_rng);

@@ -1,0 +1,8 @@
+# set: bars=12 phase=03-tribu energy=6
+# set-note: groove variation: hats in 3-3-2, the toms talk to each other every bar, clap ghosts; it runs into the gap
+use "_t03.synth"
+
+track drums { play t3_roll }
+track toms  { play tm_busy level 0.55 }
+track bass  { play hol_b level 0.8 }
+track clap  { play cl_ghost level 0.9 }

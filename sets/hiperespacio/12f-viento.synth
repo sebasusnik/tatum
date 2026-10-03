@@ -1,0 +1,19 @@
+# set: bars=32 phase=12-estela energy=1
+# set-note: the end: the master filter closes over 32 bars, the reverb swells, the pad holds its open fifth and fades, a last whir far away, the wind is the last thing left
+use "_t12.synth"
+
+auto rotor op0_ratio 0.0065 > 0.0039 > 0.0013 > 0.0 > 0.0 over 8
+auto rotor op1_ratio 0.0262 > 0.0223 > 0.0184 > 0.0165 > 0.0165 over 8
+auto rotor op2_ratio 0.0653 > 0.0588 > 0.0523 > 0.049 > 0.049 over 8
+auto rotor op3_ratio 0.0065 > 0.0039 > 0.0013 > 0.0 > 0.0 over 8
+auto grind level 0.04 > 0.02 > 0 over 8
+auto master dj cutoff 20000 > 500 over 32
+auto reverb_mix 0.55 > 0.85 over 32
+auto pad level 0.24 > 0.16 > 0.06 > 0 over 28
+auto wind level 0.3 > 0.26 > 0.18 > 0.08 > 0.01 over 32
+
+track drums { play d_last, d_rest, d_rest, d_rest level 0.75 }
+track bass  { level 0 }
+track grind { play grind_8 level 0.04 reverb_send 0.6 }
+track pad   { play void_last level 0.24 }
+track wind  { play breath level 0.3 }

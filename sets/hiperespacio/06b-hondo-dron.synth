@@ -1,0 +1,10 @@
+# set: bars=16 phase=06-hondo energy=7
+# set-note: The drone rises out of the long room on D alone, clean, its index low; the roll takes a tribal gap every second beat so the ride speaks.
+use "_t06.synth"
+
+track drums { play k_rim, k_rim, k_rim, k_rim_turn }
+track ride  { play rd_off level 1.8 }
+track bass  { play h_gap, h_gap, h_gap, h_roll_turn }
+track drone { level 0.1 }
+auto drone level 0 > 0.06 > 0.1 over 16
+auto abyss mod_index 0.3 > 0.34 over 16

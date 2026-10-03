@@ -1,0 +1,6 @@
+# set: bars=32 phase=02-orbita energy=5
+# set-note: the way out for the tribal record: kick, open hat, hat on the e, shaker sixteenths, the plain dark roll; nothing tonal but the bass
+use "_t02.synth"
+
+track drums { play o_out }
+track bass  { play low_out }

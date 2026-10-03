@@ -213,12 +213,17 @@ pub struct CompiledScene {
 pub struct CompiledAutomation {
     pub target: String,
     pub keyframes: Vec<f32>,
+    /// Bars a top-level lane runs over before it holds; `None` in a scene,
+    /// whose lanes span the scene.
+    pub over: Option<u32>,
 }
 
 /// Master FX chain.
 #[derive(Clone, Debug)]
 pub struct CompiledMaster {
     pub fx_chain: Vec<ChainStep>,
+    /// `as <name>` per node, for `auto master <name> <param>`.
+    pub labels: Vec<Option<String>>,
 }
 
 /// A compiled instrument — either a graph template or a module preset.
@@ -290,4 +295,6 @@ pub struct CompiledSong {
     /// Insert chains on the global send returns: `reverb_return { in > ... > out }`.
     pub reverb_return: Vec<ChainStep>,
     pub delay_return: Vec<ChainStep>,
+    /// Top-level `auto ... over N` lanes of a song without scenes.
+    pub automations: Vec<CompiledAutomation>,
 }

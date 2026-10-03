@@ -1,0 +1,9 @@
+# set: bars=16 phase=01-ignicion energy=4
+# set-note: the clap arrives and the hat goes to sixteenths; the bass is open; the tok starts answering in the gaps
+use "_t01.synth"
+
+track drums { play floor_clap level 0.95 }
+track bass  { play roll_open level 1.15 }
+track pad   { level 0 }
+track wind  { level 0 }
+track perc  { play tok_a level 0.15 }

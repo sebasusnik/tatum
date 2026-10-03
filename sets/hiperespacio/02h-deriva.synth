@@ -1,0 +1,8 @@
+# set: bars=16 phase=02-orbita energy=6
+# set-note: after the drop the pluck thins to its ratcheted strokes and the echo carries the rest; the bass moves to the b2 again
+use "_t02.synth"
+
+track drums  { play o_main }
+track bass   { play low_b level 1.7 }
+track pluck  { play pl_after level 0.26 delay_send 0.4 }
+auto orbita mod_index 0.55 > 0.4 over 16

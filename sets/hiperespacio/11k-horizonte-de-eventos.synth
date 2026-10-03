@@ -1,0 +1,18 @@
+# set: bars=16 phase=11-drop energy=10
+# set-note: drop 4/4: the whole pile (F#, G, the octaves and the fifth) with the crush at its worst, call and machine-gun alternating, peak drums, the gallop roll
+# cue: 1 suelta B4
+use "_t11.synth"
+
+auto haze level 0.158 > 0.174 > 0.158 > 0.174 over 16
+auto haze_hi level 0.079 > 0.095 over 16
+auto haze.crush wet 0.15 > 0.3 > 0.15 > 0.35 over 16
+auto haze_hi.crush wet 0.1 > 0.25 > 0.1 > 0.3 over 16
+auto smog mod_index 0.55 > 0.62 > 0.56 > 0.62 over 16
+auto grit cutoff 0.5927 > 0.6514 > 0.5511 over 16
+
+track drums   { play beat_peak, beat_glitch, beat_peak, beat_peak_turn level 0.78 }
+track bass    { play roll_oct_gallop, roll_oct_gallop, roll_oct_gallop, roll_oct_turn level 0.82 }
+track lead    { play lead_gun, lead_cr_turn level 0.3 }
+track haze    { play haze_root level 0.158 }
+track haze_hi { play haze_pile level 0.079 }
+track acid    { play acid_scream level 0.36 }

@@ -1,0 +1,19 @@
+# set: bars=8 phase=09-build energy=5
+# set-note: The top of the build: snare packs into ratchets, the bass thins to single notes and stops, the riser climbs, the master closes to 700 Hz; the last beat is silence. No drop: T10 is the drop.
+# cue: 5 B2 apretado · riser
+# cue: 8.5 suelta B2 · ¡silencio!
+use "_t09.synth"
+
+auto master dj cutoff 4500 > 700 over 8
+auto riser level 0.3 > 0.8 over 8
+
+pattern hiss_cut {
+    E4:0.8 ..*123 - - - -
+}
+
+track drums { play d_build_b level 0.62 }
+track perc  { play d_build_b_hats level 1.0 }
+track bass  { play roll_thin level 0.85 }
+track oud   { level 0 }
+track veil  { level 0 }
+track riser { play hiss_cut level 0.3 reverb_send 0 }

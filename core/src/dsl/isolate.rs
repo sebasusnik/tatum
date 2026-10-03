@@ -53,6 +53,7 @@ impl Isolation {
         for sc in song.scenes.iter_mut() {
             sc.automations.retain(|a| !a.target.strip_suffix(".level").is_some_and(|t| self.silences(t)));
         }
+        song.automations.retain(|a| !a.target.strip_suffix(".level").is_some_and(|t| self.silences(t)));
     }
 }
 

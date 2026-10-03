@@ -1,0 +1,5 @@
+# set: bars=32 phase=05-maquina energy=7
+# set-note: Stripped outro for T06 to blend over: kick, offbeat hats, ticks in 3-3-2 and the plain bouncing FM bass; robot and zaps gone.
+use "_t05.synth"
+
+track glitch { play g_sparse level 0.9 }

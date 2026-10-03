@@ -1,0 +1,9 @@
+# set: bars=16 phase=09-nebulosa energy=6
+# set-note: The busy groove with ghost snares; in bars 7-8 of each phrase three bell strokes fall into the quarter echo, a first look at what the breath will be.
+use "_t09.synth"
+
+track drums { play d_busy }
+track perc  { play d_busy_hats }
+track bass  { play roll_hijaz }
+track oud   { play oud_main level 0.75 }
+track chime { play chime_tease level 0.28 }

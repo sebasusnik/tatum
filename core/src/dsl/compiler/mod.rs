@@ -200,14 +200,18 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     // that levels the song, so one here could only limit a level that is
     // about to change.
     let master = match &song.master {
-        Some(m) => match compile_fx_chain("master", &without_limiter(&m.chain), samples_per_bar) {
-            Ok(c) => CompiledMaster { fx_chain: c },
-            Err(e) => {
-                errors.push(e);
-                CompiledMaster { fx_chain: Vec::new() }
+        Some(m) => {
+            let chain = without_limiter(&m.chain);
+            let labels = chain.iter().map(|n| n.label.clone()).collect();
+            match compile_fx_chain("master", &chain, samples_per_bar) {
+                Ok(c) => CompiledMaster { fx_chain: c, labels },
+                Err(e) => {
+                    errors.push(e);
+                    CompiledMaster { fx_chain: Vec::new(), labels: Vec::new() }
+                }
             }
-        },
-        None => CompiledMaster { fx_chain: Vec::new() },
+        }
+        None => CompiledMaster { fx_chain: Vec::new(), labels: Vec::new() },
     };
 
     // 6. Compile scenes
@@ -292,5 +296,10 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
         grooves,
         reverb_return,
         delay_return,
+        automations: song
+            .automations
+            .iter()
+            .map(|a| CompiledAutomation { target: a.target.clone(), keyframes: a.keyframes.clone(), over: a.over })
+            .collect(),
     })
 }
