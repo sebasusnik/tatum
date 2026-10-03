@@ -1,0 +1,20 @@
+# set: bars=16 phase=11-drop energy=10
+# set-note: drop 3/4: glitch drums, gallop octave roll, the lead an octave up with an answer that does not stop, the fifth piles into the haze, acid back instead of the arp
+# cue: 1 B3 crash
+# cue: 1 suelta A1
+# cue: 15 B4 apretado · ametralladora
+use "_t11.synth"
+
+auto haze level 0.119 > 0.132 > 0.119 > 0.132 over 16
+auto haze_hi level 0.053 > 0.066 over 16
+auto haze.crush wet 0.1 > 0.25 > 0.12 > 0.28 over 16
+auto haze_hi.crush wet 0 > 0.15 > 0.05 > 0.2 over 16
+auto smog mod_index 0.5 > 0.56 > 0.52 > 0.58 over 16
+auto grit cutoff 0.5511 > 0.6344 over 16
+
+track drums   { play beat_glitch, beat_glitch, beat_glitch, beat_peak_turn level 0.73 }
+track bass    { play roll_oct_gallop, roll_oct_gallop, roll_oct_gallop, roll_oct_turn level 0.82 }
+track lead    { play lead_gun level 0.2 }
+track haze    { play haze_root level 0.119 }
+track haze_hi { play haze_fifth level 0.053 }
+track acid    { play acid_drop level 0.3 }

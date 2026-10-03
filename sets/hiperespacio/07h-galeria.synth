@@ -1,0 +1,10 @@
+# set: bars=24 phase=07-drop energy=8
+# set-note: one notch under the peak, the lead rests: drive kit, the tunnel roll back with its turns, the arp gated and wide open, ticks busy
+use "_t07.synth"
+
+track drums { play t7_drive }
+track bass  { play t7_roll }
+track ticks { play t7_ticks_busy every 4 rev level 1.0 }
+track arp   { play t7_arp_gate level 0.18 }
+
+module keys glass7 { cutoff 3khz }

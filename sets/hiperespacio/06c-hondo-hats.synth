@@ -1,0 +1,9 @@
+# set: bars=16 phase=06-hondo energy=7
+# set-note: A minute in, the hats finally arrive (ghosted sixteenths, a walking accent); the roll closes again; the drone's crusher starts to bite.
+use "_t06.synth"
+
+track drums { play k_hats, k_hats, k_hats, k_hats_turn }
+track ride  { play rd_off level 1.8 }
+track drone { level 0.1 }
+auto drone.crush wet 0 > 0.08 > 0.04 > 0.12 over 16
+auto abyss mod_index 0.34 > 0.38 > 0.35 > 0.4 over 16

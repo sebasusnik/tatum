@@ -1,0 +1,54 @@
+# hiperespacio — the ground every track of the set stands on
+#
+# A one-hour psytrance set in the manner of examples/warp_drive.synth: a
+# straight grid, a clicky kick that owns the downbeat, a bass that rolls the
+# three sixteenths between kicks, phrygian darkness, signature sounds used as
+# gestures. It is played as twelve tracks (temas), each with its own rig
+# (`_tNN.synth`, which `use`s this file) and its own face: another kick, another
+# bass, another signature, another room. Tracks are mixed like records, with
+# `# set: blend=` on the first step of each one.
+#
+#   tatum set play sets/hiperespacio --midi keylab
+#
+# This file holds only what every track shares: the grid, the sidechain, the
+# default sends, the drum bus and the master. A track overrides any of it by
+# writing it again after its `use`.
+
+tempo 138
+meter 4/4
+scale F# phrygian
+swing 0.5
+humanize 0.0 timing 0.0
+sidechain 0.5 attack=1ms release=90ms
+
+delay sync=dotted_eighth feedback=0.3 filter=0.55
+reverb size=0.62 damp=0.5 predelay=25 sidechain=0.6
+
+delay_return  { in > highpass(400hz, 0.05) > autopan(0.5, bars=2) > out }
+reverb_return { in > highpass(300hz, 0.05) > lowpass(6000, 0.05, lfo_bars=16, lfo_depth=2500) > out }
+
+bus drums
+drums { in > compressor(-10, ratio=4, attack=3, release=45, makeup=2db) > saturate(0.15) > master }
+
+# `dj` and `hp` are the build's two hands: a step closes `dj` and opens it
+# over the build (`auto master dj cutoff ... over N`), or thins the floor with
+# `hp` before the drop. At rest both are out of the way.
+master {
+    in > lowpass(20khz, 0.05) as dj
+       > highpass(20hz, 0.05) as hp
+       > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
+       > eq(low=0.5, mid=-0.5, high=1)
+       > out
+}
+
+# The KeyLab: what every track has (layout in CONTROLES.md). A track's rig
+# adds its own faders, knobs and pads.
+midi {
+    cc 82 > reverb_mix
+    cc 83 > delay_mix
+    cc 85 > master dj cutoff 150hz..20khz..20khz
+    cc 85 > master hp cutoff 20hz..20hz..3khz
+    pad 39 > freeze
+    pad 42 > prev
+    pad 43 > next
+}

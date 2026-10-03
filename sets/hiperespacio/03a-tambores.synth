@@ -1,0 +1,7 @@
+# set: bars=32 phase=03-tribu energy=5 blend=32
+# set-note: T03 mixes in under T02's outro: the round low kick, offbeat hats and the low tom in threes; nothing tonal yet
+use "_t03.synth"
+tempo 140
+
+track drums { play t3_in }
+track toms  { play tm_sparse level 0.55 }

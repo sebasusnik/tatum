@@ -1,0 +1,11 @@
+# set: bars=32 phase=06-hondo energy=7
+# set-note: Stripped outro for T07 (F# phrygian) to blend over: kick, hats, ride and the deep roll; the drone and its rub sink back into the room in the first eight bars.
+use "_t06.synth"
+
+track drums { play k_hats, k_hats, k_hats, k_hats_turn }
+track ride  { play rd_off level 1.8 }
+track drone { level 0.12 }
+track rub   { level 0.05 }
+auto drone level 0.12 > 0.05 > 0 over 8
+auto rub level 0.05 > 0 over 6
+auto drone.crush wet 0.4 > 0.1 over 8

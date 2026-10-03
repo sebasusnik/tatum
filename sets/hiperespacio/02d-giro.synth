@@ -1,0 +1,8 @@
+# set: bars=12 phase=02-orbita energy=6
+# set-note: the groove breaks: the clap slips late every fourth bar, the bass sits on the b2, the pluck's motif turns (octave first); the release comes next
+use "_t02.synth"
+
+track drums { play o_turn }
+track bass  { play low_b level 1.6 }
+track pluck { play pl_b level 0.26 }
+module fm orbita { mod_index 50% }

@@ -1,0 +1,10 @@
+# set: bars=16 phase=07-tunel energy=7
+# set-note: the glass arp enters gated and closed (stutters a beat on, a beat off), opening a little over the 16
+use "_t07.synth"
+
+track drums { play t7_main }
+track bass  { play t7_roll }
+track ticks { level 1.0 }
+track arp   { play t7_arp_gate level 0.1 }
+
+auto glass7 cutoff 0.2 > 0.3 over 16

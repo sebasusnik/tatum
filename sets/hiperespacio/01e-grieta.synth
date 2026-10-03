@@ -1,0 +1,8 @@
+# set: bars=16 phase=01-ignicion energy=4
+# set-note: the floor with a rim; the bass cracks open bar by bar on its cutoff locks; the pad fades out
+use "_t01.synth"
+
+track drums { play floor level 0.9 }
+track bass  { play roll_crack level 1.1 }
+track wind  { level 0 }
+auto pad level 0.2 > 0.12 > 0 over 16

@@ -1,0 +1,6 @@
+# set: bars=32 phase=02-orbita energy=5 blend=32
+# set-note: the next record comes in under T01's outro: a lower, darker kick, an off-beat hat, shaker eighths and the dark roll; nothing tonal but the bass
+tempo 139
+use "_t02.synth"
+
+track shaker { play shk_8 level 0.1 }

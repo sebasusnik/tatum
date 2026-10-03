@@ -1,0 +1,13 @@
+# set: bars=16 phase=05-maquina energy=8
+# set-note: Last push: the robot in sixteenths, busy ticks, and the zaps' last burst spinning up over bars 8-10 then gone (gesture 3).
+# cue: 7 B1 apretado + K3 ↑ de a poco · zap relé, RPM arriba
+# cue: 8.75 suelta B1 (K3 al medio)
+use "_t05.synth"
+
+track drums  { play m_drive, m_drive, m_drive, m_drive_turn }
+track glitch { play g_b level 0.9 }
+track ticks  { play t_busy, t_busy, t_busy, t_332_turn level 0.3 }
+track bass   { play b_mach, b_mach, b_mach, b_mach_turn }
+track robo   { play r_c, r_c, r_c, r_b_turn level 0.45 }
+track zap    { play z_burst_16 level 0.25 }
+auto zap.crush wet 0.4 > 0.4 > 1 over 10

@@ -1,0 +1,16 @@
+# set: bars=16 phase=11-drop energy=10
+# set-note: drop 2/4: the acid steps out and the shard arp takes its place; the haze grows its octave (F#5 under the G)
+# cue: 15 A1 apretado · kick fuera
+use "_t11.synth"
+
+auto haze level 0.112 > 0.119 > 0.106 > 0.119 over 16
+auto haze_hi level 0.046 > 0.053 over 16
+auto haze.crush wet 0.08 > 0.18 > 0.1 > 0.2 over 16
+auto shard mod_index 0.45 > 0.6 over 16
+
+track drums   { play beat_peak, beat_peak, beat_peak, beat_peak_turn level 0.73 }
+track bass    { play roll_oct, roll_oct, roll_oct, roll_oct_turn level 0.82 }
+track lead    { play lead_cr, lead_cr, lead_cr, lead_cr_turn level 0.3 }
+track haze    { play haze_root level 0.112 }
+track haze_hi { play haze_oct level 0.046 }
+track arp     { play arp_cell, arp_cell, arp_cell, arp_cell_turn level 0.5 }

@@ -1,0 +1,11 @@
+# set: bars=16 phase=10-hipervelocidad energy=9
+# set-note: Something new on the plateau: the screamer braids groups of three against the kick with the crusher half in, the bass back to the single gallop, the needle on seven.
+use "_t10.synth"
+
+auto acid.crush wet 0.15 > 0.35 > 0.15 over 16
+
+track drums  { play g_glitch }
+track perc  { play g_glitch_hats }
+track bass   { play gal_a }
+track acid   { play scr_tri level 0.88 }
+track needle { play needle_7 level 0.2 }

@@ -1,0 +1,7 @@
+# set: bars=8 phase=04-acido energy=6
+# set-note: echo throw: the snare steps away, the 303 plays a few open notes and the dotted-eighth echo answers
+use "_t04.synth"
+
+track drums { play a4_throw }
+track bass  { play rl_a level 1.5 }
+track acid  { play acid_throw level 0.95 delay_send 0.45 }

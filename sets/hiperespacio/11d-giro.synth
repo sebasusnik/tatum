@@ -1,0 +1,10 @@
+# set: bars=16 phase=11-singularidad energy=8
+# set-note: the arp goes, the acid turns screamer (ratchets, octave leaps) over glitch drums
+use "_t11.synth"
+
+auto grit cutoff 0.4263 > 0.5511 over 16
+
+track drums { play beat_glitch, beat_glitch, beat_glitch, beat_turn level 0.7 }
+track perc  { play perc_a level 0.5 }
+track bass  { play roll_s, roll_turn level 0.74 }
+track acid  { play acid_scream level 0.42 }

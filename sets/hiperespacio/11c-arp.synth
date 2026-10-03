@@ -1,0 +1,14 @@
+# set: bars=32 phase=11-singularidad energy=8
+# set-note: drive drums with snare ghosts, busier perc, the FM shard arp in on F#-G-C#; the acid keeps its low line
+# cue: 7 B1 apretado + K3 ↑ de a poco · el haze
+# cue: 10.75 suelta B1 (K3 al medio)
+use "_t11.synth"
+
+auto shard mod_index 0.35 > 0.55 > 0.4 over 32
+auto grit cutoff 0.4407 > 0.4924 > 0.4263 over 32
+
+track drums { play beat_drive, beat_drive, beat_drive, beat_turn level 0.7 }
+track perc  { play perc_b level 0.5 }
+track bass  { play roll_s, roll_s, roll_s, roll_turn level 0.74 }
+track acid  { play acid_low level 0.42 }
+track arp   { play arp_cell, arp_cell, arp_cell, arp_cell_turn level 0.3 }

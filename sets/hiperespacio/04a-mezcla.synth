@@ -1,0 +1,7 @@
+# set: bars=32 phase=04-acido energy=5 blend=32
+# set-note: T04 mixes in under T03's outro: the hard clicky kick, offbeat hats, the open hat from bar 5, and the square-saw roll
+use "_t04.synth"
+tempo 141
+
+track drums { play a4_in }
+track bass  { play rl_a level 1.5 }

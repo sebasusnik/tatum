@@ -1,0 +1,13 @@
+# set: bars=16 phase=07-break energy=3
+# set-note: breakdown: kick, bass, arp gone; the vault pad and the laser cell alone in the tunnel, index breathing
+# cue: 5 B1 apretado + K3 ↑ de a poco · el láser solo en el hueco
+# cue: 8.75 suelta B1 (K3 al medio)
+use "_t07.synth"
+
+track drums { level 0 }
+track bass  { level 0 }
+track pad   { level 0.055 }
+track lead  { play t7_laser level 0.19 sidechain 0 }
+
+auto reverb_mix 0.3 > 0.45 over 4
+auto laser7 mod_index 0.5 > 0.56 > 0.62 over 16

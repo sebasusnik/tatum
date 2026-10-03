@@ -1,0 +1,13 @@
+# set: bars=16 phase=12-estela energy=4
+# set-note: the grinder is gone; the hats thin to two a bar, the bass drops to offbeats, the wind rises under the pad
+# cue: 7 B1 apretado + K3 de arriba ↓ abajo · amoladora bajando de vueltas
+# cue: 12.75 suelta B1 (K3 al medio)
+use "_t12.synth"
+
+auto wind level 0.05 > 0.2 over 16
+auto vacio mod_index 0.24 > 0.3 > 0.22 over 16
+
+track drums { play d_thin, d_thin, d_thin, d_thin_turn level 0.5 }
+track bass  { play b_off level 0.38 }
+track pad   { play void level 0.16 }
+track wind  { play breath level 0.05 }

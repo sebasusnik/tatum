@@ -1,0 +1,429 @@
+# T06 hondo — D phrygian, 143 BPM
+#
+# The hypnotic valley before the next big build. Not lower in energy, lower
+# in density: a kick with more body, a deep roll with its filter nearly shut,
+# an offbeat ride, and a drone. The drone is this track's face: warp_drive's
+# `haze` idea -- the root held against the flat second -- here D against Eb,
+# an FM stack through a crusher into a long dark room. It is the only thing
+# that goes into the reverb. Its level, its crush and its index are drawn by
+# the steps so the dirt moves, and across the track they climb: the tension
+# comes from that and from what is withheld (no hats for the first minute,
+# the Eb rub arriving later, the clap last), never from a break.
+
+use "_base.synth"
+
+# The track's level in the hour: the whole track -1.0 dB at the end of the
+# master, so the set climbs the way the arc says (measured on the full render)
+master {
+    in > lowpass(20khz, 0.05) as dj
+       > highpass(20hz, 0.05) as hp
+       > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
+       > eq(low=0.5, mid=-0.5, high=1)
+       > gain(0.891) as trim
+       > out
+}
+
+tempo 143
+scale D phrygian
+
+# The room is the drone's alone: long, dark, ducking with the kick
+delay sync=dotted_eighth feedback=0.28 filter=0.4
+reverb size=0.9 damp=0.78 predelay=45 sidechain=0.55
+
+delay_return  { in > highpass(500hz, 0.05) > lowpass(4khz, 0.05) > autopan(0.4, bars=4) > out }
+reverb_return { in > highpass(260hz, 0.05) > lowpass(2400, 0.05, lfo_bars=16, lfo_depth=900) > autopan(0.35, bars=8) > out }
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# Kick: lower and longer than the set's others, less click, less drive: a
+# thump with a body the roll can sit under
+module beats hkit {
+    kick_level 1.0
+    kick_decay 30%
+    kick_pitch 0.9x
+    kick_click 42%
+    kick_drive 40%
+    snare_level 0.4
+    snare_decay 4%
+    snare_pitch 1.55x
+    snare_snap 60%
+    snare_drive 15%
+    snare_pan -0.2
+    hihat_level 0.5
+    hihat_decay 9%
+    hihat_pitch 1.45x
+    hihat_pan 0.25
+    clap_level 0.55
+    clap_pan -0.08
+    tom_pan -0.3
+}
+
+# The ride: its own kit, a long bright hat on the offbeats, off to the left
+module beats ride {
+    kick_level 0.0
+    hihat_level 1.0
+    hihat_decay 48%
+    hihat_pitch 1.9x
+    hihat_pan -0.35
+}
+
+# Deep roll: saw over a square, the filter almost shut and a short pluck
+# of envelope, a little resonance so the closed filter still speaks
+module bass deep {
+    osc1_wave saw
+    osc2_wave square
+    osc2_pitch 0st
+    cutoff 80hz
+    cutoff_env 320hz
+    resonance 32%
+    keytrack 25%
+    glide 0%
+    attack 1ms
+    decay 115ms
+    sustain 4%
+    release 30ms
+}
+
+# The drone: a slow-attack FM stack, three modulators into one carrier,
+# half-sine for the hollow, the index breathing over eight bars
+module fm abyss {
+    algorithm triple_mod
+    level 1.6
+    mod_index 38%
+    feedback 18%
+    waveform half_sine
+    op0_ratio 1x
+    op1_ratio 2x
+    op2_ratio 3.005x
+    op3_ratio 0.5x
+    op0_envelope 1.2 0.8 0.85 1.5
+    op1_envelope 1.5 1.0 0.7 1.5
+    op2_envelope 2.0 1.0 0.5 1.5
+    op3_envelope 1.0 1.0 0.8 1.5
+    lfo_target mod_index
+    lfo_sync bars_8
+    lfo_waveform triangle
+    lfo_depth 28%
+}
+
+# ────────────────────────────────────────────────
+# DRUMS (2-bar cells, chained into 8-bar phrases by the tracks)
+# ────────────────────────────────────────────────
+
+pattern k_bare {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+}
+
+pattern k_bare_turn {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  - - - -
+    snare: - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - o - o
+}
+
+# Rims only, no hats: the first minute
+pattern k_rim {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    snare: - - - -  - - - o  - - - -  - - - -   - - - -  - - - o  - - - -  - - o -
+}
+
+pattern k_rim_turn {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    snare: - - - -  - - - o  - - - -  - - - -   - - - -  - - - o  - o - -  o - o o
+}
+
+# Hats in: sixteenths, ghosted, one accent per beat that walks
+pattern k_hats {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:   o o x o  o o o x  o x o o  o o x o   o o x o  o o o x  o x o o  x o x o
+    snare: - - - -  - - - o  - - - -  - - - -   - - - -  - - - o  - - - -  - - o -
+}
+
+pattern k_hats_turn {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:   o o x o  o o o x  o x o o  o o x o   o o x o  o o o x  x x x*2 x  x*2 x x*3 -
+    snare: - - - -  - - - o  - - - -  - - - -   - - - -  - - - o  - o - -  o - o o
+}
+
+# The clap, late: on two and four, a ghost before the four
+pattern k_clap {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap:  - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - o  x - - -
+    hat:   o o x o  o o o x  o x o o  o o x o   o o x o  o o o x  o x o o  x o x o
+    snare: - - - -  - - - o  - - - -  - - - -   - - - -  - - - o  - - - -  - - o -
+}
+
+pattern k_clap_turn {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  - - X -
+    clap:  - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  - - - -
+    hat:   o o x o  o o o x  o x o o  o o x o   o o x o  o o o x  x x x x  x*2 x*2 x*3 x*4
+    snare: - - - -  - - - o  - - - -  - - - -   - - - -  - - - o  o - o -  x o x x
+}
+
+# The ride: plain offbeats, and a version with a sixteenth pickup
+pattern rd_off {
+    hat:   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -
+}
+
+pattern rd_push {
+    hat:   - - x -  - - x -  - - x -  - - x o   - - x -  - - x -  - - x -  - o x o
+}
+
+# ────────────────────────────────────────────────
+# DEEP ROLL
+# ────────────────────────────────────────────────
+
+pattern h_roll {
+    - 1.1:0.95 1.1:0.65 1.1:0.8  - 1.1:0.95 1.1:0.65 1.1:0.8  - 1.1:0.95 1.1:0.65 1.1:0.8  - 1.1:0.95 1.1:0.65 1.1:0.8
+    - 1.1:0.95 1.1:0.65 1.1:0.8  - 1.1:0.95 1.1:0.65 1.1:0.8  - 1.1:0.95 1.1:0.65 1.1:0.8  - 1.1:0.95 1.1:0.65 1.1:0.8
+}
+
+# Turn: the b2 for one beat, the filter lifting on the last two notes
+pattern h_roll_turn {
+    - 1.1:0.95 1.1:0.65 1.1:0.8  - 1.1:0.95 1.1:0.65 1.1:0.8  - 1.1:0.95 1.1:0.65 1.1:0.8  - 1.1:0.95 1.1:0.65 1.1:0.8
+    - 1.1:0.95 1.1:0.65 1.1:0.8  - 2.1:0.95 2.1:0.65 2.1:0.8  - 1.1:0.95 1.1:0.65 1.1:0.8  - 1.1:0.95 1.2:0.8(cutoff=0.2) 1.1:0.9(cutoff=0.14)
+}
+
+# A tribal gap every second beat: the roll breathes, the ride is heard
+pattern h_gap {
+    - 1.1:0.95 1.1:0.65 1.1:0.8  - 1.1:0.95 - -  - 1.1:0.95 1.1:0.65 1.1:0.8  - - 1.1:0.8 -
+    - 1.1:0.95 1.1:0.65 1.1:0.8  - 1.1:0.95 - -  - 1.1:0.95 1.1:0.65 1.1:0.8  - 2.1:0.9 - 1.1:0.7
+}
+
+# Deeper still: the filter a notch more open on every other beat, the
+# figure pulling on the b2 and a low seventh -- saved for the last stretch
+pattern h_pull {
+    - 1.1:0.95(cutoff=0.14) 1.1:0.65 1.1:0.8  - 1.1:0.95(cutoff=0.17) 1.1:0.65 1.1:0.8  - 1.1:0.95(cutoff=0.14) 1.1:0.65 2.1:0.8  - 1.1:0.95(cutoff=0.17) 1.1:0.65 1.1:0.8
+    - 1.1:0.95(cutoff=0.14) 1.1:0.65 1.1:0.8  - 2.1:0.95(cutoff=0.17) 2.1:0.65 2.1:0.8  - 1.1:0.95(cutoff=0.14) 1.1:0.65 1.1:0.8  - 7.0:0.95(cutoff=0.19) 1.1:0.8 1.2:0.85
+}
+
+# The mix-in/mix-out version: one note after each kick
+pattern h_thin {
+    - 1.1:0.9 - 1.1:0.6  - 1.1:0.9 - 1.1:0.6  - 1.1:0.9 - 1.1:0.6  - 1.1:0.9 - 1.1:0.6
+    - 1.1:0.9 - 1.1:0.6  - 1.1:0.9 - 1.1:0.6  - 1.1:0.9 - 1.1:0.6  - 1.1:0.9 - -
+}
+
+# ────────────────────────────────────────────────
+# DRONE: D below, Eb above it, each on its own fader
+# ────────────────────────────────────────────────
+
+pattern dr_root {
+    D3:0.9 ..*127
+}
+
+pattern dr_rub {
+    Eb4:0.9 ..*127
+}
+
+# The rub with its octave for the last stretch
+pattern dr_rub_hi {
+    [Eb4:0.9 Eb5:0.6]:0.8 ..*127
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track drums {
+    play k_bare, k_bare, k_bare, k_bare_turn
+    using hkit
+    level 0.92
+    velocity 1.0
+    out > highpass(28hz, 0.05) > eq(low=1.5, mid=-1.5, high=0.5) > drums
+}
+
+track ride {
+    play rd_off
+    using ride
+    level 0
+    velocity 1.0
+    delay_send 0.05
+    out > highpass(3khz, 0.05) > lowpass(12khz, 0.05) > drums
+}
+
+track bass {
+    play h_roll, h_roll, h_roll, h_roll_turn
+    using deep
+    level 2.0
+    velocity 1.0
+    gate 0.7
+    sidechain 0.3
+    out > highpass(30hz, 0.05) > saturate(0.5) > eq(low=0.5, mid=-2, high=0) > master
+}
+
+track drone {
+    play dr_root
+    using abyss
+    level 0
+    velocity 1.0
+    gate 1.0
+    pan -0.1
+    reverb_send 0.45
+    delay_send 0.08
+    sidechain 0.5
+    out > highpass(140hz, 0.05) > saturate(0.25) > bitcrush(9, 0.25, wet=0) as crush > phaser(0.3, bars=16) > autopan(0.3, bars=4) > master
+}
+
+track rub {
+    play dr_rub
+    using abyss
+    level 0
+    velocity 1.0
+    gate 1.0
+    pan 0.15
+    reverb_send 0.5
+    sidechain 0.5
+    out > highpass(300hz, 0.05) > bitcrush(9, 0.25, wet=0) as crush > lowpass(3500, 0.05, lfo_bars=12, lfo_depth=1200) as lp > autopan(0.4, bars=6) > master
+}
+
+# ────────────────────────────────────────────────
+# PERFORMANCE VOICES (the KeyLab's pads; steps never touch these)
+# ────────────────────────────────────────────────
+
+# The drone under the hand: the same stack with an attack fast enough for a
+# pad (150 ms) and a long release into the room. B1 holds D, B7 the Eb above
+# it, so two fingers make the rub. K3 is its character: low is the hollow
+# half-sine hum, high a metallic snarl -- the ratios move with the index
+module fm abyssp {
+    algorithm triple_mod
+    level 1.6
+    mod_index 40%
+    feedback 18%
+    waveform half_sine
+    op0_ratio 1x
+    op1_ratio 2x
+    op2_ratio 3.005x
+    op3_ratio 0.5x
+    op0_envelope 0.15 0.6 0.85 1.2
+    op1_envelope 0.25 0.8 0.7 1.2
+    op2_envelope 0.4 0.8 0.5 1.2
+    op3_envelope 0.15 0.8 0.8 1.2
+    lfo_target mod_index
+    lfo_sync bars_2
+    lfo_waveform triangle
+    lfo_depth 20%
+}
+
+# Riser: FM noise that brightens over two bars and falls back, on a loop
+module fm swell {
+    algorithm pair_plus_two
+    level 1.2
+    mod_index 70%
+    feedback 90%
+    waveform abs_sine
+    op0_ratio 6.2x
+    op1_ratio 1.87x
+    op2_ratio 4.41x
+    op3_ratio 2.93x
+    op0_envelope 0.3 1.0 0.9 0.5
+    op1_envelope 0.3 1.0 0.9 0.5
+    op2_envelope 0.3 1.0 0.9 0.5
+    op3_envelope 0.3 1.0 0.9 0.5
+    lfo_target mod_index
+    lfo_sync bars_2
+    lfo_waveform saw
+    lfo_depth 60%
+}
+
+# Sonar: a short dark FM ping, a second figure that answers the drone
+module fm sonar {
+    algorithm two_op
+    level 1.8
+    mod_index 45%
+    feedback 10%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 3.5x
+    op0_envelope 0.001 0.35 0.0 0.3
+    op1_envelope 0.001 0.12 0.0 0.1
+}
+
+pattern rest { -*16 }
+
+pattern swell_hold { 1.4:0.8 ..*31 }
+
+# B4: two bars, a ping at the end of each, the second answered on the b2
+pattern ping_fig {
+    - - - -  - - - -  - - - -  - - 1.4:0.8 -
+    - - - -  - - - -  - - - -  - - 2.4:0.7 1.4:0.5
+}
+
+track dpad {
+    play rest
+    using abyssp
+    level 0.1
+    velocity 1.0
+    gate 1.0
+    pan -0.2
+    reverb_send 0.5
+    delay_send 0.1
+    sidechain 0.5
+    out > highpass(140hz, 0.05) > saturate(0.25) > bitcrush(9, 0.25, wet=0.25) as crush > gain(1.0) as kg > phaser(0.3, bars=8) > autopan(0.35, bars=2) > master
+}
+
+track rise {
+    play swell_hold
+    using swell
+    level 0.3
+    velocity 1.0
+    gate 1.0
+    pan 0.25
+    reverb_send 0.3
+    sidechain 0.4
+    out > highpass(600hz, 0.05) > lowpass(7khz, 0.05) > autopan(0.6, bars=1) > master
+}
+
+track ping {
+    play ping_fig
+    using sonar
+    level 0.3
+    velocity 1.0
+    gate 0.5
+    pan 0.3
+    reverb_send 0.4
+    delay_send 0.3
+    sidechain 0.3
+    out > highpass(250hz, 0.05) > lowpass(5khz, 0.05) > master
+}
+
+# The KeyLab, in the set's fixed layout (CONTROLES.md). The base maps F7 F8 F9,
+# A4 freeze, A7 prev and A8 next. Level ranges put the top of a fader a little
+# over where the steps run each voice
+midi {
+    cc 73 > drums level 0..1.0                # F1 drums
+    cc 75 > ride level 0..2.0                 # F2 the ride
+    cc 79 > bass level 0..2.4                 # F3 the deep roll
+    cc 72 > drone level 0..0.18               # F4 the drone (D)
+    cc 80 > rub level 0..0.1                  # F5 the rub (Eb)
+    cc 81 > dpad level 0..0.2                 # F6 signature: the pad drone
+    cc 74 > deep cutoff 45hz..260hz           # K1 bass filter
+    cc 74 > deep cutoff_env 200hz..700hz
+    cc 71 > abyss mod_index 25%..65%          # K2 drone: open
+    cc 76 > abyssp op1_ratio 2x..3.5x         # K3 pad drone: character
+    cc 76 > abyssp op2_ratio 3.005x..7.02x
+    cc 76 > abyssp mod_index 30%..72%
+    cc 76 > abyssp feedback 10%..40%
+    cc 76 > dpad kg gain 1.0..1.4             #    (and a little gain: the snarl reads quieter)
+    cc 77 > rub lp cutoff 900hz..6khz         # K4 rub: open
+    cc 93 > master hp cutoff 20hz..400hz      # K5 tension
+    cc 93 > drone delay_send 0.08..0.45
+    cc 18 > drone delay_send 0..0.8           # K6 throw amount
+    cc 19 > hkit kick_decay 15%..50%          # K7 kick
+    cc 16 > hkit hihat_pitch 1.09x..1.45x..1.74x    # K8 hats: darker left, the written tuning in the middle (hihat_decay does nothing in the engine yet)
+    cc 17 > drone crush wet 0..0.6            # K9 dirt: every crusher on the drones
+    cc 17 > rub crush wet 0..0.5
+    cc 17 > dpad crush wet 0.1..0.7
+    pad 36 > mute drums q=bar    # A1 kick out
+    pad 37 > toggle ride                      # A2 ride in/out
+    pad 38 > throw drone q=1/16    # A3 drone into the echo
+    pad 40 > repeat 1/8                       # A5 roll
+    pad 41 > repeat 1/16                      # A6 tighter roll
+    pad 44 > play dpad D3 q=1/16    # B1 the drone, held
+    pad 45 > hold rise q=beat    # B2 riser
+    pad 46 > drums crash q=beat    # B3 crash
+    pad 47 > hold ping q=beat    # B4 sonar figure
+    pad 48 > repeat 1/32                      # B5 stutter
+    pad 49 > throw dpad q=1/16    # B6 the pad drone into the echo
+    pad 50 > play dpad Eb3                    # B7 the rub, by hand
+    pad 51 > drums clap                       # B8 clap hit
+}

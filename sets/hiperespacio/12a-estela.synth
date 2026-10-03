@@ -1,0 +1,7 @@
+# set: bars=32 phase=12-estela energy=6 blend=32
+# set-note: T12 enters under T11's outro: the softest kick of the set, darker hats, a low shut roll; nothing tonal but the bass
+use "_t12.synth"
+tempo 147
+
+track drums { play d_ride, d_ride, d_ride, d_ride_turn level 0.56 }
+track bass  { play b_roll, b_roll, b_roll, b_roll_turn level 0.45 }

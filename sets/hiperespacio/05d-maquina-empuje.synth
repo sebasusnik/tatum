@@ -1,0 +1,9 @@
+# set: bars=14 phase=05-maquina energy=7
+# set-note: The floor at 8: sixteenth hats and rims answering every beat, the ticks doubled with a second voice; runs straight into the stutter gap.
+use "_t05.synth"
+
+track drums  { play m_drive, m_drive, m_drive, m_drive_turn }
+track glitch { play g_a level 0.9 }
+track ticks  { play t_busy, t_busy, t_busy, t_332_turn level 0.3 }
+track robo   { play r_b, r_b, r_b, r_b_turn level 0.45 }
+auto robo mod_index 0.5 > 0.72 over 14

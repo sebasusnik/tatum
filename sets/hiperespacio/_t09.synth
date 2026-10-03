@@ -1,0 +1,620 @@
+# T09 nebulosa — E Hijaz (phrygian dominant), 145 BPM
+#
+# The set's long breath. It rides in on T08's stripped F# outro with only a
+# round low kick and a hollow square roll, lets the Hijaz colour in (the F
+# against E below, the raised G# above it), then takes the floor away: FM
+# bells into a long quarter echo and a room that freezes, a pad walking the Hijaz
+# clusters. Out of the fog comes a kickless roll, a noise riser and a snare
+# roll packing tighter while the master closes, and it stops at the top of
+# the build on one beat of silence. It has no drop of its own: T10 is it.
+#
+# Face: a round, lower kick with little click and a long body, a
+# square-wave roll with a resonant blip that accents the LAST sixteenth of
+# each beat (it pushes into the kick instead of leaning off it), an oud-like
+# square pluck on the maqsum rhythm, darbuka toms. Room: a long dark hall and
+# a long dark quarter-note echo that the bells fall into. Signature: the bells
+# and the frozen reverb, in two places only.
+#
+# The scale line says phrygian so degrees stay dark; every tonal line is in
+# absolute notes, E F G# A B C D, the way examples/shiva_circuit.synth writes
+# Hijaz.
+
+use "_base.synth"
+
+tempo 145
+scale E phrygian
+
+delay sync=quarter feedback=0.5 filter=0.35
+reverb size=0.86 damp=0.38 predelay=45 sidechain=0.55
+
+delay_return  { in > highpass(450hz, 0.05) > lowpass(5khz, 0.05, lfo_bars=8, lfo_depth=1500) > autopan(0.6, bars=3) > out }
+reverb_return { in > highpass(280hz, 0.05) > lowpass(4.5khz, 0.05, lfo_bars=16, lfo_depth=1800) > autopan(0.35, bars=8) > out }
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# Round and low: less click and drive than anything before it, a longer body
+module beats kit {
+    kick_level 1.0
+    kick_decay 27%
+    kick_pitch 0.93x
+    kick_click 36%
+    kick_drive 32%
+    snare_level 0.7
+    snare_decay 20%
+    snare_pitch 0.86x
+    snare_snap 55%
+    snare_drive 22%
+    snare_pan 0.05
+    hihat_level 0.62
+    hihat_decay 20%
+    hihat_pitch 1.32x
+    hihat_pan 0.3
+    clap_level 0.5
+    clap_pan -0.1
+    tom_pan -0.25
+    crash_pan 0.2
+}
+
+# Hollow roll: two squares an octave apart through a resonant blip
+module bass hollow {
+    osc1_wave square
+    osc2_wave square
+    osc2_pitch 12st
+    cutoff 110hz
+    cutoff_env 950hz
+    resonance 46%
+    keytrack 25%
+    glide 0%
+    attack 1ms
+    decay 105ms
+    sustain 0%
+    release 28ms
+}
+
+# Oud: a short square pluck, no vibrato, no glide; the filter blip is the pick
+module bass oud {
+    osc1_wave square
+    osc2_wave saw
+    osc2_pitch 0st
+    cutoff 520hz
+    cutoff_env 3.2khz
+    resonance 42%
+    keytrack 45%
+    glide 0%
+    attack 1ms
+    decay 150ms
+    sustain 0%
+    release 60ms
+    vel_env 55%
+}
+
+# Chime: an inharmonic two-op bell (2.41 against 1), a long ring
+module fm chime {
+    algorithm two_op
+    level 1.7
+    mod_index 42%
+    feedback 6%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 2.41x
+    op0_envelope 0.001 1.6 0.0 1.3
+    op1_envelope 0.001 0.45 0.0 0.35
+    lfo_target mod_index
+    lfo_sync bars_4
+    lfo_waveform triangle
+    lfo_depth 20%
+}
+
+# Veil: the Hijaz pad. No detune, no chorus: it moves by its filter and the
+# phaser on its chain, and by the voicings walking under it
+module keys veil {
+    voice_mode poly
+    cutoff 1.1khz
+    resonance 28%
+    detune 0%
+    chorus_mix 0%
+    attack 1.8s
+    decay 900ms
+    sustain 80%
+    release 1.4s
+    lfo_target cutoff
+    lfo_sync bars_4
+    lfo_waveform triangle
+    lfo_depth 16%
+    vibrato_rate 0.5hz
+    vibrato_depth 3%
+}
+
+# Bellpad: the chime for the hands. The same inharmonic two-op bell on its
+# own module, so K3 (ratio + index) and the pads never touch the placed
+# gestures of the chime track
+module fm bellpad {
+    algorithm two_op
+    level 1.7
+    mod_index 42%
+    feedback 6%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 2.41x
+    op0_envelope 0.001 1.6 0.0 1.3
+    op1_envelope 0.001 0.45 0.0 0.35
+    lfo_target mod_index
+    lfo_sync bars_4
+    lfo_waveform triangle
+    lfo_depth 20%
+}
+
+# Breath: short band-passed noise strokes, for the held riser roll
+instrument breath {
+    gain 0.9
+    noise() as n
+    n > bandpass(2400, 0.3) as bp
+    bp > adsr(0.002, 0.07, 0.0, 0.05) as amp
+    amp > out
+}
+
+# Riser: band-passed noise, no pitch, swelling
+instrument hiss {
+    gain 0.9
+    noise() as n
+    n > bandpass(1400, 0.25) as bp
+    bp > adsr(2.5, 1.0, 0.9, 0.08) as amp
+    amp > out
+}
+
+# ────────────────────────────────────────────────
+# DRUMS — 8-bar phrases, the turn in bar 8
+# ────────────────────────────────────────────────
+
+pattern d_none {
+    kick:    - - - -  - - - -  - - - -  - - - -
+}
+
+# d_none's hats and toms, for the perc track
+pattern d_none_hats {
+    hat:     - - - -  - - - -  - - - -  - - - -
+}
+
+# Under T08's outro: kick, a ticking hat, the open hat only at the turns
+pattern d_intro {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  - - - -
+}
+
+# d_intro's hats and toms, for the perc track
+pattern d_intro_hats {
+    hat:     - - x -  - - x o  - - x -  - - x -   - - x -  - - x o  - - x -  - - x -   - - x -  - - x o  - - x -  - - x -   - - x -  - - x o  - - x -  - - x x   - - x -  - - x o  - - x -  - - x -   - - x -  - - x o  - - x -  - - x -   - - x -  - - x o  - - x -  - - x -   - - x -  - - x o  - - x -  x x x x
+    openhat: - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - x:0.5 -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - x:0.6 -  - - - -
+}
+
+# The groove: clap on 2 and 4, a shaker hat with fixed accents, open hat off
+pattern d_main {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  - - - -
+    clap:    - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  - - - -
+    snare:   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  x x x X
+}
+
+# d_main's hats and toms, for the perc track
+pattern d_main_hats {
+    hat:     x o o x  x o o x  x o o x  x o o x   x o o x  x o o x  x o o x  x o o x   x o o x  x o o x  x o o x  x o o x   x o o x  x o o x  x o o x  x o x*2 x   x o o x  x o o x  x o o x  x o o x   x o o x  x o o x  x o o x  x o o x   x o o x  x o o x  x o o x  x o o x   x o o x  x o o x  x o o x  - - - -
+    openhat: - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - - -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - - -
+}
+
+# Darbuka: the toms on the maqsum (doum tek - tek doum - tek -), between the
+# kicks; the clap only on 4, the hats thinned to offbeats
+pattern d_darbuka {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap:    - - - -  - - - -  - - - -  X - - -   - - - -  - - - -  - - - -  X - - -   - - - -  - - - -  - - - -  X - - -   - - - -  - - - -  - - - -  X - - -   - - - -  - - - -  - - - -  X - - -   - - - -  - - - -  - - - -  X - - -   - - - -  - - - -  - - - -  X - - -   - - - -  - - - -  - - - -  X - - -
+}
+
+# d_darbuka's hats and toms, for the perc track
+pattern d_darbuka_hats {
+    tom:     - - - x  - - - -  - - x -  - - - -   - - - x  - - - -  - - x -  - - - -   - - - x  - - - -  - - x -  - - - -   - - - x  - - - -  - - x -  - x - -   - - - x  - - - -  - - x -  - - - -   - - - x  - - - -  - - x -  - - - -   - - - x  - - - -  - - x -  - - - -   - - - x  - - - -  x - x -  x - x -
+    tom2:    - x:0.6 - -  - - x:0.7 -  - - - -  - x:0.6 - x:0.5   - x:0.6 - -  - - x:0.7 -  - - - -  - x:0.6 - x:0.5   - x:0.6 - -  - - x:0.7 -  - - - -  - x:0.6 - x:0.5   - x:0.6 - -  - - x:0.7 -  - - - -  - x:0.6 - x:0.5   - x:0.6 - -  - - x:0.7 -  - - - -  - x:0.6 - x:0.5   - x:0.6 - -  - - x:0.7 -  - - - -  - x:0.6 - x:0.5   - x:0.6 - -  - - x:0.7 -  - - - -  - x:0.6 - x:0.5   - x:0.6 - -  - - x:0.7 -  - x - x  - x - x
+    hat:     - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -
+}
+
+# Busy: the groove with ghost snares and the toms answering at the turns
+pattern d_busy {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  - - - -
+    clap:    - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  - - - -
+    snare:   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  x x x X
+}
+
+# d_busy's hats and toms, for the perc track
+pattern d_busy_hats {
+    hat:     x o x o  x o x o  x o x o  x o x o   x o x o  x o x o  x o x o  x o x*2 o   x o x o  x o x o  x o x o  x o x o   x o x o  x o x o  x o x o  x o x*2 x*3   x o x o  x o x o  x o x o  x o x o   x o x o  x o x o  x o x o  x o x*2 o   x o x o  x o x o  x o x o  x o x o   x o x o  x o x o  x o x o  - - - -
+    openhat: - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - - -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - - -
+    tom:     - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -
+    tom2:    - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -
+}
+
+# Zaffa: the toms double up between the kicks, the hats run sixteenths, the
+# clap stays on 2 and 4; bar 8 drops the last kick for a tom run
+pattern d_zaffa {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  - - - -
+    clap:    - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  - - - -
+}
+
+# d_zaffa's hats and toms, for the perc track
+pattern d_zaffa_hats {
+    tom:     - - x -  - x - x  - - x -  - - - -   - - x -  - x - x  - - x -  - - - -   - - x -  - x - x  - - x -  - - - -   - - x -  - x - x  - - x -  - - - -   - - x -  - x - x  - - x -  - - - -   - - x -  - x - x  - - x -  - - - -   - - x -  - x - x  - - x -  - - - -   - - x -  - x - x  - - x -  x x x x
+    tom2:    - - - x  - - - -  - - - x  - x - x   - - - x  - - - -  - - - x  - x - x   - - - x  - - - -  - - - x  - x - x   - - - x  - - - -  - - - x  - x - x   - - - x  - - - -  - - - x  - x - x   - - - x  - - - -  - - - x  - x - x   - - - x  - - - -  - - - x  - x - x   - - - x  - - - -  - - - x  - - - -
+    hat:     x x o x  x x o x  x x o x  x x o x   x x o x  x x o x  x x o x  x x o x   x x o x  x x o x  x x o x  x x o x   x x o x  x x o x  x x o x  x x o x   x x o x  x x o x  x x o x  x x o x   x x o x  x x o x  x x o x  x x o x   x x o x  x x o x  x x o x  x x o x   x x o x  x x o x  x x o x  - - - -
+}
+
+# The breath's last bars: no kick, a faint hat and a tom pulse under the fog
+pattern d_pulse {
+    kick:    - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -
+}
+
+# d_pulse's hats and toms, for the perc track
+pattern d_pulse_hats {
+    hat:     - - - -  - - o -  - - - -  - - o -   - - - -  - - o -  - - - -  - - o o
+    tom:     x:0.5 - - -  - - - -  - - - -  - - - -   x:0.5 - - -  - - - -  - - - -  - - - -
+}
+
+# Build, first half: no kick, the snare from quarters to sixteenths
+pattern d_build_a {
+    snare:   o - - -  o - - -  o - - -  o - - -   o - - -  o - - -  o - - -  o - o -   x - o -  x - o -  x - o -  x - o -   x - x -  x - x -  x - x -  x - x -   x o x o  x o x o  x o x o  x o x o   x o x o  x o x o  x x x x  x x x x   x x x x  x x x x  x x x x  x x x x   X x X x  X x X x  X x X x  X x X x
+}
+
+# d_build_a's hats and toms, for the perc track
+pattern d_build_a_hats {
+    hat:     - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   x - x -  x - x -  x - x -  x - x -   x - x -  x - x -  x - x -  x - x -   x o x o  x o x o  x o x o  x o x o   x o x o  x o x o  x o x o  x o x o   x x x x  x x x x  x x x x  x x x x   x x x x  x x x x  x x x x  x x x x
+}
+
+# Build, second half: the roll packs into ratchets, bar 8 ends on a beat of
+# silence
+pattern d_build_b {
+    snare:   x*2 x*2 x*2 x*2  x*2 x*2 x*2 x*2  x*2 x*2 x*2 x*2  x*2 x*2 x*2 x*2   x*2 x*2 x*2 x*2  x*2 x*2 x*2 x*2  x*2 x*2 x*2 x*2  X*2 X*2 X*2 X*2   x*3 x*3 x*3 x*3  x*3 x*3 x*3 x*3  x*3 x*3 x*3 x*3  x*3 x*3 x*3 x*3   X*3 X*3 X*3 X*3  X*3 X*3 X*3 X*3  X*3 X*3 X*3 X*3  X*3 X*3 X*3 X*3   x*4 x*4 x*4 x*4  x*4 x*4 x*4 x*4  x*4 x*4 x*4 x*4  x*4 x*4 x*4 x*4   X*4 X*4 X*4 X*4  X*4 X*4 X*4 X*4  X*4 X*4 X*4 X*4  X*4 X*4 X*4 X*4   X*4 X*4 X*4 X*4  X*4 X*4 X*4 X*4  X*4 X*4 X*4 X*4  X*4 X*4 X*4 X*4   X*4 X*4 X*4 X*4  X*4 X*4 X*4 X*4  X*4 X*4 X*4 X*4  - - - -
+}
+
+# d_build_b's hats and toms, for the perc track
+pattern d_build_b_hats {
+    hat:     x x x x  x x x x  x x x x  x x x x   x x x x  x x x x  x x x x  x x x x   x*2 x*2 x*2 x*2  x*2 x*2 x*2 x*2  x*2 x*2 x*2 x*2  x*2 x*2 x*2 x*2   x*2 x*2 x*2 x*2  x*2 x*2 x*2 x*2  x*2 x*2 x*2 x*2  x*2 x*2 x*2 x*2   x*3 x*3 x*3 x*3  x*3 x*3 x*3 x*3  x*3 x*3 x*3 x*3  x*3 x*3 x*3 x*3   x*3 x*3 x*3 x*3  x*3 x*3 x*3 x*3  x*3 x*3 x*3 x*3  x*3 x*3 x*3 x*3   x*4 x*4 x*4 x*4  x*4 x*4 x*4 x*4  x*4 x*4 x*4 x*4  x*4 x*4 x*4 x*4   x*4 x*4 x*4 x*4  x*4 x*4 x*4 x*4  x*4 x*4 x*4 x*4  - - - -
+    tom:     - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   x - - -  x - - -  x x x x  - - - -
+}
+
+# ────────────────────────────────────────────────
+# BASS — the roll leans on the last sixteenth of each beat
+# ────────────────────────────────────────────────
+
+# Plain E under T08's outro, one F at the end of the phrase
+pattern roll_e {
+    - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - F1:0.75 F1:0.6 F1:0.95  - E1:0.75 - E2:0.9
+}
+
+# Hijaz: F on the turn of bar 4, and bar 8 walks down G# F E
+pattern roll_hijaz {
+    - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - F1:0.75 F1:0.6 F1:0.95  - F1:0.75 E1:0.6 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - E1:0.75 E1:0.6 E1:0.95
+    - G#1:0.75 G#1:0.6 G#1:0.95  - F1:0.75 F1:0.6 F1:0.95  - E1:0.75 E1:0.6 E1:0.95  - F1:0.8 E1:0.6 E2:0.95
+}
+
+# Tribal gaps: the roll breaks open on beats 2 and 4, the octave pops out
+pattern roll_gap {
+    - E1:0.75 E1:0.6 E1:0.95  - - E1:0.7 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - - E2:0.7 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - - E1:0.7 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - - E2:0.7 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - - E1:0.7 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - - E2:0.7 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - - F1:0.7 F1:0.95  - F1:0.75 F1:0.6 F1:0.95  - - F2:0.7 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - - E1:0.7 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - - E2:0.7 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - - E1:0.7 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - - E2:0.7 E1:0.95
+    - E1:0.75 E1:0.6 E1:0.95  - - E1:0.7 E1:0.95  - E1:0.75 E1:0.6 E1:0.95  - - E2:0.7 E1:0.95
+    - G#1:0.75 G#1:0.6 G#1:0.95  - - F1:0.7 F1:0.95  - E1:0.75 E1:0.6 E1:0.95  - - - -
+}
+
+# Kickless: with the kick gone the roll takes the downbeat too
+pattern roll_kickless {
+    E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9  E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9
+    E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9  E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9
+    E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9  E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9
+    E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9  F1:0.9 F1:0.55 F1:0.65 F1:0.9  F1:0.85 F1:0.55 F1:0.65 F1:0.9
+    E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9  E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9
+    E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9  E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9
+    E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9  E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9
+    F1:0.9 F1:0.55 F1:0.65 F1:0.9  F1:0.85 F1:0.55 F1:0.65 F1:0.9  G#1:0.9 G#1:0.55 G#1:0.65 G#1:0.9  F1:0.9 F1:0.6 F1:0.75 F1:0.95
+}
+
+# The bass thins out under the roll: sixteenths, eighths, quarters, one note,
+# and nothing on the last beat
+pattern roll_thin {
+    E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9  E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9
+    E1:0.9 E1:0.55 E1:0.65 E1:0.9  E1:0.85 E1:0.55 E1:0.65 E1:0.9  F1:0.9 F1:0.55 F1:0.65 F1:0.9  F1:0.85 F1:0.55 F1:0.65 F1:0.9
+    E1:0.9 - E1:0.7 -  E1:0.9 - E1:0.7 -  E1:0.9 - E1:0.7 -  E1:0.9 - E1:0.7 -
+    E1:0.9 - E1:0.7 -  E1:0.9 - E1:0.7 -  F1:0.9 - F1:0.7 -  F1:0.9 - F1:0.7 -
+    E1:0.9 - - -  E1:0.9 - - -  E1:0.9 - - -  E1:0.9 - - -
+    E1:0.9 - - -  E1:0.9 - - -  F1:0.9 - - -  F1:0.9 - - -
+    E1:0.95 - - -  - - - -  E1:0.95 - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+}
+
+# ────────────────────────────────────────────────
+# OUD — the Hijaz colour, a cell on the maqsum, never a tune
+# ────────────────────────────────────────────────
+
+# Sparse: E and its F, the raised G# only at the end of the phrase
+pattern oud_sparse {
+    E3:0.9 - - F3:0.6  - - E3:0.7 -  - - - -  - - - -
+    - - - -  - - - -  E3:0.85 - - F3:0.55  - - E3:0.65 -
+    E3:0.9 - - F3:0.6  - - E3:0.7 -  - - - -  - - - -
+    - - - -  - - - -  E3:0.85 - - F3:0.55  - - G#3:0.8 -
+    E3:0.9 - - F3:0.6  - - E3:0.7 -  - - - -  - - - -
+    - - - -  - - - -  E3:0.85 - - F3:0.55  - - E3:0.65 -
+    E3:0.9 - - F3:0.6  - - E3:0.7 -  - - - -  - - - -
+    - - - -  - - G#3:0.8 -  F3:0.7 - - E3:0.6  - - E4:0.9 -
+}
+
+# Main: the cell answers the toms, B and C come in on the second half
+pattern oud_main {
+    E3:0.95 - G#3:0.6 -  F3:0.75 - - -  E3:0.9 - - -  F3:0.6 - E3:0.5 -
+    E3:0.95 - G#3:0.6 -  F3:0.75 - - -  E3:0.9 - - -  - - - -
+    E3:0.95 - G#3:0.6 -  F3:0.75 - - -  E3:0.9 - - -  F3:0.6 - E3:0.5 -
+    E3:0.95 - G#3:0.6 -  A3:0.75 - - -  G#3:0.9 - - -  F3:0.6 - - -
+    E3:0.95 - G#3:0.6 -  F3:0.75 - - -  E3:0.9 - - -  F3:0.6 - E3:0.5 -
+    E3:0.95 - G#3:0.6 -  F3:0.75 - - -  E3:0.9 - - -  - - - -
+    E3:0.95 - B3:0.6 -  C4:0.8 - - -  B3:0.9 - - -  G#3:0.6 - F3:0.5 -
+    E3:0.95 - - -  E4:0.9 - - -  F4:0.7 - E4:0.6 -  - - - -
+}
+
+# Busy: the same cell turns into ratchets and octave jumps
+pattern oud_busy {
+    E3:0.95 - G#3:0.6 -  F3:0.75 - E4:0.7 -  E3:0.9 - - F3:0.5  F3:0.6 - E3:0.5 -
+    E3:0.95 - G#3:0.6 -  F3:0.75*2 - - -  E3:0.9 - E4:0.7 -  - - F4:0.6 -
+    E3:0.95 - G#3:0.6 -  F3:0.75 - E4:0.7 -  E3:0.9 - - F3:0.5  F3:0.6 - E3:0.5 -
+    E3:0.95 - G#3:0.6 -  A3:0.75*2 - - -  G#3:0.9*3 - - -  F3:0.6 - E4:0.8 -
+    E3:0.95 - G#3:0.6 -  F3:0.75 - E4:0.7 -  E3:0.9 - - F3:0.5  F3:0.6 - E3:0.5 -
+    E3:0.95 - G#3:0.6 -  F3:0.75*2 - - -  E3:0.9 - E4:0.7 -  - - F4:0.6 -
+    E3:0.95 - B3:0.6 -  C4:0.8*2 - - -  B3:0.9*3 - - -  G#3:0.6 - F3:0.5 -
+    E3:0.9*2 - E4:0.9 -  E3:0.8*3 - E4:0.95 -  F4:0.8*2 - E4:0.7 -  E3:0.9*4 - - -
+}
+
+# Rise: the cell climbs the Hijaz a step every two bars, E, G#, B, C, and
+# breaks into ratchets on the high E at the turn
+pattern oud_rise {
+    E3:0.95 F3:0.6 E3:0.7 -  E3:0.9 - F3:0.65 E3:0.6  - E3:0.8 - E4:0.85  - - F3:0.6 -
+    E3:0.95 F3:0.6 E3:0.7 -  E3:0.9 - F3:0.65 E3:0.6  - E3:0.8 - E4:0.85  - - F3:0.6 -
+    G#3:0.95 A3:0.6 G#3:0.7 -  G#3:0.9 - A3:0.65 G#3:0.6  - G#3:0.8 - G#4:0.85  - - A3:0.6 -
+    G#3:0.95 A3:0.6 G#3:0.7 -  G#3:0.9 - A3:0.65 G#3:0.6  - G#3:0.8 - G#4:0.85  - - A3:0.6 -
+    B3:0.95 C4:0.6 B3:0.7 -  B3:0.9 - C4:0.65 B3:0.6  - B3:0.8 - B4:0.85  - - C4:0.6 -
+    B3:0.95 C4:0.6 B3:0.7 -  B3:0.9 - C4:0.65 B3:0.6  - B3:0.8 - B4:0.85  - - C4:0.6 -
+    C4:0.95 D4:0.6 C4:0.7 -  C4:0.9 - D4:0.65 C4:0.6  - C4:0.8 - C5:0.85  - - D4:0.6 -
+    E4:0.9*2 - F4:0.7 E4:0.8  E4:0.9*3 - G#4:0.8 -  F4:0.8*2 - E4:0.9 -  E5:1.0*4 - - -
+}
+
+# ────────────────────────────────────────────────
+# CHIME, VEIL, HISS
+# ────────────────────────────────────────────────
+
+# The bells' first appearance: nothing for six bars, then three strokes
+pattern chime_tease {
+    -*96
+    E5:0.7 - - - - - - - - - - - G#5:0.6 - - -
+    - - - - F5:0.65 - - - - - - - - - - -
+}
+
+# The breath: intervals thrown into the echo, spaced so the echo fills them
+pattern chime_line {
+    E5:0.8 - - - - - B5:0.6 - - - - - - - - -
+    - - - - F5:0.7 - - - - - - - G#5:0.55 - - -
+    - - - - - - - - E6:0.6 - - - - - - -
+    C6:0.65 - - - - - - - B5:0.55 - - - - - - -
+    E5:0.8 - - - - - B5:0.6 - - - - - - - - -
+    - - - - F5:0.7 - - - - - - - G#5:0.55 - - -
+    - - - - - - - - F6:0.55 - - - E6:0.6 - - -
+    D6:0.5 - - - C6:0.55 - - - B5:0.6 - - - - - - -
+}
+
+# Hijaz clusters: root and fifth hold, the top moves F, G#, G# over F, back
+pattern veil_walk {
+    [E3 B3 F4]:0.6   ..*31
+    [E3 B3 G#4]:0.6  ..*31
+    [F3 C4 G#4]:0.6  ..*31
+    [D3 A3 E4]:0.6   ..*15
+    [E3 B3 F4]:0.6   ..*15
+}
+
+# Frozen: the voicing opens upward while the room holds the bells
+pattern veil_high {
+    [B3 F4 G#4]:0.55  ..*31
+    [C4 G#4 B4]:0.55  ..*31
+    [B3 E4 F4]:0.55   ..*31
+    [A3 D4 E4]:0.55   ..*31
+}
+
+# Pad-only voices play nothing on their own
+pattern rest {
+    -*16
+}
+
+# Held riser (pad B2): eighths, then sixteenths, swelling over two bars
+pattern breath_roll {
+    E4:0.3 - E4:0.35 -  E4:0.4 - E4:0.45 -  E4:0.5 - E4:0.55 -  E4:0.6 - E4:0.65 -
+    E4:0.6 E4:0.65 E4:0.7 E4:0.72  E4:0.75 E4:0.78 E4:0.8 E4:0.83  E4:0.86 E4:0.88 E4:0.9 E4:0.93  E4:0.95 E4:0.97 E4:1.0 E4:1.0
+}
+
+# Held oud call (pad B4): the cell an octave up, answering on the grid
+pattern oud_call {
+    E4:0.9 - - F4:0.6  - - E4:0.7 -  G#4:0.8 - - -  F4:0.6 - E4:0.7 -
+    - - - -  B4:0.8 - - C5:0.7  - - B4:0.6 -  G#4:0.7 - F4:0.6 -
+}
+
+pattern hiss_hold {
+    E4:0.8 ..*127
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track drums {
+    play d_intro
+    using kit
+    level 0.9
+    velocity 1.0
+    out > highpass(28hz, 0.05) > eq(low=1, mid=-1, high=0.5) > drums
+}
+
+# The hats and toms on their own track: fader 2, pad A2
+track perc {
+    play d_intro_hats
+    using kit
+    level 0.9
+    velocity 1.0
+    out > highpass(28hz, 0.05) > eq(low=1, mid=-1, high=0.5) > drums
+}
+
+track bass {
+    play roll_e
+    using hollow
+    level 0.72
+    velocity 1.0
+    gate 0.7
+    sidechain 0.3
+    out > highpass(32hz, 0.05) > saturate(0.25) as dirt > eq(low=1, mid=-2.5, high=0) > master
+}
+
+track oud {
+    play oud_sparse
+    using oud
+    level 0
+    velocity 1.0
+    gate 0.6
+    pan -0.3
+    delay_send 0.16
+    reverb_send 0.08
+    sidechain 0.35
+    out > highpass(180hz, 0.05) > saturate(0.2) > autopan(0.3, bars=4) > master
+}
+
+track chime {
+    play chime_tease
+    using chime
+    level 0
+    velocity 1.0
+    pan 0.3
+    delay_send 0.4
+    reverb_send 0.45
+    sidechain 0.2
+    out > highpass(400hz, 0.05) > master
+}
+
+track veil {
+    play veil_walk
+    using veil
+    level 0
+    velocity 1.0
+    pan 0
+    reverb_send 0.4
+    delay_send 0.05
+    sidechain 0.55
+    out > highpass(240hz, 0.05) > phaser(0.4, bars=8) > autopan(0.45, bars=6) > master
+}
+
+track riser {
+    play hiss_hold
+    using hiss
+    level 0
+    velocity 1.0
+    gate 1.0
+    pan 0
+    reverb_send 0.1
+    sidechain 0
+    out > highpass(700hz, 0.05, lfo_bars=4, lfo_depth=500) as sweep > lowpass(9khz, 0.05) > autopan(0.5, hz=0.4) > master
+}
+
+# ── Pad-only voices: rests, a real level, never touched by a step ──
+
+# The bells under the hands (B1, B7, B8; K3 is their character)
+track bell {
+    play rest
+    using bellpad
+    level 0.22
+    velocity 1.0
+    pan -0.25
+    delay_send 0.45
+    reverb_send 0.5
+    sidechain 0.2
+    out > highpass(400hz, 0.05) > master
+}
+
+# The riser roll, out until B2 is held
+track rise {
+    play breath_roll
+    using breath
+    level 3.0
+    velocity 1.0
+    pan 0
+    reverb_send 0.15
+    sidechain 0
+    out > highpass(900hz, 0.05) > autopan(0.5, bars=1) > master
+}
+
+# The oud's high answer, out until B4 is held
+track call {
+    play oud_call
+    using oud
+    level 3.0
+    velocity 1.0
+    gate 0.6
+    pan 0.3
+    delay_send 0.25
+    reverb_send 0.1
+    sidechain 0.35
+    out > highpass(250hz, 0.05) > saturate(0.2) > master
+}
+
+# The KeyLab, per CONTROLES.md (base maps F7 reverb, F8 echo, F9 DJ filter,
+# A4 freeze, A7 prev, A8 next)
+midi {
+    cc 73 > drums level
+    cc 75 > perc level
+    cc 79 > bass level
+    cc 72 > oud level
+    cc 80 > veil level
+    cc 81 > chime level 0..0.5
+    cc 81 > bell level 0..0.35
+
+    cc 74 > hollow cutoff 60hz..260hz
+    cc 74 > hollow cutoff_env 500hz..1.6khz
+    cc 71 > oud cutoff 300hz..1.6khz
+    cc 71 > oud cutoff_env 1.8khz..4.5khz
+    cc 71 > oud resonance 30%..55%
+    cc 76 > bellpad op1_ratio 1.41x..3.5x
+    cc 76 > bellpad mod_index 25%..60%
+    cc 77 > veil cutoff 500hz..3khz
+    cc 93 > master hp cutoff 20hz..400hz
+    cc 93 > oud delay_send 0.16..0.6
+    cc 18 > oud delay_send 0..0.8
+    cc 19 > kit kick_decay 15%..45%
+    cc 16 > kit hihat_pitch 1x..1.8x
+    cc 17 > bass dirt drive 0.1..1.2
+
+    pad 36 > mute drums q=bar
+    pad 37 > toggle perc
+    pad 38 > throw oud q=1/16
+    pad 40 > repeat 1/8
+    pad 41 > repeat 1/16
+
+    pad 44 > play bell E5 q=1/16
+    pad 45 > hold rise q=beat
+    pad 46 > drums crash q=beat
+    pad 47 > hold call q=beat
+    pad 48 > repeat 1/32
+    pad 49 > throw bell q=1/16
+    pad 50 > play bell G#5
+    pad 51 > play bell B5
+}

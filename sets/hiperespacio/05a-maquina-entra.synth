@@ -1,0 +1,6 @@
+# set: bars=32 phase=05-maquina energy=7 blend=32
+# set-note: T05 enters dry under T04's acid outro: the high knock kick, offbeat hats, 3-3-2 metal ticks and the FM bass bouncing root-octave-root; nothing else tonal.
+tempo 142
+use "_t05.synth"
+
+track glitch { play g_sparse level 0.9 }

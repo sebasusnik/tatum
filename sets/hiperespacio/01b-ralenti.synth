@@ -1,0 +1,8 @@
+# set: bars=16 phase=01-ignicion energy=2
+# set-note: a rim answers the tick far off, the pad thins to fifths; near the end the turbine turns over for three bars and dies (the false start)
+use "_t01.synth"
+
+track drums { play tick_rim level 0.78 }
+track pad   { play void_b level 0.26 }
+track wind  { level 0.36 }
+track grind { play grind_cough level 0.08 }

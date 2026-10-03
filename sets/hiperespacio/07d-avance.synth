@@ -1,0 +1,10 @@
+# set: bars=16 phase=07-tunel energy=7
+# set-note: drive kit with 16th hats and snare turns, busy ticks, the arp held and opening across the phrase; last floor before the hole
+use "_t07.synth"
+
+track drums { play t7_drive }
+track bass  { play t7_roll }
+track ticks { play t7_ticks_busy every 4 rev level 1.0 }
+track arp   { play t7_arp_set level 0.1 }
+
+auto glass7 cutoff 0.3 > 0.36 > 0.42 over 16

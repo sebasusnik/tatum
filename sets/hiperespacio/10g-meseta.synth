@@ -1,0 +1,10 @@
+# set: bars=32 phase=10-hipervelocidad energy=9
+# set-note: Riding the peak: drums alternate drive and glitch every 8 bars, the bass alternates double and triple gallops, the screamer its leaps and its running line.
+# cue: 32.5 A5 roll 1/8 · suelta en el 1
+use "_t10.synth"
+
+track drums  { play g_drive, g_glitch }
+track perc  { play g_drive_hats, g_glitch_hats }
+track bass   { play gal_c, gal_b }
+track acid   { play scr_b, scr_c }
+track needle { play needle_5 level 0.2 }

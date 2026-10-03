@@ -1,0 +1,7 @@
+# set: bars=32 phase=08-outro energy=7
+# set-note: T08 outro, stripped for the long breath that blends over it: kick, hats, rims, the plain roll; no grinder, no zaps
+use "_t08.synth"
+
+track drums { play g8_strip }
+track bass  { play b8_roll }
+track rims  { level 0.56 }

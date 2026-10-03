@@ -1,0 +1,7 @@
+# set: bars=32 phase=03-tribu energy=5
+# set-note: DJ outro: kick, offbeat hats, rim, the low tom and the sparse hollow bass; nothing tonal on top
+use "_t03.synth"
+
+track drums { play t3_out }
+track toms  { play tm_out level 0.45 }
+track bass  { play hol_sparse level 0.8 }

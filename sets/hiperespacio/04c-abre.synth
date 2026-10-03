@@ -1,0 +1,6 @@
+# set: bars=16 phase=04-acido energy=6
+# set-note: the 303 opens bar by bar over sixteen bars (p-locks), the roll moves to the b2 on the turns
+use "_t04.synth"
+
+track bass  { play rl_b level 1.5 }
+track acid  { play acid_open16 level 1.0 }

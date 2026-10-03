@@ -1,0 +1,9 @@
+# set: bars=8 phase=10-hipervelocidad energy=8
+# set-note: The screamer leaves; drive drums and the plain gallop carry on, the needle ticks the last phrase.
+use "_t10.synth"
+
+track drums  { play g_drive }
+track perc  { play g_drive_hats }
+track bass   { play gal_a }
+track acid   { level 0 }
+track needle { play needle_5 level 0.2 }

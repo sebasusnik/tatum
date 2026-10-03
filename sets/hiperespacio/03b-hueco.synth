@@ -1,0 +1,7 @@
+# set: bars=32 phase=03-tribu energy=6
+# set-note: the hollow gapped bass lands (plain, then with octave pops every 16), rim answers in the kit, the three toms get their phrases
+use "_t03.synth"
+
+track drums { play t3_main }
+track toms  { play tm_main level 0.55 }
+track bass  { play hol_a, hol_b level 0.8 }

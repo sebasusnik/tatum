@@ -1,0 +1,7 @@
+# set: bars=16 phase=01-ignicion energy=1
+# set-note: the hour opens almost in silence: the hollow pad, the wind swelling, a hat ticking the last sixteenth of each beat
+tempo 138
+use "_t01.synth"
+
+track drums { play tick level 0.5 }
+auto vacio mod_index 0.18 > 0.3 over 16

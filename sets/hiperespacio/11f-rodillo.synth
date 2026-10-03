@@ -1,0 +1,11 @@
+# set: bars=8 phase=11-build energy=5
+# set-note: build 1/2: no kick; the roll comes back alone and opens bar by bar under clap and hats, the haze thins, the master filter closes
+use "_t11.synth"
+
+auto master dj cutoff 20000 > 2500 over 8
+auto haze level 0.176 > 0.088 over 8
+
+track drums { play beat_roll level 0.7 }
+track perc  { play perc_a level 0.5 }
+track bass  { play roll_open level 0.74 }
+track haze  { play haze_root level 0.176 }

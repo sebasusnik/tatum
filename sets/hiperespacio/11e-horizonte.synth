@@ -1,0 +1,16 @@
+# set: bars=16 phase=11-break energy=3
+# set-note: the break: everything stops but the haze (F# held, G rubbing over it, crush breathing) and the lead's call alone into the triplet echo
+# cue: 8.5 A3 throw de la llamada (medio compás)
+use "_t11.synth"
+
+auto haze level 0.126 > 0.158 > 0.136 > 0.178 over 16
+auto haze_hi level 0.052 > 0.078 > 0.063 > 0.09 over 16
+auto haze.crush wet 0.05 > 0.15 > 0.05 > 0.25 > 0.1 over 16
+auto smog mod_index 0.45 > 0.52 > 0.48 > 0.55 over 16
+auto reverb_mix 0.3 > 0.5 over 16
+
+track drums   { level 0 }
+track bass    { level 0 }
+track haze    { play haze_root level 0.126 }
+track haze_hi { play haze_rub level 0.052 }
+track lead    { play lead_echo level 0.13 sidechain 0 }

@@ -1,0 +1,13 @@
+# set: bars=16 phase=09-breath energy=2
+# set-note: The long breath: kick and bass out, the Hijaz pad walks its clusters and the bells throw intervals into the quarter echo and a dark hall.
+# cue: 7 B1 toque corto · campana
+# cue: 11 B1 toque corto + K3 ↑ · campana
+# cue: 15 B1 toque + B6 · campana al eco
+use "_t09.synth"
+
+track drums { play d_none }
+track perc  { play d_none_hats }
+track bass  { level 0 }
+track oud   { level 0 }
+track veil  { play veil_walk level 0.07 }
+track chime { play chime_line level 0.14 }

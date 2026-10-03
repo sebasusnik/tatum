@@ -1,0 +1,551 @@
+# T10 hipervelocidad — A phrygian, 146 BPM
+#
+# Release 4's explosion. T09 stops at the top of its build on a beat of
+# silence with the master shut to 700 Hz; this record comes in on the one
+# with a hard cut (blend=0), the filter wide open, a crash, and everything
+# T09 withheld: a kick, a gallop bass, a screaming acid. Then it holds the
+# peak, changing pattern every 16 bars, with one 4-bar stutter gap, and
+# strips down for T11 to mix over.
+#
+# Face: the hardest, brightest kit of the set so far (the highest, shortest,
+# most driven kick yet, a tight bright snare, needle hats), a two-octave
+# saw gallop bass with a fast pluck, the screamer (a 303 with a square an
+# octave up and a lot of drive, ratchets and octave leaps). The room is
+# small and dry: a sixteenth slap and a short plate. Signature: the
+# screamer itself, and shard, an FM cluster stab used three times.
+
+use "_base.synth"
+
+# The track's level in the hour: the whole track -0.5 dB at the end of the
+# master, so the set climbs the way the arc says (measured on the full render)
+master {
+    in > lowpass(20khz, 0.05) as dj
+       > highpass(20hz, 0.05) as hp
+       > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
+       > eq(low=0.5, mid=-0.5, high=1)
+       > gain(0.944) as trim
+       > out
+}
+
+tempo 146
+scale A phrygian
+
+delay sync=sixteenth feedback=0.22 filter=0.65
+reverb size=0.36 damp=0.55 predelay=10 sidechain=0.65
+
+delay_return  { in > highpass(600hz, 0.05) > autopan(0.7, bars=1) > out }
+reverb_return { in > highpass(400hz, 0.05) > lowpass(7khz, 0.05, lfo_bars=8, lfo_depth=2000) > out }
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# Hard and bright: the highest-pitched, most driven, shortest kick so far
+module beats kit {
+    kick_level 1.0
+    kick_decay 13%
+    kick_pitch 1.22x
+    kick_click 60%
+    kick_drive 78%
+    snare_level 0.6
+    snare_decay 9%
+    snare_pitch 1.6x
+    snare_snap 82%
+    snare_drive 55%
+    snare_pan -0.05
+    hihat_level 0.85
+    hihat_decay 8%
+    hihat_pitch 1.98x
+    hihat_pan 0.28
+    clap_level 0.72
+    clap_pan 0.05
+    tom_pan -0.3
+    crash_pan 0.15
+}
+
+# Gallop: a saw with a second saw an octave up, a quick bright pluck, no sustain
+module bass gallop {
+    osc1_wave saw
+    osc2_wave saw
+    osc2_pitch 12st
+    cutoff 130hz
+    cutoff_env 2.1khz
+    resonance 32%
+    keytrack 30%
+    glide 0%
+    attack 1ms
+    decay 72ms
+    sustain 0%
+    release 20ms
+}
+
+# Screamer: a 303 with a square an octave above, resonance near the edge
+module bass scream {
+    osc1_wave saw
+    osc2_wave square
+    osc2_pitch 12st
+    cutoff 320hz
+    cutoff_env 5khz
+    resonance 86%
+    glide 12%
+    keytrack 35%
+    attack 1ms
+    decay 150ms
+    sustain 12%
+    release 40ms
+    vel_env 70%
+}
+
+# Shard: a dry FM cluster stab, bright and short
+module fm shard {
+    algorithm dual_pairs
+    level 1.8
+    mod_index 70%
+    feedback 25%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 3x
+    op2_ratio 1x
+    op3_ratio 5.01x
+    op0_envelope 0.001 0.12 0.0 0.08
+    op1_envelope 0.001 0.08 0.0 0.05
+    op2_envelope 0.001 0.14 0.0 0.08
+    op3_envelope 0.001 0.05 0.0 0.04
+}
+
+# Shardpad: the shard for the hands. Held, it sustains, and a sixteenth
+# triangle on its index chops it into a motor on the grid; K3 moves its ratios
+# and index together, idle (low, round) to screaming (high, metallic)
+module fm shardpad {
+    algorithm dual_pairs
+    level 1.6
+    mod_index 55%
+    feedback 20%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 3x
+    op2_ratio 1x
+    op3_ratio 5.01x
+    op0_envelope 0.004 0.3 0.8 0.18
+    op1_envelope 0.004 0.2 0.6 0.15
+    op2_envelope 0.004 0.3 0.8 0.18
+    op3_envelope 0.004 0.15 0.5 0.12
+    lfo_target mod_index
+    lfo_sync sixteenth
+    lfo_waveform triangle
+    lfo_depth 30%
+}
+
+# Spark: bright noise strokes for the held riser roll
+instrument spark {
+    gain 0.9
+    noise() as n
+    n > highpass(3200, 0.25) as hp
+    hp > adsr(0.002, 0.05, 0.0, 0.04) as amp
+    amp > out
+}
+
+# Needle: a high metallic tick on its own euclidean grid
+module fm needle {
+    algorithm two_op
+    level 1.6
+    mod_index 88%
+    feedback 35%
+    waveform abs_sine
+    op0_ratio 1x
+    op1_ratio 9.3x
+    op0_envelope 0.003 0.035 0.0 0.03
+    op1_envelope 0.001 0.02 0.0 0.02
+}
+
+# ────────────────────────────────────────────────
+# DRUMS — 8-bar phrases, the turn in bar 8
+# ────────────────────────────────────────────────
+
+# The landing: a crash on the one, then the full glitch groove
+pattern g_land {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    crash:   x:0.75 - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -
+    clap:    - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  - - - -
+    snare:   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  x x x X   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  x x x x  x x X X
+}
+
+# g_land's hats and toms, for the perc track
+pattern g_land_hats {
+    hat:     X o x o  X o x o  X o x o  X o x o   X o x o  X o x o  X o x o  X o x o   X o x o  X o x o  X o x o  X o x o   X o x o  X o x o  X o x o  - - - -   X o x o  X o x o  X o x o  X o x o   X o x o  X o x o  X o x o  X o x o   X o x o  X o x o  X o x o  X o x o   X o x o  X o x o  - - - -  - - - -
+    openhat: - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - - -   - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - x:0.7 -  - - - -  - - - -
+}
+
+# Glitch: hat ratchets move around the bar, snare bursts, a kick dropped at
+# the end of bars 4 and 8
+pattern g_glitch {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  - - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  - - - -
+    clap:    - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  - - - -
+    snare:   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  x x x x  x x X X
+}
+
+# g_glitch's hats and toms, for the perc track
+pattern g_glitch_hats {
+    hat:     x*2 o x o  x o x*3 o  x o x o  x*2 o x o   x*2 o x o  x o x*3 o  x o x o  x*2 o x o   x*2 o x o  x o x*3 o  x o x o  x*2 o x o   x*2 o x o  x o x*3 o  x o x o  x x x x   x*2 o x o  x o x*3 o  x o x o  x*2 o x o   x*2 o x o  x o x*3 o  x o x o  x*2 o x o   x*2 o x o  x o x*3 o  x o x o  x*2 o x o   x*2 o x o  x o x*3 o  - - - -  - - - -
+    openhat: - - x:0.7 -  - - - -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - - -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - - -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - - -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - - -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - - -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - - -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - - -  - - - -  - - - -
+}
+
+# Drive: straighter, the hats in sixteenths with fixed accents, toms at the turn
+pattern g_drive {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap:    - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -
+    snare:   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  x x x x  x x X X
+}
+
+# g_drive's hats and toms, for the perc track
+pattern g_drive_hats {
+    hat:     x o X o  x o X o  x o X o  x o X o   x o X o  x o X o  x o X o  x o X o   x o X o  x o X o  x o X o  x o X o   x o X o  x o X o  x o X o  x o X x   x o X o  x o X o  x o X o  x o X o   x o X o  x o X o  x o X o  x o X o   x o X o  x o X o  x o X o  x o X o   x o X o  x o X o  - - - -  - - - -
+    openhat: - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -   - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - - -
+    tom:     - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -
+}
+
+# The gap: no kick, no clap; hats and snare stutter, a roll back in on bar 4
+pattern g_stut {
+    snare:   X*4 - - -  - - - -  X*3 - - -  - - - -   X*4 - - -  - - X*2 -  X*3 - - -  - - - -   X*4 - - -  - - - -  X*3 - - -  - - X*2 -   X*2 X*2 X*2 X*2  X*3 X*3 X*3 X*3  X*4 X*4 X*4 X*4  X*4 X*4 X*4 X*4
+}
+
+# g_stut's hats and toms, for the perc track
+pattern g_stut_hats {
+    hat:     x*4 - - -  x*3 - - -  x*4 - - -  x*3 - - -   x*4 - - -  x*3 - - -  x*4 - - -  x*3 - - -   x*4 - - -  x*3 - - -  x*4 - - -  x*3 - - -   x*2 x*2 x*2 x*2  x*3 x*3 x*3 x*3  x*4 x*4 x*4 x*4  x*4 x*4 x*4 x*4
+}
+
+# Stripped for T11 to mix over: kick, hats, open hat, a tom on the turn
+pattern g_outro {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+}
+
+# g_outro's hats and toms, for the perc track
+pattern g_outro_hats {
+    hat:     x o x o  x o x o  x o x o  x o x o   x o x o  x o x o  x o x o  x o x o   x o x o  x o x o  x o x o  x o x o   x o x o  x o x o  x o x o  x o x*2 o   x o x o  x o x o  x o x o  x o x o   x o x o  x o x o  x o x o  x o x o   x o x o  x o x o  x o x o  x o x o   x o x o  x o x o  x o x o  x o x*2 x*3
+    openhat: - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - - -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -   - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - - -
+    tom:     - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - x - x
+}
+
+# ────────────────────────────────────────────────
+# BASS — the gallop: a ratchet on the first sixteenth after the kick
+# ────────────────────────────────────────────────
+
+pattern gal_a {
+    - A1:0.9*2 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9*2 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8
+    - A1:0.9*2 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9*2 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8
+    - A1:0.9*2 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9*2 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8
+    - A1:0.9*2 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - Bb1:0.9*2 Bb1:0.65 Bb1:0.8  - A1:0.9 A2:0.7 A1:0.8
+    - A1:0.9*2 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9*2 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8
+    - A1:0.9*2 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9*2 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8
+    - A1:0.9*2 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9*2 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8
+    - Bb1:0.9*2 Bb1:0.65 Bb1:0.8  - A1:0.9*2 A1:0.65 A2:0.8  - C2:0.9*2 C2:0.65 A1:0.8  - A1:0.9*3 G1:0.75 Bb1:0.85
+}
+
+# Triple ratchets on 1 and 3, the b7 below on the turns
+pattern gal_b {
+    - A1:0.9*3 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9*3 A1:0.65 A1:0.8  - A1:0.9 A1:0.7*2 A1:0.8
+    - A1:0.9*3 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9*3 A1:0.65 A1:0.8  - G1:0.9 G1:0.7*2 A1:0.8
+    - A1:0.9*3 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9*3 A1:0.65 A1:0.8  - A1:0.9 A1:0.7*2 A1:0.8
+    - Bb1:0.9*3 Bb1:0.65 Bb1:0.8  - Bb1:0.9 Bb1:0.65 A1:0.8  - A1:0.9*3 A1:0.65 A1:0.8  - G1:0.9 A1:0.7*2 A2:0.85
+    - A1:0.9*3 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9*3 A1:0.65 A1:0.8  - A1:0.9 A1:0.7*2 A1:0.8
+    - A1:0.9*3 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9*3 A1:0.65 A1:0.8  - G1:0.9 G1:0.7*2 A1:0.8
+    - A1:0.9*3 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9*3 A1:0.65 A1:0.8  - A1:0.9 A1:0.7*2 A1:0.8
+    - Bb1:0.9*3 Bb1:0.65 Bb1:0.8  - C2:0.9*3 C2:0.65 Bb1:0.8  - A1:0.9*3 A2:0.8 A1:0.8  - A1:0.9*4 A1:0.8*4 A2:0.9
+}
+
+# Saved for after the gap: double gallops with the octave popping between
+pattern gal_c {
+    - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9 A1:0.65 A1:0.8
+    - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9*2 A2:0.7 A1:0.85*2  - Bb1:0.9 Bb1:0.65 Bb1:0.8
+    - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9 A1:0.65 A1:0.8
+    - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9*2 A2:0.7 A1:0.85*2  - G1:0.9*2 G2:0.7 G1:0.85*2  - Bb1:0.9 A1:0.65 A2:0.8
+    - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9 A1:0.65 A1:0.8
+    - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9*2 A2:0.7 A1:0.85*2  - Bb1:0.9 Bb1:0.65 Bb1:0.8
+    - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9*2 A2:0.7 A1:0.85*2  - A1:0.9 A1:0.65 A1:0.8
+    - Bb1:0.9*2 Bb2:0.7 Bb1:0.85*2  - A1:0.9*2 A2:0.7 A1:0.85*2  - C2:0.9*2 C2:0.7 Bb1:0.85  - A1:0.9*3 A1:0.8*3 A2:0.9
+}
+
+# Plain roll for the outro, one Bb on the turn
+pattern gal_out {
+    - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8
+    - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8
+    - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8
+    - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8
+    - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8
+    - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8
+    - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8
+    - A1:0.9 A1:0.65 A1:0.8  - A1:0.9 A1:0.65 A1:0.8  - Bb1:0.9 Bb1:0.65 Bb1:0.8  - A1:0.9 A1:0.65 A2:0.8
+}
+
+# ────────────────────────────────────────────────
+# SCREAMER — ratchets and octave leaps on the root, the b2 as the bite
+# ────────────────────────────────────────────────
+
+# A: the root in ratchets, a slide up the octave, Bb biting on the offbeats
+pattern scr_a {
+    A2:0.9*2 - ~A3:0.9 A2:0.6   Bb2:0.8 - A2:0.9 -   A2:0.9*2 A2:0.5 ~E3:0.8 -   A3:1.0 - ~Bb3:0.9 A2:0.6
+    A2:0.9 A2:0.5 - A2:0.8*3   - G2:0.7 ~A2:0.9 -   A2:0.9*2 - ~A3:0.9 A2:0.6   C3:0.8 - Bb2:0.9 -
+    A2:0.9*2 - ~A3:0.9 A2:0.6   Bb2:0.8 - A2:0.9 -   A2:0.9*2 A2:0.5 ~E3:0.8 -   A3:1.0 - ~Bb3:0.9 A2:0.6
+    A2:0.9 A2:0.5 - A2:0.8*3   - G2:0.7 ~A2:0.9 -   <A2:0.7 Bb2:0.8 C3:0.9 E3:1.0>  A3:1.0 - ~A2:0.8   Bb2:0.9*4 - - -
+    A2:0.9*2 - ~A3:0.9 A2:0.6   Bb2:0.8 - A2:0.9 -   A2:0.9*2 A2:0.5 ~E3:0.8 -   A3:1.0 - ~Bb3:0.9 A2:0.6
+    A2:0.9 A2:0.5 - A2:0.8*3   - G2:0.7 ~A2:0.9 -   A2:0.9*2 - ~A3:0.9 A2:0.6   C3:0.8 - Bb2:0.9 -
+    A2:0.9*2 - ~A3:0.9 A2:0.6   Bb2:0.8 - A2:0.9 -   A2:0.9*2 A2:0.5 ~F3:0.8 -   A3:1.0 - ~Bb3:0.9 A2:0.6
+    A2:0.9*3 - A3:1.0*2 -   A2:0.9*3 - A4:1.0 -   ~A3:0.9 G3:0.7 ~E3:0.8 C3:0.7   Bb2:0.9*4 A2:0.9*4 - -
+}
+
+# B: octave leaps two and three octaves wide, the ratchets on the leaps
+pattern scr_b {
+    A2:0.9 A3:0.8 A2:0.6 A4:1.0   - A2:0.9*2 ~Bb2:0.8 -   A2:0.9 A3:0.8 A2:0.6 A4:1.0   - E3:0.8 ~A3:0.9 -
+    A2:0.9 A3:0.8*2 A2:0.6 -   A4:1.0*3 - ~A3:0.8 -   A2:0.9 Bb3:0.8 A2:0.6 Bb4:1.0   - A2:0.9*2 G2:0.7 -
+    A2:0.9 A3:0.8 A2:0.6 A4:1.0   - A2:0.9*2 ~Bb2:0.8 -   A2:0.9 A3:0.8 A2:0.6 A4:1.0   - E3:0.8 ~A3:0.9 -
+    A2:0.9 A3:0.8*2 A2:0.6 -   A4:1.0*3 - ~A3:0.8 -   <A2:0.7 A3:0.8 A4:0.9 A3:0.8>  <A2:0.7 A3:0.8 A4:1.0 A3:0.8>  Bb2:0.9 ~A2:0.8   - - A2:0.9*4 -
+    A2:0.9 A3:0.8 A2:0.6 A4:1.0   - A2:0.9*2 ~Bb2:0.8 -   A2:0.9 A3:0.8 A2:0.6 A4:1.0   - E3:0.8 ~A3:0.9 -
+    A2:0.9 A3:0.8*2 A2:0.6 -   A4:1.0*3 - ~A3:0.8 -   A2:0.9 C4:0.8 A2:0.6 C4:1.0   - A2:0.9*2 G2:0.7 -
+    A2:0.9 A3:0.8 A2:0.6 A4:1.0   - A2:0.9*2 ~Bb2:0.8 -   A2:0.9 A3:0.8 A2:0.6 A4:1.0   - F3:0.8 ~E3:0.9 -
+    A2:0.9*3 A3:0.9*3 A4:1.0*3 -   Bb4:1.0*4 - A4:0.9*4 -   ~A3:0.9 - ~A2:0.8 -   A2:0.9*4 A3:0.9*4 A4:1.0*4 -
+}
+
+# C: running sixteenths with slides; the filter opens by p-locks bar by bar
+pattern scr_c {
+    A2:0.9(cutoff=0.36) A2:0.5 A3:0.8 A2:0.6   Bb2:0.9 A2:0.5 ~A3:0.8 A2:0.6   A2:0.9 G2:0.6 A2:0.7 ~E3:0.9   A2:0.8 A2:0.5 Bb2:0.8 A2:0.6
+    A2:0.9(cutoff=0.4) A2:0.5 A3:0.8 A2:0.6   Bb2:0.9 A2:0.5 ~A3:0.8 A2:0.6   A2:0.9 G2:0.6 A2:0.7 ~E3:0.9   A2:0.8*3 - Bb2:0.8 A2:0.6
+    A2:0.9(cutoff=0.44) A2:0.5 A3:0.8 A2:0.6   Bb2:0.9 A2:0.5 ~A3:0.8 A2:0.6   A2:0.9 G2:0.6 A2:0.7 ~E3:0.9   A2:0.8 A2:0.5 Bb2:0.8 A2:0.6
+    A2:0.9(cutoff=0.48) A2:0.5 A3:0.8 A2:0.6   Bb2:0.9 A2:0.5 ~A3:0.8 A2:0.6   C3:0.9*2 Bb2:0.7 A2:0.7 ~E3:0.9   A3:1.0*4 - ~A2:0.8 -
+    A2:0.9(cutoff=0.52) A2:0.5 A3:0.8 A2:0.6   Bb2:0.9 A2:0.5 ~A3:0.8 A2:0.6   A2:0.9 G2:0.6 A2:0.7 ~E3:0.9   A2:0.8 A2:0.5 Bb2:0.8 A2:0.6
+    A2:0.9(cutoff=0.56) A2:0.5 A3:0.8 A2:0.6   Bb2:0.9 A2:0.5 ~A3:0.8 A2:0.6   A2:0.9 G2:0.6 A2:0.7 ~E3:0.9   A2:0.8*3 - Bb2:0.8 A2:0.6
+    A2:0.9(cutoff=0.6) A2:0.5 A3:0.8 A2:0.6   Bb2:0.9 A2:0.5 ~A3:0.8 A2:0.6   A2:0.9 G2:0.6 A2:0.7 ~F3:0.9   A2:0.8 A2:0.5 Bb2:0.8 A2:0.6
+    A2:0.9(cutoff=0.64) A3:0.8*2 A2:0.6 A4:1.0   Bb2:0.9*3 A2:0.5 ~A3:0.8 A2:0.6   <A2:0.7 Bb2:0.8 C3:0.9 E3:1.0> <F3:0.8 G3:0.9 A3:1.0 Bb3:1.0> A4:1.0 -   A2:0.9*4 - A2:0.8(cutoff=0.36) -
+}
+
+# The gap: the root in stutters, a longer burst each bar, then a run up
+pattern scr_stut {
+    A2:0.9*4 - - -  - - - -  A2:0.9*3 - - -  - - - -
+    A2:0.9*4 - - -  - - A3:0.9*2 -  A2:0.9*3 - - -  - - - -
+    A2:0.9*4 - - -  A3:0.9*4 - - -  A2:0.9*4 - - -  A4:1.0*3 - - -
+    A2:0.8*4 A2:0.85*4 A2:0.9*4 A2:0.95*4  A3:0.9*4 A3:0.95*4 A3:1.0*4 A3:1.0*4  <A2 Bb2 C3 E3> <A3 Bb3 C4 E4> A4:1.0*4 A4:1.0*4  - - - -
+}
+
+# Braid: the screamer in groups of three sixteenths against the kick's four,
+# the accent walking round the bar; for the step where the crusher opens
+pattern scr_tri {
+    A2:1.0 A3:0.6 ~A2:0.7 A2:0.95 Bb2:0.6 A2:0.5 A2:1.0 A3:0.6 ~A2:0.7 E3:0.9 A2:0.5 ~Bb2:0.7 A2:1.0 A4:0.8 ~A3:0.7 A2:0.95
+    Bb2:0.6 A2:0.5 C3:0.9 A2:0.5 ~A3:0.8 A2:1.0 A3:0.6 ~A2:0.7 A2:0.95 Bb2:0.6 A2:0.5 A2:1.0 A3:0.6 ~A2:0.7 E3:0.9 A2:0.5
+    ~Bb2:0.7 A2:1.0 A4:0.8 ~A3:0.7 A2:0.95 Bb2:0.6 A2:0.5 C3:0.9 A2:0.5 ~A3:0.8 A2:1.0 A3:0.6 ~A2:0.7 A2:0.95 Bb2:0.6 A2:0.5
+    A2:1.0 A3:0.6 ~A2:0.7 E3:0.9 A2:0.5 ~Bb2:0.7 A2:1.0 A4:0.8 ~A3:0.7 A2:0.95 Bb2:0.6 A2:0.5 C3:0.9 A2:0.5 ~A3:0.8 A2:1.0
+    A3:0.6 ~A2:0.7 A2:0.95 Bb2:0.6 A2:0.5 A2:1.0 A3:0.6 ~A2:0.7 E3:0.9 A2:0.5 ~Bb2:0.7 A2:1.0 A4:0.8 ~A3:0.7 A2:0.95 Bb2:0.6
+    A2:0.5 C3:0.9 A2:0.5 ~A3:0.8 A2:1.0 A3:0.6 ~A2:0.7 A2:0.95 Bb2:0.6 A2:0.5 A2:1.0 A3:0.6 ~A2:0.7 E3:0.9 A2:0.5 ~Bb2:0.7
+    A2:1.0 A4:0.8 ~A3:0.7 A2:0.95 Bb2:0.6 A2:0.5 C3:0.9 A2:0.5 ~A3:0.8 A2:1.0 A3:0.6 ~A2:0.7 A2:0.95 Bb2:0.6 A2:0.5 A2:1.0
+    A2:1.0*2 A3:0.7 ~A2:0.8  A2:1.0*3 A4:0.9 ~A3:0.8  A2:1.0*4 Bb3:0.9 ~A3:0.8  <A2:0.8 A3:0.9 A4:1.0 A3:0.9> A2:0.9 - - - - -
+}
+
+# Wide: after the gap, the screamer an octave up with its ratchets doubled
+pattern scr_wide {
+    A3:0.9*2 - ~A4:1.0 A3:0.6   Bb3:0.8 - A3:0.9*3 -   A2:0.9*2 A3:0.5 ~E4:0.9 -   A4:1.0 - ~Bb4:1.0 A3:0.6
+    A3:0.9 A2:0.6 - A3:0.8*4   - G3:0.7 ~A3:0.9 -   A3:0.9*2 - ~A4:1.0 A3:0.6   C4:0.9 - Bb3:0.9*2 -
+    A3:0.9*2 - ~A4:1.0 A3:0.6   Bb3:0.8 - A3:0.9*3 -   A2:0.9*2 A3:0.5 ~E4:0.9 -   A4:1.0 - ~Bb4:1.0 A3:0.6
+    A3:0.9 A2:0.6 - A3:0.8*4   - G3:0.7 ~A3:0.9 -   <A3:0.7 Bb3:0.8 C4:0.9 E4:1.0>  A4:1.0*3 - ~A3:0.8   Bb3:0.9*4 A3:0.9*4 - -
+    A3:0.9*2 - ~A4:1.0 A3:0.6   Bb3:0.8 - A3:0.9*3 -   A2:0.9*2 A3:0.5 ~E4:0.9 -   A4:1.0 - ~Bb4:1.0 A3:0.6
+    A3:0.9 A2:0.6 - A3:0.8*4   - G3:0.7 ~A3:0.9 -   A3:0.9*2 - ~A4:1.0 A3:0.6   C4:0.9 - Bb3:0.9*2 -
+    A3:0.9*2 - ~A4:1.0 A3:0.6   Bb3:0.8 - A3:0.9*3 -   A2:0.9*2 A3:0.5 ~F4:0.9 -   A4:1.0 - ~Bb4:1.0 A3:0.6
+    A2:0.9*4 A3:0.9*4 A4:1.0*4 -   Bb4:1.0*4 - A4:1.0*4 -   ~A3:0.9 G3:0.7 ~E3:0.8 C3:0.7   A2:0.9*4 A3:0.9*4 A4:1.0*4 -
+}
+
+# ────────────────────────────────────────────────
+# SHARD, NEEDLE
+# ────────────────────────────────────────────────
+
+# Shard's gesture: three stabs at the end of bar 4 and a burst in bar 8
+pattern shard_hit {
+    -*48
+    - - - -  - - - -  - - [A4 Bb4 E5]:0.8 -  [A4 Bb4 E5]:0.7 - [A4 Bb4 E5]:0.9 -
+    -*48
+    - - [A4 Bb4 E5]:0.8 -  - - [A4 Bb4 E5]:0.8 -  [A4 Bb4 E5]:0.7 - [A4 Bb4 E5]:0.8 -  [A4 Bb4 E5]:0.9 - - -
+}
+
+# The long one: offbeat stabs through the second half of the phrase
+pattern shard_chain {
+    -*64
+    - - [A4 Bb4 E5]:0.7 -  - - [A4 Bb4 E5]:0.7 -  - - [A4 Bb4 E5]:0.7 -  - - [A4 Bb4 E5]:0.7 -
+    - - [A4 Bb4 E5]:0.7 -  - - [A4 Bb4 E5]:0.7 -  - - [G4 Bb4 E5]:0.75 -  - - [G4 Bb4 E5]:0.75 -
+    - - [A4 Bb4 E5]:0.8 -  - - [A4 Bb4 E5]:0.8 -  - - [A4 Bb4 E5]:0.8 -  - - [A4 Bb4 E5]:0.8 -
+    - - [A4 Bb4 E5]:0.8 -  - [A4 Bb4 E5]:0.8 [A4 Bb4 E5]:0.85 -  - [A4 Bb4 E5]:0.9 [A4 Bb4 E5]:0.9 -  [A4 Bb4 E5]:1.0 - - -
+}
+
+# Pad-only voices play nothing on their own
+pattern rest {
+    -*16
+}
+
+# Held riser (pad B2): eighths, then sixteenths, swelling over two bars
+pattern spark_roll {
+    A5:0.3 - A5:0.35 -  A5:0.4 - A5:0.45 -  A5:0.5 - A5:0.55 -  A5:0.6 - A5:0.65 -
+    A5:0.6 A5:0.65 A5:0.7 A5:0.72  A5:0.75 A5:0.78 A5:0.8 A5:0.83  A5:0.86 A5:0.88 A5:0.9 A5:0.93  A5:0.95 A5:0.97 A5:1.0 A5:1.0
+}
+
+# Held shard figure (pad B4): the cluster on every offbeat, G under it on
+# the last one of each bar
+pattern shard_off {
+    - - [A4 Bb4 E5]:0.8 -  - - [A4 Bb4 E5]:0.75 -  - - [A4 Bb4 E5]:0.8 -  - - [G4 Bb4 E5]:0.85 -
+}
+
+# Needle: five ticks spread over sixteen, then seven, answering nobody
+pattern needle_5 {
+    A6(5,16)  A6(5,16,2)  A6(5,16)  A6(7,16,1)
+}
+
+pattern needle_7 {
+    A6(7,16)  Bb6(7,16,3)  A6(7,16)  A6(9,16,1)
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track drums {
+    play g_land
+    using kit
+    level 1.05
+    velocity 1.0
+    out > highpass(30hz, 0.05) > eq(low=1, mid=-1, high=2.5) > limiter(0.62) > drums
+}
+
+# The hats and toms on their own track: fader 2, pad A2
+track perc {
+    play g_land_hats
+    using kit
+    level 1.05
+    velocity 1.0
+    out > highpass(30hz, 0.05) > eq(low=1, mid=-1, high=2.5) > limiter(0.62) > drums
+}
+
+track bass {
+    play gal_a
+    using gallop
+    level 1.15
+    velocity 1.0
+    gate 0.7
+    sidechain 0.3
+    out > highpass(34hz, 0.05) > saturate(0.45) > eq(low=1, mid=-2, high=1.5) > limiter(0.45) > master
+}
+
+track acid {
+    play scr_a
+    using scream
+    level 1.05
+    velocity 1.0
+    gate 0.55
+    pan 0.15
+    delay_send 0.12
+    reverb_send 0.05
+    sidechain 0.55
+    out > highpass(170hz, 0.05) > saturate(1.2) > bitcrush(9, 0.25, wet=0) as crush > limiter(0.45) > autopan(0.3, bars=2) > master
+}
+
+track shard {
+    play shard_hit
+    using shard
+    level 0
+    velocity 1.0
+    gate 0.4
+    pan -0.3
+    delay_send 0.25
+    reverb_send 0.12
+    sidechain 0.3
+    out > highpass(350hz, 0.05) > saturate(0.5) > limiter(0.3) > panenv(0.6, release=250) > master
+}
+
+track needle {
+    play needle_5
+    using needle
+    level 0
+    velocity 1.0
+    gate 0.3
+    pan 0.4
+    delay_send 0.1
+    sidechain 0.2
+    out > highpass(2khz, 0.05) > lowpass(12khz, 0.05) > autopan(0.6, bars=1) > master
+}
+
+# ── Pad-only voices: rests, a real level, never touched by a step ──
+
+# The shard motor under the hands (B1, B7, B8; K3 is its RPM)
+track motor {
+    play rest
+    using shardpad
+    level 0.8
+    velocity 1.0
+    pan -0.1
+    delay_send 0.12
+    reverb_send 0.08
+    sidechain 0.4
+    out > highpass(250hz, 0.05) > saturate(0.5) > limiter(0.35) > master
+}
+
+# The riser roll, out until B2 is held
+track rise {
+    play spark_roll
+    using spark
+    level 2.8
+    velocity 1.0
+    pan 0
+    reverb_send 0.1
+    sidechain 0
+    out > lowpass(12khz, 0.05) > autopan(0.6, bars=1) > master
+}
+
+# The shard on the offbeats, out until B4 is held
+track stabs {
+    play shard_off
+    using shard
+    level 1.5
+    velocity 1.0
+    gate 0.4
+    pan 0.3
+    delay_send 0.15
+    reverb_send 0.08
+    sidechain 0.3
+    out > highpass(350hz, 0.05) > saturate(0.5) > limiter(0.45) > master
+}
+
+# The KeyLab, per CONTROLES.md (base maps F7 reverb, F8 echo, F9 DJ filter,
+# A4 freeze, A7 prev, A8 next)
+midi {
+    cc 73 > drums level
+    cc 75 > perc level
+    cc 79 > bass level
+    cc 72 > acid level
+    cc 80 > needle level 0..0.3
+    cc 81 > shard level 0..1
+    cc 81 > motor level 0..0.9
+
+    cc 74 > gallop cutoff 70hz..300hz
+    cc 74 > gallop cutoff_env 1khz..3khz
+    cc 71 > scream cutoff 180hz..1.2khz
+    cc 71 > scream cutoff_env 3khz..6.5khz
+    cc 71 > scream resonance 70%..88%
+    cc 76 > shardpad op1_ratio 1.5x..4x
+    cc 76 > shardpad op3_ratio 2.5x..7x
+    cc 76 > shardpad mod_index 35%..75%
+    cc 77 > needle mod_index 50%..95%
+    cc 93 > master hp cutoff 20hz..400hz
+    cc 93 > acid delay_send 0.12..0.5
+    cc 18 > acid delay_send 0..0.8
+    cc 19 > kit kick_decay 9%..32%
+    cc 16 > kit hihat_pitch 1.4x..2x
+    cc 17 > acid crush wet 0..0.6
+
+    pad 36 > mute drums q=bar
+    pad 37 > toggle perc
+    pad 38 > throw acid q=1/16
+    pad 40 > repeat 1/8
+    pad 41 > repeat 1/16
+
+    pad 44 > play motor A3 q=1/16
+    pad 45 > hold rise q=beat
+    pad 46 > drums crash q=beat
+    pad 47 > hold stabs q=beat
+    pad 48 > repeat 1/32
+    pad 49 > throw motor q=1/16
+    pad 50 > play motor Bb3
+    pad 51 > play motor E4
+}

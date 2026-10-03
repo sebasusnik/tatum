@@ -1,0 +1,524 @@
+# T07 tunel — F# phrygian, 144 BPM. The build-up track, and Release 3.
+#
+# Face: a tight high kick with a hard click, a hollow square/saw roll that
+# knocks rather than buzzes, a glass arp (FM, 1:7) that opens over phrases,
+# and the one lead of the first half: a serial-FM laser that says a short
+# phrygian cell (F# G F# E) and nothing more. The room is a tunnel: a darker,
+# longer reverb with a late predelay and a straight-eighth echo that walks
+# down it.
+#
+# The KeyLab layout is CONTROLES.md; the midi block at the end maps it here.
+# B1 plays the laser on its own module (K3 its character), B2 holds a riser,
+# B4 holds the machine-gun figure.
+
+use "_base.synth"
+
+# The track's level in the hour: the whole track -0.6 dB at the end of the
+# master, so the set climbs the way the arc says (measured on the full render)
+master {
+    in > lowpass(20khz, 0.05) as dj
+       > highpass(20hz, 0.05) as hp
+       > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
+       > eq(low=0.5, mid=-0.5, high=1)
+       > gain(0.933) as trim
+       > out
+}
+
+tempo 144
+scale F# phrygian
+
+# The tunnel: eighth echo (not the base's dotted), longer and darker tail
+delay sync=eighth feedback=0.38 filter=0.45
+reverb size=0.74 damp=0.62 predelay=45 sidechain=0.65
+delay_return  { in > highpass(500hz, 0.05) > lowpass(5khz, 0.05) > autopan(0.6, bars=1) > out }
+reverb_return { in > highpass(350hz, 0.05) > lowpass(4.5khz, 0.05, lfo_bars=8, lfo_depth=1800) > out }
+
+# ── MODULES ──
+
+# Kick higher and tighter than warp's, all click; a crisp tuned-up snare for the roll
+module beats tunelkit {
+    kick_level 1.0
+    kick_decay 17%
+    kick_pitch 1.14x
+    kick_click 66%
+    kick_drive 45%
+    snare_level 0.5
+    snare_decay 9%
+    snare_pitch 1.38x
+    snare_snap 82%
+    snare_drive 30%
+    snare_pan 0.05
+    hihat_level 0.7
+    hihat_decay 7%
+    hihat_pitch 1.85x
+    hihat_pan 0.3
+    clap_level 0.6
+    clap_pan -0.1
+    tom_pan -0.35
+    crash_pan 0.25
+}
+
+# Metal ticks: a second kit with no kick, toms tuned up into rims
+module beats ticks {
+    level 1.4
+    hihat_level 0.6
+    hihat_decay 22%
+    hihat_pitch 1.3x
+    hihat_pan -0.4
+    clap_level 0.5
+    clap_pan 0.35
+    tom_pan 0.4
+    snare_level 0.4
+    snare_pitch 1.9x
+    snare_decay 3%
+    snare_snap 90%
+    snare_pan -0.3
+}
+
+# Rolling bass: a square with a saw an octave under, a knock of resonance;
+# hollow where warp's two saws are thick
+module bass tube {
+    osc1_wave square
+    osc2_wave saw
+    osc2_pitch -12st
+    cutoff 115hz
+    cutoff_env 1150hz
+    resonance 42%
+    keytrack 25%
+    glide 0%
+    attack 1ms
+    decay 78ms
+    sustain 0%
+    release 22ms
+    vel_env 45%
+}
+
+# Glass: a resonant keys ping, no detune; its cutoff (a slow LFO, and the
+# steps' auto) is what opens it over the phrases
+module keys glass7 {
+    voice_mode poly
+    cutoff 900hz
+    resonance 48%
+    detune 0%
+    chorus_mix 0%
+    attack 1ms
+    decay 95ms
+    sustain 0%
+    release 70ms
+    lfo_target cutoff
+    lfo_sync bars_8
+    lfo_waveform triangle
+    lfo_depth 18%
+}
+
+# Pad for the hole: dry of chorus, it moves by filter LFO and a phaser
+module keys vault {
+    voice_mode poly
+    cutoff 650hz
+    resonance 32%
+    detune 0%
+    chorus_mix 0%
+    attack 1.8s
+    decay 900ms
+    sustain 85%
+    release 1.4s
+    lfo_target cutoff
+    lfo_sync bars_4
+    lfo_waveform triangle
+    lfo_depth 20%
+}
+
+# Laser: serial FM, a high short modulator at the top of the stack so each
+# note starts with a bright zap and settles thin; no vibrato. The index LFO
+# is the only thing that moves while a note holds
+module fm laser7 {
+    algorithm serial4
+    level 1.5
+    mod_index 58%
+    feedback 12%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op2_ratio 2x
+    op3_ratio 7x
+    op0_envelope 0.002 0.22 0.6 0.12
+    op1_envelope 0.001 0.14 0.35 0.10
+    op2_envelope 0.001 0.09 0.2 0.08
+    op3_envelope 0.001 0.035 0.0 0.03
+    lfo_target mod_index
+    lfo_sync bar
+    lfo_waveform triangle
+    lfo_depth 25%
+}
+
+# Riser: noise through a bandpass whose envelope climbs for ten seconds
+instrument wind7 {
+    gain 0.9
+    noise() as n
+    n > bandpass(350, 0.35, ea=10, ed=1, es=1, er=0.3, edepth=6500) as bp
+    bp > adsr(8, 1, 1, 0.08) as amp
+    amp > out
+}
+
+# ── DRUMS ──
+
+# Mix-in / mix-out: kick, a ticking offbeat hat with a ghost, an open hat
+# closing every four bars, and bar 8 trips the last kick onto the offbeat
+pattern t7_strip {
+    kick:    X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  - - X:0.7 -
+    hat:     - - x - - - x - - - x - - - x o  - - x - - - x - - - x - - - x o  - - x - - - x - - - x - - - x o  - - x - - - x - - - x - x o x x  - - x - - - x - - - x - - - x o  - - x - - - x - - - x - - - x o  - - x - - - x - - - x - - - x o  - - x - - - x - x - x - x*2 - x*3 -
+    openhat: - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.5 -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.5 -  - - - -
+}
+
+# Main: offbeat open hat, clap on 2 and 4, a turn in the 8th bar (kick drops a beat)
+pattern t7_main {
+    kick:    X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  - - - -
+    clap:    - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - x x
+    hat:     o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  o - x o  x x x x  x*2 x x*3 x
+    openhat: - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - - -  - - - -
+}
+
+# Drive: 16th hats with fixed accents, snare ghosts, a snare flam turn every 4 bars
+pattern t7_drive {
+    kick:    X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - X:0.7 -
+    clap:    - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -
+    snare:   - - - -  - - - o  - - - -  - - o -  - - - -  - - - o  - - - -  - o <x o x> -  - - - -  - - - o  - - - -  - - o -  - - - -  - - - o  - o - -  x*2 - x*3 x*4
+    hat:     x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x x*2 X x*3
+    openhat: - - x:0.55 -  - - x:0.55 -  - - x:0.55 -  - - x:0.55 -  - - x:0.55 -  - - x:0.55 -  - - x:0.55 -  - - - -  - - x:0.55 -  - - x:0.55 -  - - x:0.55 -  - - x:0.55 -  - - x:0.55 -  - - x:0.55 -  - - x:0.55 -  - - - -
+}
+
+# The drop kit: drive with a crash on the one and a 16th-tom answer in bar 8
+pattern t7_drop {
+    kick:    X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - X -  X X X X
+    crash:   x:0.45 - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -
+    clap:    - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  - - - -  - - - -  - - - -
+    snare:   - - - -  - - - o  - - - -  - - o -  - - - -  - - - o  - - - -  - o - -  - - - -  - - - o  - - - -  - - o -  - - - -  - - - o  - o - -  x - x -  - - - -  - - - o  - - - -  - - o -  - - - -  - - - o  - - - -  - o - -  - - - -  - - - o  - - - -  - - o -  x x x x  x*2 x*2 x*2 x*2  x*3 x*3 x*3 x*3  x*4 x*4 x*4 x*4
+    hat:     x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o  x o X o
+    openhat: - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - - -  - - - -  - - - -  - - - -
+}
+
+# The build: no kick. The snare packs tighter every two bars (quarters,
+# eighths, sixteenths, then rolls), the hats with it, and the last beat of
+# bar 8 is silence
+pattern t7_build {
+    snare:   x:0.5 - - -  x:0.5 - - -  x:0.55 - - -  x:0.55 - - -  x:0.6 - - -  x:0.6 - - -  x:0.6 - - -  x:0.65 - - -  x:0.6 - x:0.6 -  x:0.65 - x:0.65 -  x:0.65 - x:0.65 -  x:0.7 - x:0.7 -  x:0.7 - x:0.7 -  x:0.7 - x:0.7 -  x:0.75 - x:0.75 -  x:0.75 - x:0.75 -  x:0.7 x:0.7 x:0.7 x:0.7  x:0.75 x:0.75 x:0.75 x:0.75  x:0.8 x:0.8 x:0.8 x:0.8  x:0.8 x:0.8 x:0.8 x:0.8  x:0.85 x:0.85 x:0.85 x:0.85  x:0.85 x:0.85 x:0.85 x:0.85  x:0.9 x:0.9 x:0.9 x:0.9  x:0.9 x:0.9 x:0.9 x:0.9  x*2 x*2 x*2 x*2  x*2 x*2 x*2 x*2  x*2 x*2 x*3 x*3  x*3 x*3 x*3 x*3  X*3 X*3 X*3 X*3  X*4 X*4 X*4 X*4  X*4 X*4 X*6 X*8  - - - -
+    hat:     - - x - - - x - - - x - - - x -  - - x - - - x - - - x - - - x -  x - x - x - x - x - x - x - x -  x - x - x - x - x - x - x - x -  x x x x x x x x x x x x x x x x  x x x x x x x x x x x x x x x x  x*2 x x*2 x x*2 x x*2 x x*2 x x*2 x x*2 x x*2 x  x*2 x*2 x*2 x*2 x*3 x*3 x*3 x*3 x*3 x*3 x*4 x*4 - - - -
+}
+
+pattern t7_ticks {
+    hat:  - x - -  - - - x  - x - -  - - - -  - x - -  - - - x  - x - -  - - x?0.5 -
+    tom:  - - - -  - - - -  - - - -  - - x:0.5 -  - - - -  - - - -  - - - -  x:0.5 - - x:0.4
+}
+
+pattern t7_ticks_busy {
+    hat:   - x - x  - - - x  - x - -  - x - x  - x - x  - - - x  - x - -  x*2 - x -
+    snare: - - - -  - - o -  - - - -  - - - o  - - - -  - - o -  - - - -  - - - o
+    clap:  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.4 -
+    tom:   - - - -  - - - -  - - - -  - - x:0.5 -  - - - -  - - - -  - - x:0.4 -  x:0.5 - - x:0.4
+}
+
+# ── BASS ──
+
+# Closed and plain for mixing in: root only, the b2 once in bar 8
+pattern t7_roll_in {
+    - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75
+    - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75
+    - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75
+    - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75
+    - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75
+    - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75
+    - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75
+    - 1.1:0.9 1.1:0.65 1.1:0.75  - 1.1:0.9 1.1:0.65 1.1:0.75  - 2.1:0.9 2.1:0.65 2.1:0.75  - 2.1:0.9 1.1:0.7 1.1:0.8
+}
+
+# The tunnel roll: the accent walks (first, then last sixteenth of the three),
+# a ratchet at the end of bar 4, the b2 for a beat in bar 6, and bar 8 turns
+# round the b2 and the octave with ratchets
+pattern t7_roll {
+    - 1.1:0.95 1.1:0.6 1.1:0.75  - 1.1:0.95 1.1:0.6 1.1:0.75  - 1.1:0.95 1.1:0.6 1.1:0.75  - 1.1:0.95 1.1:0.6 1.1:0.75
+    - 1.1:0.75 1.1:0.6 1.1:0.95  - 1.1:0.75 1.1:0.6 1.1:0.95  - 1.1:0.75 1.1:0.6 1.1:0.95  - 1.1:0.75 1.1:0.6 1.1:0.95
+    - 1.1:0.95 1.1:0.6 1.1:0.75  - 1.1:0.95 1.1:0.6 1.1:0.75  - 1.1:0.95 1.1:0.6 1.1:0.75  - 1.1:0.95 1.1:0.6 1.1:0.75
+    - 1.1:0.95 1.1:0.6 1.1:0.75  - 1.1:0.95 1.1:0.6 1.1:0.75  - 1.1:0.95 1.1:0.6 1.1:0.75  - 1.1:0.9 <1.1:0.8 1.1:0.8> <1.1:0.85 1.1:0.85 1.1:0.85>
+    - 1.1:0.95 1.1:0.6 1.1:0.75  - 1.1:0.95 1.1:0.6 1.1:0.75  - 1.1:0.95 1.1:0.6 1.1:0.75  - 1.1:0.95 1.1:0.6 1.1:0.75
+    - 1.1:0.95 1.1:0.6 1.1:0.75  - 1.1:0.95 1.1:0.6 1.1:0.75  - 2.1:0.95 2.1:0.6 2.1:0.75  - 1.1:0.95 1.1:0.6 1.1:0.75
+    - 1.1:0.75 1.1:0.6 1.1:0.95  - 1.1:0.75 1.1:0.6 1.1:0.95  - 1.1:0.75 1.1:0.6 1.1:0.95  - 1.1:0.75 1.1:0.6 1.1:0.95
+    - 2.1:0.95 2.1:0.6 1.1:0.8  - <1.1:0.85 1.1:0.85> 1.1:0.6 1.2:0.9  - 2.1:0.95 1.1:0.6 <1.1:0.85 1.1:0.85 1.1:0.85>  - 1.2:0.95 2.1:0.8 <1.1:0.9 1.1:0.9>
+}
+
+# Kickless in the build: the roll thins to one note a beat, then nothing
+pattern t7_roll_build {
+    - 1.1:0.9 1.1:0.6 1.1:0.75  - 1.1:0.9 1.1:0.6 1.1:0.75  - 1.1:0.9 1.1:0.6 1.1:0.75  - 1.1:0.9 1.1:0.6 1.1:0.75
+    - 1.1:0.9 1.1:0.6 1.1:0.75  - 1.1:0.9 1.1:0.6 1.1:0.75  - 1.1:0.9 1.1:0.6 1.1:0.75  - 2.1:0.9 2.1:0.6 2.1:0.75
+    - 1.1:0.9 1.1:0.6 1.1:0.75  - 1.1:0.9 1.1:0.6 1.1:0.75  - 1.1:0.9 1.1:0.6 1.1:0.75  - 1.1:0.9 1.1:0.6 1.1:0.75
+    - 1.1:0.9 - 1.1:0.75  - 1.1:0.9 - 1.1:0.75  - 1.1:0.9 - 1.1:0.75  - 2.1:0.9 - 2.1:0.75
+    - 1.1:0.9 - 1.1:0.75  - 1.1:0.9 - 1.1:0.75  - 1.1:0.9 - 1.1:0.75  - 1.1:0.9 - 1.1:0.75
+    - 1.1:0.9 - -  - 1.1:0.9 - -  - 1.1:0.9 - -  - 2.1:0.9 - -
+    - 1.1:0.9 - -  - - - -  - 1.1:0.9 - -  - - - -
+    - 1.1:0.9 - -  - - - -  - - - -  - - - -
+}
+
+# The drop's new figure: octave jumps on the second sixteenth, a gallop into
+# every fourth beat; bars 7-8 climb to the b2 and turn with ratchets
+pattern t7_roll_drop {
+    - 1.1:0.95 1.2:0.7 1.1:0.8  - 1.1:0.95 1.1:0.6 1.1:0.8  - 1.1:0.95 1.2:0.7 1.1:0.8  - <1.1:0.9 1.1:0.8> 1.1:0.7 1.1:0.85
+    - 1.1:0.95 1.2:0.7 1.1:0.8  - 1.1:0.95 1.1:0.6 1.1:0.8  - 1.1:0.95 1.2:0.7 1.1:0.8  - <1.1:0.9 1.1:0.8> 1.1:0.7 1.1:0.85
+    - 1.1:0.95 1.2:0.7 1.1:0.8  - 1.1:0.95 1.1:0.6 1.1:0.8  - 2.1:0.95 2.2:0.7 2.1:0.8  - <2.1:0.9 2.1:0.8> 2.1:0.7 1.1:0.85
+    - 1.1:0.95 1.2:0.7 1.1:0.8  - 1.1:0.95 1.1:0.6 1.1:0.8  - 1.1:0.95 1.2:0.7 1.1:0.8  - <1.1:0.9 1.1:0.9 1.1:0.9> 1.2:0.8 2.1:0.9
+    - 1.1:0.95 1.2:0.7 1.1:0.8  - 1.1:0.95 1.1:0.6 1.1:0.8  - 1.1:0.95 1.2:0.7 1.1:0.8  - <1.1:0.9 1.1:0.8> 1.1:0.7 1.1:0.85
+    - 1.1:0.95 1.2:0.7 1.1:0.8  - 1.1:0.95 1.1:0.6 1.1:0.8  - 1.1:0.95 1.2:0.7 1.1:0.8  - <1.1:0.9 1.1:0.8> 1.1:0.7 1.1:0.85
+    - 2.1:0.95 2.2:0.7 2.1:0.8  - 2.1:0.95 2.1:0.6 2.1:0.8  - 1.1:0.95 1.2:0.7 1.1:0.8  - <1.1:0.9 1.1:0.8> 1.1:0.7 1.1:0.85
+    - 1.1:0.95 <1.2:0.8 1.2:0.8> 1.1:0.8  - 2.1:0.95 <2.2:0.8 2.2:0.8> 2.1:0.8  - 1.1:0.95 <1.2:0.8 1.2:0.8> 2.1:0.9  - <2.1:0.9 2.1:0.9 2.1:0.9> 1.2:0.9 <1.1:0.9 1.1:0.9>
+}
+
+# ── ARP, PAD, LEAD, RISER ──
+
+# Held note sets the arp walks: root cluster, the b2 on top, sus4, a tritone
+pattern t7_arp_set {
+    [1.4 2.4 5.4]:0.8 ..*15  [1.4 2.4 5.4]:0.8 ..*15
+    [1.4 4.4 5.4]:0.8 ..*15  [7.3 2.4 5.4]:0.8 ..*15
+}
+
+# Sparse: the same sets, a beat on and a beat off, so the arp stutters
+pattern t7_arp_gate {
+    [1.4 2.4 5.4]:0.8 ..*5 - -  [1.4 2.4 5.4]:0.8 ..*5 - -  [1.4 2.4 5.4]:0.8 ..*5 - -  [1.4 2.4 5.4]:0.8 ..*5 - -
+    [1.4 4.4 5.4]:0.8 ..*5 - -  [1.4 4.4 5.4]:0.8 ..*5 - -  [7.3 2.4 5.4]:0.8 ..*5 - -  [7.3 2.4 5.4]:0.8 ..*7
+}
+
+# Open fifth and the b2 rubbing above it, a bar each, then the tritone shape
+pattern t7_pad {
+    [1.2 5.2 2.3]:0.6 ..*31
+    [1.2 5.2 1.3]:0.6 ..*15
+    [7.1 5.2 2.3]:0.6 ..*15
+}
+
+# The laser cell: F# F# G | E, left to ring, answered once lower (C# D C#).
+# Bar 8 closes on a two-note ratchet, not a cadence
+pattern t7_laser {
+    1.4:0.9 - 1.4:0.7 2.4:0.95  .. .. - -  7.3:0.85 .. .. ..  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    1.4:0.9 - 1.4:0.7 2.4:0.95  .. .. - -  7.3:0.85 .. .. ..  - - - -
+    5.3:0.8 .. 6.3:0.85 ..  5.3:0.8 .. .. ..  - - - -  - - - -
+    1.4:0.9 - 1.4:0.7 2.4:0.95  .. .. - -  7.3:0.85 .. .. ..  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    1.4:0.9 - 1.4:0.7 2.4:0.95  .. .. 1.4:0.8 ..  5.3:0.85 .. .. ..  - - - -
+    - - - -  - - - -  <2.4:0.8 2.4:0.8> .. <1.4:0.9 1.4:0.9> ..  - - - -
+}
+
+# The drop: the cell an octave up, and every answer a machine-gun on one note
+pattern t7_laser_peak {
+    1.5:1.0 - 1.5:0.75 2.5:1.0  .. .. - -  7.4:0.9 .. .. ..  - - - -
+    - - - -  <2.5:0.85 2.5:0.85 2.5:0.85 2.5:0.85> - <2.5:0.85 2.5:0.85 2.5:0.85 2.5:0.85> -  <1.5:0.9 1.5:0.9 1.5:0.9 1.5:0.9> - - -  - - - -
+    1.5:1.0 - 1.5:0.75 2.5:1.0  .. .. - -  7.4:0.9 .. .. ..  - - - -
+    5.4:0.9 .. 6.4:0.9 ..  <5.4:0.85 5.4:0.85 5.4:0.85 5.4:0.85> - <5.4:0.85 5.4:0.85 5.4:0.85 5.4:0.85> -  <5.4:0.9 5.4:0.9 5.4:0.9 5.4:0.9 5.4:0.9 5.4:0.9> - - -  - - - -
+    1.5:1.0 - 1.5:0.75 2.5:1.0  .. .. - -  7.4:0.9 .. .. ..  - - - -
+    - - - -  <2.5:0.85 2.5:0.85 2.5:0.85 2.5:0.85> - <2.5:0.85 2.5:0.85 2.5:0.85 2.5:0.85> -  <1.5:0.9 1.5:0.9 1.5:0.9 1.5:0.9> - - -  - - - -
+    1.5:1.0 - 1.5:0.75 2.5:1.0  .. .. 1.5:0.85 ..  5.4:0.9 .. .. ..  - - - -
+    <1.5:0.8 1.5:0.8 1.5:0.8 1.5:0.8> <1.5:0.85 1.5:0.85 1.5:0.85 1.5:0.85> <1.5:0.9 1.5:0.9 1.5:0.9 1.5:0.9 1.5:0.9 1.5:0.9> <1.5:0.95 1.5:0.95 1.5:0.95 1.5:0.95 1.5:0.95 1.5:0.95 1.5:0.95 1.5:0.95>  <2.5:0.9 2.5:0.9 2.5:0.9 2.5:0.9> - <1.5:1.0 1.5:1.0 1.5:1.0 1.5:1.0> -  - - - -  - - - -
+}
+
+pattern t7_rise {
+    F#3:0.8 ..*123 - - - -
+}
+
+pattern t7_rest { -*16 }
+
+# ── TRACKS ──
+
+track drums {
+    play t7_strip
+    using tunelkit
+    level 1.0
+    velocity 1.0
+    out > highpass(30hz, 0.05) > eq(low=1, mid=-1.5, high=2.5) > drums
+}
+
+track ticks {
+    play t7_ticks every 4 rev
+    using ticks
+    level 0
+    velocity 1.0
+    delay_send 0.12
+    reverb_send 0.08
+    out > highpass(400hz, 0.05) > drums
+}
+
+track bass {
+    play t7_roll_in
+    using tube
+    level 1.6
+    velocity 1.0
+    gate 0.7
+    sidechain 0.3
+    out > highpass(35hz, 0.05) > saturate(0.28) > saturate(1.2, wet=0) as dirt > eq(low=1, mid=-2.5, high=0.5) > master
+}
+
+track arp {
+    play t7_arp_set
+    using glass7
+    level 0
+    velocity 1.0
+    pan -0.3
+    delay_send 0.2
+    reverb_send 0.14
+    sidechain 0.6
+    arp updown rate=16 gate=0.35 octaves=2
+    out > highpass(450hz, 0.05) > autopan(0.5, bars=2) > master
+}
+
+track pad {
+    play t7_pad
+    using vault
+    level 0
+    velocity 1.0
+    pan 0.2
+    reverb_send 0.5
+    delay_send 0.05
+    sidechain 0.5
+    out > highpass(200hz, 0.05) > phaser(0.4, bars=8, stages=8) > autopan(0.4, bars=8) > master
+}
+
+track lead {
+    play t7_laser
+    using laser7
+    level 0
+    velocity 1.0
+    gate 0.9
+    pan 0.0
+    delay_send 0.32
+    reverb_send 0.2
+    sidechain 0.4
+    out > highpass(320hz, 0.05) > saturate(0.25) > lowpass(9khz, 0.05) > master
+}
+
+track riser {
+    play t7_rise
+    using wind7
+    level 0
+    velocity 1.0
+    pan -0.25
+    reverb_send 0.3
+    sidechain 0
+    out > highpass(500hz, 0.05) > autopan(0.6, hz=0.4) > master
+}
+
+# ── PERFORMANCE VOICES (pads; the steps never touch these tracks) ──
+
+# The laser for the pad: laser7's stack, its own module so K3 can ride its
+# top ratios and index without fighting the steps' `auto laser7`
+module fm laser7p {
+    algorithm serial4
+    level 1.5
+    mod_index 52%
+    feedback 10%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op2_ratio 2x
+    op3_ratio 5x
+    op0_envelope 0.002 0.3 0.75 0.18
+    op1_envelope 0.001 0.2 0.45 0.15
+    op2_envelope 0.001 0.12 0.3 0.1
+    op3_envelope 0.001 0.05 0.05 0.04
+    lfo_target mod_index
+    lfo_sync quarter
+    lfo_waveform triangle
+    lfo_depth 18%
+}
+
+# The riser for the hold pad: two-bar swells, so a hold of two or four bars
+# climbs and lands on a bar line
+instrument wind7h {
+    gain 0.9
+    noise() as n
+    n > bandpass(400, 0.35, ea=3, ed=1, es=1, er=0.2, edepth=5500) as bp
+    bp > adsr(2.6, 1, 1, 0.06) as amp
+    amp > out
+}
+
+pattern t7_pad_rest { -*16 }
+
+pattern t7_rise_hold {
+    F#3:0.8 ..*29 - -
+}
+
+# The machine-gun figure for the hold pad: one bar, on the grid, the drop's
+# answer on its own (F# G F# runs in the second half of the bar)
+pattern t7_mg {
+    - - - -  - - - -  <1.5:0.9 1.5:0.9 1.5:0.9 1.5:0.9> - <2.5:0.85 2.5:0.85 2.5:0.85 2.5:0.85> -  <1.5:0.95 1.5:0.95 1.5:0.95 1.5:0.95 1.5:0.95 1.5:0.95> - - -
+}
+
+track laserpad {
+    play t7_pad_rest
+    using laser7p
+    level 0.3
+    velocity 1.0
+    pan 0.1
+    delay_send 0.3
+    reverb_send 0.2
+    sidechain 0.3
+    out > highpass(320hz, 0.05) > saturate(0.25) > lowpass(8khz, 0.05) > master
+}
+
+track risehold {
+    play t7_rise_hold
+    using wind7h
+    level 0.9
+    velocity 1.0
+    pan 0.25
+    reverb_send 0.3
+    sidechain 0
+    out > highpass(500hz, 0.05) > autopan(0.6, hz=0.4) > master
+}
+
+track mg {
+    play t7_mg
+    using laser7p
+    level 0.3
+    velocity 1.0
+    gate 0.9
+    pan -0.15
+    delay_send 0.25
+    reverb_send 0.1
+    sidechain 0.4
+    out > highpass(320hz, 0.05) > saturate(0.25) > lowpass(8khz, 0.05) > master
+}
+
+# The KeyLab, per CONTROLES.md (F7 reverb, F8 echo, F9 DJ filter, A4 freeze,
+# A7 prev, A8 next come from _base). B7 throws the arp, B8 takes the bass out.
+midi {
+    cc 73 > drums level 0..1.0
+    cc 75 > ticks level 0..1.0
+    cc 79 > bass level 0..1.6
+    cc 72 > lead level 0..0.3
+    cc 80 > arp level 0..0.25
+    cc 81 > laserpad level 0..0.36
+    cc 81 > mg level 0..0.45
+    cc 74 > tube cutoff 70hz..330hz
+    cc 74 > tube cutoff_env 700hz..1.8khz
+    cc 74 > tube resonance 36%..48%
+    cc 71 > laser7 mod_index 40%..74%
+    cc 71 > laser7 feedback 6%..20%
+    cc 76 > laser7p op2_ratio 1x..3x
+    cc 76 > laser7p op3_ratio 2x..9x
+    cc 76 > laser7p mod_index 38%..70%
+    cc 77 > glass7 cutoff 1.2khz..5khz
+    cc 93 > master hp cutoff 20hz..400hz
+    cc 93 > lead delay_send 30%..60%
+    cc 18 > lead delay_send 0%..80%
+    cc 19 > tunelkit kick_decay 10%..34%
+    cc 16 > tunelkit hihat_pitch 1.39x..1.85x..2.0x    # K8 hats: darker left, the written tuning in the middle (hihat_decay does nothing in the engine yet)
+    cc 17 > bass dirt wet 0%..60%
+    pad 36 > mute drums q=bar
+    pad 37 > toggle ticks
+    pad 38 > throw lead q=1/16
+    pad 40 > repeat 1/8
+    pad 41 > repeat 1/16
+    pad 44 > play laserpad q=1/16
+    pad 45 > hold risehold q=beat
+    pad 46 > drums crash q=beat
+    pad 47 > hold mg q=beat
+    pad 48 > repeat 1/32
+    pad 49 > throw laserpad q=1/16
+    pad 50 > throw arp
+    pad 51 > mute bass
+}

@@ -1,0 +1,8 @@
+# set: bars=16 phase=09-nebulosa energy=6
+# set-note: Darbuka toms on the maqsum take the hats' place, the roll opens gaps on beats 2 and 4, the oud plays its full cell with B and C.
+use "_t09.synth"
+
+track drums { play d_darbuka }
+track perc  { play d_darbuka_hats }
+track bass  { play roll_gap }
+track oud   { play oud_main level 0.8 }

@@ -1,0 +1,13 @@
+# set: bars=8 phase=04-acido energy=5
+# set-note: build: kick for four bars then gone, the roll thins then stops, snare packs to ratchets, riser climbs, the drone gone, 303 hammers the root opening; one beat of silence
+# cue: 7 B2 apretado · riser
+# cue: 8.5 B5 roll 1/32 · suelta todo en el 1
+use "_t04.synth"
+
+track drums { play a4_build level 0.6 }
+track bass  { play rl_build level 1.1 }
+track acid  { play acid_rise level 0.65 delay_send 0.1 }
+track riser { level 0.04 }
+
+auto master rise cutoff 1500 > 20000 over 8
+auto riser level 0.04 > 0.3 over 8

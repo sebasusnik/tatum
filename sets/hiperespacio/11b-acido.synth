@@ -1,0 +1,10 @@
+# set: bars=16 phase=11-singularidad energy=8
+# set-note: the floor lands (clap, open hats) and the square acid starts underneath, closed and climbing
+use "_t11.synth"
+
+auto grit cutoff 0.301 > 0.4407 over 16
+
+track drums { play beat_main, beat_main, beat_main, beat_turn level 0.7 }
+track perc  { play perc_a level 0.5 }
+track bass  { play roll_s, roll_s, roll_s, roll_turn level 0.74 }
+track acid  { play acid_low level 0.42 }

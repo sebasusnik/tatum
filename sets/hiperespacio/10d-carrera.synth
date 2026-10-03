@@ -1,0 +1,9 @@
+# set: bars=12 phase=10-hipervelocidad energy=9
+# set-note: The screamer runs sixteenths with slides and its filter opens bar by bar; glitch drums, needle back at seven-over-sixteen.
+use "_t10.synth"
+
+track drums  { play g_glitch }
+track perc  { play g_glitch_hats }
+track bass   { play gal_b }
+track acid   { play scr_c }
+track needle { play needle_7 level 0.2 }

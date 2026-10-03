@@ -1,0 +1,466 @@
+# T08 amoladora — F# phrygian, 145 BPM: warp_drive's home tempo, and its homage.
+#
+# Face: a lower, dirtier kick than T07's (more drive, less click), a gallop
+# roll of three saws with the ratchet on the middle sixteenth, glitch drums
+# and a rim/tom kit that stutters, zaps that go from sparse to busy, and the
+# grinder: its own machine, a triple-modulator stack on a buzzing abs-sine
+# with a gritty feedback operator and a sixteenth chatter on its amplitude.
+# The steps draw its RPM curves with `auto ... over N` on the op ratios, the
+# index and the level: three gestures in the whole track and no more (a spin
+# up that cuts before a section lands, the 4-bar gap where it is alone, a
+# spin down that stalls before the outro).
+# The room is small and dry, the echo a triplet eighth for the zaps.
+#
+# The KeyLab layout is CONTROLES.md; the midi block at the end maps it here.
+# B1 plays the grinder (K3 its RPM), B2 holds sparks rising, B4 holds a zap run.
+
+use "_base.synth"
+
+# The track's level in the hour: the whole track +0.5 dB at the end of the
+# master, so the set climbs the way the arc says (measured on the full render)
+master {
+    in > lowpass(20khz, 0.05) as dj
+       > highpass(20hz, 0.05) as hp
+       > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
+       > eq(low=0.5, mid=-0.5, high=1)
+       > gain(1.059) as trim
+       > out
+}
+
+tempo 145
+scale F# phrygian
+
+delay sync=triplet_eighth feedback=0.26 filter=0.5
+reverb size=0.42 damp=0.7 predelay=12 sidechain=0.6
+delay_return  { in > highpass(600hz, 0.05) > autopan(0.7, bars=1) > out }
+reverb_return { in > highpass(400hz, 0.05) > lowpass(5.5khz, 0.05, lfo_bars=4, lfo_depth=1500) > out }
+
+# ── MODULES ──
+
+module beats grindkit {
+    kick_level 1.0
+    kick_decay 21%
+    kick_pitch 0.97x
+    kick_click 52%
+    kick_drive 70%
+    snare_level 0.5
+    snare_decay 14%
+    snare_pitch 1.1x
+    snare_snap 62%
+    snare_drive 55%
+    snare_pan -0.08
+    hihat_level 0.72
+    hihat_decay 10%
+    hihat_pitch 1.55x
+    hihat_pan 0.22
+    clap_level 0.62
+    clap_pan 0.05
+    tom_pan -0.35
+    crash_pan -0.2
+}
+
+# The glitch layer: toms tuned as clanks and a short hat, dry (no snare: off the
+# grid and through a triplet echo it read as random)
+module beats rims {
+    level 1.4
+    snare_level 0.45
+    snare_pitch 1.95x
+    snare_decay 2%
+    snare_snap 95%
+    snare_pan 0.4
+    hihat_level 0.5
+    hihat_decay 4%
+    hihat_pitch 1.95x
+    hihat_pan -0.45
+    clap_level 0.4
+    clap_pan -0.3
+    tom_pan 0.3
+}
+
+# Gallop bass: three oscillators (two saws apart, a square an octave under),
+# a fast bright pluck, driven in the chain
+module bass gallop {
+    osc1_wave saw
+    osc2_wave saw
+    osc2_pitch 0.15st
+    osc3_wave square
+    osc3_pitch -12st
+    cutoff 80hz
+    cutoff_env 1700hz
+    resonance 22%
+    keytrack 30%
+    glide 0%
+    attack 1ms
+    decay 66ms
+    sustain 0%
+    release 20ms
+    vel_env 50%
+}
+
+# Zap: three modulators at inharmonic ratios into a quarter-sine carrier,
+# the pitch dropping on an eighth-note saw
+module fm zap8 {
+    algorithm triple_mod
+    level 1.8
+    mod_index 70%
+    feedback 18%
+    waveform quarter_sine
+    op0_ratio 1x
+    op1_ratio 5.19x
+    op2_ratio 2.37x
+    op3_ratio 9.1x
+    op0_envelope 0.001 0.06 0.0 0.04
+    op1_envelope 0.001 0.03 0.0 0.02
+    op2_envelope 0.001 0.05 0.0 0.03
+    op3_envelope 0.001 0.015 0.0 0.01
+    lfo_target pitch
+    lfo_sync eighth
+    lfo_waveform saw
+    lfo_depth 60%
+}
+
+# The grinder: three modulators (a fifth, a detuned 2.5 and a unison with
+# grit) into an abs-sine carrier; a sixteenth square on its amplitude is the
+# disc chattering. Its ratios all move together: that is the RPM
+module fm disco {
+    algorithm triple_mod
+    level 1.4
+    mod_index 42%
+    feedback 15%
+    waveform abs_sine
+    op0_ratio 1x
+    op1_ratio 1.5x
+    op2_ratio 2.51x
+    op3_ratio 1.01x
+    op0_envelope 0.25 0.5 1.0 0.04
+    op1_envelope 0.25 0.5 1.0 0.04
+    op2_envelope 0.25 0.5 1.0 0.04
+    op3_envelope 0.25 0.5 1.0 0.04
+    op3_feedback 55%
+    lfo_target amplitude
+    lfo_sync sixteenth
+    lfo_waveform square
+    lfo_depth 22%
+}
+
+# ── DRUMS ──
+
+# Mix-in / mix-out
+pattern g8_strip {
+    kick:    X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -
+    hat:     - - x - - - x - - - x - - - x -  - - x - - - x - - - x - - - x -  - - x - - - x - - - x - - - x -  - - x - - - x - - - x - - - x -  - - x - - - x - - - x - - - x -  - - x - - - x - - - x - - - x -  - - x - - - x - - - x - - - x -  - - x - - - x - - - x o x o x -
+    openhat: - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.5 -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.5 -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.5 -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - x:0.5 -
+}
+
+# Main: clap on 2 and 4, hats x-o, the open hat off the beat; bar 8 drops the
+# last kick and flams the clap
+pattern g8_main {
+    kick:    X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  - - - -
+    clap:    - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  <x o X> - - x
+    hat:     x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x*2 o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x*2 x*2 x*3 x*4
+    openhat: - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - - -  - - - -
+}
+
+# Glitch: the hats roll inside the step; the snare only fills the end of the
+# phrase, straight sixteenths on the grid; a kick trips in bar 8
+pattern g8_glitch {
+    kick:    X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - x:0.6  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - x:0.7 -  X - x:0.7 x:0.5
+    clap:    - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - x*2 -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -
+    snare:   - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  x - x -  x x x x
+    hat:     x*2 o x o  x o x*3 o  x o x o  x*2 o x o  x o x o  x*2 o x o  x o x*3 o  x o x*4 x  x*2 o x o  x o x*3 o  x o x o  x*2 o x o  x o x o  x*2 o x o  x o x*3 o  x o x*4 x  x*2 o x o  x o x*3 o  x o x o  x*2 o x o  x o x o  x*2 o x o  x o x*3 o  x o x*4 x  x*2 o x o  x o x*3 o  x o x o  x*2 o x o  x o x o  x*2 o x o  x o x*3 o  - - - -
+    openhat: - - x:0.6 -  - - - -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - - -  - - x:0.6 -  - - - -  - - x:0.6 -  - - - -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - - -  - - x:0.6 -  - - - -  - - x:0.6 -  - - - -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - - -  - - x:0.6 -  - - - -  - - x:0.6 -  - - - -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - - -  - - - -  - - - -
+}
+
+# Landing after the gap: the crash, then main with the glitch hats
+pattern g8_land {
+    kick:    X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - X -
+    crash:   X - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -
+    clap:    - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  X - x*2 x*3
+    snare:   - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  x - x -  x x x x
+    hat:     x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x*2 x*3  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x*2 x*3  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x*2 x*3  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x x x x
+    openhat: - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - - -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - - -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - - -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - x:0.65 -  - - - -
+}
+
+# Chatter: the variation after the peak. Toms answer the kick in three
+# tunings, the clap moves to the "and" of 4 every other bar, hats open up
+pattern g8_chatter {
+    kick:    X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - - -  X - x:0.6 x:0.8
+    clap:    - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  - - - X  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  - - - X  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  - - - X  - - - -  X - - -  - - - -  X - - -  - - - -  X - - -  - - - -  <x o x> - - -
+    tom:     - - x:0.7 -  - - - -  - - - -  - - - -  - - x:0.7 -  - - - -  - - - -  - - - -  - - x:0.7 -  - - - -  - - - -  - - - -  - - x:0.7 -  - - - -  - - - -  - - - -  - - x:0.7 -  - - - -  - - - -  - - - -  - - x:0.7 -  - - - -  - - - -  - - - -  - - x:0.7 -  - - - -  - - - -  - - - -  - - x:0.7 -  - - - -  - - - -  - x:0.6 x:0.7 x:0.8
+    tom2:    - - - -  - - - x:0.6  - - - -  - - - -  - - - -  - - - x:0.6  - - - -  - - x:0.6 -  - - - -  - - - x:0.6  - - - -  - - - -  - - - -  - - - x:0.6  - - - -  - - x:0.6 -  - - - -  - - - x:0.6  - - - -  - - - -  - - - -  - - - x:0.6  - - - -  - - x:0.6 -  - - - -  - - - x:0.6  - - - -  - - - -  - - - -  - - - x:0.6  x:0.6 - - -  - - - -
+    tom3:    - - - -  - - - -  - - - x:0.5  - - - -  - - - -  - - - -  - - - x:0.5  - - - -  - - - -  - - - -  - - - x:0.5  - - - -  - - - -  - - - -  - - - x:0.5  - - - -  - - - -  - - - -  - - - x:0.5  - - - -  - - - -  - - - -  - - - x:0.5  - - - -  - - - -  - - - -  - - - x:0.5  - - - -  - - - -  - - - -  - - - -  x*2 x*2 x*3 x*4
+    hat:     x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  x o x o  - - - -
+    openhat: - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - - -
+}
+
+pattern g8_rims {
+    hat:   - x - -  - x - -  - x - -  - x - x  - x - -  - x - -  - x - -  - x x -
+    tom:   - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - x:0.5 - x:0.4
+}
+
+pattern g8_rims_glitch {
+    hat:   - x - -  - x - -  - x - x  - x - x  - x - -  - x - -  - x - x  - x x x
+    clap:  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - -  - - - x:0.5
+    tom:   - - x:0.5 -  - - - -  - - - -  - - - x:0.4  - - x:0.5 -  - - - -  - - - -  x:0.5 x:0.4 - x:0.5
+}
+
+# ── BASS ──
+
+pattern b8_roll {
+    - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8
+    - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8
+    - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8
+    - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8  - 2.1:0.9 2.1:0.65 2.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8
+    - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8
+    - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8
+    - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.1:0.8
+    - 2.1:0.9 2.1:0.65 2.1:0.8  - 2.1:0.9 2.1:0.65 1.1:0.8  - 1.1:0.9 1.1:0.65 1.2:0.9  - 4.1:0.9 2.1:0.8 1.1:0.8
+}
+
+# The gallop: the ratchet on the middle sixteenth; bar 4 goes to the b2,
+# bar 8 climbs the fourth and the octave and comes down the b2
+pattern b8_gallop {
+    - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8
+    - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8
+    - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8
+    - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 2.1:0.95 <2.1:0.85 2.1:0.75> 2.1:0.8  - 2.1:0.95 <2.1:0.85 2.1:0.75> 1.1:0.8
+    - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8
+    - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8
+    - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8
+    - 1.1:0.95 <1.1:0.85 1.1:0.75> 4.1:0.8  - 4.1:0.95 <1.2:0.85 1.2:0.75> 1.1:0.8  - 2.1:0.95 <2.1:0.85 2.1:0.75> 2.1:0.8  - 1.1:0.95 <2.1:0.9 2.1:0.9 2.1:0.9> 1.1:0.85
+}
+
+# Broken: gaps in the gallop, the octave answering
+pattern b8_broken {
+    - 1.1:0.95 <1.1:0.85 1.1:0.75> -  - 1.1:0.95 - 1.2:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> -  - 1.1:0.95 1.2:0.8 1.1:0.8
+    - 1.1:0.95 <1.1:0.85 1.1:0.75> -  - 1.1:0.95 - 1.2:0.8  - 2.1:0.95 <2.1:0.85 2.1:0.75> -  - 2.1:0.95 1.2:0.8 1.1:0.8
+    - 1.1:0.95 <1.1:0.85 1.1:0.75> -  - 1.1:0.95 - 1.2:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> -  - 1.1:0.95 1.2:0.8 1.1:0.8
+    - 1.1:0.95 <1.1:0.85 1.1:0.75> -  - 1.1:0.95 - 1.2:0.8  - 2.1:0.95 <2.1:0.85 2.1:0.75> 2.1:0.8  - <1.2:0.9 1.2:0.9 1.2:0.9> 2.1:0.9 1.1:0.85
+}
+
+# Climb: the gallop walking up the phrygian steps a bar at a time (root,
+# b2, the minor third, back), each bar's last sixteenth leaping the octave
+pattern b8_climb {
+    - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.2:0.85
+    - 2.1:0.95 <2.1:0.85 2.1:0.75> 2.1:0.8  - 2.1:0.95 <2.1:0.85 2.1:0.75> 2.1:0.8  - 2.1:0.95 <2.1:0.85 2.1:0.75> 2.1:0.8  - 2.1:0.95 <2.1:0.85 2.1:0.75> 2.2:0.85
+    - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.1:0.8  - 1.1:0.95 <1.1:0.85 1.1:0.75> 1.2:0.85
+    - 3.1:0.95 <3.1:0.85 3.1:0.75> 3.1:0.8  - 3.1:0.95 <3.1:0.85 3.1:0.75> 3.1:0.8  - 2.1:0.95 <2.1:0.85 2.1:0.75> 2.1:0.8  - 2.1:0.95 <2.1:0.9 2.1:0.9 2.1:0.9> 1.2:0.85
+}
+
+# ── ZAPS ──
+
+pattern z8_sparse {
+    - - - -  - - - -  - - - -  - - - 5.5:0.7
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - 1.6:0.8 -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - 5.5:0.7
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - 2.5:0.7 -  - - - -  - - - -
+    - - - -  - - - -  - - <1.6:0.8 5.5:0.7 2.5:0.6> -  - - - -
+}
+
+# Busy: the second half of each four bars fills up, then a run
+pattern z8_busy {
+    - - - -  - - - 5.5:0.8  - - - -  - - 1.6:0.7 -
+    - - 1.6:0.7 -  - - - 5.5:0.8  - - - -  - 2.5:0.6 - -
+    - - 1.6:0.7 -  - <1.6:0.6 1.6:0.6 1.6:0.6> - 5.5:0.8  - - 1.6:0.7 -  - 2.5:0.6 - -
+    - - 1.6:0.7 -  - - 7.5:0.7 5.5:0.8  - - 1.6:0.7 -  <1.6:0.5 2.6:0.6 5.5:0.7 7.5:0.8> - - 1.6:0.7
+    - - - -  - - - 5.5:0.8  - - - -  - - 1.6:0.7 -
+    - - 1.6:0.7 -  - - - 5.5:0.8  - - - -  - 2.5:0.6 - -
+    - - 1.6:0.7 -  - <1.6:0.6 1.6:0.6 1.6:0.6> - 5.5:0.8  - - 1.6:0.7 -  - 2.5:0.6 5.5:0.7 -
+    <1.6:0.8 1.6:0.8> - 1.6:0.7 -  <2.6:0.8 2.6:0.8> - 5.5:0.8 -  <1.6:0.8 1.6:0.8 1.6:0.8> - 7.5:0.7 -  <1.6:0.6 1.6:0.7 1.6:0.8 1.6:0.9> - - -
+}
+
+# ── GRINDER ──
+# One drone that loops on its own tie and never retriggers; the steps draw
+# the whole gesture with `auto`: the RPM on the ratios, the bite on the index,
+# and when it is heard (and the cut) on the level, a point every sixteenth.
+# So a gesture starts on the step's first bar wherever the loop sits.
+pattern gr8_drone {
+    F#3:0.8 ..*63
+}
+
+pattern g8_rest { -*16 }
+
+# ── TRACKS ──
+
+track drums {
+    play g8_strip
+    using grindkit
+    level 0.64
+    velocity 1.0
+    out > highpass(30hz, 0.05) > eq(low=1.5, mid=-1, high=1.5) > drums
+}
+
+track rims {
+    play g8_rims
+    using rims
+    level 0
+    velocity 1.0
+    delay_send 0
+    reverb_send 0.05
+    out > highpass(350hz, 0.05) > drums
+}
+
+track bass {
+    play b8_roll
+    using gallop
+    level 0.48
+    velocity 1.0
+    gate 0.7
+    sidechain 0.3
+    out > highpass(34hz, 0.05) > saturate(0.45) as drive > eq(low=1, mid=-2, high=1.5) > master
+}
+
+track zap {
+    play z8_sparse
+    using zap8
+    level 0
+    velocity 1.0
+    gate 0.3
+    pan 0.35
+    delay_send 0.22
+    reverb_send 0.06
+    sidechain 0.2
+    out > highpass(300hz, 0.05) > lowpass(10khz, 0.05) > panenv(0.8, release=250) > master
+}
+
+track grind {
+    play gr8_drone
+    using disco
+    level 0
+    velocity 1.0
+    gate 1.0
+    pan -0.25
+    reverb_send 0.12
+    sidechain 0.5
+    out > highpass(220hz, 0.05) > saturate(0.5) > bitcrush(12, 0.08, wet=0.35) as grit > phaser(0.35, hz=2.2, stages=4) > lowpass(7.5khz, 0.05) > master
+}
+
+# ── PERFORMANCE VOICES (pads; the steps never touch these tracks) ──
+
+# The grinder for the pad: disco's machine on its own module, so K3 rides its
+# RPM (every ratio together, and the index) without fighting the steps' auto
+# gestures on `disco`. Idle at the bottom of the knob, screaming at the top
+module fm discop {
+    algorithm triple_mod
+    level 1.4
+    mod_index 40%
+    feedback 15%
+    waveform abs_sine
+    op0_ratio 1x
+    op1_ratio 1.5x
+    op2_ratio 2.51x
+    op3_ratio 1.01x
+    op0_envelope 0.12 0.5 1.0 0.08
+    op1_envelope 0.12 0.5 1.0 0.08
+    op2_envelope 0.12 0.5 1.0 0.08
+    op3_envelope 0.12 0.5 1.0 0.08
+    op3_feedback 55%
+    lfo_target amplitude
+    lfo_sync sixteenth
+    lfo_waveform square
+    lfo_depth 22%
+}
+
+# The riser for the hold pad: sparks, not wind. Noise whose highpass climbs
+# for two bars, with a sixteenth chop, so a hold of two or four bars lands
+instrument spark8 {
+    gain 1.0
+    noise() as n
+    n > highpass(600, 0.3, ea=2.6, ed=1, es=1, er=0.1, edepth=7000) as hp
+    hp > adsr(2.2, 1, 1, 0.05) as amp
+    amp > out
+}
+
+pattern g8_pad_rest { -*16 }
+
+pattern g8_spark {
+    F#3:0.8 ..*29 - -
+}
+
+# The zap figure for the hold pad: one bar, the run from z8_busy's turn
+pattern z8_hold {
+    <1.6:0.8 1.6:0.8> - 1.6:0.7 -  <2.6:0.8 2.6:0.8> - 5.5:0.8 -  <1.6:0.8 1.6:0.8 1.6:0.8> - 7.5:0.7 -  <1.6:0.6 1.6:0.7 1.6:0.8 1.6:0.9> - - -
+}
+
+track grindpad {
+    play g8_pad_rest
+    using discop
+    level 0.55
+    velocity 1.0
+    gate 1.0
+    pan -0.2
+    reverb_send 0.12
+    sidechain 0.5
+    out > highpass(220hz, 0.05) > saturate(0.5) > bitcrush(12, 0.08, wet=0.35) as grit > phaser(0.35, hz=2.2, stages=4) > lowpass(7.5khz, 0.05) > master
+}
+
+track sparks {
+    play g8_spark
+    using spark8
+    level 0.12
+    velocity 1.0
+    pan 0.3
+    reverb_send 0.2
+    sidechain 0.3
+    out > highpass(800hz, 0.05) > lowpass(12khz, 0.05) > autopan(0.6, hz=0.5) > master
+}
+
+track zaphold {
+    play z8_hold
+    using zap8
+    level 0.45
+    velocity 1.0
+    gate 0.3
+    pan -0.35
+    delay_send 0.15
+    reverb_send 0.06
+    sidechain 0.2
+    out > highpass(300hz, 0.05) > lowpass(10khz, 0.05) > panenv(0.8, release=250) > master
+}
+
+# The KeyLab, per CONTROLES.md (F7 reverb, F8 echo, F9 DJ filter, A4 freeze,
+# A7 prev, A8 next come from _base). T08 has no lead: its main voice (F4, K2,
+# A3, K5/K6) is the zaps, its second voice (F5, K4) the grinder of the steps'
+# gestures. B7 hits the clap, B8 takes the bass out.
+midi {
+    cc 73 > drums level 0..0.8
+    cc 75 > rims level 0..0.8
+    cc 79 > bass level 0..0.6
+    cc 72 > zap level 0..0.32
+    cc 80 > grind level 0..0.3
+    cc 81 > grindpad level 0..0.65
+    cc 74 > gallop cutoff 55hz..260hz
+    cc 74 > gallop cutoff_env 900hz..2.4khz
+    cc 74 > gallop resonance 18%..32%
+    cc 71 > zap8 mod_index 50%..85%
+    cc 71 > zap8 feedback 10%..28%
+    cc 76 > discop op0_ratio 1x..4.5x
+    cc 76 > discop op1_ratio 1.5x..6.75x
+    cc 76 > discop op2_ratio 2.51x..11.3x
+    cc 76 > discop op3_ratio 1.01x..4.55x
+    cc 76 > discop mod_index 36%..60%
+    cc 77 > disco mod_index 30%..62%
+    cc 93 > master hp cutoff 20hz..400hz
+    cc 93 > zap delay_send 22%..50%
+    cc 18 > zap delay_send 0%..60%
+    cc 19 > grindkit kick_decay 12%..34%
+    cc 16 > grindkit hihat_pitch 1.16x..1.55x..1.86x    # K8 hats: darker left, the written tuning in the middle (hihat_decay does nothing in the engine yet)
+    cc 17 > bass drive drive 0.3..1.1
+    cc 17 > grindpad grit wet 20%..70%
+    pad 36 > mute drums q=bar
+    pad 37 > toggle rims
+    pad 38 > throw zap q=1/16
+    pad 40 > repeat 1/8
+    pad 41 > repeat 1/16
+    pad 44 > play grindpad q=1/16
+    pad 45 > hold sparks q=beat
+    pad 46 > drums crash q=beat
+    pad 47 > hold zaphold q=beat
+    pad 48 > repeat 1/32
+    pad 49 > throw grindpad q=1/16
+    pad 50 > drums clap
+    pad 51 > mute bass
+}

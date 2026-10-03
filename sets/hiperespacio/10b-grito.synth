@@ -1,0 +1,9 @@
+# set: bars=16 phase=10-hipervelocidad energy=9
+# set-note: The screamer switches to its octave leaps (two and three octaves), the needle ticks enter on a five-over-sixteen grid.
+use "_t10.synth"
+
+track drums  { play g_glitch }
+track perc  { play g_glitch_hats }
+track bass   { play gal_a }
+track acid   { play scr_b }
+track needle { play needle_5 level 0.22 }

@@ -1,0 +1,8 @@
+# set: bars=12 phase=08-amoladora energy=9
+# set-note: grinder gone; glitch drums (rolls inside the step, snare stutters), glitch rims, the first zaps, sparse
+use "_t08.synth"
+
+track drums { play g8_glitch }
+track bass  { play b8_gallop }
+track rims  { play g8_rims_glitch level 0.64 }
+track zap   { play z8_sparse level 0.24 }

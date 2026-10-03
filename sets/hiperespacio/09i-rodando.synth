@@ -1,0 +1,14 @@
+# set: bars=8 phase=09-build energy=3
+# set-note: Kickless tension: the roll takes every sixteenth, the snare goes from quarters to sixteenths, the noise riser starts and the master begins to close.
+use "_t09.synth"
+
+auto master dj cutoff 20000 > 4500 over 8
+auto riser level 0.01 > 0.3 over 8
+auto veil level 0.1 > 0 over 6
+
+track drums { play d_build_a level 0.7 }
+track perc  { play d_build_a_hats level 1.0 }
+track bass  { play roll_kickless level 0.85 }
+track oud   { level 0 }
+track veil  { play veil_walk }
+track riser { play hiss_hold level 0.01 }

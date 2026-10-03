@@ -1,0 +1,13 @@
+# set: bars=32 phase=07-drop energy=9
+# set-note: RELEASE 3: crash, the laser an octave up with machine-gun answers, a new roll (octave jumps, gallop), the arp held wide open
+# cue: 1 B3 crash · ¡DROP!
+# cue: 32.5 A3 throw del láser (medio compás)
+use "_t07.synth"
+
+track drums { play t7_drop }
+track bass  { play t7_roll_drop }
+track ticks { play t7_ticks_busy every 4 rev level 1.0 }
+track arp   { play t7_arp_set level 0.18 }
+track lead  { play t7_laser_peak level 0.23 }
+
+module keys glass7 { cutoff 2.6khz }

@@ -1,0 +1,16 @@
+# set: bars=8 phase=12-estela energy=3
+# set-note: the motor sputters once (a half-hearted rev) and dies; half the kicks gone, the bass a note a bar
+use "_t12.synth"
+
+auto rotor op0_ratio 0.009 > 0.009 > 0.0258 > 0.0452 > 0.0387 > 0.0194 > 0.0065 > 0.0013 > 0.0 over 8
+auto rotor op1_ratio 0.0301 > 0.0301 > 0.0554 > 0.0846 > 0.0749 > 0.0457 > 0.0262 > 0.0184 > 0.0165 over 8
+auto rotor op2_ratio 0.0718 > 0.0718 > 0.1141 > 0.1628 > 0.1466 > 0.0978 > 0.0653 > 0.0523 > 0.049 over 8
+auto rotor op3_ratio 0.009 > 0.009 > 0.0258 > 0.0452 > 0.0387 > 0.0194 > 0.0065 > 0.0013 > 0.0 over 8
+auto grind level 0.05 > 0.09 > 0.12 > 0.12 > 0.09 > 0.06 > 0.03 > 0.01 > 0 over 8
+auto rotor mod_index 0.35 > 0.4 > 0.5 > 0.48 > 0.4 > 0.33 > 0.3 > 0.28 > 0.28 over 8
+
+track drums { play d_half, d_half, d_half, d_half_turn level 0.58 }
+track bass  { play b_sparse level 0.48 }
+track grind { play grind_8 level 0.05 }
+track pad   { play void level 0.16 }
+track wind  { play breath level 0.2 }
