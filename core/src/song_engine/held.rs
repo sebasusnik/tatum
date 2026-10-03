@@ -90,6 +90,10 @@ impl SongEngine {
             (AutoTarget::MasterParam { param_name }, FastOp::NodeParam { track: None, param, .. }) => {
                 param_name.as_str() == *param
             }
+            (
+                AutoTarget::MasterNodeParam { node_idx, param_name },
+                FastOp::NodeParam { track: None, node, param, .. },
+            ) => node_idx == node && param_name.as_str() == *param,
             (AutoTarget::DelayMix, FastOp::DelayMix(_)) => true,
             (AutoTarget::ReverbFreeze, FastOp::ReverbFreeze(_)) => true,
             (

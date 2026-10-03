@@ -77,8 +77,10 @@ fn static_scenes(song: &Song, m: &ModuleDef, track: &TrackDef) -> Vec<String> {
             out.push(scene.name.clone());
         }
     }
-    // No scenes at all: judge the top-level track
-    if song.scenes.is_empty() && longest_hold(song, &track.play) >= 8 {
+    // No scenes at all: judge the top-level track, which a top-level lane
+    // on the module moves the way a scene's would.
+    let automated = song.automations.iter().any(|a| a.target.starts_with(&prefix) && !a.target.ends_with(".level"));
+    if song.scenes.is_empty() && !automated && longest_hold(song, &track.play) >= 8 {
         out.push(String::from("(top level)"));
     }
     out
@@ -197,7 +199,7 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
             out.push(lint(
                 "static_pad",
                 format!("track '{}' holds long notes on module '{}' with nothing moving it in: {}", track.name, m.name, scenes.join(", ")),
-                "Sustained sounds need movement: add `lfo_target cutoff` with `lfo_depth`, `vibrato_depth`, a per-scene `auto <module> cutoff a > b`, or an `arp`.",
+                "Sustained sounds need movement: add `lfo_target cutoff` with `lfo_depth`, `vibrato_depth`, an `auto <module> cutoff a > b` (in a scene, or `over 8` bars at the top level), or an `arp`.",
             ));
         }
     }

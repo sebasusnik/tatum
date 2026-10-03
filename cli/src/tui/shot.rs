@@ -110,6 +110,9 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
             current,
             next: (current + 1 < steps.len()).then_some((current + 1, 3)),
             phrase: 8,
+            bar: 1,
+            bars: steps[current].bars as usize,
+            cues: steps[current].cues.clone(),
         });
     }
     let source = Source::load(Path::new(&path))?;
@@ -164,6 +167,10 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     }
     if let Some(e) = player.engine() {
         screen.position(e.current_bar(), e.global_step(), e.tempo());
+        // The step on its own from its first bar, as `set play` counts it.
+        if let Some(set) = screen.set.as_mut() {
+            set.bar = e.current_bar() + 1;
+        }
     }
     screen.glass = glass;
     for m in &marks {

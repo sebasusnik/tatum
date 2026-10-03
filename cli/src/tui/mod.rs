@@ -118,6 +118,11 @@ pub struct SetView {
     /// The step asked for and the bars until it lands.
     pub next: Option<(usize, usize)>,
     pub phrase: usize,
+    /// The bar of the playing step, from 1, and how many it holds.
+    pub bar: usize,
+    pub bars: usize,
+    /// The playing step's `# cue:` lines: bar (from 1) and what to do.
+    pub cues: Vec<(f32, String)>,
 }
 
 /// What a key asks for.
@@ -801,9 +806,11 @@ impl Screen {
         } else {
             rest.saturating_sub(10)
         } + quiet as u16;
+        // A set gets a third row: the bar of the step and the cue coming up.
+        let timeline_rows = if self.set.is_some() { 3 } else { 2 };
         let [header, timeline, spectrum, lanes, bottom, footer] = Layout::vertical([
             Constraint::Length(1),
-            Constraint::Length(2),
+            Constraint::Length(timeline_rows),
             Constraint::Min(6),
             Constraint::Length(lane_rows),
             Constraint::Length(5),
@@ -1237,6 +1244,9 @@ impl Screen {
         let buf = f.buffer_mut();
         if let Some(set) = &self.set {
             self.steps(buf, area, set);
+            if area.height >= 3 {
+                self.cue_line(buf, Rect { y: area.y + 2, height: 1, ..area }, set);
+            }
             return;
         }
         let Some(song) = self.song.as_ref() else { return };
@@ -1276,6 +1286,46 @@ impl Screen {
         let x = ((pos * w) as u16).min(area.width.saturating_sub(1));
         if let Some(c) = buf.cell_mut((area.x + x, area.y)) {
             c.set_char('▼').set_fg(GOLD);
+        }
+    }
+
+    /// Where you are in the step, and what its `# cue:` lines ask for next:
+    /// the cue whose bar is playing lights up, the one after counts down.
+    fn cue_line(&self, buf: &mut Buffer, area: Rect, set: &SetView) {
+        let beats = (self.step % 16) / 4;
+        let here = format!(
+            " bar {}/{} · {} ",
+            set.bar,
+            set.bars.max(1),
+            "●".repeat(beats + 1) + &"○".repeat(3 - beats.min(3))
+        );
+        buf.set_string(area.x, area.y, &here, Style::new().fg(TEXT).bg(BG));
+        let mut x = area.x + here.chars().count() as u16;
+        if set.cues.is_empty() {
+            return;
+        }
+        // Bars from 1, with the beat as a fraction: 8.75 is bar 8, beat 4.
+        let pos = set.bar as f32 + beats as f32 / 4.0;
+        let now = set.cues.iter().rev().find(|(b, _)| *b <= pos && pos < b + 1.0);
+        let next = set.cues.iter().find(|(b, _)| *b > pos);
+        if let Some((_, what)) = now {
+            let s = format!(" ▶ {} ", what);
+            buf.set_string(x, area.y, &s, Style::new().fg(Color::Black).bg(HOT).add_modifier(Modifier::BOLD));
+            x += s.chars().count() as u16 + 1;
+        }
+        if let Some((b, what)) = next {
+            let left = b - pos;
+            let when = if left < 1.0 {
+                format!("in {} beat{}", (left * 4.0).round(), if (left * 4.0).round() == 1.0 { "" } else { "s" })
+            } else if b.fract() == 0.0 {
+                format!("bar {}", b)
+            } else {
+                format!("bar {} beat {}", b.trunc(), (b.fract() * 4.0).round() as u32 + 1)
+            };
+            let s = format!(" next: {} · {}", when, what);
+            let color = if left <= 1.0 { GOLD } else { DIM };
+            let room = area.width.saturating_sub(x - area.x) as usize;
+            buf.set_string(x, area.y, s.chars().take(room).collect::<String>(), Style::new().fg(color).bg(BG));
         }
     }
 

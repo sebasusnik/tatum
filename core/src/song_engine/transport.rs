@@ -30,10 +30,14 @@ impl SongEngine {
             inst.set_bpm(self.tempo);
         }
 
-        // If arrangement exists, apply first scene
+        // If arrangement exists, apply first scene; without one, the
+        // top-level lanes start on bar 0.
         if !self.arrangement.is_empty() {
             let (scene_idx, _) = self.arrangement[0];
             self.apply_scene(scene_idx);
+        } else {
+            self.lane_origin = 0;
+            self.start_lanes();
         }
         self.reassert_held();
         self.snap_mix();
@@ -157,6 +161,21 @@ impl SongEngine {
     pub fn global_step(&self) -> usize {
         self.global_step
     }
+
+    /// Where playback is, in bars from the top, to the sample: the steps
+    /// that have sounded and how far into the current one the clock is. A
+    /// scripted performance times its events on this.
+    pub fn position_bars(&self) -> f64 {
+        if self.global_step == 0 || self.steps_per_bar == 0 {
+            return 0.0;
+        }
+        let within = if self.current_step_duration > 0.0 && self.current_step_duration < f32::MAX {
+            (self.sample_counter / self.current_step_duration).clamp(0.0, 1.0) as f64
+        } else {
+            0.0
+        };
+        ((self.global_step - 1) as f64 + within) / self.steps_per_bar as f64
+    }
     pub fn running(&self) -> bool {
         self.running
     }
@@ -211,6 +230,11 @@ impl SongEngine {
             // must not restart its automation: a sweep that was three bars in
             // stays three bars in.
             self.scene_step = self.arrangement_bar_count as usize * self.steps_per_bar;
+        } else {
+            // Top-level lanes count from the bar the engine starts on: the
+            // first bar this text plays.
+            self.lane_origin = bar * self.steps_per_bar;
+            self.start_lanes();
         }
 
         self.current_bar = bar;

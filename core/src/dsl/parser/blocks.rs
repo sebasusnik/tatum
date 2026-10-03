@@ -86,6 +86,9 @@ impl Parser {
     //     cc 74 > acid cutoff      a knob or a fader
     //     keys > solo              the keyboard plays a track
     //     pad 36 > kick kick       a pad hits one drum of a track
+    //     pad 40 > play drone C2   a pad plays a note on a track while held
+    //     pad 41 > hold riser      a track sounds only while the pad is held
+    //     pad 38 > repeat 1/16     a beat repeat on the output while held
     // }
 
     /// A later block replaces what an earlier one said about the same knob,
@@ -162,6 +165,7 @@ impl Parser {
                         break
                     }
                     Token::Ident(w) if w == "keys" && matches!(self.peek_ahead(1), Token::Arrow) => break,
+                    Token::Ident(w) if w == "q" && matches!(self.peek_ahead(1), Token::Eq) => break,
                     Token::Ident(w) => w.clone(),
                     Token::Level => String::from("level"),
                     Token::Pan => String::from("pan"),
@@ -169,6 +173,9 @@ impl Parser {
                     Token::Mix => String::from("mix"),
                     Token::Master => String::from("master"),
                     Token::Tempo => String::from("tempo"),
+                    Token::Play => String::from("play"),
+                    // `pad 40 > play grinder C2`: the note a pad plays.
+                    Token::Note(n) if matches!(source, MidiSource::Pad(_)) => n.clone(),
                     _ => break,
                 };
                 self.advance();
@@ -196,12 +203,57 @@ impl Parser {
                     words.push(format!("{}", n as usize));
                 }
             }
+            // `pad 38 > repeat 1/16`: a division, read as the fraction it is.
+            if matches!(source, MidiSource::Pad(_)) && words == ["repeat"] {
+                if let (Token::Number(a), Token::Slash, Token::Number(b)) =
+                    (self.peek().clone(), self.peek_ahead(1).clone(), self.peek_ahead(2).clone())
+                {
+                    self.pos += 3;
+                    words.push(format!("{}/{}", a as u32, b as u32));
+                }
+            }
             let range = if matches!(source, MidiSource::Cc(_)) { self.parse_knob_range() } else { None };
-            block.push(MidiMapDef { source, target: words.join("."), range, line });
+            let quantize = self.parse_pad_quantize(source, &words);
+            block.push(MidiMapDef { source, target: words.join("."), range, quantize, line });
         }
         self.expect(&Token::RBrace);
         maps.retain(|m| !block.iter().any(|b| b.source == m.source));
         maps.extend(block);
+    }
+
+    /// `q=bar`, `q=beat`, `q=1/8`, `q=1/16` or `q=off` after a pad's target.
+    fn parse_pad_quantize(&mut self, source: MidiSource, words: &[String]) -> Option<Quantize> {
+        if !(matches!(self.peek(), Token::Ident(w) if w == "q") && matches!(self.peek_ahead(1), Token::Eq)) {
+            return None;
+        }
+        let s = self.span().clone();
+        self.pos += 2;
+        let word = match (self.peek().clone(), self.peek_ahead(1).clone(), self.peek_ahead(2).clone()) {
+            (Token::Number(a), Token::Slash, Token::Number(b)) => {
+                self.pos += 3;
+                format!("{}/{}", a as u32, b as u32)
+            }
+            (Token::Ident(w), _, _) => {
+                self.pos += 1;
+                w
+            }
+            (other, _, _) => describe_token(&other),
+        };
+        let err = |p: &mut Self, message: String| p.errors.push(ParseError { line: s.line, col: s.col, message });
+        let Some(q) = Quantize::from_word(&word) else {
+            err(self, format!("midi: q= is bar, beat, 1/8, 1/16 or off, got {}", word));
+            return None;
+        };
+        let first = words.first().map(String::as_str);
+        if !matches!(source, MidiSource::Pad(_)) {
+            err(self, String::from("midi: q= quantizes a pad; a knob or the keys act at once"));
+        } else if matches!(first, Some("repeat" | "next" | "prev" | "step")) {
+            err(self, format!(
+                "midi: `{}` already waits for its line (a repeat for its division, a set move for the phrase); it takes no q=",
+                first.unwrap_or_default()
+            ));
+        }
+        q
     }
 
     /// `200hz..4khz` after a knob's target, if one follows; or three points,
@@ -445,7 +497,7 @@ impl Parser {
                 }
                 Token::Auto => {
                     self.advance();
-                    self.parse_automation(&mut scene.automations);
+                    self.parse_automation(&mut scene.automations, false);
                 }
                 // Override: reverb_mix = 0.2 or delay_mix = 0.18
                 Token::Ident(ref target) => {

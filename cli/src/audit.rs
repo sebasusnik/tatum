@@ -323,6 +323,7 @@ fn solo_base(song: &Song, keep: &str) -> Song {
         // a level automation would put the muted track straight back
         sc.automations.retain(|a| !a.target.ends_with(".level"));
     }
+    s.automations.retain(|a| !a.target.ends_with(".level"));
     s
 }
 

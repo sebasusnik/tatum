@@ -224,6 +224,8 @@ pub fn run(
     planner.isolate(isolation);
     if let Some(nav) = &set {
         planner.set_output_gain(crate::set::set_gain(&nav.steps)?);
+        // Each step's `auto ... over N` starts on the step's first bar.
+        planner.restart_lanes();
     }
     let mut player = LivePlayer::new();
     match planner.plan(&source.text, player.generation()) {
@@ -512,6 +514,14 @@ pub fn run(
                             if velocity > 0 {
                                 notes_played += 1;
                             }
+                            // A quantized pad says it heard you, and when it
+                            // will act: `pad 36 → bar`, on the way down and up.
+                            if pad {
+                                if let Some(q) = planner.pad_quantize(note) {
+                                    let way = if velocity > 0 { "" } else { " (up)" };
+                                    readings.push(format!("pad {}{} → {}", note, way, q.word()));
+                                }
+                            }
                         }
                         None if velocity > 0 => {
                             readings.push(format!("{} {} (not mapped)", if pad { "pad" } else { "key" }, note));
@@ -762,6 +772,9 @@ pub fn run(
                     current: nav.current,
                     next: nav.waiting(bar),
                     phrase: nav.phrase,
+                    bar: nav.bar_in_step(bar),
+                    bars: nav.steps[nav.current].bars as usize,
+                    cues: nav.steps[nav.current].cues.clone(),
                 });
             }
             screen.position(

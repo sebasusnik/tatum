@@ -53,6 +53,13 @@ pub struct SetNav {
     ramp: Option<Ramp>,
     /// The bar a queued step was last built on, so it is built once.
     built_on: Option<usize>,
+    /// The step the bar count below belongs to, and the bar it started on.
+    counted: usize,
+    started: usize,
+    /// `set play --auto`: each step asks for the next on its own when its
+    /// header's bars run out, the way `set render` walks a set, so the
+    /// performer's hands are free for the music. A key or a pad still moves.
+    pub auto: bool,
 }
 
 impl SetNav {
@@ -68,7 +75,15 @@ impl SetNav {
             in_flight: None,
             ramp: None,
             built_on: None,
+            counted: 0,
+            started: 0,
+            auto: false,
         }
+    }
+
+    /// The bar of the step playing, from 1, for a performer reading cues.
+    pub fn bar_in_step(&self, bar: usize) -> usize {
+        bar.saturating_sub(self.started) + 1
     }
 
     pub fn path(&self) -> PathBuf {
@@ -132,6 +147,25 @@ impl SetNav {
         planner: &mut LivePlanner,
     ) -> (Vec<Plan>, Vec<String>) {
         let (mut plans, mut said) = (Vec::new(), Vec::new());
+        // A step lands on a bar line and the next tick sees it in that same
+        // bar, so this is where it started.
+        if self.current != self.counted {
+            self.counted = self.current;
+            self.started = bar;
+        }
+        // In its last bar, a step asks for the next one, which then lands
+        // on the line its bars end on.
+        let ends = self.started + self.steps[self.current].bars as usize;
+        if self.auto
+            && self.queued.is_none()
+            && self.held.is_none()
+            && self.in_flight.is_none()
+            && self.current + 1 < self.steps.len()
+            && bar + 1 >= ends
+            && self.built_on.is_none_or(|b| b < self.started)
+        {
+            said.push(self.ask(Move::Next, bar));
+        }
 
         // A values-only step waiting for its line.
         if let Some((_, _, _, _)) = &self.held {
@@ -261,10 +295,15 @@ track bass  { play line using acid out > master }
 
     /// Plays the set, calling `at_bar` once at the start of each bar with
     /// the navigation; returns, per bar, the step playing and the tempo.
-    fn play(bars: usize, mut at_bar: impl FnMut(usize, &mut SetNav)) -> Vec<(usize, f32)> {
+    fn play(bars: usize, at_bar: impl FnMut(usize, &mut SetNav)) -> Vec<(usize, f32)> {
         let dir = set_dir();
         let steps = crate::set::load(&dir, 32).unwrap();
-        let mut nav = SetNav::new(steps, 4, 2.0);
+        let seen = play_nav(bars, SetNav::new(steps, 4, 2.0), at_bar);
+        let _ = std::fs::remove_dir_all(&dir);
+        seen
+    }
+
+    fn play_nav(bars: usize, mut nav: SetNav, mut at_bar: impl FnMut(usize, &mut SetNav)) -> Vec<(usize, f32)> {
         let mut planner = LivePlanner::new();
         let mut player = LivePlayer::new();
         let first = Source::load(&nav.path()).unwrap();
@@ -294,8 +333,30 @@ track bass  { play line using acid out > master }
             while player.take_retired().is_some() {}
             rendered += BLOCK_SIZE;
         }
-        let _ = std::fs::remove_dir_all(&dir);
         seen
+    }
+
+    /// `--auto`: each step holds its header's bars and the next comes in on
+    /// its own, on the bar it should, whatever the lengths.
+    #[test]
+    fn an_auto_set_walks_its_headers() {
+        let dir = set_dir();
+        for (f, bars) in [("01.synth", 3), ("02.synth", 2), ("03.synth", 5)] {
+            let text = std::fs::read_to_string(dir.join(f)).unwrap();
+            std::fs::write(dir.join(f), format!("# set: bars={bars}\n# cue: 2 B1 the grinder\n{text}")).unwrap();
+        }
+        let steps = crate::set::load(&dir, 32).unwrap();
+        assert_eq!(steps[0].cues, [(2.0, String::from("B1 the grinder"))]);
+        let mut nav = SetNav::new(steps, 1, 0.0);
+        nav.auto = true;
+        let mut counted = Vec::new();
+        let seen = play_nav(9, nav, |bar, nav| counted.push(nav.bar_in_step(bar)));
+        let _ = std::fs::remove_dir_all(&dir);
+        let steps: Vec<usize> = seen.iter().map(|s| s.0).collect();
+        assert_eq!(steps, [0, 0, 0, 1, 1, 2, 2, 2, 2], "{steps:?}");
+        // The bar of the step a performer reads, one behind the landing:
+        // the step is counted from the tick after it lands.
+        assert_eq!(&counted[..3], &[1, 2, 3], "{counted:?}");
     }
 
     #[test]
@@ -500,6 +561,7 @@ mod walk {
         nav.blend_bars = std::env::var("TATUM_DEMO_BLEND").ok().and_then(|b| b.parse().ok()).unwrap_or(0.0);
         let mut planner = LivePlanner::new();
         planner.set_output_gain(gain);
+        planner.restart_lanes();
         let mut player = LivePlayer::new();
         let first = Source::load(&nav.path()).unwrap();
         player.apply(planner.plan(&first.text, player.generation()).unwrap());

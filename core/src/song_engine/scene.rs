@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 
 use crate::SAMPLE_RATE;
 
-use super::automation::ActiveAutomation;
+use super::automation::{ActiveAutomation, LaneSource};
 use super::instrument::SongInstrument;
 use super::track::{make_arp, pan_gains};
 use super::SongEngine;
@@ -131,7 +131,7 @@ impl SongEngine {
             let resolved = self.resolve_auto_target(&target_name);
             self.scenes[scene_idx].automations[auto_idx].target = target_name;
             if let Some(target) = resolved {
-                lanes.push(ActiveAutomation { target, scene_idx, auto_idx });
+                lanes.push(ActiveAutomation { target, source: LaneSource::Scene { scene: scene_idx, lane: auto_idx } });
             }
         }
         self.active_automations = lanes;

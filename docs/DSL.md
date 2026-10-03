@@ -360,6 +360,7 @@ scene drop {
     auto reverb_freeze 0 > 1             # freezes once the lane crosses 0.5
     auto master tilt 0.4 > -0.2          # master chain sweeps: tilt, eq_low, eq_mid, eq_high, drive,
     auto master cutoff 20000 > 400       #   gain, cutoff, comp_threshold (the node must be in the chain)
+    auto master dj cutoff 20000 > 400    # the master node named `as dj`, when the chain has two filters
     track drums { play beat using kit }
     track acid  { play riff using acid }
 }
@@ -425,6 +426,44 @@ When the source is re-evaluated while playing (`tatum watch`, or the browser):
   12 ms. A swap to a song that sounds the same is sample-identical to not swapping.
 - Two saves inside one bar are fine: a value edit made while a swap is queued lands on
   the engine that takes over.
+
+### Lanes in a song without scenes
+
+A looping file has no scene for an `auto` to span, so at the top level a lane says
+how long it is:
+
+```
+use "rig.synth"
+auto master cutoff 1500 > 20000 over 8     # opens over 8 bars, then stays open
+auto riser level 0 > 0.5 over 8
+auto fmlead mod_index 0.2 > 0.9 > 0.4 over 16
+auto reverb_freeze 0 > 1 over 4
+auto bass.crush wet 0 > 1 over 2
+```
+
+Targets and keyframes are the scene's: two values ramp, three draw a triangle, four
+or more an evenly spaced curve, and the same names resolve (a module parameter, a
+track's `level`, `master <param>`, `master <node> <param>`, `reverb_mix`,
+`delay_mix`, `reverb_freeze`, `<track>.<node> wet`), checked at compile time. `over` is a whole number of bars,
+1 to 1024, and it is required: a top-level `auto` without it is an error that shows
+the line with `over 8` added. In a file with scenes a top-level `auto` is an error
+(put it in the scene), and so is `over` inside a scene.
+
+A lane starts on the first bar its text plays: bar 0 for `render` and `play`, the
+bar a save or a set's step takes over on. It runs its bars once and then holds its
+last value for as long as the file keeps looping; it does not loop with it, because
+a build that started again every eight bars would never arrive. `over` can be longer
+than a set step lasts: the next step takes over wherever the lane got to.
+
+Adding, removing or changing an `auto` line takes over on the next bar, never as a
+value edit, since a lane needs a first bar. A lane a save leaves untouched keeps its
+progress, so editing a pattern halfway through a sixteen-bar sweep does not start the
+sweep again; in a set every step starts its lanes afresh, even one it copied. What a
+lane moved does not stay where it left it: when the new text no longer automates a
+module parameter, a master parameter or a node's wet, that module, the master chain or
+that track's chain is rebuilt from the new text, as if its definition had changed, so
+it plays what the text says. Levels, the send mixes and freeze come from the new text
+anyway.
 
 ## MIDI: knobs, keys and pads
 
@@ -560,15 +599,79 @@ midi {
 }
 ```
 
+And play, the way a DJ does with a controller over a rig:
+
+```
+midi {
+    pad 40 > play grinder      # the grinder's note while held: the scale's root
+    pad 41 > play grinder E2   # or the note written; a drum name on a kit
+    pad 42 > hold zap          # the zap figure sounds only while the pad is held
+    pad 43 > repeat 1/16       # a beat repeat on the output while held: 1/4, 1/8, 1/16, 1/32
+}
+```
+
+`play <track> [<note>]` is the keyboard on a pad: note-on as it goes down, as loud as it
+is struck, note-off as it comes up, on the track's instrument and through its insert
+chain, fader and sends. With no note it plays the scale's root (A minor: A), in octave
+2 on a `bass` module and octave 3 on anything else, and the kick on a `beats` kit. The
+rule for the fader is the keys' rule: the pad plays at the track's level as it stands,
+whatever set it (the text, a knob, an `auto` lane), and a track at `level 0` stays
+silent. So a drone that only the pad plays is a track with a pattern of rests
+(`pattern rest { -*16 }`) and a real level; the pattern never releases what the pad
+holds, but a pattern note on the same pitch does. Several pads can play different
+tracks and notes at once. A `bass` module is mono: a second pad on it glides there.
+
+`hold <track>` is `mute` turned over: the track is out until the pad goes down, plays
+its pattern on the grid while it is held (it has kept counting, as a muted track
+does), and fades out when the pad comes up. For a riser or a zap figure that should
+only happen when you ask. A track out by any pad, toggle or solo stays out until all
+of them let it in. A live session and `tatum set render`/`check`/`next` measure a song as it
+starts, with the hold tracks out, so their level does not move the song's or the set's
+gain; `tatum render` ignores the `midi` block and plays them.
+
+`repeat <division>` is a DJ roll on everything the player outputs. Pressed, it waits for
+the next line of that division on the grid, takes one division of the output from
+there, and loops it for as long as the pad is held; each pass fades in and out over
+32 samples so the seam does not click. The song keeps playing underneath, so letting go
+crossfades in 6 ms back to where the song has got to, not where the roll began. Pressing
+a shorter division while one rolls cuts the slice already caught (1/8 to 1/16 halves it);
+letting go before the roll starts never rolls. It is on the whole output, not one
+track, and it rolls on across a step change.
+
 A muted or thrown track fades in 3 ms rather than cutting, and its level and sends are
 left alone, so letting go puts it back exactly where it was. A toggled track stays out
 through saves and scene changes until it is toggled back. Letting go of `freeze` returns
 the reverb to what the scene says, so it does not thaw a scene that froze it. A muted
 kick still drives the sidechain. The set moves do nothing in `watch`, which says so.
 
+`q=` puts a pad on the grid, the way launch quantization does in a DAW: the hand can be
+a little early or late and the action still lands on the line.
+
+```
+midi {
+    pad 36 > mute drums q=bar       # the kick goes out and comes back on a bar line
+    pad 46 > drums crash q=beat     # the crash is struck on the beat
+    pad 44 > play grinder q=1/16    # the note starts and stops on a sixteenth
+}
+```
+
+The grids are `bar`, `beat`, `1/8` and `1/16`; `q=off`, or no `q=`, acts at once. Both
+the press and the release wait for their line (a drum hit only has a press). An action
+that arrives in the first quarter of a division after a line counts as that line and
+acts at once: the player was just late, and waiting a whole bar for it would be worse.
+A release never lands before the line after its press, so a tap still lasts one
+division. `repeat` and the set moves already wait for their line and take no `q=`; nor
+do knobs and the keys, which act at once. While playing, the status line says when a
+quantized pad will act (`pad 36 → bar`). Every voice takes the same few milliseconds to
+speak, pattern or pad, so a quantized note sits exactly where a pattern note on that
+line would.
+
 Pads and the low keys send the same note numbers. What tells them apart is the
 channel: pads send on channel 10, the drum channel of General MIDI, and everything
-else is keys. A pad or a key that nothing is mapped to shows its number while you play
+else is keys. Nothing assumes which numbers a controller's pads send: a pad line names
+the note it answers to. An Arturia KeyLab Essential mk3 sends, by Arturia's defaults,
+36-43 for pad bank A and 44-51 for bank B on channel 10; a pad that nothing is mapped
+to shows its number, which is the quickest way to check yours. A pad or a key that nothing is mapped to shows its number while you play
 (`pad 44 (not mapped)`).
 
 ### Everything else
@@ -608,8 +711,62 @@ midpoint in 50 ms so two basses never play at once. A step can ask for its own w
 `# set: blend=8` in its header. It is for going between steps that have little in
 common; steps built on one rig hand over well on the line.
 
+`--auto` lets the set walk itself, the way `set render` does: each step holds the bars
+its header gives and asks for the next in its last bar, so the hands are free for the
+music. The phrase becomes 1 bar unless `--phrase` says otherwise, because a step's bars
+need not be a multiple of 8. A key or a pad still moves the set at any time.
+
+A step can carry its own practice sheet. `# cue: <bar> <what>` lines, with the bar of
+the step counted from 1 and a fraction for the beat (`8.75` is bar 8, beat 4), show
+under the steps in `set play --tui`: the bar of the step and its beat, the cue whose
+bar is playing, and the next one counting down.
+
+```
+# set: bars=24 phase=08-amoladora energy=8
+# cue: 17 B1 held + K3 from 0 to the top · the grinder: idle, scream, cut
+# cue: 20.75 let go of B1
+```
+
 The file of the step playing is watched like `tatum watch` watches one: save it and the
 edit plays. `q` or Ctrl-C quits and leaves the terminal as it was.
+
+A step builds tension with `auto ... over N` (see "Lanes in a song without scenes"):
+its lanes start on the step's first bar, whenever the step lands, and hold once done.
+
+`tatum set render <dir> -o set.wav` walks the set the same way with nobody at the
+controls: each step is asked for a bar before its header's `bars` run out, so it lands
+there, the tempo ramps (`--ramp 4`), `blend=` in a header blends (`--blend` sets it for
+every step), and the render is the set as it would be played. `--phrase 8` lands steps
+on phrase lines as `play` does, moving a step whose predecessor ends off the line to
+the next one; the default, 1, keeps every step to its header. It prints where each
+step starts, `m:ss  name  bars  phase  note`, one line per step.
+
+`--perform script.txt` plays a performance on top, for review audio without the
+hardware. The script is one event a line, `<bar> <what>`, the bar counted from 0 at the
+set's first downbeat and fractional:
+
+```
+# hiperespacio, one take
+12.0   cc 74 64        # a knob or fader to 64
+18.0   pad 44 110      # a pad down, struck at 110
+19.0   pad 44 0        # and up
+20.5   key 48 100      # a key down (velocity 0 lets it go)
+21.0   bend 12000      # the pitch strip, 0..16383, 8192 at rest
+35.0   next            # ask for the next step; also `prev`, `step 3`
+96.0   end             # stop here
+```
+
+The events go through the same planner the live session uses, against the `midi`
+blocks of the step playing: knobs, toggles and held pads carry from step to step as in
+`set play`, and a pad mapped to `next` moves the set. An event lands on the sample its
+bar falls on, to within a block (3 ms). A script that moves through the set (`next`,
+`prev`, `step`, or a pad mapped to one) is the only thing that does, and a move lands
+on the next phrase line as it would live; one that does not leaves the steps to their
+headers. Without `end`, a scripted walk stops when the last step reached has played its
+header's bars and every event has happened. The render prints what the script did
+under the step markers, in the script's bars, from 0: `bar 12.00: acid cutoff 1.2khz`,
+`bar 35.00: asked for 4/12 04.synth, lands on bar 36`, `bar 36: now 4/12 04.synth`.
+(`set play`'s status line counts bars from 1, as a performer does.)
 
 ## Redefinition
 

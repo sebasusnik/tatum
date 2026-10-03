@@ -22,6 +22,24 @@ Two edits apply **inside the bar**, with no hot swap and no voice restart:
 | `level 0` → `level 0.4` | bring a voice in. A muted track fires no notes and is skipped whole, so a rig of waiting voices is nearly free |
 | `wet=0` → `wet=1` | switch an effect in. At 0 the node is not processed at all |
 
+Values jump. A step that has to **build** — a filter opening, a riser coming up, an
+FM lead getting harsher, the reverb freezing near the end — writes a lane with
+its length in bars. It starts on the step's first bar, runs once and holds:
+
+```
+# set: bars=8 phase=build energy=6
+use "_rig.synth"
+track riser { level 0.3 }
+auto master cutoff 1500 > 20000 over 8
+auto riser level 0 > 0.4 over 8
+auto reverb_freeze 0 > 0 > 0 > 1 over 8    # crosses 0.5, and freezes, in bar 7
+```
+
+A lane is a swap, like any `auto` edit. The next step does not have to undo it:
+what it does not automate plays at its own text's value. Targets are the ones a
+scene's `auto` takes: a module parameter, a track's `level`, `master cutoff`/`tilt`/
+`drive`..., `reverb_mix`, `reverb_freeze`, `<track>.<node> wet`.
+
 Everything else — adding a node, changing which pattern a track plays, renaming
 anything — is a hot swap, quantized to the next bar line. A swap keeps every
 voice, tail and send that did not change; only what actually changed restarts.
@@ -269,7 +287,7 @@ Only after the gate accepts, save it as `sets/<name>/NNN.synth`.
 
 ```
 tatum set check  sets/<name>              # every step and every transition
-tatum set render sets/<name> -o set.wav   # the whole thing, real hot swaps
+tatum set render sets/<name> -o set.wav   # the whole thing, walked as `set play` walks it
 ```
 
 Read the check table before declaring victory. The `rms dB` column is the arc:

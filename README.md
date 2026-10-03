@@ -99,7 +99,7 @@ all take `--solo` and `--mute` with track names; a muted kick still drives the s
   [zed-tatum](https://github.com/sebasusnik/zed-tatum), on the tree-sitter grammar in
   [tree-sitter-tatum](https://github.com/sebasusnik/tree-sitter-tatum).
 - `sets/`: live sets. A directory of numbered `.synth` files, each the whole rig at a
-  moment, walked with real hot swaps by `tatum set render` and played live by
+  moment, walked the way it is played (hot swaps, blends, tempo ramps) by `tatum set render` and played live by
   `tatum set play`, a key or a pad moving to the next step on the next phrase.
 
 Workspace: `core` (engine, DSL, registry), `cli`, `debug` (the analysis behind `tatum
