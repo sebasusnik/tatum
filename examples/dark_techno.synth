@@ -7,7 +7,10 @@
 # ghosts come and go, a metal click on a 3-3-2, a ride, and air under it
 # all. Under that a kick with a long body and no room, an FM bass on the
 # off-beats, and a fill every eight bars. A light saturator on the master
-# warms the peak without flattening it.
+# warms the peak without flattening it. After the peak the tempo climbs bar
+# by bar to 150 for a hard part: a gabber kick under the kit, the hook
+# hammered and crushed, a screech over the last eight bars, then straight
+# back to 137 for the end.
 tempo 137
 meter 4/4
 scale F minor
@@ -180,6 +183,32 @@ module fm static {
     lfo_depth 25%
 }
 
+# Gabber: a second kit whose kick is long, low and driven into a tone,
+# for the hard part only
+module beats gabber {
+    kick_level 1.0
+    kick_decay 85%
+    kick_pitch 0.65x
+    kick_click 80%
+    kick_drive 100%
+}
+
+# Screech: FM with the modulator at the carrier's ratio and a lot of
+# feedback, a held, sliding scream for the second half of the hard part
+module fm screech {
+    algorithm two_op
+    level 1.6
+    mod_index 70%
+    feedback 85%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op0_envelope 0.01 0.3 0.8 0.15
+    op1_envelope 0.01 0.25 0.7 0.1
+    vibrato_rate 6hz
+    vibrato_depth 40%
+}
+
 # ────────────────────────────────────────────────
 # DRUMS: eight-bar phrases, a fill closing each
 # ────────────────────────────────────────────────
@@ -216,6 +245,38 @@ pattern beat_rise {
     snare:   o - - -  o - - -  o - - -  o - - -   o - - -  o - - -  o - - -  o - - -   o - o -  o - o -  o - o -  o - o -   x - o -  x - o -  x - o -  x - o -   x o x o  x o x o  x o x o  x o x o   x o x o  x o x o  x o x o  x o x o   x x x x  x x x x  x x x x  x x x x   X*2 X*2 X*2 X*2  X*2 X*2 X*2 X*2  X*3 X*3 X*3 X*3  X*4 X*4 - -
 }
 
+# Four bars of pressure before the hard part: the kick alone with the hats,
+# getting dirtier bar by bar, then folding into a roll and a beat of silence
+pattern beat_press {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - X -  X - X -  X X X X  - - - -
+    hat:     o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  x x x x  - - - -
+    clap:    - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  - - - -
+}
+
+# The hard part: a driven kick with extra hits on the off sixteenths,
+# clap and snare together on two and four, sixteenth hats, the open hat
+# on every off-beat, a crash on the one
+pattern beat_hard {
+    kick:    X - - x  X - x x  X - - x  X - x x   X - - x  X - x x  X - - x  X - X x   X - x x  X - - x  X - x x  X - - x   X - - x  X - x x  X - - x  X x X X   X - - x  X - x x  X - - x  X - x x   X - - x  X - x x  X - - x  X - X x   X - x x  X - - x  X - x x  X - - x   X - x x  X - x x  X x X x  X X X X
+    hat:     o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  - - - -  - - - -
+    openhat: - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - - -  - - - -
+    clap:    - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  X - - -   - - - -  X - - -  - - - -  - - - -
+    snare:   - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  x x x x  X X X X
+    crash:   X - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -
+}
+
+# The last bar of the pressure: the kick folds into a roll, then a beat of silence
+pattern beat_press_end {
+    kick:    X - X -  X - X -  X X X X  - - - -
+    hat:     o o x o  o o x o  x x x x  - - - -
+    clap:    - - - -  X - - -  - - - -  - - - -
+}
+
+# The gabber kick: the four on the floor and the rolls, nothing in between
+pattern gabber_kick {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - X X   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - X -  X X X X
+}
+
 pattern beat_break {
     hat:     - - x -  - - x -  - - x -  - - x -
     snare:   - - - -  - - - x  - - - -  - - x -
@@ -249,6 +310,13 @@ pattern hook_d {
     F2:0.9 - - -   - - F3:0.7 -   - - ~Gb2:0.8 -   - - - -
 }
 
+# H: the hard part -- one note hammered in sixteenths, the accents on a
+# 3-3-2 that the brightness follows, answered by the flat second
+pattern hook_h {
+    F3:1.0 F3:0.45 F3:0.55 F3:1.0   F3:0.45 F3:0.55 F3:1.0 F3:0.45   Ab3:1.0 F3:0.45 F3:0.55 C4:1.0   F3:0.45 F3:0.55 Gb3:1.0 F3:0.45
+    F3:1.0 F3:0.45 F3:0.55 F3:1.0   F3:0.45 F3:0.55 F3:1.0 F3:0.45   Eb4:1.0*2 C4:0.6 Ab3:0.6 Gb3:1.0*3   F3:0.6 F2:0.9 F2:0.9 F3:1.0
+}
+
 # ────────────────────────────────────────────────
 # LOW END, METAL, VOICE
 # ────────────────────────────────────────────────
@@ -262,6 +330,19 @@ pattern roll {
 pattern roll_peak {
     - F1:0.7 F1:0.9 F1:0.6   - F1:0.7 F1:0.9 F1:0.6   - F1:0.7 F1:0.9 F1:0.6   - F1:0.7 F1:0.9 F1:0.6
     - F1:0.7 F1:0.9 F1:0.6   - F1:0.7 F1:0.9 F1:0.6   - F1:0.7 F1:0.9 F1:0.6   - F1:0.7 Ab1:0.9 F1:0.6
+}
+
+# Stabs in the hard part: a 3-3-2 every other bar
+pattern stabs_hard {
+    [F3 C4 Gb4]:0.9 - - [F3 C4 Gb4]:0.6   - - [F3 C4 Gb4]:0.8 -   - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+}
+
+# The screech: a held note that slides to the flat second and back, then
+# up to the fifth and down
+pattern screech_line {
+    F3:0.9 ..*7  ~Gb3:1.0 ..*3  ~F3:0.9 ..*3
+    F3:0.9 ..*5  ~C4:1.0 ..  ~Bb3:0.9 ..*3  ~Gb3:1.0 ..*3
 }
 
 pattern stabs {
@@ -420,6 +501,28 @@ track static {
     out > highpass(1500hz, 0.05) > lowpass(5khz, 0.05, lfo_bars=8, lfo_depth=2500) > autopan(0.6, bars=4) > master
 }
 
+# The gabber kick, driven again after the kit
+track gabber {
+    play gabber_kick
+    using gabber
+    level 0.17
+    velocity 1.0
+    out > highpass(30hz, 0.05) > saturate(4) > eq(mid=3) > lowpass(7khz, 0.05) > master
+}
+
+track screech {
+    play screech_line
+    using screech
+    level 0.12
+    velocity 1.0
+    gate 1.0
+    pan 0.0
+    delay_send 0.15
+    reverb_send 0.15
+    sidechain 0.6
+    out > highpass(250hz, 0.05) > saturate(2.5) > chorus(0.5) > lowpass(5khz, 0.05) > master
+}
+
 master {
     in > highpass(20hz, 0.05) > saturate(0.3) > eq(low=1, high=0.5) > out
 }
@@ -527,9 +630,103 @@ scene peak {
     track air { play static_bed using static }
 }
 
+# Pressure: four bars, the hook and the bass gone, the kick alone getting
+# dirtier and the tempo climbing a step every bar up to the hard part's
+# tempo
+scene press1 {
+    tempo 139
+    auto master drive 0.24 > 0.22
+    auto drums level 0.8 > 0.825
+    auto machine kick_drive 0.35 > 0.45
+    auto machine kick_click 0.6 > 0.6
+    track drums  { play beat_press using machine }
+    track voice  { play speak_cut using whisper pan -0.1 }
+    track static { play static_bed using static }
+}
+
+scene press2 {
+    tempo 142
+    auto master drive 0.24 > 0.22
+    auto drums level 0.825 > 0.85
+    auto machine kick_drive 0.45 > 0.55
+    auto machine kick_click 0.6 > 0.6
+    track drums  { play beat_press using machine }
+    track voice  { play speak_cut using whisper pan -0.1 }
+    track static { play static_bed using static }
+}
+
+scene press3 {
+    tempo 146
+    auto master drive 0.24 > 0.22
+    auto drums level 0.85 > 0.875
+    auto machine kick_drive 0.55 > 0.65
+    auto machine kick_click 0.6 > 0.6
+    track drums  { play beat_press using machine }
+    track voice  { play speak_cut using whisper pan -0.1 }
+    track static { play static_bed using static }
+}
+
+scene press4 {
+    tempo 150
+    auto master drive 0.24 > 0.22
+    auto drums level 0.875 > 0.9
+    auto machine kick_drive 0.65 > 0.75
+    auto machine kick_click 0.6 > 0.6
+    track drums  { play beat_press_end using machine }
+    track voice  { play speak_cut using whisper pan -0.1 }
+    track static { play static_bed using static }
+}
+
+# The hard part, faster: a gabber kick under the kit, the riff hammered in
+# sixteenths and crushed, metal every other bar
+scene hard {
+    tempo 150
+    auto master drive 0.22 > 0.24
+    auto drums level 0.8 > 0.8
+    auto machine kick_level 1.0 > 1.0
+    auto machine kick_drive 0.75 > 0.75
+    auto machine kick_decay 0.55 > 0.55
+    auto machine kick_click 0.6 > 0.6
+    auto hook.talk wet 0.00 > 0.00
+    auto hook mod_index 0.7 > 0.8 > 0.72 > 0.85
+    auto hook.crush wet 0.3 > 0.5
+    track drums  { play beat_hard using machine }
+    track gabber { play gabber_kick using gabber }
+    track hook   { play hook_h using hook pan 0.1 level 0.18 }
+    track stab   { play stabs_hard using stab pan -0.3 }
+    track click  { play clicks using click pan -0.4 }
+    track ride   { play ride_off using ride pan -0.25 }
+}
+
+# The same, and the screech on top: the riff is crushed further
+scene scream {
+    tempo 150
+    auto master drive 0.22 > 0.24
+    auto drums level 0.8 > 0.8
+    auto machine kick_level 1.0 > 1.0
+    auto machine kick_drive 0.75 > 0.75
+    auto machine kick_decay 0.55 > 0.55
+    auto machine kick_click 0.6 > 0.6
+    auto hook.talk wet 0.00 > 0.00
+    auto hook mod_index 0.8 > 0.9
+    auto hook.crush wet 0.5 > 0.7
+    auto screech mod_index 0.6 > 0.85
+    track drums  { play beat_hard using machine }
+    track gabber { play gabber_kick using gabber }
+    track hook   { play hook_h using hook pan 0.1 level 0.18 }
+    track stab   { play stabs_hard using stab pan -0.3 }
+    track click  { play clicks using click pan -0.4 }
+    track ride   { play ride_off using ride pan -0.25 }
+    track screech { play screech_line using screech }
+}
+
 # What is left: the hook reduced to a few notes, the drums still going
 scene mutate {
     auto master drive 0.25 > 0.17
+    auto machine kick_level 1.0 > 1.0
+    auto machine kick_drive 0.35 > 0.35
+    auto machine kick_decay 0.55 > 0.55
+    auto machine kick_click 0.4 > 0.4
     auto hook.crush wet 0.15 > 0.00
     auto hook mod_index 0.55 > 0.35
     track drums { play beat_drive using machine }
@@ -558,6 +755,12 @@ arrange {
     break x16
     rise x8
     peak x32
+    press1 x1
+    press2 x1
+    press3 x1
+    press4 x1
+    hard x8
+    scream x8
     mutate x16
     outro x16
 }
