@@ -1,6 +1,6 @@
 # set: bars=16 phase=11-drop energy=10
 # set-note: FINAL DROP: crash, the octave-bounce roll never heard before, the lead's call with its machine-gun answer, the haze full (F# + G rub), the acid screaming wide open
-# cue: 1 B3 crash · ¡DROP FINAL!
+# cue: 1 B3 crash · FINAL DROP!
 use "_t11.synth"
 
 auto haze level 0.092 > 0.106 > 0.099 > 0.112 over 16

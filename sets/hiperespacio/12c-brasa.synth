@@ -1,7 +1,7 @@
 # set: bars=16 phase=12-estela energy=4
 # set-note: the grinder is gone; the hats thin to two a bar, the bass drops to offbeats, the wind rises under the pad
-# cue: 7 B1 apretado + K3 de arriba ↓ abajo · amoladora bajando de vueltas
-# cue: 12.75 suelta B1 (K3 al medio)
+# cue: 7 B1 held + K3 from top ↓ to bottom · grinder spinning down
+# cue: 12.75 let go of B1 (K3 to center)
 use "_t12.synth"
 
 auto wind level 0.05 > 0.2 over 16

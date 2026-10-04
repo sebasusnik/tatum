@@ -1,5 +1,5 @@
 # set: bars=32 phase=hondo energy=5
-# set-note: Aparece una campana con tres notas que el eco multiplica: el gancho del dub. El acorde se abre un poco y el eco se retira para dejarle lugar.
+# set-note: A bell appears with three notes that the echo multiplies: the dub's hook. The chord opens a little and the echo steps back to make room.
 use "_rig.synth"
 
 module keys chord { cutoff 2.1khz }

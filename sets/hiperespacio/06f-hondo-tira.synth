@@ -1,6 +1,6 @@
 # set: bars=8 phase=06-hondo energy=7
 # set-note: Eight bars withheld without a break: hats, clap and ride out, the roll down to one note per gap, and the drone pushed up and crushed so it fills the space.
-# cue: 7 A1 apretado · kick fuera · vuelve con la sección nueva
+# cue: 7 A1 held · kick out · back with the new section
 use "_t06.synth"
 
 track drums { play k_rim, k_rim, k_rim, k_rim_turn }

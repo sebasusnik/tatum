@@ -1,5 +1,5 @@
 # set: bars=32 phase=lleno energy=7
-# set-note: Detroit a pleno: crash al empezar, stabs que contestan, el hat abierto, remates cada ocho compases y uno largo al final de cada dieciséis.
+# set-note: Detroit in full: a crash at the start, answering stabs, the open hat, fills every eight bars and a long one at the end of every sixteen.
 use "_rig.synth"
 tempo 128
 

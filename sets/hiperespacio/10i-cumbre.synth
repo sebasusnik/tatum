@@ -1,7 +1,7 @@
 # set: bars=32 phase=10-hipervelocidad energy=9
 # set-note: Last stretch of the peak: the wide screamer against the first riff, glitch drums with the turns, shard's last gesture.
-# cue: 21 B1 apretado + K3 ↑ de a poco · motor shard, RPM arriba
-# cue: 24.75 suelta B1 (K3 al medio)
+# cue: 21 B1 held + K3 ↑ slowly · shard motor, RPM up
+# cue: 24.75 let go of B1 (K3 to center)
 use "_t10.synth"
 
 track drums  { play g_glitch, g_land }

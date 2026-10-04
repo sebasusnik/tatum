@@ -1,8 +1,8 @@
 # set: bars=8 phase=11-build energy=7
 # set-note: build 2/2: snare and hats pack tighter every bar, the kick back on bar 5, bass down to one note, riser up, the master filter opens; bar 8 is silence
-# cue: 5 B2 apretado · riser
-# cue: 7.5 B5 roll 1/32 · suelta antes del compás de silencio
-# cue: 8 suelta B2 y B5 · silencio
+# cue: 5 B2 held · riser
+# cue: 7.5 B5 roll 1/32 · let go before the silent bar
+# cue: 8 let go of B2 and B5 · silence
 use "_t11.synth"
 
 auto master dj cutoff 1200 > 20000 over 7

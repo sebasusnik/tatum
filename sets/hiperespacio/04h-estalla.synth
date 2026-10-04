@@ -1,7 +1,7 @@
 # set: bars=32 phase=04-acido energy=8
 # set-note: THE DROP: crash on the one, the 303 wide open on a new riff, the gallop bass for the first time; crash again at bar 17
-# cue: 1 B3 crash · ¡DROP!
-# cue: 31 A1 apretado · kick fuera
+# cue: 1 B3 crash · DROP!
+# cue: 31 A1 held · kick out
 use "_t04.synth"
 
 track drums  { play a4_drop }

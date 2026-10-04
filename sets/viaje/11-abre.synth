@@ -1,5 +1,5 @@
 # set: bars=16 phase=abre energy=6
-# set-note: Tensión sin cortar el groove: el bajo se aquieta, los acordes se abren y suben, la campana aparece. El bombo sigue.
+# set-note: Tension without cutting the groove: the bass goes quiet, the chords open and rise, the bell appears. The kick keeps going.
 use "_rig.synth"
 tempo 127
 

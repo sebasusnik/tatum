@@ -1,7 +1,7 @@
 # set: bars=8 phase=07-build energy=6
 # set-note: build, one pass: no kick, the snare packs tighter every two bars, the roll thins to one note and closes, the master hp thins the floor, the wind rises; the last beat is silence
-# cue: 7 B2 apretado · riser
-# cue: 8.5 B5 roll 1/32 · suelta todo en el 1
+# cue: 7 B2 held · riser
+# cue: 8.5 B5 roll 1/32 · let go of everything on the 1
 use "_t07.synth"
 
 track drums { play t7_build level 0.8 }

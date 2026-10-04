@@ -1,5 +1,5 @@
 # set: bars=16 phase=cruce energy=5
-# set-note: El cruce. Entran el clap, el bajo que camina y los acordes de Detroit bajitos; el bombo todavía es el de dub y el acorde dub se despide con sus últimos ecos.
+# set-note: The crossing. The clap, the walking bass and quiet Detroit chords come in; the kick is still the dub one and the dub chord says goodbye with its last echoes.
 use "_rig.synth"
 tempo 126
 

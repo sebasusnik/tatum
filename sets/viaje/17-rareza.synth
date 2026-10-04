@@ -1,5 +1,5 @@
 # set: bars=16 phase=rareza energy=7
-# set-note: Se va el clap: el 303 y el bajo rodante solos, y un módem que conversa en el costado.
+# set-note: The clap goes: the 303 and the rolling bass alone, and a modem chattering off to the side.
 use "_rig.synth"
 tempo 132
 

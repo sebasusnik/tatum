@@ -1,5 +1,5 @@
 # set: bars=16 phase=vuelta energy=5
-# set-note: La vuelta: el 303 sigue del respiro y el bombo vuelve de a poco, un golpe por compás, después dos, después cuatro. Los hats y el sub llegan en la segunda mitad; los acordes del respiro siguen sonando.
+# set-note: The return: the 303 carries on from the breather and the kick comes back bit by bit, one hit a bar, then two, then four. The hats and the sub arrive in the second half; the breather's chords keep sounding.
 use "_rig.synth"
 tempo 129
 

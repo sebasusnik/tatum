@@ -1,5 +1,5 @@
 # set: bars=16 phase=subida energy=8
-# set-note: La subida: el 303 se abre del todo y termina martillando la tónica, un redoble de rim que va de negras a semicorcheas, sirena y aire, y un tiempo de silencio antes del pico.
+# set-note: The rise: the 303 opens all the way and ends up hammering the root, a rim roll that goes from quarters to sixteenths, siren and air, and one beat of silence before the peak.
 use "_rig.synth"
 tempo 134
 

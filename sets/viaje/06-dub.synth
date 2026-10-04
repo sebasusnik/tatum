@@ -1,5 +1,5 @@
 # set: bars=32 phase=dub energy=5
-# set-note: El cambio de acorde (Fm9 a Dbmaj9) dos veces por frase, el eco empujado, toms que caen en el eco: el momento en que el eco manda.
+# set-note: The chord change (Fm9 to Dbmaj9) twice a phrase, the echo pushed, toms falling into the echo: the moment the echo takes over.
 use "_rig.synth"
 
 track bed   { play hiss_swell level 0.3 }

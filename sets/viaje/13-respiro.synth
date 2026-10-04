@@ -1,5 +1,5 @@
 # set: bars=16 phase=respiro energy=3
-# set-note: Se va la batería: los acordes, la campana y el viento que vuelve. En los últimos cuatro compases asoma el 303, cerrado, antes que el bombo.
+# set-note: The drums go: the chords, the bell and the wind coming back. In the last four bars the 303 shows, closed, before the kick.
 use "_rig.synth"
 tempo 128
 
