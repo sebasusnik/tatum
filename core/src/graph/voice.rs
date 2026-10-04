@@ -26,10 +26,24 @@ impl Voice {
         Self { nodes: core::array::from_fn(|_| None), note: 0, velocity: 0.0, active: false, age: 0 }
     }
 
+    /// The voice's nodes, allocated once for `template`: a note renews them
+    /// in place, so playing never allocates. Each note used to box a fresh
+    /// node per node of the graph, running the allocator on the audio thread
+    /// thousands of times a minute.
+    pub fn allocate(&mut self, template: &GraphTemplate) {
+        for i in 0..MAX_GRAPH_NODES {
+            self.nodes[i] = (i < template.node_count as usize).then(|| Box::new(template.specs[i].instantiate()));
+        }
+    }
+
     /// Initialize this voice for a new note.
     pub fn init(&mut self, template: &GraphTemplate, note: u8, velocity: f32) {
         for i in 0..template.node_count as usize {
-            self.nodes[i] = Some(Box::new(template.specs[i].instantiate()));
+            match self.nodes[i] {
+                Some(ref mut node) => node.renew(&template.specs[i]),
+                // A voice that was never allocated for this template.
+                None => self.nodes[i] = Some(Box::new(template.specs[i].instantiate())),
+            }
         }
         for i in template.node_count as usize..MAX_GRAPH_NODES {
             self.nodes[i] = None;
@@ -119,9 +133,13 @@ impl Instrument {
         !self.voices.iter().any(|v| v.active)
     }
     pub fn new(template: GraphTemplate) -> Self {
+        let mut voices: [Voice; MAX_VOICES] = core::array::from_fn(|_| Voice::new());
+        for v in voices.iter_mut() {
+            v.allocate(&template);
+        }
         Self {
             template,
-            voices: core::array::from_fn(|_| Voice::new()),
+            voices,
             node_bufs: Box::new([[0.0; BLOCK_SIZE]; MAX_GRAPH_NODES]),
             staged_cutoff: None,
             staged_env_depth: None,
