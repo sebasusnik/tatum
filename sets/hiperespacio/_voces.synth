@@ -171,6 +171,27 @@ track kruido {
     out > highpass(300hz, 0.05) > autopan(0.5, hz=0.5) > master
 }
 
+# F8: a riser by fader. Noise held as long as the fader is up, opening its
+# band as it rises. A note on every beat starts it within a beat of the
+# fader leaving the bottom; while it sounds the next ones only hold it.
+instrument kriser_v {
+    gain 2.0
+    noise() as n
+    n > adsr(0.01, 0.1, 1.0, 0.3) as amp
+    amp > out
+}
+
+pattern kheld { C3 ..*3  C3 ..*3  C3 ..*3  C3 ..*3 }
+
+track kriser {
+    play kheld
+    using kriser_v
+    level 0
+    reverb_send 0.25
+    sidechain 0.3
+    out > highpass(200hz, 0.05) > bandpass(400hz, 0.35) as band > autopan(0.5, hz=0.25) > master
+}
+
 track kfill {
     play kroll
     using ksnare_v

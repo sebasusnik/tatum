@@ -30,7 +30,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::dsl::ast::{ChainNode, Quantize, Song, ZoneKind};
+use crate::dsl::ast::{ChainNode, Quantize, Song, VoiceMove, ZoneKind};
 use crate::dsl::compiler::CompiledSong;
 use crate::dsl::diff::{self, DslChange};
 use crate::midi;
@@ -225,6 +225,11 @@ pub enum Plan {
     /// to start on the next division of that length; `None` lets go. It
     /// belongs to the player, not to an engine, so it rolls on across a swap.
     Repeat(Option<f32>),
+    /// An effect on the player's output, on or off, at an amount 0..1; the
+    /// player's too, so it carries on across a swap.
+    Fx { fx: crate::perform::fx::OutFx, on: bool, amount: f32 },
+    /// How hard a held effect is pressed now.
+    FxAmount { fx: crate::perform::fx::OutFx, amount: f32 },
     /// A pad written with `q=`: `inner` waits for the next line of `grid`,
     /// on the audio thread, which is the only place that knows where the
     /// line is. `pad` and `down` pair a release with its press; a trigger
@@ -267,6 +272,7 @@ impl Plan {
             Plan::Repeat(_) => "repeat",
             Plan::Quantized { .. } => "quantized",
             Plan::AtBar { .. } => "at bar",
+            Plan::Fx { .. } | Plan::FxAmount { .. } => "fx",
         }
     }
 }
@@ -451,6 +457,17 @@ pub struct LivePlanner {
     /// The same for each controller a scene has lines for: the lines, by
     /// index in the scene's list, a move away from rest started on.
     knob_gesture: Vec<(u8, Vec<usize>)>,
+    /// Output effects held down: from a key (else a pad), its note, the
+    /// effect and how hard it was struck.
+    fx_held: Vec<(bool, u8, crate::perform::fx::OutFx, f32)>,
+    /// The knobs' page, by position in the song's list.
+    page: usize,
+    /// Where each knob was left on each page (`""` for the `midi` block's
+    /// own lines): what a page change takes the knobs back to.
+    page_memory: Vec<(String, u8, u8)>,
+    /// Knobs waiting to take over after a page change: the controller, the
+    /// position it has to reach, and whether it comes from below.
+    pickups: Vec<(u8, u8, bool)>,
     /// Keys held down, oldest first, with the velocity each was struck at.
     /// A mono instrument plays the newest; letting it go falls back to the
     /// one before it, which is how a monosynth answers a keyboard.
@@ -492,6 +509,10 @@ impl LivePlanner {
             seq: 0,
             bend_gesture: None,
             knob_gesture: Vec::new(),
+            fx_held: Vec::new(),
+            page: 0,
+            page_memory: Vec::new(),
+            pickups: Vec::new(),
             held: Vec::new(),
             bend: 0.0,
             output_gain: None,
@@ -650,6 +671,24 @@ impl LivePlanner {
         if let Some(sixteenths) = repeat {
             plans.push(Plan::Repeat(down.then_some(sixteenths)));
         }
+        // So is an output effect: on as hard as it was struck.
+        let fx = self
+            .pending
+            .as_ref()
+            .or(self.running.as_ref())
+            .and_then(|k| bank.of(&k.controls).iter().find(|p| p.note == note))
+            .and_then(|p| match p.action {
+                midi::PadAction::Fx(fx) => Some(fx),
+                _ => None,
+            });
+        if let Some(fx) = fx {
+            let is_key = matches!(bank, Bank::Keys);
+            self.fx_held.retain(|h| !(h.0 == is_key && h.1 == note));
+            if down {
+                self.fx_held.push((is_key, note, fx, velocity));
+            }
+            plans.push(Plan::Fx { fx, on: down, amount: velocity });
+        }
         for known in self.known() {
             for pad in bank.of(&known.controls).iter().filter(|p| p.note == note) {
                 let base = known.generation;
@@ -691,6 +730,18 @@ impl LivePlanner {
             }
         }
         Some(plans)
+    }
+
+    /// Aftertouch: how hard a held pad (`pad`) or key is pressed, `value`
+    /// 0..127, for one note or, with `note` `None`, every one held. A held
+    /// effect follows it, never below how hard it was struck.
+    pub fn pressure(&mut self, pad: bool, note: Option<u8>, value: u8) -> Vec<Plan> {
+        let pressed = value.min(127) as f32 / 127.0;
+        self.fx_held
+            .iter()
+            .filter(|h| h.0 != pad && note.is_none_or(|n| n == h.1))
+            .map(|h| Plan::FxAmount { fx: h.2, amount: pressed.max(h.3) })
+            .collect()
     }
 
     /// Mute a track, or bring it back, by name: the state a toggle pad keeps,
@@ -1294,28 +1345,176 @@ impl LivePlanner {
                 }
             }
             _ => {
-                turn.readings = latest
-                    .controls
-                    .knobs
-                    .iter()
-                    .filter(|k| k.cc == cc && !k.moves.is_empty())
-                    .map(|k| k.reading(value))
-                    .collect();
-                if turn.readings.is_empty() {
+                // A controller that chooses the knobs' voice.
+                if let Some(&(_, step)) = latest.controls.voice_knobs.iter().find(|v| v.0 == cc) {
+                    let pages = latest.controls.pages.len();
+                    let last = self.knob_values.iter().find(|(c, _)| *c == cc).map(|(_, v)| *v);
+                    self.remember(cc, value);
+                    let mv = if step {
+                        // An encoder: past the middle is a step on, below it
+                        // a step back (Arturia's relative mode); 64 is none.
+                        match value {
+                            65..=127 => Some(VoiceMove::Next),
+                            0..=63 => Some(VoiceMove::Prev),
+                            _ => None,
+                        }
+                    } else {
+                        let at = (value as usize * pages.max(1) / 128).min(pages.saturating_sub(1));
+                        let before = last.map(|v| (v as usize * pages.max(1) / 128).min(pages.saturating_sub(1)));
+                        (before != Some(at)).then(|| VoiceMove::To(self.page_name(at).unwrap_or_default()))
+                    };
+                    if let Some(said) = mv.and_then(|mv| self.voice(&mv, playing)) {
+                        turn.readings.push(said);
+                    }
                     return turn;
                 }
+                let page = self.page_with(cc);
+                let key = page.and_then(|i| self.page_name(i)).unwrap_or_default();
+                let latest = self.pending.as_ref().or(self.running.as_ref()).expect("checked above");
+                let readings: Vec<String> = match page.and_then(|i| latest.controls.pages.get(i)) {
+                    Some(p) => p
+                        .lines(cc)
+                        .map(|k| {
+                            if k.moves.is_empty() {
+                                format!("{} (not in this track)", k.target.replace('.', " "))
+                            } else {
+                                k.reading(value)
+                            }
+                        })
+                        .collect(),
+                    None => latest
+                        .controls
+                        .knobs
+                        .iter()
+                        .filter(|k| k.cc == cc && !k.moves.is_empty())
+                        .map(|k| k.reading(value))
+                        .collect(),
+                };
+                if readings.is_empty() {
+                    return turn;
+                }
+                // The first touch of a knob whose target the text puts
+                // somewhere else: with `takeover pickup`, it waits for the
+                // knob to get there rather than jump.
+                let first_touch = !self.knob_values.iter().any(|(c, _)| *c == cc);
+                let latest = self.pending.as_ref().or(self.running.as_ref()).expect("checked above");
+                if first_touch && latest.controls.pickup && !self.pickups.iter().any(|p| p.0 == cc) {
+                    let lines: Vec<&midi::Knob> = match page.and_then(|i| latest.controls.pages.get(i)) {
+                        Some(p) => p.lines(cc).collect(),
+                        None => latest.controls.knobs.iter().filter(|k| k.cc == cc).collect(),
+                    };
+                    let at = lines.iter().filter(|k| !k.moves.is_empty()).find_map(|k| {
+                        let now = midi::text_value(&latest.ast, &k.target)?;
+                        k.position_of(now)
+                    });
+                    if let Some(t) = at.filter(|t| t.abs_diff(value) > 3) {
+                        self.pickups.push((cc, t, value < t));
+                    }
+                }
+                // Soft takeover: after a page change a knob that is not
+                // where its new target is moves nothing until it gets there.
+                if let Some(i) = self.pickups.iter().position(|p| p.0 == cc) {
+                    let (_, t, below) = self.pickups[i];
+                    let there = if below { value + 1 >= t } else { value <= t.saturating_add(1) };
+                    if !there {
+                        let arrow = if below { "→" } else { "←" };
+                        turn.readings = readings
+                            .iter()
+                            .map(|r| format!("{}  {} turn {} to {} to take it", r, value, arrow, t))
+                            .collect();
+                        self.remember_physical(cc, value);
+                        return turn;
+                    }
+                    self.pickups.remove(i);
+                }
+                turn.readings = readings;
                 for known in self.known() {
-                    for op in known.block_knob_ops(cc, value) {
+                    for op in self.page_ops(known, cc, value, page) {
                         turn.plans.push(Plan::Control { base: known.generation, op });
                     }
                 }
+                self.page_memory.retain(|(k, c, _)| !(k == &key && *c == cc));
+                self.page_memory.push((key, cc, value));
             }
         }
+        self.remember_physical(cc, value);
+        turn
+    }
+
+    fn remember_physical(&mut self, cc: u8, value: u8) {
         match self.knob_values.iter_mut().find(|(c, _)| *c == cc) {
             Some(slot) => slot.1 = value,
             None => self.knob_values.push((cc, value)),
         }
-        turn
+    }
+
+    fn remember(&mut self, cc: u8, value: u8) {
+        self.remember_physical(cc, value);
+    }
+
+    /// The page chosen, when it has lines for controller `cc`.
+    fn page_with(&self, cc: u8) -> Option<usize> {
+        let latest = self.pending.as_ref().or(self.running.as_ref())?;
+        latest.controls.pages.get(self.page).filter(|p| p.lines(cc).next().is_some()).map(|_| self.page)
+    }
+
+    fn page_name(&self, i: usize) -> Option<String> {
+        self.pending.as_ref().or(self.running.as_ref())?.controls.pages.get(i).map(|p| p.name.clone())
+    }
+
+    /// What controller `cc` at `value` does to `known` on `page`: the
+    /// page's lines for it, or else the `midi` block's.
+    fn page_ops(&self, known: &Known, cc: u8, value: u8, page: Option<usize>) -> Vec<FastOp> {
+        match page.and_then(|i| known.controls.pages.get(i)).filter(|p| p.lines(cc).next().is_some()) {
+            Some(p) => p.lines(cc).flat_map(|k| k.ops(value)).collect(),
+            None => known.block_knob_ops(cc, value).collect(),
+        }
+    }
+
+    /// The knobs' voice: the page chosen, by name.
+    pub fn voice_name(&self) -> Option<String> {
+        self.page_name(self.page)
+    }
+
+    /// Choose the knobs' page. Returns what it now moves, for the screen:
+    /// `voice bass: cutoff · resonance · decay`. With `takeover pickup`, a
+    /// knob whose position does not match the value it left its new
+    /// target at waits until it passes it.
+    pub fn voice(&mut self, mv: &VoiceMove, playing: Generation) -> Option<String> {
+        self.catch_up(playing);
+        let latest = self.pending.as_ref().or(self.running.as_ref())?;
+        let pages = &latest.controls.pages;
+        let n = pages.len();
+        if n == 0 {
+            return None;
+        }
+        let to = match mv {
+            VoiceMove::Next => (self.page + 1) % n,
+            VoiceMove::Prev => (self.page + n - 1) % n,
+            VoiceMove::To(name) => pages.iter().position(|p| &p.name == name)?,
+        };
+        let old = pages.get(self.page).cloned();
+        let new = pages[to].clone();
+        let pickup = latest.controls.pickup;
+        self.page = to;
+        self.pickups.clear();
+        if pickup {
+            let mut ccs: Vec<u8> = new.knobs.iter().map(|k| k.cc).collect();
+            ccs.extend(old.iter().flat_map(|p| p.knobs.iter().map(|k| k.cc)));
+            ccs.sort();
+            ccs.dedup();
+            for cc in ccs {
+                let key = if new.lines(cc).next().is_some() { new.name.clone() } else { String::new() };
+                let target = self.page_memory.iter().find(|(k, c, _)| *k == key && *c == cc).map(|(_, _, v)| *v);
+                let here = self.knob_values.iter().find(|(c, _)| *c == cc).map(|(_, v)| *v);
+                if let (Some(t), Some(h)) = (target, here) {
+                    if h.abs_diff(t) > 2 {
+                        self.pickups.push((cc, t, h < t));
+                    }
+                }
+            }
+        }
+        Some(format!("voice {}: {}", new.name, new.summary()))
     }
 
     /// Controller at `value` put on `target` (`acid.cutoff`) as if a `midi`
@@ -1428,13 +1627,30 @@ impl LivePlanner {
         let known = Known::new(generation, ast, &engine);
         // The new engine starts where the knobs were left, not where the
         // text puts them, so a save does not undo what the hands did.
+        // What the other pages' knobs were left at, then the knobs as the
+        // chosen page and the scene have them.
+        let current = self.page_name(self.page).unwrap_or_default();
+        for (key, cc, value) in &self.page_memory {
+            if key.is_empty() || *key == current {
+                continue;
+            }
+            if let Some(p) = known.controls.pages.iter().find(|p| &p.name == key) {
+                for op in p.lines(*cc).flat_map(|k| k.ops(*value)) {
+                    engine.hold(op);
+                }
+            }
+        }
         for &(cc, value) in &self.knob_values {
             let scene_has = known.controls.scene_knobs(cc, self.scene.as_deref()).is_some();
             let gesture = self.knob_gesture.iter().find(|(c, _)| *c == cc).map(|(_, l)| l.clone());
             let ops: Vec<FastOp> = if scene_has {
                 self.scene_knob_ops(&known, &gesture, value)
+            } else if known.controls.voice_knobs.iter().any(|v| v.0 == cc) {
+                Vec::new()
             } else {
-                known.block_knob_ops(cc, value).collect()
+                let page =
+                    known.controls.pages.get(self.page).filter(|p| p.lines(cc).next().is_some()).map(|_| self.page);
+                self.page_ops(&known, cc, value, page)
             };
             for op in ops {
                 engine.hold(op);
@@ -1857,6 +2073,8 @@ pub struct LivePlayer {
     blind_swaps: u32,
     /// A `repeat` pad's roll over the whole output.
     repeat: Repeat,
+    /// The output effects pads and keys hold.
+    fx: crate::perform::fx::PadFx,
     /// Samples rendered since the player was made: the clock quantized pads
     /// are queued against.
     clock: u64,
@@ -1889,6 +2107,7 @@ impl LivePlayer {
             swaps: 0,
             blind_swaps: 0,
             repeat: Repeat::new(),
+            fx: crate::perform::fx::PadFx::new(),
             clock: 0,
             waiting: [None; MAX_WAITING],
             pressed: [None; 256],
@@ -2009,6 +2228,14 @@ impl LivePlayer {
             }
             Plan::Repeat(None) => {
                 self.repeat.release();
+                Applied::Control
+            }
+            Plan::Fx { fx, on, amount } => {
+                self.fx.set(fx, on, amount);
+                Applied::Control
+            }
+            Plan::FxAmount { fx, amount } => {
+                self.fx.amount(fx, amount);
                 Applied::Control
             }
             Plan::Swap { engine, generation, inherit, blend_bars } => {
@@ -2148,6 +2375,7 @@ impl LivePlayer {
     /// Stop. A queued engine takes over at once, with nothing to inherit.
     pub fn stop(&mut self) {
         self.repeat.state = RepeatState::Off;
+        self.fx.reset();
         self.waiting = [None; MAX_WAITING];
         self.pressed = [None; 256];
         self.at_bar = [None; MAX_WAITING];
@@ -2211,10 +2439,12 @@ impl LivePlayer {
             }
         }
         let engine = self.engine.as_mut().expect("engine present");
+        let (step, into_step) = engine.step_timing();
         engine.process_block_stereo(out_l, out_r);
         // What the previous engine still owns fades out on top.
         self.render_fade(out_l, out_r);
         self.render_blend(out_l, out_r);
+        self.fx.process(out_l, out_r, step, into_step);
         self.repeat.process(out_l, out_r);
         swapped
     }

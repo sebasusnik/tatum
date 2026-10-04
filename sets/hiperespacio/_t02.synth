@@ -478,13 +478,14 @@ track eco {
 # voice under the pluck: F5 and K4 go to the echo figure (B4) and the
 # shaker's top instead.
 midi {
+    # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
+    # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw
+    # that were pads A2 and A3. Knobs: the page `tema`.
     # faders
-    cc 73 > drums level
-    cc 75 > shaker level 0..0.25
-    cc 79 > bass level 0..1.8
-    cc 72 > pluck level 0..0.45
+    cc 75 > bass level 0..1.8
+    cc 80 > pluck level 0..0.45
     cc 80 > eco level 0..0.6
-    cc 81 > sig level 0..0.6
+    cc 80 > sig level 0..0.6
 
     # knobs
     cc 74 > orb cutoff 45hz..260hz
@@ -503,11 +504,8 @@ midi {
     cc 17 > bass dirt drive 0.2..1.4
 
     # bank A: performance
-    pad 36 > mute drums q=bar
-    pad 37 > toggle shaker
-    pad 38 > throw pluck q=1/16
-    pad 40 > repeat 1/8
-    pad 41 > repeat 1/16
+    key 46 > toggle shaker
+    key 47 > throw pluck q=1/16
 
     # bank B: the track's sounds
     pad 44 > play sig F q=1/16    #3

@@ -1,7 +1,7 @@
 # set: bars=32 phase=01-ignicion energy=5
 # set-note: the full floor: open hat, rim ghosts, turns at 8 and 16; the bass open with its octave kicks; one throttle blip from the turbine closes the phrase
-# cue: 15 A1 apretado · kick fuera
-# cue: 17 suelta A1
+# cue: 15 tecla D apretada · kick fuera
+# cue: 17 suelta la tecla D
 use "_t01.synth"
 
 track drums { play full level 0.92 }

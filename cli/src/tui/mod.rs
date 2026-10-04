@@ -279,6 +279,8 @@ pub struct Screen {
     /// The performance scene, and the one called that waits for its bar:
     /// `drop`, `drop → break @ 33`.
     pub perform: Option<String>,
+    /// The page the knobs are on: `bass`.
+    pub voice: Option<String>,
     bar: usize,
     step: usize,
     tempo: f32,
@@ -332,6 +334,7 @@ impl Screen {
             marked: Vec::new(),
             bound: Vec::new(),
             perform: None,
+            voice: None,
             picker: None,
             view: 0,
             followed: None,
@@ -1300,6 +1303,10 @@ impl Screen {
         if let Some(perform) = &self.perform {
             spans.push(Span::styled("  ⚑ ", Style::new().fg(DIM)));
             spans.push(Span::styled(perform.clone(), Style::new().fg(GOLD).add_modifier(Modifier::BOLD)));
+        }
+        if let Some(voice) = &self.voice {
+            spans.push(Span::styled("  knobs: ", Style::new().fg(DIM)));
+            spans.push(Span::styled(voice.clone(), Style::new().fg(HOT).add_modifier(Modifier::BOLD)));
         }
         if self.finished {
             spans.push(Span::styled("  ■ finished", Style::new().fg(DIM)));

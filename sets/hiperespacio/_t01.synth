@@ -21,6 +21,7 @@ master {
        > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
        > eq(low=0.5, mid=-0.5, high=1)
        > gain(0.944) as trim
+       > gain(1.0) as vol
        > out
 }
 
@@ -558,14 +559,15 @@ track spark {
 # The KeyLab, laid out as CONTROLES.md says. _base.synth has F7 reverb,
 # F8 echo, F9 DJ filter, A4 freeze, A7 prev, A8 next.
 midi {
+    # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
+    # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw
+    # that were pads A2 and A3. Knobs: the page `tema`.
     # faders
-    cc 73 > drums level
-    cc 75 > perc level 0..0.3
-    cc 79 > bass level 0..1.2
-    cc 72 > pad level 0..0.35
+    cc 75 > bass level 0..1.2
+    cc 80 > pad level 0..0.35
     cc 80 > wind level 0..0.5
-    cc 81 > grind level 0..0.15
-    cc 81 > sig level 0..0.15
+    cc 80 > grind level 0..0.15
+    cc 80 > sig level 0..0.15
 
     # knobs
     cc 74 > ign cutoff_env 250hz..1.6khz
@@ -587,11 +589,8 @@ midi {
     cc 17 > bass dirt drive 0.2..1.4
 
     # bank A: performance
-    pad 36 > mute drums q=bar
-    pad 37 > toggle perc
-    pad 38 > throw pad q=1/16
-    pad 40 > repeat 1/8
-    pad 41 > repeat 1/16
+    key 46 > toggle perc
+    key 47 > throw pad q=1/16
 
     # bank B: the track's sounds
     pad 44 > play sig F q=1/16    #3

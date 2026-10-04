@@ -21,6 +21,7 @@ master {
        > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
        > eq(low=0.5, mid=-0.5, high=1)
        > gain(0.933) as trim
+       > gain(1.0) as vol
        > out
 }
 
@@ -486,13 +487,14 @@ track mg {
 # The KeyLab, per CONTROLES.md (F7 reverb, F8 echo, F9 DJ filter, A4 freeze,
 # A7 prev, A8 next come from _base). B7 throws the arp, B8 takes the bass out.
 midi {
-    cc 73 > drums level 0..1.0
-    cc 75 > ticks level 0..1.0
-    cc 79 > bass level 0..1.6
-    cc 72 > lead level 0..0.3
+    # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
+    # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw
+    # that were pads A2 and A3. Knobs: the page `tema`.
+    cc 75 > bass level 0..1.6
+    cc 80 > lead level 0..0.3
     cc 80 > arp level 0..0.25
-    cc 81 > laserpad level 0..0.36
-    cc 81 > mg level 0..0.45
+    cc 80 > laserpad level 0..0.36
+    cc 80 > mg level 0..0.45
     cc 74 > tube cutoff 70hz..330hz
     cc 74 > tube cutoff_env 700hz..1.8khz
     cc 74 > tube resonance 36%..48%
@@ -508,11 +510,8 @@ midi {
     cc 19 > tunelkit kick_decay 10%..34%
     cc 16 > tunelkit hihat_pitch 1.39x..1.85x..2.0x    # K8 hats: darker left, the written tuning in the middle (hihat_decay does nothing in the engine yet)
     cc 17 > bass dirt wet 0%..60%
-    pad 36 > mute drums q=bar
-    pad 37 > toggle ticks
-    pad 38 > throw lead q=1/16
-    pad 40 > repeat 1/8
-    pad 41 > repeat 1/16
+    key 46 > toggle ticks
+    key 47 > throw lead q=1/16
     pad 44 > play laserpad q=1/16
     pad 45 > hold risehold q=beat
     pad 46 > drums crash q=beat

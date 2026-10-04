@@ -20,6 +20,7 @@ master {
        > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
        > eq(low=0.5, mid=-0.5, high=1)
        > gain(0.891) as trim
+       > gain(1.0) as vol
        > out
 }
 
@@ -390,12 +391,13 @@ track ping {
 # A4 freeze, A7 prev and A8 next. Level ranges put the top of a fader a little
 # over where the steps run each voice
 midi {
-    cc 73 > drums level 0..1.0                # F1 drums
-    cc 75 > ride level 0..2.0                 # F2 the ride
-    cc 79 > bass level 0..2.4                 # F3 the deep roll
-    cc 72 > drone level 0..0.18               # F4 the drone (D)
-    cc 80 > rub level 0..0.1                  # F5 the rub (Eb)
-    cc 81 > dpad level 0..0.2                 # F6 signature: the pad drone
+    # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
+    # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw
+    # that were pads A2 and A3. Knobs: the page `tema`.
+    cc 75 > bass level 0..2.4
+    cc 80 > drone level 0..0.18
+    cc 80 > rub level 0..0.1
+    cc 80 > dpad level 0..0.2
     cc 74 > deep cutoff 45hz..260hz           # K1 bass filter
     cc 74 > deep cutoff_env 200hz..700hz
     cc 71 > abyss mod_index 25%..65%          # K2 drone: open
@@ -413,11 +415,8 @@ midi {
     cc 17 > drone crush wet 0..0.6            # K9 dirt: every crusher on the drones
     cc 17 > rub crush wet 0..0.5
     cc 17 > dpad crush wet 0.1..0.7
-    pad 36 > mute drums q=bar    # A1 kick out
-    pad 37 > toggle ride                      # A2 ride in/out
-    pad 38 > throw drone q=1/16    # A3 drone into the echo
-    pad 40 > repeat 1/8                       # A5 roll
-    pad 41 > repeat 1/16                      # A6 tighter roll
+    key 46 > toggle ride
+    key 47 > throw drone q=1/16
     pad 44 > play dpad D3 q=1/16    # B1 the drone, held
     pad 45 > hold rise q=beat    # B2 riser
     pad 46 > drums crash q=beat    # B3 crash

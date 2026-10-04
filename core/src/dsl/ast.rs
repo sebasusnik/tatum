@@ -43,6 +43,14 @@ pub struct PerformSetup {
     /// `bend lead 2st` in a `midi` block: what the pitch strip does to a
     /// zone when no scene says otherwise.
     pub bends: Vec<BendDef>,
+    /// `page bass { cc 74 > bass cutoff }`: the knobs' voices, in order. The
+    /// first is the one a session starts on; a page's line for a controller
+    /// stands in for the `midi` block's while the page is chosen.
+    pub pages: Vec<PageDef>,
+    /// `takeover pickup`: a knob whose position does not match what it now
+    /// moves, after a page change, waits until it passes the value before
+    /// it moves anything. `None` or `jump`: it moves at once.
+    pub pickup: Option<bool>,
     /// `quantize bar` in the `keyboard` block: where a scene called from the
     /// computer comes in, in bars. `None`: the next bar.
     pub scene_bars: Option<u32>,
@@ -194,6 +202,23 @@ pub enum BendRange {
     Off,
 }
 
+/// `page bass { ... }` in a `midi` block: what the knobs move while the
+/// bass is the voice chosen.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PageDef {
+    pub name: String,
+    pub knobs: Vec<MidiMapDef>,
+    pub line: usize,
+}
+
+/// Choosing the knobs' voice.
+#[derive(Debug, Clone, PartialEq)]
+pub enum VoiceMove {
+    Next,
+    Prev,
+    To(String),
+}
+
 /// `f1 > perform intro` in the `keyboard` block.
 #[derive(Debug, Clone, PartialEq)]
 pub struct KeyBinding {
@@ -206,6 +231,8 @@ pub struct KeyBinding {
 #[derive(Debug, Clone, PartialEq)]
 pub enum KeyAction {
     Perform(String),
+    /// `tab > voice next`: the knobs' page.
+    Voice(VoiceMove),
     Next,
     Prev,
     Step(usize),

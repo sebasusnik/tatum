@@ -440,7 +440,7 @@ mod tests {
         let song = tatum_core::dsl::parse(&src).unwrap();
         let say = |e: Event| meaning(&song, None, &e).unwrap();
         assert_eq!(say(Event::Note { channel: 1, note: 36, velocity: 100 }), "trigger key: play ruido");
-        assert_eq!(say(Event::Note { channel: 1, note: 40, velocity: 100 }), "trigger zone 36..47: key 40 not mapped");
+        assert_eq!(say(Event::Note { channel: 1, note: 46, velocity: 100 }), "trigger zone 36..47: key 46 not mapped");
         assert_eq!(
             say(Event::Note { channel: 1, note: 54, velocity: 100 }),
             "bass zone 48..59: plays F3 on bass (roll)"

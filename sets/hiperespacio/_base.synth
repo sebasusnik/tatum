@@ -38,18 +38,13 @@ master {
        > highpass(20hz, 0.05) as hp
        > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
        > eq(low=0.5, mid=-0.5, high=1)
+       > gain(1.0) as vol
        > out
 }
 
-# The KeyLab: what every track has (layout in CONTROLES.md). A track's rig
-# adds its own faders, knobs and pads. The keyboard's zones, voices and
-# scenes are in _keylab.synth. The set moves from the computer's keys only.
-midi {
-    cc 82 > reverb_mix
-    cc 83 > delay_mix
-    cc 85 > master dj cutoff 150hz..20khz..20khz
-    cc 85 > master hp cutoff 20hz..20hz..3khz
-    pad 39 > freeze
-}
+# The KeyLab: _keylab.synth maps all of it (layout in CONTROLES.md, the
+# short version in KEYLAB.md); a track's rig adds its own faders F2 and F5,
+# its page of knobs and its bank B pads. The set moves from the computer's
+# keys only.
 
 use "_keylab.synth"

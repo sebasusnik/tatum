@@ -807,6 +807,58 @@ cc, pitch strip, aftertouch, program change), its bytes, and, given a song or
 a set, what the `midi` block, the zones and the trigger keys do with it. It is
 the way to find out which numbers a controller sends before writing them down.
 
+### Pages, takeover and effects
+
+A knob line can name a track where a module is meant: `bass cutoff` reaches
+the module the track `bass` plays, whatever the rig calls it, so one mapping
+serves every track of a set.
+
+`page <name> { ... }` blocks give the knobs voices. The first page is the one
+a session starts on; while a page is chosen, its line for a controller stands
+in for the `midi` block's, and a controller it does not name keeps the block's
+line. A page reaches across a set whose rigs differ, so a line naming
+something a rig does not have is left out rather than refused, and reads
+`(not in this track)` on screen.
+
+```
+midi {
+    takeover pickup                 # a knob not where its target is waits for it
+    page tema { }                   # the block's own lines
+    page bass {
+        cc 74 > bass cutoff
+        cc 71 > bass resonance
+    }
+    cc 114 > voice step             # an encoder steps through the pages
+}
+keyboard { tab > voice next }       # also voice prev, voice bass
+```
+
+`cc N > voice` picks a page by the controller's position; `voice step` is an
+encoder: above 64 the next page, below it the one before. With `takeover
+pickup`, a knob that comes back to a page where it left its target somewhere
+else, or is touched for the first time away from where the text puts its
+target, moves nothing until it passes that value; the screen says which way to
+turn. Without it a first touch jumps, as before.
+
+A pad or a trigger key can hold an effect on the whole output, coming in and
+out over a few milliseconds, as strong as the pad was struck and then as hard
+as it is pressed (aftertouch, polyphonic or the channel's, never below the
+strike):
+
+```
+midi {
+    pad 39 > tapestop     # slows to a stop, sooner the harder
+    pad 40 > gate 1/16    # chopped on the grid: open the first half of each division
+    pad 41 > crush        # 12 bits down to 3
+    pad 42 > scream       # driven into a vowel filter that pressure moves
+    key 40 > cut          # a low-pass closing to 900..150 Hz
+    key 41 > sweep        # a high-pass climbing toward 4 kHz while held
+}
+```
+
+They take no `q=`. A script plays aftertouch with `press pad 40 90` and picks
+a page with `voice bass`.
+
 ### Everything else
 
 `render` ignores the block, so a song with a `midi` block renders exactly as one

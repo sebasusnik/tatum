@@ -167,7 +167,29 @@ pub(super) fn validate_perform(song: &Song) -> Vec<CompileError> {
                 .push(CompileError::at(b.line, format!("bend {}: there is no {} zone", b.zone.word(), b.zone.word())));
         }
     }
+    // A page reaches across the tracks of a set, and a rig may lack what it
+    // names (an `fm` bass has no cutoff): a line that names nothing here is
+    // left out, not refused. One that does name something is checked whole.
+    for page in &p.pages {
+        let head = format!("page {}", page.name);
+        for line in &page.knobs {
+            let bare = MidiMapDef { range: None, ..line.clone() };
+            if validate_maps(song, core::slice::from_ref(&bare), |_, _| String::new()).is_empty() {
+                errors.extend(validate_maps(song, core::slice::from_ref(line), |source, words| {
+                    format!("{}: {} > {}", head, source, words)
+                }));
+            }
+        }
+    }
     for b in &p.keyboard {
+        if let KeyAction::Voice(VoiceMove::To(name)) = &b.action {
+            if !p.pages.iter().any(|pg| &pg.name == name) {
+                errors.push(CompileError::at(
+                    b.line,
+                    format!("keyboard: {} > voice {}: no page named '{}'", b.key, name, name),
+                ));
+            }
+        }
         if b.key == "q" {
             errors.push(CompileError::at(b.line, String::from("keyboard: q quits; bind another key")));
         }
@@ -272,6 +294,8 @@ fn validate_maps(song: &Song, maps: &[MidiMapDef], head: impl Fn(&str, &str) -> 
                     }
                 }
                 ["repeat"] => errors.push(err(String::from("how long a repeat: `pad 38 > repeat 1/16`"))),
+                [fx, rest @ ..] if crate::midi::out_fx(fx, rest).is_some() => {}
+                ["gate", d] => errors.push(err(format!("a gate chops in 1/4, 1/8, 1/16 or 1/32, got '{}'", d))),
                 ["play", track, rest @ ..] if rest.len() <= 1 => match module_of(track) {
                     None => errors.push(err(format!("no track named '{}'", track))),
                     Some((_, kind)) => {
@@ -305,11 +329,14 @@ fn validate_maps(song: &Song, maps: &[MidiMapDef], head: impl Fn(&str, &str) -> 
                 },
                 _ => errors.push(err(String::from(
                     "a pad hits a drum (`pad 36 > kick kick`), or does one of: mute <track>, toggle <track>, \
-throw <track>, hold <track>, play <track> [<note>], repeat <1/4|1/8|1/16|1/32>, freeze, next, prev, step <n>",
+throw <track>, hold <track>, play <track> [<note>], repeat <1/4|1/8|1/16|1/32>, freeze, \
+tapestop, gate [<1/8|1/16|1/32>], crush, scream, cut, sweep, next, prev, step <n>",
                 ))),
             },
             MidiSource::Cc(_) => match words.as_slice() {
                 ["reverb_mix"] | ["delay_mix"] | ["reverb_freeze"] | ["tempo"] => {}
+                // The knobs' voice: a knob picks the page, an encoder steps.
+                ["voice"] | ["voice", "step"] => {}
                 [track, "delay_send" | "reverb_send"] => {
                     if !song.tracks.iter().any(|t| &t.name == track) {
                         errors.push(err(format!("no track named '{}'", track)));
@@ -374,7 +401,7 @@ throw <track>, hold <track>, play <track> [<note>], repeat <1/4|1/8|1/16|1/32>, 
                         )));
                     }
                 },
-                [module, param] => match song.module_defs.iter().find(|m| &m.name == module) {
+                [module, param] => match crate::midi::module_named(song, module) {
                     Some(m) => {
                         if let Some(kind) = ModuleKind::from_str(&m.module_type) {
                             if params::lookup(kind, param).is_none() {

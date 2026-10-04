@@ -401,12 +401,13 @@ track coughs {
 # grinder (rotor; the pads play rotor_pad). No perc layer: F2 is the hats,
 # A2 toggles the wind
 midi {
-    cc 73 > drums level
-    cc 75 > kit hihat_level 0..0.9
-    cc 79 > bass level
-    cc 72 > pad level 0..0.35
+    # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
+    # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw
+    # that were pads A2 and A3. Knobs: the page `tema`.
+    cc 75 > bass level
+    cc 80 > pad level 0..0.35
     cc 80 > wind level 0..0.4
-    cc 81 > grind_pad level 0..0.4
+    cc 80 > grind_pad level 0..0.4
 
     cc 74 > rescoldo cutoff 45hz..200hz
     cc 74 > rescoldo cutoff_env 300hz..1.5khz
@@ -426,11 +427,8 @@ midi {
     cc 17 > grind dirt drive 0.2..1.4
     cc 17 > grind_pad dirt drive 0.2..1.4
 
-    pad 36 > mute drums q=bar
-    pad 37 > toggle wind
-    pad 38 > throw pad q=1/16
-    pad 40 > repeat 1/8
-    pad 41 > repeat 1/16
+    key 46 > toggle wind
+    key 47 > throw pad q=1/16
 
     pad 44 > play grind_pad F q=1/16    #3
     pad 45 > hold swell q=beat

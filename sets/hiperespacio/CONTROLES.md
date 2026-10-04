@@ -3,24 +3,49 @@
 One layout for the whole hour: a fader, knob or pad does the same job in every
 track, the way a DJ's rack does in Ableton. What it reaches changes with the
 track (the bass of T04 is a 303, the bass of T08 a three-oscillator gallop), what
-it *means* does not. `_base.synth` maps what every track shares; each `_tNN.synth`
-maps the rest onto its own voices with a `midi` block after its `use`.
+it *means* does not. `_keylab.synth` maps what every track shares; each
+`_tNN.synth` maps the rest onto its own voices with a `midi` block after its
+`use`: faders F2 and F5, the `tema` page of knobs, bank B and keys A# and B.
+The short version is `KEYLAB.md`.
 
 ## Faders (left to right)
 
 | # | cc | role | notes |
 |---|---|---|---|
-| F1 | 73 | **drums** | the main kit track's level |
-| F2 | 75 | **perc / hats** | the second drum layer (rims, toms, ticks, shaker) |
-| F3 | 79 | **bass** | the rolling bass |
-| F4 | 72 | **main voice** | the track's protagonist: acid, pluck, robot, laser, oud, screamer… |
-| F5 | 80 | **second voice** | arp, pad, drone, haze — whatever plays under/against the main voice |
-| F6 | 81 | **signature** | the grinder / turbine / zaps / shard — its level (its pads are below) |
-| F7 | 82 | **reverb** | `reverb_mix` (base) |
-| F8 | 83 | **echo** | `delay_mix` (base) |
-| F9 | 85 | **DJ filter** | centre open, down dark, up thin (base) |
+| F1 | 73 | **kick** | the kit's `kick_level`, through the track name `drums` (_keylab) |
+| F2 | 75 | **bass** | the track's bass, as its rig writes it (T04: the roll and the gallop together) |
+| F3 | 79 | **hats** | the kit's `hihat_level` (_keylab) |
+| F4 | 72 | **lead** | the keyboard's voices, all four (_keylab) |
+| F5 | 80 | **FX** | the track's own voices together: main voice, second voice, signature (its rig) |
+| F6 | 81 | **send: echo** | the keyboard's voices into the delay (_keylab) |
+| F7 | 82 | **send: room** | the keyboard's voices into the reverb (_keylab) |
+| F8 | 83 | **noise riser** | a noise held while the fader is up, louder and brighter as it rises (_keylab) |
+| F9 | 85 | **master** | the master `vol` gain, top = as written (_keylab) |
 
-## Knobs (left to right)
+`takeover pickup`: a fader or knob that is not where its target is moves
+nothing until it gets there (the screen says which way). The master fader
+starts at the top; found at the bottom it waits, it does not silence the room.
+
+## Knobs: one page per voice
+
+Tab on the computer (or an encoder once its number is known: `cc N > voice
+step` in `_keylab.synth`) steps through the pages; the screen's header shows
+the page (`knobs: bass`), and changing it says what each knob now moves.
+
+| page | K1 74 | K2 71 | K3 76 | K4 77 | K5 93 | K6 18 | K7 19 | K8 16 | K9 17 |
+|---|---|---|---|---|---|---|---|---|---|
+| **tema** (start) | bass filter | main voice open | signature RPM | second voice open | tension | throw amount | kick decay | hats pitch | dirt |
+| **bass** | cutoff | resonance | decay | env amount | glide | echo send | osc 2 pitch | vibrato | level |
+| **lead** | brightness | resonance (pad) | decay | FM index | FM feedback | laser vowel | zap crusher | zap fall | vibrato |
+| **drums** | kick decay | kick pitch | kick click | kick drive | snare level | snare decay | hats pitch | hats pan | stutter |
+| **master** | DJ filter | thin the floor | room | echo | EQ low | EQ mid | EQ high | — | — |
+
+The `tema` page is each track's own nine macros (below). The others are
+written once in `_keylab.synth` by track name, so `bass cutoff` reaches every
+track's bass; a knob whose target a track lacks (the FM bass of T05 has no
+cutoff) reads `(not in this track)` and does nothing.
+
+### The `tema` page
 
 | # | cc | role | typical targets |
 |---|---|---|---|
@@ -36,24 +61,25 @@ maps the rest onto its own voices with a `midi` block after its `use`.
 
 ## Pads
 
-Bank A (36–43), performance:
+Bank A (36–43): effects on the whole mix while held, as strong as the pad is
+struck and then as hard as it is pressed (aftertouch, never below the strike):
 
 | pad | note | action |
 |---|---|---|
-| A1 | 36 | `mute` drums — kick out while held |
-| A2 | 37 | `toggle` perc/hats layer |
-| A3 | 38 | `throw` main voice into the echo |
-| A4 | 39 | `freeze` the reverb (base) |
-| A5 | 40 | `repeat 1/8` — DJ roll |
-| A6 | 41 | `repeat 1/16` — tighter roll |
-| A7 | 42 | free (was `prev`: the set moves from the computer now) |
-| A8 | 43 | free (was `next`) |
+| A1 | 36 | `repeat 1/8` — DJ roll |
+| A2 | 37 | `repeat 1/16` — tighter |
+| A3 | 38 | `repeat 1/32` — the stutter before a drop |
+| A4 | 39 | `tapestop` — slows to a stop; struck harder, sooner |
+| A5 | 40 | `gate 1/16` — trance gate; harder, deeper |
+| A6 | 41 | `crush` — bitcrusher; harder, fewer bits |
+| A7 | 42 | `scream` — driven into a vowel filter; pressure moves it a → i |
+| A8 | 43 | `freeze` the reverb — the free one: put anything here |
 
-Bank B (44–51), the track's sounds:
+Bank B (44–51), the track's sounds (each rig):
 
 | pad | note | action |
 |---|---|---|
-| B1 | 44 | `play` signature — hold it and the grinder/turbine/drone sounds; K3 moves its RPM |
+| B1 | 44 | `play` signature — hold it and the grinder/turbine/drone sounds; K3 (page `tema`) moves its RPM |
 | B2 | 45 | `hold` riser — a sweep/riser figure while held |
 | B3 | 46 | crash (drum hit) |
 | B4 | 47 | `hold` second signature figure (zaps, shard, bell phrase, oud cell…) |
@@ -61,6 +87,9 @@ Bank B (44–51), the track's sounds:
 | B6 | 49 | `throw` signature into the echo |
 | B7 | 50 | free per track |
 | B8 | 51 | free per track |
+
+What bank A used to do moved to the lowest octave of the keyboard: kick out
+is key D, the throw key B, the perc toggle key A#.
 
 ## Rules for the per-track maps
 
@@ -98,13 +127,14 @@ Triggers:
 | C# | 37 | `play kimpact` — a crash of noise, on the beat |
 | D | 38 | `mute drums` — out while held, back on the one |
 | D# | 39 | `mute bass` — out while held |
-| E | 40 | free — the filter cut comes in stage 3 |
-| F | 41 | free — the sweep comes in stage 3 |
+| E | 40 | `cut` — the whole mix under a low-pass, harder the harder struck |
+| F | 41 | `sweep` — a high-pass climbing for as long as it is held |
 | F# | 42 | `hold kfill` — a snare roll in straight sixteenths while held |
 | G | 43 | `throw` the lead (whichever the scene plays) into the echo |
 | G# | 44 | `freeze` the reverb |
-| A | 45 | free — tape stop comes in stage 3 |
-| A# / B | 46 / 47 | free |
+| A | 45 | `tapestop` — the whole mix slows to a stop |
+| A# | 46 | the track's toggle (perc, shaker, clap, ride… its rig) |
+| B | 47 | the track's throw: its main voice into the echo (its rig) |
 
 Scenes, from the computer's keys only, each landing on the next bar:
 

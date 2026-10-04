@@ -21,6 +21,7 @@ master {
        > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
        > eq(low=0.5, mid=-0.5, high=1)
        > gain(0.891) as trim
+       > gain(1.0) as vol
        > out
 }
 
@@ -515,13 +516,14 @@ track rjam {
 # A4 freeze, A7 prev and A8 next. Level ranges are written so the top of a
 # fader is a little over where the steps run each voice
 midi {
-    cc 73 > drums level 0..1.0                # F1 drums
-    cc 75 > glitch level 0..1.0               # F2 the glitch hats
-    cc 79 > bass level 0..0.32                # F3 the FM bass
-    cc 72 > robo level 0..0.6                 # F4 the robot
-    cc 80 > ticks level 0..0.5                # F5 the metal ticks
-    cc 81 > zap level 0..0.35                 # F6 signature: the zaps and the pad voice
-    cc 81 > zpad level 0..0.16
+    # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
+    # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw
+    # that were pads A2 and A3. Knobs: the page `tema`.
+    cc 75 > bass level 0..0.32
+    cc 80 > robo level 0..0.6
+    cc 80 > ticks level 0..0.5
+    cc 80 > zap level 0..0.35
+    cc 80 > zpad level 0..0.16
     cc 74 > bass lp cutoff 350hz..4khz        # K1 bass: the filter over the FM tok
     cc 74 > fbass mod_index 40%..68%          #    and the knock's brightness
     cc 71 > robo mod_index 40%..78%           # K2 robot: grit
@@ -539,11 +541,8 @@ midi {
     cc 16 > mkit hihat_pitch 1.35x..1.8x..2.0x    # K8 hats: darker left, the written tuning in the middle (hihat_decay does nothing in the engine yet)
     cc 17 > bass drv drive 0.15..1.0          # K9 dirt: the bass drive and the pad's crusher
     cc 17 > zpad crush wet 0.2..1.0
-    pad 36 > mute drums q=bar    # A1 kick out
-    pad 37 > toggle glitch                    # A2 glitch hats in/out
-    pad 38 > throw robo q=1/16    # A3 robot into the echo
-    pad 40 > repeat 1/8                       # A5 roll
-    pad 41 > repeat 1/16                      # A6 tighter roll
+    key 46 > toggle glitch
+    key 47 > throw robo q=1/16
     pad 44 > play zpad E4 q=1/16    # B1 the zap held
     pad 45 > hold rise q=beat    # B2 riser
     pad 46 > drums crash q=beat    # B3 crash

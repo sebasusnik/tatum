@@ -241,6 +241,10 @@ pub enum Act {
     /// A performance scene, called as its computer key would call it: it
     /// takes the keyboard on the bar the song's `keyboard` block says.
     Perform(String),
+    /// Aftertouch: a held pad (`true`) or key pressed this hard.
+    Pressure(bool, u8, u8),
+    /// The knobs' page: `voice next`, `voice prev`, `voice bass`.
+    Voice(tatum_core::dsl::ast::VoiceMove),
     End,
 }
 
@@ -261,6 +265,8 @@ impl Act {
 ///     21.0  bend 12000      the pitch strip
 ///     35.0  next            ask for the next step (also `prev`, `step 3`)
 ///     40.0  perform drop    call a scene, as its key in `keyboard` would
+///     41.0  press pad 40 90 aftertouch on a held pad (or `press key 45 90`)
+///     42.0  voice bass      the knobs' page (also `voice next`, `voice prev`)
 ///     64.0  end             stop here
 pub fn parse_script(text: &str) -> Result<Vec<(f64, Act)>, String> {
     let mut out = Vec::new();
@@ -303,7 +309,22 @@ pub fn parse_script(text: &str) -> Result<Vec<(f64, Act)>, String> {
             ),
             Some("end") => Act::End,
             Some("perform") => Act::Perform(w.get(2).ok_or_else(|| bad("perform <scene>"))?.to_string()),
-            _ => return Err(bad("expected cc, pad, key, bend, next, prev, step, perform or end")),
+            Some("press") => Act::Pressure(
+                match w.get(2) {
+                    Some(&"pad") => true,
+                    Some(&"key") => false,
+                    _ => return Err(bad("press pad|key <note> <0-127>")),
+                },
+                byte(3).ok_or_else(|| bad("press pad|key <note> <0-127>"))?,
+                byte(4).ok_or_else(|| bad("press pad|key <note> <0-127>"))?,
+            ),
+            Some("voice") => Act::Voice(match w.get(2).copied() {
+                Some("next") => tatum_core::dsl::ast::VoiceMove::Next,
+                Some("prev") => tatum_core::dsl::ast::VoiceMove::Prev,
+                Some(p) => tatum_core::dsl::ast::VoiceMove::To(p.to_string()),
+                None => return Err(bad("voice next|prev|<page>")),
+            }),
+            _ => return Err(bad("expected cc, pad, key, press, bend, voice, next, prev, step, perform or end")),
         };
         out.push((bar, act));
     }
@@ -479,6 +500,10 @@ pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Resul
                         }
                         None => said = format!("no scene named {}", scene),
                     }
+                }
+                Act::Pressure(pad, note, v) => plans = planner.pressure(pad, Some(note), v),
+                Act::Voice(mv) => {
+                    said = planner.voice(&mv, g).unwrap_or_else(|| String::from("no knob pages"));
                 }
                 Act::End => {}
             }

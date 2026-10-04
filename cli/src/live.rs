@@ -501,8 +501,13 @@ pub fn run(
             match event {
                 Midi::Cc(cc, value) => unsent[cc as usize] = Some(value),
                 Midi::Bend(value) => unsent_bend = Some(value),
-                // Read by the pads in a later stage; for now only `tatum midi monitor` shows it.
-                Midi::Pressure { .. } | Midi::Other { .. } => {}
+                // How hard a held pad or key is pressed: a held effect follows it.
+                Midi::Pressure { channel, note, value } => {
+                    for plan in planner.pressure(channel == DRUM_CHANNEL, note, value) {
+                        let _ = plan_tx.try_send(plan);
+                    }
+                }
+                Midi::Other { .. } => {}
                 Midi::Note { channel, note, velocity } => {
                     let generation = stats.generation.load(Ordering::Relaxed);
                     let pad = channel == DRUM_CHANNEL;
@@ -706,6 +711,14 @@ pub fn run(
                 crate::keys::Key::Named(name) => {
                     let word = name.word();
                     match bindings.iter().find(|b| b.key == word).map(|b| &b.action) {
+                        Some(KeyAction::Voice(mv)) => {
+                            let generation = stats.generation.load(Ordering::Relaxed);
+                            match planner.voice(mv, generation) {
+                                Some(said) => ui.say(now_s(), &said, crate::tui::Tone::Good),
+                                None => ui.say(now_s(), "no knob pages in this song", crate::tui::Tone::Bad),
+                            }
+                            continue;
+                        }
                         Some(KeyAction::Perform(scene)) => {
                             let bar = stats.bar.load(Ordering::Relaxed) as usize;
                             // A phrase counts from the step's first bar.
@@ -871,6 +884,7 @@ pub fn run(
         }
         if let Ui::Screen(screen) = &mut ui {
             screen.bound = bindings.iter().map(|b| b.key.clone()).collect();
+            screen.voice = planner.voice_name();
             screen.perform = match (planner.scene(), &pending_scene) {
                 (now, Some((next, bar))) => Some(format!("{} → {} @ bar {}", now.unwrap_or("—"), next, bar + 1)),
                 (Some(now), None) => Some(now.to_string()),
@@ -1017,6 +1031,9 @@ fn print_keyboard(planner: &LivePlanner) {
         .map(|b| {
             let what = match &b.action {
                 KeyAction::Perform(s) => format!("scene {}", s),
+                KeyAction::Voice(tatum_core::dsl::ast::VoiceMove::Next) => "next voice".into(),
+                KeyAction::Voice(tatum_core::dsl::ast::VoiceMove::Prev) => "voice before".into(),
+                KeyAction::Voice(tatum_core::dsl::ast::VoiceMove::To(p)) => format!("voice {}", p),
                 KeyAction::Next => "next".into(),
                 KeyAction::Prev => "prev".into(),
                 KeyAction::Step(n) => format!("step {}", n),

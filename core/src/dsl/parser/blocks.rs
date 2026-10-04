@@ -125,6 +125,39 @@ impl Parser {
                     }
                     continue;
                 }
+                Token::Ident(w)
+                    if w == "page"
+                        && matches!(
+                            self.peek_ahead(1),
+                            Token::Ident(_) | Token::Master | Token::Mix | Token::In | Token::Out
+                        ) =>
+                {
+                    self.advance();
+                    if let Some(page) = self.parse_page(line) {
+                        perform.pages.retain(|p| p.name != page.name);
+                        perform.pages.push(page);
+                    }
+                    continue;
+                }
+                Token::Ident(w) if w == "takeover" => {
+                    self.advance();
+                    let s = self.span().clone();
+                    match &s.token {
+                        Token::Ident(w) if w == "pickup" || w == "jump" => {
+                            perform.pickup = Some(w == "pickup");
+                            self.advance();
+                        }
+                        other => {
+                            self.errors.push(ParseError {
+                                line: s.line,
+                                col: s.col,
+                                message: format!("takeover: pickup or jump, got {}", describe_token(other)),
+                            });
+                            self.recover_to_line_end();
+                        }
+                    }
+                    continue;
+                }
                 Token::Ident(w) if w == "bend" => {
                     self.advance();
                     if let Some(b) = self.parse_bend(line) {
@@ -138,7 +171,7 @@ impl Parser {
                     self.errors.push(ParseError {
                         line: s.line, col: s.col,
                         message: format!(
-                            "midi: expected `cc <number> > <target>`, `keys > <track>`, `pad <note> > <track> <drum>`, `key <note> > <action>`, `zone <triggers|bass|lead> <low>..<high>`, `lock <snap|white|off>` or `bend <bass|lead> <range>`, got {}",
+                            "midi: expected `cc <number> > <target>`, `keys > <track>`, `pad <note> > <track> <drum>`, `key <note> > <action>`, `zone <triggers|bass|lead> <low>..<high>`, `lock <snap|white|off>`, `bend <bass|lead> <range>`, `page <name> {{ ... }}` or `takeover <pickup|jump>`, got {}",
                             describe_token(other)),
                     });
                     self.recover_to_line_end();
@@ -241,7 +274,7 @@ impl Parser {
                 }
             }
             // `pad 38 > repeat 1/16`: a division, read as the fraction it is.
-            if matches!(source, MidiSource::Pad(_) | MidiSource::Key(_)) && words == ["repeat"] {
+            if matches!(source, MidiSource::Pad(_) | MidiSource::Key(_)) && (words == ["repeat"] || words == ["gate"]) {
                 if let (Token::Number(a), Token::Slash, Token::Number(b)) =
                     (self.peek().clone(), self.peek_ahead(1).clone(), self.peek_ahead(2).clone())
                 {
@@ -340,6 +373,53 @@ impl Parser {
                 None
             }
         }
+    }
+
+    /// `page bass { cc 74 > bass cutoff ... }`, after `page`.
+    fn parse_page(&mut self, line: usize) -> Option<PageDef> {
+        let name = self.expect_ident()?;
+        if !self.expect(&Token::LBrace) {
+            self.recover_to_line_end();
+            return None;
+        }
+        let mut knobs = Vec::new();
+        loop {
+            self.skip_newlines();
+            if self.at_block_end() {
+                break;
+            }
+            let s = self.span().clone();
+            let cc = match (&s.token, self.peek_ahead(1).clone()) {
+                (Token::Ident(w), Token::Number(n))
+                    if w == "cc" && (0.0..=127.0).contains(&n) && (n as u8) as f32 == n =>
+                {
+                    Some(n as u8)
+                }
+                _ => None,
+            };
+            match cc {
+                Some(cc) => {
+                    self.pos += 2;
+                    if let Some(k) = self.parse_scene_knob(cc, s.line) {
+                        knobs.push(k.map);
+                    }
+                }
+                None => {
+                    self.errors.push(ParseError {
+                        line: s.line,
+                        col: s.col,
+                        message: format!(
+                            "page {}: knob lines, like `cc 74 > bass cutoff`, got {}",
+                            name,
+                            describe_token(&s.token)
+                        ),
+                    });
+                    self.recover_to_line_end();
+                }
+            }
+        }
+        self.expect(&Token::RBrace);
+        Some(PageDef { name, knobs, line })
     }
 
     /// `wheel lead > vox vowel position 0..1` or `cc 74 idle > master dj
@@ -801,6 +881,20 @@ impl Parser {
                     self.advance();
                     self.expect_ident().map(KeyAction::Perform)
                 }
+                Token::Ident(w) if w == "voice" => {
+                    self.advance();
+                    match self.peek().clone() {
+                        Token::Ident(w) if w == "next" => {
+                            self.advance();
+                            Some(KeyAction::Voice(VoiceMove::Next))
+                        }
+                        Token::Ident(w) if w == "prev" => {
+                            self.advance();
+                            Some(KeyAction::Voice(VoiceMove::Prev))
+                        }
+                        _ => self.expect_ident().map(|n| KeyAction::Voice(VoiceMove::To(n))),
+                    }
+                }
                 Token::Ident(w) if w == "next" => {
                     self.advance();
                     Some(KeyAction::Next)
@@ -831,7 +925,7 @@ impl Parser {
                         line: a.line,
                         col: a.col,
                         message: format!(
-                            "keyboard: a key does `perform <scene>`, `next`, `prev` or `step <n>`; got {}",
+                            "keyboard: a key does `perform <scene>`, `voice next|prev|<page>`, `next`, `prev` or `step <n>`; got {}",
                             describe_token(&a.token)
                         ),
                     });
@@ -868,9 +962,12 @@ impl Parser {
         let first = words.first().map(String::as_str);
         if !matches!(source, MidiSource::Pad(_) | MidiSource::Key(_)) {
             err(self, String::from("midi: q= quantizes a pad or a trigger key; a knob or the keys act at once"));
-        } else if matches!(first, Some("repeat" | "next" | "prev" | "step")) {
+        } else if matches!(
+            first,
+            Some("repeat" | "next" | "prev" | "step" | "tapestop" | "gate" | "crush" | "scream" | "cut" | "sweep")
+        ) {
             err(self, format!(
-                "midi: `{}` already waits for its line (a repeat for its division, a set move for the phrase); it takes no q=",
+                "midi: `{}` keeps its own time (a repeat waits for its division, a set move for the phrase, an effect acts at once); it takes no q=",
                 first.unwrap_or_default()
             ));
         }

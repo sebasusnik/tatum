@@ -35,6 +35,7 @@ master {
     in > lowpass(20khz, 0.05) as dj
        > highpass(20hz, 0.05) as hp
        > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
+       > gain(1.0) as vol
        > out
 }
 
@@ -232,6 +233,52 @@ midi {
     key 43 > throw laser
     key 43 > throw vox
     key 44 > freeze                   # G#  the reverb frozen while held
+    key 40 > cut                      # E   the mix under a low-pass
+    key 41 > sweep                    # F   a high-pass climbing while held
+    key 45 > tapestop                 # A   the mix slows to a stop
+
+    # Faders: kick, bass, hats, lead, sub, echo, room, -, master
+    cc 73 > drums kick_level 0..1.3
+    cc 75 > bass level 0..1.6
+    cc 79 > drums hihat_level 0..1.2
+    cc 72 > pluck level 0..0.5
+    cc 72 > zap level 0..0.9
+    cc 72 > laser level 0..0.18
+    cc 72 > vox level 0..0.35
+    cc 80 > sub level 0..0.8
+    cc 81 > laser delay_send 0..80%
+    cc 82 > vox reverb_send 0..80%
+    cc 85 > master vol gain 0..1
+    takeover pickup
+
+    # Knobs: Tab on the computer changes the page
+    page mix {
+        cc 74 > master dj cutoff 150hz..20khz..20khz
+        cc 74 > master hp cutoff 20hz..20hz..3khz
+        cc 71 > reverb_mix
+        cc 76 > delay_mix
+    }
+    page bass {
+        cc 74 > bass cutoff
+        cc 71 > bass resonance
+        cc 76 > bass decay
+        cc 77 > bass cutoff_env
+    }
+    page drums {
+        cc 74 > drums kick_decay
+        cc 71 > drums kick_pitch 0.8x..1.6x
+        cc 76 > drums hihat_pitch 0.8x..2x
+    }
+
+    # Pads, bank A: effects while held, as hard as struck and pressed
+    pad 36 > repeat 1/8
+    pad 37 > repeat 1/16
+    pad 38 > repeat 1/32
+    pad 39 > tapestop
+    pad 40 > gate 1/16
+    pad 41 > crush
+    pad 42 > scream
+    pad 43 > freeze
 }
 
 perform intro {
@@ -291,6 +338,7 @@ perform break {
 }
 
 keyboard {
+    tab > voice next
     f1 > perform intro
     f2 > perform build
     f3 > perform drop

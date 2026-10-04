@@ -163,6 +163,53 @@ impl Knob {
         self.moves.iter().map(move |m| op(m, scaled(m, value, self.span)))
     }
 
+    /// Where on its travel (0..127) this knob puts `target` at `value`, the
+    /// value as the engine reads it: what a knob has to reach to take over
+    /// a target it does not move yet. `None` when it cannot reach it.
+    pub fn position_of(&self, value: f32) -> Option<u8> {
+        let m = self.moves.first()?;
+        let inverse = |a: f32, b: f32, log: bool| -> Option<f32> {
+            if log && a > 0.0 && b > 0.0 && value > 0.0 {
+                let x = crate::math::ln(value / a) / crate::math::ln(b / a);
+                x.is_finite().then_some(x)
+            } else if b != a {
+                Some((value - a) / (b - a))
+            } else {
+                None
+            }
+        };
+        let x = match self.span {
+            Some(span) if span.len == 3 => {
+                let p = span.points;
+                inverse(p[0], p[1], span.log)
+                    .map(|x| x * 0.5)
+                    .filter(|x| (0.0..=0.5).contains(x))
+                    .or_else(|| inverse(p[1], p[2], span.log).map(|x| 0.5 + x * 0.5))
+            }
+            Some(span) => inverse(span.points[0], span.points[1], span.log),
+            None => match m {
+                Move::Module { spec, .. } => match spec.range {
+                    Range::Unit => Some(value),
+                    Range::Bipolar => Some((value + 1.0) / 2.0),
+                    Range::Gain { max } => Some(value / max),
+                    Range::Choice(_) => None,
+                },
+                Move::TrackLevel { .. }
+                | Move::NodeWet { .. }
+                | Move::ReverbMix
+                | Move::DelayMix
+                | Move::TrackSend { .. } => Some(value),
+                Move::TrackPan { .. } => Some((value + 1.0) / 2.0),
+                Move::NodeParam { param, .. } => {
+                    let &(_, lo, hi, log) = node_param(param)?;
+                    inverse(lo, hi, log)
+                }
+                _ => None,
+            },
+        }?;
+        (-0.01..=1.01).contains(&x).then(|| crate::math::floor(x.clamp(0.0, 1.0) * 127.0 + 0.5) as u8)
+    }
+
     /// What the knob reads at `value`: `acid cutoff 1.2khz`, `pad level -6.0 dB`.
     pub fn reading(&self, value: u8) -> String {
         let label = self.target.replace('.', " ");
@@ -233,6 +280,10 @@ pub enum PadAction {
     Repeat {
         sixteenths: f32,
     },
+    /// `pad 40 > tapestop`, `gate 1/16`, `crush`, `scream`, `cut`,
+    /// `sweep`: an effect on the whole output while held, as hard as the pad
+    /// was struck and then as hard as it is pressed.
+    Fx(crate::perform::fx::OutFx),
     /// `pad 48 > next`, `pad 49 > prev`, `pad 50 > step 3`.
     Next,
     Prev,
@@ -249,6 +300,22 @@ impl PadAction {
 /// What a pad line names, before any engine: the words after `>`.
 pub fn pad_words(target: &str) -> Vec<&str> {
     target.split('.').collect()
+}
+
+/// The output effect a pad line names: `tapestop`, `gate` (`gate 1/8`: the
+/// division, a sixteenth by default), `crush`, `scream`, `cut`, `sweep`.
+pub fn out_fx(word: &str, rest: &[&str]) -> Option<crate::perform::fx::OutFx> {
+    use crate::perform::fx::OutFx;
+    match (word, rest) {
+        ("tapestop", []) => Some(OutFx::TapeStop),
+        ("gate", []) => Some(OutFx::Gate(1.0)),
+        ("gate", [d]) => repeat_division(d).map(OutFx::Gate),
+        ("crush", []) => Some(OutFx::Crush),
+        ("scream", []) => Some(OutFx::Scream),
+        ("cut", []) => Some(OutFx::Cut),
+        ("sweep", []) => Some(OutFx::Sweep),
+        _ => None,
+    }
 }
 
 /// The tracks a `pad N > hold <track>` (or `key N > hold`) line keeps out
@@ -392,6 +459,44 @@ pub struct Controls {
     pub scale: Option<Scale>,
     /// The `midi` block's `bend` lines.
     pub bends: Vec<(ZoneKind, BendRange, Hands)>,
+    /// The knobs' voices, in order: what each page moves.
+    pub pages: Vec<Page>,
+    /// `takeover pickup`.
+    pub pickup: bool,
+    /// Controllers that choose the page: `cc 114 > voice` picks by
+    /// position, `cc 114 > voice step` steps like an encoder.
+    pub voice_knobs: Vec<(u8, bool)>,
+}
+
+/// A page of knobs, resolved.
+#[derive(Debug, Clone)]
+pub struct Page {
+    pub name: String,
+    pub knobs: Vec<Knob>,
+}
+
+impl Page {
+    /// The page's lines for controller `cc`; empty when the page leaves it
+    /// to the `midi` block.
+    pub fn lines(&self, cc: u8) -> impl Iterator<Item = &Knob> {
+        self.knobs.iter().filter(move |k| k.cc == cc)
+    }
+
+    /// `cutoff · resonance · decay`: what its knobs move, in order, by the
+    /// last word of each target.
+    pub fn summary(&self) -> String {
+        let mut seen: Vec<u8> = Vec::new();
+        let mut words: Vec<String> = Vec::new();
+        for k in &self.knobs {
+            if seen.contains(&k.cc) {
+                continue;
+            }
+            seen.push(k.cc);
+            let w = k.target.rsplit('.').next().unwrap_or(&k.target);
+            words.push(if k.moves.is_empty() { format!("({})", w) } else { String::from(w) });
+        }
+        words.join(" · ")
+    }
 }
 
 impl Default for Controls {
@@ -406,6 +511,9 @@ impl Default for Controls {
             lock: Lock::Snap,
             scale: None,
             bends: Vec::new(),
+            pages: Vec::new(),
+            pickup: false,
+            voice_knobs: Vec::new(),
         }
     }
 }
@@ -556,6 +664,33 @@ pub fn resolve_all(song: &Song, names: &Names) -> Controls {
         })
         .collect();
     controls.bends = song.perform.bends.iter().map(|b| (b.zone, b.range, b.hands)).collect();
+    controls.pages = song
+        .perform
+        .pages
+        .iter()
+        .map(|p| Page {
+            name: p.name.clone(),
+            knobs: p
+                .knobs
+                .iter()
+                .filter_map(|m| {
+                    let MidiSource::Cc(cc) = m.source else { return None };
+                    let span = m.range.as_ref().and_then(|r| knob_span(song, &m.target, r).ok());
+                    Some(Knob { cc, target: m.target.clone(), moves: resolve(song, names, &m.target), span })
+                })
+                .collect(),
+        })
+        .collect();
+    controls.pickup = song.perform.pickup.unwrap_or(false);
+    controls.voice_knobs = song
+        .midi
+        .iter()
+        .filter_map(|m| match (m.source, m.target.as_str()) {
+            (MidiSource::Cc(cc), "voice") => Some((cc, false)),
+            (MidiSource::Cc(cc), "voice.step") => Some((cc, true)),
+            _ => None,
+        })
+        .collect();
     controls
 }
 
@@ -572,6 +707,7 @@ fn pad_action(song: &Song, track: &impl Fn(&str) -> Option<usize>, target: &str)
         ["throw", t] => track(t).map(|track| PadAction::Throw { track }),
         ["hold", t] => track(t).map(|track| PadAction::Hold { track }),
         ["repeat", d] => repeat_division(d).map(|sixteenths| PadAction::Repeat { sixteenths }),
+        [fx, rest @ ..] if out_fx(fx, rest).is_some() => out_fx(fx, rest).map(PadAction::Fx),
         ["play", t, rest @ ..] if rest.len() <= 1 => match (track(t), play_note(song, t, rest.first().copied())) {
             (Some(track), Some(note)) => Some(PadAction::Play { track, note }),
             _ => None,
@@ -687,23 +823,37 @@ pub fn resolve(song: &Song, names: &Names, target: &str) -> Vec<Move> {
             }
         }
         [module, param] => {
-            let spec = song
-                .module_defs
-                .iter()
-                .find(|m| &m.name == module)
+            let spec = module_named(song, module)
                 .and_then(|def| ModuleKind::from_str(&def.module_type))
                 .and_then(|kind| params::lookup(kind, param));
             if let Some(spec) = spec {
-                for (i, n) in names.instruments.iter().enumerate() {
-                    if n == module {
-                        out.push(Move::Module { instrument: i, spec });
+                if song.module_defs.iter().any(|m| &m.name == module) {
+                    for (i, n) in names.instruments.iter().enumerate() {
+                        if n == module {
+                            out.push(Move::Module { instrument: i, spec });
+                        }
                     }
+                } else if let Some(&instrument) =
+                    track(module).and_then(|t| names.track_instruments.get(t)).filter(|&&i| i != usize::MAX)
+                {
+                    // A track's name: the copy of the module that track plays.
+                    out.push(Move::Module { instrument, spec });
                 }
             }
         }
         _ => {}
     }
     out
+}
+
+/// The module `name` names: a module by that name, or else the one the track
+/// of that name plays, so `bass cutoff` reaches every track set's bass
+/// whatever each calls its module.
+pub fn module_named<'a>(song: &'a Song, name: &str) -> Option<&'a crate::dsl::ast::ModuleDef> {
+    song.module_defs.iter().find(|m| m.name == name).or_else(|| {
+        let t = song.tracks.iter().find(|t| t.name == name)?;
+        song.module_defs.iter().find(|m| m.name == t.using_instrument)
+    })
 }
 
 /// The master node a knob on `param` reaches, by its position in the chain
@@ -743,14 +893,15 @@ pub fn text_value(song: &Song, target: &str) -> Option<f32> {
                 _ => None,
             })
         }
-        [module, param] => song
-            .module_defs
-            .iter()
-            .find(|m| &m.name == module)?
-            .params
-            .iter()
-            .find(|p| &p.name == param)
-            .map(|p| p.value),
+        ["master", label, param] => {
+            let node = song.master.as_ref()?.chain.iter().find(|n| n.label.as_deref() == Some(*label))?;
+            let _ = param;
+            node.params.iter().find_map(|p| match p {
+                Param::Float(v) => Some(*v),
+                _ => None,
+            })
+        }
+        [module, param] => module_named(song, module)?.params.iter().find(|p| &p.name == param).map(|p| p.value),
         _ => None,
     }
 }
@@ -769,9 +920,7 @@ pub fn knob_span(song: &Song, target: &str, range: &[RangeEnd]) -> Result<Span, 
     let words: Vec<&str> = target.split('.').collect();
     let spec = match words.as_slice() {
         [module, param] if !matches!(*param, "level" | "pan" | "delay_send" | "reverb_send") && *module != "master" => {
-            song.module_defs
-                .iter()
-                .find(|m| &m.name == module)
+            module_named(song, module)
                 .and_then(|def| ModuleKind::from_str(&def.module_type))
                 .and_then(|kind| params::lookup(kind, param))
         }
