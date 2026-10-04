@@ -91,6 +91,8 @@ return kept apart, each as it sits in the mix, and writes into
 
 `--bars 17-24` zooms in on those bars; `--dry` adds each track before its insert chain.
 
+![sheet.png for dark_techno: each part's spectrogram on one time axis, sections on top, clicks marked, the crowded strip and the mix](img/debug-sheet.png)
+
 ## audit
 
 ```
@@ -139,7 +141,8 @@ tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48
 ```
 
 A PNG of the `--tui` screen at a moment of a song or a set's step, without a terminal
-or an audio device. Its other flags are in [TUI.md](TUI.md#a-picture-of-the-screen-tui-shot).
+or an audio device. Every picture in [TUI.md](TUI.md) was taken with it; its other
+flags are there too.
 
 ## params
 

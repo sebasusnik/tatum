@@ -1,6 +1,6 @@
 # The live screen
 
-![The live screen playing dark_techno's hard part, the hook chosen](img/tui.png)
+![The live screen on a step of the hiperespacio set: the steps, the cue coming up, two tracks muted, one transformed, and the bass line's pattern](img/tui.png)
 
 `tatum play`, `watch` and `set play` take `--tui` and run full screen, meant for half a
 terminal with the editor in the other half:
@@ -11,6 +11,8 @@ tatum set play sets/viaje --tui --midi keylab
 ```
 
 ## What it shows
+
+![A song: dark_techno's hard part, the arrangement on top with the playhead, the gabber kick chosen](img/tui-song.png)
 
 Top to bottom:
 
@@ -33,7 +35,11 @@ Top to bottom:
 
 ## Keys
 
-`?` lists every key on the screen itself. In short:
+`?` lists every key on the screen itself:
+
+![The help overlay: every key, and the patterns the chosen track could play instead](img/tui-help.png)
+
+In short:
 
 | key | what it does |
 |-----|--------------|
@@ -49,6 +55,15 @@ Top to bottom:
 | `←` `→` `Enter` | in a set: look through the steps, go to the one looked at |
 | `1`-`9` `g` `Tab` | in a set: go to a step on screen; pick from every step |
 | `q` `Ctrl-C` | quit; `Esc` never quits |
+
+`k` lists everything the chosen track offers a knob, with what each controller already
+moves; turn a knob while it is open and it moves the one marked, to try it:
+
+![The knob list for the bass: its module's parameters, level, pan, sends and chain nodes, the controllers mapped on them, and the knob in hand](img/tui-knobs.png)
+
+In a set, `g` or `Tab` lists every step, with the one playing and the one queued:
+
+![The step picker over a set of 111 steps](img/tui-steps.png)
 
 The transform keys write into the file, as if typed (see "Transforming a pattern" in [DSL.md](DSL.md#transforming-a-pattern)), so
 the save plays and the change stays. `--glass` is `--tui` painted with cell backgrounds
