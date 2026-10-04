@@ -125,12 +125,20 @@ impl Parser {
                     }
                     continue;
                 }
+                Token::Ident(w) if w == "bend" => {
+                    self.advance();
+                    if let Some(b) = self.parse_bend(line) {
+                        perform.bends.retain(|o| (o.zone, o.hands) != (b.zone, b.hands));
+                        perform.bends.push(b);
+                    }
+                    continue;
+                }
                 other => {
                     let s = self.span().clone();
                     self.errors.push(ParseError {
                         line: s.line, col: s.col,
                         message: format!(
-                            "midi: expected `cc <number> > <target>`, `keys > <track>`, `pad <note> > <track> <drum>`, `key <note> > <action>`, `zone <triggers|bass|lead> <low>..<high>` or `lock <snap|white|off>`, got {}",
+                            "midi: expected `cc <number> > <target>`, `keys > <track>`, `pad <note> > <track> <drum>`, `key <note> > <action>`, `zone <triggers|bass|lead> <low>..<high>`, `lock <snap|white|off>` or `bend <bass|lead> <range>`, got {}",
                             describe_token(other)),
                     });
                     self.recover_to_line_end();
@@ -279,6 +287,112 @@ impl Parser {
         }
     }
 
+    /// `lead 24st`, `lead 2deg` or `lead off`, after `bend`.
+    fn parse_bend(&mut self, line: usize) -> Option<BendDef> {
+        let s = self.span().clone();
+        let zone = match &s.token {
+            Token::Ident(w) => ZoneKind::from_word(w).filter(|z| *z != ZoneKind::Triggers),
+            _ => None,
+        };
+        let Some(zone) = zone else {
+            self.errors.push(ParseError {
+                line: s.line,
+                col: s.col,
+                message: format!("bend: the zone it bends, bass or lead, got {}", describe_token(&s.token)),
+            });
+            self.recover_to_line_end();
+            return None;
+        };
+        self.advance();
+        let r = self.span().clone();
+        let range = match &r.token {
+            Token::Quantity(n, u) if u == "st" && (0.0..=48.0).contains(n) => Some(BendRange::Semitones(*n)),
+            Token::Quantity(n, u) if u == "deg" && (1.0..=7.0).contains(n) && (*n as u8) as f32 == *n => {
+                Some(BendRange::Degrees(*n as u8))
+            }
+            Token::Ident(w) if w == "off" => Some(BendRange::Off),
+            _ => None,
+        };
+        match range {
+            Some(range) => {
+                self.advance();
+                let hands = match self.peek() {
+                    Token::Ident(w) if w == "always" => Some(Hands::Always),
+                    Token::Ident(w) if w == "idle" => Some(Hands::Idle),
+                    _ => None,
+                };
+                if hands.is_some() {
+                    self.advance();
+                }
+                Some(BendDef { zone, range, hands: hands.unwrap_or(Hands::Playing(zone)), line })
+            }
+            None => {
+                self.errors.push(ParseError {
+                    line: r.line,
+                    col: r.col,
+                    message: format!(
+                        "bend {}: semitones each way up to 48 (`24st`), degrees of the scale from 1 to 7 (`2deg`), or off; got {}",
+                        zone.word(),
+                        describe_token(&r.token)
+                    ),
+                });
+                self.recover_to_line_end();
+                None
+            }
+        }
+    }
+
+    /// `wheel lead > vox vowel position 0..1` or `cc 74 idle > master dj
+    /// cutoff`, inside a scene, after `wheel` or `cc <n>`: a knob line like
+    /// the `midi` block's, with when it answers before the `>` (`bass`,
+    /// `lead`, `idle` or `always`; nothing is `always`).
+    fn parse_scene_knob(&mut self, cc: u8, line: usize) -> Option<SceneKnob> {
+        let hands = match self.peek() {
+            Token::Ident(w) if w == "always" => Some(Hands::Always),
+            Token::Ident(w) if w == "idle" => Some(Hands::Idle),
+            Token::Ident(w) => match ZoneKind::from_word(w) {
+                Some(z) if z != ZoneKind::Triggers => Some(Hands::Playing(z)),
+                _ => None,
+            },
+            _ => None,
+        };
+        if hands.is_some() {
+            self.advance();
+        }
+        let hands = hands.unwrap_or(Hands::Always);
+        if !self.expect(&Token::Arrow) {
+            self.recover_to_line_end();
+            return None;
+        }
+        let mut words: Vec<String> = Vec::new();
+        loop {
+            let word = match self.peek() {
+                Token::Ident(w) => w.clone(),
+                Token::Level => String::from("level"),
+                Token::Pan => String::from("pan"),
+                Token::Mix => String::from("mix"),
+                Token::Master => String::from("master"),
+                Token::Tempo => String::from("tempo"),
+                _ => break,
+            };
+            self.advance();
+            words.push(word);
+        }
+        if words.is_empty() {
+            let s = self.span().clone();
+            self.errors.push(ParseError {
+                line: s.line,
+                col: s.col,
+                message: String::from("a knob in a scene needs a target after `>`, like `wheel > vox vowel position`"),
+            });
+            self.recover_to_line_end();
+            return None;
+        }
+        let range = self.parse_knob_range();
+        let map = MidiMapDef { source: MidiSource::Cc(cc), target: words.join("."), range, quantize: None, line };
+        Some(SceneKnob { hands, map })
+    }
+
     /// A note as a zone writes it: a MIDI number or a name, `48` or `C2`.
     fn parse_zone_note(&mut self) -> Option<u8> {
         let s = self.span().clone();
@@ -374,13 +488,39 @@ impl Parser {
             }
         };
         self.advance();
-        let mut play = ZonePlay { track, roll: false, kick: None };
+        let mut play = ZonePlay { track, roll: false, kick: None, octave: None };
         loop {
             let s = self.span().clone();
             match &s.token {
                 Token::Ident(w) if w == "roll" || w == "notes" => {
                     play.roll = w == "roll";
                     self.advance();
+                }
+                Token::Ident(w) if w == "octave" => {
+                    self.advance();
+                    let negative = matches!(self.peek(), Token::Rest);
+                    if negative {
+                        self.advance();
+                    }
+                    match self.peek().clone() {
+                        Token::Number(n) if (0.0..=8.0).contains(&n) && (n as i8) as f32 == n => {
+                            self.advance();
+                            play.octave = Some(if negative { -(n as i8) } else { n as i8 });
+                        }
+                        other => {
+                            let s = self.span().clone();
+                            self.errors.push(ParseError {
+                                line: s.line,
+                                col: s.col,
+                                message: format!(
+                                    "octave: the octave the zone's root plays in, a whole number like 1, got {}",
+                                    describe_token(&other)
+                                ),
+                            });
+                            self.recover_to_line_end();
+                            return None;
+                        }
+                    }
                 }
                 Token::Ident(w) if w == "kick" && matches!(self.peek_ahead(1), Token::Eq) => {
                     self.pos += 2;
@@ -412,7 +552,7 @@ impl Parser {
                         line: s.line,
                         col: s.col,
                         message: format!(
-                            "{}: after the track, `roll` or `notes`, and `kick=<track>`; got {}",
+                            "{}: after the track, `roll` or `notes`, `kick=<track>` and `octave <n>`; got {}",
                             kind.word(),
                             describe_token(other)
                         ),
@@ -458,7 +598,19 @@ impl Parser {
         if !self.expect(&Token::LBrace) {
             return;
         }
-        let mut def = PerformDef { name, scale: None, lock: None, bass: None, lead: None, sets: Vec::new(), line };
+        let mut def = PerformDef {
+            name,
+            scale: None,
+            lock: None,
+            bass: None,
+            lead: None,
+            sets: Vec::new(),
+            bends: Vec::new(),
+            knobs: Vec::new(),
+            line,
+        };
+        // A scene's knob lines: several on one controller make a macro.
+        let mut knobs: Vec<SceneKnob> = Vec::new();
         loop {
             self.skip_newlines();
             if self.at_block_end() {
@@ -488,6 +640,38 @@ impl Parser {
                         def.bass = play;
                     } else {
                         def.lead = play;
+                    }
+                }
+                Token::Ident(w) if w == "bend" => {
+                    self.advance();
+                    if let Some(b) = self.parse_bend(s.line) {
+                        def.bends.retain(|o| (o.zone, o.hands) != (b.zone, b.hands));
+                        def.bends.push(b);
+                    }
+                }
+                Token::Ident(w) if w == "wheel" => {
+                    self.advance();
+                    knobs.extend(self.parse_scene_knob(1, s.line));
+                }
+                Token::Ident(w) if w == "cc" => {
+                    self.advance();
+                    match self.peek().clone() {
+                        Token::Number(n) if (0.0..=127.0).contains(&n) && (n as u8) as f32 == n => {
+                            self.advance();
+                            knobs.extend(self.parse_scene_knob(n as u8, s.line));
+                        }
+                        other => {
+                            let e = self.span().clone();
+                            self.errors.push(ParseError {
+                                line: e.line,
+                                col: e.col,
+                                message: format!(
+                                    "cc: a controller number from 0 to 127, got {}",
+                                    describe_token(&other)
+                                ),
+                            });
+                            self.recover_to_line_end();
+                        }
                     }
                 }
                 Token::Ident(w) if w == "set" => {
@@ -525,7 +709,7 @@ impl Parser {
                         line: s.line,
                         col: s.col,
                         message: format!(
-                            "perform: scale, lock, `bass > <track>`, `lead > <track>` or `set <target> <value>`, got {}",
+                            "perform: scale, lock, `bass > <track>`, `lead > <track>`, `set <target> <value>`, `bend <zone> <range>`, `wheel > <target>` or `cc <n> > <target>`, got {}",
                             describe_token(&other)
                         ),
                     });
@@ -534,6 +718,7 @@ impl Parser {
             }
         }
         self.expect(&Token::RBrace);
+        def.knobs = knobs;
         setup.scenes.retain(|o| o.name != def.name);
         setup.scenes.push(def);
     }

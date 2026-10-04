@@ -4,11 +4,14 @@
 # called from the computer's keys, change what the keyboard plays, the
 # scale it keeps to and where the mix sits:
 #
-#   F1 intro   muffled; the pluck in the lead zone
-#   F2 build   thin and open; the zap
-#   F3 drop    everything; the laser lead, the bass rolls under your hand
+#   F1 intro   muffled; the pluck in the lead zone, the wheel opens it,
+#              the strip bends two degrees of the scale
+#   F2 build   thin and open; the zap, the strip dives two octaves (and the
+#              bass line one), the wheel brings in a crusher
+#   F3 drop    everything; the laser lead, the wheel makes it talk; the bass
+#              rolls under your hand
 #   F4 break   no drums; a vowel pad in E phrygian dominant on the white keys,
-#              and the bass zone plays a long sub, one note at a time
+#              the wheel walks its vowel; the bass zone plays a long sub
 #
 # The keyboard, as the KeyLab Essential 49 mk3 ships (check yours with
 # `tatum midi monitor examples/keylab_psy_e_frigio.synth`):
@@ -203,9 +206,9 @@ instrument impact_v {
 
 pattern sroll { o:0.3 o:0.3 o:0.35 o:0.35  o:0.4 o:0.4 o:0.45 o:0.45  x:0.5 x:0.5 x:0.55 x:0.55  x:0.6 x:0.65 x:0.7 x:0.8 }
 
-track pluck  { play krest using pluck_v level 0.32 gate 0.9 pan 0.25 delay_send 0.3 reverb_send 0.18 sidechain 0.45 out > highpass(250hz, 0.05) > master }
-track zap    { play krest using zap_v level 0.6 gate 0.9 pan -0.3 delay_send 0.25 reverb_send 0.12 sidechain 0.4 out > highpass(350hz, 0.05) > master }
-track laser  { play krest using laser_v level 0.11 gate 0.95 delay_send 0.22 reverb_send 0.2 sidechain 0.45 out > highpass(300hz, 0.05) > saturate(0.25) > master }
+track pluck  { play krest using pluck_v level 0.32 gate 0.9 pan 0.25 delay_send 0.3 reverb_send 0.18 sidechain 0.45 out > highpass(250hz, 0.05) > lowpass(2500hz, 0.25) as lp > master }
+track zap    { play krest using zap_v level 0.6 gate 0.9 pan -0.3 delay_send 0.25 reverb_send 0.12 sidechain 0.4 out > highpass(350hz, 0.05) > bitcrush(6, 0.35, wet=0) as crush > master }
+track laser  { play krest using laser_v level 0.11 gate 0.95 delay_send 0.22 reverb_send 0.2 sidechain 0.45 out > highpass(300hz, 0.05) > saturate(0.25) > vowel(a, wet=0) as talk > master }
 track vox    { play krest using vox_v level 0.22 delay_send 0.1 reverb_send 0.45 sidechain 0.6 out > highpass(220hz, 0.05) > vowel(a, o, bars=4) as vowel > master }
 track ruido  { play krest using ruido_v level 0.28 reverb_send 0.3 sidechain 0.2 out > highpass(300hz, 0.05) > autopan(0.5, hz=0.5) > master }
 track fill   { play sroll using snare_v level 0.4 reverb_send 0.15 out > highpass(200hz, 0.05) > master }
@@ -235,6 +238,9 @@ perform intro {
     scale E phrygian
     bass > bass roll
     lead > pluck
+    bend lead 2deg                              # playing: two degrees away, in the scale
+    wheel lead > pluck lp cutoff 2500hz..14khz  # playing: the pluck opens
+    wheel idle > master dj cutoff 20khz..1200hz # hands off: the song goes under
     set master dj cutoff 2500hz
     set master hp cutoff 20hz
     set drums level 0.8
@@ -245,6 +251,10 @@ perform build {
     scale E phrygian
     bass > bass roll
     lead > zap
+    bend lead 24st                              # playing: two octaves each way, dives
+    bend bass 12st idle                         # hands off: the bass line falls an octave
+    wheel lead > zap crush wet 0%..70%          # playing: the crusher
+    wheel idle > master hp cutoff 20hz..1500hz  # hands off: the floor thins
     set master dj cutoff 20khz
     set master hp cutoff 350hz
     set drums level 0.9
@@ -255,6 +265,10 @@ perform drop {
     scale E phrygian
     bass > bass roll
     lead > laser
+    bend lead 2deg
+    wheel lead > laser talk wet 0%..100%        # playing: the laser starts to talk
+    wheel lead > laser talk position 0..1       # and walks a-e-i-o-u
+    wheel idle > master dj cutoff 20khz..600hz  # hands off: a DJ filter sweep
     set master dj cutoff 20khz
     set master hp cutoff 20hz
     set drums level 0.9
@@ -264,8 +278,12 @@ perform drop {
 perform break {
     scale E phrygian_dominant
     lock white
-    bass > sub notes
+    bass > sub notes octave 2
     lead > vox
+    bend lead 1deg
+    bend bass 2deg
+    wheel lead > vox vowel position 0..1        # playing: the pad says a-e-i-o-u
+    wheel idle > master dj cutoff 20khz..400hz  # hands off: under water
     set master dj cutoff 20khz
     set master hp cutoff 20hz
     set drums level 0

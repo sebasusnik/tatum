@@ -10,7 +10,8 @@
 #                     sixteenths after each beat, in place of its line
 #   60..84  lead      the scene's lead or sound, kept to the scale
 #
-# Scenes change what the zones play; F1-F4 call them, on the next bar.
+# Scenes change what the zones play, the pitch strip's range and what the
+# mod wheel moves; F1-F4 call them, on the next bar.
 # The set moves only from the computer: space or → next, ← back.
 
 use "_voces.synth"
@@ -34,21 +35,43 @@ midi {
     # E, F, A, A#, B: filter cut, sweep, tape stop and two free -- stage 3.
 }
 
+# Each scene: what the zones play, what the pitch strip and the mod wheel
+# do, and the values it starts from. A bend or wheel line says when it
+# answers: with `lead` or `bass` (or a bend with no word), while a key of
+# that zone is the newest held -- the sound you play; with `idle`, only
+# with the hands off the keys -- the song; with `always`, both. A gesture
+# belongs to what it started on: the lines are chosen as the strip or the
+# wheel leaves rest, and kept until it comes back. Every wheel range starts
+# at the sound as written, so the wheel at rest changes nothing.
+
 perform intro {
     bass > bass roll
     lead > kpluck
+    bend lead 2deg                                  # playing: to the note two degrees away, in the scale
+    bend bass 12st idle                             # hands off: the song's bass line bends, up to an octave
+    wheel lead > kpluck lp cutoff 2500hz..14khz     # playing: the pluck opens
+    wheel idle > master dj cutoff 20khz..1200hz     # hands off: the whole song goes under
     set kpluck delay_send 35%
 }
 
 perform build {
     bass > bass roll
     lead > kzap
+    bend lead 24st                                  # playing: the zap dives and climbs two octaves
+    bend bass 12st idle                             # hands off: the song's bass line falls an octave
+    wheel lead > kzap crush wet 0%..70%             # playing: the crusher on the zap
+    wheel idle > master hp cutoff 20hz..1500hz      # hands off: the floor thins out, the build tightens
     set kzap delay_send 30%
 }
 
 perform drop {
     bass > bass roll
     lead > klaser
+    bend lead 2deg
+    bend bass 12st idle                             # hands off: the song's bass line bends
+    wheel lead > klaser talk wet 0%..100%           # playing: the laser starts to talk...
+    wheel lead > klaser talk position 0..1          # ...and walks a-e-i-o-u
+    wheel idle > master dj cutoff 20khz..600hz      # hands off: a DJ filter sweep on the drop
     set klaser delay_send 22%
 }
 
@@ -56,6 +79,10 @@ perform drop {
 perform break {
     bass > bass roll kick=drums
     lead > kvox
+    bend lead 1deg
+    bend bass 12st idle                             # hands off: whatever bass is left dives
+    wheel lead > kvox vox position 0..1             # playing: the pad says a-e-i-o-u
+    wheel idle > master dj cutoff 20khz..400hz      # hands off: the break goes under water
     set kvox reverb_send 50%
 }
 

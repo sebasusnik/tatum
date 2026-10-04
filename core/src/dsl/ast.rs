@@ -40,6 +40,9 @@ pub struct PerformSetup {
     pub lock: Option<crate::perform::scale::Lock>,
     pub scenes: Vec<PerformDef>,
     pub keyboard: Vec<KeyBinding>,
+    /// `bend lead 2st` in a `midi` block: what the pitch strip does to a
+    /// zone when no scene says otherwise.
+    pub bends: Vec<BendDef>,
     /// `quantize bar` in the `keyboard` block: where a scene called from the
     /// computer comes in, in bars. `None`: the next bar.
     pub scene_bars: Option<u32>,
@@ -95,6 +98,10 @@ pub struct ZonePlay {
     pub roll: bool,
     /// `kick=drums`: a roll also strikes this track's kick on each beat.
     pub kick: Option<String>,
+    /// `octave 1`: the zone's first key on the scale's root plays the root
+    /// in this octave. `None`: the bass zone plays where the track's own
+    /// line sits, the lead zone as written.
+    pub octave: Option<i8>,
 }
 
 /// `perform drop { ... }`: one scene of a performance.
@@ -108,6 +115,13 @@ pub struct PerformDef {
     pub lead: Option<ZonePlay>,
     /// `set reverb_mix 20%`: values put in place when the scene comes in.
     pub sets: Vec<PerformSet>,
+    /// `bend lead 24st`: the pitch strip, zone by zone, in this scene.
+    pub bends: Vec<BendDef>,
+    /// `wheel lead > laser talk wet` and `cc 74 idle > ...`: what a
+    /// controller moves while this scene plays, in place of the `midi`
+    /// block's line for the same controller, and when. The wheel is
+    /// controller 1.
+    pub knobs: Vec<SceneKnob>,
     pub line: usize,
 }
 
@@ -117,6 +131,67 @@ pub struct PerformSet {
     pub target: String,
     pub value: RangeEnd,
     pub line: usize,
+}
+
+/// `bend lead 2deg`: how far the pitch strip takes a zone's notes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BendDef {
+    pub zone: ZoneKind,
+    pub range: BendRange,
+    /// `bend bass 12st idle`: when it bends. Without a word, while a key of
+    /// its own zone is the newest held.
+    pub hands: Hands,
+    pub line: usize,
+}
+
+/// When a scene's bend or wheel line answers the controller, by where the
+/// hands are on the keyboard: the zone of the newest key held, or none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Hands {
+    /// While a key of this zone is the newest held: the sound you play.
+    Playing(ZoneKind),
+    /// Whatever the hands do: the song.
+    Always,
+    /// Only with no key held in the bass or lead zone: the song, while the
+    /// hands are off the keys.
+    Idle,
+}
+
+impl Hands {
+    pub fn word(self) -> &'static str {
+        match self {
+            Hands::Playing(z) => z.word(),
+            Hands::Always => "always",
+            Hands::Idle => "idle",
+        }
+    }
+
+    /// Whether it answers with the hands at `zone` (`None`: no key held).
+    pub fn answers(self, zone: Option<ZoneKind>) -> bool {
+        match self {
+            Hands::Playing(z) => zone == Some(z),
+            Hands::Always => true,
+            Hands::Idle => zone.is_none(),
+        }
+    }
+}
+
+/// A knob line in a scene, with when it answers.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SceneKnob {
+    pub hands: Hands,
+    pub map: MidiMapDef,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BendRange {
+    /// Up to this many semitones each way: `24st` for a dive.
+    Semitones(f32),
+    /// To the note this many degrees of the scale away, up or down, from
+    /// the note held: the bend lands in the scale.
+    Degrees(u8),
+    /// The strip leaves the zone alone.
+    Off,
 }
 
 /// `f1 > perform intro` in the `keyboard` block.

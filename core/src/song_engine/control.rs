@@ -274,6 +274,41 @@ impl SongEngine {
 
     /// The live instrument a track plays right now. With one copy per track
     /// that names a module this is not the compiled index.
+    /// The note a track's patterns sound most often, over every pattern its
+    /// `play` line can choose: where its register is. `None` for a track
+    /// whose patterns play no notes.
+    pub fn track_home_note(&self, idx: usize) -> Option<u8> {
+        use crate::dsl::compiler::CompiledStep;
+        let t = self.tracks.get(idx)?;
+        let mut patterns = alloc::vec![t.pattern_idx];
+        if let Some(plan) = t.play.and_then(|p| self.plays.get(p)) {
+            patterns.extend(plan.variants.iter().copied());
+        }
+        let mut count = [0u32; 128];
+        for p in patterns.iter().filter_map(|&i| self.patterns.get(i)) {
+            for step in &p.steps {
+                match *step {
+                    CompiledStep::NoteOn { midi_note, velocity, .. } if velocity > 0.0 => {
+                        count[midi_note as usize & 127] += 1
+                    }
+                    CompiledStep::Chord { notes, count: n, .. } => {
+                        for c in &notes[..n as usize] {
+                            count[c.midi_note as usize & 127] += 1;
+                        }
+                    }
+                    CompiledStep::Subdiv { notes, count: n, .. } => {
+                        for c in notes[..n as usize].iter().filter(|c| c.velocity > 0.0) {
+                            count[c.midi_note as usize & 127] += 1;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let (note, n) = count.iter().enumerate().max_by_key(|(i, n)| (**n, core::cmp::Reverse(*i)))?;
+        (*n > 0).then_some(note as u8)
+    }
+
     pub fn track_instrument(&self, idx: usize) -> Option<usize> {
         self.tracks.get(idx).map(|t| t.instrument_idx)
     }

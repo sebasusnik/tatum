@@ -14,7 +14,7 @@ use super::notes::drum_note;
 
 /// Master-chain parameters that `auto master <param>` can move.
 pub const MASTER_AUTO_PARAMS: &[&str] =
-    &["tilt", "eq_low", "eq_mid", "eq_high", "drive", "gain", "cutoff", "comp_threshold"];
+    &["tilt", "eq_low", "eq_mid", "eq_high", "drive", "gain", "cutoff", "comp_threshold", "position"];
 
 /// Node kinds that carry a given master automation parameter.
 pub fn master_auto_node_kinds(param: &str) -> &'static [&'static str] {
@@ -25,6 +25,7 @@ pub fn master_auto_node_kinds(param: &str) -> &'static [&'static str] {
         "gain" => &["gain"],
         "cutoff" => &["lowpass", "highpass", "bandpass", "ladder"],
         "comp_threshold" => &["compressor"],
+        "position" => &["vowel"],
         _ => &[],
     }
 }
@@ -136,6 +137,35 @@ pub(super) fn validate_perform(song: &Song) -> Vec<CompileError> {
             })
             .collect();
         errors.extend(validate_maps(song, &maps, |_, words| format!("{}: set {}", head, words)));
+        let maps: Vec<MidiMapDef> = sc.knobs.iter().map(|k| k.map.clone()).collect();
+        errors.extend(validate_maps(song, &maps, |source, words| {
+            let what = if source == "cc 1" { String::from("wheel") } else { String::from(source) };
+            format!("{}: {} > {}", head, what, words)
+        }));
+        for k in &sc.knobs {
+            if let Hands::Playing(z) = k.hands {
+                if !p.zones.iter().any(|o| o.kind == z) {
+                    errors.push(CompileError::at(
+                        k.map.line,
+                        format!("{}: {} >: there is no {} zone to play", head, z.word(), z.word()),
+                    ));
+                }
+            }
+        }
+        for b in &sc.bends {
+            if !p.zones.iter().any(|z| z.kind == b.zone) {
+                errors.push(CompileError::at(
+                    b.line,
+                    format!("{}: bend {}: there is no {} zone", head, b.zone.word(), b.zone.word()),
+                ));
+            }
+        }
+    }
+    for b in &p.bends {
+        if !p.zones.iter().any(|z| z.kind == b.zone) {
+            errors
+                .push(CompileError::at(b.line, format!("bend {}: there is no {} zone", b.zone.word(), b.zone.word())));
+        }
     }
     for b in &p.keyboard {
         if b.key == "q" {

@@ -14,7 +14,7 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::dsl::ast::{MidiSource, Param, RangeEnd, Song, ZoneKind, ZonePlay};
+use crate::dsl::ast::{BendRange, Hands, MidiSource, Param, RangeEnd, Song, ZoneKind, ZonePlay};
 use crate::perform::scale::{Lock, Scale};
 use crate::live::FastOp;
 use crate::params::{self, ModuleKind, ParamSpec, Range};
@@ -67,6 +67,8 @@ const NODE_PARAMS: &[(&str, f32, f32, bool)] = &[
     ("drive", 0.0, 2.0, false),
     ("gain", 0.0, 1.0, false),
     ("comp_threshold", -40.0, 0.0, false),
+    // A vowel filter's place along a-e-i-o-u.
+    ("position", 0.0, 1.0, false),
 ];
 
 /// The widest a range on a node parameter may be written, which is what the
@@ -77,6 +79,7 @@ fn node_param_limits(param: &str) -> (f32, f32) {
         "tilt" => (-1.0, 1.0),
         "eq_low" | "eq_mid" | "eq_high" => (-12.0, 12.0),
         "drive" | "gain" => (0.0, 10.0),
+        "position" => (0.0, 1.0),
         _ => (-60.0, 0.0),
     }
 }
@@ -138,6 +141,8 @@ pub struct Names<'a> {
     pub track_instruments: &'a [usize],
     /// The `as` names of each track's insert nodes, in chain order.
     pub track_nodes: &'a [Vec<Option<String>>],
+    /// The note each track's patterns sound most often, if any.
+    pub track_home: &'a [Option<u8>],
 }
 
 /// A controller and everything it moves in one engine.
@@ -331,6 +336,9 @@ pub struct ZoneTarget {
     pub roll: bool,
     /// The kick a roll strikes on the beat: track and drum note.
     pub kick: Option<(usize, u8)>,
+    /// Semitones every key of the zone is moved by, in whole octaves: what
+    /// puts a bass zone in the register of the line it plays over.
+    pub shift: i8,
 }
 
 /// A stretch of the keyboard, by MIDI note, both ends in it.
@@ -360,6 +368,12 @@ pub struct Scene {
     /// Its `set` lines, each a knob with its value at the bottom of its
     /// travel: `ops(0)` puts it in place.
     pub sets: Vec<Knob>,
+    /// Its `bend` lines.
+    pub bends: Vec<(ZoneKind, BendRange, Hands)>,
+    /// Its `wheel` and `cc` lines, with when each answers: while it plays,
+    /// a controller named here moves these instead of what the `midi`
+    /// block maps it to.
+    pub knobs: Vec<(Hands, Knob)>,
 }
 
 /// Everything a `midi` block maps, resolved against one engine.
@@ -376,6 +390,8 @@ pub struct Controls {
     pub lock: Lock,
     /// The song's scale; a scene may name its own.
     pub scale: Option<Scale>,
+    /// The `midi` block's `bend` lines.
+    pub bends: Vec<(ZoneKind, BendRange, Hands)>,
 }
 
 impl Default for Controls {
@@ -389,6 +405,7 @@ impl Default for Controls {
             scenes: Vec::new(),
             lock: Lock::Snap,
             scale: None,
+            bends: Vec::new(),
         }
     }
 }
@@ -413,6 +430,34 @@ impl Controls {
             ZoneKind::Triggers => None,
         };
         from_scene.or_else(|| self.zones.iter().find(|z| z.kind == kind).and_then(|z| z.play))
+    }
+
+    /// The bend lines for `zone` under `scene`: the scene's, else the
+    /// `midi` block's, else two semitones on the lead while it is played.
+    pub fn bends_under(&self, zone: ZoneKind, scene: Option<&str>) -> Vec<(BendRange, Hands)> {
+        let of = |list: &[(ZoneKind, BendRange, Hands)]| -> Vec<(BendRange, Hands)> {
+            list.iter().filter(|b| b.0 == zone).map(|b| (b.1, b.2)).collect()
+        };
+        let from_scene = scene.and_then(|n| self.scene(n)).map(|s| of(&s.bends)).unwrap_or_default();
+        if !from_scene.is_empty() {
+            return from_scene;
+        }
+        let from_block = of(&self.bends);
+        if !from_block.is_empty() {
+            return from_block;
+        }
+        match zone {
+            ZoneKind::Lead => Vec::from([(BendRange::Semitones(crate::live::BEND_SEMITONES), Hands::Playing(zone))]),
+            _ => Vec::new(),
+        }
+    }
+
+    /// The scene's own lines for controller `cc`, by index in its list:
+    /// `None` when the scene has none and the `midi` block's line stands.
+    pub fn scene_knobs(&self, cc: u8, scene: Option<&str>) -> Option<Vec<usize>> {
+        let sc = scene.and_then(|n| self.scene(n))?;
+        let lines: Vec<usize> = (0..sc.knobs.len()).filter(|&i| sc.knobs[i].1.cc == cc).collect();
+        (!lines.is_empty()).then_some(lines)
     }
 
     /// The scale and lock the zones keep to under `scene`.
@@ -458,13 +503,20 @@ pub fn resolve_all(song: &Song, names: &Names) -> Controls {
             }
         }
     }
-    let target = |play: &ZonePlay| zone_target(song, names, play);
+    let zone_of = |kind: ZoneKind| song.perform.zones.iter().find(|z| z.kind == kind);
     controls.zones = song
         .perform
         .zones
         .iter()
-        .map(|z| Zone { kind: z.kind, low: z.low, high: z.high, play: z.play.as_ref().and_then(target) })
+        .map(|z| Zone {
+            kind: z.kind,
+            low: z.low,
+            high: z.high,
+            play: z.play.as_ref().and_then(|p| zone_target(song, names, p, z.kind, z.low)),
+        })
         .collect();
+    let target =
+        |kind: ZoneKind| move |play: &ZonePlay| zone_of(kind).and_then(|z| zone_target(song, names, play, kind, z.low));
     controls.lock = song.perform.lock.unwrap_or(Lock::Snap);
     controls.scale = song.globals.scale.as_ref().and_then(|d| Scale::named(&d.root, &d.kind));
     controls.scenes = song
@@ -475,8 +527,8 @@ pub fn resolve_all(song: &Song, names: &Names) -> Controls {
             name: sc.name.clone(),
             scale: sc.scale.as_ref().and_then(|d| Scale::named(&d.root, &d.kind)),
             lock: sc.lock,
-            bass: sc.bass.as_ref().and_then(target),
-            lead: sc.lead.as_ref().and_then(target),
+            bass: sc.bass.as_ref().and_then(target(ZoneKind::Bass)),
+            lead: sc.lead.as_ref().and_then(target(ZoneKind::Lead)),
             sets: sc
                 .sets
                 .iter()
@@ -490,8 +542,20 @@ pub fn resolve_all(song: &Song, names: &Names) -> Controls {
                     }
                 })
                 .collect(),
+            bends: sc.bends.iter().map(|b| (b.zone, b.range, b.hands)).collect(),
+            knobs: sc
+                .knobs
+                .iter()
+                .map(|k| {
+                    let m = &k.map;
+                    let span = m.range.as_ref().and_then(|r| knob_span(song, &m.target, r).ok());
+                    let MidiSource::Cc(cc) = m.source else { unreachable!("a scene's knob is a controller") };
+                    (k.hands, Knob { cc, target: m.target.clone(), moves: resolve(song, names, &m.target), span })
+                })
+                .collect(),
         })
         .collect();
+    controls.bends = song.perform.bends.iter().map(|b| (b.zone, b.range, b.hands)).collect();
     controls
 }
 
@@ -521,8 +585,8 @@ fn pad_action(song: &Song, track: &impl Fn(&str) -> Option<usize>, target: &str)
 }
 
 /// A zone's track in this engine: `None` when the engine has no such track
-/// or it plays no instrument.
-fn zone_target(song: &Song, names: &Names, play: &ZonePlay) -> Option<ZoneTarget> {
+/// or it plays no instrument. `low` is the zone's lowest key.
+fn zone_target(song: &Song, names: &Names, play: &ZonePlay, kind: ZoneKind, low: u8) -> Option<ZoneTarget> {
     let t = names.tracks.iter().position(|n| *n == play.track)?;
     let instrument = *names.track_instruments.get(t).filter(|&&i| i != usize::MAX)?;
     let module = song.tracks.iter().find(|d| d.name == play.track).map(|d| d.using_instrument.as_str());
@@ -532,7 +596,32 @@ fn zone_target(song: &Song, names: &Names, play: &ZonePlay) -> Option<ZoneTarget
         let kt = names.tracks.iter().position(|n| n == k)?;
         Some((kt, crate::dsl::compiler::drum_note("kick")?))
     });
-    Some(ZoneTarget { track: t, instrument, mono, roll: play.roll, kick })
+    // The key the zone's root sits on: its lowest key on the scale's root.
+    let root = song.globals.scale.as_ref().and_then(|d| crate::perform::scale::root_pc(&d.root)).unwrap_or(0);
+    let root_key = low as i32 + (root as i32 - low as i32).rem_euclid(12);
+    // Where that root should sound: in the octave written, else, for a bass
+    // zone, the root nearest the note the track's line plays most, else, on
+    // a `bass` module, octave 1, where a psytrance bass lives.
+    let wanted = match (play.octave, kind) {
+        (Some(o), _) => Some(12 * (o as i32 + 1) + root as i32),
+        (None, ZoneKind::Bass) => names
+            .track_home
+            .get(t)
+            .copied()
+            .flatten()
+            .map(|home| {
+                let below = home as i32 - (home as i32 - root as i32).rem_euclid(12);
+                if home as i32 - below > 6 {
+                    below + 12
+                } else {
+                    below
+                }
+            })
+            .or_else(|| mono.then_some(24 + root as i32)),
+        (None, _) => None,
+    };
+    let shift = wanted.map_or(0, |w| (w - root_key + 6).div_euclid(12) * 12);
+    Some(ZoneTarget { track: t, instrument, mono, roll: play.roll, kick, shift: shift.clamp(-96, 96) as i8 })
 }
 
 /// What `target` moves in the engine `names` describes. Resolves the way
@@ -708,7 +797,7 @@ pub fn knob_span(song: &Song, target: &str, range: &[RangeEnd]) -> Result<Span, 
                     ("cutoff", Some("khz")) => e.value * 1000.0,
                     ("eq_low" | "eq_mid" | "eq_high" | "comp_threshold", Some("db")) => e.value,
                     ("gain", Some("db")) => crate::math::pow(10.0, e.value / 20.0),
-                    ("tilt", Some("%")) => e.value / 100.0,
+                    ("tilt" | "position", Some("%")) => e.value / 100.0,
                     (_, Some(u)) => return Err(format!("'{}' does not take '{}'", param, u)),
                 };
                 let (lo, hi) = node_param_limits(param);
@@ -865,6 +954,11 @@ fn reading(m: &Move, v: f32) -> String {
         Move::NodeParam { param: "cutoff", .. } => params::write_amount(v, params::Unit::Hz),
         Move::NodeParam { param: "eq_low" | "eq_mid" | "eq_high" | "comp_threshold", .. } => format!("{:+.1} dB", v),
         Move::NodeParam { param: "gain", .. } => decibels(v),
+        Move::NodeParam { param: "position", .. } => {
+            let x = v.clamp(0.0, 1.0) * 4.0;
+            let near = ["a", "e", "i", "o", "u"][crate::math::floor(x + 0.5) as usize];
+            format!("{} ({:.0}%)", near, v * 100.0)
+        }
         Move::NodeParam { .. } => format!("{:.2}", v),
         Move::Tempo => format!("{:.1} bpm", v),
         Move::ReverbFreeze => String::from(if v >= 0.5 { "frozen" } else { "off" }),

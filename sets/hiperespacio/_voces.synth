@@ -5,10 +5,14 @@
 # is heard until a key is held, and none moves the set's loudness. Each sits
 # behind its own high-pass so the low end stays the kick's and the bass's.
 #
-#   kpluck   intro: a dark two-operator pluck, the warp_drive sound
-#   kzap     build: a zap that falls a fifth every sixteenth
-#   klaser   drop:  the serial-FM laser lead, growling index
-#   kvox     break: a breathing pad through a vowel filter
+#   kpluck   intro: a dark two-operator pluck, the warp_drive sound;
+#            the wheel opens its low-pass (`lp`)
+#   kzap     build: a zap that falls a fifth every sixteenth; the wheel
+#            brings in a bitcrusher (`crush`)
+#   klaser   drop:  the serial-FM laser lead, growling index; the wheel
+#            makes it talk, a vowel filter (`talk`) fading in from a to u
+#   kvox     break: a breathing pad through a vowel filter; the wheel
+#            takes the vowel from the LFO and walks it a-e-i-o-u
 #   kruido   a key held: noise whose band climbs for as long as it is held
 #   kfill    a snare roll in straight sixteenths
 #   kimpact  a crash of noise, for the one after a build
@@ -120,7 +124,7 @@ track kpluck {
     delay_send 0.3
     reverb_send 0.18
     sidechain 0.45
-    out > highpass(250hz, 0.05) > master
+    out > highpass(250hz, 0.05) > lowpass(2500hz, 0.25) as lp > master
 }
 
 track kzap {
@@ -132,7 +136,7 @@ track kzap {
     delay_send 0.25
     reverb_send 0.12
     sidechain 0.4
-    out > highpass(350hz, 0.05) > master
+    out > highpass(350hz, 0.05) > bitcrush(6, 0.35, wet=0) as crush > master
 }
 
 track klaser {
@@ -144,7 +148,7 @@ track klaser {
     delay_send 0.22
     reverb_send 0.2
     sidechain 0.45
-    out > highpass(300hz, 0.05) > saturate(0.25) > master
+    out > highpass(300hz, 0.05) > saturate(0.25) > vowel(a, wet=0) as talk > master
 }
 
 track kvox {

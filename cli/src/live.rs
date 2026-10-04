@@ -495,7 +495,7 @@ pub fn run(
             // `i` on the screen: every message as it arrives, and what the
             // song does with it.
             if let Ui::Screen(screen) = &mut ui {
-                let what = planner.song().and_then(|s| crate::midi::meaning(s, &event));
+                let what = planner.song().and_then(|s| crate::midi::meaning(s, Some(&planner), &event));
                 screen.midi_in(now_s(), crate::midi::describe(&event), what);
             }
             match event {
@@ -570,6 +570,7 @@ pub fn run(
             }
             if !full {
                 unsent_bend = None;
+                readings.push(planner.bend_reading());
             }
         }
         if unsent.iter().any(|v| v.is_some()) {

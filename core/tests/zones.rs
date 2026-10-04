@@ -179,7 +179,10 @@ fn a_scene_brings_its_scale_and_its_lock() {
     // A key held through a scene change sounds on where it started, and
     // lets go there: the drone, not the drop's lead.
     let plans = planner.enter_scene("drop", player.generation()).unwrap();
-    assert!(plans.is_empty(), "nothing is cut on the line");
+    assert!(
+        !plans.iter().any(|p| matches!(p, Plan::Play { op: FastOp::NoteOff { .. }, .. })),
+        "nothing is cut on the line"
+    );
     // The drone is a `bass` module, one note at a time: letting go of the
     // newest falls back to the key under it, and the last one lets go.
     let up = key(&mut planner, &mut player, n("E4"), 0);
@@ -219,17 +222,22 @@ fn per_step(out: &[f32], from: f64, steps: usize) -> Vec<f32> {
 
 #[test]
 fn a_held_bass_key_rolls_on_the_offbeat_sixteenths_and_stops_when_let_go() {
+    // The zone as the `midi` block has it: the scenes cut off, since a
+    // session starts in the first one.
     let quiet =
         SONG.replace("track drums { play beat using kit level 0.8", "track drums { play beat using kit level 0");
-    let (mut planner, mut player) = session(&quiet);
+    let quiet = quiet.split("perform drop").next().unwrap();
+    let (mut planner, mut player) = session(quiet);
     let mut out = run(&mut player, (BAR * 0.5 + STEP * 0.3) as usize);
     // Held a third of the way into a sixteenth: the roll starts on the next.
     let ops = key(&mut planner, &mut player, n("F#3"), 110);
     assert!(
-        matches!(ops[..], [FastOp::Roll { note, velocity, track: 0, kick: None }] if note == n("F3") && velocity > 0.8),
+        // F# snaps to F, and the zone plays where a bass lives: a `bass`
+        // module with no line of its own sits in octave 1.
+        matches!(ops[..], [FastOp::Roll { note, velocity, track: 0, kick: None }] if note == n("F1") && velocity > 0.8),
         "{ops:?}"
     );
-    assert_eq!(player.engine().unwrap().track_roll(0), Some(n("F3")));
+    assert_eq!(player.engine().unwrap().track_roll(0), Some(n("F1")));
     out.extend(run(&mut player, (BAR * 1.5) as usize));
     let from = BAR * 0.5 + STEP; // the first sixteenth after the press, a beat's second
     let levels = per_step(&out, from, 15);
@@ -308,5 +316,27 @@ fn a_rebuilt_engine_keeps_rolling() {
     // The new track comes first in the text: the bass is no longer track 0.
     let bass = (0..e.track_count()).find(|&t| e.track_name(t) == "bass").unwrap();
     assert_eq!(bass, 1);
-    assert_eq!(e.track_roll(bass), Some(n("A3")));
+    assert_eq!(e.track_roll(bass), Some(n("A1")));
+}
+
+/// The bass zone plays in the register of the line it plays over: the
+/// root nearest the note the track plays most, or the octave written.
+#[test]
+fn the_bass_zone_sits_where_the_bass_line_does() {
+    let line_in_2 = SONG.replace(
+        "track bass  { play rest using pluck",
+        "pattern line2 { - 1.2 1.2 1.2  - 1.2 1.2 1.2  - 1.2 2.2 1.2  - 1.2 1.2 7.1 }\ntrack bass  { play line2 using pluck",
+    );
+    let line_in_2 = line_in_2.split("perform drop").next().unwrap();
+    let (mut planner, mut player) = session(line_in_2);
+    let ops = key(&mut planner, &mut player, n("E3"), 100);
+    assert!(matches!(ops[..], [FastOp::Roll { note, .. }] if note == n("E2")), "{ops:?}");
+    assert_eq!(planner.zone_note(n("E3")).map(|z| z.2), Some(n("E2")));
+    // Written: `octave 3` puts the root on the key itself.
+    let written = line_in_2.replace("zone bass 48..59 > bass roll", "zone bass 48..59 > bass roll octave 3");
+    let (planner, _) = session(&written);
+    assert_eq!(planner.zone_note(n("E3")).map(|z| z.2), Some(n("E3")));
+    assert_eq!(planner.zone_note(n("C3")).map(|z| z.2), Some(n("C3")));
+    // The lead zone plays as written.
+    assert_eq!(planner.zone_note(n("E4")).map(|z| z.2), Some(n("E4")));
 }

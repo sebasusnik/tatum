@@ -1001,6 +1001,10 @@ impl NodeKind {
                 *g = value;
                 true
             }
+            (NodeKind::Vowel(v), "position") => {
+                v.set_position(value);
+                true
+            }
             (NodeKind::Capture(c), n) => c.set_named(n, value),
             (NodeKind::Limiter(l), "limiter") => {
                 l.set_threshold(value);

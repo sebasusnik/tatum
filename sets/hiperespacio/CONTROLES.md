@@ -87,7 +87,7 @@ shows what yours send.
 | zone | notes | what it does |
 |---|---|---|
 | triggers | 36–47 (the lowest C to B) | each key does one thing, below |
-| bass | 48–59 | held, the track's own `bass` rolls that note on the three sixteenths after each beat, in place of its line; let go and the line comes back |
+| bass | 48–59 | held, the track's own `bass` rolls that note on the three sixteenths after each beat, in place of its line; let go and the line comes back. The keys sound in the line's own register (octave 1 in every track of the set): E3 on the keyboard plays E1 |
 | lead | 60–84 | the scene's voice, every note kept to the track's scale (`lock snap`: a key outside it plays the nearest note in it, the lower one on a tie) |
 
 Triggers:
@@ -108,12 +108,27 @@ Triggers:
 
 Scenes, from the computer's keys only, each landing on the next bar:
 
-| key | scene | bass zone | lead zone |
-|---|---|---|---|
-| F1 | intro | `bass` roll | `kpluck`, a dark FM pluck |
-| F2 | build | `bass` roll | `kzap`, the zap that falls every sixteenth |
-| F3 | drop | `bass` roll | `klaser`, the serial-FM laser |
-| F4 | break | `bass` roll **with its own kick** on the beat | `kvox`, a pad through a vowel filter |
+The set starts in the first scene, intro, so the strip and the wheel answer
+from the first bar. The strip and the wheel follow the hands. **Playing** means a key of the
+lead zone is the newest held: they move the sound you play. **Hands off**
+(no key held, `idle`): they move the song.
+
+| key | scene | bass zone | lead zone | strip, playing | strip, hands off | wheel, playing | wheel, hands off |
+|---|---|---|---|---|---|---|---|
+| F1 | intro | `bass` roll | `kpluck`, a dark FM pluck | to the note 2 degrees away, in the scale | the song's bass line bends, up to an octave | **filter**: the pluck opens, 2.5 → 14 kHz | the song goes under (DJ low-pass to 1.2 kHz) |
+| F2 | build | `bass` roll | `kzap`, the falling zap | ±24 semitones: dives | the song's bass line falls an octave | **FX**: a crusher on the zap, 0 → 70% | the floor thins (high-pass to 1.5 kHz) |
+| F3 | drop | `bass` roll | `klaser`, the laser | 2 degrees | the song's bass line bends | **vowel**: the laser talks, a → u | a DJ filter sweep (low-pass to 600 Hz) |
+| F4 | break | `bass` roll **with its own kick** | `kvox`, a vowel pad | 1 degree | whatever bass is left dives an octave | **vowel**: the pad walks a-e-i-o-u | under water (low-pass to 400 Hz) |
+
+A gesture belongs to what it started on: if you let go of the key mid-sweep,
+the sweep stays on your sound until the wheel (or the strip) comes home, and
+only the next one moves the song.
+
+A bend in degrees goes from the key held to the note so many degrees of the
+scale away: half way it slides, at the end it lands in the scale. Every
+wheel range starts at the sound as written, so the wheel at rest changes
+nothing; changing scene puts the old scene's wheel targets back there and
+moves the new ones to where the wheel is.
 
 The roll plays through the track's fader: in a step where `bass` is at level 0
 (a breakdown, or T04's drop, where the gallop is the bass) a held bass key is

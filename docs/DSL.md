@@ -705,6 +705,13 @@ Letting go gives the pattern back. `kick=drums` also strikes the kick of a
 `roll` (`> sub notes`) the key plays the note held. The lead zone plays chords
 on a `keys` or `fm` track and one note at a time on a `bass` one.
 
+The bass zone plays in the register of the line under it: its keys move by
+whole octaves so the zone's first key on the scale's root plays the root
+nearest the note the track plays most (a `bass` track with no line of its
+own: octave 1, where a psytrance bass lives). `octave 2` after the track
+writes it instead: the root in octave 2. The lead zone plays as written
+unless it says `octave`.
+
 `lock` keeps both zones in the song's scale: `snap` moves a key outside it
 to the nearest note in it (the lower one when two are as near), `white` makes
 the white keys the scale's degrees from C (C the root, D the second...) and
@@ -731,6 +738,53 @@ keyboard {
     quantize bar                      # bar, phrase (8 bars) or a number of bars
 }
 ```
+
+A scene, or the `midi` block for when none plays, says what the pitch strip
+does to each zone, and a scene can put the mod wheel (controller 1), or any
+controller, on something of its own while it plays:
+
+```
+perform build {
+    bend lead 24st                          # playing the lead: two octaves each way
+    bend bass 12st idle                     # hands off: the song's bass line falls
+    wheel lead > zap crush wet 0%..70%      # playing the lead: an effect's mix
+    wheel idle > master hp cutoff 20hz..1500hz   # hands off: the song thins
+}
+perform drop {
+    bend lead 2deg                          # to the note two degrees of the scale away
+    wheel lead > laser talk wet 0%..100%    # a vowel filter fading in...
+    wheel lead > laser talk position 0..1   # ...and walking a-e-i-o-u
+    cc 74 always > laser lp cutoff          # any controller: replaces the `midi` line
+}
+```
+
+Each line says when it answers, by where the hands are: the zone of the
+newest key held in the bass or lead zone, or none. A line with a zone
+(`wheel lead >`, and a `bend` with no word after its range) answers while a
+key of that zone is the newest held: it is for the sound you play. `idle`
+answers only with no key held: the song, while the hands are off the keys.
+`always` answers whatever the hands do; a `wheel >` with no word is
+`always`. A gesture belongs to what it started on: the lines are chosen as
+the strip or the controller leaves rest, and kept until it comes back, so
+letting go of a key mid-sweep does not hand the sweep to the song.
+
+`bend <zone> 24st` bends up to that many semitones each way, `2deg` from the
+key held to the note so many degrees of the scale away (half way it slides, at
+the end it is in the scale; a new key held while bent re-aims it), and `off`
+leaves the zone alone; `always` or `idle` after the range says when. With no
+`bend` line the lead zone bends two semitones while it is played and the bass
+zone not at all. A zone bends the track its newest key sounds on, or the one
+the scene gives it, with everything that track plays: `bend bass 12st idle`
+on the song's own bass track drops its line.
+
+A `wheel` or `cc` line in a scene is a knob line, with a range, a macro when
+the controller is named twice: while the scene plays the controller moves
+these instead of what the `midi` block gives it. When the scene changes, what
+the old one's lines moved goes back to the bottom of their travel and the new
+one's go to where the controller is, so write a scene's ranges to start at
+the sound as written. A vowel filter takes `position`, 0..1 along a-e-i-o-u,
+which glides over about 25 ms and takes over from its LFO; a node's `wet`
+moves over 10 ms, so a wheel thrown across its travel does not click.
 
 A scene is called from the computer's keys only, never from the controller,
 and comes in on the next bar (or what `quantize` says, counted from the

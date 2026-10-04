@@ -172,14 +172,14 @@ pub fn cmd(args: &[String]) {
             std::process::exit(1);
         }
     };
-    if let Err(e) = monitor(wanted.as_deref(), song.as_ref().map(|(name, s)| (name.as_str(), s))) {
+    if let Err(e) = monitor(wanted.as_deref(), song.as_ref().map(|(name, s, text)| (name.as_str(), s, text.as_str()))) {
         eprintln!("error: {}", e);
         std::process::exit(1);
     }
 }
 
 /// A song, or step `step` of a set (from 1), parsed, with its name.
-fn load_song(path: &str, step: usize) -> Result<(String, tatum_core::dsl::ast::Song), String> {
+fn load_song(path: &str, step: usize) -> Result<(String, tatum_core::dsl::ast::Song, String), String> {
     let p = std::path::Path::new(path);
     let (name, file) = if p.is_dir() {
         let steps = crate::set::load(p, 32)?;
@@ -193,7 +193,7 @@ fn load_song(path: &str, step: usize) -> Result<(String, tatum_core::dsl::ast::S
         let lines: Vec<String> = errs.iter().map(|e| format!("line {}: {}", e.line, e.message)).collect();
         format!("{}: {}", file.display(), lines.join("; "))
     })?;
-    Ok((name, song))
+    Ok((name, song, source.text))
 }
 
 /// `C2` for 36: the names the text writes notes with.
@@ -204,7 +204,12 @@ pub fn note_name(n: u8) -> String {
 
 /// What `song` does with one decoded message, as the `midi` block and the
 /// zones say: `→ ...`, or nothing when it maps nothing.
-pub fn meaning(song: &tatum_core::dsl::ast::Song, event: &Event) -> Option<String> {
+/// `planner`, when there is one, knows the scene and the zones' register.
+pub fn meaning(
+    song: &tatum_core::dsl::ast::Song,
+    planner: Option<&tatum_core::live::LivePlanner>,
+    event: &Event,
+) -> Option<String> {
     use tatum_core::dsl::ast::{MidiSource, ZoneKind};
     let line = |src: MidiSource| -> Vec<String> {
         song.midi.iter().filter(|m| m.source == src).map(|m| m.target.replace('.', " ")).collect()
@@ -212,10 +217,20 @@ pub fn meaning(song: &tatum_core::dsl::ast::Song, event: &Event) -> Option<Strin
     let out = match *event {
         Event::Cc(cc, _) => {
             let t = line(MidiSource::Cc(cc));
-            if t.is_empty() {
-                return Some(String::from("not mapped"));
+            // Scenes that put this controller on something of their own.
+            let scenes: Vec<&str> = song
+                .perform
+                .scenes
+                .iter()
+                .filter(|sc| sc.knobs.iter().any(|k| k.map.source == MidiSource::Cc(cc)))
+                .map(|sc| sc.name.as_str())
+                .collect();
+            match (t.is_empty(), scenes.is_empty()) {
+                (true, true) => return Some(String::from("not mapped")),
+                (true, false) => format!("in scenes {}", scenes.join(", ")),
+                (false, true) => t.join(" + "),
+                (false, false) => format!("{} (scenes {} move their own)", t.join(" + "), scenes.join(", ")),
             }
-            t.join(" + ")
         }
         Event::Note { channel: DRUM_CHANNEL, note, .. } => {
             let t = line(MidiSource::Pad(note));
@@ -233,25 +248,37 @@ pub fn meaning(song: &tatum_core::dsl::ast::Song, event: &Event) -> Option<Strin
                     Some(z) if z.kind == ZoneKind::Triggers => {
                         format!("trigger zone {}..{}: key {} not mapped", z.low, z.high, note)
                     }
-                    Some(z) => {
-                        let lock = song.perform.lock.unwrap_or(tatum_core::perform::scale::Lock::Snap);
-                        let scale = song
-                            .globals
-                            .scale
-                            .as_ref()
-                            .and_then(|d| tatum_core::perform::scale::Scale::named(&d.root, &d.kind));
-                        let plays = match scale.map(|s| s.lock(lock, note)) {
-                            None => note_name(note),
-                            Some(Some(n)) => note_name(n),
-                            Some(None) => String::from("nothing (a black key under lock white)"),
-                        };
-                        let track = z
-                            .play
-                            .as_ref()
-                            .map(|p| format!(" on {}{}", p.track, if p.roll { " (roll)" } else { "" }))
-                            .unwrap_or_default();
-                        format!("{} zone {}..{}: plays {}{}", z.kind.word(), z.low, z.high, plays, track)
-                    }
+                    Some(z) => match planner.map(|p| p.zone_note(note)) {
+                        Some(Some((_, track, out, roll))) => format!(
+                            "{} zone {}..{}: plays {} on {}{}",
+                            z.kind.word(),
+                            z.low,
+                            z.high,
+                            note_name(out),
+                            track,
+                            if roll { " (roll)" } else { "" }
+                        ),
+                        Some(None) => format!("{} zone {}..{}: plays nothing here", z.kind.word(), z.low, z.high),
+                        None => {
+                            let lock = song.perform.lock.unwrap_or(tatum_core::perform::scale::Lock::Snap);
+                            let scale = song
+                                .globals
+                                .scale
+                                .as_ref()
+                                .and_then(|d| tatum_core::perform::scale::Scale::named(&d.root, &d.kind));
+                            let plays = match scale.map(|s| s.lock(lock, note)) {
+                                None => note_name(note),
+                                Some(Some(n)) => note_name(n),
+                                Some(None) => String::from("nothing (a black key under lock white)"),
+                            };
+                            let track = z
+                                .play
+                                .as_ref()
+                                .map(|p| format!(" on {}{}", p.track, if p.roll { " (roll)" } else { "" }))
+                                .unwrap_or_default();
+                            format!("{} zone {}..{}: plays {}{}", z.kind.word(), z.low, z.high, plays, track)
+                        }
+                    },
                     None => {
                         let keys = line(MidiSource::Keys);
                         if keys.is_empty() {
@@ -262,7 +289,7 @@ pub fn meaning(song: &tatum_core::dsl::ast::Song, event: &Event) -> Option<Strin
                 }
             }
         }
-        Event::Bend(_) => String::from("pitch strip: bends the keys"),
+        Event::Bend(_) => String::from("pitch strip: bends the zones as the scene says"),
         Event::Pressure { .. } => String::from("aftertouch: read by the pads in stage 3"),
         Event::Other { .. } => String::from("not used"),
     };
@@ -300,7 +327,15 @@ pub fn describe(event: &Event) -> String {
     }
 }
 
-fn monitor(wanted: Option<&str>, song: Option<(&str, &tatum_core::dsl::ast::Song)>) -> Result<(), String> {
+fn monitor(wanted: Option<&str>, song: Option<(&str, &tatum_core::dsl::ast::Song, &str)>) -> Result<(), String> {
+    // A planner over the song, never played, so a key reads as the session
+    // would play it: in the first scene, in the zone's register.
+    let planner = song.and_then(|(_, _, text)| {
+        let mut p = tatum_core::live::LivePlanner::new();
+        p.set_output_gain(1.0);
+        p.plan(text, 0).ok().map(|_| p)
+    });
+    let song = song.map(|(name, s, _)| (name, s));
     let probe = MidiInput::new("tatum").map_err(|e| format!("cannot reach MIDI: {}", e))?;
     let needle = wanted.map(|w| w.to_lowercase());
     let (tx, rx) = std::sync::mpsc::channel::<(String, Vec<u8>)>();
@@ -349,7 +384,10 @@ fn monitor(wanted: Option<&str>, song: Option<(&str, &tatum_core::dsl::ast::Song
             .unwrap_or_else(|| String::from("     "));
         match decode(&bytes) {
             Some(ev) => {
-                let what = song.and_then(|(_, s)| meaning(s, &ev)).map(|m| format!("  → {}", m)).unwrap_or_default();
+                let what = song
+                    .and_then(|(_, s)| meaning(s, planner.as_ref(), &ev))
+                    .map(|m| format!("  → {}", m))
+                    .unwrap_or_default();
                 println!(
                     "{:>8.3}s  {:<28} {}  {:<34} [{}{}]{}",
                     t,
@@ -400,7 +438,7 @@ mod tests {
             std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/keylab_psy_e_frigio.synth"))
                 .unwrap();
         let song = tatum_core::dsl::parse(&src).unwrap();
-        let say = |e: Event| meaning(&song, &e).unwrap();
+        let say = |e: Event| meaning(&song, None, &e).unwrap();
         assert_eq!(say(Event::Note { channel: 1, note: 36, velocity: 100 }), "trigger key: play ruido");
         assert_eq!(say(Event::Note { channel: 1, note: 40, velocity: 100 }), "trigger zone 36..47: key 40 not mapped");
         assert_eq!(

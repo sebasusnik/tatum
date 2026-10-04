@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 /// Suffixes the lexer will attach to a number. The parser decides whether the
 /// suffix makes sense for the parameter it lands on.
-pub const UNIT_SUFFIXES: &[&str] = &["hz", "khz", "ms", "s", "sec", "st", "x", "db", "%"];
+pub const UNIT_SUFFIXES: &[&str] = &["hz", "khz", "ms", "s", "sec", "st", "deg", "x", "db", "%"];
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
