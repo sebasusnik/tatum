@@ -47,6 +47,10 @@ pub struct SongInfo {
     pub scenes: Vec<(String, u32)>,
     /// Each track's `play` line as written: `acid_riff16 every 4 rev`.
     pub plays: Vec<String>,
+    /// Per scene, in arrangement order like `scenes`, what each track it
+    /// names plays there: a scene restates its tracks' `play` lines, and what
+    /// the screen names has to be what is heard.
+    pub scene_plays: Vec<Vec<(String, String)>>,
     /// Whether each track plays a drum pattern, for the palette.
     pub drums: Vec<bool>,
     /// The song's own patterns, by name, and whether each is a drum pattern:
@@ -75,6 +79,12 @@ impl SongInfo {
                 .filter_map(|&(i, n)| compiled.scenes.get(i).map(|s| (s.name.clone(), n)))
                 .collect(),
             plays: compiled.tracks.iter().map(|t| t.play_text.clone()).collect(),
+            scene_plays: compiled
+                .arrangement
+                .iter()
+                .filter_map(|&(i, _)| compiled.scenes.get(i))
+                .map(|s| s.tracks.iter().map(|t| (t.name.clone(), t.play_text.clone())).collect())
+                .collect(),
             drums: compiled
                 .tracks
                 .iter()
@@ -857,11 +867,7 @@ impl Screen {
         let (Some(song), Some(i)) = (self.song.as_ref(), self.selected) else { return false };
         let (pat_idx, step) = self.telemetry.position(i);
         let Some(pat) = song.compiled.get(pat_idx) else { return false };
-        let title = format!(
-            " {} · {} ",
-            song.tracks.get(i).map(String::as_str).unwrap_or(""),
-            song.plays.get(i).map(String::as_str).unwrap_or("")
-        );
+        let title = format!(" {} · {} ", song.tracks.get(i).map(String::as_str).unwrap_or(""), self.play_of(i));
         let on = self.transformed.get(i).copied().unwrap_or(false);
         let block = Block::new()
             .borders(Borders::TOP)
@@ -1144,7 +1150,7 @@ impl Screen {
         ];
         if let (Some(song), Some(i)) = (self.song.as_ref(), self.selected) {
             let drum = song.drums.get(i).copied().unwrap_or(false);
-            let current = song.plays.get(i).and_then(|p| p.split([' ', ',']).next()).unwrap_or("");
+            let current = self.play_of(i).split([' ', ',']).next().unwrap_or("");
             let prefix = current.split('_').next().unwrap_or(current);
             let mut same: Vec<&str> =
                 song.patterns.iter().filter(|(n, d)| *d == drum && n != current).map(|(n, _)| n.as_str()).collect();
@@ -1232,6 +1238,17 @@ impl Screen {
         let Some(song) = self.song.as_ref() else { return false };
         let Some(pat) = song.compiled.get(self.telemetry.position(i).0) else { return false };
         pat.steps.iter().any(|s| s.is_onset()) || pat.lanes.iter().any(|l| l.steps.iter().any(|s| s.is_onset()))
+    }
+
+    /// What track `i` plays now: its scene's `play` line when a scene is
+    /// playing and names it, else the line the track was defined with.
+    fn play_of(&self, i: usize) -> &str {
+        let Some(song) = self.song.as_ref() else { return "" };
+        let in_scene = song.scene_at(self.bar).and_then(|(s, _)| {
+            let name = song.tracks.get(i)?;
+            song.scene_plays.get(s)?.iter().find(|(t, _)| t == name).map(|(_, p)| p.as_str())
+        });
+        in_scene.or_else(|| song.plays.get(i).map(String::as_str)).unwrap_or("")
     }
 
     fn current_scene(&self) -> Option<(String, usize, u32)> {
@@ -1590,7 +1607,7 @@ impl Screen {
             }
             // What the `play` line does to the pattern, lit on the loops it
             // changes: the second row of a lane, or a mark when there is one.
-            let play = song.plays.get(i).map(String::as_str).unwrap_or("");
+            let play = self.play_of(i);
             let tail = play.split_once(' ').map(|(_, t)| t).unwrap_or("");
             if !tail.is_empty() {
                 let on = self.transformed.get(i).copied().unwrap_or(false);
@@ -1881,6 +1898,28 @@ arrange { a x2 b x2 }
             })
         });
         assert!(lit, "nothing in the spectrogram is lit");
+    }
+
+    #[test]
+    fn a_track_is_named_by_what_its_scene_plays() {
+        // The track is defined playing `line`; scene b plays `riff` backwards.
+        let song = r#"
+tempo 120
+module bass low { cutoff 400hz }
+pattern line { A2 ..*15 }
+pattern riff { A2 - C3 - E3 - - -  A2 - - -  G2 - - - }
+track bass { play line using low }
+scene a { track bass { play line using low } }
+scene b { track bass { play riff rev using low } }
+arrange { a x2 b x2 }
+"#;
+        let telemetry = Arc::new(Telemetry::new());
+        let mut screen = Screen::headless(Arc::clone(&telemetry), "test".into(), vec![]);
+        screen.set_song(SongInfo::from_source("demo.synth", song).unwrap());
+        screen.position(0, 0, 120.0);
+        assert_eq!(screen.play_of(0), "line");
+        screen.position(2, 32, 120.0);
+        assert_eq!(screen.play_of(0), "riff rev");
     }
 
     #[test]
