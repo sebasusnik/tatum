@@ -1,6 +1,6 @@
 # set: bars=16 phase=05-maquina energy=8
 # set-note: Out of the jam: the bass's new ratchet figure with the b2 every second bar, the robot run into sixteenths, and a crushed zap burst on the one (gesture 2).
-# cue: 1 B3 crash · ¡DROP!
+# cue: 1 B3 crash · DROP!
 use "_t05.synth"
 
 track drums  { play m_drive, m_drive, m_drive, m_drive_turn }

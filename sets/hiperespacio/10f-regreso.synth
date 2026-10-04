@@ -1,6 +1,6 @@
 # set: bars=16 phase=10-hipervelocidad energy=9
 # set-note: Back in with a crash: a new double-gallop bass with the octave popping, the screamer an octave up with doubled ratchets, shard's offbeat chain in the second phrase.
-# cue: 1 B3 crash · vuelve
+# cue: 1 B3 crash · back
 use "_t10.synth"
 
 track drums  { play g_land }

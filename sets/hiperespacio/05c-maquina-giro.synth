@@ -1,7 +1,7 @@
 # set: bars=16 phase=05-maquina energy=7
 # set-note: The robot's cell gets its octave leap and a second hit, the glitch hats come off the grid; the zaps idle then spin up in the last two bars and cut (gesture 1).
-# cue: 9 B4 apretado · figura de zaps
-# cue: 11 suelta B4
+# cue: 9 B4 held · zap figure
+# cue: 11 let go of B4
 use "_t05.synth"
 
 track drums  { play m_main, m_main, m_main, m_main_turn }

@@ -1,7 +1,7 @@
 # set: bars=8 phase=04-acido energy=5
 # set-note: build: kick for four bars then gone, the roll thins then stops, snare packs to ratchets, riser climbs, the drone gone, 303 hammers the root opening; one beat of silence
-# cue: 7 B2 apretado · riser
-# cue: 8.5 B5 roll 1/32 · suelta todo en el 1
+# cue: 7 B2 held · riser
+# cue: 8.5 B5 roll 1/32 · let go of everything on the 1
 use "_t04.synth"
 
 track drums { play a4_build level 0.6 }

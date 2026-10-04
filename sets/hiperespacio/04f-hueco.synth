@@ -1,7 +1,7 @@
 # set: bars=16 phase=04-acido energy=3
 # set-note: breakdown: no drums, no roll; a low drone and the 303 with its filter nearly shut
-# cue: 7 B1 apretado + K3 ↑ de a poco · 303 sostenido que se abre
-# cue: 10.75 suelta B1 (K3 al medio)
+# cue: 7 B1 held + K3 ↑ slowly · held 303 opening
+# cue: 10.75 let go of B1 (K3 to center)
 use "_t04.synth"
 
 track drums { play a4_rest }

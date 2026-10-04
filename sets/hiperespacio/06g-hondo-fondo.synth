@@ -1,6 +1,6 @@
 # set: bars=24 phase=06-hondo energy=7
 # set-note: Everything back at once plus what was saved: the roll pulling on the b2 and the low seventh with its filter lifting, the Eb doubled at the octave, the crush at its dirtiest.
-# cue: 1 suelta A1
+# cue: 1 let go of A1
 use "_t06.synth"
 
 track drums { play k_clap, k_clap, k_clap, k_clap_turn }

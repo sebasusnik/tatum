@@ -1,7 +1,7 @@
 # set: bars=16 phase=06-hondo energy=7
 # set-note: The Eb comes in over the D -- the semitone rub, the track's dark heart; the ride gets its pickup; crush and index keep climbing, never smoothly.
-# cue: 11 B1 apretado + K3 ↑ muy lento · el dron, lento
-# cue: 14.75 suelta B1 (K3 al medio)
+# cue: 11 B1 held + K3 ↑ very slowly · the drone, slow
+# cue: 14.75 let go of B1 (K3 to center)
 use "_t06.synth"
 
 track drums { play k_hats, k_hats, k_hats, k_hats_turn }

@@ -1,7 +1,7 @@
 # set: bars=32 phase=02-orbita energy=6
 # set-note: the clap lands and the pluck plays its motif, brightening over the 32 bars as its index climbs
-# cue: 15 B4 apretado · ratchets al eco
-# cue: 17 suelta B4
+# cue: 15 B4 held · ratchets into the echo
+# cue: 17 let go of B4
 use "_t02.synth"
 
 track drums { play o_main }

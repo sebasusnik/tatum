@@ -86,25 +86,25 @@ module keys cloud {
     vibrato_depth 0.04
 }
 
-# La chapa. Era un Rhodes FM; ahora es la fuente de un filtro de envolvente, y
-# el caracter lo pone el filtro, no el timbre. Por eso aca no hay ratios
-# inarmonicos ni feedback: el feedback en FM es un generador de ruido, y con
-# `chorus_mix` habia dos chorus en serie (uno aca y otro en la cadena), que es
-# lo que raspaba -- un chorus es una copia desafinada, y desafinar es batir.
-# Aspereza medida sobre el track aislado: 34.9% de la modulacion antes, 6.3%
-# despues de sacar los dos.
+# The plate (`chapa`). It was an FM Rhodes; now it is the source for an
+# envelope filter, and the filter gives it its character, not the timbre. So
+# there are no inharmonic ratios and no feedback here: feedback in FM is a noise
+# generator, and with `chorus_mix` there were two choruses in series (one here
+# and one in the chain), which is what rasped -- a chorus is a detuned copy,
+# and detuning is beating. Roughness measured on the track alone: 34.9% of the
+# modulation before, 6.3% after taking both out.
 module fm chapa {
     algorithm two_op
     level 2.0
-    mod_index 0.66          # el brillo del ataque sale de aca: subir un shelf
-                            # detras de un resonante de Q alto no llega, se lo come
+    mod_index 0.66          # the attack's brightness comes from here: a shelf
+                            # after a high-Q resonant filter does not get through, it eats it
     feedback 0.0
     waveform sine
-    op0_ratio 1x      # 1x, portadora
-    op1_ratio 2x      # 2x armonico: limpio
-    op0_attack 2.0001ms       # 2 ms, el golpe que dispara el seguidor
+    op0_ratio 1x      # 1x, carrier
+    op1_ratio 2x      # 2x harmonic: clean
+    op0_attack 2.0001ms       # 2 ms, the hit that triggers the follower
     op0_decay 619.93ms        # 620 ms
-    op0_sustain 0.12        # cae rapido: seco, no sostenido
+    op0_sustain 0.12        # falls fast: dry, not sustained
     op0_release 299.98ms      # 300 ms
     op1_attack 1ms          # 1 ms
     op1_decay 379.975ms        # 380 ms
@@ -115,7 +115,7 @@ module fm chapa {
     vibrato_depth 0.02
     lfo_target mod_index
     lfo_sync bars_8
-    lfo_depth 0.0           # el unico que se mueve es el filtro
+    lfo_depth 0.0           # only the filter moves
 }
 
 # Air: the high drone that makes the record sound wide.
@@ -387,15 +387,15 @@ pattern silence {
 bus drums
 drums { in > eq(low=2.0, mid=-1.0, high=2.0) > compressor(-7, ratio=2, attack=25, release=130, makeup=2.92db) > master }
 
-# La nube. El acorde entra y sale solo su cola: el nodo `reverb` es wet only,
-# asi que lo que llega a master no tiene nada del ataque. Eso es lo que la
-# receta busca al resamplear la cola, y aca se consigue sin resamplear.
+# The cloud. The chord goes in and only its tail comes out: the `reverb` node
+# is wet only, so what reaches master has none of the attack. That is what the
+# recipe gets by resampling the tail, and here it comes without resampling.
 #
-# Aca habia un `capture(4, start=8, speed=0.75)`. Grababa cuatro compases de
-# cola y los repetia para siempre, asi que la nube dejaba de seguir la
-# armonia: la similitud de coseno entre un compas sobre Fm9 y uno sobre
-# Abmaj9 daba 1.000, y el centroide quedaba clavado en 338 Hz durante siete
-# escenas. Un loop de cinta, no una nube.
+# There used to be a `capture(4, start=8, speed=0.75)` here. It recorded four
+# bars of tail and repeated them forever, so the cloud stopped following the
+# harmony: the cosine similarity between a bar over Fm9 and one over Abmaj9
+# was 1.000, and the centroid stayed stuck at 338 Hz for seven scenes. A tape
+# loop, not a cloud.
 bus haze
 haze { in > reverb(0.92)
           > highpass(300hz, 0.02)
@@ -438,7 +438,7 @@ track pad {
     reverb_send 0.48
     delay_send 0.14
     sidechain 0.40
-    # y se agacha cuando pega la chapa, en vez de subirle el nivel a ella
+    # and ducks when the plate hits, instead of turning the plate up
     sidechain 0.28 from=rhodes
     out > highpass(290hz, 0.02) > eq(low=0.0, mid=-2.5, high=1.0)
         > lowpass(3.4khz, 0.02, lfo_bars=16, lfo_depth=1500)
@@ -450,8 +450,8 @@ track haze {
     play silence
     using cloud
     velocity 0.9
-    level 0.32              # la nube era lo que sonaba adelante, no el pad:
-                            # estaba 6.4 dB encima de la chapa y en su misma banda
+    level 0.32              # the cloud was what sat in front, not the pad:
+                            # it was 6.4 dB above the plate and in its band
     sidechain 0.35
     out > haze
 }
@@ -460,24 +460,24 @@ track rhodes {
     play silence
     using chapa
     velocity 0.9
-    level 0.22              # detras del pad, no delante: medido, no a ojo
-    gate 0.55               # nota corta: la chapa es un golpe, no un acorde sostenido
+    level 0.22              # behind the pad, not in front: measured, not by eye
+    gate 0.55               # short note: the plate is a hit, not a held chord
     pan -0.20
-    reverb_send 0.06        # casi seca. El piso entre golpes pasa de -15 a -36 dB.
+    reverb_send 0.06        # almost dry. The floor between hits goes from -15 to -36 dB.
     delay_send 0.0
     sidechain 0.30
     out > highpass(260, 0.02)
-        # El filtro de envolvente. `peak` es Q = 0.5 + n*19.5, y el tiempo de
-        # respuesta de un resonante es Q/(pi*f): con peak 0.92 a 220 Hz eso da
-        # 26.7 ms, que se oye como un ataque tarde por rapido que sea el golpe.
-        # A peak 0.58 y 480 Hz son 7.8 ms. `wobble` es lo que separa esto de un
-        # wah comun: la resonancia no se mueve una vez y se queda, oscila y se
-        # muere con la nota, que es lo que hace una chapa fina al flexionarse.
+        # The envelope filter. `peak` is Q = 0.5 + n*19.5, and a resonant
+        # filter's response time is Q/(pi*f): with peak 0.92 at 220 Hz that is
+        # 26.7 ms, heard as a late attack however fast the hit. At peak 0.58
+        # and 480 Hz it is 7.8 ms. `wobble` is what sets this apart from a
+        # plain wah: the resonance does not move once and stay, it oscillates
+        # and dies with the note, which is what a thin metal plate does as it flexes.
         > autowah(0.88, base=480hz, range=2600hz, peak=0.58, attack=1,
                   release=520, wobble=1500hz, wobble_hz=6)
         > eq(low=-2.0, mid=0.5, high=1.5)
-        # paneo por envolvente, y dos autopan de periodos coprimos encima: las
-        # fases no vuelven a coincidir en 77 compases
+        # envelope panning, and two autopans with coprime periods on top: the
+        # phases do not line up again for 77 bars
         > panenv(0.65, attack=3, release=240)
         > autopan(0.50, bars=7) > autopan(0.30, bars=11) > master
 }
@@ -627,9 +627,9 @@ scene breakdown {
     auto reverb_freeze 0 > 1
     auto cloud cutoff 0.54 > 0.72            # 2.4khz -> 5.5khz
     auto master tilt -0.30 > 0.0
-    # Sin esto la escena medía 82.7% de medios y 0% de sub: una masa de
-    # medios desnuda. El pad necesita algo abajo sobre lo que flotar, que es
-    # justo lo que el highpass de 290 Hz le saca a él.
+    # Without this the scene measured 82.7% mids and 0% sub: a bare mass of
+    # mids. The pad needs something below to float on, which is exactly what
+    # its 290 Hz highpass takes away from it.
     track sub { play sub_hold using sub sidechain 0.0 velocity 0.85 }
     track pad { play voice_break using cloud sidechain 0.0 velocity 0.72 pan 0.45 }
     track haze { play voice_break using cloud velocity 0.72 }

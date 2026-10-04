@@ -75,7 +75,7 @@ stage() {
         local name
         name="$(printf '%02d-etapa.synth' "$STAGE")"
         { echo "# set: bars=$bars phase=etapa$STAGE"; echo "# set-note: $say"; cat "$WORK"; } > "$SET_DIR/$name"
-        printf '%2d  %3d compases  %s\n' "$STAGE" "$bars" "$say"
+        printf '%2d  %3d bars  %s\n' "$STAGE" "$bars" "$say"
     fi
 }
 
@@ -86,35 +86,35 @@ else
     read -r
 fi
 
-stage 4 "Arranca: bombo y hats, nada más." \
+stage 4 "Start: kick and hats, nothing else." \
     kick "kick4" hats "hats"
-stage 4 "Entra el bajo rodando." \
+stage 4 "The rolling bass comes in." \
     bass "roll"
-stage 4 "Entra la línea ácida, tal cual está escrita." \
+stage 4 "The acid line comes in, as written." \
     acid "acid_line"
-stage 8 "every 4 rev: la cuarta vuelta de cada cuatro, al revés. Es el remate de la frase." \
+stage 8 "every 4 rev: every fourth cycle plays backwards. It closes the phrase." \
     acid "acid_line every 4 rev"
-stage 4 "Hats a semicorcheas, y degrade 30%: se comen notas al azar, siempre las mismas en cada render." \
+stage 4 "Hats in sixteenths, and degrade 30%: it drops random notes, the same ones on every render." \
     hats "hats16 degrade 30%"
-stage 4 "Entra el clap." \
+stage 4 "The clap comes in." \
     clap "clap"
-stage 4 "fast 2: la línea ácida dos veces en el mismo compás." \
+stage 4 "fast 2: the acid line twice in the same bar." \
     acid "acid_line fast 2"
-stage 4 "shift 3: la misma, corrida tres semicorcheas. Cambia dónde acentúa." \
+stage 4 "shift 3: the same line, moved three sixteenths. The accents land elsewhere." \
     acid "acid_line fast 2 shift 3"
-stage 8 "Los stabs alternan dos patrones, una vuelta cada uno: play stab_a, stab_b." \
+stage 8 "The stabs alternate two patterns, one cycle each: play stab_a, stab_b." \
     stab "stab_a, stab_b" acid "acid_line every 4 rev"
-stage 8 "La ácida alterna con su respuesta, dos grados más arriba; el bajo sube una octava cada dos vueltas." \
+stage 8 "The acid alternates with its answer, two degrees higher; the bass goes up an octave every second cycle." \
     acid "acid_line, acid_answer up 2" bass "roll every 2 octave 1"
-stage 8 "iter 4 en los hats: cada vuelta arranca un cuarto más adelante. sometimes 50% rev en el metal." \
+stage 8 "iter 4 on the hats: each cycle starts a quarter later. sometimes 50% rev on the metal." \
     hats "hats16 iter 4" metal "metal_hit sometimes 50% rev"
-stage 4 "every 4 fast 2 en el bombo: un redoble en el último compás de cada cuatro." \
+stage 4 "every 4 fast 2 on the kick: a roll in the last bar of every four." \
     kick "kick4 every 4 fast 2"
-stage 8 "Respiro: sin bombo ni clap, la ácida a media velocidad (slow 2)." \
+stage 8 "Breather: no kick or clap, the acid at half speed (slow 2)." \
     kick "rest" clap "rest" acid "acid_line slow 2" stab "rest"
-stage 8 "Vuelve todo, la ácida con every 4 rev y degrade 20%." \
+stage 8 "Everything returns, the acid with every 4 rev and degrade 20%." \
     kick "kick4" clap "clap" acid "acid_line every 4 rev degrade 20%" stab "stab_a, stab_b"
-stage 4 "Salida: las transformaciones afuera, cada pista como está escrita." \
+stage 4 "Outro: the transformations come off, each track as written." \
     kick "kick4" hats "hats" clap "rest" bass "roll" acid "acid_line" stab "rest" metal "rest"
 
 if [[ "$MODE" == render ]]; then

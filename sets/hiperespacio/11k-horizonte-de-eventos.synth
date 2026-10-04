@@ -1,6 +1,6 @@
 # set: bars=16 phase=11-drop energy=10
 # set-note: drop 4/4: the whole pile (F#, G, the octaves and the fifth) with the crush at its worst, call and machine-gun alternating, peak drums, the gallop roll
-# cue: 1 suelta B4
+# cue: 1 let go of B4
 use "_t11.synth"
 
 auto haze level 0.158 > 0.174 > 0.158 > 0.174 over 16

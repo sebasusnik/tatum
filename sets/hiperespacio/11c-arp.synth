@@ -1,7 +1,7 @@
 # set: bars=32 phase=11-singularidad energy=8
 # set-note: drive drums with snare ghosts, busier perc, the FM shard arp in on F#-G-C#; the acid keeps its low line
-# cue: 7 B1 apretado + K3 ↑ de a poco · el haze
-# cue: 10.75 suelta B1 (K3 al medio)
+# cue: 7 B1 held + K3 ↑ slowly · the haze
+# cue: 10.75 let go of B1 (K3 to center)
 use "_t11.synth"
 
 auto shard mod_index 0.35 > 0.55 > 0.4 over 32

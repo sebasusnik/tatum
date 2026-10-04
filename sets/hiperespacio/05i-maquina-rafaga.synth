@@ -1,7 +1,7 @@
 # set: bars=16 phase=05-maquina energy=8
 # set-note: Last push: the robot in sixteenths, busy ticks, and the zaps' last burst spinning up over bars 8-10 then gone (gesture 3).
-# cue: 7 B1 apretado + K3 ↑ de a poco · zap relé, RPM arriba
-# cue: 8.75 suelta B1 (K3 al medio)
+# cue: 7 B1 held + K3 ↑ slowly · relay zap, RPM up
+# cue: 8.75 let go of B1 (K3 to center)
 use "_t05.synth"
 
 track drums  { play m_drive, m_drive, m_drive, m_drive_turn }

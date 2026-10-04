@@ -22,7 +22,9 @@ use tatum_core::params::{self, ModuleKind};
 use tatum_core::song_engine::{DslError, SongEngine};
 use tatum_core::SAMPLE_RATE;
 
-const DSL_DOC: &str = include_str!("../../docs/DSL.md");
+/// The language, then how to read what a render and an audit report: what an
+/// agent writing a song needs, without the pages on playing it live.
+const DSL_DOC: &str = concat!(include_str!("../../docs/DSL.md"), "\n\n", include_str!("../../docs/MIX.md"));
 
 /// The server compiles the docs, the parser and the registries in. A client
 /// that connected before the last build keeps talking to all of them, and
@@ -81,8 +83,8 @@ const LIMITER_CEILING: f32 = 0.85;
 
 const INSTRUCTIONS: &str = "\
 Tatum writes music as `.synth` files: modules (instruments), patterns, tracks, \
-scenes and an arrangement. Workflow: read `tatum_docs` once (it ends with sound-design \
-recipes), look at one example from `tatum_examples` for the target genre, write the file, \
+scenes and an arrangement. Workflow: read `tatum_docs` once (it has sound-design \
+recipes, and ends with how to read a render), look at one example from `tatum_examples` for the target genre, write the file, \
 run `tatum_check` and fix every error it reports (they carry line numbers and suggestions), \
 act on its design warnings, then `tatum_render` and read the per-section loudness report to \
 judge the arrangement. The engine brings every song to -18 LUFS and limits its true peak \

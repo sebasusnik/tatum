@@ -7,7 +7,7 @@ songs with the compiler in the loop. Transport is stdio; nothing is sent anywher
 
 | tool | input | returns |
 |------|-------|---------|
-| `tatum_docs` | none | the DSL reference (`docs/DSL.md`) |
+| `tatum_docs` | none | the DSL reference (`docs/DSL.md`), then how to read a render (`docs/MIX.md`) |
 | `tatum_params` | `module?`, `format?` (markdown or json) | the parameter registry, the only source of valid names |
 | `tatum_examples` | `name?` | the example list, or one example's source |
 | `tatum_check` | `source` | `ok` plus a summary, or every error with line, column and suggestion |

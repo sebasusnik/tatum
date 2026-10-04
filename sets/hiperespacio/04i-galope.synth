@@ -1,6 +1,6 @@
 # set: bars=16 phase=04-acido energy=8
 # set-note: drop variation: the riff turned over from the octave, the gallop leans on the b2, the kit's accents move
-# cue: 1 suelta A1
+# cue: 1 let go of A1
 use "_t04.synth"
 
 track drums  { play a4_drop2 }
