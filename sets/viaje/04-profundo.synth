@@ -1,5 +1,5 @@
 # set: bars=32 phase=profundo energy=4
-# set-note: The whole dub groove in eight-bar phrases: the rim answers, a chord shifts, and at the end of each phrase a chord is thrown into the echo.
+# set-note: El groove dub entero en frases de ocho: el rim contesta, un acorde se corre, y al final de cada frase un acorde tirado al eco.
 use "_rig.synth"
 
 track bed   { play hiss_swell level 0.32 }

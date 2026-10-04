@@ -1,5 +1,5 @@
 # set: bars=32 phase=maquina energy=7
-# set-note: The bass rolls, the clap comes in with a roll at the end of each phrase, and sixteenth hats that drop out on the last beat. The 303 riff opens twice and answers with ratchets; a lone metal hit.
+# set-note: El bajo rueda, entra el clap con un redoble al final de cada frase y los hats a 16 que se callan en el último tiempo. El riff del 303 se abre dos veces y contesta con repiques; un golpe de metal suelto.
 use "_rig.synth"
 tempo 132
 

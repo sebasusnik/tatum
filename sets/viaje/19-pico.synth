@@ -1,5 +1,5 @@
 # set: bars=32 phase=pico energy=9
-# set-note: The peak, the loudest part of the set: a crash at the start, the 303 in full with turns at 8 and 16, the bass walks through the chords and the Detroit chords and stabs return. Metal in bursts.
+# set-note: El pico, lo más fuerte del set: crash al empezar, el 303 a pleno con giros en el 8 y el 16, el bajo recorre los acordes y vuelven los acordes y stabs de Detroit. Metal en ráfagas.
 use "_rig.synth"
 tempo 135
 

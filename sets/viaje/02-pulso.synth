@@ -1,5 +1,5 @@
 # set: bars=32 phase=pulso energy=2
-# set-note: The kick and a long sub come in. Every eight bars the kick takes a breath and a tom or a rim falls into the echo.
+# set-note: Entran el bombo y un sub largo. Cada ocho compases el bombo respira y un tom o un rim caen en el eco.
 use "_rig.synth"
 
 track bed  { play hiss_swell level 0.5 }

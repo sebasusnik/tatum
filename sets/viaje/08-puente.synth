@@ -1,5 +1,5 @@
 # set: bars=16 phase=puente energy=5
-# set-note: Detroit shows from below: the low chord in the background and the bass starting to walk, over the dub groove still in its phrases.
+# set-note: Detroit asoma por abajo: el acorde grave de fondo y el bajo que empieza a caminar, sobre el groove dub que sigue en sus frases.
 use "_rig.synth"
 tempo 124
 

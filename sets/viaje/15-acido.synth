@@ -1,5 +1,5 @@
 # set: bars=32 phase=acido energy=6
-# set-note: The kick steady, the Detroit hats carrying on, and the 303 opening its filter over sixteen bars: it jumps and ratchets at 8, slides up at 16.
+# set-note: El bombo firme, los hats de Detroit que siguen y el 303 que abre su filtro a lo largo de dieciséis compases: salta y repica en el 8, sube deslizando en el 16.
 use "_rig.synth"
 tempo 130
 

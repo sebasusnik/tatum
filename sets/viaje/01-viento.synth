@@ -1,5 +1,5 @@
 # set: bars=16 phase=viento energy=1
-# set-note: Only the wind, growing with each phrase, and a distant chord made of echoes. Nothing to dance to yet.
+# set-note: Solo el viento, que crece en cada frase, y un acorde lejos hecho de ecos. Nada que bailar todavía.
 use "_rig.synth"
 
 track bed  { play hiss_swell level 0.6 }

@@ -1,5 +1,5 @@
 # set: bars=16 phase=corte energy=3
-# set-note: The first break: the kick goes, the chord opens and floats with the wind; in the last four bars the kick comes back one hit at a time.
+# set-note: El primer corte: se va el bombo, el acorde se abre y queda flotando con el viento; en los últimos cuatro compases el bombo vuelve de a un golpe.
 use "_rig.synth"
 
 module keys chord { cutoff 2.6khz }
