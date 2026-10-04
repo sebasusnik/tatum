@@ -58,6 +58,7 @@ cargo run -p tatum-cli -- render examples/acid_arp.synth -o acid_arp.wav
 cargo run -p tatum-cli -- params bass
 cargo run --release -p tatum-cli -- play examples/acid_arp.synth
 cargo run --release -p tatum-cli -- watch live.synth     # re-evaluates on every save
+cargo run --release -p tatum-cli -- watch live.synth --tui   # the same, full screen
 cargo run --release -p tatum-cli -- debug examples/acid_arp.synth --solo acid
 ```
 
@@ -74,6 +75,14 @@ on its parameters (`cc 74 > acid cutoff`), the keys on a track (`keys > solo`), 
 pads on drums (`pad 36 > kick kick`).
 See "Livecoding semantics" and "MIDI" in `docs/DSL.md` and the analysis in `docs/LIVE.md`.
 
+`--tui` runs `play`, `watch` and `set play` full screen, for half a terminal with the
+editor in the other half: the bar and the scene, the arrangement or the set's steps, the
+mix as a scrolling spectrogram, a lane per track, the knobs as they turn and a save that
+did not compile, in red, until one does. Its keys mute, solo and transform the tracks,
+writing the words into the file (`rev`, `fast 2`, `every 4 rev`), and put knobs on them;
+`?` lists them all. `tui-shot` takes a PNG of that screen at any second of a song or a
+set, without a terminal or an audio device. See "The live screen" in `docs/DSL.md`.
+
 `debug` is for finding where a noise comes from. It renders once with every track, bus
 and send return kept apart, each as it sits in the mix, and writes into
 `test_output/debug/<song>/` a WAV and a spectrogram per part, `sheet.png` with all of
@@ -85,6 +94,11 @@ parts sit level with each other on top of the same range, section by section; th
 has a "crowded" strip that shows where three or more parts pile up. `--bars 17-24` zooms in,
 `--dry` adds each track before its insert chain. `render`, `play`, `watch` and `debug`
 all take `--solo` and `--mute` with track names; a muted kick still drives the sidechain.
+
+`audit` renders every tonal track on its own and dry and reports, note by note, how much
+of its energy is not at a harmonic of the note asked for: a note going wrong, or an
+effect dirtying a whole voice. `fmt --units` rewrites knob positions (`cutoff 0.1`) in
+their units (`cutoff 800hz`).
 
 ## Where to go next
 
