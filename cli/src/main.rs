@@ -62,7 +62,7 @@ USAGE:
     tatum audit <song.synth> [--bars N] [--json] [--strict]
     tatum debug <song.synth> [--bars N | A-B] [--dry] [-o dir] [--solo a,b] [--mute c]
     tatum watch <song.synth> [--tui] [--device <name>] [--rate <hz>] [--midi <name>]
-    tatum tui-shot <song.synth | set dir> [--at <seconds>] [--size 160x48] [-o shot.png]
+    tatum tui-shot <song.synth | set dir> [--at <seconds>] [--size 160x48] [--font f.ttf] [--frames N] [-o shot.png]
 
 COMMANDS:
     render    Parse, compile, and render a .synth file to WAV
@@ -117,7 +117,9 @@ COMMANDS:
     tui-shot  A picture of the --tui screen at a moment of a song or a set's
               step, without a terminal or an audio device: the song is
               rendered offline up to --at seconds and the screen fed on the
-              audio's own clock. Writes a PNG (-o, tui-shot.png by default).
+              audio's own clock. Writes a PNG (-o, tui-shot.png by default);
+              --font draws the text in a TrueType font, --frames N writes N
+              pictures --fps a second into the directory -o names.
     help      Show this help
 
     render, play, watch and debug take --solo and --mute with track names

@@ -43,7 +43,7 @@ chain. On the way it prints the mix: each track's peak, RMS, crest, width and ba
 tracks that share a band at a similar level, each section's loudness against the
 loudest, and what the master chain did to the peaks. At the end it lists what it heard
 that sounds wrong: clicks, tracks that do not go quiet between notes. How to read that
-report is in [DSL.md](DSL.md#reading-a-mix).
+report is in [MIX.md](MIX.md#reading-a-mix).
 
 ## play and watch
 
@@ -105,14 +105,14 @@ a note going wrong against the other notes of the same voice, and an effect dirt
 whole voice, by rendering it with and without each effect. The absolute number is a
 fingerprint of a timbre and means nothing next to another track's. `--json` prints the
 same numbers for a script; `--strict` exits 1 if anything is reported. More in
-[DSL.md](DSL.md#auditing-a-mix).
+[MIX.md](MIX.md#auditing-a-mix).
 
 ## set
 
 A set is a directory of numbered `.synth` files, each the whole rig at a moment,
 walked in filename order. A step's header says how long it holds and what it is:
-`# set: bars=32 phase=build energy=5`. Writing one is in
-[DSL.md](DSL.md#playing-a-set-live).
+`# set: bars=32 phase=build energy=5`; every step is a song in the language of
+[DSL.md](DSL.md), usually a rig (`use "_rig.synth"`) and what changes.
 
 ```
 tatum set check  <dir> [--bars N] [--json]
@@ -134,10 +134,96 @@ tatum set play   <dir> [--tui] [--auto] [--phrase 8] [--ramp 4] [--blend 0] [--d
   mixes two steps the way a DJ does. `--tui` runs full screen, with the steps and their
   cues ([TUI.md](TUI.md)).
 
+### Playing a set live
+
+A set is a directory of numbered `.synth` files, each the whole rig at one moment
+(`sets/` has five). `tatum set play <dir>` plays it with a controller in hand:
+
+```
+tatum set play sets/mine --phrase 8 --ramp 4 --midi keylab
+```
+
+It starts on the first step. The space bar (or `n`, or →) asks for the next one, ←
+for the one before, a digit for a step by number, and a pad does the same with
+`pad 48 > next`, `prev` or `step 3`. What was asked for does not come in at once: it
+lands on the next phrase line, the next bar that is a multiple of `--phrase` (8 by
+default), so the set keeps its phrasing whoever is at the controls. The status line
+counts down the bars to it. Asking for the step that plays cancels the move.
+
+A step that needs a new engine is built in the last bar of the phrase and handed over
+on the line, the way a save is: what the two steps share keeps playing and what leaves
+rings out. A step that only changes values is sent on the line itself. A step at another
+tempo starts at the tempo that was playing and ramps to its own over `--ramp` bars (4
+by default; 0 jumps). Knobs, toggled tracks and held pads carry from step to step.
+
+`--blend 8` mixes instead of handing over, the way a DJ does: the step that was playing
+keeps going under the new one for 8 bars while it fades out and the new one fades in,
+the two on the same tempo through the ramp, and the low end changes hands at the
+midpoint in 50 ms so two basses never play at once. A step can ask for its own with
+`# set: blend=8` in its header. It is for going between steps that have little in
+common; steps built on one rig hand over well on the line.
+
+`--auto` lets the set walk itself, the way `set render` does: each step holds the bars
+its header gives and asks for the next in its last bar, so the hands are free for the
+music. The phrase becomes 1 bar unless `--phrase` says otherwise, because a step's bars
+need not be a multiple of 8. A key or a pad still moves the set at any time.
+
+A step can carry its own practice sheet. `# cue: <bar> <what>` lines, with the bar of
+the step counted from 1 and a fraction for the beat (`8.75` is bar 8, beat 4), show
+under the steps in `set play --tui`: the bar of the step and its beat, the cue whose
+bar is playing, and the next one counting down.
+
+```
+# set: bars=24 phase=08-amoladora energy=8
+# cue: 17 B1 held + K3 from 0 to the top · the grinder: idle, scream, cut
+# cue: 20.75 let go of B1
+```
+
+The file of the step playing is watched like `tatum watch` watches one: save it and the
+edit plays. `q` or Ctrl-C quits and leaves the terminal as it was.
+
+A step builds tension with `auto ... over N` (see "Lanes in a song without scenes" in [DSL.md](DSL.md#lanes-in-a-song-without-scenes)):
+its lanes start on the step's first bar, whenever the step lands, and hold once done.
+
+`tatum set render <dir> -o set.wav` walks the set the same way with nobody at the
+controls: each step is asked for a bar before its header's `bars` run out, so it lands
+there, the tempo ramps (`--ramp 4`), `blend=` in a header blends (`--blend` sets it for
+every step), and the render is the set as it would be played. `--phrase 8` lands steps
+on phrase lines as `play` does, moving a step whose predecessor ends off the line to
+the next one; the default, 1, keeps every step to its header. It prints where each
+step starts, `m:ss  name  bars  phase  note`, one line per step.
+
+`--perform script.txt` plays a performance on top, for review audio without the
+hardware. The script is one event a line, `<bar> <what>`, the bar counted from 0 at the
+set's first downbeat and fractional:
+
+```
+# hiperespacio, one take
+12.0   cc 74 64        # a knob or fader to 64
+18.0   pad 44 110      # a pad down, struck at 110
+19.0   pad 44 0        # and up
+20.5   key 48 100      # a key down (velocity 0 lets it go)
+21.0   bend 12000      # the pitch strip, 0..16383, 8192 at rest
+35.0   next            # ask for the next step; also `prev`, `step 3`
+96.0   end             # stop here
+```
+
+The events go through the same planner the live session uses, against the `midi`
+blocks of the step playing: knobs, toggles and held pads carry from step to step as in
+`set play`, and a pad mapped to `next` moves the set. An event lands on the sample its
+bar falls on, to within a block (3 ms). A script that moves through the set (`next`,
+`prev`, `step`, or a pad mapped to one) is the only thing that does, and a move lands
+on the next phrase line as it would live; one that does not leaves the steps to their
+headers. Without `end`, a scripted walk stops when the last step reached has played its
+header's bars and every event has happened. The render prints what the script did
+under the step markers, in the script's bars, from 0: `bar 12.00: acid cutoff 1.2khz`,
+`bar 35.00: asked for 4/12 04.synth, lands on bar 36`, `bar 36: now 4/12 04.synth`.
+(`set play`'s status line counts bars from 1, as a performer does.)
+
 ## tui-shot
 
 ```
-tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [-o shot.png]
+tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--font f.ttf] [--frames N] [-o shot.png]
 ```
 
 A PNG of the `--tui` screen at a moment of a song or a set's step, without a terminal

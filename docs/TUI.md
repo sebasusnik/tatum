@@ -20,7 +20,7 @@ Top to bottom:
   the scene with how far into it.
 - **The arrangement** with a playhead, or the set's steps with the one queued flashing
   and the bars until it lands. A set gets a third row with the bar of the step and its
-  next `# cue:` (see "Playing a set live" in [DSL.md](DSL.md#playing-a-set-live)).
+  next `# cue:` (see "Playing a set live" in [CLI.md](CLI.md#playing-a-set-live)).
 - **The mix** as a scrolling spectrogram with bar lines and numbers. It uses
   `tatum debug`'s colours, log frequency and 100 Hz / 1 kHz / 10 kHz lines, so the
   screen and the pictures read the same.
@@ -83,5 +83,21 @@ tatum tui-shot sets/viaje --step 3 --at 20 --select sub -o step3.png
 `--size` is in cells (160x48 by default). `--select <track>` chooses a track, so its
 pattern shows, and `--mark`, `--mute` and `--solo` take track names. `--help`, `--log`,
 `--knobs N` and `--pick N` open the overlays, and `--look N` looks at step N of a set.
+`--font <file.ttf>` draws the text in a monospace TrueType font instead of the
+pictures' own 5x7 one, sized to the cell, with its Bold face beside it when the
+file's name says Regular. Every picture here uses JetBrains Mono Nerd Font.
+
+`--frames N` takes N pictures from `--at` on, `--fps` a second (10 by default), in one
+render, into the directory `-o` names (`frame-0000.png`, `frame-0001.png`...). That is
+how the README's GIF was made:
+
+```
+tatum tui-shot examples/dark_techno.synth --at 213 --frames 130 --size 140x42 \
+    --font ~/Library/Fonts/JetBrainsMonoNerdFont-Regular.ttf -o frames
+ffmpeg -framerate 10 -i frames/frame-%04d.png -vf "fps=6,scale=960:-1:flags=lanczos,\
+split[a][b];[a]palettegen=max_colors=64:stats_mode=diff[p];[b][p]paletteuse=dither=none" \
+    -loop 0 tui.gif
+```
+
 `--see-through` paints a wallpaper behind the screen, to show what a translucent window
 lets through, and `--glass` draws it as `--glass` does.

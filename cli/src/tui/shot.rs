@@ -19,7 +19,7 @@ use super::{Screen, SongInfo, Telemetry, Tone};
 use crate::include::Source;
 
 const USAGE: &str =
-    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--see-through] [--glass] [--select <track>] [--mute <track>] [--solo <track>] [--pick N] [--help] [--log] [--look N] [--mark <track>] [--knobs N] [-o shot.png]";
+    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--font <file.ttf>] [--frames N] [--fps 10] [--see-through] [--glass] [--select <track>] [--mute <track>] [--solo <track>] [--pick N] [--help] [--log] [--look N] [--mark <track>] [--knobs N] [-o shot.png | -o dir]";
 const CELL_W: usize = 12;
 const CELL_H: usize = 24;
 
@@ -37,6 +37,9 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     let mut mute: Vec<String> = Vec::new();
     let mut solo: Option<String> = None;
     let mut pick: Option<usize> = None;
+    let mut font: Option<String> = None;
+    let mut frames: usize = 0;
+    let mut fps: f32 = 10.0;
     let mut i = 0;
     while i < args.len() {
         let value = |i: usize| args.get(i + 1).cloned().ok_or(USAGE);
@@ -83,6 +86,18 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
             }
             "--select" => {
                 select = Some(value(i)?);
+                i += 1;
+            }
+            "--font" => {
+                font = Some(value(i)?);
+                i += 1;
+            }
+            "--frames" => {
+                frames = value(i)?.parse().map_err(|_| "--frames needs a number")?;
+                i += 1;
+            }
+            "--fps" => {
+                fps = value(i)?.parse().map_err(|_| "--fps needs a number")?;
                 i += 1;
             }
             "--step" => {
@@ -142,36 +157,41 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
         player.apply(p);
     }
     screen.soloed = planner.soloed().to_vec();
+    let font = font.map(|f| Font::load(Path::new(&f))).transpose()?;
     let column = (Screen::column_period().as_secs_f32() * SAMPLE_RATE) as usize;
     let total = (at * SAMPLE_RATE) as usize;
     let (mut done, mut since) = (0usize, 0usize);
     let (mut l, mut r) = ([0.0f32; BLOCK_SIZE], [0.0f32; BLOCK_SIZE]);
-    while done < total {
-        if let Some(e) = player.engine_mut() {
-            e.set_band_metering(true);
-        }
-        player.process(&mut l, &mut r);
-        telemetry.push(&l, &r);
-        if let Some(e) = player.engine_mut() {
-            telemetry.meter(e);
-        }
-        done += BLOCK_SIZE;
-        since += BLOCK_SIZE;
-        if since >= column {
-            since -= column;
-            if let Some(e) = player.engine() {
-                screen.position(e.current_bar(), e.global_step(), e.tempo());
+    // Play on to `until` samples, feeding the screen as the live session does.
+    let mut run = |until: usize, screen: &mut Screen, player: &mut LivePlayer| {
+        while done < until {
+            if let Some(e) = player.engine_mut() {
+                e.set_band_metering(true);
             }
-            screen.column();
+            player.process(&mut l, &mut r);
+            telemetry.push(&l, &r);
+            if let Some(e) = player.engine_mut() {
+                telemetry.meter(e);
+            }
+            done += BLOCK_SIZE;
+            since += BLOCK_SIZE;
+            if since >= column {
+                since -= column;
+                if let Some(e) = player.engine() {
+                    screen.position(e.current_bar(), e.global_step(), e.tempo());
+                }
+                screen.column();
+            }
         }
-    }
-    if let Some(e) = player.engine() {
-        screen.position(e.current_bar(), e.global_step(), e.tempo());
-        // The step on its own from its first bar, as `set play` counts it.
-        if let Some(set) = screen.set.as_mut() {
-            set.bar = e.current_bar() + 1;
+        if let Some(e) = player.engine() {
+            screen.position(e.current_bar(), e.global_step(), e.tempo());
+            // The step on its own from its first bar, as `set play` counts it.
+            if let Some(set) = screen.set.as_mut() {
+                set.bar = e.current_bar() + 1;
+            }
         }
-    }
+    };
+    run(total, &mut screen, &mut player);
     screen.glass = glass;
     for m in &marks {
         screen.mark(m);
@@ -194,9 +214,95 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     if let Some(n) = pick {
         screen.open_picker(n);
     }
-    paint(&screen.snapshot(size.0, size.1), see_through, glass).save(Path::new(&out))?;
-    eprintln!("wrote {} ({}x{} cells, {:.1} s in)", out, size.0, size.1, at);
+    if frames == 0 {
+        paint(&screen.snapshot(size.0, size.1), see_through, glass, font.as_ref()).save(Path::new(&out))?;
+        eprintln!("wrote {} ({}x{} cells, {:.1} s in)", out, size.0, size.1, at);
+        return Ok(());
+    }
+    // A run of frames from `at` on, `fps` a second, into the directory `-o`
+    // names: frame-0000.png, frame-0001.png... for a GIF or a video.
+    std::fs::create_dir_all(&out).map_err(|e| format!("cannot create {}: {e}", out))?;
+    let step = (SAMPLE_RATE / fps.max(0.1)) as usize;
+    for n in 0..frames {
+        if n > 0 {
+            run(total + n * step, &mut screen, &mut player);
+            screen.draw_offline(select.as_deref(), help);
+        }
+        let file = Path::new(&out).join(format!("frame-{:04}.png", n));
+        paint(&screen.snapshot(size.0, size.1), see_through, glass, font.as_ref()).save(&file)?;
+    }
+    eprintln!(
+        "wrote {} frames into {} ({}x{} cells, {:.1} s from {:.1} s in)",
+        frames,
+        out,
+        size.0,
+        size.1,
+        frames as f32 / fps,
+        at
+    );
     Ok(())
+}
+
+/// A TrueType font for the text, in place of the pictures' 5x7 one: sized so
+/// its advance fills a cell, with its bold face beside it when the file's
+/// name says Regular and a Bold one sits next to it.
+pub struct Font {
+    regular: fontdue::Font,
+    bold: Option<fontdue::Font>,
+    px: f32,
+    ascent: f32,
+}
+
+impl Font {
+    fn load(path: &Path) -> Result<Font, String> {
+        let read = |p: &Path| -> Result<fontdue::Font, String> {
+            let bytes = std::fs::read(p).map_err(|e| format!("cannot read {}: {e}", p.display()))?;
+            fontdue::Font::from_bytes(bytes, fontdue::FontSettings::default())
+                .map_err(|e| format!("{}: {e}", p.display()))
+        };
+        let regular = read(path)?;
+        let name = path.to_string_lossy();
+        let bold =
+            name.contains("Regular").then(|| name.replace("Regular", "Bold")).and_then(|b| read(Path::new(&b)).ok());
+        // A monospace face: one advance for every glyph. Size it to the cell.
+        let advance = regular.metrics('M', 100.0).advance_width / 100.0;
+        let px = (CELL_W as f32 / advance).min(CELL_H as f32 * 0.85);
+        let lines = regular.horizontal_line_metrics(px).ok_or("the font has no horizontal metrics")?;
+        let ascent = lines.ascent + ((CELL_H as f32 - (lines.ascent - lines.descent)) / 2.0).max(0.0);
+        Ok(Font { regular, bold, px, ascent })
+    }
+
+    /// One character in the cell at (px, py), its coverage laid over what
+    /// is there in `fg`.
+    fn draw(&self, c: &mut Canvas, px: usize, py: usize, ch: char, fg: [u8; 3], bold: bool) {
+        let face = if bold { self.bold.as_ref().unwrap_or(&self.regular) } else { &self.regular };
+        // A character the face lacks: its nearest look-alike the face has,
+        // else the pictures' own font, the way a terminal falls back.
+        let ch = match ch {
+            k if face.lookup_glyph_index(k) != 0 => k,
+            '⟲' | '⟳' if ['↺', '↻'].iter().any(|&a| face.lookup_glyph_index(a) != 0) => {
+                ['↺', '↻'].into_iter().find(|&a| face.lookup_glyph_index(a) != 0).unwrap_or(ch)
+            }
+            k => {
+                c.text(px + 1, py + (CELL_H - GLYPH_HEIGHT * 2) / 2, &k.to_string(), fg, 2);
+                return;
+            }
+        };
+        let (m, bitmap) = face.rasterize(ch, self.px);
+        let baseline = py as f32 + self.ascent;
+        let top = baseline - m.height as f32 - m.ymin as f32;
+        for gy in 0..m.height {
+            for gx in 0..m.width {
+                let a = bitmap[gy * m.width + gx] as f32 / 255.0;
+                if a > 0.0 {
+                    let (x, y) = (px as i32 + m.xmin + gx as i32, top as i32 + gy as i32);
+                    if x >= 0 && y >= 0 {
+                        c.blend(x as usize, y as usize, fg, a);
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn rgb(c: Color, fallback: [u8; 3]) -> [u8; 3] {
@@ -211,7 +317,7 @@ fn rgb(c: Color, fallback: [u8; 3]) -> [u8; 3] {
 /// few shapes the screen uses drawn as shapes, text in the pictures' font.
 /// With `glass`, cell backgrounds are laid over the wallpaper at 0.88, the
 /// way Ghostty's `background-opacity-cells` draws them.
-fn paint(buf: &Buffer, see_through: bool, glass: bool) -> Canvas {
+fn paint(buf: &Buffer, see_through: bool, glass: bool, font: Option<&Font>) -> Canvas {
     let area = buf.area;
     let mut c = Canvas::new(area.width as usize * CELL_W, area.height as usize * CELL_H);
     for y in 0..area.height {
@@ -239,6 +345,17 @@ fn paint(buf: &Buffer, see_through: bool, glass: bool) -> Canvas {
                 c.fill(px, py, CELL_W, CELL_H, rgb(cell.bg, [8, 7, 14]));
             }
             let (cx, cy) = (px + CELL_W / 2, py + CELL_H / 2);
+            // With a font, everything but the blocks is its text.
+            if let Some(font) = font {
+                let sym = cell.symbol();
+                if !matches!(sym, " " | "" | "▀" | "▄" | "▔" | "▮") {
+                    let bold = cell.modifier.contains(ratatui::style::Modifier::BOLD);
+                    for ch in sym.chars().take(1) {
+                        font.draw(&mut c, px, py, ch, fg, bold);
+                    }
+                    continue;
+                }
+            }
             match cell.symbol() {
                 " " | "" => {}
                 "▀" => c.fill(px, py, CELL_W, CELL_H / 2, fg),
