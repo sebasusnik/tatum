@@ -331,16 +331,88 @@ impl Default for Loudness {
 
 const HOP: usize = (SAMPLE_RATE as usize) / 10;
 
+/// The two K-weighting stages designed for `fs`, as libebur128 designs them:
+/// the shelf and the highpass from their analog prototypes, prewarped.
+fn k_weighting(fs: f64) -> (Biquad, Biquad) {
+    fn tan(x: f64) -> f64 {
+        // x is under 0.4 rad for any rate above 16 kHz, where both series are
+        // exact to f64 well before twenty terms.
+        let (mut sin, mut cos) = (0.0f64, 0.0f64);
+        let mut term = 1.0f64; // x^n / n!
+        for n in 0..40u32 {
+            let signed = if (n / 2) % 2 == 0 { term } else { -term };
+            if n % 2 == 0 {
+                cos += signed;
+            } else {
+                sin += signed;
+            }
+            term *= x / f64::from(n + 1);
+        }
+        sin / cos
+    }
+    let pi = core::f64::consts::PI;
+    let (f0, g, q) = (1681.974450955533, 3.999843853973347, 0.7071752369554196);
+    let k = tan(pi * f0 / fs);
+    let vh = libm_pow10(g / 20.0);
+    let vb = libm_powf64(vh, 0.4996667741545416);
+    let a0 = 1.0 + k / q + k * k;
+    let shelf = Biquad::new(
+        [(vh + vb * k / q + k * k) / a0, 2.0 * (k * k - vh) / a0, (vh - vb * k / q + k * k) / a0],
+        [2.0 * (k * k - 1.0) / a0, (1.0 - k / q + k * k) / a0],
+    );
+    let (f0, q) = (38.13547087602444, 0.5003270373238773);
+    let k = tan(pi * f0 / fs);
+    let a0 = 1.0 + k / q + k * k;
+    let highpass = Biquad::new([1.0, -2.0, 1.0], [2.0 * (k * k - 1.0) / a0, (1.0 - k / q + k * k) / a0]);
+    (shelf, highpass)
+}
+
+fn libm_powf64(x: f64, y: f64) -> f64 {
+    libm_exp(y * libm_ln(x))
+}
+
+fn libm_pow10(x: f64) -> f64 {
+    libm_exp(x * core::f64::consts::LN_10)
+}
+
+fn libm_exp(x: f64) -> f64 {
+    let (mut e, mut t, mut i) = (1.0f64, 1.0f64, 1.0f64);
+    while i < 60.0 {
+        t *= x / i;
+        e += t;
+        i += 1.0;
+    }
+    e
+}
+
+fn libm_ln(x: f64) -> f64 {
+    // ln x = 2 atanh((x-1)/(x+1)); x here is between 1 and 2.
+    let z = (x - 1.0) / (x + 1.0);
+    let (mut s, mut t, mut n) = (0.0f64, z, 1.0f64);
+    while n < 200.0 {
+        s += t / n;
+        t *= z * z;
+        n += 2.0;
+    }
+    2.0 * s
+}
+
 impl Loudness {
     pub fn new() -> Self {
         // BS.1770's two stages, taken from their analog design to 44.1 kHz the
         // way libebur128 does. Its 48 kHz coefficients, or the same design
         // without the frequency warping, read a 1 kHz tone 0.26 dB quiet.
-        let shelf = Biquad::new(
-            [1.530_841_230_050_347_8, -2.650_979_995_154_729_7, 1.169_079_079_921_587],
-            [-1.663_655_113_256_020_4, 0.712_595_428_073_225_4],
-        );
-        let highpass = Biquad::new([1.0, -2.0, 1.0], [-1.989_169_673_629_796, 0.989_199_035_787_039_3]);
+        let (shelf, highpass) = if SAMPLE_RATE == 44100.0 {
+            (
+                Biquad::new(
+                    [1.530_841_230_050_347_8, -2.650_979_995_154_729_7, 1.169_079_079_921_587],
+                    [-1.663_655_113_256_020_4, 0.712_595_428_073_225_4],
+                ),
+                Biquad::new([1.0, -2.0, 1.0], [-1.989_169_673_629_796, 0.989_199_035_787_039_3]),
+            )
+        } else {
+            k_weighting(SAMPLE_RATE as f64)
+        };
         Loudness { shelf: [shelf; 2], highpass: [highpass; 2], sum: 0.0, count: 0, hops: Vec::new() }
     }
 
@@ -468,5 +540,14 @@ mod tests {
         for i in OUTPUT_DELAY..input.len() {
             assert!((out[i] - input[i - OUTPUT_DELAY] * 0.5).abs() < 1e-6, "sample {i}");
         }
+    }
+
+    #[test]
+    fn k_weighting_designed_at_44k_is_the_written_one() {
+        let (shelf, hp) = super::k_weighting(44100.0);
+        let close = |a: f64, b: f64| (a - b).abs() < 1e-9;
+        assert!(close(shelf.b[0], 1.530_841_230_050_347_8) && close(shelf.b[1], -2.650_979_995_154_729_7));
+        assert!(close(shelf.a[0], -1.663_655_113_256_020_4) && close(shelf.a[1], 0.712_595_428_073_225_4));
+        assert!(close(hp.a[0], -1.989_169_673_629_796) && close(hp.a[1], 0.989_199_035_787_039_3));
     }
 }

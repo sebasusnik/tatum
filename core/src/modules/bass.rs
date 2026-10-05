@@ -116,7 +116,7 @@ impl BassModule {
             filter: LadderFilter::new(SAMPLE_RATE),
             current_freq: 110.0,
             target_freq: 110.0,
-            glide_rate: 0.003,
+            glide_rate: crate::one_pole_step(0.003),
             cutoff_base: 400.0,
             cutoff_env_amount: 4000.0,
             resonance: 0.3,
@@ -147,7 +147,7 @@ impl BassModule {
                 self.cutoff_env_amount = crate::params::BASS_CUTOFF_ENV.to_real(value);
             }
             BassParam::Resonance => self.resonance = value,
-            BassParam::Glide => self.glide_rate = 0.0001 + value * 0.05,
+            BassParam::Glide => self.glide_rate = crate::one_pole_step(0.0001 + value * 0.05),
             BassParam::Attack => self.amp_env.set_attack(crate::params::ENV_TIME.to_real(value) * 0.001),
             BassParam::Decay => self.amp_env.set_decay(crate::params::ENV_TIME.to_real(value) * 0.001),
             BassParam::Sustain => self.amp_env.set_sustain(value),

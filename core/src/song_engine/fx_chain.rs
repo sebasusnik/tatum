@@ -20,8 +20,9 @@ pub(super) struct FxChain {
 }
 
 impl FxChain {
-    pub(super) fn new(steps: &[ChainStep]) -> Self {
-        let nodes = steps.iter().map(|s| s.spec.instantiate()).collect();
+    /// `slowest_bpm` is the song's slowest tempo, which sizes delay lines.
+    pub(super) fn new(steps: &[ChainStep], slowest_bpm: f32) -> Self {
+        let nodes = steps.iter().map(|s| s.spec.instantiate_in_chain(slowest_bpm)).collect();
         let wet = steps.iter().map(|s| s.wet).collect();
         let bypassed = steps.iter().map(|s| s.wet <= 0.0).collect();
         Self { nodes, wet, bypassed }

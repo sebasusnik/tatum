@@ -448,9 +448,14 @@ fn cmd_render(args: &[String]) {
             if change < -3.0 { "  the master chain is eating transients" } else { "" }
         );
     }
-    eprintln!("writing {} ({} samples, {:.1}s)...", output_path, out_l.len(), out_l.len() as f32 / 44100.0,);
+    eprintln!(
+        "writing {} ({} samples, {:.1}s)...",
+        output_path,
+        out_l.len(),
+        out_l.len() as f32 / tatum_core::SAMPLE_RATE,
+    );
 
-    write_wav_stereo(&output_path, &out_l, &out_r, 44100);
+    write_wav_stereo(&output_path, &out_l, &out_r, tatum_core::SAMPLE_RATE as u32);
     if heard.is_empty() {
         eprintln!("heard: no clicks, no noise between notes, nothing under 25 Hz or over 16 kHz.");
     } else {
@@ -459,6 +464,12 @@ fn cmd_render(args: &[String]) {
             eprintln!("  {line}");
         }
         eprintln!("  `tatum debug {path}` shows each one up close, with every part on its own.");
+    }
+    if tatum_core::SAMPLE_RATE != 44100.0 {
+        eprintln!(
+            "  (built for {} Hz: the click finder is tuned at 44.1 kHz, and below it fast attacks read as clicks)",
+            tatum_core::SAMPLE_RATE
+        );
     }
     eprintln!("done.");
 }
