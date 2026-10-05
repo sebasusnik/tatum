@@ -24,10 +24,10 @@ pub(super) struct SongBus {
 }
 
 impl SongBus {
-    pub(super) fn new(name: String, specs: &[ChainStep]) -> Self {
+    pub(super) fn new(name: String, specs: &[ChainStep], slowest_bpm: f32) -> Self {
         Self {
             name,
-            fx_chain: FxChain::new(specs),
+            fx_chain: FxChain::new(specs, slowest_bpm),
             buffer: [0.0; BLOCK_SIZE],
             buffer_r: [0.0; BLOCK_SIZE],
             meter_peak: 0.0,

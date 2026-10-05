@@ -301,5 +301,15 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
             .iter()
             .map(|a| CompiledAutomation { target: a.target.clone(), keyframes: a.keyframes.clone(), over: a.over })
             .collect(),
+        slowest_tempo: song
+            .midi
+            .iter()
+            .filter(|m| m.target.trim() == "tempo")
+            .map(|m| match &m.range {
+                Some(ends) => ends.iter().map(|e| e.value).fold(f32::MAX, f32::min),
+                None => 60.0,
+            })
+            .fold(slowest_tempo, f32::min)
+            .max(20.0),
     })
 }
