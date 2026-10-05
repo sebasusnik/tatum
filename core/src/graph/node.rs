@@ -205,7 +205,7 @@ pub struct FilterLfo {
 
 /// How fast the peak reference forgets, per sample: about four seconds, long
 /// enough to span the gap between two chords.
-const PANENV_PEAK_FALL: f32 = 0.999996;
+const PANENV_PEAK_FALL: f32 = crate::per_sample(0.999996);
 /// Below this the follower is dividing noise by noise; hold the last position.
 const PANENV_FLOOR: f32 = 1.0e-4;
 /// One-pole on the pan position itself, about 30 ms, so it can never jump.
@@ -428,6 +428,24 @@ impl NodeSpec {
                 NodeKind::Reverb(r)
             }
             NodeSpec::Output => NodeKind::Output,
+        }
+    }
+
+    /// As `instantiate`, for a chain in a song whose slowest tempo is
+    /// `slowest_bpm`: a delay line holds the longest echo it can be asked for
+    /// there, rather than two seconds. Today a chain delay plays 300 ms
+    /// whatever its division says (the division is not applied yet), so the
+    /// line covers that too.
+    pub fn instantiate_in_chain(&self, slowest_bpm: f32) -> NodeKind {
+        match *self {
+            NodeSpec::Delay { sync_div, feedback } => {
+                let synced = 60.0 / slowest_bpm.max(20.0) * 4.0 * sync_div;
+                let mut d = Delay::new(SAMPLE_RATE, (synced.max(0.3) * 1.2).min(2.0));
+                d.set_feedback(feedback);
+                d.set_mix(1.0);
+                NodeKind::Delay(d)
+            }
+            _ => self.instantiate(),
         }
     }
 

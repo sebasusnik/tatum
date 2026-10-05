@@ -42,12 +42,12 @@ impl Kick {
             end_freq: 50.0,
             pitch_decay: 0.994,
             amp: 0.0,
-            amp_decay: 0.9992,
+            amp_decay: const { crate::per_sample(0.9992) },
             level: 1.0,
             pitch: 1.0,
             click_amp: 0.0,
             click_level: 0.7,
-            click_decay: 0.955,
+            click_decay: const { crate::per_sample(0.955) },
             click_filter,
             click_tone,
             rng: Rng::new(88888),
@@ -170,7 +170,7 @@ impl Snare {
             tail_bp,
             rng: Rng::new(12345),
             active: false,
-            decay_rate: 0.9985,
+            decay_rate: const { crate::per_sample(0.9985) },
             level: 1.0,
             pitch: 1.0,
             drive: 1.8,
@@ -236,17 +236,17 @@ impl Snare {
         // Subtle pitch sweep (~20-30Hz drop over ~30ms)
         self.body_freq_1 += (self.body_target_freq_1 - self.body_freq_1) * 0.006;
         self.body_freq_2 += (self.body_target_freq_2 - self.body_freq_2) * 0.006;
-        self.body_amp *= 0.9975; // ~40ms decay
+        self.body_amp *= const { crate::per_sample(0.9975) }; // ~40ms decay
 
         // Noise: HP + BP filtered
         let noise_hp = self.noise_hp.process(noise);
         let noise_bp = self.noise_bp.process(noise);
         let noise_out = (noise_hp * 0.6 + noise_bp * 0.4) * self.noise_amp;
-        self.noise_amp *= 0.9988; // ~100ms decay
+        self.noise_amp *= const { crate::per_sample(0.9988) }; // ~100ms decay
 
         // Crack: sharp bandpassed snap (~20ms)
         let crack = self.crack_filter.process(noise) * self.crack_amp;
-        self.crack_amp *= 0.9925;
+        self.crack_amp *= const { crate::per_sample(0.9925) };
 
         // Tail: wire sizzle (~100ms, stereo spread)
         let tail = self.tail_bp.process(noise) * self.tail_amp;
@@ -311,7 +311,7 @@ impl HiHat {
             freqs: base_freqs,
             base_freqs,
             amp: 0.0,
-            decay_rate: 0.9975,
+            decay_rate: const { crate::per_sample(0.9975) },
             filter,
             bp_filter,
             tone,
@@ -394,7 +394,7 @@ impl Clap {
             active: false,
             stage: 0,
             stage_counter: 0,
-            decay_rate: 0.99955,
+            decay_rate: const { crate::per_sample(0.99955) },
             level: 1.0,
         }
     }
@@ -474,7 +474,7 @@ impl Tom {
             level: 1.0,
             active: false,
             click_amp: 0.0,
-            click_decay: 0.90,
+            click_decay: const { crate::per_sample(0.90) },
             rng: Rng::new(66666),
         }
     }
@@ -698,8 +698,8 @@ impl BeatsModule {
     pub fn set_param(&mut self, param: BeatsParam, value: f32) {
         match param {
             BeatsParam::Level => self.level = value,
-            BeatsParam::KickDecay => self.kick.amp_decay = 0.999 + value * 0.0009,
-            BeatsParam::SnareDecay => self.snare.decay_rate = 0.9985 + value * 0.0013,
+            BeatsParam::KickDecay => self.kick.amp_decay = crate::per_sample(0.999 + value * 0.0009),
+            BeatsParam::SnareDecay => self.snare.decay_rate = crate::per_sample(0.9985 + value * 0.0013),
             BeatsParam::KickPan => self.kick_pan = math::clamp(value, -1.0, 1.0),
             BeatsParam::SnarePan => self.snare_pan = math::clamp(value, -1.0, 1.0),
             BeatsParam::HihatPan => self.hihat_pan = math::clamp(value, -1.0, 1.0),
@@ -737,7 +737,7 @@ impl BeatsModule {
             // kick_drive: 0.0 = warm (0.8), 1.0 = heavy (3.0)
             BeatsParam::KickDrive => self.kick.drive = 0.8 + value * 2.2,
             // hihat_decay: 0.0 = very tight, 1.0 = ringy
-            BeatsParam::HihatDecay => self.hihat.decay_rate = 0.995 + value * 0.004,
+            BeatsParam::HihatDecay => self.hihat.decay_rate = crate::per_sample(0.995 + value * 0.004),
         }
     }
 

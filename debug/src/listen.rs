@@ -6,7 +6,7 @@
 //! than anything near it?") and the audio itself is too big to keep.
 
 /// Samples per summary frame: one millisecond.
-pub const FRAME: usize = 44;
+pub const FRAME: usize = tatum_core::at_rate(44);
 
 /// Per millisecond of one part: the biggest sample-to-sample jump in it, its
 /// power, and its power below 25 Hz and above 16 kHz, the two ends of the

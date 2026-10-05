@@ -154,6 +154,42 @@ jobs:
       # The browser runs the same core; `no_std` is only proven by this target.
       - run: cargo build -p tatum-wasm --target wasm32-unknown-unknown --locked
 
+  # A smaller machine can build the engine at a lower rate (TATUM_SAMPLE_RATE).
+  # Lengths written in samples at 44.1 kHz fall off the end of shorter buffers
+  # there -- the reverb's output taps did, at 22.05 kHz -- so every song is
+  # rendered at the two rates a microcontroller would use.
+  other-rates:
+    name: render at ${{ matrix.rate }} Hz
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rate: [32000, 22050]
+    env:
+      TATUM_SAMPLE_RATE: ${{ matrix.rate }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: rate-${{ matrix.rate }}
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - run: cargo build -p tatum-cli --locked --profile ci
+      - name: Every song renders
+        run: |
+          fails=0
+          for f in examples/*.synth; do
+            if ! ./target/ci/tatum render "$f" -o /tmp/out.wav >/tmp/log 2>&1; then
+              echo "::error file=$f::does not render at $TATUM_SAMPLE_RATE Hz"
+              tail -5 /tmp/log
+              fails=$((fails + 1))
+            fi
+          done
+          echo "$fails failures"
+          test "$fails" -eq 0
+
   clippy:
     name: clippy, fmt
     runs-on: ubuntu-latest

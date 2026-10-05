@@ -1,6 +1,6 @@
 use crate::math;
 
-const LOOKAHEAD_SIZE: usize = 44; // ~1ms at 44100 Hz
+const LOOKAHEAD_SIZE: usize = crate::at_rate(44); // ~1ms
 
 pub struct Limiter {
     lookahead_l: [f32; LOOKAHEAD_SIZE],

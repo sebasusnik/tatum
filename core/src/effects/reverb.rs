@@ -10,17 +10,27 @@ const NUM_COMBS: usize = 8;
 const NUM_ALLPASSES: usize = 4;
 
 // Comb filter delay lengths (in samples at 44100 Hz, Freeverb standard)
-const COMB_LENGTHS: [usize; NUM_COMBS] = [1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617];
+const COMB_LENGTHS: [usize; NUM_COMBS] = [
+    crate::at_rate(1116),
+    crate::at_rate(1188),
+    crate::at_rate(1277),
+    crate::at_rate(1356),
+    crate::at_rate(1422),
+    crate::at_rate(1491),
+    crate::at_rate(1557),
+    crate::at_rate(1617),
+];
 
 // Allpass filter delay lengths
-const ALLPASS_LENGTHS: [usize; NUM_ALLPASSES] = [556, 441, 341, 225];
+const ALLPASS_LENGTHS: [usize; NUM_ALLPASSES] =
+    [crate::at_rate(556), crate::at_rate(441), crate::at_rate(341), crate::at_rate(225)];
 
 // Stereo spread: R channel delays offset by 23 samples (Freeverb standard)
-const STEREO_SPREAD: usize = 23;
+const STEREO_SPREAD: usize = crate::at_rate(23);
 
 // ─── Pre-Delay ───
 
-const PRE_DELAY_MAX_SAMPLES: usize = 4411; // 100ms at 44100Hz
+const PRE_DELAY_MAX_SAMPLES: usize = crate::at_rate(4411); // 100ms at 44100Hz
 
 struct PreDelay {
     buffer: [f32; PRE_DELAY_MAX_SAMPLES],
@@ -34,7 +44,7 @@ impl PreDelay {
     }
 
     fn set_delay_ms(&mut self, ms: f32) {
-        let samples = (ms * 44.1) as usize;
+        let samples = (ms * (crate::SAMPLE_RATE / 1000.0)) as usize;
         self.delay_samples = if samples >= PRE_DELAY_MAX_SAMPLES { PRE_DELAY_MAX_SAMPLES - 1 } else { samples };
     }
 
@@ -68,11 +78,19 @@ impl PreDelay {
 
 // ─── Early Reflections ───
 
-const ER_BUFFER_SIZE: usize = 6500;
+const ER_BUFFER_SIZE: usize = crate::at_rate(6500);
 const ER_NUM_TAPS: usize = 7;
 
 // Tap delays in samples (prime numbers, roughly 50ms-139ms at 44100Hz)
-const ER_DELAYS: [usize; ER_NUM_TAPS] = [2207, 2953, 3571, 4201, 4831, 5501, 6133];
+const ER_DELAYS: [usize; ER_NUM_TAPS] = [
+    crate::at_rate(2207),
+    crate::at_rate(2953),
+    crate::at_rate(3571),
+    crate::at_rate(4201),
+    crate::at_rate(4831),
+    crate::at_rate(5501),
+    crate::at_rate(6133),
+];
 
 // Decaying gains for each tap (normalized so sum ≈ 1.0)
 const ER_GAINS: [f32; ER_NUM_TAPS] = [0.228, 0.195, 0.163, 0.137, 0.114, 0.091, 0.072];
@@ -144,7 +162,7 @@ impl ModCombFilter {
             damp2: 0.5,
             filterstore: 0.0,
             lfo_phase: initial_phase,
-            lfo_phase_inc: lfo_rate / 44100.0,
+            lfo_phase_inc: lfo_rate / crate::SAMPLE_RATE,
         }
     }
 
@@ -522,7 +540,7 @@ impl ModAllpass {
             nominal_len,
             gain: 0.7,
             lfo_phase: 0.0,
-            lfo_phase_inc: lfo_rate / 44100.0,
+            lfo_phase_inc: lfo_rate / crate::SAMPLE_RATE,
             mod_depth,
         }
     }
@@ -566,19 +584,20 @@ impl ModAllpass {
 // ─── Dattorro Plate Reverb ───
 
 // Input diffusion allpass lengths (scaled from 29761Hz to 44100Hz)
-const DATTORRO_INPUT_AP: [usize; 4] = [311, 234, 831, 607];
+const DATTORRO_INPUT_AP: [usize; 4] =
+    [crate::at_rate(311), crate::at_rate(234), crate::at_rate(831), crate::at_rate(607)];
 
 // Tank delay line lengths
-const DATTORRO_DELAY_L: [usize; 2] = [3163, 3289];
-const DATTORRO_DELAY_R: [usize; 2] = [3187, 3533];
+const DATTORRO_DELAY_L: [usize; 2] = [crate::at_rate(3163), crate::at_rate(3289)];
+const DATTORRO_DELAY_R: [usize; 2] = [crate::at_rate(3187), crate::at_rate(3533)];
 
 // Modulated allpass lengths
-const DATTORRO_MOD_AP_L: usize = 1800;
-const DATTORRO_MOD_AP_R: usize = 2053;
+const DATTORRO_MOD_AP_L: usize = crate::at_rate(1800);
+const DATTORRO_MOD_AP_R: usize = crate::at_rate(2053);
 
 // Static tank allpass lengths
-const DATTORRO_STATIC_AP_L: usize = 2389;
-const DATTORRO_STATIC_AP_R: usize = 1973;
+const DATTORRO_STATIC_AP_L: usize = crate::at_rate(2389);
+const DATTORRO_STATIC_AP_R: usize = crate::at_rate(1973);
 
 pub struct DattorroReverb {
     pre_delay: PreDelay,
@@ -683,10 +702,14 @@ impl DattorroReverb {
 
         // Output: cross-channel taps for stereo width
         // L output taps from R tank, R output taps from L tank
-        let tap_l = self.delay_r[0].read_at(266) + self.delay_r[0].read_at(1913) - self.delay_r[1].read_at(1066)
-            + self.delay_l[1].read_at(353);
-        let tap_r = self.delay_l[0].read_at(266) + self.delay_l[0].read_at(1913) - self.delay_l[1].read_at(1066)
-            + self.delay_r[1].read_at(353);
+        let tap_l = self.delay_r[0].read_at(const { crate::at_rate(266) })
+            + self.delay_r[0].read_at(const { crate::at_rate(1913) })
+            - self.delay_r[1].read_at(const { crate::at_rate(1066) })
+            + self.delay_l[1].read_at(const { crate::at_rate(353) });
+        let tap_r = self.delay_l[0].read_at(const { crate::at_rate(266) })
+            + self.delay_l[0].read_at(const { crate::at_rate(1913) })
+            - self.delay_l[1].read_at(const { crate::at_rate(1066) })
+            + self.delay_r[1].read_at(const { crate::at_rate(353) });
 
         let wet_l = tap_l * 0.3;
         let wet_r = tap_r * 0.3;
@@ -748,7 +771,7 @@ mod tests {
         let mut pd = PreDelay::new();
         pd.set_delay_ms(20.0); // ~882 samples
 
-        let delay_samples = (20.0 * 44.1) as usize; // 882
+        let delay_samples = (20.0 * crate::SAMPLE_RATE / 1000.0) as usize; // 882 at 44.1 kHz
 
         // Feed impulse then silence
         let _ = pd.process(1.0);

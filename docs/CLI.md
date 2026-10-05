@@ -255,3 +255,35 @@ the same.
 comma-separated or with the flag repeated. A muted track is taken to level 0
 everywhere, level automation included. A muted kick still drives the sidechain, so
 what is left pumps the way it does in the mix.
+
+## Building for another sample rate
+
+The engine renders at 44.1 kHz. A build can choose another rate, for a machine
+that cannot afford that many samples a second or a sound card that runs at
+48 kHz without resampling:
+
+```
+TATUM_SAMPLE_RATE=32000 cargo build --release -p tatum-cli
+```
+
+Without the variable the build is the one there has always been: every song
+renders bit for bit as before. With it, what is tuned in time stays in time:
+the reverb, the chorus and the limiter keep their lengths in milliseconds, a
+drum's decay its time constant, a glide its speed, and the loudness every song
+is brought to is measured with filters designed for that rate.
+
+What a lower rate costs is treble. The highest frequency a rate can carry is
+half of it:
+
+| rate | treble up to | CPU against 44.1 kHz | sounds |
+|---|---|---|---|
+| 48 kHz | 24 kHz | about 8% more | the same |
+| 44.1 kHz | 22 kHz | — | the reference |
+| 32 kHz | 16 kHz | about 30% less | close: a little less air on hats and cymbals |
+| 22.05 kHz | 11 kHz | about half | audibly duller |
+
+The click finder in the render's report is tuned at 44.1 kHz. Below it, a fast
+attack falls on fewer samples and can read as a click; the report says so when
+the build is at another rate. It is a build setting rather than an option
+because several buffers have a fixed size in samples; a microcontroller's
+firmware is built for one rate anyway.
