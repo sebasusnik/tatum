@@ -237,7 +237,7 @@ midi {
     key 41 > sweep                    # F   a high-pass climbing while held
     key 45 > tapestop                 # A   the mix slows to a stop
 
-    # Faders: kick, bass, hats, lead, sub, echo, room, -, master
+    # Faders: kick, bass, hats, lead, sub, echo, room, -, DJ filter
     cc 73 > drums kick_level 0..1.3
     cc 75 > bass level 0..1.6
     cc 79 > drums hihat_level 0..1.2
@@ -248,13 +248,13 @@ midi {
     cc 80 > sub level 0..0.8
     cc 81 > laser delay_send 0..80%
     cc 82 > vox reverb_send 0..80%
-    cc 85 > master vol gain 0..1
+    cc 85 > master dj cutoff 150hz..20khz..20khz
+    cc 85 > master hp cutoff 20hz..20hz..3khz
     takeover pickup
 
     # Knobs: Tab on the computer changes the page
     page mix {
-        cc 74 > master dj cutoff 150hz..20khz..20khz
-        cc 74 > master hp cutoff 20hz..20hz..3khz
+        cc 74 > master vol gain 0..1
         cc 71 > reverb_mix
         cc 76 > delay_mix
     }

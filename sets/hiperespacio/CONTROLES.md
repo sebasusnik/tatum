@@ -20,11 +20,12 @@ The short version is `KEYLAB.md`.
 | F6 | 81 | **send: echo** | the keyboard's voices into the delay (_keylab) |
 | F7 | 82 | **send: room** | the keyboard's voices into the reverb (_keylab) |
 | F8 | 83 | **noise riser** | a noise held while the fader is up, louder and brighter as it rises (_keylab) |
-| F9 | 85 | **master** | the master `vol` gain, top = as written (_keylab) |
+| F9 | 85 | **DJ filter** | centre open, down darker (low-pass), up thinner (high-pass) (_keylab) |
 
 `takeover pickup`: a fader or knob that is not where its target is moves
-nothing until it gets there (the screen says which way). The master fader
-starts at the top; found at the bottom it waits, it does not silence the room.
+nothing until it gets there (the screen says which way). The DJ filter
+starts in the centre; found anywhere else it waits for the centre. The
+master volume is K1 on the `master` page, and starts at the top.
 
 ## Knobs: one page per voice
 
@@ -38,7 +39,7 @@ the page (`knobs: bass`), and changing it says what each knob now moves.
 | **bass** | cutoff | resonance | decay | env amount | glide | echo send | osc 2 pitch | vibrato | level |
 | **lead** | brightness | resonance (pad) | decay | FM index | FM feedback | laser vowel | zap crusher | zap fall | vibrato |
 | **drums** | kick decay | kick pitch | kick click | kick drive | snare level | snare decay | hats pitch | hats pan | stutter |
-| **master** | DJ filter | thin the floor | room | echo | EQ low | EQ mid | EQ high | — | — |
+| **master** | master volume | thin the floor | room | echo | EQ low | EQ mid | EQ high | — | — |
 
 The `tema` page is each track's own nine macros (below). The others are
 written once in `_keylab.synth` by track name, so `bass cutoff` reaches every

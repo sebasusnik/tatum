@@ -36,7 +36,9 @@ El gesto sigue en lo que empezó hasta que la rueda vuelve a cero.
 
 | F1 | F2 | F3 | F4 | F5 | F6 | F7 | F8 | F9 |
 |---|---|---|---|---|---|---|---|---|
-| kick | bajo | hats | lead | FX del tema | lead → eco | lead → sala | riser de ruido | master |
+| kick | bajo | hats | lead | FX del tema | lead → eco | lead → sala | riser de ruido | filtro DJ |
+
+F9, el filtro DJ: al medio está abierto, para abajo oscurece, para arriba adelgaza.
 
 ## Perillas: una página por voz
 
@@ -48,10 +50,10 @@ El gesto sigue en lo que empezó hasta que la rueda vuelve a cero.
 | **bass** | cutoff | reso | decay | envolvente | glide | eco | osc 2 | vibrato | volumen |
 | **lead** | brillo | reso | decay | FM | feedback | vocal | crusher | caída del zap | vibrato |
 | **drums** | decay kick | pitch kick | click | drive | snare | decay snare | pitch hats | pan hats | stutter |
-| **master** | filtro DJ | adelgazar | sala | eco | graves | medios | agudos | | |
+| **master** | volumen master | adelgazar | sala | eco | graves | medios | agudos | | |
 
 Una perilla que no está donde está su parámetro no hace nada hasta llegar ahí (toma suave): la
-pantalla dice para dónde girarla. El master arranca arriba del todo.
+pantalla dice para dónde girarla. El filtro DJ arranca al medio y el volumen master arriba del todo.
 
 ## Pads
 

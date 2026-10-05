@@ -57,7 +57,8 @@ midi {
     cc 82 > kvox reverb_send 0..80%
     cc 83 > kriser level 0..0.45                      # F8 the noise riser: louder and brighter
     cc 83 > kriser band cutoff 400hz..9khz
-    cc 85 > master vol gain 0..1                      # F9 master
+    cc 85 > master dj cutoff 150hz..20khz..20khz      # F9 DJ filter: centre open,
+    cc 85 > master hp cutoff 20hz..20hz..3khz         #    down darker, up thinner
 
     # A knob or fader that is not where its target is waits until it gets
     # there: after a page change, and the first time it is touched.
@@ -108,8 +109,7 @@ midi {
         cc 17 > drums stutter_rate                    # K9 stutter
     }
     page master {
-        cc 74 > master dj cutoff 150hz..20khz..20khz  # K1 DJ filter: darker left,
-        cc 74 > master hp cutoff 20hz..20hz..3khz     #    thinner right
+        cc 74 > master vol gain 0..1                  # K1 master volume (top: as written)
         cc 71 > master hp cutoff 20hz..1500hz         # K2 thin the floor
         cc 76 > reverb_mix                            # K3 room
         cc 77 > delay_mix                             # K4 echo
