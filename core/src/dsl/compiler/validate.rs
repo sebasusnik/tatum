@@ -133,6 +133,7 @@ pub(super) fn validate_perform(song: &Song) -> Vec<CompileError> {
                 target: set.target.clone(),
                 range: Some(alloc::vec![set.value.clone(), set.value.clone()]),
                 quantize: None,
+                guard: false,
                 line: set.line,
             })
             .collect();

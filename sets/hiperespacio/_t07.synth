@@ -507,11 +507,13 @@ midi {
     cc 93 > master hp cutoff 20hz..400hz
     cc 93 > lead delay_send 30%..60%
     cc 18 > lead delay_send 0%..80%
+    cc 18 > arp delay_send 0%..60%               # and the arp, where the lead is out
     cc 19 > tunelkit kick_decay 10%..34%
     cc 16 > tunelkit hihat_pitch 1.39x..1.85x..2.0x    # K8 hats: darker left, the written tuning in the middle (hihat_decay does nothing in the engine yet)
     cc 17 > bass dirt wet 0%..60%
     key 46 > toggle ticks
     key 47 > throw lead q=1/16
+    key 47 > throw arp q=1/16
     pad 44 > play laserpad q=1/16
     pad 45 > hold risehold q=beat
     pad 46 > drums crash q=beat

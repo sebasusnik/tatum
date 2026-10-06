@@ -57,25 +57,33 @@ midi {
     cc 82 > kvox reverb_send 0..80%
     cc 83 > kriser level 0..0.45                      # F8 the noise riser: louder and brighter
     cc 83 > kriser band cutoff 400hz..9khz
-    cc 85 > master dj cutoff 150hz..20khz..20khz      # F9 DJ filter: centre open,
-    cc 85 > master hp cutoff 20hz..20hz..3khz         #    down darker, up thinner
+    cc 85 > master dj cutoff 150hz..20khz..20khz guard  # F9 DJ filter: centre open,
+    cc 85 > master hp cutoff 20hz..20hz..3khz guard     #    down darker, up thinner
 
-    # A knob or fader that is not where its target is waits until it gets
-    # there: after a page change, and the first time it is touched.
+    # After a page change, a knob that is not where its target was left
+    # waits until it gets there. A `guard` line (the DJ filter, the master
+    # volume) also waits on its first touch; every other knob moves at once.
     takeover pickup
 
     # ── Knobs: one page per voice; Tab (or an encoder, below) changes it ──
     # The first page is the track's own nine knobs, as its rig maps them.
     page tema {
     }
+    # Each line reaches what the track's bass has: a `bass` module's filter,
+    # or an `fm` bass's index (T05); the other line of the pair reads
+    # `(not in this track)`.
     page bass {
-        cc 74 > bass cutoff 40hz..3khz                # K1 cutoff
-        cc 71 > bass resonance                        # K2 resonance
+        cc 74 > bass cutoff 40hz..3khz                # K1 cutoff (FM: index)
+        cc 74 > bass mod_index
+        cc 71 > bass resonance                        # K2 resonance (FM: feedback)
+        cc 71 > bass feedback
         cc 76 > bass decay                            # K3 decay
-        cc 77 > bass cutoff_env                       # K4 envelope amount
-        cc 93 > bass glide                            # K5 glide
+        cc 77 > bass cutoff_env                       # K4 envelope amount (FM: the modulator's decay)
+        cc 77 > bass op1_decay
+        cc 93 > bass sustain                          # K5 sustain: plucked to held
         cc 18 > bass delay_send 0..60%                # K6 echo
-        cc 19 > bass osc2_pitch -12st..12st           # K7 the second oscillator
+        cc 19 > bass osc2_pitch -12st..12st           # K7 the second oscillator (FM: its ratio)
+        cc 19 > bass op1_ratio 0.5x..4x
         cc 16 > bass vibrato_depth                    # K8 vibrato
         cc 17 > bass level 0..1.5                     # K9 level
     }
@@ -92,7 +100,9 @@ midi {
         cc 93 > kpluck_v feedback                     # K5 FM feedback: grit
         cc 93 > kzap_v feedback
         cc 93 > klaser_v feedback
-        cc 18 > klaser talk position 0..1             # K6 the laser's vowel
+        cc 18 > klaser talk wet 0%..100%              # K6 vowel: the laser talks,
+        cc 18 > klaser talk position 0..1             #    a to u,
+        cc 18 > kvox vox position 0..1                #    and the pad's vowel
         cc 19 > kzap crush wet 0%..80%                # K7 the zap's crusher
         cc 16 > kzap_v lfo_depth                      # K8 the zap's fall
         cc 17 > klaser_v vibrato_depth                # K9 vibrato
@@ -102,14 +112,15 @@ midi {
         cc 71 > drums kick_pitch 0.8x..1.6x           # K2 kick pitch
         cc 76 > drums kick_click                      # K3 kick click
         cc 77 > drums kick_drive                      # K4 kick drive
-        cc 93 > drums snare_level 0..1                # K5 snare
-        cc 18 > drums snare_decay                     # K6 snare decay
-        cc 19 > drums hihat_pitch 0.8x..2x             # K7 hats pitch
+        cc 93 > drums hihat_level 0..1.2              # K5 hats level
+        cc 18 > drums hihat_pitch 0.8x..2x            # K6 hats pitch
+        cc 19 > drums snare_level 0..1                # K7 snare (where a fill plays it)
+        cc 19 > drums snare_decay
         cc 16 > drums hihat_pan                       # K8 hats pan
-        cc 17 > drums stutter_rate                    # K9 stutter
+        cc 17 > drums level 0..1.3                    # K9 the whole kit
     }
     page master {
-        cc 74 > master vol gain 0..1                  # K1 master volume (top: as written)
+        cc 74 > master vol gain 0..1 guard            # K1 master volume (top: as written)
         cc 71 > master hp cutoff 20hz..1500hz         # K2 thin the floor
         cc 76 > reverb_mix                            # K3 room
         cc 77 > delay_mix                             # K4 echo

@@ -448,12 +448,14 @@ midi {
     cc 93 > master hp cutoff 20hz..400hz
     cc 93 > zap delay_send 22%..50%
     cc 18 > zap delay_send 0%..60%
+    cc 18 > grind delay_send 0%..40%             # and the grinder, where the zap is out
     cc 19 > grindkit kick_decay 12%..34%
     cc 16 > grindkit hihat_pitch 1.16x..1.55x..1.86x    # K8 hats: darker left, the written tuning in the middle (hihat_decay does nothing in the engine yet)
     cc 17 > bass drive drive 0.3..1.1
     cc 17 > grindpad grit wet 20%..70%
     key 46 > toggle rims
     key 47 > throw zap q=1/16
+    key 47 > throw grind q=1/16
     pad 44 > play grindpad q=1/16
     pad 45 > hold sparks q=beat
     pad 46 > drums crash q=beat

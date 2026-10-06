@@ -1,4 +1,5 @@
 mod audit;
+mod controls;
 mod fmt;
 mod debug;
 mod include;

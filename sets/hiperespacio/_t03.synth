@@ -500,6 +500,7 @@ midi {
     # K4 second voice open: the drone's index and its lowpass
     cc 77 > lengua mod_index 35%..75%
     cc 77 > talk lp cutoff 1.5khz..8khz
+    cc 77 > clap reverb_send 0.05..0.6           # and the clap's room, where the drone is silent
     # K5 tension: thin from below, toms into the echo
     cc 93 > master hp cutoff 20hz..400hz
     cc 93 > toms delay_send 0.12..0.4

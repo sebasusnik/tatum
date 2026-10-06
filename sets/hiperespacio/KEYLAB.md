@@ -52,8 +52,10 @@ F9, el filtro DJ: al medio está abierto, para abajo oscurece, para arriba adelg
 | **drums** | decay kick | pitch kick | click | drive | snare | decay snare | pitch hats | pan hats | stutter |
 | **master** | volumen master | adelgazar | sala | eco | graves | medios | agudos | | |
 
-Una perilla que no está donde está su parámetro no hace nada hasta llegar ahí (toma suave): la
-pantalla dice para dónde girarla. El filtro DJ arranca al medio y el volumen master arriba del todo.
+Las perillas responden apenas las tocás. Dos esperan: el filtro DJ (F9) arranca al medio y,
+si lo encontrás en otro lado, espera a pasar por el medio; el volumen master arranca arriba. Y al
+volver a una página con Tab, una perilla que no está donde la dejaste espera a llegar ahí: la
+pantalla dice para dónde girarla.
 
 ## Pads
 

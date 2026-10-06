@@ -98,6 +98,18 @@ pub fn cmd(args: &[String], watch: bool) {
                 return;
             }
             "--tui" => tui = true,
+            "--buffer" => {
+                i += 1;
+                match args.get(i).and_then(|v| v.parse::<u32>().ok()).filter(|n| (64..=8192).contains(n)) {
+                    Some(n) => {
+                        let _ = BUFFER.set(n);
+                    }
+                    None => {
+                        eprintln!("error: --buffer needs a number of frames, 64 to 8192 (like 1024)");
+                        std::process::exit(1);
+                    }
+                }
+            }
             // Sound painted with cell backgrounds only, for a terminal that
             // makes them translucent (Ghostty: `background-opacity-cells`).
             "--glass" => {
@@ -141,6 +153,12 @@ fn list_devices() {
         Err(e) => eprintln!("error: cannot list devices: {}", e),
     }
 }
+
+/// `--buffer`: the frames the audio device is asked for per callback.
+pub static BUFFER: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+
+/// Errors the audio stream reported: dropouts, as a rule.
+static STREAM_ERRORS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
 /// The engine renders 44.1 kHz stereo. Take that rate when the device offers
 /// it (no conversion, sample-exact), otherwise the device's own default rate
@@ -244,7 +262,12 @@ pub fn run(
     };
 
     let device = open_device(device_name)?;
-    let (config, rate) = pick_config(&device, forced_rate)?;
+    let (mut config, rate) = pick_config(&device, forced_rate)?;
+    // `--buffer 1024`: a bigger block per callback, for headroom when the
+    // device's default leaves too little (a blend runs two engines at once).
+    if let Some(&frames) = BUFFER.get() {
+        config.buffer_size = cpal::BufferSize::Fixed(frames);
+    }
     // None at the engine's own rate: the samples reach the device untouched.
     let mut resampler = if rate == SAMPLE_RATE as u32 { None } else { Some(Resampler::new(SAMPLE_RATE as u32, rate)) };
     let device_desc = device.description().map(|d| d.to_string()).unwrap_or_else(|_| "?".into());
@@ -359,7 +382,11 @@ pub fn run(
                     stats_cb.late.fetch_add(1, Ordering::Relaxed);
                 }
             },
-            |err| eprintln!("audio stream error: {}", err),
+            // Counted, not printed: a line written over the screen would tear
+            // it. The summary at the end says how many, and how to get room.
+            |_err| {
+                STREAM_ERRORS.fetch_add(1, Ordering::Relaxed);
+            },
             None,
         )
         .map_err(|e| format!("cannot open output stream: {}", e))?;
@@ -983,6 +1010,14 @@ pub fn run(
         if budget > 0.0 { worst / budget * 100.0 } else { 0.0 },
         stats.late.load(Ordering::Relaxed)
     );
+    let dropouts = STREAM_ERRORS.load(Ordering::Relaxed);
+    if dropouts > 0 {
+        eprintln!(
+            "{} audio dropout{} (the device ran out of sound to play); `--buffer 1024` gives each callback more room",
+            dropouts,
+            if dropouts == 1 { "" } else { "s" }
+        );
+    }
     if watch {
         eprintln!("{} swaps, {} instant edits, {} rejected saves", swaps, fast, rejected);
     }

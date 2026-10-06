@@ -1393,9 +1393,10 @@ impl LivePlanner {
                 if readings.is_empty() {
                     return turn;
                 }
-                // The first touch of a knob whose target the text puts
-                // somewhere else: with `takeover pickup`, it waits for the
-                // knob to get there rather than jump.
+                // The first touch of a `guard` knob whose target the text
+                // puts somewhere else: with `takeover pickup`, it waits for
+                // the knob to get there rather than jump. Other knobs jump,
+                // as they always have.
                 let first_touch = !self.knob_values.iter().any(|(c, _)| *c == cc);
                 let latest = self.pending.as_ref().or(self.running.as_ref()).expect("checked above");
                 if first_touch && latest.controls.pickup && !self.pickups.iter().any(|p| p.0 == cc) {
@@ -1403,7 +1404,7 @@ impl LivePlanner {
                         Some(p) => p.lines(cc).collect(),
                         None => latest.controls.knobs.iter().filter(|k| k.cc == cc).collect(),
                     };
-                    let at = lines.iter().filter(|k| !k.moves.is_empty()).find_map(|k| {
+                    let at = lines.iter().filter(|k| k.guard && !k.moves.is_empty()).find_map(|k| {
                         let now = midi::text_value(&latest.ast, &k.target)?;
                         k.position_of(now)
                     });
@@ -1531,6 +1532,7 @@ impl LivePlanner {
                 target: target.into(),
                 moves: midi::resolve(&known.ast, &names, target),
                 span: None,
+                guard: false,
             };
             if knob.moves.is_empty() {
                 continue;

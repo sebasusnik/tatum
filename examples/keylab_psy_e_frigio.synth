@@ -248,13 +248,13 @@ midi {
     cc 80 > sub level 0..0.8
     cc 81 > laser delay_send 0..80%
     cc 82 > vox reverb_send 0..80%
-    cc 85 > master dj cutoff 150hz..20khz..20khz
-    cc 85 > master hp cutoff 20hz..20hz..3khz
+    cc 85 > master dj cutoff 150hz..20khz..20khz guard
+    cc 85 > master hp cutoff 20hz..20hz..3khz guard
     takeover pickup
 
     # Knobs: Tab on the computer changes the page
     page mix {
-        cc 74 > master vol gain 0..1
+        cc 74 > master vol gain 0..1 guard
         cc 71 > reverb_mix
         cc 76 > delay_mix
     }

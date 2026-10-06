@@ -283,8 +283,9 @@ impl Parser {
                 }
             }
             let range = if matches!(source, MidiSource::Cc(_)) { self.parse_knob_range() } else { None };
+            let guard = matches!(source, MidiSource::Cc(_)) && self.parse_guard();
             let quantize = self.parse_pad_quantize(source, &words);
-            block.push(MidiMapDef { source, target: words.join("."), range, quantize, line });
+            block.push(MidiMapDef { source, target: words.join("."), range, quantize, guard, line });
         }
         self.expect(&Token::RBrace);
         maps.retain(|m| !block.iter().any(|b| b.source == m.source));
@@ -469,7 +470,9 @@ impl Parser {
             return None;
         }
         let range = self.parse_knob_range();
-        let map = MidiMapDef { source: MidiSource::Cc(cc), target: words.join("."), range, quantize: None, line };
+        let guard = self.parse_guard();
+        let map =
+            MidiMapDef { source: MidiSource::Cc(cc), target: words.join("."), range, quantize: None, guard, line };
         Some(SceneKnob { hands, map })
     }
 
@@ -934,6 +937,15 @@ impl Parser {
             }
         }
         self.expect(&Token::RBrace);
+    }
+
+    /// `guard` after a knob's target and range.
+    fn parse_guard(&mut self) -> bool {
+        let guard = matches!(self.peek(), Token::Ident(w) if w == "guard");
+        if guard {
+            self.advance();
+        }
+        guard
     }
 
     /// `q=bar`, `q=beat`, `q=1/8`, `q=1/16` or `q=off` after a pad's target.

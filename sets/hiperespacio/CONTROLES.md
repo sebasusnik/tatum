@@ -22,10 +22,12 @@ The short version is `KEYLAB.md`.
 | F8 | 83 | **noise riser** | a noise held while the fader is up, louder and brighter as it rises (_keylab) |
 | F9 | 85 | **DJ filter** | centre open, down darker (low-pass), up thinner (high-pass) (_keylab) |
 
-`takeover pickup`: a fader or knob that is not where its target is moves
-nothing until it gets there (the screen says which way). The DJ filter
-starts in the centre; found anywhere else it waits for the centre. The
-master volume is K1 on the `master` page, and starts at the top.
+Knobs and faders move their target the moment they are touched, as they
+always have. Two wait instead (`guard`): the DJ filter starts in the centre
+and, found anywhere else, waits for the centre; the master volume (K1 on the
+`master` page) starts at the top. And after a page change, a knob that is
+not where it left its target on that page waits until it gets there (the
+screen says which way).
 
 ## Knobs: one page per voice
 

@@ -665,6 +665,7 @@ midi {
     cc 93 > master hp cutoff 20hz..400hz
     cc 93 > lead delay_send 0.3..0.65
     cc 18 > lead delay_send 0..0.8
+    cc 18 > acid delay_send 0..0.6               # and the acid, where the lead is out
     cc 19 > kit kick_decay 8%..32%
     cc 16 > kit hihat_pitch 1.39x..1.85x..2.0x    # K8 hats: darker left, the written tuning in the middle (hihat_decay does nothing in the engine yet)
     cc 17 > haze crush wet 0..0.4
@@ -673,6 +674,7 @@ midi {
 
     key 46 > toggle perc
     key 47 > throw lead q=1/16
+    key 47 > throw acid q=1/16
 
     pad 44 > play haze_pad F q=1/16    #4
     pad 45 > hold riser_pad q=beat

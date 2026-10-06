@@ -801,6 +801,14 @@ The scales a `scale` line and a scene take are `major`, `minor`, `dorian`,
 `phrygian_dominant`, `hungarian_minor` and `double_harmonic` (and `ionian`,
 `aeolian`). Any other name is an error.
 
+`tatum set controls <dir>` tries every control of every step the way a hand
+would -- each knob on each page turned end to end, each pad and trigger key
+held, the strip and the wheel thrown, with the lead or bass key or the pad a
+voice needs held when it needs one -- and prints, per step, the ones that
+changed nothing (`NOTHING`) and how much the others did. A knob on a voice a
+step leaves out does nothing in that step; one that does nothing anywhere is a
+mapping to fix.
+
 `tatum midi monitor [<song or set>] [--midi <name>]` prints every message the
 controller sends, one a line: the port, the channel, what it is (note, pad,
 cc, pitch strip, aftertouch, program change), its bytes, and, given a song or
@@ -822,7 +830,8 @@ something a rig does not have is left out rather than refused, and reads
 
 ```
 midi {
-    takeover pickup                 # a knob not where its target is waits for it
+    takeover pickup                 # back on a page, a knob waits for where it left its target
+    cc 85 > master vol gain 0..1 guard   # and this one waits on its first touch too
     page tema { }                   # the block's own lines
     page bass {
         cc 74 > bass cutoff
@@ -836,9 +845,10 @@ keyboard { tab > voice next }       # also voice prev, voice bass
 `cc N > voice` picks a page by the controller's position; `voice step` is an
 encoder: above 64 the next page, below it the one before. With `takeover
 pickup`, a knob that comes back to a page where it left its target somewhere
-else, or is touched for the first time away from where the text puts its
-target, moves nothing until it passes that value; the screen says which way to
-turn. Without it a first touch jumps, as before.
+else moves nothing until it passes that value; the screen says which way to
+turn. A line written with `guard` also waits on its first touch, when the
+text puts its target somewhere else: for what a jump would hurt, a DJ filter
+or a master volume. Every other knob jumps on its first touch, as before.
 
 A pad or a trigger key can hold an effect on the whole output, coming in and
 out over a few milliseconds, as strong as the pad was struck and then as hard

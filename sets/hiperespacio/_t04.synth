@@ -661,6 +661,7 @@ midi {
     # K4 the drone open
     cc 77 > pozo mod_index 25%..65%
     cc 77 > drone lp cutoff 400hz..2.5khz
+    cc 77 > tb cutoff_env 300hz..2.5khz          # and the 303's squelch, which plays in most steps
     # K5 tension: thin from below, the 303 into the echo
     cc 93 > master hp cutoff 20hz..400hz
     cc 93 > acid delay_send 0.2..0.5

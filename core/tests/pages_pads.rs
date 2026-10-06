@@ -23,7 +23,7 @@ master { in > lowpass(20khz, 0.05) as dj > gain(1.0) as vol > out }
 midi {
     zone lead 60..84 > lead
     cc 74 > bass level 0..1.6
-    cc 85 > master vol gain 0..1
+    cc 85 > master vol gain 0..1 guard
     takeover pickup
     page tema {
     }
@@ -107,10 +107,7 @@ fn back_on_a_page_a_knob_waits_until_it_reaches_where_it_left_it() {
     let (mut planner, player) = session();
     let g = player.generation();
     planner.voice(&VoiceMove::To("bass".into()), g);
-    // The first touch finds the cutoff where the text has it (0.4: 51),
-    // and turns it up to 100.
-    assert!(planner.knob(74, 100, g).plans.is_empty(), "a first touch away from the text jumped");
-    planner.knob(74, 51, g);
+    // An unguarded knob jumps on its first touch: the cutoff to 100.
     assert!(!planner.knob(74, 100, g).plans.is_empty()); // the bass cutoff left at 100
     planner.voice(&VoiceMove::To("tema".into()), g);
     planner.knob(74, 20, g); // the level, from 20 on
@@ -138,6 +135,10 @@ fn a_first_touch_away_from_the_text_waits_for_it() {
     assert!(turn.readings[0].contains("turn → to 127"), "{:?}", turn.readings);
     let turn = planner.knob(85, 126, g);
     assert!(!turn.plans.is_empty(), "{:?}", turn.readings);
+    // A knob without `guard` jumps on its first touch, as always: the bass
+    // level, written at 0.8, taken from the top.
+    let turn = planner.knob(74, 127, g);
+    assert!(!turn.plans.is_empty(), "an unguarded first touch waited: {:?}", turn.readings);
 }
 
 #[test]

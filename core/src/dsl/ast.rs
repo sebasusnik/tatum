@@ -253,6 +253,11 @@ pub struct MidiMapDef {
     /// `pad 44 > mute drums q=bar`: the pad's press and release wait for the
     /// next line of this grid. `None` acts at once.
     pub quantize: Option<Quantize>,
+    /// `cc 85 > master dj cutoff ... guard`: with `takeover pickup`, the first
+    /// touch waits for the knob to reach where the text puts the target,
+    /// instead of jumping there. For what a jump would hurt: a DJ filter, a
+    /// master volume.
+    pub guard: bool,
     /// Source line, for compile errors.
     pub line: usize,
 }

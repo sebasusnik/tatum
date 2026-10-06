@@ -682,11 +682,13 @@ pub fn cmd(args: &[String]) {
         "check" => run(cmd_check(rest)),
         "next" => run(cmd_next(rest)),
         "play" => run(cmd_play(rest)),
+        "controls" => run(crate::controls::cmd(rest)),
         _ => {
             eprintln!("usage:");
             eprintln!(
                 "    tatum set render <dir> [-o out.wav] [--bars N] [--phrase 1] [--ramp 4] [--blend 0] [--perform script.txt]"
             );
+            eprintln!("    tatum set controls <dir> [--step N] [--bars 2]   every control of every step, tried");
             eprintln!("    tatum set check  <dir> [--bars N] [--json]");
             eprintln!("    tatum set next   <dir> <candidate.synth> [--json]");
             eprintln!(
@@ -763,6 +765,14 @@ fn cmd_play(args: &[String]) -> Result<(), String> {
             }
             "--tui" => tui = true,
             "--auto" => auto = true,
+            "--buffer" => {
+                let n = value(i)
+                    .and_then(|v| v.parse::<u32>().ok())
+                    .filter(|n| (64..=8192).contains(n))
+                    .ok_or("--buffer needs a number of frames, 64 to 8192 (like 1024)")?;
+                let _ = crate::live::BUFFER.set(n);
+                i += 1;
+            }
             "--glass" => {
                 tui = true;
                 glass = true;

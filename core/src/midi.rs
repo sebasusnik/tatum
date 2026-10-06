@@ -155,6 +155,8 @@ pub struct Knob {
     /// Where the travel lands, as the engine reads the target; from
     /// `cc 74 > acid cutoff 200hz..4khz`. `None`: all of it.
     pub span: Option<Span>,
+    /// `guard`: a first touch waits for the knob to reach the target.
+    pub guard: bool,
 }
 
 impl Knob {
@@ -586,7 +588,13 @@ pub fn resolve_all(song: &Song, names: &Names) -> Controls {
         match m.source {
             MidiSource::Cc(cc) => {
                 let span = m.range.as_ref().and_then(|r| knob_span(song, &m.target, r).ok());
-                controls.knobs.push(Knob { cc, target: m.target.clone(), moves: resolve(song, names, &m.target), span })
+                controls.knobs.push(Knob {
+                    cc,
+                    target: m.target.clone(),
+                    moves: resolve(song, names, &m.target),
+                    span,
+                    guard: m.guard,
+                })
             }
             MidiSource::Keys => {
                 let Some(t) = track(&m.target) else { continue };
@@ -647,6 +655,7 @@ pub fn resolve_all(song: &Song, names: &Names) -> Controls {
                         target: set.target.clone(),
                         moves: resolve(song, names, &set.target),
                         span: knob_span(song, &set.target, &ends).ok(),
+                        guard: false,
                     }
                 })
                 .collect(),
@@ -658,7 +667,16 @@ pub fn resolve_all(song: &Song, names: &Names) -> Controls {
                     let m = &k.map;
                     let span = m.range.as_ref().and_then(|r| knob_span(song, &m.target, r).ok());
                     let MidiSource::Cc(cc) = m.source else { unreachable!("a scene's knob is a controller") };
-                    (k.hands, Knob { cc, target: m.target.clone(), moves: resolve(song, names, &m.target), span })
+                    (
+                        k.hands,
+                        Knob {
+                            cc,
+                            target: m.target.clone(),
+                            moves: resolve(song, names, &m.target),
+                            span,
+                            guard: m.guard,
+                        },
+                    )
                 })
                 .collect(),
         })
@@ -676,7 +694,13 @@ pub fn resolve_all(song: &Song, names: &Names) -> Controls {
                 .filter_map(|m| {
                     let MidiSource::Cc(cc) = m.source else { return None };
                     let span = m.range.as_ref().and_then(|r| knob_span(song, &m.target, r).ok());
-                    Some(Knob { cc, target: m.target.clone(), moves: resolve(song, names, &m.target), span })
+                    Some(Knob {
+                        cc,
+                        target: m.target.clone(),
+                        moves: resolve(song, names, &m.target),
+                        span,
+                        guard: m.guard,
+                    })
                 })
                 .collect(),
         })
@@ -827,17 +851,14 @@ pub fn resolve(song: &Song, names: &Names, target: &str) -> Vec<Move> {
                 .and_then(|def| ModuleKind::from_str(&def.module_type))
                 .and_then(|kind| params::lookup(kind, param));
             if let Some(spec) = spec {
-                if song.module_defs.iter().any(|m| &m.name == module) {
-                    for (i, n) in names.instruments.iter().enumerate() {
-                        if n == module {
-                            out.push(Move::Module { instrument: i, spec });
-                        }
+                // A track's name stands for its module, every copy of it, as
+                // the module's own name does: the hats of a kit that two
+                // tracks play are wherever they sound.
+                let name = module_named(song, module).map(|d| d.name.as_str()).unwrap_or(module);
+                for (i, n) in names.instruments.iter().enumerate() {
+                    if n == name {
+                        out.push(Move::Module { instrument: i, spec });
                     }
-                } else if let Some(&instrument) =
-                    track(module).and_then(|t| names.track_instruments.get(t)).filter(|&&i| i != usize::MAX)
-                {
-                    // A track's name: the copy of the module that track plays.
-                    out.push(Move::Module { instrument, spec });
                 }
             }
         }
