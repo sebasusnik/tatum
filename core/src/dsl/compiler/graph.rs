@@ -154,6 +154,31 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
     Ok(template)
 }
 
+/// The waveform word of a source node, with its `width=` for a pulse. A width
+/// on any other shape is an error rather than a knob that does nothing.
+fn node_waveform(node: &NodeDef) -> Result<Waveform, CompileError> {
+    let word = node
+        .params
+        .iter()
+        .find_map(|p| if let Param::Waveform(w) = p { Some(w.as_str()) } else { None })
+        .unwrap_or("sine");
+    let width = named_param(&node.params, "width");
+    if width.is_some() && word != "pulse" {
+        return Err(CompileError::new(format!(
+            "{}: `width=` sets a pulse's duty cycle, and this one is {}; write `pulse` to use it",
+            node.kind, word
+        )));
+    }
+    match word {
+        "sine" => Ok(Waveform::Sine),
+        "saw" => Ok(Waveform::Saw),
+        "square" => Ok(Waveform::Square),
+        "triangle" => Ok(Waveform::Triangle),
+        "pulse" => Ok(Waveform::Pulse(width.unwrap_or(0.5))),
+        other => Err(CompileError::new(format!("{}: unknown waveform '{}'", node.kind, other))),
+    }
+}
+
 pub(super) fn node_def_to_spec(
     node: &NodeDef,
     noise_seed: &mut u32,
@@ -166,55 +191,40 @@ pub(super) fn node_def_to_spec(
     }
     match node.kind.as_str() {
         "osc" => {
-            let waveform = node
-                .params
-                .iter()
-                .find_map(|p| if let Param::Waveform(w) = p { Some(w.as_str()) } else { None })
-                .unwrap_or("sine");
-            let wf = match waveform {
-                "sine" => Waveform::Sine,
-                "saw" => Waveform::Saw,
-                "square" => Waveform::Square,
-                "triangle" => Waveform::Triangle,
-                _ => Waveform::Sine,
-            };
+            let wf = node_waveform(node)?;
             let freq = first_float_param(&node.params).unwrap_or(440.0);
             let seed = *osc_drift_seed;
             *osc_drift_seed += 1;
             let pitch_semitones = named_param(&node.params, "pitch").unwrap_or(0.0);
-            Ok(NodeSpec::Osc { waveform: wf, freq, drift_seed: seed, fixed: false, pitch_semitones })
+            let pitch_env = named_param(&node.params, "pitch_env").unwrap_or(0.0);
+            let pitch_decay = named_param(&node.params, "pitch_decay").unwrap_or(5.0) / 1000.0;
+            Ok(NodeSpec::Osc {
+                waveform: wf,
+                freq,
+                drift_seed: seed,
+                fixed: false,
+                pitch_semitones,
+                pitch_env,
+                pitch_decay,
+            })
         }
         "fixosc" => {
-            let waveform = node
-                .params
-                .iter()
-                .find_map(|p| if let Param::Waveform(w) = p { Some(w.as_str()) } else { None })
-                .unwrap_or("sine");
-            let wf = match waveform {
-                "sine" => Waveform::Sine,
-                "saw" => Waveform::Saw,
-                "square" => Waveform::Square,
-                "triangle" => Waveform::Triangle,
-                _ => Waveform::Sine,
-            };
+            let wf = node_waveform(node)?;
             let freq = first_float_param(&node.params).unwrap_or(440.0);
             let seed = *osc_drift_seed;
             *osc_drift_seed += 1;
-            Ok(NodeSpec::Osc { waveform: wf, freq, drift_seed: seed, fixed: true, pitch_semitones: 0.0 })
+            Ok(NodeSpec::Osc {
+                waveform: wf,
+                freq,
+                drift_seed: seed,
+                fixed: true,
+                pitch_semitones: 0.0,
+                pitch_env: 0.0,
+                pitch_decay: 0.005,
+            })
         }
         "pitch_osc" => {
-            let waveform = node
-                .params
-                .iter()
-                .find_map(|p| if let Param::Waveform(w) = p { Some(w.as_str()) } else { None })
-                .unwrap_or("sine");
-            let wf = match waveform {
-                "sine" => Waveform::Sine,
-                "saw" => Waveform::Saw,
-                "square" => Waveform::Square,
-                "triangle" => Waveform::Triangle,
-                _ => Waveform::Sine,
-            };
+            let wf = node_waveform(node)?;
             let start_freq = float_param_at(&node.params, 0).unwrap_or(300.0);
             let end_freq = float_param_at(&node.params, 1).unwrap_or(55.0);
             let decay = named_param(&node.params, "decay").or_else(|| float_param_at(&node.params, 2)).unwrap_or(0.995);

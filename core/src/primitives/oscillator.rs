@@ -166,8 +166,10 @@ impl Oscillator {
             }
             Waveform::Pulse(duty) => {
                 let naive = if p < duty { 1.0 } else { -1.0 };
-                // Rising edge at p=0, falling edge at p=duty
-                naive + polyblep(p, dt) - polyblep(fmod_1(p + 1.0 - duty), dt)
+                // Rising edge at p=0, falling edge at p=duty. A duty other
+                // than a half spends longer on one side, which averages to
+                // 2*duty - 1 rather than zero; that offset is taken back out.
+                naive + polyblep(p, dt) - polyblep(fmod_1(p + 1.0 - duty), dt) - (2.0 * duty - 1.0)
             }
         }
     }

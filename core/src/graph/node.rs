@@ -53,6 +53,11 @@ pub enum NodeSpec {
         drift_seed: u32,
         fixed: bool,
         pitch_semitones: f32,
+        /// Hz added to the note at its start, falling away with `pitch_decay`:
+        /// the click of pitch a plucked bass or a lead has on its attack.
+        pitch_env: f32,
+        /// Time constant of that fall, in seconds: a third of it is left by then.
+        pitch_decay: f32,
     },
     /// Oscillator with built-in pitch envelope (exponential sweep from start→end).
     /// Used for drum body synthesis (kick, tom). Not MIDI-note tracked.
@@ -258,11 +263,17 @@ impl NodeSpec {
     /// Create a fresh NodeKind from this spec.
     pub fn instantiate(&self) -> NodeKind {
         match *self {
-            NodeSpec::Osc { waveform, freq, drift_seed, .. } => {
+            NodeSpec::Osc { waveform, freq, drift_seed, pitch_env, pitch_decay, .. } => {
                 let mut osc = Oscillator::new(waveform, SAMPLE_RATE);
-                osc.set_frequency(freq);
                 osc.set_drift_seed(drift_seed);
-                NodeKind::Osc(osc)
+                let mut note_osc = NoteOsc {
+                    osc,
+                    base: freq,
+                    env: pitch_env,
+                    env_coeff: crate::math::exp(-1.0 / (pitch_decay.max(1e-4) * SAMPLE_RATE)),
+                };
+                note_osc.set_frequency(freq);
+                NodeKind::Osc(note_osc)
             }
             NodeSpec::PitchOsc { waveform, start_freq, end_freq, decay } => {
                 let mut osc = Oscillator::new(waveform, SAMPLE_RATE);
@@ -674,6 +685,45 @@ impl ModBiquad {
     }
 }
 
+// ── Note oscillator state ──
+
+/// An oscillator that follows the played note, with an optional pitch
+/// envelope: `env` Hz on top of the note at its start, multiplied down every
+/// sample until it no longer moves the pitch.
+pub struct NoteOsc {
+    pub osc: Oscillator,
+    base: f32,
+    env: f32,
+    env_coeff: f32,
+}
+
+/// Below this many Hz the envelope is left out, and the oscillator plays the
+/// note it was given as a plain one.
+const PITCH_ENV_FLOOR: f32 = 0.01;
+
+impl NoteOsc {
+    #[inline]
+    pub fn next_sample(&mut self) -> f32 {
+        if self.env != 0.0 {
+            self.env *= self.env_coeff;
+            if self.env.abs() < PITCH_ENV_FLOOR {
+                self.env = 0.0;
+            }
+            self.osc.set_frequency((self.base + self.env).max(1.0));
+        }
+        self.osc.next_sample()
+    }
+
+    pub fn set_frequency(&mut self, freq: f32) {
+        self.base = freq;
+        self.osc.set_frequency((freq + self.env).max(1.0));
+    }
+
+    pub fn reset(&mut self) {
+        self.osc.reset();
+    }
+}
+
 // ── Pitch-envelope oscillator state ──
 
 /// Oscillator with built-in exponential pitch sweep (start_freq → end_freq).
@@ -709,7 +759,7 @@ impl PitchOscState {
 #[allow(clippy::large_enum_variant)]
 pub enum NodeKind {
     // ── Sources ──
-    Osc(Oscillator),
+    Osc(NoteOsc),
     PitchOsc(PitchOscState),
     Noise(NoiseGen),
     Lfo(Lfo),
