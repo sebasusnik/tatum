@@ -153,19 +153,24 @@ arrange {{ a x1 }}
         let (l, _) = engine.render(1);
         let sr = tatum_core::SAMPLE_RATE as usize;
         let win = sr / 20; // 50 ms
-        (0..4).map(|i| l[i * win..(i + 1) * win].iter().fold(0.0f32, |m, v| m.max(v.abs()))).collect()
+        let peak = |a: usize, b: usize| l[a..b].iter().fold(0.0f32, |m, v| m.max(v.abs()));
+        // Three windows from the downbeat, and one more a second in.
+        let mut w: Vec<f32> = (0..3).map(|i| peak(i * win, (i + 1) * win)).collect();
+        w.push(peak(sr, sr + win));
+        w
     }
 
     let short = probe("");
-    let long = probe("attack=1ms release=1500ms");
+    // 150 ms: a release is now as long as it says, so it is gone a second in.
+    let long = probe("attack=1ms release=150ms");
     assert!(
         long[0] < short[0] * 0.85,
         "a long release should hold the pad down through the first 50 ms:\n  default {:?}\n  long    {:?}",
         short,
         long
     );
-    // And the two must agree once the kick is long gone, or the release is
-    // doing something other than releasing.
+    // And the two must agree a second later, once the kick is long gone, or
+    // the release is doing something other than releasing.
     assert!((long[3] - short[3]).abs() < 1e-3, "{:?} vs {:?}", short, long);
 }
 
