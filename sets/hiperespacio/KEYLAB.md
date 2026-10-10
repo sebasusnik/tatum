@@ -47,9 +47,9 @@ F9, el filtro DJ: al medio está abierto, para abajo oscurece, para arriba adelg
 | página | K1 | K2 | K3 | K4 | K5 | K6 | K7 | K8 | K9 |
 |---|---|---|---|---|---|---|---|---|---|
 | **tema** | filtro del bajo | voz principal | firma (RPM) | segunda voz | tensión | throw | kick | hats | suciedad |
-| **bass** | cutoff | reso | decay | envolvente | glide | eco | osc 2 | vibrato | volumen |
-| **lead** | brillo | reso | decay | FM | feedback | vocal | crusher | caída del zap | vibrato |
-| **drums** | decay kick | pitch kick | click | drive | snare | decay snare | pitch hats | pan hats | stutter |
+| **bass** | cutoff | reso | decay | envolvente | sustain | eco | osc 2 | vibrato | volumen |
+| **lead** | brillo | reso | decay | FM | feedback | vocal (láser y pad) | crusher | caída del zap | vibrato |
+| **drums** | decay kick | pitch kick | click | drive | volumen hats | pitch hats | redoblante | pan hats | toda la batería |
 | **master** | volumen master | adelgazar | sala | eco | graves | medios | agudos | | |
 
 Las perillas responden apenas las tocás. Dos esperan: el filtro DJ (F9) arranca al medio y,

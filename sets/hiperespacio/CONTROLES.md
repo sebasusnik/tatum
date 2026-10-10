@@ -38,9 +38,9 @@ the page (`knobs: bass`), and changing it says what each knob now moves.
 | page | K1 74 | K2 71 | K3 76 | K4 77 | K5 93 | K6 18 | K7 19 | K8 16 | K9 17 |
 |---|---|---|---|---|---|---|---|---|---|
 | **tema** (start) | bass filter | main voice open | signature RPM | second voice open | tension | throw amount | kick decay | hats pitch | dirt |
-| **bass** | cutoff | resonance | decay | env amount | glide | echo send | osc 2 pitch | vibrato | level |
-| **lead** | brightness | resonance (pad) | decay | FM index | FM feedback | laser vowel | zap crusher | zap fall | vibrato |
-| **drums** | kick decay | kick pitch | kick click | kick drive | snare level | snare decay | hats pitch | hats pan | stutter |
+| **bass** | cutoff (FM: index) | resonance (FM: feedback) | decay | env amount (FM: modulator decay) | sustain | echo send | osc 2 pitch (FM: ratio) | vibrato | level |
+| **lead** | brightness | resonance (pad) | decay | FM index | FM feedback | vowel (laser and pad) | zap crusher | zap fall | vibrato |
+| **drums** | kick decay | kick pitch | kick click | kick drive | hats level | hats pitch | snare (fills) | hats pan | the whole kit |
 | **master** | master volume | thin the floor | room | echo | EQ low | EQ mid | EQ high | — | — |
 
 The `tema` page is each track's own nine macros (below). The others are
