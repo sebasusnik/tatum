@@ -106,7 +106,7 @@ module bass guitar {
     attack 1ms
     decay 2s
     sustain 100%
-    release 60ms
+    release 120ms   # what 60ms played as before envelope times meant what they say
 }
 
 module bass guitar2 {
@@ -122,7 +122,7 @@ module bass guitar2 {
     attack 1ms
     decay 2s
     sustain 100%
-    release 60ms
+    release 120ms   # what 60ms played as before envelope times meant what they say
 }
 
 # Hoover: detuned saws that bend between notes, the rave siren of '92

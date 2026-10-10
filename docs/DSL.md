@@ -62,6 +62,22 @@ you should write:
 | `%` | percent | any 0..1 parameter |
 | `db` | decibels | any gain (`level`, and `makeup` on a compressor) |
 
+An envelope time is how long the stage takes: `release 1s` is a second of tail, 60 dB
+down at the end of it, and `attack 300ms` is at full level 300 ms after the note. The
+curve is exponential, so most of the change happens early in the stage. That holds
+from 100 ms up. The shortest corners are kept as they are: a stage under 10 ms falls
+with that time as its time constant (60 dB down after about seven times it), so the
+1 ms releases a psy bass is written with stay tight without clicking. Between 10 and
+100 ms the stage runs longer than written, so that nothing over 10 ms gets a time
+constant shorter than 10 ms and every time still lasts longer than a shorter one:
+10 ms lasts 69 ms, 20 ms 77, 30 ms 82, 50 ms 90, 100 ms 100. The same goes for
+`adsr`, `perc` and the filter envelopes in an instrument graph.
+
+A compressor's, the sidechain's, an envelope follower's and an autowah's `attack`
+and `release` are something else: time constants, so `sidechain release=150ms` has
+made up all but 1/e of its dip 150 ms after the kick lets go, and is most of the
+way back after three times that.
+
 `cutoff 800hz` and `cutoff 0.4337` are the same thing. A unit that does not apply
 is an error naming what the parameter does take, so `cutoff 20ms` does not quietly
 become 20. The `in units` column of PARAMS.md gives each parameter's span and its

@@ -58,8 +58,8 @@ module fm sub {
     waveform sine
     op0_ratio 1x
     op1_ratio 1x
-    op0_envelope 0.005 1.0 1.0 0.12
-    op1_envelope 0.005 1.0 1.0 0.12
+    op0_envelope 0.002 1.0 1.0 0.12
+    op1_envelope 0.002 1.0 1.0 0.12
 }
 
 # Bass: the growl on top of the sub, a saw and its octave plucked through a
@@ -73,8 +73,8 @@ module bass growl {
     cutoff_env 1200hz
     resonance 28%
     glide 10%
-    attack 3ms
-    decay 110ms
+    attack 1ms
+    decay 80ms
     sustain 20%
     release 100ms
 }
@@ -300,6 +300,11 @@ pattern bongos {
 bus drums
 drums { in > compressor(-8, ratio=2, attack=10, release=80, makeup=0db) > master }
 
+# The low end as one instrument: sub and growl squeezed together, the attack
+# left slow enough that each note's front gets through before it clamps
+bus low
+low { in > compressor(-26, ratio=6, attack=15, release=60, makeup=6db) > master }
+
 track drums {
     play beat_main
     using deep
@@ -325,8 +330,8 @@ track sub {
     level 0.13
     velocity 1.0
     gate 0.85
-    sidechain 0.5
-    out > highpass(28hz, 0.05) > lowpass(120hz, 0.05) > master
+    sidechain 0.3
+    out > highpass(28hz, 0.05) > lowpass(120hz, 0.05) > low
 }
 
 track bass {
@@ -335,8 +340,8 @@ track bass {
     level 0.6
     velocity 1.0
     gate 0.8
-    sidechain 0.4
-    out > highpass(100hz, 0.05) > saturate(0.9) > lowpass(1800hz, 0.05) > highpass(55hz, 0.01) > master
+    sidechain 0.25
+    out > highpass(100hz, 0.05) > saturate(0.9) > lowpass(1800hz, 0.05) > highpass(55hz, 0.01) > low
 }
 
 track dub {

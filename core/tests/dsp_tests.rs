@@ -1197,7 +1197,9 @@ fn test_fm_adsr_lifecycle() {
 
     let spm = SAMPLE_RATE as usize;
 
-    let attack_start = samples[0..spm / 100].iter().fold(0.0f32, |a, &b| a.max(b.abs()));
+    // The first 2 ms: a 50 ms attack is a stage that is over in 50 ms, so by
+    // 10 ms it is already most of the way up.
+    let attack_start = samples[0..spm / 500].iter().fold(0.0f32, |a, &b| a.max(b.abs()));
     let attack_peak = samples[spm / 40..spm / 10].iter().fold(0.0f32, |a, &b| a.max(b.abs()));
     assert!(
         attack_peak > attack_start * 2.0,

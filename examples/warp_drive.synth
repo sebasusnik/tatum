@@ -150,7 +150,7 @@ module keys glass {
     attack 1ms
     decay 120ms
     sustain 10%
-    release 90ms
+    release 150ms
     lfo_target cutoff
     lfo_sync bars_4
     lfo_waveform triangle
