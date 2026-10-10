@@ -128,9 +128,9 @@ midi {
         cc 18 > master eq_mid -12db..12db             # K6 mid
         cc 19 > master eq_high -12db..12db            # K7 high
     }
-    # An encoder that steps through the pages: put its number here once
-    # `i` shows what it sends (Arturia's relative mode: above 64 is on).
-    # cc 114 > voice step
+    # The big encoder steps through the pages (relative: above 64 is on,
+    # below it back), as Tab does on the computer.
+    cc 114 > voice step
 
     # ── Pads, bank A: effects on the whole mix while held, as hard as struck,
     #    then as hard as pressed ──
