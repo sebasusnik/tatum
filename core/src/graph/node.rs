@@ -10,7 +10,9 @@ use crate::effects::formant::Formant;
 use crate::effects::bitcrusher::Bitcrusher;
 use crate::effects::compressor::Compressor;
 use crate::effects::limiter::Limiter;
-use crate::effects::eq::{TiltEq, ThreeBandEq};
+use crate::effects::clipper::Clipper;
+use crate::effects::eq::{Band, ParamEq, TiltEq, ThreeBandEq};
+use crate::effects::transient::Transient;
 use crate::effects::delay::Delay;
 use crate::effects::reverb::DattorroReverb;
 use crate::effects::capture::Capture;
@@ -56,11 +58,16 @@ pub enum NodeSpec {
     },
     /// Oscillator with built-in pitch envelope (exponential sweep from start→end).
     /// Used for drum body synthesis (kick, tom). Not MIDI-note tracked.
+    /// With `mid_freq` under `start_freq` the sweep has two stages: a fast
+    /// drop from start to mid at `fast`, laid over the slow one from mid to
+    /// end at `decay` -- the snap of a kick's hit, then its body falling.
     PitchOsc {
         waveform: Waveform,
         start_freq: f32,
         end_freq: f32,
         decay: f32,
+        mid_freq: f32,
+        fast: f32,
     },
     Noise {
         seed: u32,
@@ -172,6 +179,23 @@ pub enum NodeSpec {
         mid: f32,
         high: f32,
     },
+    /// One parametric band: a bell or a shelf at any frequency.
+    ParamEq {
+        band: Band,
+        freq: f32,
+        gain_db: f32,
+        q: f32,
+    },
+    /// Antialiased hard clipper.
+    Clip {
+        drive: f32,
+        ceiling: f32,
+    },
+    /// Transient shaper: attack and sustain in dB.
+    Transient {
+        attack_db: f32,
+        sustain_db: f32,
+    },
     /// Delay (bus/master chain only, not per-voice).
     Delay {
         sync_div: f32,
@@ -264,11 +288,18 @@ impl NodeSpec {
                 osc.set_drift_seed(drift_seed);
                 NodeKind::Osc(osc)
             }
-            NodeSpec::PitchOsc { waveform, start_freq, end_freq, decay } => {
+            NodeSpec::PitchOsc { waveform, start_freq, end_freq, decay, mid_freq, fast } => {
                 let mut osc = Oscillator::new(waveform, SAMPLE_RATE);
                 osc.set_frequency(start_freq);
                 osc.set_drift_enabled(false); // drums don't need drift
-                NodeKind::PitchOsc(PitchOscState { osc, current_freq: start_freq, end_freq, decay })
+                NodeKind::PitchOsc(PitchOscState {
+                    osc,
+                    current_freq: mid_freq,
+                    end_freq,
+                    decay,
+                    fast_part: start_freq - mid_freq,
+                    fast,
+                })
             }
             NodeSpec::Noise { seed } => NodeKind::Noise(NoiseGen::new(seed)),
             NodeSpec::Lfo { rate, depth } => {
@@ -414,6 +445,13 @@ impl NodeSpec {
                 eq.set_mid(mid);
                 eq.set_high(high);
                 NodeKind::ThreeBandEq(eq)
+            }
+            NodeSpec::ParamEq { band, freq, gain_db, q } => {
+                NodeKind::ParamEq(ParamEq::new(band, freq, gain_db, q, SAMPLE_RATE))
+            }
+            NodeSpec::Clip { drive, ceiling } => NodeKind::Clip(Clipper::new(drive, ceiling)),
+            NodeSpec::Transient { attack_db, sustain_db } => {
+                NodeKind::Transient(Transient::new(attack_db, sustain_db, SAMPLE_RATE))
             }
             NodeSpec::Delay { feedback, .. } => {
                 let mut d = Delay::new(SAMPLE_RATE, 2.0);
@@ -680,9 +718,15 @@ impl ModBiquad {
 /// Used for drum body synthesis. Fresh instance per note (re-triggers from start_freq).
 pub struct PitchOscState {
     pub osc: Oscillator,
+    /// The slow stage: from the mid frequency (the start, with one stage)
+    /// towards `end_freq`.
     pub current_freq: f32,
     pub end_freq: f32,
     pub decay: f32,
+    /// The fast stage, on top: start minus mid, falling at `fast`. Zero with
+    /// one stage, and adding zero leaves the sweep as it always was.
+    pub fast_part: f32,
+    pub fast: f32,
 }
 
 impl PitchOscState {
@@ -691,7 +735,8 @@ impl PitchOscState {
         let out = self.osc.next_sample();
         // Exponential pitch sweep toward end_freq
         self.current_freq = self.end_freq + (self.current_freq - self.end_freq) * self.decay;
-        self.osc.set_frequency(self.current_freq);
+        self.fast_part *= self.fast;
+        self.osc.set_frequency(self.current_freq + self.fast_part);
         out
     }
 
@@ -776,6 +821,9 @@ pub enum NodeKind {
     Limiter(Limiter),
     TiltEq(TiltEq),
     ThreeBandEq(ThreeBandEq),
+    ParamEq(ParamEq),
+    Clip(Clipper),
+    Transient(Transient),
     Delay(Delay),
     Reverb(Box<DattorroReverb>),
     Capture(Capture),
@@ -834,6 +882,9 @@ impl NodeKind {
                 let (l, _) = eq.process_stereo(inputs[0], inputs[0]);
                 l
             }
+            NodeKind::ParamEq(eq) => eq.process(inputs[0]),
+            NodeKind::Clip(c) => c.process(inputs[0]),
+            NodeKind::Transient(t) => t.process(inputs[0]),
             NodeKind::Delay(d) => d.process(inputs[0]),
             NodeKind::Reverb(r) => r.process(inputs[0]),
 
@@ -850,6 +901,11 @@ impl NodeKind {
             NodeKind::Limiter(lim) => lim.process_stereo(l, r),
             NodeKind::TiltEq(eq) => eq.process_stereo(l, r),
             NodeKind::ThreeBandEq(eq) => eq.process_stereo(l, r),
+            // Each holds state per channel, or follows both channels together:
+            // the dual-mono fallback would run both through one state.
+            NodeKind::ParamEq(eq) => eq.process_stereo(l, r),
+            NodeKind::Clip(c) => c.process_stereo(l, r),
+            NodeKind::Transient(t) => t.process_stereo(l, r),
             NodeKind::Bitcrusher(bc) => bc.process_stereo(l, r),
             NodeKind::Saturator(sat) => (sat.process(l), sat.process(r)),
             NodeKind::Gain(g) => (l * *g, r * *g),
@@ -1000,6 +1056,10 @@ impl NodeKind {
             }
             (NodeKind::Saturator(s), "drive") => {
                 s.set_drive(value);
+                true
+            }
+            (NodeKind::Clip(c), "drive") => {
+                c.set_drive(value);
                 true
             }
             (NodeKind::Gain(g), "gain") => {
@@ -1160,6 +1220,9 @@ impl NodeKind {
             NodeKind::Limiter(lim) => lim.reset(),
             NodeKind::TiltEq(eq) => eq.reset(),
             NodeKind::ThreeBandEq(eq) => eq.reset(),
+            NodeKind::ParamEq(eq) => eq.reset(),
+            NodeKind::Clip(c) => c.reset(),
+            NodeKind::Transient(t) => t.reset(),
             NodeKind::Delay(d) => d.reset(),
             NodeKind::Reverb(r) => r.reset(),
         }
@@ -1196,6 +1259,38 @@ mod renew_tests {
         renews_like_new(NodeSpec::Capture { samples: 4_000, start_samples: 0, speed: 0.5, reverse: true, mix: 1.0 });
         renews_like_new(NodeSpec::Chorus { mix: 0.5 });
         renews_like_new(NodeSpec::Saturator { drive: 2.0 });
+        renews_like_new(NodeSpec::ParamEq { band: Band::Bell, freq: 300.0, gain_db: -6.0, q: 2.0 });
+        renews_like_new(NodeSpec::Clip { drive: 4.0, ceiling: 0.7 });
+        renews_like_new(NodeSpec::Transient { attack_db: 6.0, sustain_db: -6.0 });
+    }
+
+    /// With `mid` at the start, a sweep plays sample for sample what it did
+    /// before there was a second stage, rising or falling: the old sweep,
+    /// written out here as it was.
+    #[test]
+    fn one_stage_plays_the_old_sweep_bit_for_bit() {
+        for (start, end) in [(50.0, 300.0), (300.0, 50.0)] {
+            let spec = NodeSpec::PitchOsc {
+                waveform: Waveform::Sine,
+                start_freq: start,
+                end_freq: end,
+                decay: 0.999,
+                mid_freq: start,
+                fast: 0.99,
+            };
+            let mut node = spec.instantiate();
+            let mut osc = Oscillator::new(Waveform::Sine, SAMPLE_RATE);
+            osc.set_frequency(start);
+            osc.set_drift_enabled(false);
+            let mut freq = start;
+            for i in 0..20_000 {
+                let old = osc.next_sample();
+                freq = end + (freq - end) * 0.999;
+                osc.set_frequency(freq);
+                let new = node.process(&[0.0; MAX_NODE_INPUTS], 1);
+                assert_eq!(new.to_bits(), old.to_bits(), "{start} to {end} differs at sample {i}");
+            }
+        }
     }
 
     #[test]
