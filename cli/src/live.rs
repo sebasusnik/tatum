@@ -738,6 +738,16 @@ pub fn run(
                 crate::keys::Key::Named(name) => {
                     let word = name.word();
                     match bindings.iter().find(|b| b.key == word).map(|b| &b.action) {
+                        Some(KeyAction::Reset) => {
+                            let generation = stats.generation.load(Ordering::Relaxed);
+                            for plan in planner.reset_knobs(generation) {
+                                if plan_tx.send(plan).is_err() {
+                                    break;
+                                }
+                            }
+                            ui.say(now_s(), "reset: every knob and fader back to the text", crate::tui::Tone::Good);
+                            continue;
+                        }
                         Some(KeyAction::Voice(mv)) => {
                             let generation = stats.generation.load(Ordering::Relaxed);
                             match planner.voice(mv, generation) {
@@ -1066,6 +1076,7 @@ fn print_keyboard(planner: &LivePlanner) {
         .map(|b| {
             let what = match &b.action {
                 KeyAction::Perform(s) => format!("scene {}", s),
+                KeyAction::Reset => "reset the knobs".into(),
                 KeyAction::Voice(tatum_core::dsl::ast::VoiceMove::Next) => "next voice".into(),
                 KeyAction::Voice(tatum_core::dsl::ast::VoiceMove::Prev) => "voice before".into(),
                 KeyAction::Voice(tatum_core::dsl::ast::VoiceMove::To(p)) => format!("voice {}", p),

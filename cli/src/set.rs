@@ -245,6 +245,8 @@ pub enum Act {
     Pressure(bool, u8, u8),
     /// The knobs' page: `voice next`, `voice prev`, `voice bass`.
     Voice(tatum_core::dsl::ast::VoiceMove),
+    /// Every knob touched back to the text, as the reset key does.
+    Reset,
     End,
 }
 
@@ -309,6 +311,7 @@ pub fn parse_script(text: &str) -> Result<Vec<(f64, Act)>, String> {
             ),
             Some("end") => Act::End,
             Some("perform") => Act::Perform(w.get(2).ok_or_else(|| bad("perform <scene>"))?.to_string()),
+            Some("reset") => Act::Reset,
             Some("press") => Act::Pressure(
                 match w.get(2) {
                     Some(&"pad") => true,
@@ -324,7 +327,7 @@ pub fn parse_script(text: &str) -> Result<Vec<(f64, Act)>, String> {
                 Some(p) => tatum_core::dsl::ast::VoiceMove::To(p.to_string()),
                 None => return Err(bad("voice next|prev|<page>")),
             }),
-            _ => return Err(bad("expected cc, pad, key, press, bend, voice, next, prev, step, perform or end")),
+            _ => return Err(bad("expected cc, pad, key, press, bend, voice, reset, next, prev, step, perform or end")),
         };
         out.push((bar, act));
     }
@@ -502,6 +505,10 @@ pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Resul
                     }
                 }
                 Act::Pressure(pad, note, v) => plans = planner.pressure(pad, Some(note), v),
+                Act::Reset => {
+                    plans = planner.reset_knobs(g);
+                    said = String::from("reset: every knob back to the text");
+                }
                 Act::Voice(mv) => {
                     said = planner.voice(&mv, g).unwrap_or_else(|| String::from("no knob pages"));
                 }

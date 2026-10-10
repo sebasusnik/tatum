@@ -233,6 +233,8 @@ pub enum KeyAction {
     Perform(String),
     /// `tab > voice next`: the knobs' page.
     Voice(VoiceMove),
+    /// `0 > reset`: every knob and fader touched goes back to the text.
+    Reset,
     Next,
     Prev,
     Step(usize),

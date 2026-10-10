@@ -212,6 +212,29 @@ impl Knob {
         (-0.01..=1.01).contains(&x).then(|| crate::math::floor(x.clamp(0.0, 1.0) * 127.0 + 0.5) as u8)
     }
 
+    /// What puts every target of this knob back where the text has it: the
+    /// value written, else the default the compiler gives it. A target with
+    /// neither (a tempo) is left where it is.
+    pub fn rest_ops(&self, song: &Song) -> Vec<FastOp> {
+        let written = text_value(song, &self.target);
+        self.moves
+            .iter()
+            .filter_map(|m| {
+                let v = match m {
+                    Move::Module { spec, .. } => written.unwrap_or(spec.default),
+                    Move::TrackLevel { .. } => written.unwrap_or(0.8),
+                    Move::TrackPan { .. } | Move::TrackSend { .. } => written.unwrap_or(0.0),
+                    Move::NodeWet { .. } => written.unwrap_or(1.0),
+                    Move::ReverbMix | Move::DelayMix => written.unwrap_or(1.0),
+                    Move::ReverbFreeze => 0.0,
+                    Move::NodeParam { .. } => written?,
+                    Move::Tempo => return None,
+                };
+                Some(op(m, v))
+            })
+            .collect()
+    }
+
     /// What the knob reads at `value`: `acid cutoff 1.2khz`, `pad level -6.0 dB`.
     pub fn reading(&self, value: u8) -> String {
         let label = self.target.replace('.', " ");
@@ -911,6 +934,15 @@ pub fn text_value(song: &Song, target: &str) -> Option<f32> {
             let n = def.routing.iter().find(|n| n.label.as_deref() == Some(*node))?;
             n.params.iter().find_map(|p| match p {
                 Param::Named(k, v) if k == "wet" => Some(*v),
+                _ => None,
+            })
+        }
+        [t, label, param] if *t != "master" && *param != "wet" => {
+            let def = song.tracks.iter().find(|d| &d.name == t)?;
+            let node = def.routing.iter().find(|n| n.label.as_deref() == Some(*label))?;
+            let _ = param;
+            node.params.iter().find_map(|p| match p {
+                Param::Float(v) => Some(*v),
                 _ => None,
             })
         }

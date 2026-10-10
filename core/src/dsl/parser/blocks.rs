@@ -884,6 +884,10 @@ impl Parser {
                     self.advance();
                     self.expect_ident().map(KeyAction::Perform)
                 }
+                Token::Ident(w) if w == "reset" => {
+                    self.advance();
+                    Some(KeyAction::Reset)
+                }
                 Token::Ident(w) if w == "voice" => {
                     self.advance();
                     match self.peek().clone() {
@@ -928,7 +932,7 @@ impl Parser {
                         line: a.line,
                         col: a.col,
                         message: format!(
-                            "keyboard: a key does `perform <scene>`, `voice next|prev|<page>`, `next`, `prev` or `step <n>`; got {}",
+                            "keyboard: a key does `perform <scene>`, `voice next|prev|<page>`, `reset`, `next`, `prev` or `step <n>`; got {}",
                             describe_token(&a.token)
                         ),
                     });

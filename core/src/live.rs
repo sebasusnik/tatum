@@ -1472,6 +1472,40 @@ impl LivePlanner {
         }
     }
 
+    /// Every knob and fader the hands have moved, on every page and in the
+    /// scene, back to where the text has its targets, and forgotten: the
+    /// next touch of each is a first touch again. The scene's own values go
+    /// back on after, since the scene is still playing.
+    pub fn reset_knobs(&mut self, playing: Generation) -> Vec<Plan> {
+        self.catch_up(playing);
+        let mut touched: Vec<u8> = self.knob_values.iter().map(|(c, _)| *c).collect();
+        touched.extend(self.page_memory.iter().map(|(_, c, _)| *c));
+        touched.sort();
+        touched.dedup();
+        let mut plans = Vec::new();
+        for known in self.known() {
+            let c = &known.controls;
+            let lines = c
+                .knobs
+                .iter()
+                .chain(c.pages.iter().flat_map(|p| p.knobs.iter()))
+                .chain(c.scenes.iter().flat_map(|s| s.knobs.iter().map(|(_, k)| k)))
+                .filter(|k| touched.contains(&k.cc));
+            let ops: Vec<FastOp> = lines.flat_map(|k| k.rest_ops(&known.ast)).collect();
+            if !ops.is_empty() {
+                plans.push(Plan::Fast { base: known.generation, ops });
+            }
+        }
+        self.knob_values.clear();
+        self.page_memory.clear();
+        self.pickups.clear();
+        self.knob_gesture.clear();
+        if let Some(scene) = self.scene.clone() {
+            plans.extend(self.scene_values(&scene, None, playing).unwrap_or_default());
+        }
+        plans
+    }
+
     /// The knobs' voice: the page chosen, by name.
     pub fn voice_name(&self) -> Option<String> {
         self.page_name(self.page)

@@ -42,7 +42,7 @@ F9, el filtro DJ: al medio está abierto, para abajo oscurece, para arriba adelg
 
 ## Perillas: una página por voz
 
-**Tab** en la compu cambia de página; el encabezado de la TUI dice cuál (`knobs: bass`).
+**Tab** en la compu, o el **encoder grande**, cambia de página; el encabezado de la TUI dice cuál (`knobs: bass`). Las perillas son siempre las mismas 9: la página elige qué mueven. **0** en la compu vuelve todo a como está el tema.
 
 | página | K1 | K2 | K3 | K4 | K5 | K6 | K7 | K8 | K9 |
 |---|---|---|---|---|---|---|---|---|---|
@@ -72,6 +72,7 @@ Banco A: cuanto más fuerte golpeás, más intenso; si apretás más mientras lo
 |---|---|
 | F1 · F2 · F3 · F4 | escena intro · build · drop · break (entran en el próximo compás) |
 | Tab | página siguiente de perillas |
+| 0 | reset: todo lo que moviste con perillas y faders vuelve a como está el tema |
 | espacio o → | próximo paso del set · ← el anterior · 1–9 un paso de la pantalla · g la lista |
 | i | monitor MIDI |
 | ? | todas las teclas de la TUI |

@@ -202,3 +202,32 @@ fn a_held_tape_stop_silences_the_song_and_letting_go_brings_it_back() {
     assert!(rms(&stopping[n / 2..]) < rms(&before) * 0.05, "the stop did not stop");
     assert!(rms(&after[4410..]) > rms(&before) * 0.5, "the song did not come back");
 }
+
+#[test]
+fn reset_puts_every_touched_knob_back_to_the_text() {
+    let (mut planner, player) = session();
+    let g = player.generation();
+    planner.knob(74, 127, g); // tema: the bass level, to the top
+    planner.voice(&VoiceMove::To("bass".into()), g);
+    planner.knob(74, 10, g); // bass: the cutoff, down
+    let plans = planner.reset_knobs(g);
+    let ops: Vec<FastOp> = plans
+        .iter()
+        .flat_map(|p| match p {
+            Plan::Fast { ops, .. } => ops.clone(),
+            _ => Vec::new(),
+        })
+        .collect();
+    assert!(
+        ops.iter().any(|op| matches!(op, FastOp::TrackLevel { track: 0, level } if (*level - 0.8).abs() < 1e-6)),
+        "the bass level is not back at 0.8: {ops:?}"
+    );
+    assert!(
+        ops.iter().any(|op| matches!(op, FastOp::ModuleParam { value, .. } if (*value - 0.4).abs() < 1e-6)),
+        "the cutoff is not back at 0.4: {ops:?}"
+    );
+    // Untouched knobs are left alone: nothing on the master volume.
+    assert!(!ops.iter().any(|op| matches!(op, FastOp::NodeParam { track: None, .. })), "{ops:?}");
+    // Forgotten: back on the bass page the knob moves at once, no pickup.
+    assert!(!planner.knob(74, 90, g).plans.is_empty());
+}

@@ -198,6 +198,7 @@ perform break {
 
 keyboard {
     tab > voice next
+    0 > reset                         # every knob and fader back to the text
     f1 > perform intro
     f2 > perform build
     f3 > perform drop
