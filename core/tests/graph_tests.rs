@@ -19,6 +19,8 @@ fn build_bass_graph() -> Instrument {
         drift_seed: 42,
         fixed: false,
         pitch_semitones: 0.0,
+        pitch_env: 0.0,
+        pitch_decay: 0.005,
     });
     let filt = b.add_node(NodeSpec::ladder(900.0, 0.6));
     let env = b.add_node(NodeSpec::Env { a: 0.01, d: 0.2, s: 0.7, r: 0.3 });
@@ -48,6 +50,8 @@ fn build_kick_graph() -> Instrument {
         drift_seed: 42,
         fixed: false,
         pitch_semitones: 0.0,
+        pitch_env: 0.0,
+        pitch_decay: 0.005,
     });
     let body_env = b.add_node(NodeSpec::Env { a: 0.001, d: 0.3, s: 0.0, r: 0.01 });
     let body_vca = b.add_node(NodeSpec::Vca);
@@ -94,6 +98,8 @@ fn build_pad_graph() -> Instrument {
         drift_seed: 42,
         fixed: false,
         pitch_semitones: 0.0,
+        pitch_env: 0.0,
+        pitch_decay: 0.005,
     });
     let osc2 = b.add_node(NodeSpec::Osc {
         waveform: Waveform::Square,
@@ -101,6 +107,8 @@ fn build_pad_graph() -> Instrument {
         drift_seed: 43,
         fixed: false,
         pitch_semitones: 0.0,
+        pitch_env: 0.0,
+        pitch_decay: 0.005,
     });
     let mix = b.add_node(NodeSpec::Mix);
     let filt = b.add_node(NodeSpec::biquad(FilterType::LowPass, 2000.0, 0.3));
@@ -247,6 +255,8 @@ fn test_graph_topological_sort() {
         drift_seed: 42,
         fixed: false,
         pitch_semitones: 0.0,
+        pitch_env: 0.0,
+        pitch_decay: 0.005,
     });
 
     b.connect(osc, vca);
@@ -277,6 +287,8 @@ fn test_graph_voice_stealing() {
         drift_seed: 42,
         fixed: false,
         pitch_semitones: 0.0,
+        pitch_env: 0.0,
+        pitch_decay: 0.005,
     });
     let env = b.add_node(NodeSpec::Env { a: 0.01, d: 0.1, s: 1.0, r: 0.1 });
     let vca = b.add_node(NodeSpec::Vca);

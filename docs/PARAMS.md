@@ -176,9 +176,9 @@ listed below:
 
 | node | where | arguments | options | description |
 |------|-------|-----------|---------|-------------|
-| `osc` | graph | `freq` 1..20000 (default 440); waveform word | `pitch=` -48..48 (default 0), offset in semitones | Oscillator that follows the played note. Waveform word: sine | saw | square | triangle. Has analog drift. |
-| `fixosc` | graph | `freq` 1..20000 (default 440); waveform word | none | Fixed-frequency oscillator (ignores the note), for metallic stacks. |
-| `pitch_osc` | graph | `start_freq` 1..20000 (default 300); `end_freq` 1..20000 (default 55); `decay` 0.9..0.99999 (default 0.995); waveform word | `decay=` 0.9..0.99999 (default 0.995), per-sample pitch decay factor | Pitch-sweeping oscillator for kicks and toms. |
+| `osc` | graph | `freq` 1..20000 (default 440); waveform word | `pitch=` -48..48 (default 0), offset in semitones; `width=` 0.05..0.95 (default 0.5), pulse duty cycle, the share of each cycle spent high; pulse only; `pitch_env=` -5000..5000 (default 0), Hz added to the note at its start, falling away with pitch_decay: the click on a pluck's attack; `pitch_decay=` 0.1..2000 (default 5), ms for pitch_env to fall to a third | Oscillator that follows the played note. Waveform word: sine | saw | square | triangle | pulse. Has analog drift. |
+| `fixosc` | graph | `freq` 1..20000 (default 440); waveform word | `width=` 0.05..0.95 (default 0.5), pulse duty cycle, the share of each cycle spent high; pulse only | Fixed-frequency oscillator (ignores the note), for metallic stacks. |
+| `pitch_osc` | graph | `start_freq` 1..20000 (default 300); `end_freq` 1..20000 (default 55); `decay` 0.9..0.99999 (default 0.995); waveform word | `decay=` 0.9..0.99999 (default 0.995), per-sample pitch decay factor; `width=` 0.05..0.95 (default 0.5), pulse duty cycle, the share of each cycle spent high; pulse only | Pitch-sweeping oscillator for kicks and toms. |
 | `noise` | graph | none | none | White noise. |
 | `lfo` | graph | `rate` 0.01..50 (default 1); `depth` 0..1 (default 0.5) | none | Low-frequency oscillator as a control signal. |
 | `adsr` | graph | `attack` 0..10 (default 0.01); `decay` 0..10 (default 0.1); `sustain` 0..1 (default 0.7); `release` 0..10 (default 0.3) | none | Amplitude envelope; the last envelope before `out` gates the voice. |

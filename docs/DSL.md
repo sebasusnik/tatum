@@ -753,6 +753,30 @@ pattern line { 1.2:0.95 ~1.2:0.7 - 1.2:0.9 ~5.2:0.85 - ~7.1:0.8 - }
 scene build { auto acid cutoff 0.15 > 0.5 ... }
 ```
 
+**A minimal pluck.** When the patch has to be exact, build it as an `instrument` graph:
+a saw, a narrow `pulse` a few cents up, a square sub, a ladder resting low with a
+short exponential sweep, and `pitch_env` for the click of pitch on the attack.
+`width=` only applies to `pulse`; `pitch_decay` is the time for the jump to fall
+to a third:
+
+```
+instrument pluck {
+  osc saw(55, pitch_env=150hz, pitch_decay=5ms) as body
+  osc pulse(55, width=0.42, pitch=0.06) as edge
+  osc square(55, pitch=-12) as sub
+  body > gain(0.55) as lvl_body
+  edge > gain(0.45) as lvl_edge
+  sub > gain(0.3) as lvl_sub
+  lvl_body > mix
+  lvl_edge > mix
+  lvl_sub > mix
+  mix > ladder(150, 0.6, ea=0.001, ed=0.12, es=0.05, edepth=4000) as filt
+  filt > adsr(0.001, 0.2, 0.0, 0.05) as amp
+  amp > saturate(1.5) as sat
+  sat > out
+}
+```
+
 **An FM stab.** Two operators, short envelopes, a bit of feedback, off-beat pattern with
 rests, saturation in the chain and a delay send:
 
