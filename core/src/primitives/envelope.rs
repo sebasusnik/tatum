@@ -48,7 +48,7 @@ fn stage_tau(time: f32) -> f32 {
 }
 
 /// The per-sample coefficient for a stage `time` seconds long.
-fn stage_coeff(time: f32, sample_rate: f32) -> f32 {
+pub(crate) fn stage_coeff(time: f32, sample_rate: f32) -> f32 {
     math::exp(-1.0 / (stage_tau(time) * sample_rate))
 }
 
