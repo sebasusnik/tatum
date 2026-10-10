@@ -477,6 +477,26 @@ track eco {
 # F8 echo, F9 DJ filter, A4 freeze, A7 prev, A8 next. T02 has no second
 # voice under the pluck: F5 and K4 go to the echo figure (B4) and the
 # shaker's top instead.
+# The keyboard's lead in this track: its own pluck voice (orbita), for the
+# lead zone, through the same chain, plus a filter (`klp`) and a vowel
+# (`talk`) the wheel and the knobs reach, and its own gain (`kgain`).
+track ktema {
+    play krest
+    using orbita
+    level 0.5
+    velocity 1.0
+    gate 0.6
+    pan -0.18
+    delay_send 0.28
+    reverb_send 0.1
+    sidechain 0.3
+
+    out > highpass(160hz, 0.05)
+        > lowpass(5khz, 0.1, lfo_bars=8, lfo_depth=2500)
+        > panenv(0.45, release=250)
+        > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(0.820) as kgain > master
+}
+
 midi {
     # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
     # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw

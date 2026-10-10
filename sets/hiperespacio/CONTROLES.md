@@ -39,7 +39,7 @@ the page (`knobs: bass`), and changing it says what each knob now moves.
 |---|---|---|---|---|---|---|---|---|---|
 | **tema** (start) | bass filter | main voice open | signature RPM | second voice open | tension | throw amount | kick decay | hats pitch | dirt |
 | **bass** | cutoff (FM: index) | resonance (FM: feedback) | decay | env amount (FM: modulator decay) | sustain | echo send | osc 2 pitch (FM: ratio) | vibrato | level |
-| **lead** | brightness | resonance (pad) | decay | FM index | FM feedback | vowel (laser and pad) | zap crusher | zap fall | vibrato |
+| **lead** | brightness | resonance (FM: feedback) | decay | FM index (filter: env) | vibrato | vowel | zap crusher | zap fall | the lead's level |
 | **drums** | kick decay | kick pitch | kick click | kick drive | hats level | hats pitch | snare (fills) | hats pan | the whole kit |
 | **master** | master volume | thin the floor | room | echo | EQ low | EQ mid | EQ high | — | — |
 
@@ -120,7 +120,7 @@ shows what yours send.
 |---|---|---|
 | triggers | 36–47 (the lowest C to B) | each key does one thing, below |
 | bass | 48–59 | held, the track's own `bass` rolls that note on the three sixteenths after each beat, in place of its line; let go and the line comes back. The keys sound in the line's own register (octave 1 in every track of the set): E3 on the keyboard plays E1 |
-| lead | 60–84 | the scene's voice, every note kept to the track's scale (`lock snap`: a key outside it plays the nearest note in it, the lower one on a tie) |
+| lead | 60–84 | the track's own lead (`ktema`: a keyboard copy of its main voice, through the same chain, in that voice's register) in intro and drop, a zap in the build, a pad in the break; every note kept to the track's scale (`lock snap`) |
 
 Triggers:
 
@@ -148,9 +148,9 @@ lead zone is the newest held: they move the sound you play. **Hands off**
 
 | key | scene | bass zone | lead zone | strip, playing | strip, hands off | wheel, playing | wheel, hands off |
 |---|---|---|---|---|---|---|---|
-| F1 | intro | `bass` roll | `kpluck`, a dark FM pluck | to the note 2 degrees away, in the scale | the song's bass line bends, up to an octave | **filter**: the pluck opens, 2.5 → 14 kHz | the song goes under (DJ low-pass to 1.2 kHz) |
+| F1 | intro | `bass` roll | `ktema`, the track's own lead | to the note 2 degrees away, in the scale | the song's bass line bends, up to an octave | **filter**: the lead closes into the dark | the song goes under (DJ low-pass to 1.2 kHz) |
 | F2 | build | `bass` roll | `kzap`, the falling zap | ±24 semitones: dives | the song's bass line falls an octave | **FX**: a crusher on the zap, 0 → 70% | the floor thins (high-pass to 1.5 kHz) |
-| F3 | drop | `bass` roll | `klaser`, the laser | 2 degrees | the song's bass line bends | **vowel**: the laser talks, a → u | a DJ filter sweep (low-pass to 600 Hz) |
+| F3 | drop | `bass` roll | `ktema`, the track's own lead | 2 degrees | the song's bass line bends | **vowel**: the lead talks, a → u | a DJ filter sweep (low-pass to 600 Hz) |
 | F4 | break | `bass` roll **with its own kick** | `kvox`, a vowel pad | 1 degree | whatever bass is left dives an octave | **vowel**: the pad walks a-e-i-o-u | under water (low-pass to 400 Hz) |
 
 A gesture belongs to what it started on: if you let go of the key mid-sweep,

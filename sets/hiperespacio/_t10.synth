@@ -510,6 +510,23 @@ track stabs {
 
 # The KeyLab, per CONTROLES.md (base maps F7 reverb, F8 echo, F9 DJ filter,
 # A4 freeze, A7 prev, A8 next)
+# The keyboard's lead in this track: its own acid voice (scream), for the
+# lead zone, through the same chain, plus a filter (`klp`) and a vowel
+# (`talk`) the wheel and the knobs reach, and its own gain (`kgain`).
+track ktema {
+    play krest
+    using scream
+    level 0.5
+    velocity 1.0
+    gate 0.55
+    pan 0.15
+    delay_send 0.12
+    reverb_send 0.05
+    sidechain 0.55
+
+    out > highpass(170hz, 0.05) > saturate(1.2) > bitcrush(9, 0.25, wet=0) as crush > limiter(0.45) > autopan(0.3, bars=2) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(2.624) as kgain > master
+}
+
 midi {
     # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
     # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw

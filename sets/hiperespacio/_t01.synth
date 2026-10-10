@@ -558,6 +558,22 @@ track spark {
 
 # The KeyLab, laid out as CONTROLES.md says. _base.synth has F7 reverb,
 # F8 echo, F9 DJ filter, A4 freeze, A7 prev, A8 next.
+# The keyboard's lead in this track: its own pad voice (vacio), for the
+# lead zone, through the same chain, plus a filter (`klp`) and a vowel
+# (`talk`) the wheel and the knobs reach, and its own gain (`kgain`).
+track ktema {
+    play krest
+    using vacio
+    level 0.5
+    velocity 1.0
+    pan -0.2
+    reverb_send 0.5
+    delay_send 0.06
+    sidechain 0.6
+
+    out > highpass(200hz, 0.05) > phaser(0.35, bars=16) > autopan(0.45, bars=8) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(1.021) as kgain > master
+}
+
 midi {
     # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
     # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw

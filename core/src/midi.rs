@@ -792,6 +792,7 @@ fn zone_target(song: &Song, names: &Names, play: &ZonePlay, kind: ZoneKind, low:
             .get(t)
             .copied()
             .flatten()
+            .or_else(|| sibling_home(names, t))
             .map(|home| {
                 let below = home as i32 - (home as i32 - root as i32).rem_euclid(12);
                 if home as i32 - below > 6 {
@@ -801,10 +802,31 @@ fn zone_target(song: &Song, names: &Names, play: &ZonePlay, kind: ZoneKind, low:
                 }
             })
             .or_else(|| mono.then_some(24 + root as i32)),
+        // A lead zone on a voice of the song's own -- a keyboard copy of the
+        // track's lead -- plays where that lead plays; any other as written.
+        (None, ZoneKind::Lead) => sibling_home(names, t).map(|home| {
+            let below = home as i32 - (home as i32 - root as i32).rem_euclid(12);
+            if home as i32 - below > 6 {
+                below + 12
+            } else {
+                below
+            }
+        }),
         (None, _) => None,
     };
     let shift = wanted.map_or(0, |w| (w - root_key + 6).div_euclid(12) * 12);
     Some(ZoneTarget { track: t, instrument, mono, roll: play.roll, kick, shift: shift.clamp(-96, 96) as i8 })
+}
+
+/// The note another track playing the same module plays most: where a
+/// track with no notes of its own, kept for the keys, belongs.
+fn sibling_home(names: &Names, t: usize) -> Option<u8> {
+    let inst = *names.track_instruments.get(t)?;
+    let name = names.instruments.get(inst)?;
+    (0..names.tracks.len())
+        .filter(|&o| o != t)
+        .filter(|&o| names.track_instruments.get(o).and_then(|&i| names.instruments.get(i)) == Some(name))
+        .find_map(|o| names.track_home.get(o).copied().flatten())
 }
 
 /// What `target` moves in the engine `names` describes. Resolves the way

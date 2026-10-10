@@ -130,7 +130,7 @@ track kpluck {
 track kzap {
     play krest
     using kzap_v
-    level 0.6
+    level 0.22
     gate 0.9
     pan -0.15
     delay_send 0.25
@@ -154,7 +154,7 @@ track klaser {
 track kvox {
     play krest
     using kvox_v
-    level 0.22
+    level 0.2
     pan 0.0
     delay_send 0.1
     reverb_send 0.45

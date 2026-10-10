@@ -515,6 +515,23 @@ track rjam {
 # The KeyLab, in the set's fixed layout (CONTROLES.md). The base maps F7 F8 F9,
 # A4 freeze, A7 prev and A8 next. Level ranges are written so the top of a
 # fader is a little over where the steps run each voice
+# The keyboard's lead in this track: its own robo voice (robo), for the
+# lead zone, through the same chain, plus a filter (`klp`) and a vowel
+# (`talk`) the wheel and the knobs reach, and its own gain (`kgain`).
+track ktema {
+    play krest
+    using robo
+    level 0.5
+    velocity 1.0
+    gate 0.45
+    pan 0.22
+    delay_send 0.12
+    reverb_send 0.08
+    sidechain 0.35
+
+    out > highpass(180hz, 0.05) > vowel(o, i, bars=1, mix=0.85) > saturate(0.35) > lowpass(8khz, 0.05) > autopan(0.25, bars=2) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(2.654) as kgain > master
+}
+
 midi {
     # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
     # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw

@@ -486,6 +486,23 @@ track mg {
 
 # The KeyLab, per CONTROLES.md (F7 reverb, F8 echo, F9 DJ filter, A4 freeze,
 # A7 prev, A8 next come from _base). B7 throws the arp, B8 takes the bass out.
+# The keyboard's lead in this track: its own lead voice (laser7), for the
+# lead zone, through the same chain, plus a filter (`klp`) and a vowel
+# (`talk`) the wheel and the knobs reach, and its own gain (`kgain`).
+track ktema {
+    play krest
+    using laser7
+    level 0.5
+    velocity 1.0
+    gate 0.9
+    pan 0.0
+    delay_send 0.32
+    reverb_send 0.2
+    sidechain 0.4
+
+    out > highpass(320hz, 0.05) > saturate(0.25) > lowpass(9khz, 0.05) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(0.059) as kgain > master
+}
+
 midi {
     # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
     # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw

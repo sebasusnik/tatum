@@ -634,6 +634,23 @@ track silbido {
 # K3. T04 has no second drum track, so F2 is the kit's hats and A2 takes the
 # roll in and out instead. The base already maps F7 reverb, F8 echo, F9 DJ
 # filter, A4 freeze, A7 prev, A8 next. B8 is left free.
+# The keyboard's lead in this track: its own acid voice (tb), for the
+# lead zone, through the same chain, plus a filter (`klp`) and a vowel
+# (`talk`) the wheel and the knobs reach, and its own gain (`kgain`).
+track ktema {
+    play krest
+    using tb
+    level 0.5
+    velocity 1.0
+    gate 0.55
+    pan 0.28
+    delay_send 0.2
+    reverb_send 0.05
+    sidechain 0.6
+
+    out > highpass(180hz, 0.05) > saturate(0.7) as dirt > lowpass(9khz, 0.05) as lp > limiter(0.5) > autopan(0.3, bars=4) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(2.393) as kgain > master
+}
+
 midi {
     # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
     # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw

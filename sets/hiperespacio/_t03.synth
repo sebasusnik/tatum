@@ -476,6 +476,23 @@ track viento {
 # talking drone's gestures are the second voice and its pad voice the
 # signature. The base already maps F7 reverb, F8 echo, F9 DJ filter,
 # A4 freeze, A7 prev, A8 next.
+# The keyboard's lead in this track: its own talk voice (lengua), for the
+# lead zone, through the same chain, plus a filter (`klp`) and a vowel
+# (`talk`) the wheel and the knobs reach, and its own gain (`kgain`).
+track ktema {
+    play krest
+    using lengua
+    level 0.5
+    velocity 1.0
+    gate 1.0
+    pan 0.12
+    delay_send 0.15
+    reverb_send 0.3
+    sidechain 0.5
+
+    out > highpass(220hz, 0.05) > vowel(o, a, bars=1, mix=0.9) as mouth > saturate(0.25) > lowpass(6khz, 0.05) as lp > autopan(0.3, bars=4) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(0.574) as kgain > master
+}
+
 midi {
     # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
     # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw

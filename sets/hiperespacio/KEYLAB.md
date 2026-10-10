@@ -15,7 +15,7 @@ cambiarlo.
 |---|---|---|
 | la más grave | 36–47 | **disparos**, una cosa por tecla (abajo) |
 | la segunda | 48–59 | **bajo**: mantené una tecla y el bajo del tema la rueda en semicorcheas, en su registro; soltá y vuelve su línea |
-| el resto | 60–84 | **lead**: la voz de la escena, siempre dentro de la escala |
+| el resto | 60–84 | **lead**: la voz principal del tema (el 303 en T04, el oud en T09, el láser en T07…), en su registro y dentro de la escala; en el build un zap y en el break un pad |
 
 Disparos, de izquierda a derecha:
 
@@ -48,7 +48,7 @@ F9, el filtro DJ: al medio está abierto, para abajo oscurece, para arriba adelg
 |---|---|---|---|---|---|---|---|---|---|
 | **tema** | filtro del bajo | voz principal | firma (RPM) | segunda voz | tensión | throw | kick | hats | suciedad |
 | **bass** | cutoff | reso | decay | envolvente | sustain | eco | osc 2 | vibrato | volumen |
-| **lead** | brillo | reso | decay | FM | feedback | vocal (láser y pad) | crusher | caída del zap | vibrato |
+| **lead** | brillo | reso | decay | FM | vibrato | vocal | crusher (build) | caída del zap (build) | volumen |
 | **drums** | decay kick | pitch kick | click | drive | volumen hats | pitch hats | redoblante | pan hats | toda la batería |
 | **master** | volumen master | adelgazar | sala | eco | graves | medios | agudos | | |
 

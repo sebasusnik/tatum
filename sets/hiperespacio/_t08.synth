@@ -426,6 +426,23 @@ track zaphold {
 # A7 prev, A8 next come from _base). T08 has no lead: its main voice (F4, K2,
 # A3, K5/K6) is the zaps, its second voice (F5, K4) the grinder of the steps'
 # gestures. B7 hits the clap, B8 takes the bass out.
+# The keyboard's lead in this track: its own zap voice (zap8), for the
+# lead zone, through the same chain, plus a filter (`klp`) and a vowel
+# (`talk`) the wheel and the knobs reach, and its own gain (`kgain`).
+track ktema {
+    play krest
+    using zap8
+    level 0.5
+    velocity 1.0
+    gate 0.3
+    pan 0.35
+    delay_send 0.22
+    reverb_send 0.06
+    sidechain 0.2
+
+    out > highpass(300hz, 0.05) > lowpass(10khz, 0.05) > panenv(0.8, release=250) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(0.323) as kgain > master
+}
+
 midi {
     # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
     # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw
