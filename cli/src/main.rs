@@ -1,3 +1,4 @@
+mod analyze;
 mod audit;
 mod fmt;
 mod debug;
@@ -25,6 +26,8 @@ fn main() {
         "render" => cmd_render(&args[2..]),
         "check" => cmd_check(&args[2..]),
         "audit" => audit::cmd(&args[2..]),
+        "analyze" => analyze::cmd_analyze(&args[2..]),
+        "compare" => analyze::cmd_compare(&args[2..]),
         "debug" => debug::cmd(&args[2..]),
         "params" => cmd_params(&args[2..]),
         "fmt" => fmt::cmd(&args[2..]),
@@ -61,6 +64,8 @@ USAGE:
     tatum set play <dir> [--tui] [--auto] [--phrase 8] [--midi <name>]
     tatum audit <song.synth> [--bars N] [--json] [--strict]
     tatum debug <song.synth> [--bars N | A-B] [--dry] [-o dir] [--solo a,b] [--mute c]
+    tatum analyze <reference.wav> [--from 1:04] [--to 1:36]
+    tatum compare <reference.wav> <song.synth | other.wav> [--from S] [--to S] [--bars N | A-B] [--solo a,b]
     tatum watch <song.synth> [--tui] [--device <name>] [--rate <hz>] [--midi <name>]
     tatum tui-shot <song.synth | set dir> [--at <seconds>] [--size 160x48] [--font f.ttf] [--frames N] [-o shot.png]
 
@@ -107,6 +112,19 @@ COMMANDS:
               same as a crowded strip); and zoom.*.png, the worst moment of
               each part up close, wave and spectrum. --bars 17-24
               zooms in; --dry adds each track before its insert chain.
+    analyze   Measure a reference track: tempo, key, the notes under 250 Hz,
+              loudness and how far the peaks sit over it, stereo width above
+              250 Hz and under 150 Hz, the kick (where its sweep starts and
+              lands, how long the sweep and the body take, how much click),
+              and the spectrum per octave. A WAV at any rate; --from/--to
+              take a stretch of it (64 or 1:04).
+    compare   The same measures for a reference and a song (rendered, or a
+              second WAV) side by side, then what differs by enough to hear,
+              each with what in the file moves it: the kick's `pitch_osc`
+              and `perc` with numbers that land like the reference, the
+              bands to take down or bring up, the density, the low end's
+              width. --solo kick compares one part against the reference;
+              --bars picks the stretch of the song.
     set       A live set: a directory of numbered .synth files, each the whole
               rig at a moment. `render` walks them with real hot swaps into one
               continuous WAV; `check` validates every step and reports the arc;
