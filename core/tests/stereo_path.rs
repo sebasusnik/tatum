@@ -155,10 +155,17 @@ fn autowah_opens_with_the_signal_and_closes_after_it() {
     }
     let open = cutoff(&node);
     assert!(open > 300.0 + 2500.0 * 0.5, "after 300 ms of signal the cutoff is at {:.0} Hz", open);
-    for _ in 0..SAMPLE_RATE as usize {
+    // Two seconds: the follower falls with its 200 ms release, and at the
+    // default sensitivity the envelope is scaled up 28 times on the way to
+    // the cutoff, so it takes about a second to come within a tenth.
+    for _ in 0..2 * SAMPLE_RATE as usize {
         node.process_stereo(0.0, 0.0);
     }
     let closed = cutoff(&node);
-    assert!(closed < 300.0 + 2500.0 * 0.1, "a second after the signal stopped the cutoff is still at {:.0} Hz", closed);
+    assert!(
+        closed < 300.0 + 2500.0 * 0.1,
+        "two seconds after the signal stopped the cutoff is still at {:.0} Hz",
+        closed
+    );
     let _ = BLOCK_SIZE;
 }

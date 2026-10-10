@@ -43,7 +43,7 @@ fn report(name: &str, path: &str) -> f64 {
     let worst = *times.last().unwrap();
     let median = pick(0.5);
     println!(
-        "{name:<18} presupuesto {budget_us:.0} us | mediana {median:6.1} = {:4.1}% | p99 {:6.1} | peor {worst:7.1} us  (p99 y peor son la máquina)",
+        "{name:<18} budget {budget_us:.0} us | median {median:6.1} = {:4.1}% | p99 {:6.1} | worst {worst:7.1} us  (p99 and worst are the machine)",
         median / budget_us * 100.0,
         pick(0.99),
     );

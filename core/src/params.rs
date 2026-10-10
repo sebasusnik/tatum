@@ -719,7 +719,7 @@ pub const KEYS_PARAMS: &[ParamSpec] = &[
         "cutoff",
         ParamId::Keys(KeysParam::Cutoff),
         Range::Unit,
-        0.588152,
+        0.588046,
         KEYS_CUTOFF,
         "Biquad lowpass cutoff, exponential 200Hz..20kHz (0.5 ≈ 2kHz)"
     ),

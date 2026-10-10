@@ -15,6 +15,8 @@ use crate::effects::delay::Delay;
 use crate::effects::reverb::DattorroReverb;
 use crate::effects::capture::Capture;
 use crate::SAMPLE_RATE;
+extern crate alloc;
+use alloc::boxed::Box;
 
 /// Maximum number of inputs a single node can accept.
 pub const MAX_NODE_INPUTS: usize = 8;
@@ -377,7 +379,7 @@ impl NodeSpec {
             NodeSpec::Vca => NodeKind::Vca,
             NodeSpec::Saturator { drive } => NodeKind::Saturator(Saturator::new(drive)),
             NodeSpec::Chorus { mix } => {
-                let mut c = Chorus::new();
+                let mut c = Box::new(Chorus::new());
                 c.set_mix(mix);
                 NodeKind::Chorus(c)
             }
@@ -420,7 +422,7 @@ impl NodeSpec {
                 NodeKind::Delay(d)
             }
             NodeSpec::Reverb { room_size } => {
-                let mut r = DattorroReverb::new(SAMPLE_RATE);
+                let mut r = Box::new(DattorroReverb::new(SAMPLE_RATE));
                 r.set_room_size(room_size);
                 r.set_mix(1.0); // wet-only for sends
                 NodeKind::Reverb(r)
@@ -765,14 +767,17 @@ pub enum NodeKind {
     Phaser(Phaser),
     Vowel(Formant),
     Saturator(Saturator),
-    Chorus(Chorus),
+    /// Boxed, with the reverb: their buffers live inline (32 KB, 18 KB), and
+    /// every node is as large as the largest kind. Boxed, a node is a few
+    /// hundred bytes, which is what lets a voice keep its nodes allocated.
+    Chorus(Box<Chorus>),
     Bitcrusher(Bitcrusher),
     Compressor(Compressor),
     Limiter(Limiter),
     TiltEq(TiltEq),
     ThreeBandEq(ThreeBandEq),
     Delay(Delay),
-    Reverb(DattorroReverb),
+    Reverb(Box<DattorroReverb>),
     Capture(Capture),
 
     // ── Output ──
@@ -1103,6 +1108,28 @@ impl NodeKind {
         }
     }
 
+    /// Become what `spec` instantiates, reusing this node's memory: a voice
+    /// does this on every note. The kinds that own a buffer (a delay line, a
+    /// capture window, the chorus) are cleared and set again in place, which
+    /// plays exactly as a fresh one does; the rest are small and simply made
+    /// again. The reverb is made again too: its `reset` leaves state behind,
+    /// and it lives on buses and the master, never in a voice.
+    pub fn renew(&mut self, spec: &NodeSpec) {
+        match (&mut *self, spec) {
+            (NodeKind::Delay(d), NodeSpec::Delay { feedback, .. }) => {
+                d.reset();
+                d.set_feedback(*feedback);
+                d.set_mix(1.0);
+            }
+            (NodeKind::Capture(c), NodeSpec::Capture { .. }) => c.reset(),
+            (NodeKind::Chorus(c), NodeSpec::Chorus { mix }) => {
+                c.reset();
+                c.set_mix(*mix);
+            }
+            _ => *self = spec.instantiate(),
+        }
+    }
+
     pub fn reset(&mut self) {
         match self {
             NodeKind::Osc(osc) => osc.reset(),
@@ -1140,5 +1167,43 @@ impl NodeKind {
             NodeKind::Delay(d) => d.reset(),
             NodeKind::Reverb(r) => r.reset(),
         }
+    }
+}
+
+#[cfg(test)]
+mod renew_tests {
+    use super::*;
+
+    /// Feed a node a burst, renew it, and it must then play exactly what a
+    /// freshly instantiated one plays: no tail, no state left over.
+    fn renews_like_new(spec: NodeSpec) {
+        let input = |i: usize| if i % 97 < 40 { ((i as f32) * 0.37).sin() * 0.8 } else { 0.0 };
+        let mut used = spec.instantiate();
+        for i in 0..20_000 {
+            let mut ins = [0.0; MAX_NODE_INPUTS];
+            ins[0] = input(i);
+            used.process(&ins, 1);
+        }
+        used.renew(&spec);
+        let mut fresh = spec.instantiate();
+        for i in 0..20_000 {
+            let mut ins = [0.0; MAX_NODE_INPUTS];
+            ins[0] = input(i);
+            let (a, b) = (used.process(&ins, 1), fresh.process(&ins, 1));
+            assert_eq!(a.to_bits(), b.to_bits(), "{spec:?} differs at sample {i}");
+        }
+    }
+
+    #[test]
+    fn a_renewed_node_plays_like_a_new_one() {
+        renews_like_new(NodeSpec::Delay { sync_div: 0.25, feedback: 0.6 });
+        renews_like_new(NodeSpec::Capture { samples: 4_000, start_samples: 0, speed: 0.5, reverse: true, mix: 1.0 });
+        renews_like_new(NodeSpec::Chorus { mix: 0.5 });
+        renews_like_new(NodeSpec::Saturator { drive: 2.0 });
+    }
+
+    #[test]
+    fn a_node_is_small_enough_to_keep_per_voice() {
+        assert!(core::mem::size_of::<NodeKind>() <= 512, "NodeKind is {} bytes", core::mem::size_of::<NodeKind>());
     }
 }

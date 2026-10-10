@@ -123,7 +123,18 @@ pub fn tanh(x: f32) -> f32 {
     num / den
 }
 
-/// Fast exp approximation.
+/// e^x, to a few parts in a million everywhere it is finite, and closer near 0.
+///
+/// x is split as k·ln2 + r with |r| <= ln2/2 (ln2 in two parts, so the
+/// subtraction loses nothing), e^r comes from six terms of its series, and
+/// 2^k goes into the exponent bits.
+///
+/// It used to be a polynomial for 2^f on [0, 1) whose value at 1 was 1.9985
+/// instead of 2. Just under x = 0 that is where the result lands, and that is
+/// where every one-pole coefficient e^(-1/(time * rate)) lives: off by 0.08%
+/// there, a 500 ms envelope decayed with a 28 ms time constant and a 2 s one
+/// with 30, so no envelope, compressor or limiter time was longer than about
+/// 30 ms whatever the song said.
 pub fn exp(x: f32) -> f32 {
     if x > 88.0 {
         return 3.4028235e38;
@@ -131,12 +142,11 @@ pub fn exp(x: f32) -> f32 {
     if x < -87.0 {
         return 0.0;
     }
-    let t = x * INV_LN2;
-    let k = floor(t);
-    let f = t - k;
-
-    // 2^f polynomial for f in [0, 1)
-    let p = 1.0 + f * (core::f32::consts::LN_2 + f * (0.2402265 + f * (0.0555041 + f * 0.0096139)));
+    const LN2_HI: f32 = 6.931_457_5e-1;
+    const LN2_LO: f32 = 1.428_606_8e-6;
+    let k = floor(x * INV_LN2 + 0.5);
+    let r = (x - k * LN2_HI) - k * LN2_LO;
+    let p = 1.0 + r * (1.0 + r * (0.5 + r * (1.0 / 6.0 + r * (1.0 / 24.0 + r * (1.0 / 120.0 + r * (1.0 / 720.0))))));
 
     // 2^k via bit manipulation
     let ki = k as i32;
@@ -147,9 +157,7 @@ pub fn exp(x: f32) -> f32 {
         return 3.4028235e38;
     }
     let bits = ((ki + 127) as u32) << 23;
-    let pow2k = f32::from_bits(bits);
-
-    p * pow2k
+    p * f32::from_bits(bits)
 }
 
 /// Fast square root using Newton's method with bit manipulation initial guess.
@@ -382,6 +390,27 @@ mod tests {
 
         let a2 = midi_to_freq(45);
         assert!(abs(a2 - 110.0) < 0.5, "A2 should be 110Hz, got {}", a2);
+    }
+
+    /// Relative error against the real e^x across the range, and in the
+    /// stretch just under 0 where the one-pole coefficients are.
+    #[test]
+    fn exp_is_accurate_where_coefficients_live() {
+        let mut x = -80.0f64;
+        while x < 80.0 {
+            let (got, want) = (exp(x as f32) as f64, x.exp());
+            assert!(((got - want) / want).abs() < 4e-6, "exp({x}) = {got}, not {want}");
+            x += 0.37;
+        }
+        // Past a few seconds f32 cannot say a coefficient that close to 1 to
+        // better than a percent, whatever exp does.
+        for ms in [0.1f64, 1.0, 5.0, 20.0, 90.0, 500.0, 2000.0] {
+            let x = -1.0 / (ms * 0.001 * 44100.0);
+            let (got, want) = (exp(x as f32) as f64, x.exp());
+            // The time constant this coefficient gives, against the one asked for.
+            let tau = -1.0 / got.ln() / 44.1;
+            assert!((tau / ms - 1.0).abs() < 0.01, "{ms} ms comes out as {tau:.2} ms ({got} against {want})");
+        }
     }
 
     #[test]

@@ -1,7 +1,6 @@
 //! A chain of effects in series, with a dry/wet per node: what a track's
 //! inserts, a bus, the master and the send returns are all made of.
 
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use crate::graph::node::{ChainStep, NodeKind};
@@ -11,7 +10,7 @@ const WET_STEP: f32 = 1.0 / (0.010 * crate::SAMPLE_RATE);
 
 /// FX chain processing helper: a chain of NodeKind applied in series.
 pub(super) struct FxChain {
-    pub(super) nodes: Vec<Box<NodeKind>>,
+    pub(super) nodes: Vec<NodeKind>,
     /// Dry/wet per node. 0 bypasses: the node is not processed at all, which
     /// is what makes a rig of switched-off effects free rather than merely
     /// silent. Kept beside the nodes rather than inside them so every node
@@ -28,7 +27,7 @@ pub(super) struct FxChain {
 
 impl FxChain {
     pub(super) fn new(steps: &[ChainStep]) -> Self {
-        let nodes = steps.iter().map(|s| Box::new(s.spec.instantiate())).collect();
+        let nodes = steps.iter().map(|s| s.spec.instantiate()).collect();
         let wet: Vec<f32> = steps.iter().map(|s| s.wet).collect();
         let bypassed = steps.iter().map(|s| s.wet <= 0.0).collect();
         Self { nodes, target: wet.clone(), wet, bypassed }

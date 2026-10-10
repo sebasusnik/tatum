@@ -1,6 +1,6 @@
 # set: bars=4 phase=02-orbita energy=4
 # set-note: the snare packs tighter for four bars with no kick; the bass rolls again, still shut, opening; the pluck brightens into it
-# cue: 4.5 B5 roll 1/32 · suelta todo en el 1
+# cue: 4.5 B5 roll 1/32 · let go of everything on the 1
 use "_t02.synth"
 
 track drums  { play o_roll level 0.55 }

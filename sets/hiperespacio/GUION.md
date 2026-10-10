@@ -1,149 +1,149 @@
-# Guion para tocar hiperespacio con la KeyLab
+# Script for playing hiperespacio with the KeyLab
 
-Arrancá con `tatum set play sets/hiperespacio --auto --tui`. El set avanza solo; vos hacés estos gestos y nada más. "Compás 17" es el compás del paso que muestra la TUI (`bar 17/24`).
+Start with `tatum set play sets/hiperespacio --auto --tui`. The set moves on by itself; you play these gestures and nothing else. "Bar 17" is the bar of the step the TUI shows (`bar 17/24`).
 
-**Qué es cada cosa en la KeyLab:**
-- **Teclas de la octava más grave** (la de la izquierda del todo): **D** (re) kick fuera · **B** (si) throw al eco.
-- **Pads del banco B** (sonidos): 1 firma · 2 riser · 3 crash · 4 figura · 5 roll 1/32 · 6 firma al eco.
-- **Pads del banco A** (efectos): 1 roll 1/8 · 8 congelar sala. Solo los usás en T09 y T10.
-- **Perilla 3** (página `tema`, la del arranque): RPM o carácter de la firma. Ningún otro control se toca en este guion.
-- El banco se cambia con el botón de banco de pads de la KeyLab. Quedate en el **banco B** toda la hora salvo en T09–T10, donde el guion avisa.
-- Los pads esperan solos a la grilla: apretá un poquito antes, nunca tarde.
+**What each thing is on the KeyLab:**
+- **Keys of the lowest octave** (the far left of the keyboard): **D** kick out · **B** throw into the echo.
+- **Bank B pads** (sounds): 1 signature · 2 riser · 3 crash · 4 figure · 5 roll 1/32 · 6 signature into the echo.
+- **Bank A pads** (effects): 1 roll 1/8 · 8 freeze the room. Only in T09 and T10.
+- **Knob 3** (page `tema`, the one the set starts on): RPM or character of the signature. No other control is touched in this script.
+- Switch banks with the KeyLab's pad bank button. Stay on **bank B** the whole hour except in T09–T10, where the script says.
+- The pads wait for the grid by themselves: press a little early, never late.
 
-Para escuchar este guion tocado sin la KeyLab, rendérialo:
+To hear this script played without the KeyLab, render it:
 
 ```
 tatum set render sets/hiperespacio --perform sets/hiperespacio/guion-tocado.txt -o sets/hiperespacio/hiperespacio-tocado.wav
 ```
 
-Antes de empezar: **banco B** y **perilla 3 al medio**.
+Before you start: **bank B** and **knob 3 centered**.
 
 
-## 01 · ignición — 0:00
+## 01 · ignicion — 0:00
 
-_Arranca casi en silencio. Solo dos gestos: sacar el kick y prender la turbina a mano._
+_Starts almost in silence. Only two gestures: take the kick out and fire the turbine by hand._
 
-- **2:43** · paso 7, compás 15: la tecla **D** de la octava grave: apretalo y mantenelo — kick fuera
-- **2:46** · paso 7, compás 17: soltá la tecla **D** de la octava grave
-- **3:27** · paso 8, compás 9: **pad 1 del banco B**: apretalo y mantenelo + **perilla 3** hacia arriba de a poco — turbina: RPM arriba y corte
-- **3:34** · paso 8, compás 12, tiempo 4: soltá **pad 1 del banco B** y dejá la perilla 3 al medio
+- **2:43** · step 7, bar 15: the low **D** key: hold it — kick out
+- **2:46** · step 7, bar 17: let go of the low **D** key
+- **3:27** · step 8, bar 9: **pad 1 of bank B**: hold it + **knob 3** up slowly — turbine: RPM up and cut
+- **3:34** · step 8, bar 12, beat 4: let go of **pad 1 of bank B** and leave knob 3 centered
 
-## 02 · órbita — 4:38
+## 02 · orbita — 4:38
 
-_Primer drop chico del set._
+_The set's first small drop._
 
-- **6:25** · paso 12, compás 15: **pad 4 del banco B**: apretalo y mantenelo — ratchets al eco
-- **6:28** · paso 12, compás 17: soltá **pad 4 del banco B**
-- **7:36** · paso 15, compás 4, tiempo 3: **pad 5 del banco B** roll 1/32 — soltá todo en el 1
-- **7:37** · paso 16, compás 1: **pad 3 del banco B** crash — ¡DROP!
-- **8:17** · paso 16, compás 24, tiempo 3: la tecla **B** de la octava grave throw del pluck (medio compás)
+- **6:25** · step 12, bar 15: **pad 4 of bank B**: hold it — ratchets into the echo
+- **6:28** · step 12, bar 17: let go of **pad 4 of bank B**
+- **7:36** · step 15, bar 4, beat 3: **pad 5 of bank B** roll 1/32 — let go of everything on the 1
+- **7:37** · step 16, bar 1: **pad 3 of bank B** crash — DROP!
+- **8:17** · step 16, bar 24, beat 3: the low **B** key throw the pluck (half bar)
 
 ## 03 · tribu — 9:42
 
-_Tribal. Dron a mano y un crash a la vuelta de los toms._
+_Tribal. The drone by hand and a crash when the toms come back._
 
-- **11:37** · paso 21, compás 5: **pad 1 del banco B**: apretalo y mantenelo + **perilla 3** hacia arriba de a poco — dron que habla
-- **11:44** · paso 21, compás 8, tiempo 4: soltá **pad 1 del banco B** y dejá la perilla 3 al medio
-- **12:26** · paso 24, compás 1: **pad 3 del banco B** crash — vuelve el groove
-- **13:31** · paso 25, compás 7: la tecla **D** de la octava grave: apretalo y mantenelo — kick fuera
-- **13:34** · paso 25, compás 9: soltá la tecla **D** de la octava grave
+- **11:37** · step 21, bar 5: **pad 1 of bank B**: hold it + **knob 3** up slowly — talking drone
+- **11:44** · step 21, bar 8, beat 4: let go of **pad 1 of bank B** and leave knob 3 centered
+- **12:26** · step 24, bar 1: **pad 3 of bank B** crash — the groove returns
+- **13:31** · step 25, bar 7: the low **D** key: hold it — kick out
+- **13:34** · step 25, bar 9: let go of the low **D** key
 
-## 04 · ácido — 14:43
+## 04 · acido — 14:43
 
-_El ácido y la primera explosión grande._
+_The acid and the first big explosion._
 
-- **16:58** · paso 30, compás 16, tiempo 3: la tecla **B** de la octava grave throw del ácido (medio compás)
-- **17:23** · paso 32, compás 7: **pad 1 del banco B**: apretalo y mantenelo + **perilla 3** hacia arriba de a poco — 303 sostenido que se abre
-- **17:29** · paso 32, compás 10, tiempo 4: soltá **pad 1 del banco B** y dejá la perilla 3 al medio
-- **17:50** · paso 33, compás 7: **pad 2 del banco B**: apretalo y mantenelo — riser
-- **17:52** · paso 33, compás 8, tiempo 3: **pad 5 del banco B** roll 1/32 — soltá todo en el 1
-- **17:54** · paso 34, compás 1: **pad 3 del banco B** crash — ¡DROP!
-- **18:45** · paso 34, compás 31: la tecla **D** de la octava grave: apretalo y mantenelo — kick fuera
-- **18:49** · paso 35, compás 1: soltá la tecla **D** de la octava grave
+- **16:58** · step 30, bar 16, beat 3: the low **B** key throw the acid (half bar)
+- **17:23** · step 32, bar 7: **pad 1 of bank B**: hold it + **knob 3** up slowly — held 303 opening
+- **17:29** · step 32, bar 10, beat 4: let go of **pad 1 of bank B** and leave knob 3 centered
+- **17:50** · step 33, bar 7: **pad 2 of bank B**: hold it — riser
+- **17:52** · step 33, bar 8, beat 3: **pad 5 of bank B** roll 1/32 — let go of everything on the 1
+- **17:54** · step 34, bar 1: **pad 3 of bank B** crash — DROP!
+- **18:45** · step 34, bar 31: the low **D** key: hold it — kick out
+- **18:49** · step 35, bar 1: let go of the low **D** key
 
-## 05 · máquina — 20:10
+## 05 · maquina — 20:10
 
-_Robótico, sin break. Una figura, un roll al aterrizaje y el zap._
+_Robotic, no break. One figure, a roll into the landing and the zap._
 
-- **21:44** · paso 39, compás 9: **pad 4 del banco B**: apretalo y mantenelo — figura de zaps
-- **21:47** · paso 39, compás 11: soltá **pad 4 del banco B**
-- **22:24** · paso 41, compás 2, tiempo 3: **pad 5 del banco B** roll 1/32 — soltá todo en el 1
-- **22:25** · paso 42, compás 1: **pad 3 del banco B** crash — ¡DROP!
-- **23:57** · paso 45, compás 7: **pad 1 del banco B**: apretalo y mantenelo + **perilla 3** hacia arriba de a poco — zap relé, RPM arriba
-- **24:00** · paso 45, compás 8, tiempo 4: soltá **pad 1 del banco B** y dejá la perilla 3 al medio
+- **21:44** · step 39, bar 9: **pad 4 of bank B**: hold it — zap figure
+- **21:47** · step 39, bar 11: let go of **pad 4 of bank B**
+- **22:24** · step 41, bar 2, beat 3: **pad 5 of bank B** roll 1/32 — let go of everything on the 1
+- **22:25** · step 42, bar 1: **pad 3 of bank B** crash — DROP!
+- **23:57** · step 45, bar 7: **pad 1 of bank B**: hold it + **knob 3** up slowly — relay zap, RPM up
+- **24:00** · step 45, bar 8, beat 4: let go of **pad 1 of bank B** and leave knob 3 centered
 
 ## 06 · hondo — 25:08
 
-_Hipnótico. Todo lento, sin apuro._
+_Hypnotic. Everything slow, no hurry._
 
-- **27:11** · paso 50, compás 11: **pad 1 del banco B**: apretalo y mantenelo + **perilla 3** hacia arriba muy lento — el dron, lento
-- **27:18** · paso 50, compás 14, tiempo 4: soltá **pad 1 del banco B** y dejá la perilla 3 al medio
-- **27:59** · paso 52, compás 7: la tecla **D** de la octava grave: apretalo y mantenelo — kick fuera — vuelve con la sección nueva
-- **28:02** · paso 53, compás 1: soltá la tecla **D** de la octava grave
+- **27:11** · step 50, bar 11: **pad 1 of bank B**: hold it + **knob 3** up very slowly — the drone, slow
+- **27:18** · step 50, bar 14, beat 4: let go of **pad 1 of bank B** and leave knob 3 centered
+- **27:59** · step 52, bar 7: the low **D** key: hold it — kick out — back with the new section
+- **28:02** · step 53, bar 1: let go of the low **D** key
 
-## 07 · túnel — 29:36
+## 07 · tunel — 29:36
 
-_El túnel: el láser solo en el hueco y la tercera explosión._
+_The tunnel: the laser alone in the gap and the third explosion._
 
-- **31:56** · paso 59, compás 5: **pad 1 del banco B**: apretalo y mantenelo + **perilla 3** hacia arriba de a poco — el láser solo en el hueco
-- **32:02** · paso 59, compás 8, tiempo 4: soltá **pad 1 del banco B** y dejá la perilla 3 al medio
-- **32:26** · paso 60, compás 7: **pad 2 del banco B**: apretalo y mantenelo — riser
-- **32:28** · paso 60, compás 8, tiempo 3: **pad 5 del banco B** roll 1/32 — soltá todo en el 1
-- **32:30** · paso 61, compás 1: **pad 3 del banco B** crash — ¡DROP!
-- **33:22** · paso 61, compás 32, tiempo 3: la tecla **B** de la octava grave throw del láser (medio compás)
+- **31:56** · step 59, bar 5: **pad 1 of bank B**: hold it + **knob 3** up slowly — the laser alone in the gap
+- **32:02** · step 59, bar 8, beat 4: let go of **pad 1 of bank B** and leave knob 3 centered
+- **32:26** · step 60, bar 7: **pad 2 of bank B**: hold it — riser
+- **32:28** · step 60, bar 8, beat 3: **pad 5 of bank B** roll 1/32 — let go of everything on the 1
+- **32:30** · step 61, bar 1: **pad 3 of bank B** crash — DROP!
+- **33:22** · step 61, bar 32, beat 3: the low **B** key throw the laser (half bar)
 
 ## 08 · amoladora — 34:56
 
-_La amoladora. El gesto estrella del set._
+_The grinder. The set's star gesture._
 
-- **36:42** · paso 68, compás 1: **pad 3 del banco B** crash — cae después del hueco
-- **37:58** · paso 69, compás 15: la tecla **D** de la octava grave: apretalo y mantenelo — kick fuera
-- **38:02** · paso 70, compás 1: soltá la tecla **D** de la octava grave
-- **38:28** · paso 70, compás 17: **pad 1 del banco B**: apretalo y mantenelo + **perilla 3** de 0 a fondo — AMOLADORA: ralentí → grito → corte
-- **38:34** · paso 70, compás 20, tiempo 4: soltá **pad 1 del banco B** y dejá la perilla 3 al medio
+- **36:42** · step 68, bar 1: **pad 3 of bank B** crash — lands after the gap
+- **37:58** · step 69, bar 15: the low **D** key: hold it — kick out
+- **38:02** · step 70, bar 1: let go of the low **D** key
+- **38:28** · step 70, bar 17: **pad 1 of bank B**: hold it + **knob 3** from 0 to the top — GRINDER: idle → scream → cut
+- **38:34** · step 70, bar 20, beat 4: let go of **pad 1 of bank B** and leave knob 3 centered
 
 ## 09 · nebulosa — 40:01
 
-_El respiro largo: campanas a mano, sala congelada y un riser hasta el borde._
+_The long breath: bells by hand, the room frozen and a riser to the edge._
 
-- **43:42** · paso 79, compás 7: **pad 1 del banco B**: un toque corto — campana
-- **43:49** · paso 79, compás 11: **pad 1 del banco B**: un toque corto + **perilla 3** hacia arriba — campana
-- **43:56** · paso 79, compás 15: **pad 1 del banco B**: un toque + **pad 6 del banco B** — campana al eco
-- **44:08** · paso 80, compás 7: (pasá al **banco A**) **pad 8 del banco A**: apretalo y mantenelo — sala congelada
-- **44:15** · paso 80, compás 11: soltá (pasá al **banco A**) **pad 8 del banco A**
-- **44:45** · paso 82, compás 5: **pad 2 del banco B**: apretalo y mantenelo — riser
-- **44:51** · paso 82, compás 8, tiempo 3: soltá **pad 2 del banco B** — ¡silencio!
+- **43:42** · step 79, bar 7: **pad 1 of bank B**: one short tap — bell
+- **43:49** · step 79, bar 11: **pad 1 of bank B**: one short tap + **knob 3** up — bell
+- **43:56** · step 79, bar 15: **pad 1 of bank B**: one tap + **pad 6 of bank B** — bell into the echo
+- **44:08** · step 80, bar 7: (switch to **bank A**) **pad 8 of bank A**: hold it — room frozen
+- **44:15** · step 80, bar 11: let go of **pad 8 of bank A**
+- **44:45** · step 82, bar 5: **pad 2 of bank B**: hold it — riser
+- **44:51** · step 82, bar 8, beat 3: let go of **pad 2 of bank B** — silence!
 
 ## 10 · hipervelocidad — 44:52
 
-_Entra de golpe. Crash en el corte._
+_Comes in all at once. Crash on the cut._
 
-- **44:52** · paso 83, compás 1: **pad 3 del banco B** crash — ¡CORTE!
-- **46:37** · paso 88, compás 1: **pad 3 del banco B** crash — vuelve
-- **47:55** · paso 89, compás 32, tiempo 3: (pasá al **banco A**) **pad 1 del banco A** roll 1/8 — soltá en el 1
-- **48:55** · paso 91, compás 21: **pad 1 del banco B**: apretalo y mantenelo + **perilla 3** hacia arriba de a poco — motor shard, RPM arriba
-- **49:02** · paso 91, compás 24, tiempo 4: soltá **pad 1 del banco B** y dejá la perilla 3 al medio
+- **44:52** · step 83, bar 1: **pad 3 of bank B** crash — CUT!
+- **46:37** · step 88, bar 1: **pad 3 of bank B** crash — back
+- **47:55** · step 89, bar 32, beat 3: (switch to **bank A**) **pad 1 of bank A** roll 1/8 — let go on the 1
+- **48:55** · step 91, bar 21: **pad 1 of bank B**: hold it + **knob 3** up slowly — shard motor, RPM up
+- **49:02** · step 91, bar 24, beat 4: let go of **pad 1 of bank B** and leave knob 3 centered
 
 ## 11 · singularidad — 50:21
 
-_El final grande. El build más largo y el drop final._
+_The big finale. The longest build and the final drop._
 
-- **51:48** · paso 96, compás 7: **pad 1 del banco B**: apretalo y mantenelo + **perilla 3** hacia arriba de a poco — el haze
-- **51:54** · paso 96, compás 10, tiempo 4: soltá **pad 1 del banco B** y dejá la perilla 3 al medio
-- **53:10** · paso 98, compás 8, tiempo 3: la tecla **B** de la octava grave throw de la llamada (medio compás)
-- **53:43** · paso 100, compás 5: **pad 2 del banco B**: apretalo y mantenelo — riser
-- **53:47** · paso 100, compás 7, tiempo 3: **pad 5 del banco B** roll 1/32 — soltá antes del compás de silencio
-- **53:48** · paso 100, compás 8: soltá **pad 2 del banco B** y **pad 5 del banco B** — silencio
-- **53:50** · paso 101, compás 1: **pad 3 del banco B** crash — ¡DROP FINAL!
-- **54:38** · paso 102, compás 15: la tecla **D** de la octava grave: apretalo y mantenelo — kick fuera
-- **54:42** · paso 103, compás 1: **pad 3 del banco B** crash
-- **54:42** · paso 103, compás 1: soltá la tecla **D** de la octava grave
-- **55:04** · paso 103, compás 15: **pad 4 del banco B**: apretalo y mantenelo — ametralladora
-- **55:08** · paso 104, compás 1: soltá **pad 4 del banco B**
+- **51:48** · step 96, bar 7: **pad 1 of bank B**: hold it + **knob 3** up slowly — the haze
+- **51:54** · step 96, bar 10, beat 4: let go of **pad 1 of bank B** and leave knob 3 centered
+- **53:10** · step 98, bar 8, beat 3: the low **B** key throw the call (half bar)
+- **53:43** · step 100, bar 5: **pad 2 of bank B**: hold it — riser
+- **53:47** · step 100, bar 7, beat 3: **pad 5 of bank B** roll 1/32 — let go before the silent bar
+- **53:48** · step 100, bar 8: let go of **pad 2 of bank B** and **pad 5 of bank B** — silence
+- **53:50** · step 101, bar 1: **pad 3 of bank B** crash — FINAL DROP!
+- **54:38** · step 102, bar 15: the low **D** key: hold it — kick out
+- **54:42** · step 103, bar 1: **pad 3 of bank B** crash
+- **54:42** · step 103, bar 1: let go of the low **D** key
+- **55:04** · step 103, bar 15: **pad 4 of bank B**: hold it — machine-gun
+- **55:08** · step 104, bar 1: let go of **pad 4 of bank B**
 
 ## 12 · estela — 56:27
 
-_Salida. La amoladora se apaga de a poco._
+_The way out. The grinder dies down slowly._
 
-- **57:54** · paso 108, compás 7: **pad 1 del banco B**: apretalo y mantenelo + **perilla 3** de arriba hacia abajo abajo — amoladora bajando de vueltas
-- **58:04** · paso 108, compás 12, tiempo 4: soltá **pad 1 del banco B** y dejá la perilla 3 al medio
+- **57:54** · step 108, bar 7: **pad 1 of bank B**: hold it + **knob 3** from top down to bottom — grinder spinning down
+- **58:04** · step 108, bar 12, beat 4: let go of **pad 1 of bank B** and leave knob 3 centered

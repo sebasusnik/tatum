@@ -692,7 +692,7 @@ pub fn cmd(args: &[String]) {
             eprintln!("    tatum set check  <dir> [--bars N] [--json]");
             eprintln!("    tatum set next   <dir> <candidate.synth> [--json]");
             eprintln!(
-                "    tatum set play   <dir> [--phrase 8] [--ramp 4] [--blend 0] [--device <name>] [--midi <name>]"
+                "    tatum set play   <dir> [--tui] [--auto] [--phrase 8] [--ramp 4] [--blend 0] [--device <name>] [--midi <name>]"
             );
             eprintln!();
             eprintln!("A set is a directory of numbered .synth files, each the whole rig at a");
@@ -782,7 +782,7 @@ fn cmd_play(args: &[String]) -> Result<(), String> {
         }
         i += 1;
     }
-    let dir = dir.ok_or("usage: tatum set play <dir> [--auto] [--phrase 8] [--ramp 4]")?;
+    let dir = dir.ok_or("usage: tatum set play <dir> [--tui] [--auto] [--phrase 8] [--ramp 4]")?;
     let steps = load(Path::new(dir), DEFAULT_BARS)?;
     let first = steps[0].path.to_string_lossy().into_owned();
     // Walking on its own, a set keeps its headers' bars, which need not be a

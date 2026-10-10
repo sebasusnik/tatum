@@ -1,6 +1,6 @@
 # set: bars=16 phase=10-hipervelocidad energy=9 blend=0
 # set-note: Release 4 lands: hard cut on the one after T09's silent beat, crash, the master wide open, the gallop bass and the screamer at once over the glitch kit.
-# cue: 1 B3 crash · ¡CORTE!
+# cue: 1 B3 crash · CUT!
 use "_t10.synth"
 tempo 146
 

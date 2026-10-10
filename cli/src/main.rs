@@ -58,12 +58,14 @@ USAGE:
     tatum check <song.synth>
     tatum fmt --units <song.synth>      rewrite knob positions (cutoff 0.1) in their units
     tatum params [bass|fm|keys|beats|track|fx] [--json]
-    tatum play <song.synth> [--device <name>] [--rate <hz>] [--midi <name>]
+    tatum play <song.synth> [--tui] [--device <name>] [--rate <hz>] [--midi <name>]
     tatum set render <dir> [-o out.wav] | set check <dir> | set next <dir> <file>
+    tatum set play <dir> [--tui] [--auto] [--phrase 8] [--midi <name>]
     tatum audit <song.synth> [--bars N] [--json] [--strict]
     tatum debug <song.synth> [--bars N | A-B] [--dry] [-o dir] [--solo a,b] [--mute c]
-    tatum watch <song.synth> [--device <name>] [--rate <hz>] [--midi <name>]
+    tatum watch <song.synth> [--tui] [--device <name>] [--rate <hz>] [--midi <name>] [--buffer <frames>]
     tatum midi monitor [<song.synth> | <set dir> [--step N]] [--midi <name>] | midi list
+    tatum tui-shot <song.synth | set dir> [--at <seconds>] [--size 160x48] [--font f.ttf] [--frames N] [-o shot.png]
 
 COMMANDS:
     render    Parse, compile, and render a .synth file to WAV
@@ -80,6 +82,12 @@ COMMANDS:
               knobs and faders on parameters, the keys on a track, the pads on
               drums. Every MIDI input is read unless --midi names one;
               --list-midi shows them.
+              --tui runs full screen: the bar and the scene, the arrangement
+              or the set's steps, the mix as a scrolling spectrogram, a lane
+              per track, the knobs as they turn and the session's log; its
+              keys mute, solo and transform the tracks and put knobs on them
+              (? lists every key). --glass is --tui for a terminal with
+              translucent cell backgrounds.
     midi      `monitor` prints every message the controller sends (notes,
               pads, knobs, the pitch strip, aftertouch, program changes) with
               its channel and bytes, and, given a song or a set, what its
@@ -112,6 +120,14 @@ COMMANDS:
               continuous WAV; `check` validates every step and reports the arc;
               `next` is the gate a proposed step has to pass. How long a step
               holds travels in the file: `# set: bars=32 phase=build energy=5`.
+              `play` plays it live, a key or a pad moving to the next step on
+              the next phrase; --auto walks it on its own.
+    tui-shot  A picture of the --tui screen at a moment of a song or a set's
+              step, without a terminal or an audio device: the song is
+              rendered offline up to --at seconds and the screen fed on the
+              audio's own clock. Writes a PNG (-o, tui-shot.png by default);
+              --font draws the text in a TrueType font, --frames N writes N
+              pictures --fps a second into the directory -o names.
     help      Show this help
 
     render, play, watch and debug take --solo and --mute with track names

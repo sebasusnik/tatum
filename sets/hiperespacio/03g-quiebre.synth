@@ -1,7 +1,7 @@
 # set: bars=16 phase=03-tribu energy=6
 # set-note: broken variation: the kick drops beats in bars 4 and 8, sixteenth hats, busy toms, a last short drone answer
-# cue: 7 tecla D apretada · kick fuera
-# cue: 9 suelta la tecla D
+# cue: 7 key D held · kick out
+# cue: 9 let go of key D
 use "_t03.synth"
 
 track drums { play t3_broke }

@@ -62,6 +62,22 @@ you should write:
 | `%` | percent | any 0..1 parameter |
 | `db` | decibels | any gain (`level`, and `makeup` on a compressor) |
 
+An envelope time is how long the stage takes: `release 1s` is a second of tail, 60 dB
+down at the end of it, and `attack 300ms` is at full level 300 ms after the note. The
+curve is exponential, so most of the change happens early in the stage. That holds
+from 100 ms up. The shortest corners are kept as they are: a stage under 10 ms falls
+with that time as its time constant (60 dB down after about seven times it), so the
+1 ms releases a psy bass is written with stay tight without clicking. Between 10 and
+100 ms the stage runs longer than written, so that nothing over 10 ms gets a time
+constant shorter than 10 ms and every time still lasts longer than a shorter one:
+10 ms lasts 69 ms, 20 ms 77, 30 ms 82, 50 ms 90, 100 ms 100. The same goes for
+`adsr`, `perc` and the filter envelopes in an instrument graph.
+
+A compressor's, the sidechain's, an envelope follower's and an autowah's `attack`
+and `release` are something else: time constants, so `sidechain release=150ms` has
+made up all but 1/e of its dip 150 ms after the kick lets go, and is most of the
+way back after three times that.
+
 `cutoff 800hz` and `cutoff 0.4337` are the same thing. A unit that does not apply
 is an error naming what the parameter does take, so `cutoff 20ms` does not quietly
 become 20. The `in units` column of PARAMS.md gives each parameter's span and its
@@ -214,7 +230,7 @@ line without these words compiles exactly as it always has.
 In a scene, a track's `play` line carries its own words; a scene that says
 `play x` plays `x` as written. `--tui` shows each track's words under its
 name, lit on the loops they change, and its keys write them into the file
-(`?` lists them).
+(`?` lists them; see [TUI.md](TUI.md)).
 
 ## Tracks
 
@@ -877,91 +893,17 @@ A later `midi` block replaces what an earlier one said about the same knob, the 
 or the same pad, and leaves the rest, so a set step that `use`s a rig can remap one
 of its knobs.
 
-## Playing a set live
+## Sets
 
-A set is a directory of numbered `.synth` files, each the whole rig at one moment
-(`sets/` has three). `tatum set play <dir>` plays it with a controller in hand:
+A set is a directory of numbered `.synth` files, each the whole rig at one moment. A
+step's header says how long it holds and what it is (`# set: bars=32 phase=build
+energy=5`), and `# cue:` lines carry its practice sheet. How a set is walked, played
+live and rendered is in [CLI.md](CLI.md#set).
 
-```
-tatum set play sets/mine --phrase 8 --ramp 4
-```
+## The live screen
 
-It starts on the first step. The space bar (or `n`, or →) asks for the next one, ←
-for the one before, a digit for a step by number, and a pad does the same with
-`pad 48 > next`, `prev` or `step 3`. What was asked for does not come in at once: it
-lands on the next phrase line, the next bar that is a multiple of `--phrase` (8 by
-default), so the set keeps its phrasing whoever is at the controls. The status line
-counts down the bars to it. Asking for the step that plays cancels the move.
-
-A step that needs a new engine is built in the last bar of the phrase and handed over
-on the line, the way a save is: what the two steps share keeps playing and what leaves
-rings out. A step that only changes values is sent on the line itself. A step at another
-tempo starts at the tempo that was playing and ramps to its own over `--ramp` bars (4
-by default; 0 jumps). Knobs, toggled tracks and held pads carry from step to step.
-
-`--blend 8` mixes instead of handing over, the way a DJ does: the step that was playing
-keeps going under the new one for 8 bars while it fades out and the new one fades in,
-the two on the same tempo through the ramp, and the low end changes hands at the
-midpoint in 50 ms so two basses never play at once. A step can ask for its own with
-`# set: blend=8` in its header. It is for going between steps that have little in
-common; steps built on one rig hand over well on the line.
-
-`--auto` lets the set walk itself, the way `set render` does: each step holds the bars
-its header gives and asks for the next in its last bar, so the hands are free for the
-music. The phrase becomes 1 bar unless `--phrase` says otherwise, because a step's bars
-need not be a multiple of 8. A key or a pad still moves the set at any time.
-
-A step can carry its own practice sheet. `# cue: <bar> <what>` lines, with the bar of
-the step counted from 1 and a fraction for the beat (`8.75` is bar 8, beat 4), show
-under the steps in `set play --tui`: the bar of the step and its beat, the cue whose
-bar is playing, and the next one counting down.
-
-```
-# set: bars=24 phase=08-amoladora energy=8
-# cue: 17 B1 held + K3 from 0 to the top · the grinder: idle, scream, cut
-# cue: 20.75 let go of B1
-```
-
-The file of the step playing is watched like `tatum watch` watches one: save it and the
-edit plays. `q` or Ctrl-C quits and leaves the terminal as it was.
-
-A step builds tension with `auto ... over N` (see "Lanes in a song without scenes"):
-its lanes start on the step's first bar, whenever the step lands, and hold once done.
-
-`tatum set render <dir> -o set.wav` walks the set the same way with nobody at the
-controls: each step is asked for a bar before its header's `bars` run out, so it lands
-there, the tempo ramps (`--ramp 4`), `blend=` in a header blends (`--blend` sets it for
-every step), and the render is the set as it would be played. `--phrase 8` lands steps
-on phrase lines as `play` does, moving a step whose predecessor ends off the line to
-the next one; the default, 1, keeps every step to its header. It prints where each
-step starts, `m:ss  name  bars  phase  note`, one line per step.
-
-`--perform script.txt` plays a performance on top, for review audio without the
-hardware. The script is one event a line, `<bar> <what>`, the bar counted from 0 at the
-set's first downbeat and fractional:
-
-```
-# hiperespacio, one take
-12.0   cc 74 64        # a knob or fader to 64
-18.0   pad 44 110      # a pad down, struck at 110
-19.0   pad 44 0        # and up
-20.5   key 48 100      # a key down (velocity 0 lets it go)
-21.0   bend 12000      # the pitch strip, 0..16383, 8192 at rest
-35.0   next            # ask for the next step; also `prev`, `step 3`
-96.0   end             # stop here
-```
-
-The events go through the same planner the live session uses, against the `midi`
-blocks of the step playing: knobs, toggles and held pads carry from step to step as in
-`set play`, and a pad mapped to `next` moves the set. An event lands on the sample its
-bar falls on, to within a block (3 ms). A script that moves through the set (`next`,
-`prev`, `step`, or a pad mapped to one) is the only thing that does, and a move lands
-on the next phrase line as it would live; one that does not leaves the steps to their
-headers. Without `end`, a scripted walk stops when the last step reached has played its
-header's bars and every event has happened. The render prints what the script did
-under the step markers, in the script's bars, from 0: `bar 12.00: acid cutoff 1.2khz`,
-`bar 35.00: asked for 4/12 04.synth, lands on bar 36`, `bar 36: now 4/12 04.synth`.
-(`set play`'s status line counts bars from 1, as a performer does.)
+`--tui` runs `play`, `watch` and `set play` full screen. What it shows, its keys and
+`tatum tui-shot`, which takes a picture of it, are in [TUI.md](TUI.md).
 
 ## Redefinition
 
@@ -1075,133 +1017,6 @@ The song as a whole is levelled by the engine, so only the shape is yours. A tra
 the level written for it whatever else is playing, so a scene with fewer tracks is simply
 quieter. One thing that makes section loudness non-obvious: sidechain only ducks in scenes
 that have a beats track (a breakdown without drums plays its pads at full level).
-
-## Reading a mix
-
-`tatum render` prints what the render measures. Levels answer "is anything
-buried"; the three columns and two blocks after them answer the questions that
-decide whether a song sounds good, and all three used to be worked out by hand.
-
-```
-  track          peak      rms   rms dB  peak dB  crest  width  band
-  drums         0.484   0.0540     +0.0     -1.5    9.0     0%  low
-  chords        0.278   0.0320     -4.5     -6.3    8.7    13%  mid
-  shine         0.243   0.0228     -7.5     -7.5   10.6    32%  mid
-
-sharing a band:
-  low    drums +0.0, bass -3.1, under -5.9   <-- within 6 dB of each other
-  mid    chords -4.5, shine -7.5, chime -8.8, stabs -12.4   <-- within 6 dB
-
-sections:
-  intro          8 bars   -23.1 dB  ##
-  peak          16 bars   -17.2 dB  ########################
-  outro          8 bars   -23.7 dB
-  arc: 6.5 dB between the quietest section and the loudest
-```
-
-**`width`** is how much of a track is *not* in the middle. Everything at zero
-is why instruments cannot be told apart however carefully their levels are
-set — `pan`, `autopan` and `chorus_mix` are what move it. It is measured
-full-band, so on a drum track the mono kick holds it near zero whatever the
-hats are doing.
-
-**`sharing a band`** is the same problem in frequency. Two instruments in one
-band mask each other, and a column reading `mid` five times does not make that
-jump out. Within 6 dB of each other is where one stops sitting clearly behind
-the other; further apart is a mix decision and is listed without a marker.
-
-**`sections`** is the shape. A drop that measures the same as the breakdown
-before it is flat however good the parts are, and a table that averages the
-whole render into one row per track cannot show it. Under 3 dB of arc gets
-said out loud.
-
-None of this is what `tatum audit` measures, and the two do not substitute for
-each other. The audit asks whether a *voice* is dirty. A song can be perfectly
-clean by that measure and still sound wrong, which is the usual case.
-
-## Auditing a mix
-
-`tatum check` reads the text. `tatum audit` listens to the render: it plays
-every tonal track on its own and dry, and measures each note for energy that
-is **not** at a harmonic of the note the pattern asked for — which is what a
-detuned copy of a voice sounds like, whether the detune came from a chorus, a
-saturator or an oscillator.
-
-```
-track         notes     median      worst    at bar   note    peak
-bass            597   -12.7 dB    -5.0 dB     37.75    C#3   0.322
-bell             25   -49.9 dB   -47.7 dB     83.75    F#5   0.266
-
-Switched off one at a time, on the same voice:
-  the chorus on `bell` accounts for 16.7 dB of its inharmonic content
-```
-
-**The absolute number means nothing next to another track's.** A saturated saw
-reads dirtier than a bell however clean both are, so `median` is a fingerprint
-of a timbre rather than a score, and the rows come out alphabetical to make
-ranking them awkward on purpose.
-
-Two comparisons *are* meaningful, and they are the two the tool reports:
-
-- **A note against the other notes of the same voice.** One note far above the
-  rest of its own voice is worth going to listen to. The bar is printed for
-  that reason.
-- **The same voice with and without one effect.** Both renders are the same
-  timbre, so whatever the difference is, the effect caused it. This needs no
-  threshold that has to travel between sounds, and it is the one that works on
-  an effect that dirties a whole voice evenly — which is the shape the chorus
-  bug turned out to have. It did not make one note bad; it raised the whole
-  bell by 17 dB, and the ear caught it on the first note because a clean bell
-  has nothing to hide it behind. `chorus` and `drive` are the suspects, and a
-  track only gets a second render if it has one.
-
-`--bars N` audits only the first N bars, which is six times faster and enough
-to tell whether a voice is clean. `--json` prints the same numbers for a
-script. `--strict` exits 1 if anything is reported.
-
-### The net under the engine
-
-Three songs have their numbers checked in at `cli/tests/audit_baseline.txt`,
-and a release-only test fails if any of them moves more than 1.5 dB. Nothing
-else in the suite would notice a filter that began ringing or a saturator that
-got hotter: the bit-identity tests compare a render against the same code, the
-callback-budget test measures time, and the lints read text.
-
-```
-UPDATE_AUDIT_BASELINE=1 cargo test --release -p tatum-cli --test audit_baseline
-```
-
-regenerates it — and then you read the diff. Three songs and not thirty on
-purpose: thirty would take twenty-five minutes and would make regenerating the
-file routine, which is how a baseline stops being read.
-
-The other half of the answer is that **the audit is how you find a rule and a
-lint is how you enforce it**. `chorus_beats` catches from the text, in
-milliseconds and on every song, the same problem the audit took a minute to
-find on one. Anywhere the audit turns up a class of fault twice, the move is
-to try to make it a lint.
-
-Four things it does on purpose, each of which cost a wrong diagnosis first:
-
-- **Per note, not per song.** Averaged over three minutes, the track with the
-  bug was the *cleanest* in the mix.
-- **Soloed and dry.** In the mix everything masks everything — and with the
-  sends open, a reverb tail puts the previous note inside this note's window,
-  so the tool reported *more* dirty notes after the bug was fixed than before.
-- **Absolute energy, not a percentage.** A window with a huge *share* of harsh
-  energy is usually just a quiet window.
-- **The per-note check steps back where a window cannot hold one clear
-  pitch.** An arp runs below the step, so a window that fits inside a step
-  still holds several of its notes. Vibrato deep enough to matter moves the
-  upper harmonics out of their bands — half a semitone at C#6 moves the eighth
-  harmonic 107 Hz. And a note below about 110 Hz has its harmonics closer
-  together than the ±45 Hz bands they are measured in, so a sub can never be
-  judged this way. Without those three rules the check reported 30 "dirty"
-  notes on a sub, 24 on a low organ and 8 on an arpeggio — always the same
-  handful of pitches over and over, which is the signature of a measurement
-  being wrong about a pitch rather than a note being wrong. **The
-  with-and-without comparison is unaffected by all of it**, because it is the
-  same voice both times.
 
 ## Capture
 

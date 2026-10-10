@@ -1,7 +1,7 @@
 # set: bars=32 phase=07-drop energy=9
 # set-note: RELEASE 3: crash, the laser an octave up with machine-gun answers, a new roll (octave jumps, gallop), the arp held wide open
-# cue: 1 B3 crash · ¡DROP!
-# cue: 32.5 tecla B grave: throw del láser (medio compás)
+# cue: 1 B3 crash · DROP!
+# cue: 32.5 low key B: throw the laser (half bar)
 use "_t07.synth"
 
 track drums { play t7_drop }

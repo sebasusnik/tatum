@@ -1,6 +1,6 @@
 # set: bars=32 phase=03-tribu energy=6
 # set-note: back in on the one: full groove, the bass octave figure first, the drone's second gesture leaning on the b2
-# cue: 1 B3 crash · vuelve el groove
+# cue: 1 B3 crash · the groove returns
 use "_t03.synth"
 
 track drums { play t3_main }

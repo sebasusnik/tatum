@@ -1,7 +1,7 @@
 # set: bars=16 phase=01-ignicion energy=5
 # set-note: broken: the rim cuts across in threes, the hat stutters, the bass gallops on beats 1 and 3, the tok goes 3-3-2
-# cue: 9 B1 apretado + K3 ↑ de a poco · turbina: RPM arriba y corte
-# cue: 12.75 suelta B1 (K3 al medio)
+# cue: 9 B1 held + K3 ↑ slowly · turbine: RPM up and cut
+# cue: 12.75 let go of B1 (K3 to center)
 use "_t01.synth"
 
 track drums { play drive level 0.9 }
