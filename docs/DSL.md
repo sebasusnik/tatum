@@ -338,6 +338,10 @@ master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2
 | `compressor(threshold_db, ratio=, attack=, release=, makeup=)` | dB, ratio, ms, ms, dB | `makeup` must carry `db`, up to `12db` |
 | `limiter(threshold)` | 0..1, default 0.95 | lookahead peak limiter, for one spiky track or bus. On the master it is left out (with a `master_limiter` warning): the engine limits every song itself, after levelling it |
 | `eq(low=, mid=, high=)` | dB per band (200Hz, 1kHz, 8kHz) | |
+| `bell(freq, gain, q)` | Hz, dB -24..24, 0.1..18 | parametric bell at any frequency: `bell(300hz, -4db, 1.5)` takes the box out of a kick |
+| `lowshelf(freq, gain)` / `highshelf(freq, gain)` | Hz, dB | shelves at any corner: `lowshelf(60hz, 2db)`, `highshelf(6khz, -2db)` |
+| `clip(drive, ceiling=)` | 0.1..20, dB -24..0 | hard clipper, antialiased: under the ceiling nothing changes, over it is cut flat. The density of a club kick |
+| `transient(attack, sustain)` | dB -24..24 each | the hit and the tail turned up or down whatever the level; a steady tone passes |
 | `tilt(amount)` | -1..1, negative = darker | one-knob tilt EQ |
 | `delay(1/8, feedback)` | note division, 0..1 | tempo-synced delay inside a chain |
 | `reverb(size)` | 0..1 | plate reverb inside a chain |
@@ -511,10 +515,11 @@ midi {
 ```
 
 A chain node answers to the parameters `auto master` sweeps: `cutoff` on a filter,
-`tilt`, `eq_low`/`eq_mid`/`eq_high`, `drive` on `saturate`, `gain`, and
+`tilt`, `eq_low`/`eq_mid`/`eq_high`, `drive` on `saturate` or `clip`, `gain`, and
 `comp_threshold`. With no range a cutoff knob runs 20 Hz to 20 kHz, evenly to the ear
 (each stretch of the knob is the same interval, not the same number of Hz), an EQ band
-±12 dB, `drive` 0..2 and a tempo 60..180 BPM. The master chain is counted without its
+±12 dB, `drive` 0..2 on `saturate` and 1..10 on `clip` (under 1 a clip only turns the
+track down), and a tempo 60..180 BPM. The master chain is counted without its
 `limiter`, which the engine leaves out.
 
 The target is written the way `auto` writes one, and resolves the same way: a name that
@@ -799,6 +804,32 @@ reverb size=1.0 damp=0.3 sidechain=0.5
 reverb_return { in > highpass(250, 0.05) > lowpass(2500, 0.05, lfo_bars=16, lfo_depth=1200) > autopan(0.4, bars=8) > out }
 scene bloom  { track pad { play voicings using cloud } }
 scene frozen { reverb_freeze = 1  track drums { play brk using kit } }   # pad silent, cloud sustains
+```
+
+**A techno kick, built.** The `beats` kick is a fixed design with five knobs; a kick
+that sounds like a record is built, and every stage of it is a node. The body is a sine
+whose pitch drops in two stages, a snap from 1.2 kHz to 160 Hz in a couple of
+milliseconds, then the fall to the note the kick is tuned to, which is the song's key
+(49 Hz is G1). A transient shaper sharpens the hit and shortens the tail, a bell takes
+out the box around 300 Hz, and a clipper shaves the peak so the kick is dense rather than
+spiky; the level comes back after it. `tatum compare record.wav song.synth --solo kick`
+measures it against a reference and says which of these to move:
+
+```
+instrument kick909 {
+  pitch_osc sine(1200, 49, 0.9993, mid=160, fast=0.97) as body
+  body > perc(0.001, 0.25) as amp
+  noise() as click
+  click > highpass(3000, 0.4) as clickhp
+  clickhp > perc(0.001, 0.004) as clickenv
+  amp > mix
+  clickenv > mix
+  mix > transient(4db, -3db) as shape
+  shape > bell(300hz, -4db, 1.5) as box
+  box > clip(2.5) as dense
+  dense > out
+}
+track kick { play four using kick909 level 0.9 out > lowshelf(60hz, 1.5db) > master }
 ```
 
 **A breakbeat kit.** Accents on the downbeats, ghosts between, probability on the extra

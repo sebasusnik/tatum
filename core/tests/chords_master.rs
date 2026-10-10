@@ -84,7 +84,7 @@ fn master_automation_is_validated() {
         Err(e) => e,
         Ok(_) => panic!(),
     };
-    assert!(errs[0].message.contains("needs a saturate or drive node"), "{}", errs[0].message);
+    assert!(errs[0].message.contains("needs a saturate or drive or clip node"), "{}", errs[0].message);
 }
 
 #[test]

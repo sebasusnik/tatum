@@ -1,6 +1,7 @@
 pub mod capture;
 pub mod bitcrusher;
 pub mod chorus;
+pub mod clipper;
 pub mod compressor;
 pub mod delay;
 pub mod eq;
@@ -10,3 +11,4 @@ pub mod phaser;
 pub mod reverb;
 pub mod saturator;
 pub mod tape_stop;
+pub mod transient;
