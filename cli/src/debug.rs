@@ -117,7 +117,7 @@ pub fn cmd(args: &[String]) {
 }
 
 /// `16` is the first sixteen bars; `17-24` is bars 17 to 24.
-fn parse_bars(v: &str) -> Option<(u32, u32)> {
+pub fn parse_bars(v: &str) -> Option<(u32, u32)> {
     match v.split_once('-') {
         Some((a, b)) => {
             let (a, b) = (a.parse().ok()?, b.parse().ok()?);
