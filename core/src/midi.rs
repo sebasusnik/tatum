@@ -336,7 +336,10 @@ pub fn resolve_all(song: &Song, names: &Names) -> Controls {
     for m in &song.midi {
         match m.source {
             MidiSource::Cc(cc) => {
-                let span = m.range.as_ref().and_then(|r| knob_span(song, &m.target, r).ok());
+                let span = match &m.range {
+                    Some(r) => knob_span(song, &m.target, r).ok(),
+                    None => default_span(song, &m.target),
+                };
                 controls.knobs.push(Knob { cc, target: m.target.clone(), moves: resolve(song, names, &m.target), span })
             }
             MidiSource::Keys => {
@@ -480,6 +483,33 @@ pub fn master_node(song: &Song, label: Option<&str>, param: &str) -> Option<usiz
         }
     }
     None
+}
+
+/// The chain node a `master <param>`, `master <label> <param>` or
+/// `<track> <label> <param>` target lands on, by its kind: `clip`, `saturate`.
+fn target_node_kind<'a>(song: &'a Song, target: &str) -> Option<&'a str> {
+    let words: Vec<&str> = target.split('.').collect();
+    let (label, param) = match words.as_slice() {
+        ["master", param] => (None, *param),
+        ["master", label, param] => (Some(*label), *param),
+        [t, label, param] if *param != "wet" => {
+            let def = song.tracks.iter().find(|d| &d.name == t)?;
+            return def.routing.iter().find(|n| n.label.as_deref() == Some(*label)).map(|n| n.kind.as_str());
+        }
+        _ => return None,
+    };
+    let i = master_node(song, label, param)?;
+    song.master.as_ref()?.chain.iter().filter(|n| n.kind != "limiter").nth(i).map(|n| n.kind.as_str())
+}
+
+/// The travel of a knob written with no range, where it is not the
+/// parameter's own: a `clip`'s drive runs from 1, where it starts to cut, up
+/// to the 10 a range may be written to. Under 1 a clip is only quieter, and
+/// at 0 the track is silent; `saturate` keeps 0..2, where its colour is.
+fn default_span(song: &Song, target: &str) -> Option<Span> {
+    let drive = target.rsplit('.').next() == Some("drive");
+    (drive && target_node_kind(song, target) == Some("clip"))
+        .then(|| Span::two(1.0, node_param_limits("drive").1, false))
 }
 
 /// The value `target` has in the text, where the text gives it one. A knob

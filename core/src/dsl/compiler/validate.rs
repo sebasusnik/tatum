@@ -21,7 +21,7 @@ pub fn master_auto_node_kinds(param: &str) -> &'static [&'static str] {
     match param {
         "tilt" => &["tilt"],
         "eq_low" | "eq_mid" | "eq_high" => &["eq"],
-        "drive" => &["saturate", "drive"],
+        "drive" => &["saturate", "drive", "clip"],
         "gain" => &["gain"],
         "cutoff" => &["lowpass", "highpass", "bandpass", "ladder"],
         "comp_threshold" => &["compressor"],

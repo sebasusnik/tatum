@@ -9,6 +9,7 @@ use alloc::format;
 use crate::dsl::ast::*;
 use crate::dsl::error::CompileError;
 use crate::graph::{GraphBuilder, GraphError, GraphTemplate};
+use crate::effects::eq::Band;
 use crate::graph::node::NodeSpec;
 use crate::primitives::oscillator::Waveform;
 use crate::primitives::filter::FilterType;
@@ -218,7 +219,26 @@ pub(super) fn node_def_to_spec(
             let start_freq = float_param_at(&node.params, 0).unwrap_or(300.0);
             let end_freq = float_param_at(&node.params, 1).unwrap_or(55.0);
             let decay = named_param(&node.params, "decay").or_else(|| float_param_at(&node.params, 2)).unwrap_or(0.995);
-            Ok(NodeSpec::PitchOsc { waveform: wf, start_freq, end_freq, decay })
+            let fast = named_param(&node.params, "fast").unwrap_or(0.99);
+            // Unset, mid is the start: one stage, the sweep as it always was,
+            // rising or falling. Written, it has to sit between the two ends,
+            // or one of the stages would run the wrong way.
+            let mid_freq = match named_param(&node.params, "mid") {
+                None => start_freq,
+                Some(m) => {
+                    let (low, high) = (start_freq.min(end_freq), start_freq.max(end_freq));
+                    if m < low || m > high {
+                        let (side, at) = if m > high { ("over", high) } else { ("under", low) };
+                        let which = if at == start_freq { "start" } else { "end" };
+                        return Err(CompileError::new(format!(
+                            "pitch_osc: mid={} is {} the {} frequency {}; the fast stage goes from the start to mid, then the slow one from mid to the end, so mid sits between {} and {}",
+                            m, side, which, at, start_freq, end_freq
+                        )));
+                    }
+                    m
+                }
+            };
+            Ok(NodeSpec::PitchOsc { waveform: wf, start_freq, end_freq, decay, mid_freq, fast })
         }
         "noise" => {
             *noise_seed += 1;
@@ -344,6 +364,27 @@ pub(super) fn node_def_to_spec(
             let high = named_param(&node.params, "high").unwrap_or(0.0);
             Ok(NodeSpec::ThreeBandEq { low, mid, high })
         }
+        "bell" | "lowshelf" | "highshelf" => {
+            let band = match node.kind.as_str() {
+                "bell" => Band::Bell,
+                "lowshelf" => Band::LowShelf,
+                _ => Band::HighShelf,
+            };
+            let freq = float_param_at(&node.params, 0).unwrap_or(1000.0);
+            let gain_db = float_param_at(&node.params, 1).unwrap_or(0.0);
+            let q = float_param_at(&node.params, 2).or_else(|| named_param(&node.params, "q")).unwrap_or(1.0);
+            Ok(NodeSpec::ParamEq { band, freq, gain_db, q })
+        }
+        "clip" => {
+            let drive = float_param_at(&node.params, 0).unwrap_or(1.0);
+            let ceiling_db = named_param(&node.params, "ceiling").unwrap_or(0.0);
+            Ok(NodeSpec::Clip { drive, ceiling: crate::math::db_to_linear(ceiling_db) })
+        }
+        "transient" => {
+            let attack_db = float_param_at(&node.params, 0).unwrap_or(0.0);
+            let sustain_db = float_param_at(&node.params, 1).unwrap_or(0.0);
+            Ok(NodeSpec::Transient { attack_db, sustain_db })
+        }
         "delay" => {
             let sync_div = rhythm_div_param(&node.params).unwrap_or(0.25);
             // feedback is the first float param (rhythm div is parsed separately)
@@ -448,4 +489,65 @@ pub(super) fn node_def_to_spec(
 
 fn find_node(names: &[(String, u8)], name: &str) -> Option<u8> {
     names.iter().find(|(n, _)| n == name).map(|(_, idx)| *idx)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pitch_osc(params: Vec<Param>) -> Result<NodeSpec, CompileError> {
+        let node = NodeDef { kind: String::from("pitch_osc"), alias: None, params, line: Line(1) };
+        node_def_to_spec(&node, &mut 0, &mut 0, 88200.0)
+    }
+
+    fn sweep(start: f32, end: f32) -> Vec<Param> {
+        Vec::from([Param::Waveform(String::from("sine")), Param::Float(start), Param::Float(end), Param::Float(0.999)])
+    }
+
+    #[test]
+    fn a_rising_sweep_with_no_mid_is_one_stage() {
+        let spec = pitch_osc(sweep(50.0, 300.0)).expect("a rising sweep compiles");
+        let one_stage = NodeSpec::PitchOsc {
+            waveform: Waveform::Sine,
+            start_freq: 50.0,
+            end_freq: 300.0,
+            decay: 0.999,
+            mid_freq: 50.0,
+            fast: 0.99,
+        };
+        assert_eq!(format!("{spec:?}"), format!("{one_stage:?}"));
+    }
+
+    #[test]
+    fn a_mid_over_the_start_is_an_error() {
+        let mut params = sweep(300.0, 50.0);
+        params.push(Param::Named(String::from("mid"), 400.0));
+        let e = pitch_osc(params).expect_err("mid over the start");
+        assert!(format!("{e}").contains("mid=400 is over the start frequency 300"), "{e}");
+    }
+
+    #[test]
+    fn a_mid_under_the_end_is_an_error() {
+        let mut params = sweep(300.0, 50.0);
+        params.push(Param::Named(String::from("mid"), 40.0));
+        let e = pitch_osc(params).expect_err("mid under the end");
+        assert!(format!("{e}").contains("mid=40 is under the end frequency 50"), "{e}");
+    }
+
+    /// A rising sweep takes a mid too, between its ends, and one outside
+    /// them is named on the side it falls.
+    #[test]
+    fn a_rising_sweep_keeps_its_mid_between_the_ends() {
+        let mut inside = sweep(50.0, 300.0);
+        inside.push(Param::Named(String::from("mid"), 200.0));
+        assert!(pitch_osc(inside).is_ok());
+        let mut over = sweep(50.0, 300.0);
+        over.push(Param::Named(String::from("mid"), 400.0));
+        let e = pitch_osc(over).expect_err("mid over the end");
+        assert!(format!("{e}").contains("mid=400 is over the end frequency 300"), "{e}");
+        let mut under = sweep(50.0, 300.0);
+        under.push(Param::Named(String::from("mid"), 40.0));
+        let e = pitch_osc(under).expect_err("mid under the start");
+        assert!(format!("{e}").contains("mid=40 is under the start frequency 50"), "{e}");
+    }
 }

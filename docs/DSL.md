@@ -338,6 +338,10 @@ master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2
 | `compressor(threshold_db, ratio=, attack=, release=, makeup=)` | dB, ratio, ms, ms, dB | `makeup` must carry `db`, up to `12db` |
 | `limiter(threshold)` | 0..1, default 0.95 | lookahead peak limiter, for one spiky track or bus. On the master it is left out (with a `master_limiter` warning): the engine limits every song itself, after levelling it |
 | `eq(low=, mid=, high=)` | dB per band (200Hz, 1kHz, 8kHz) | |
+| `bell(freq, gain, q)` | Hz, dB -24..24, 0.1..18 | parametric bell at any frequency: `bell(300hz, -4db, 1.5)` takes the box out of a kick |
+| `lowshelf(freq, gain)` / `highshelf(freq, gain)` | Hz, dB | shelves at any corner: `lowshelf(60hz, 2db)`, `highshelf(6khz, -2db)` |
+| `clip(drive, ceiling=)` | 0.1..20, dB -24..0 | hard clipper, antialiased: under the ceiling nothing changes, over it is cut flat. The density of a club kick |
+| `transient(attack, sustain)` | dB -24..24 each | the hit and the tail turned up or down whatever the level; a steady tone passes |
 | `tilt(amount)` | -1..1, negative = darker | one-knob tilt EQ |
 | `delay(1/8, feedback)` | note division, 0..1 | tempo-synced delay inside a chain |
 | `reverb(size)` | 0..1 | plate reverb inside a chain |
@@ -511,10 +515,11 @@ midi {
 ```
 
 A chain node answers to the parameters `auto master` sweeps: `cutoff` on a filter,
-`tilt`, `eq_low`/`eq_mid`/`eq_high`, `drive` on `saturate`, `gain`, and
+`tilt`, `eq_low`/`eq_mid`/`eq_high`, `drive` on `saturate` or `clip`, `gain`, and
 `comp_threshold`. With no range a cutoff knob runs 20 Hz to 20 kHz, evenly to the ear
 (each stretch of the knob is the same interval, not the same number of Hz), an EQ band
-±12 dB, `drive` 0..2 and a tempo 60..180 BPM. The master chain is counted without its
+±12 dB, `drive` 0..2 on `saturate` and 1..10 on `clip` (under 1 a clip only turns the
+track down), and a tempo 60..180 BPM. The master chain is counted without its
 `limiter`, which the engine leaves out.
 
 The target is written the way `auto` writes one, and resolves the same way: a name that
