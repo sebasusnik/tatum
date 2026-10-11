@@ -361,6 +361,11 @@ fn is_dsp_keyword(word: &str) -> bool {
             | "limiter"
             | "tilt"
             | "eq"
+            | "bell"
+            | "lowshelf"
+            | "highshelf"
+            | "clip"
+            | "transient"
     )
 }
 

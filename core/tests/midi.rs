@@ -821,3 +821,32 @@ fn a_pad_action_on_nothing_is_a_compile_error() {
         assert!(format!("{:?}", err).contains(says), "{line}: {err:?}");
     }
 }
+
+/// A knob on a `clip`'s drive with no range runs from 1, where the clip
+/// starts to cut, up: under 1 a clip is only quieter, and at 0 the track
+/// would be silent at the bottom of the knob. `saturate` keeps its 0..2.
+#[test]
+fn a_clip_drive_knob_starts_where_the_clip_cuts() {
+    let src = r#"
+tempo 124
+module beats kit { }
+pattern beat { kick: X - x - X - x - }
+track drums { play beat using kit out > clip(1.5) as dense > saturate(1.0) as warm > master }
+master { in > clip(1.2) > out }
+midi {
+    cc 20 > drums dense drive
+    cc 21 > master drive
+    cc 22 > drums warm drive
+    cc 23 > drums dense drive 0.5..4
+}
+"#;
+    let (mut planner, player) = session(src);
+    let g = player.generation();
+    let at = |planner: &mut LivePlanner, cc: u8, value: u8| node_value(&ops(&planner.knob(cc, value, g).plans)[0]).3;
+    for cc in [20, 21] {
+        assert_eq!(at(&mut planner, cc, 0), 1.0, "cc {cc} at the bottom");
+        assert_eq!(at(&mut planner, cc, 127), 10.0, "cc {cc} at the top");
+    }
+    assert_eq!((at(&mut planner, 22, 0), at(&mut planner, 22, 127)), (0.0, 2.0), "saturate");
+    assert_eq!((at(&mut planner, 23, 0), at(&mut planner, 23, 127)), (0.5, 4.0), "a written range");
+}
