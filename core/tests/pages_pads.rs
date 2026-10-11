@@ -86,10 +86,14 @@ fn pages_change_what_the_knobs_move() {
     // Tab: the bass page, and K1 is its cutoff.
     let said = planner.voice(&VoiceMove::Next, g).unwrap();
     assert_eq!(said, "voice bass: cutoff · resonance");
-    // The knob was left at 64 on `tema`; on `bass` it has never been
-    // turned, so it moves its new target at once.
+    // The knob was left at 64 on `tema`; on `bass` the cutoff is where the
+    // text has it, 0.4 (51 of 127): turning away from it does nothing.
     let turn = planner.knob(74, 70, g);
     assert!(turn.readings[0].starts_with("bass cutoff"), "{:?}", turn.readings);
+    assert!(turn.plans.is_empty(), "jumped: {:?}", turn.readings);
+    assert!(turn.readings[0].contains("turn ← to 51"), "{:?}", turn.readings);
+    // Down through it, it takes over.
+    let turn = planner.knob(74, 50, g);
     assert!(ops(&turn.plans).iter().any(|op| matches!(op, FastOp::ModuleParam { .. })));
     // A line naming what this track has not: shown, and does nothing.
     planner.voice(&VoiceMove::Next, g).unwrap();
@@ -107,8 +111,9 @@ fn back_on_a_page_a_knob_waits_until_it_reaches_where_it_left_it() {
     let (mut planner, player) = session();
     let g = player.generation();
     planner.voice(&VoiceMove::To("bass".into()), g);
-    // An unguarded knob jumps on its first touch: the cutoff to 100.
-    assert!(!planner.knob(74, 100, g).plans.is_empty()); // the bass cutoff left at 100
+    // Taken at the text's cutoff (51), then left at 100.
+    assert!(!planner.knob(74, 51, g).plans.is_empty());
+    assert!(!planner.knob(74, 100, g).plans.is_empty());
     planner.voice(&VoiceMove::To("tema".into()), g);
     planner.knob(74, 20, g); // the level, from 20 on
     planner.knob(74, 30, g);
@@ -122,6 +127,27 @@ fn back_on_a_page_a_knob_waits_until_it_reaches_where_it_left_it() {
     assert!(!turn.plans.is_empty(), "{:?}", turn.readings);
     let turn = planner.knob(74, 90, g);
     assert!(!turn.plans.is_empty());
+}
+
+#[test]
+fn a_knob_never_touched_on_a_new_page_waits_for_the_text_value() {
+    let (mut planner, player) = session();
+    let g = player.generation();
+    // Tab before touching anything: the knob's place is unknown, so its
+    // first touch decides the side. The resonance is at 0.3 (38 of 127).
+    planner.voice(&VoiceMove::To("bass".into()), g);
+    let turn = planner.knob(71, 110, g);
+    assert!(turn.plans.is_empty(), "jumped: {:?}", turn.readings);
+    assert!(turn.readings[0].contains("turn ← to 38"), "{:?}", turn.readings);
+    assert!(planner.knob(71, 60, g).plans.is_empty());
+    assert!(!planner.knob(71, 38, g).plans.is_empty());
+    // A first touch near the value takes at once.
+    planner.voice(&VoiceMove::To("drums".into()), g);
+    planner.voice(&VoiceMove::To("bass".into()), g);
+    planner.reset_knobs(g);
+    planner.voice(&VoiceMove::To("tema".into()), g);
+    planner.voice(&VoiceMove::To("bass".into()), g);
+    assert!(!planner.knob(74, 52, g).plans.is_empty());
 }
 
 #[test]

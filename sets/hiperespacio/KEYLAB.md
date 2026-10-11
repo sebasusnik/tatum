@@ -52,10 +52,10 @@ F9, el filtro DJ: al medio está abierto, para abajo oscurece, para arriba adelg
 | **drums** | decay kick | pitch kick | click | drive | volumen hats | pitch hats | redoblante | pan hats | toda la batería |
 | **master** | volumen master | adelgazar | sala | eco | graves | medios | agudos | | |
 
-Las perillas responden apenas las tocás. Dos esperan: el filtro DJ (F9) arranca al medio y,
-si lo encontrás en otro lado, espera a pasar por el medio; el volumen master arranca arriba. Y al
-volver a una página con Tab, una perilla que no está donde la dejaste espera a llegar ahí: la
-pantalla dice para dónde girarla.
+Al cambiar de página (Tab o el encoder), una perilla no salta: espera a pasar por el valor que
+tiene ese parámetro (donde la dejaste, o como está en el tema). La pantalla dice para dónde
+girarla y a qué número. En la primera página, antes de cambiar, responden apenas las tocás, salvo
+dos que siempre esperan: el filtro DJ (F9) arranca al medio y el volumen master arranca arriba.
 
 ## Pads
 

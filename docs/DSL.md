@@ -846,7 +846,7 @@ something a rig does not have is left out rather than refused, and reads
 
 ```
 midi {
-    takeover pickup                 # back on a page, a knob waits for where it left its target
+    takeover pickup                 # after a page change, a knob waits to reach its target's value
     cc 85 > master vol gain 0..1 guard   # and this one waits on its first touch too
     page tema { }                   # the block's own lines
     page bass {
@@ -860,11 +860,13 @@ keyboard { tab > voice next }       # also voice prev, voice bass
 
 `cc N > voice` picks a page by the controller's position; `voice step` is an
 encoder: above 64 the next page, below it the one before. With `takeover
-pickup`, a knob that comes back to a page where it left its target somewhere
-else moves nothing until it passes that value; the screen says which way to
-turn. A line written with `guard` also waits on its first touch, when the
-text puts its target somewhere else: for what a jump would hurt, a DJ filter
-or a master volume. Every other knob jumps on its first touch, as before.
+pickup`, after a page change a knob that is not where its new target is
+moves nothing until it passes that value: where it left the target on that
+page, else where the text has it. The screen says which way to turn. A line
+written with `guard` also waits on its very first touch, before any page
+change, when the text puts its target somewhere else: for what a jump would
+hurt, a DJ filter or a master volume. On the first page, before any change,
+every other knob jumps on its first touch.
 
 A pad or a trigger key can hold an effect on the whole output, coming in and
 out over a few milliseconds, as strong as the pad was struck and then as hard

@@ -468,6 +468,10 @@ pub struct LivePlanner {
     /// Knobs waiting to take over after a page change: the controller, the
     /// position it has to reach, and whether it comes from below.
     pickups: Vec<(u8, u8, bool)>,
+    /// Knobs of the page chosen that the hands have not moved since the
+    /// program started, with the position the text's value sits at: their
+    /// first touch takes over from there, from whichever side it comes.
+    armed: Vec<(u8, u8)>,
     /// Keys held down, oldest first, with the velocity each was struck at.
     /// A mono instrument plays the newest; letting it go falls back to the
     /// one before it, which is how a monosynth answers a keyboard.
@@ -513,6 +517,7 @@ impl LivePlanner {
             page: 0,
             page_memory: Vec::new(),
             pickups: Vec::new(),
+            armed: Vec::new(),
             held: Vec::new(),
             bend: 0.0,
             output_gain: None,
@@ -1412,6 +1417,14 @@ impl LivePlanner {
                         self.pickups.push((cc, t, value < t));
                     }
                 }
+                // A page chosen before this knob was ever touched: it takes
+                // over from where the text has its target.
+                if let Some(i) = self.armed.iter().position(|a| a.0 == cc) {
+                    let (_, t) = self.armed.remove(i);
+                    if t.abs_diff(value) > 3 && !self.pickups.iter().any(|p| p.0 == cc) {
+                        self.pickups.push((cc, t, value < t));
+                    }
+                }
                 // Soft takeover: after a page change a knob that is not
                 // where its new target is moves nothing until it gets there.
                 if let Some(i) = self.pickups.iter().position(|p| p.0 == cc) {
@@ -1499,6 +1512,7 @@ impl LivePlanner {
         self.knob_values.clear();
         self.page_memory.clear();
         self.pickups.clear();
+        self.armed.clear();
         self.knob_gesture.clear();
         if let Some(scene) = self.scene.clone() {
             plans.extend(self.scene_values(&scene, None, playing).unwrap_or_default());
@@ -1513,8 +1527,8 @@ impl LivePlanner {
 
     /// Choose the knobs' page. Returns what it now moves, for the screen:
     /// `voice bass: cutoff · resonance · decay`. With `takeover pickup`, a
-    /// knob whose position does not match the value it left its new
-    /// target at waits until it passes it.
+    /// knob whose position does not match its new target's value (where it
+    /// left it, else where the text has it) waits until it passes it.
     pub fn voice(&mut self, mv: &VoiceMove, playing: Generation) -> Option<String> {
         self.catch_up(playing);
         let latest = self.pending.as_ref().or(self.running.as_ref())?;
@@ -1531,21 +1545,41 @@ impl LivePlanner {
         let old = pages.get(self.page).cloned();
         let new = pages[to].clone();
         let pickup = latest.controls.pickup;
+        let mut ccs: Vec<u8> = new.knobs.iter().map(|k| k.cc).collect();
+        ccs.extend(old.iter().flat_map(|p| p.knobs.iter().map(|k| k.cc)));
+        ccs.sort();
+        ccs.dedup();
+        // Where the text has each knob's target on the new page (or, for a
+        // knob the page leaves out, in the `midi` block): what a knob not
+        // yet moved there takes over from.
+        let rest: Vec<(u8, Option<u8>)> = ccs
+            .iter()
+            .map(|&cc| {
+                let lines: Vec<&midi::Knob> = if new.lines(cc).next().is_some() {
+                    new.lines(cc).collect()
+                } else {
+                    latest.controls.knobs.iter().filter(|k| k.cc == cc).collect()
+                };
+                (cc, lines.iter().filter(|k| !k.moves.is_empty()).find_map(|k| k.rest_position(&latest.ast)))
+            })
+            .collect();
         self.page = to;
         self.pickups.clear();
+        self.armed.clear();
         if pickup {
-            let mut ccs: Vec<u8> = new.knobs.iter().map(|k| k.cc).collect();
-            ccs.extend(old.iter().flat_map(|p| p.knobs.iter().map(|k| k.cc)));
-            ccs.sort();
-            ccs.dedup();
-            for cc in ccs {
+            for (cc, rest) in rest {
                 let key = if new.lines(cc).next().is_some() { new.name.clone() } else { String::new() };
-                let target = self.page_memory.iter().find(|(k, c, _)| *k == key && *c == cc).map(|(_, _, v)| *v);
+                let left = self.page_memory.iter().find(|(k, c, _)| *k == key && *c == cc).map(|(_, _, v)| *v);
                 let here = self.knob_values.iter().find(|(c, _)| *c == cc).map(|(_, v)| *v);
-                if let (Some(t), Some(h)) = (target, here) {
-                    if h.abs_diff(t) > 2 {
-                        self.pickups.push((cc, t, h < t));
+                match (left.or(rest), here) {
+                    (Some(t), Some(h)) => {
+                        if h.abs_diff(t) > 2 {
+                            self.pickups.push((cc, t, h < t));
+                        }
                     }
+                    // Never touched: where it is, the first touch tells.
+                    (Some(t), None) => self.armed.push((cc, t)),
+                    _ => {}
                 }
             }
         }

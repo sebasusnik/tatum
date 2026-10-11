@@ -219,20 +219,15 @@ impl Knob {
         let written = text_value(song, &self.target);
         self.moves
             .iter()
-            .filter_map(|m| {
-                let v = match m {
-                    Move::Module { spec, .. } => written.unwrap_or(spec.default),
-                    Move::TrackLevel { .. } => written.unwrap_or(0.8),
-                    Move::TrackPan { .. } | Move::TrackSend { .. } => written.unwrap_or(0.0),
-                    Move::NodeWet { .. } => written.unwrap_or(1.0),
-                    Move::ReverbMix | Move::DelayMix => written.unwrap_or(1.0),
-                    Move::ReverbFreeze => 0.0,
-                    Move::NodeParam { .. } => written?,
-                    Move::Tempo => return None,
-                };
-                Some(op(m, v))
-            })
+            .filter_map(|m| Some(op(m, rest_value(m, written)?)))
             .collect()
+    }
+
+    /// Where the knob has to be to sit on the value the text gives its
+    /// target: what a knob that has not moved it yet takes over from.
+    pub fn rest_position(&self, song: &Song) -> Option<u8> {
+        let written = text_value(song, &self.target);
+        self.position_of(rest_value(self.moves.first()?, written)?)
     }
 
     /// What the knob reads at `value`: `acid cutoff 1.2khz`, `pad level -6.0 dB`.
@@ -243,6 +238,21 @@ impl Knob {
             None => label,
         }
     }
+}
+
+/// The value the text gives a knob's target: the one written, else the
+/// default the compiler gives it. A target with neither (a tempo) has none.
+fn rest_value(m: &Move, written: Option<f32>) -> Option<f32> {
+    Some(match m {
+        Move::Module { spec, .. } => written.unwrap_or(spec.default),
+        Move::TrackLevel { .. } => written.unwrap_or(0.8),
+        Move::TrackPan { .. } | Move::TrackSend { .. } => written.unwrap_or(0.0),
+        Move::NodeWet { .. } => written.unwrap_or(1.0),
+        Move::ReverbMix | Move::DelayMix => written.unwrap_or(1.0),
+        Move::ReverbFreeze => 0.0,
+        Move::NodeParam { .. } => written?,
+        Move::Tempo => return None,
+    })
 }
 
 /// A track the keyboard plays.
