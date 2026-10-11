@@ -68,7 +68,9 @@ for the next bar line, a multiple of them, to swap in what you saved.
   and DJ-style blends; a `midi` block maps knobs, keys and pads to the song.
 - **Tools that listen.** `render` reports the mix section by section, `debug` renders
   every part apart with spectrograms and finds clicks and mud, `audit` measures every
-  note for what is not its harmonics.
+  note for what is not its harmonics, and `analyze` and `compare` measure a record you
+  want to sound like -- its kick's note, sweep and decay, its spectrum and density --
+  and say what in your file to change to get there.
 - **Everywhere.** A CLI, the browser through WASM, and an MCP server so an AI can write
   songs with the compiler in the loop.
 
@@ -135,6 +137,7 @@ cargo run --release -p tatum-cli -- debug examples/acid_arp.synth --solo acid
 | `play`, `watch` | play a song live; `watch` swaps in each save on the next bar, and a save that does not compile is reported while the last good version keeps playing |
 | `debug` | render every part apart, with spectrograms and a report of clicks and mud, bar by bar |
 | `audit` | measure every note of every tonal track for what is not its harmonics |
+| `analyze`, `compare` | measure a record you want to sound like; compare your song with it and say what to change |
 | `set` | render, check, gate and play a live set |
 | `tui-shot` | a picture of the live screen at any second |
 | `params`, `fmt` | the parameter reference; knob positions rewritten in their units |

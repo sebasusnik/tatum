@@ -13,6 +13,8 @@ songs with the compiler in the loop. Transport is stdio; nothing is sent anywher
 | `tatum_check` | `source` | `ok` plus a summary, or every error with line, column and suggestion |
 | `tatum_render` | `source`, `output?`, `bars?` | the WAV path plus the mix report below |
 | `tatum_debug` | `source`, `solo?`, `mute?`, `bars?` (`"17-24"`), `dry?`, `output?` | the `tatum debug` report and the path of `sheet.png`, every part's spectrogram stacked over the mix, to open and look at; the report names a `zoom.*.png` close-up for the worst moment of each part |
+| `tatum_analyze` | `path` (a `.wav`; relative to the render directory), `from?`, `to?` (seconds; at most 15 minutes) | the `tatum analyze` report: tempo, key, low notes, loudness and density, width, the kick, the spectrum per octave |
+| `tatum_compare` | `reference` (a `.wav`), `source`, `from?`, `to?`, `bars?`, `solo?`, `mute?` | the `tatum compare` report: the reference and the song side by side, and what differs with what in the file moves it |
 
 ### The mix report
 

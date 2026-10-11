@@ -129,3 +129,31 @@ Four things it does on purpose, each of which cost a wrong diagnosis first:
   being wrong about a pitch rather than a note being wrong. **The
   with-and-without comparison is unaffected by all of it**, because it is the
   same voice both times.
+
+## Measuring a reference
+
+A model writing a song cannot hear a record named as a reference, and it cannot hear
+its own render either. `tatum analyze record.wav` (`tatum_analyze`) measures it, and
+`tatum compare record.wav song.synth` (`tatum_compare`) measures the song the same way
+and says what differs by enough to hear, each with what in the file moves it. Ask for a
+WAV of the record rather than writing from its name.
+
+How to read the two:
+
+- **The kick's tail** is the note its pitch sweep lands on, in Hz and as a note. It is the
+  number to tune first: a kick a semitone or two off the record's never sounds like it,
+  whatever else matches. On an instrument kick it is `pitch_osc`'s end frequency; on
+  `beats`, `kick_pitch` moves the whole sweep.
+- **The sweep** is how long the pitch takes to land, and **the decay** how long the body
+  takes to fall 12 and 24 dB. The comparison gives each as a factor on what the file
+  already says: a sweep's time follows how far `pitch_osc`'s decay is from 1, a body's
+  follows `perc`'s decay.
+- **Under it** is how loud the kick's band is late in the beat, when the kick has died.
+  Above about -10 dB something else fills it, usually a held bass, and the tail and the
+  decay are partly that: measure a stretch where the kick plays alone (`--from`/`--to`).
+- **Peak to loudness** is density. A loud club master sits well under 10 dB; the songs
+  in `examples/` measure 12-17. The engine matches loudness and leaves density to the
+  song: saturate or clip the kick and the drums, compress the drum bus.
+- **The spectrum** is per octave, against the whole, so it compares a record at -8 LUFS
+  with a song at -18. Three dB off in a band is audible; `tatum debug` says which tracks
+  sit there.

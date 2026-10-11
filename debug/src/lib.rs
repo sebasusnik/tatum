@@ -18,6 +18,7 @@ pub mod fft;
 pub mod listen;
 pub mod mixing;
 pub mod picture;
+pub mod reference;
 pub mod spectrogram;
 pub mod wav;
 

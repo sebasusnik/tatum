@@ -100,7 +100,10 @@ unison, octave and fifth stack their voices on one note, so a chord sent to them
 note alone. When something sounds wrong -- a noise, a click, a part you cannot place -- run \
 `tatum_debug`: it renders every track, bus and send return apart and returns a report of clicks \
 and parts that do not go quiet between notes, with the bar of each, plus the path of a PNG \
-with every part's spectrogram stacked over the mix. Open that picture to see where it is.";
+with every part's spectrogram stacked over the mix. Open that picture to see where it is. \
+When the user names a record to sound like, you cannot hear it, and neither can you hear your \
+render: ask for a WAV of it, measure it with `tatum_analyze`, and close in with `tatum_compare`, \
+which says what differs and what in the file moves it. Never claim a likeness from a name alone.";
 
 fn main() {
     let ctx = Ctx::from_env();
@@ -292,6 +295,38 @@ fn tool_definitions() -> Vec<Value> {
                 "additionalProperties": false
             }
         }),
+        json!({
+            "name": "tatum_analyze",
+            "description": "Measure a reference track from a WAV file: tempo (and its span when it moves), key, the notes under 250 Hz, loudness and peak-to-loudness (density), stereo width above 250 Hz and under 150 Hz, the kick (the frequency it hits at, the note its sweep lands on, how long the sweep and the body take, how much click, and how much else fills its band), and the spectrum per octave against the whole. A track named as a reference is only a word to you: you cannot hear it. Ask the user for a WAV of it and measure it, so 'like that record' becomes numbers. Point from/to at a stretch where the kick plays alone (an intro) for the cleanest kick reading.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "Path to a .wav file (8 to 384 kHz, PCM or float). A relative path is read from the render directory, so a tatum_render output can be named as it was written. An MP3 has to be converted first: ffmpeg -i song.mp3 song.wav." },
+                    "from": { "type": "number", "minimum": 0, "description": "Start of the stretch to measure, in seconds." },
+                    "to": { "type": "number", "minimum": 0, "description": "End of the stretch to measure, in seconds. At most 15 minutes are measured at once; for a longer file, pick a stretch." }
+                },
+                "required": ["path"],
+                "additionalProperties": false
+            }
+        }),
+        json!({
+            "name": "tatum_compare",
+            "description": "The tatum_analyze measures for a reference WAV and for a song (rendered from source) side by side, then what differs by enough to hear, each with what in the .synth file moves it: the kick's tail note in Hz for `pitch_osc`'s end frequency, the sweep and the body's decay as factors on what the file says, the octave bands to take down or bring up, the density, the low end's width, the tempo. Loudness itself is not compared: the engine brings every song to -18 LUFS and a record is mastered louder; density (peak to loudness) is. Iterate: change what it names, compare again. solo a track (e.g. the drums) to compare one part against the reference's kick.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "reference": { "type": "string", "description": "Path to the reference .wav; a relative path is read from the render directory." },
+                    "source": { "type": "string", "description": "Full .synth source text of your song." },
+                    "from": { "type": "number", "minimum": 0, "description": "Start of the reference stretch, in seconds." },
+                    "to": { "type": "number", "minimum": 0, "description": "End of the reference stretch, in seconds." },
+                    "bars": { "type": "string", "description": "Stretch of the song: \"16\" for the first 16 bars, \"17-24\". Default: the whole song." },
+                    "solo": { "type": "array", "items": { "type": "string" }, "description": "Keep only these tracks of the song." },
+                    "mute": { "type": "array", "items": { "type": "string" }, "description": "Take these tracks of the song out." }
+                },
+                "required": ["reference", "source"],
+                "additionalProperties": false
+            }
+        }),
     ]
 }
 
@@ -308,6 +343,8 @@ fn call_tool(ctx: &Ctx, params: &Value) -> Result<Value, (i64, String)> {
         "tatum_check" => tool_check(&args),
         "tatum_render" => tool_render(ctx, &args),
         "tatum_debug" => tool_debug(ctx, &args),
+        "tatum_analyze" => tool_analyze(ctx, &args),
+        "tatum_compare" => tool_compare(ctx, &args),
         other => return Err((-32602, format!("unknown tool: {}", other))),
     };
     Ok(match outcome {
@@ -486,6 +523,60 @@ fn tool_debug(ctx: &Ctx, args: &Value) -> Result<String, String> {
     }
     let outcome = tatum_debug::run(song, &slug, &isolation, &opts)?;
     Ok(format!("{}\nsheet: {}\n", outcome.report, outcome.sheet.display()))
+}
+
+/// A reference WAV, measured. Reading is all the server does with the path:
+/// it has to name a `.wav`, and what comes back is numbers, never the file.
+/// A relative path is read from the render directory, where `tatum_render`
+/// writes, so a render can be measured by the name it was given.
+fn reference_profile(ctx: &Ctx, args: &Value, key: &str) -> Result<tatum_debug::reference::Profile, String> {
+    let path = args.get(key).and_then(Value::as_str).ok_or(format!("missing '{key}'"))?;
+    if !path.to_lowercase().ends_with(".wav") {
+        return Err(format!("{key}: a path to a .wav file; convert other formats first (ffmpeg -i song.mp3 song.wav)"));
+    }
+    let seconds = |k: &str| args.get(k).and_then(Value::as_f64).map(|v| v as f32);
+    let file = ctx.render_dir.join(path);
+    let audio = tatum_debug::wav::read(&file)?;
+    tatum_debug::reference::analyze(&audio, seconds("from"), seconds("to"))
+}
+
+fn tool_analyze(ctx: &Ctx, args: &Value) -> Result<String, String> {
+    let profile = reference_profile(ctx, args, "path")?;
+    let path = args.get("path").and_then(Value::as_str).unwrap_or_default();
+    Ok(tatum_debug::reference::describe(&profile, path))
+}
+
+fn tool_compare(ctx: &Ctx, args: &Value) -> Result<String, String> {
+    let reference = reference_profile(ctx, args, "reference")?;
+    let source = args.get("source").and_then(Value::as_str).ok_or("missing 'source'")?;
+    let names = |key: &str| -> Vec<String> {
+        args.get(key)
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect())
+            .unwrap_or_default()
+    };
+    let isolation = tatum_debug::Isolation { solo: names("solo"), mute: names("mute") };
+    let song = tatum_core::dsl::isolate::compile(source, &isolation).map_err(|e| pretty(&e.to_json()))?;
+    short_enough(&song)?;
+    let gain = tatum_core::dsl::isolate::output_gain(source).map_err(|e| pretty(&e.to_json()))?;
+    let bars = match args.get("bars").and_then(Value::as_str) {
+        None => None,
+        Some(text) => Some(
+            match text.split_once('-') {
+                Some((a, b)) => a.trim().parse().ok().zip(b.trim().parse().ok()),
+                None => text.trim().parse().ok().map(|n| (1, n)),
+            }
+            .filter(|(a, b): &(u32, u32)| *a >= 1 && b >= a)
+            .ok_or("bars: a count (\"16\") or a range (\"17-24\")")?,
+        ),
+    };
+    let (l, r) = tatum_debug::reference::render(song, gain, bars)?;
+    if l.len() < SAMPLE_RATE as usize * 2 {
+        return Err("the render is under two seconds; give `bars` more of the song".into());
+    }
+    let mine = tatum_debug::reference::measure(&l, &r);
+    let ref_name = args.get("reference").and_then(Value::as_str).unwrap_or_default();
+    Ok(tatum_debug::reference::compare(&reference, &mine, ref_name, &slug_from_source(source)))
 }
 
 /// Refuse a song longer than `MAX_RENDER_MINUTES`, before rendering any of it.
@@ -927,7 +1018,16 @@ mod tests {
             r["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert_eq!(
             names,
-            vec!["tatum_docs", "tatum_params", "tatum_examples", "tatum_check", "tatum_render", "tatum_debug"]
+            vec![
+                "tatum_docs",
+                "tatum_params",
+                "tatum_examples",
+                "tatum_check",
+                "tatum_render",
+                "tatum_debug",
+                "tatum_analyze",
+                "tatum_compare"
+            ]
         );
         assert_eq!(r["id"], "x");
     }
@@ -987,6 +1087,46 @@ mod tests {
         assert_eq!(sections[0]["bars"], 2);
         assert_eq!(sections[1]["scene"], "groove");
         assert!(out.exists());
+    }
+
+    #[test]
+    fn a_render_measured_as_a_reference_compares_with_its_song() {
+        let c = ctx();
+        // Eight bars, so the test renders seconds and not a whole song.
+        let src = "tempo 124\nscale A minor\nmodule beats kit { kick_decay 40% }\n\
+                   module bass sub { cutoff 300hz decay 200ms }\n\
+                   pattern four { kick: X - - - X - - - X - - - X - - - }\n\
+                   pattern line { - - A1 - - - A1 - - - C2 - - - A1 - }\n\
+                   track drums { play four using kit }\ntrack bass { play line using sub level 0.5 }\n\
+                   scene a { track drums { play four using kit } track bass { play line using sub } }\n\
+                   arrange { a x8 }\n";
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 20, "method": "tools/call", "params": { "name": "tatum_render", "arguments": { "source": src, "output": "reference_test.wav" } } }),
+        );
+        assert_eq!(r["result"]["isError"], false, "{}", r);
+        // A relative path is read where the render was written.
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 21, "method": "tools/call", "params": { "name": "tatum_analyze", "arguments": { "path": "reference_test.wav" } } }),
+        );
+        let text = r["result"]["content"][0]["text"].as_str().unwrap();
+        assert_eq!(r["result"]["isError"], false, "{text}");
+        assert!(text.contains("124.0 BPM"), "{text}");
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 22, "method": "tools/call", "params": { "name": "tatum_compare", "arguments": { "reference": c.render_dir.join("reference_test.wav").to_str().unwrap(), "source": src } } }),
+        );
+        let text = r["result"]["content"][0]["text"].as_str().unwrap();
+        assert_eq!(r["result"]["isError"], false, "{text}");
+        assert!(text.contains("nothing differs"), "{text}");
+
+        // Only a WAV is read.
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 23, "method": "tools/call", "params": { "name": "tatum_analyze", "arguments": { "path": "/etc/passwd" } } }),
+        );
+        assert_eq!(r["result"]["isError"], true);
     }
 
     #[test]

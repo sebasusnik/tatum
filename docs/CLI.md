@@ -11,6 +11,8 @@
 | [`watch`](#play-and-watch) | play it, and play every save of the file on the next bar |
 | [`debug`](#debug) | render every part apart, with spectrograms and a report of clicks and mud |
 | [`audit`](#audit) | measure every note of every tonal track for what is not its harmonics |
+| [`analyze`](#analyze-and-compare) | measure a reference track: tempo, key, the kick, the spectrum, density |
+| [`compare`](#analyze-and-compare) | a reference and your song side by side, and what in the file moves each difference |
 | [`set`](#set) | render, check, gate and play a live set |
 | [`tui-shot`](#tui-shot) | a picture of the live screen at any second |
 | [`params`](#params) | every module parameter, its range and units |
@@ -106,6 +108,71 @@ whole voice, by rendering it with and without each effect. The absolute number i
 fingerprint of a timbre and means nothing next to another track's. `--json` prints the
 same numbers for a script; `--strict` exits 1 if anything is reported. More in
 [MIX.md](MIX.md#auditing-a-mix).
+
+## analyze and compare
+
+```
+tatum analyze reference.wav [--from 1:04] [--to 1:36]
+tatum compare reference.wav song.synth [--from S] [--to S] [--bars N | A-B] [--solo a,b] [--mute c]
+tatum compare reference.wav other.wav
+```
+
+A record named as a reference is a word to whoever writes the song, and more so to a
+model, which cannot hear it or its own render. `analyze` turns it into numbers: the
+tempo (and its span when it moves), the key, the notes under 250 Hz, the loudness and
+how far the peaks sit over it, the width above 250 Hz and under 150 Hz, the spectrum per
+octave against the whole, and the kick -- the frequency it hits at, the note its sweep
+lands on, how long the sweep and the body take, how much click, and how much else fills
+its band. It reads a WAV from 8 to 384 kHz, PCM or float; an MP3 has to be converted
+first (`ffmpeg -i song.mp3 song.wav`). `--from`/`--to` take a stretch, in seconds or
+`m:ss`. At most 15 minutes are measured at once, enough for a long extended mix; a longer
+file, such as a DJ set, is refused with a pointer to `--from`/`--to`, and only the stretch
+picked is ever converted.
+
+What it says about `dark_techno` rendered, the engine's own song:
+
+```
+dark_techno.wav: 300.7 s
+  tempo        137.0 BPM (137..150)
+  key          G# major / F minor, weakly: little in it is tonal
+  low notes    D# 32%, E 16%, G 9%   (under 250 Hz, the kick's tail included)
+  loudness     -18.0 LUFS, peak -1.3 dBFS, peak to loudness 16.7 dB
+  width        1% above 250 Hz, 0.0% under 150 Hz
+  kick         582 hits, measured on the 36 with the least under them
+    hit        89 Hz (the first half cycle)
+    tail       37.9 Hz (D#1 -44c)
+    sweep      44 ms to within 10% of the tail
+    decay      -12 dB at 82 ms, -24 dB at 146 ms
+    click      -62.3 dB (first 10 ms over 2 kHz against the body)
+    under it   -45.3 dB (the band under 400 Hz late in the beat)
+  spectrum     31.5    63   125   250   500    1k    2k    4k    8k   16k
+  (dB)         -1.1  -8.0 -15.1 -17.9 -21.2 -23.8 -26.8 -25.0 -25.1 -26.5
+```
+
+The kick is measured on every hit averaged together, so the bass, the pads and the reverb
+under its tail cancel and the kick is left; and only on the hits with the least else in
+its band late in the beat, which in a track made for DJs are the intro and the outro,
+where the kick plays alone. A bass that starts with every kick is locked to it and
+survives the average; when one fills the band throughout, the report says so and the
+tail and the decay are not to be trusted -- point `--from`/`--to` at a stretch where the
+kick plays alone. The tail is measured on the stretch where the kick is within 12 dB of
+its peak, and when the sweep is still falling there, from where it is heading: a pitch
+sweep is an exponential towards its end note. A sweep that lands in a few milliseconds
+is quicker than a cycle, so `hit` reads lower than where it starts. The key comes with
+its relative, which has the same notes; the two cannot be told apart by the notes alone.
+
+`compare` measures your song the same way (rendered as `render` renders it, or a second
+WAV) and prints both side by side, then what differs by enough to hear, each with what in
+the file moves it: the note to put at the end of `pitch_osc`'s sweep, the factor for the
+sweep's decay and the body's `perc`, the octave bands to take down or bring up, the
+density, the low end's width, the tempo. Loudness itself is not compared: every song
+leaves the engine at -18 LUFS and a record is mastered far louder. How far the peaks sit
+over the loudness is, because that is the density a master hears as punch, and it comes
+from saturating, clipping and compressing the drums, not from the level. `--solo drums`
+compares the kit alone against the record's kick; `--bars` picks the stretch of the song,
+counted as `debug` counts it, each scene at its own tempo, and a first bar past the end is
+an error. `--bars`, `--solo` and `--mute` pick parts of a song, so with a second WAV they
+are an error rather than ignored; that WAV is measured whole.
 
 ## set
 
