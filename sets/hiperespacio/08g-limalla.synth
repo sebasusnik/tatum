@@ -1,6 +1,6 @@
 # set: bars=24 phase=08-amoladora energy=8
 # set-note: sustain one notch down: glitch drums, the broken gallop with gaps and octaves, plain rims; the zaps are gone again
-# cue: 1 let go of A1
+# cue: 1 let go of key D
 # cue: 17 B1 held + K3 from 0 to the top · GRINDER: idle → scream → cut
 # cue: 20.75 let go of B1 (K3 to center)
 use "_t08.synth"

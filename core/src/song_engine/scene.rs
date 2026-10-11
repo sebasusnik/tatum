@@ -135,6 +135,7 @@ impl SongEngine {
             }
         }
         self.active_automations = lanes;
+        self.refresh_track_rests();
     }
 
     /// Bind every track's `sidechain from=` to a track index, and mark which

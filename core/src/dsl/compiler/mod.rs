@@ -38,7 +38,7 @@ use module::compile_module_def;
 use notes::drum_name_to_midi;
 use pattern::compile_pattern;
 use track::compile_track;
-use validate::{validate_automations, validate_midi};
+use validate::{validate_automations, validate_midi, validate_perform, validate_scale};
 
 // ── Compiler ──
 
@@ -90,6 +90,8 @@ pub fn compile(song: &Song) -> CompileResult<CompiledSong> {
     // 1c. Validate automation targets against the registry
     errors.extend(validate_automations(song));
     errors.extend(validate_midi(song));
+    errors.extend(validate_scale(song));
+    errors.extend(validate_perform(song));
 
     // 2. Compile patterns (with scale context for degree resolution)
     let (intervals, root_pc) = scale_context(song);

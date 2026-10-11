@@ -5,6 +5,9 @@ use alloc::vec::Vec;
 
 use crate::graph::node::{ChainStep, NodeKind};
 
+/// How far a wet moves in a sample: across its whole travel in 10 ms.
+const WET_STEP: f32 = 1.0 / (0.010 * crate::SAMPLE_RATE);
+
 /// FX chain processing helper: a chain of NodeKind applied in series.
 pub(super) struct FxChain {
     pub(super) nodes: Vec<NodeKind>,
@@ -13,6 +16,9 @@ pub(super) struct FxChain {
     /// silent. Kept beside the nodes rather than inside them so every node
     /// type gets it without knowing about it.
     wet: Vec<f32>,
+    /// Where each wet is going: a knob or the wheel sets this, and `wet`
+    /// follows it over a few milliseconds, so a fast sweep does not step.
+    target: Vec<f32>,
     /// True while a node is bypassed, so entering bypass can clear it once.
     /// Without this a delay or reverb resumes with whatever it was holding
     /// when it was switched out, which arrives as a stale burst.
@@ -22,21 +28,22 @@ pub(super) struct FxChain {
 impl FxChain {
     pub(super) fn new(steps: &[ChainStep]) -> Self {
         let nodes = steps.iter().map(|s| s.spec.instantiate()).collect();
-        let wet = steps.iter().map(|s| s.wet).collect();
+        let wet: Vec<f32> = steps.iter().map(|s| s.wet).collect();
         let bypassed = steps.iter().map(|s| s.wet <= 0.0).collect();
-        Self { nodes, wet, bypassed }
+        Self { nodes, target: wet.clone(), wet, bypassed }
     }
 
     /// Set one node's dry/wet by position. Returns false if there is no such
     /// node, so a caller can tell a no-op from a real change.
     pub(super) fn set_wet(&mut self, idx: usize, value: f32) -> bool {
-        let Some(slot) = self.wet.get_mut(idx) else { return false };
+        let Some(slot) = self.target.get_mut(idx) else { return false };
         *slot = value.clamp(0.0, 1.0);
-        let now_off = *slot <= 0.0;
-        if now_off && !self.bypassed[idx] {
-            self.nodes[idx].reset();
+        // Coming out of bypass: the node was cleared going in, and the wet
+        // ramps up from nothing.
+        if *slot > 0.0 && self.bypassed[idx] {
+            self.bypassed[idx] = false;
+            self.wet[idx] = 0.0;
         }
-        self.bypassed[idx] = now_off;
         true
     }
 
@@ -46,11 +53,21 @@ impl FxChain {
         let mut vl = l;
         let mut vr = r;
         for (i, node) in self.nodes.iter_mut().enumerate() {
+            let target = self.target[i];
+            if self.wet[i] != target {
+                let d = target - self.wet[i];
+                self.wet[i] = if d.abs() <= WET_STEP { target } else { self.wet[i] + WET_STEP * d.signum() };
+            }
             let wet = self.wet[i];
             // Bypassed: not processed at all. This is the whole point -- an
             // effect that is switched off has to cost nothing, or a rig with a
-            // full chain on every voice is unaffordable.
+            // full chain on every voice is unaffordable. Arriving there, it
+            // is cleared, so it does not resume with a stale burst.
             if wet <= 0.0 {
+                if target <= 0.0 && !self.bypassed[i] {
+                    node.reset();
+                    self.bypassed[i] = true;
+                }
                 continue;
             }
             let (wl, wr) = node.process_stereo(vl, vr);

@@ -690,6 +690,203 @@ the note it answers to. An Arturia KeyLab Essential mk3 sends, by Arturia's defa
 to shows its number, which is the quickest way to check yours. A pad or a key that nothing is mapped to shows its number while you play
 (`pad 44 (not mapped)`).
 
+### Zones, scenes and the computer's keys
+
+A performer splits the keyboard: the lowest octave for things that happen, a
+stretch for the bass, the rest for a lead. Zones are written by MIDI note
+(or a note name), so moving them after the octave buttons is one line each:
+
+```
+midi {
+    zone triggers 36..47              # each key does one thing: `key` lines
+    zone bass     48..59 > bass roll  # held, `bass` rolls the note
+    zone lead     60..84 > zap        # the lead plays `zap`
+    lock snap                         # snap (default), white or off
+
+    key 36 > play riser               # anything a pad does, on a key
+    key 38 > mute drums q=bar
+    key 42 > hold fill q=beat
+}
+```
+
+A `key` line takes every action a `pad` line takes, `q=` included, except the
+set moves: the set moves from the computer's keys. With a trigger zone, a
+`key` outside it is an error.
+
+The bass zone plays one note at a time. With `roll`, a held key plays the
+note on the three sixteenths after each beat of the track named, in place of
+its pattern, from the next sixteenth: the psytrance roll, under the hand.
+Letting go gives the pattern back. `kick=drums` also strikes the kick of a
+`beats` track on each beat, for bringing a groove into a break. Without
+`roll` (`> sub notes`) the key plays the note held. The lead zone plays chords
+on a `keys` or `fm` track and one note at a time on a `bass` one.
+
+The bass zone plays in the register of the line under it: its keys move by
+whole octaves so the zone's first key on the scale's root plays the root
+nearest the note the track plays most (a `bass` track with no line of its
+own: octave 1, where a psytrance bass lives). `octave 2` after the track
+writes it instead: the root in octave 2. The lead zone plays as written
+unless it says `octave`.
+
+`lock` keeps both zones in the song's scale: `snap` moves a key outside it
+to the nearest note in it (the lower one when two are as near), `white` makes
+the white keys the scale's degrees from C (C the root, D the second...) and
+the black keys silent, and `off` plays what is pressed.
+
+A `perform` block is a scene of the performance. It changes what the zones
+play and the scale they keep to, and puts values in place as it comes in
+(the same targets and units a knob takes):
+
+```
+perform break {
+    scale E phrygian_dominant         # with none, the song's
+    lock white
+    bass > sub notes
+    lead > vox
+    set master dj cutoff 20khz
+    set drums level 0
+}
+
+keyboard {
+    f1 > perform intro
+    f4 > perform break
+    space > next                      # also prev, step 3
+    quantize bar                      # bar, phrase (8 bars) or a number of bars
+}
+```
+
+A scene, or the `midi` block for when none plays, says what the pitch strip
+does to each zone, and a scene can put the mod wheel (controller 1), or any
+controller, on something of its own while it plays:
+
+```
+perform build {
+    bend lead 24st                          # playing the lead: two octaves each way
+    bend bass 12st idle                     # hands off: the song's bass line falls
+    wheel lead > zap crush wet 0%..70%      # playing the lead: an effect's mix
+    wheel idle > master hp cutoff 20hz..1500hz   # hands off: the song thins
+}
+perform drop {
+    bend lead 2deg                          # to the note two degrees of the scale away
+    wheel lead > laser talk wet 0%..100%    # a vowel filter fading in...
+    wheel lead > laser talk position 0..1   # ...and walking a-e-i-o-u
+    cc 74 always > laser lp cutoff          # any controller: replaces the `midi` line
+}
+```
+
+Each line says when it answers, by where the hands are: the zone of the
+newest key held in the bass or lead zone, or none. A line with a zone
+(`wheel lead >`, and a `bend` with no word after its range) answers while a
+key of that zone is the newest held: it is for the sound you play. `idle`
+answers only with no key held: the song, while the hands are off the keys.
+`always` answers whatever the hands do; a `wheel >` with no word is
+`always`. A gesture belongs to what it started on: the lines are chosen as
+the strip or the controller leaves rest, and kept until it comes back, so
+letting go of a key mid-sweep does not hand the sweep to the song.
+
+`bend <zone> 24st` bends up to that many semitones each way, `2deg` from the
+key held to the note so many degrees of the scale away (half way it slides, at
+the end it is in the scale; a new key held while bent re-aims it), and `off`
+leaves the zone alone; `always` or `idle` after the range says when. With no
+`bend` line the lead zone bends two semitones while it is played and the bass
+zone not at all. A zone bends the track its newest key sounds on, or the one
+the scene gives it, with everything that track plays: `bend bass 12st idle`
+on the song's own bass track drops its line.
+
+A `wheel` or `cc` line in a scene is a knob line, with a range, a macro when
+the controller is named twice: while the scene plays the controller moves
+these instead of what the `midi` block gives it. When the scene changes, what
+the old one's lines moved goes back to the bottom of their travel and the new
+one's go to where the controller is, so write a scene's ranges to start at
+the sound as written. A vowel filter takes `position`, 0..1 along a-e-i-o-u,
+which glides over about 25 ms and takes over from its LFO; a node's `wet`
+moves over 10 ms, so a wheel thrown across its travel does not click.
+
+A scene is called from the computer's keys only, never from the controller,
+and comes in on the next bar (or what `quantize` says, counted from the
+step's first bar in a set): its `set` values land on the sample of the line,
+and a key held through the change sounds on where it started until let go.
+The `keyboard` block names letters, digits, `f1`..`f12`, `space`, `tab`,
+`enter` and the arrows; a key it binds does that instead of what the screen
+does with it, and `q` always quits. A set step can bring a scene in as it
+lands with `# set: perform=drop`, and a performance script can call one with
+`perform drop`.
+
+The scales a `scale` line and a scene take are `major`, `minor`, `dorian`,
+`phrygian`, `lydian`, `mixolydian`, `locrian`, `harmonic_minor`,
+`phrygian_dominant`, `hungarian_minor` and `double_harmonic` (and `ionian`,
+`aeolian`). Any other name is an error.
+
+`tatum set controls <dir>` tries every control of every step the way a hand
+would -- each knob on each page turned end to end, each pad and trigger key
+held, the strip and the wheel thrown, with the lead or bass key or the pad a
+voice needs held when it needs one -- and prints, per step, the ones that
+changed nothing (`NOTHING`) and how much the others did. A knob on a voice a
+step leaves out does nothing in that step; one that does nothing anywhere is a
+mapping to fix.
+
+`tatum midi monitor [<song or set>] [--midi <name>]` prints every message the
+controller sends, one a line: the port, the channel, what it is (note, pad,
+cc, pitch strip, aftertouch, program change), its bytes, and, given a song or
+a set, what the `midi` block, the zones and the trigger keys do with it. It is
+the way to find out which numbers a controller sends before writing them down.
+
+### Pages, takeover and effects
+
+A knob line can name a track where a module is meant: `bass cutoff` reaches
+the module the track `bass` plays, whatever the rig calls it, so one mapping
+serves every track of a set.
+
+`page <name> { ... }` blocks give the knobs voices. The first page is the one
+a session starts on; while a page is chosen, its line for a controller stands
+in for the `midi` block's, and a controller it does not name keeps the block's
+line. A page reaches across a set whose rigs differ, so a line naming
+something a rig does not have is left out rather than refused, and reads
+`(not in this track)` on screen.
+
+```
+midi {
+    takeover pickup                 # after a page change, a knob waits to reach its target's value
+    cc 85 > master vol gain 0..1 guard   # and this one waits on its first touch too
+    page tema { }                   # the block's own lines
+    page bass {
+        cc 74 > bass cutoff
+        cc 71 > bass resonance
+    }
+    cc 114 > voice step             # an encoder steps through the pages
+}
+keyboard { tab > voice next }       # also voice prev, voice bass
+```
+
+`cc N > voice` picks a page by the controller's position; `voice step` is an
+encoder: above 64 the next page, below it the one before. With `takeover
+pickup`, after a page change a knob that is not where its new target is
+moves nothing until it passes that value: where it left the target on that
+page, else where the text has it. The screen says which way to turn. A line
+written with `guard` also waits on its very first touch, before any page
+change, when the text puts its target somewhere else: for what a jump would
+hurt, a DJ filter or a master volume. On the first page, before any change,
+every other knob jumps on its first touch.
+
+A pad or a trigger key can hold an effect on the whole output, coming in and
+out over a few milliseconds, as strong as the pad was struck and then as hard
+as it is pressed (aftertouch, polyphonic or the channel's, never below the
+strike):
+
+```
+midi {
+    pad 39 > tapestop     # slows to a stop, sooner the harder
+    pad 40 > gate 1/16    # chopped on the grid: open the first half of each division
+    pad 41 > crush        # 12 bits down to 3
+    pad 42 > scream       # driven into a vowel filter that pressure moves
+    key 40 > cut          # a low-pass closing to 900..150 Hz
+    key 41 > sweep        # a high-pass climbing toward 4 kHz while held
+}
+```
+
+They take no `q=`. A script plays aftertouch with `press pad 40 90` and picks
+a page with `voice bass`.
+
 ### Everything else
 
 `render` ignores the block, so a song with a `midi` block renders exactly as one

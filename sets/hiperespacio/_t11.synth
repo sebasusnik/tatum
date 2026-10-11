@@ -29,6 +29,7 @@ master {
        > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
        > eq(low=0.5, mid=-0.5, high=1)
        > gain(1.122) as trim
+       > gain(1.0) as vol
        > out
 }
 
@@ -644,13 +645,31 @@ track gun {
 # The KeyLab, laid out as CONTROLES.md (F7 F8 F9, A4 A7 A8 come from _base).
 # Main voice = the lead (blade), second voice = the acid (grit),
 # signature = the haze (smog; the pad plays smog_pad)
+# The keyboard's lead in this track: its own lead voice (blade), for the
+# lead zone, through the same chain, plus a filter (`klp`) and a vowel
+# (`talk`) the wheel and the knobs reach, and its own gain (`kgain`).
+track ktema {
+    play krest
+    using blade
+    level 0.5
+    velocity 1.0
+    gate 0.9
+    pan 0.08
+    delay_send 0.3
+    reverb_send 0.18
+    sidechain 0.4
+
+    out > highpass(320hz, 0.05) > saturate(0.25) > phaser(0.25, bars=8) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(0.393) as kgain > master
+}
+
 midi {
-    cc 73 > drums level
-    cc 75 > perc level 0..0.8
-    cc 79 > bass level
-    cc 72 > lead level 0..0.35
+    # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
+    # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw
+    # that were pads A2 and A3. Knobs: the page `tema`.
+    cc 75 > bass level
+    cc 80 > lead level 0..0.35
     cc 80 > acid level 0..0.55
-    cc 81 > haze_pad level 0..0.5
+    cc 80 > haze_pad level 0..0.5
 
     cc 74 > sing cutoff 50hz..220hz
     cc 74 > sing cutoff_env 700hz..2.4khz
@@ -663,17 +682,16 @@ midi {
     cc 93 > master hp cutoff 20hz..400hz
     cc 93 > lead delay_send 0.3..0.65
     cc 18 > lead delay_send 0..0.8
+    cc 18 > acid delay_send 0..0.6               # and the acid, where the lead is out
     cc 19 > kit kick_decay 8%..32%
     cc 16 > kit hihat_pitch 1.39x..1.85x..2.0x    # K8 hats: darker left, the written tuning in the middle (hihat_decay does nothing in the engine yet)
     cc 17 > haze crush wet 0..0.4
     cc 17 > haze_hi crush wet 0..0.4
     cc 17 > haze_pad crush wet 0..0.45
 
-    pad 36 > mute drums q=bar
-    pad 37 > toggle perc
-    pad 38 > throw lead q=1/16
-    pad 40 > repeat 1/8
-    pad 41 > repeat 1/16
+    key 46 > toggle perc
+    key 47 > throw lead q=1/16
+    key 47 > throw acid q=1/16
 
     pad 44 > play haze_pad F q=1/16    #4
     pad 45 > hold riser_pad q=beat

@@ -104,8 +104,9 @@ fn q_parses_and_is_refused_where_it_means_nothing() {
     assert!(SongEngine::from_source(SONG).is_ok());
     for (line, says) in [
         ("cc 74 > drone cutoff q=bar", "a knob or the keys act at once"),
-        ("pad 44 > repeat 1/16 q=bar", "already waits for its line"),
-        ("pad 44 > next q=beat", "already waits for its line"),
+        ("pad 44 > repeat 1/16 q=bar", "keeps its own time"),
+        ("pad 44 > tapestop q=bar", "keeps its own time"),
+        ("pad 44 > next q=beat", "keeps its own time"),
         ("pad 44 > mute kick q=1/3", "bar, beat, 1/8, 1/16 or off"),
     ] {
         let err = SongEngine::from_source(&format!("{SONG}midi {{\n  {line}\n}}\n")).err().expect(line);

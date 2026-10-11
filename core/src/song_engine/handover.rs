@@ -61,6 +61,19 @@ impl SongEngine {
         total as usize
     }
 
+    /// A sixteenth as it plays now, in samples, and how far into the one
+    /// playing the engine is: what keeps an effect on the grid.
+    pub fn step_timing(&self) -> (f32, f32) {
+        (self.samples_per_step, self.sample_counter)
+    }
+
+    /// The bar that starts on the next bar line: the one the next step
+    /// begins, when that step is a downbeat, else the one after.
+    pub fn next_bar_line(&self) -> usize {
+        let spb = self.steps_per_bar.max(1);
+        self.global_step.div_ceil(spb)
+    }
+
     /// Bar the next step to fire belongs to. On a bar line this is the bar
     /// about to start, while `current_bar` still reads the one that ended.
     pub fn bar_of_next_step(&self) -> usize {

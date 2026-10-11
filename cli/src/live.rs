@@ -21,6 +21,7 @@ use tatum_core::{BLOCK_SIZE, SAMPLE_RATE};
 
 use crate::include::Source;
 use crate::midi::{Event as Midi, DRUM_CHANNEL};
+use tatum_core::dsl::ast::KeyAction;
 use crate::resample::Resampler;
 
 /// What the audio thread tells the main thread.
@@ -97,6 +98,18 @@ pub fn cmd(args: &[String], watch: bool) {
                 return;
             }
             "--tui" => tui = true,
+            "--buffer" => {
+                i += 1;
+                match args.get(i).and_then(|v| v.parse::<u32>().ok()).filter(|n| (64..=8192).contains(n)) {
+                    Some(n) => {
+                        let _ = BUFFER.set(n);
+                    }
+                    None => {
+                        eprintln!("error: --buffer needs a number of frames, 64 to 8192 (like 1024)");
+                        std::process::exit(1);
+                    }
+                }
+            }
             // Sound painted with cell backgrounds only, for a terminal that
             // makes them translucent (Ghostty: `background-opacity-cells`).
             "--glass" => {
@@ -140,6 +153,12 @@ fn list_devices() {
         Err(e) => eprintln!("error: cannot list devices: {}", e),
     }
 }
+
+/// `--buffer`: the frames the audio device is asked for per callback.
+pub static BUFFER: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+
+/// Errors the audio stream reported: dropouts, as a rule.
+static STREAM_ERRORS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
 /// The engine renders 44.1 kHz stereo. Take that rate when the device offers
 /// it (no conversion, sample-exact), otherwise the device's own default rate
@@ -243,7 +262,12 @@ pub fn run(
     };
 
     let device = open_device(device_name)?;
-    let (config, rate) = pick_config(&device, forced_rate)?;
+    let (mut config, rate) = pick_config(&device, forced_rate)?;
+    // `--buffer 1024`: a bigger block per callback, for headroom when the
+    // device's default leaves too little (a blend runs two engines at once).
+    if let Some(&frames) = BUFFER.get() {
+        config.buffer_size = cpal::BufferSize::Fixed(frames);
+    }
     // None at the engine's own rate: the samples reach the device untouched.
     let mut resampler = if rate == SAMPLE_RATE as u32 { None } else { Some(Resampler::new(SAMPLE_RATE as u32, rate)) };
     let device_desc = device.description().map(|d| d.to_string()).unwrap_or_else(|_| "?".into());
@@ -358,7 +382,11 @@ pub fn run(
                     stats_cb.late.fetch_add(1, Ordering::Relaxed);
                 }
             },
-            |err| eprintln!("audio stream error: {}", err),
+            // Counted, not printed: a line written over the screen would tear
+            // it. The summary at the end says how many, and how to get room.
+            |_err| {
+                STREAM_ERRORS.fetch_add(1, Ordering::Relaxed);
+            },
             None,
         )
         .map_err(|e| format!("cannot open output stream: {}", e))?;
@@ -411,6 +439,12 @@ pub fn run(
                     eprintln!("    {}", nav.describe(i));
                 }
                 eprintln!("  space or → next, ← back, 1-9 a step, q quit; save the playing step to re-evaluate it");
+                print_keyboard(&planner);
+                Some(crate::keys::spawn(key_tx))
+            }
+            None if planner.has_keyboard() => {
+                eprintln!("  q quits");
+                print_keyboard(&planner);
                 Some(crate::keys::spawn(key_tx))
             }
             None => {
@@ -441,6 +475,18 @@ pub fn run(
     };
     ui.song(&title(&source, &set), &source);
 
+    // The first step of a set may name the scene it starts in.
+    if let Some(scene) = set.as_ref().and_then(|n| n.steps[n.current].perform.clone()) {
+        let generation = stats.generation.load(Ordering::Relaxed);
+        let plans = planner
+            .enter_scene(&scene, generation)
+            .into_iter()
+            .flatten()
+            .chain(planner.scene_values(&scene, None, generation).into_iter().flatten());
+        for plan in plans {
+            let _ = plan_tx.send(plan);
+        }
+    }
     let started = Instant::now();
     let mut last_mtime: Option<SystemTime> = source.newest_mtime();
     let mut swaps = 0u32;
@@ -456,6 +502,8 @@ pub fn run(
     // every hit is sent, in the order it was played.
     let mut unsent: [Option<u8>; 128] = [None; 128];
     let mut unsent_bend: Option<u16> = None;
+    // A scene called from the computer's keys, and the bar it lands on.
+    let mut pending_scene: Option<(String, usize)> = None;
     // What the screen's keys changed, newest last, to take back: every file
     // one key touched, as it was before.
     let mut undo: Vec<Vec<(std::path::PathBuf, String)>> = Vec::new();
@@ -471,9 +519,22 @@ pub fn run(
         let now_s = || started.elapsed().as_secs_f32();
         let mut readings = Vec::new();
         for event in first.into_iter().chain(std::iter::from_fn(|| midi_rx.try_recv().ok())) {
+            // `i` on the screen: every message as it arrives, and what the
+            // song does with it.
+            if let Ui::Screen(screen) = &mut ui {
+                let what = planner.song().and_then(|s| crate::midi::meaning(s, Some(&planner), &event));
+                screen.midi_in(now_s(), crate::midi::describe(&event), what);
+            }
             match event {
                 Midi::Cc(cc, value) => unsent[cc as usize] = Some(value),
                 Midi::Bend(value) => unsent_bend = Some(value),
+                // How hard a held pad or key is pressed: a held effect follows it.
+                Midi::Pressure { channel, note, value } => {
+                    for plan in planner.pressure(channel == DRUM_CHANNEL, note, value) {
+                        let _ = plan_tx.try_send(plan);
+                    }
+                }
+                Midi::Other { .. } => {}
                 Midi::Note { channel, note, velocity } => {
                     let generation = stats.generation.load(Ordering::Relaxed);
                     let pad = channel == DRUM_CHANNEL;
@@ -541,6 +602,7 @@ pub fn run(
             }
             if !full {
                 unsent_bend = None;
+                readings.push(planner.bend_reading());
             }
         }
         if unsent.iter().any(|v| v.is_some()) {
@@ -601,6 +663,7 @@ pub fn run(
                     crate::tui::Key::Next => keys.push(crate::keys::Key::Next),
                     crate::tui::Key::Prev => keys.push(crate::keys::Key::Prev),
                     crate::tui::Key::Step(n) => keys.push(crate::keys::Key::Step(n)),
+                    crate::tui::Key::Named(n) => keys.push(crate::keys::Key::Named(n)),
                     // The screen writes the line in the file; the save is
                     // picked up below like one from the editor.
                     crate::tui::Key::Edit(op) => match edit_play(&watched, screen.selected_tracks(), op) {
@@ -667,7 +730,68 @@ pub fn run(
                 }
             }
         }
+        let (bindings, scene_bars) = planner.keyboard();
         for key in keys {
+            // A key the song binds does what the `keyboard` block says;
+            // any other keeps the set's own meaning.
+            let key = match key {
+                crate::keys::Key::Named(name) => {
+                    let word = name.word();
+                    match bindings.iter().find(|b| b.key == word).map(|b| &b.action) {
+                        Some(KeyAction::Reset) => {
+                            let generation = stats.generation.load(Ordering::Relaxed);
+                            for plan in planner.reset_knobs(generation) {
+                                if plan_tx.send(plan).is_err() {
+                                    break;
+                                }
+                            }
+                            ui.say(now_s(), "reset: every knob and fader back to the text", crate::tui::Tone::Good);
+                            continue;
+                        }
+                        Some(KeyAction::Voice(mv)) => {
+                            let generation = stats.generation.load(Ordering::Relaxed);
+                            match planner.voice(mv, generation) {
+                                Some(said) => ui.say(now_s(), &said, crate::tui::Tone::Good),
+                                None => ui.say(now_s(), "no knob pages in this song", crate::tui::Tone::Bad),
+                            }
+                            continue;
+                        }
+                        Some(KeyAction::Perform(scene)) => {
+                            let bar = stats.bar.load(Ordering::Relaxed) as usize;
+                            // A phrase counts from the step's first bar.
+                            let origin = set.as_ref().map_or(0, |n| bar + 1 - n.bar_in_step(bar));
+                            let q = scene_bars as usize;
+                            let target = origin + ((bar - origin) / q + 1) * q;
+                            let generation = stats.generation.load(Ordering::Relaxed);
+                            match planner.scene_values(scene, Some(target), generation) {
+                                Some(plans) => {
+                                    for plan in plans {
+                                        if plan_tx.send(plan).is_err() {
+                                            break;
+                                        }
+                                    }
+                                    pending_scene = Some((scene.clone(), target));
+                                    ui.say(
+                                        now_s(),
+                                        &format!("scene {} on bar {}", scene, target + 1),
+                                        crate::tui::Tone::Info,
+                                    );
+                                }
+                                None => ui.say(now_s(), &format!("no scene named {}", scene), crate::tui::Tone::Bad),
+                            }
+                            continue;
+                        }
+                        Some(KeyAction::Next) => crate::keys::Key::Next,
+                        Some(KeyAction::Prev) => crate::keys::Key::Prev,
+                        Some(KeyAction::Step(n)) => crate::keys::Key::Step(*n),
+                        None => match name.default_move() {
+                            Some(k) => k,
+                            None => continue,
+                        },
+                    }
+                }
+                k => k,
+            };
             let m = match key {
                 crate::keys::Key::Quit => {
                     quit = true;
@@ -676,6 +800,7 @@ pub fn run(
                 crate::keys::Key::Next => crate::setnav::Move::Next,
                 crate::keys::Key::Prev => crate::setnav::Move::Prev,
                 crate::keys::Key::Step(n) => crate::setnav::Move::To(n),
+                crate::keys::Key::Named(_) => continue,
             };
             if let Some(nav) = set.as_mut() {
                 let bar = stats.bar.load(Ordering::Relaxed) as usize;
@@ -685,6 +810,20 @@ pub fn run(
         }
         if quit {
             break;
+        }
+        // A scene called from the keys takes the keyboard on its bar; its
+        // values were sent when it was called and land there on their own.
+        if let Some((scene, target)) = pending_scene.clone() {
+            if stats.bar.load(Ordering::Relaxed) as usize >= target {
+                pending_scene = None;
+                let generation = stats.generation.load(Ordering::Relaxed);
+                for plan in planner.enter_scene(&scene, generation).unwrap_or_default() {
+                    if plan_tx.send(plan).is_err() {
+                        break;
+                    }
+                }
+                ui.say(now_s(), &format!("scene {}", planner.describe_scene(&scene)), crate::tui::Tone::Good);
+            }
         }
         if let Some(nav) = set.as_mut() {
             let bar = stats.bar.load(Ordering::Relaxed) as usize;
@@ -701,6 +840,22 @@ pub fn run(
                 ui.say(now_s(), &line, crate::tui::Tone::Info);
             }
             if nav.current != before {
+                // A step whose header names a scene brings it in as it lands.
+                if let Some(scene) = nav.steps[nav.current].perform.clone().filter(|s| planner.scene() != Some(s)) {
+                    let generation = stats.generation.load(Ordering::Relaxed);
+                    let plans = planner
+                        .enter_scene(&scene, generation)
+                        .into_iter()
+                        .flatten()
+                        .chain(planner.scene_values(&scene, None, generation).into_iter().flatten());
+                    for plan in plans {
+                        if plan_tx.send(plan).is_err() {
+                            break;
+                        }
+                    }
+                    pending_scene = None;
+                    ui.say(now_s(), &format!("scene {}", planner.describe_scene(&scene)), crate::tui::Tone::Good);
+                }
                 if let Ok(s) = Source::load(&nav.path()) {
                     source = s;
                     last_mtime = source.newest_mtime();
@@ -765,6 +920,13 @@ pub fn run(
             }
         }
         if let Ui::Screen(screen) = &mut ui {
+            screen.bound = bindings.iter().map(|b| b.key.clone()).collect();
+            screen.voice = planner.voice_name();
+            screen.perform = match (planner.scene(), &pending_scene) {
+                (now, Some((next, bar))) => Some(format!("{} → {} @ bar {}", now.unwrap_or("—"), next, bar + 1)),
+                (Some(now), None) => Some(now.to_string()),
+                (None, None) => None,
+            };
             if let Some(nav) = set.as_ref() {
                 let bar = stats.bar.load(Ordering::Relaxed) as usize;
                 screen.set = Some(crate::tui::SetView {
@@ -858,6 +1020,14 @@ pub fn run(
         if budget > 0.0 { worst / budget * 100.0 } else { 0.0 },
         stats.late.load(Ordering::Relaxed)
     );
+    let dropouts = STREAM_ERRORS.load(Ordering::Relaxed);
+    if dropouts > 0 {
+        eprintln!(
+            "{} audio dropout{} (the device ran out of sound to play); `--buffer 1024` gives each callback more room",
+            dropouts,
+            if dropouts == 1 { "" } else { "s" }
+        );
+    }
     if watch {
         eprintln!("{} swaps, {} instant edits, {} rejected saves", swaps, fast, rejected);
     }
@@ -893,6 +1063,35 @@ fn edit_play(
     }
     std::fs::write(file, &after).map_err(|e| format!("cannot write {}: {}", file.display(), e))?;
     Ok((before, said.join("  ·  ")))
+}
+
+/// The keys the song binds, for the plain screen.
+fn print_keyboard(planner: &LivePlanner) {
+    let (bindings, bars) = planner.keyboard();
+    if bindings.is_empty() {
+        return;
+    }
+    let said: Vec<String> = bindings
+        .iter()
+        .map(|b| {
+            let what = match &b.action {
+                KeyAction::Perform(s) => format!("scene {}", s),
+                KeyAction::Reset => "reset the knobs".into(),
+                KeyAction::Voice(tatum_core::dsl::ast::VoiceMove::Next) => "next voice".into(),
+                KeyAction::Voice(tatum_core::dsl::ast::VoiceMove::Prev) => "voice before".into(),
+                KeyAction::Voice(tatum_core::dsl::ast::VoiceMove::To(p)) => format!("voice {}", p),
+                KeyAction::Next => "next".into(),
+                KeyAction::Prev => "prev".into(),
+                KeyAction::Step(n) => format!("step {}", n),
+            };
+            format!("{} {}", b.key, what)
+        })
+        .collect();
+    eprintln!(
+        "  keys: {}  (a scene comes in on the next {})",
+        said.join(", "),
+        if bars == 1 { "bar".to_string() } else { format!("{} bars", bars) }
+    );
 }
 
 /// Where the session's messages go: lines on stderr, or the screen.

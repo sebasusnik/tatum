@@ -1,0 +1,347 @@
+# keylab_psy_e_frigio — a psytrance groove in E phrygian to play on a KeyLab
+#
+# A loop with no arrangement: the performer makes the song. Four scenes,
+# called from the computer's keys, change what the keyboard plays, the
+# scale it keeps to and where the mix sits:
+#
+#   F1 intro   muffled; the pluck in the lead zone, the wheel opens it,
+#              the strip bends two degrees of the scale
+#   F2 build   thin and open; the zap, the strip dives two octaves (and the
+#              bass line one), the wheel brings in a crusher
+#   F3 drop    everything; the laser lead, the wheel makes it talk; the bass
+#              rolls under your hand
+#   F4 break   no drums; a vowel pad in E phrygian dominant on the white keys,
+#              the wheel walks its vowel; the bass zone plays a long sub
+#
+# The keyboard, as the KeyLab Essential 49 mk3 ships (check yours with
+# `tatum midi monitor examples/keylab_psy_e_frigio.synth`):
+#
+#   36..47  triggers  C riser · C# impact · D drums out · D# bass out ·
+#                     F# snare roll · G lead into the echo · G# freeze
+#   48..59  bass      hold a key: the bass rolls that note (drop, build)
+#   60..84  lead      the scene's voice, kept to the scale
+#
+#   tatum play examples/keylab_psy_e_frigio.synth --tui
+
+tempo 142
+meter 4/4
+scale E phrygian
+swing 0.5
+sidechain 0.5 attack=1ms release=90ms
+delay sync=dotted_eighth feedback=0.3 filter=0.55
+reverb size=0.62 damp=0.5 predelay=25 sidechain=0.6
+
+master {
+    in > lowpass(20khz, 0.05) as dj
+       > highpass(20hz, 0.05) as hp
+       > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
+       > gain(1.0) as vol
+       > out
+}
+
+# ── The groove ──
+
+module beats kit {
+    kick_level 1.0
+    kick_decay 20%
+    kick_pitch 1.12x
+    kick_click 58%
+    kick_drive 70%
+    snare_level 0.4
+    snare_decay 10%
+    snare_pitch 1.3x
+    hihat_level 0.6
+    hihat_decay 7%
+    hihat_pitch 1.9x
+    hihat_pan -0.2
+    clap_level 0.0
+}
+
+module bass rodillo {
+    osc1_wave square
+    osc2_wave saw
+    osc2_pitch 0.07st
+    cutoff 100hz
+    cutoff_env 1200hz
+    resonance 32%
+    keytrack 25%
+    glide 0%
+    attack 1ms
+    decay 85ms
+    sustain 0%
+    release 22ms
+}
+
+module bass sub_v {
+    osc1_wave square
+    osc2_wave saw
+    osc2_pitch -12st
+    cutoff 180hz
+    resonance 10%
+    glide 20%
+    attack 20ms
+    decay 300ms
+    sustain 80%
+    release 200ms
+}
+
+pattern beat {
+    kick: X - - -  X - - -  X - - -  X - - -
+    hat:  - o x o  - o x o  - o x o  - o x o
+}
+
+pattern roll {
+    - 1.2:0.95 1.2:0.7 1.2:0.8  - 1.2:0.95 1.2:0.7 1.2:0.8  - 1.2:0.95 1.2:0.7 1.2:0.8  - 2.2:0.95 1.2:0.7 1.2:0.8
+}
+
+pattern krest { -*16 }
+
+track drums {
+    play beat
+    using kit
+    level 0.9
+    out > highpass(30hz, 0.05) > master
+}
+
+track bass {
+    play roll
+    using rodillo
+    level 1.2
+    gate 0.7
+    sidechain 0.3
+    out > highpass(32hz, 0.05) > saturate(0.3) > master
+}
+
+track sub {
+    play krest
+    using sub_v
+    level 0.5
+    sidechain 0.2
+    out > highpass(28hz, 0.05) > master
+}
+
+# ── The keyboard's voices: silent until a key is held ──
+
+module fm pluck_v {
+    algorithm two_op
+    level 1.3
+    mod_index 48%
+    feedback 12%
+    op0_ratio 1x
+    op1_ratio 2x
+    op0_envelope 0.002 0.22 0.0 0.12
+    op1_envelope 0.001 0.09 0.0 0.06
+}
+
+module fm zap_v {
+    algorithm two_op
+    level 1.5
+    mod_index 80%
+    feedback 30%
+    op0_ratio 1x
+    op1_ratio 3.5x
+    op0_envelope 0.001 0.09 0.0 0.05
+    op1_envelope 0.001 0.05 0.0 0.03
+    lfo_target pitch
+    lfo_sync sixteenth
+    lfo_waveform saw
+    lfo_depth 45%
+}
+
+module fm laser_v {
+    algorithm serial4
+    level 1.5
+    mod_index 55%
+    feedback 22%
+    op0_ratio 1x
+    op1_ratio 2x
+    op2_ratio 1.005x
+    op3_ratio 3x
+    op0_envelope 0.004 0.25 0.7 0.15
+    op1_envelope 0.002 0.18 0.5 0.12
+    op2_envelope 0.002 0.30 0.4 0.12
+    op3_envelope 0.001 0.10 0.2 0.08
+    lfo_target mod_index
+    lfo_sync bars_2
+    lfo_waveform triangle
+    lfo_depth 35%
+    vibrato_rate 5.5hz
+    vibrato_depth 18%
+}
+
+module keys vox_v {
+    voice_mode poly
+    cutoff 1400hz
+    resonance 25%
+    detune 22%
+    chorus_mix 30%
+    attack 250ms
+    decay 600ms
+    sustain 75%
+    release 500ms
+}
+
+instrument ruido_v {
+    gain 2.0
+    noise() as n
+    n > bandpass(300, 0.4, ea=8.0, ed=0.1, es=1.0, er=0.4, edepth=7000) as bp
+    bp > adsr(2.5, 0.1, 1.0, 0.4) as amp
+    amp > out
+}
+
+instrument snare_v {
+    gain 1.8
+    noise() as n
+    n > bandpass(1900, 0.45) as bp
+    bp > perc(0.001, 0.11) as amp
+    amp > out
+}
+
+instrument impact_v {
+    gain 1.6
+    noise() as n
+    n > highpass(3000, 0.1) as hp
+    hp > perc(0.002, 1.6) as amp
+    amp > out
+}
+
+pattern sroll { o:0.3 o:0.3 o:0.35 o:0.35  o:0.4 o:0.4 o:0.45 o:0.45  x:0.5 x:0.5 x:0.55 x:0.55  x:0.6 x:0.65 x:0.7 x:0.8 }
+
+track pluck  { play krest using pluck_v level 0.32 gate 0.9 pan 0.25 delay_send 0.3 reverb_send 0.18 sidechain 0.45 out > highpass(250hz, 0.05) > lowpass(2500hz, 0.25) as lp > master }
+track zap    { play krest using zap_v level 0.6 gate 0.9 pan -0.3 delay_send 0.25 reverb_send 0.12 sidechain 0.4 out > highpass(350hz, 0.05) > bitcrush(6, 0.35, wet=0) as crush > master }
+track laser  { play krest using laser_v level 0.11 gate 0.95 delay_send 0.22 reverb_send 0.2 sidechain 0.45 out > highpass(300hz, 0.05) > saturate(0.25) > vowel(a, wet=0) as talk > master }
+track vox    { play krest using vox_v level 0.22 delay_send 0.1 reverb_send 0.45 sidechain 0.6 out > highpass(220hz, 0.05) > vowel(a, o, bars=4) as vowel > master }
+track ruido  { play krest using ruido_v level 0.28 reverb_send 0.3 sidechain 0.2 out > highpass(300hz, 0.05) > autopan(0.5, hz=0.5) > master }
+track fill   { play sroll using snare_v level 0.4 reverb_send 0.15 out > highpass(200hz, 0.05) > master }
+track impact { play krest using impact_v level 0.35 pan 0.2 reverb_send 0.4 out > master }
+
+# ── The controller ──
+
+midi {
+    zone triggers 36..47
+    zone bass     48..59 > bass roll
+    zone lead     60..84 > pluck
+    lock snap
+
+    key 36 > play ruido               # C   riser: noise that climbs while held
+    key 37 > play impact q=beat       # C#  impact, on the beat
+    key 38 > mute drums q=bar         # D   drums out while held
+    key 39 > mute bass q=bar          # D#  bass out while held
+    key 42 > hold fill q=beat         # F#  snare roll while held
+    key 43 > throw pluck              # G   the lead into the echo while held
+    key 43 > throw zap
+    key 43 > throw laser
+    key 43 > throw vox
+    key 44 > freeze                   # G#  the reverb frozen while held
+    key 40 > cut                      # E   the mix under a low-pass
+    key 41 > sweep                    # F   a high-pass climbing while held
+    key 45 > tapestop                 # A   the mix slows to a stop
+
+    # Faders: kick, bass, hats, lead, sub, echo, room, -, DJ filter
+    cc 73 > drums kick_level 0..1.3
+    cc 75 > bass level 0..1.6
+    cc 79 > drums hihat_level 0..1.2
+    cc 72 > pluck level 0..0.5
+    cc 72 > zap level 0..0.9
+    cc 72 > laser level 0..0.18
+    cc 72 > vox level 0..0.35
+    cc 80 > sub level 0..0.8
+    cc 81 > laser delay_send 0..80%
+    cc 82 > vox reverb_send 0..80%
+    cc 85 > master dj cutoff 150hz..20khz..20khz guard
+    cc 85 > master hp cutoff 20hz..20hz..3khz guard
+    takeover pickup
+
+    # Knobs: Tab on the computer changes the page
+    page mix {
+        cc 74 > master vol gain 0..1 guard
+        cc 71 > reverb_mix
+        cc 76 > delay_mix
+    }
+    page bass {
+        cc 74 > bass cutoff
+        cc 71 > bass resonance
+        cc 76 > bass decay
+        cc 77 > bass cutoff_env
+    }
+    page drums {
+        cc 74 > drums kick_decay
+        cc 71 > drums kick_pitch 0.8x..1.6x
+        cc 76 > drums hihat_pitch 0.8x..2x
+    }
+
+    # Pads, bank A: effects while held, as hard as struck and pressed
+    pad 36 > repeat 1/8
+    pad 37 > repeat 1/16
+    pad 38 > repeat 1/32
+    pad 39 > tapestop
+    pad 40 > gate 1/16
+    pad 41 > crush
+    pad 42 > scream
+    pad 43 > freeze
+}
+
+perform intro {
+    scale E phrygian
+    bass > bass roll
+    lead > pluck
+    bend lead 2deg                              # playing: two degrees away, in the scale
+    wheel lead > pluck lp cutoff 2500hz..14khz  # playing: the pluck opens
+    wheel idle > master dj cutoff 20khz..1200hz # hands off: the song goes under
+    set master dj cutoff 2500hz
+    set master hp cutoff 20hz
+    set drums level 0.8
+    set bass level 1.0
+}
+
+perform build {
+    scale E phrygian
+    bass > bass roll
+    lead > zap
+    bend lead 24st                              # playing: two octaves each way, dives
+    bend bass 12st idle                         # hands off: the bass line falls an octave
+    wheel lead > zap crush wet 0%..70%          # playing: the crusher
+    wheel idle > master hp cutoff 20hz..1500hz  # hands off: the floor thins
+    set master dj cutoff 20khz
+    set master hp cutoff 350hz
+    set drums level 0.9
+    set bass level 1.2
+}
+
+perform drop {
+    scale E phrygian
+    bass > bass roll
+    lead > laser
+    bend lead 2deg
+    wheel lead > laser talk wet 0%..100%        # playing: the laser starts to talk
+    wheel lead > laser talk position 0..1       # and walks a-e-i-o-u
+    wheel idle > master dj cutoff 20khz..600hz  # hands off: a DJ filter sweep
+    set master dj cutoff 20khz
+    set master hp cutoff 20hz
+    set drums level 0.9
+    set bass level 1.2
+}
+
+perform break {
+    scale E phrygian_dominant
+    lock white
+    bass > sub notes octave 2
+    lead > vox
+    bend lead 1deg
+    bend bass 2deg
+    wheel lead > vox vowel position 0..1        # playing: the pad says a-e-i-o-u
+    wheel idle > master dj cutoff 20khz..400hz  # hands off: under water
+    set master dj cutoff 20khz
+    set master hp cutoff 20hz
+    set drums level 0
+    set bass level 0
+}
+
+keyboard {
+    tab > voice next
+    f1 > perform intro
+    f2 > perform build
+    f3 > perform drop
+    f4 > perform break
+    quantize bar
+}

@@ -30,7 +30,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::dsl::ast::{ChainNode, Quantize, Song};
+use crate::dsl::ast::{ChainNode, Quantize, Song, VoiceMove, ZoneKind};
 use crate::dsl::compiler::CompiledSong;
 use crate::dsl::diff::{self, DslChange};
 use crate::midi;
@@ -40,6 +40,13 @@ use crate::{BLOCK_SIZE, SAMPLE_RATE};
 
 /// How far the pitch strip bends the keys, each way.
 pub const BEND_SEMITONES: f32 = 2.0;
+
+/// Within this of the middle the pitch strip is at rest: a gesture ends,
+/// and the next one picks its lines by where the hands are then.
+const BEND_REST: f32 = 0.02;
+
+/// A controller at or below this is at rest, for the same purpose.
+const KNOB_REST: u8 = 2;
 
 /// Length of the fade-out applied to what the old engine still owns after a
 /// swap. About 12 ms: long enough to hide a cut voice, short enough not to
@@ -136,6 +143,15 @@ pub enum FastOp {
         instrument: usize,
         ratio: f32,
     },
+    /// A key held in a roll zone: `note` rolled on `track` from the next
+    /// sixteenth, in place of its pattern; velocity 0 stops it. `kick` is
+    /// the drum track and note struck on each beat.
+    Roll {
+        track: usize,
+        note: u8,
+        velocity: f32,
+        kick: Option<(usize, u8)>,
+    },
 }
 
 /// What a new engine takes over from the one it replaces, by index in the new
@@ -209,18 +225,40 @@ pub enum Plan {
     /// to start on the next division of that length; `None` lets go. It
     /// belongs to the player, not to an engine, so it rolls on across a swap.
     Repeat(Option<f32>),
+    /// An effect on the player's output, on or off, at an amount 0..1; the
+    /// player's too, so it carries on across a swap.
+    Fx { fx: crate::perform::fx::OutFx, on: bool, amount: f32 },
+    /// How hard a held effect is pressed now.
+    FxAmount { fx: crate::perform::fx::OutFx, amount: f32 },
     /// A pad written with `q=`: `inner` waits for the next line of `grid`,
     /// on the audio thread, which is the only place that knows where the
-    /// line is. `pad` and `down` pair a release with its press.
+    /// line is. `pad` and `down` pair a release with its press; a trigger
+    /// key is its note with the top bit set, so it never pairs with a pad.
     Quantized { grid: Quantize, pad: u8, down: bool, inner: Deferred },
+    /// `inner` on the line where bar `bar` starts, counted as the engine
+    /// counts them; a bar already started acts at once. What a scene called
+    /// from the computer puts in place, on its bar.
+    AtBar { bar: usize, inner: Deferred },
 }
 
 /// What a quantized pad does when its line comes: a [`Plan::Control`] or a
 /// [`Plan::Play`], held without anything to free.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Deferred {
-    Control { base: Generation, op: FastOp },
-    Play { base: Generation, op: FastOp },
+    Control {
+        base: Generation,
+        op: FastOp,
+    },
+    Play {
+        base: Generation,
+        op: FastOp,
+    },
+    /// A value as the text would write it: it lets go of a knob holding
+    /// the same target, as a `Plan::Fast` does.
+    Set {
+        base: Generation,
+        op: FastOp,
+    },
 }
 
 impl Plan {
@@ -233,6 +271,8 @@ impl Plan {
             Plan::Play { .. } => "play",
             Plan::Repeat(_) => "repeat",
             Plan::Quantized { .. } => "quantized",
+            Plan::AtBar { .. } => "at bar",
+            Plan::Fx { .. } | Plan::FxAmount { .. } => "fx",
         }
     }
 }
@@ -261,6 +301,8 @@ struct Known {
     buses: Vec<String>,
     /// The `as` names in each track's insert chain.
     track_nodes: Vec<Vec<Option<String>>>,
+    /// The note each track plays most, for a bass zone's register.
+    track_home: Vec<Option<u8>>,
     /// The `midi` block resolved against this engine. Re-resolved whenever
     /// the text changes, which needs only the names above, so remapping a
     /// knob takes effect at once instead of waiting for a swap.
@@ -281,6 +323,7 @@ impl Known {
             track_nodes: (0..engine.track_count())
                 .map(|i| engine.track_node_labels(i).map(|l| l.map(String::from)).collect())
                 .collect(),
+            track_home: (0..engine.track_count()).map(|i| engine.track_home_note(i)).collect(),
             controls: midi::Controls::default(),
         };
         known.resolve_controls();
@@ -298,6 +341,7 @@ impl Known {
             tracks: &self.tracks,
             track_instruments: &self.track_instruments,
             track_nodes: &self.track_nodes,
+            track_home: &self.track_home,
         }
     }
 
@@ -305,14 +349,79 @@ impl Known {
         self.controls = midi::resolve_all(&self.ast, &self.names());
     }
 
-    /// Everything controller `cc` does to this engine at `value`.
-    fn knob_ops(&self, cc: u8, value: u8) -> impl Iterator<Item = FastOp> + '_ {
+    /// What the `midi` block's lines for controller `cc` do at `value`.
+    fn block_knob_ops(&self, cc: u8, value: u8) -> impl Iterator<Item = FastOp> + '_ {
         self.controls.knobs.iter().filter(move |k| k.cc == cc).flat_map(move |k| k.ops(value))
     }
+}
 
-    /// The pitch strip at `ratio`, on every instrument the keys play.
-    fn bend_ops(&self, ratio: f32) -> impl Iterator<Item = FastOp> + '_ {
-        self.controls.keys.iter().map(move |k| FastOp::PitchBend { instrument: k.instrument, ratio })
+/// A key held in the bass or lead zone, with what it sounds on: by track
+/// name, so the note lets go where it started even after a scene has
+/// changed what the zone plays, or a rebuild has moved the track's index.
+#[derive(Debug, Clone, PartialEq)]
+struct ZoneNote {
+    /// When it went down, counted by the planner: the newest held key of
+    /// either zone is where the hands are.
+    seq: u64,
+    key: u8,
+    /// The note after the scale lock.
+    note: u8,
+    velocity: f32,
+    track: String,
+    roll: bool,
+    /// One note at a time on this track.
+    mono: bool,
+    /// The drum track whose kick a roll strikes.
+    kick: Option<String>,
+}
+
+impl ZoneNote {
+    fn same_sound(a: Option<&ZoneNote>, b: Option<&ZoneNote>) -> bool {
+        match (a, b) {
+            (Some(a), Some(b)) => a.track == b.track && a.note == b.note,
+            (None, None) => true,
+            _ => false,
+        }
+    }
+
+    /// The roll this note asks of `known`, or the stop when `on` is false.
+    fn roll_op(&self, known: &Known, on: bool) -> Option<FastOp> {
+        let track = known.tracks.iter().position(|t| *t == self.track)?;
+        let kick = self
+            .kick
+            .as_ref()
+            .and_then(|k| Some((known.tracks.iter().position(|t| t == k)?, crate::dsl::compiler::drum_note("kick")?)));
+        Some(if on {
+            FastOp::Roll { track, note: self.note, velocity: self.velocity, kick }
+        } else {
+            FastOp::Roll { track, note: 0, velocity: 0.0, kick: None }
+        })
+    }
+
+    fn note_op(&self, known: &Known, on: bool) -> Option<FastOp> {
+        let track = known.tracks.iter().position(|t| *t == self.track)?;
+        Some(if on {
+            FastOp::NoteOn { track, note: self.note, velocity: self.velocity }
+        } else {
+            FastOp::NoteOff { track, note: self.note }
+        })
+    }
+}
+
+/// Which of the two ways to hit something: the pads, or the keys of the
+/// keyboard's trigger zone.
+#[derive(Clone, Copy)]
+enum Bank {
+    Pads,
+    Keys,
+}
+
+impl Bank {
+    fn of(self, controls: &midi::Controls) -> &[midi::Pad] {
+        match self {
+            Bank::Pads => &controls.pads,
+            Bank::Keys => &controls.triggers,
+        }
     }
 }
 
@@ -332,12 +441,43 @@ pub struct LivePlanner {
     solo: Option<(Vec<String>, Vec<String>)>,
     /// Pads held down right now, by note.
     pads_down: Vec<u8>,
+    /// Keys of the trigger zone held down, by note.
+    keys_down: Vec<u8>,
+    /// The scene playing, by name; `None` before any.
+    scene: Option<String>,
+    /// Keys held in the bass zone and the lead zone, oldest first.
+    bass_held: Vec<ZoneNote>,
+    lead_held: Vec<ZoneNote>,
+    /// Keys counted as they go down, for `ZoneNote::seq`.
+    seq: u64,
+    /// The bend lines the pitch strip follows while it is away from rest:
+    /// chosen by where the hands were as it left rest, so a gesture ends on
+    /// what it started on whatever the hands do meanwhile.
+    bend_gesture: Option<Vec<(ZoneKind, crate::dsl::ast::BendRange)>>,
+    /// The same for each controller a scene has lines for: the lines, by
+    /// index in the scene's list, a move away from rest started on.
+    knob_gesture: Vec<(u8, Vec<usize>)>,
+    /// Output effects held down: from a key (else a pad), its note, the
+    /// effect and how hard it was struck.
+    fx_held: Vec<(bool, u8, crate::perform::fx::OutFx, f32)>,
+    /// The knobs' page, by position in the song's list.
+    page: usize,
+    /// Where each knob was left on each page (`""` for the `midi` block's
+    /// own lines): what a page change takes the knobs back to.
+    page_memory: Vec<(String, u8, u8)>,
+    /// Knobs waiting to take over after a page change: the controller, the
+    /// position it has to reach, and whether it comes from below.
+    pickups: Vec<(u8, u8, bool)>,
+    /// Knobs of the page chosen that the hands have not moved since the
+    /// program started, with the position the text's value sits at: their
+    /// first touch takes over from there, from whichever side it comes.
+    armed: Vec<(u8, u8)>,
     /// Keys held down, oldest first, with the velocity each was struck at.
     /// A mono instrument plays the newest; letting it go falls back to the
     /// one before it, which is how a monosynth answers a keyboard.
     held: Vec<(u8, f32)>,
-    /// Where the pitch strip is, as a frequency ratio. Kept like a knob
-    /// value, so an engine built mid-bend starts bent.
+    /// Where the pitch strip is, -1..1, 0 at rest. Kept like a knob value,
+    /// so an engine built mid-bend starts bent.
     bend: f32,
     /// `--solo`/`--mute`, applied to every version of the file as it is read.
     isolation: crate::dsl::isolate::Isolation,
@@ -366,8 +506,20 @@ impl LivePlanner {
             muted: Vec::new(),
             solo: None,
             pads_down: Vec::new(),
+            keys_down: Vec::new(),
+            scene: None,
+            bass_held: Vec::new(),
+            lead_held: Vec::new(),
+            seq: 0,
+            bend_gesture: None,
+            knob_gesture: Vec::new(),
+            fx_held: Vec::new(),
+            page: 0,
+            page_memory: Vec::new(),
+            pickups: Vec::new(),
+            armed: Vec::new(),
             held: Vec::new(),
-            bend: 1.0,
+            bend: 0.0,
             output_gain: None,
             isolation: Default::default(),
             restart_lanes: false,
@@ -404,6 +556,15 @@ impl LivePlanner {
     /// when the song maps no keys.
     pub fn key(&mut self, note: u8, velocity: u8, playing: Generation) -> Option<Vec<Plan>> {
         self.catch_up(playing);
+        let latest = self.pending.as_ref().or(self.running.as_ref())?;
+        if latest.controls.triggers.iter().any(|t| t.note == note) {
+            return self.hit(Bank::Keys, note, velocity);
+        }
+        match latest.controls.zone_of(note).map(|z| z.kind) {
+            Some(ZoneKind::Triggers) => return None,
+            Some(kind) => return Some(self.zone_key(kind, note, velocity)),
+            None => {}
+        }
         if self.known().all(|k| k.controls.keys.is_empty()) {
             return None;
         }
@@ -451,22 +612,36 @@ impl LivePlanner {
     /// here: [`LivePlanner::pad_navigation`] says what it asks for.
     pub fn pad(&mut self, note: u8, velocity: u8, playing: Generation) -> Option<Vec<Plan>> {
         self.catch_up(playing);
-        if !self.known().any(|k| k.controls.pads.iter().any(|p| p.note == note)) {
+        self.hit(Bank::Pads, note, velocity)
+    }
+
+    /// A pad, or a key of the trigger zone, which does what a pad does.
+    fn hit(&mut self, bank: Bank, note: u8, velocity: u8) -> Option<Vec<Plan>> {
+        if !self.known().any(|k| bank.of(&k.controls).iter().any(|p| p.note == note)) {
             return None;
         }
         let down = velocity > 0;
         let velocity = velocity.min(127) as f32 / 127.0;
-        self.pads_down.retain(|&n| n != note);
+        let held = match bank {
+            Bank::Pads => &mut self.pads_down,
+            Bank::Keys => &mut self.keys_down,
+        };
+        held.retain(|&n| n != note);
         if down {
-            self.pads_down.push(note);
+            held.push(note);
         }
+        // What the player pairs a quantized release with: a key never with
+        // the pad of the same number.
+        let line_id = match bank {
+            Bank::Pads => note,
+            Bank::Keys => note | 0x80,
+        };
         // A toggle flips once per hit, by track name, so every engine hears
         // the same state and a rebuilt one inherits it.
         let latest = self.pending.as_ref().or(self.running.as_ref());
         let toggled: Vec<String> = latest
             .map(|k| {
-                k.controls
-                    .pads
+                bank.of(&k.controls)
                     .iter()
                     .filter(|p| p.note == note)
                     .filter_map(|p| match p.action {
@@ -493,7 +668,7 @@ impl LivePlanner {
             .pending
             .as_ref()
             .or(self.running.as_ref())
-            .and_then(|k| k.controls.pads.iter().find(|p| p.note == note))
+            .and_then(|k| bank.of(&k.controls).iter().find(|p| p.note == note))
             .and_then(|p| match p.action {
                 midi::PadAction::Repeat { sixteenths } => Some(sixteenths),
                 _ => None,
@@ -501,8 +676,26 @@ impl LivePlanner {
         if let Some(sixteenths) = repeat {
             plans.push(Plan::Repeat(down.then_some(sixteenths)));
         }
+        // So is an output effect: on as hard as it was struck.
+        let fx = self
+            .pending
+            .as_ref()
+            .or(self.running.as_ref())
+            .and_then(|k| bank.of(&k.controls).iter().find(|p| p.note == note))
+            .and_then(|p| match p.action {
+                midi::PadAction::Fx(fx) => Some(fx),
+                _ => None,
+            });
+        if let Some(fx) = fx {
+            let is_key = matches!(bank, Bank::Keys);
+            self.fx_held.retain(|h| !(h.0 == is_key && h.1 == note));
+            if down {
+                self.fx_held.push((is_key, note, fx, velocity));
+            }
+            plans.push(Plan::Fx { fx, on: down, amount: velocity });
+        }
         for known in self.known() {
-            for pad in known.controls.pads.iter().filter(|p| p.note == note) {
+            for pad in bank.of(&known.controls).iter().filter(|p| p.note == note) {
                 let base = known.generation;
                 let plan = match pad.action {
                     midi::PadAction::Drum { track, drum } if down => {
@@ -532,16 +725,28 @@ impl LivePlanner {
                 };
                 plans.push(match (pad.quantize, plan) {
                     (Some(grid), Plan::Play { base, op }) => {
-                        Plan::Quantized { grid, pad: note, down, inner: Deferred::Play { base, op } }
+                        Plan::Quantized { grid, pad: line_id, down, inner: Deferred::Play { base, op } }
                     }
                     (Some(grid), Plan::Control { base, op }) => {
-                        Plan::Quantized { grid, pad: note, down, inner: Deferred::Control { base, op } }
+                        Plan::Quantized { grid, pad: line_id, down, inner: Deferred::Control { base, op } }
                     }
                     (_, plan) => plan,
                 });
             }
         }
         Some(plans)
+    }
+
+    /// Aftertouch: how hard a held pad (`pad`) or key is pressed, `value`
+    /// 0..127, for one note or, with `note` `None`, every one held. A held
+    /// effect follows it, never below how hard it was struck.
+    pub fn pressure(&mut self, pad: bool, note: Option<u8>, value: u8) -> Vec<Plan> {
+        let pressed = value.min(127) as f32 / 127.0;
+        self.fx_held
+            .iter()
+            .filter(|h| h.0 != pad && note.is_none_or(|n| n == h.1))
+            .map(|h| Plan::FxAmount { fx: h.2, amount: pressed.max(h.3) })
+            .collect()
     }
 
     /// Mute a track, or bring it back, by name: the state a toggle pad keeps,
@@ -601,12 +806,14 @@ impl LivePlanner {
     /// pad on it held down, or a `hold` pad on it not held.
     fn muted_now(&self, known: &Known, track: usize) -> bool {
         let toggled = known.tracks.get(track).is_some_and(|n| self.muted.contains(n));
-        let pads = known.controls.pads.iter().any(|p| match p.action {
-            midi::PadAction::Mute { track: t } => t == track && self.pads_down.contains(&p.note),
-            midi::PadAction::Hold { track: t } => t == track && !self.pads_down.contains(&p.note),
-            _ => false,
-        });
-        toggled || pads
+        let out = |list: &[midi::Pad], down: &[u8]| {
+            list.iter().any(|p| match p.action {
+                midi::PadAction::Mute { track: t } => t == track && down.contains(&p.note),
+                midi::PadAction::Hold { track: t } => t == track && !down.contains(&p.note),
+                _ => false,
+            })
+        };
+        toggled || out(&known.controls.pads, &self.pads_down) || out(&known.controls.triggers, &self.keys_down)
     }
 
     /// Every track's mute as the planner has it, for every engine it knows.
@@ -642,33 +849,473 @@ impl LivePlanner {
                 ops.push(FastOp::TrackMute { track, muted: true });
             }
         }
-        for &note in &self.pads_down {
-            for pad in known.controls.pads.iter().filter(|p| p.note == note) {
-                match pad.action {
-                    midi::PadAction::Throw { track } => ops.push(FastOp::TrackThrow { track, on: true }),
-                    midi::PadAction::Freeze => ops.push(FastOp::FreezeHold(true)),
-                    _ => {}
-                }
+        let down =
+            self.pads_down.iter().flat_map(|&n| known.controls.pads.iter().filter(move |p| p.note == n)).chain(
+                self.keys_down.iter().flat_map(|&n| known.controls.triggers.iter().filter(move |p| p.note == n)),
+            );
+        for pad in down {
+            match pad.action {
+                midi::PadAction::Throw { track } => ops.push(FastOp::TrackThrow { track, on: true }),
+                midi::PadAction::Freeze => ops.push(FastOp::FreezeHold(true)),
+                _ => {}
             }
+        }
+        // A roll held across a rebuild keeps rolling on the new engine.
+        if let Some(op) = self.bass_held.last().filter(|h| h.roll).and_then(|h| h.roll_op(known, true)) {
+            ops.push(op);
         }
         ops
     }
 
-    /// The pitch strip moved to `value`, 14 bits with 8192 at rest. It bends
-    /// the keys by up to two semitones either way. Sent like a knob, to the
-    /// engine playing and the one queued, since it is a position rather than
-    /// an event.
-    pub fn bend(&mut self, value: u16, playing: Generation) -> Vec<Plan> {
-        self.catch_up(playing);
-        let semitones = (value.min(16383) as f32 - 8192.0) / 8192.0 * BEND_SEMITONES;
-        self.bend = crate::math::pow(2.0, semitones / 12.0);
+    /// A key in the bass or lead zone: kept to the scene's scale, and
+    /// played on the zone's track as the scene has it. The bass zone and a
+    /// lead on a `bass` module play one note at a time, the newest held; a
+    /// roll rolls it.
+    fn zone_key(&mut self, kind: ZoneKind, note: u8, velocity: u8) -> Vec<Plan> {
+        self.seq += 1;
+        let seq = self.seq;
+        let Some(latest) = self.pending.as_ref().or(self.running.as_ref()) else { return Vec::new() };
+        let scene = self.scene.as_deref();
+        let stack = match kind {
+            ZoneKind::Bass => &mut self.bass_held,
+            _ => &mut self.lead_held,
+        };
+        let before = stack.last().cloned();
+        let mut released = None;
+        if velocity > 0 {
+            let Some(t) = latest.controls.zone_target(kind, scene) else { return Vec::new() };
+            let (scale, lock) = latest.controls.lock_under(scene);
+            let out = match scale {
+                Some(s) => s.lock(lock, note),
+                None => Some(note),
+            };
+            // A black key under `lock white` plays nothing; the zone's
+            // register moves every key by whole octaves.
+            let Some(out) = out.map(|n| n as i32 + t.shift as i32).filter(|n| (0..=127).contains(n)) else {
+                return Vec::new();
+            };
+            let out = out as u8;
+            let name = |i: usize| latest.tracks.get(i).cloned();
+            let Some(track) = name(t.track) else { return Vec::new() };
+            stack.retain(|h| h.key != note);
+            stack.push(ZoneNote {
+                seq,
+                key: note,
+                note: out,
+                velocity: velocity.min(127) as f32 / 127.0,
+                track,
+                roll: t.roll,
+                mono: kind == ZoneKind::Bass || t.mono,
+                kick: t.kick.and_then(|k| name(k.0)),
+            });
+        } else {
+            let Some(i) = stack.iter().position(|h| h.key == note) else { return Vec::new() };
+            released = Some(stack.remove(i));
+        }
+        let after = stack.last().cloned();
         let mut plans = Vec::new();
         for known in self.known() {
-            for op in known.bend_ops(self.bend) {
+            let base = known.generation;
+            let mut control = |op: Option<FastOp>| {
+                if let Some(op) = op {
+                    plans.push(Plan::Control { base, op });
+                }
+            };
+            let mut ops: Vec<FastOp> = Vec::new();
+            // What sounds is the newest held key, on a mono track or a
+            // roll; on a poly track, every key held.
+            let mono = after.as_ref().or(before.as_ref()).is_some_and(|h| h.mono || h.roll);
+            if mono {
+                if ZoneNote::same_sound(before.as_ref(), after.as_ref()) {
+                    continue;
+                }
+                if let Some(b) = &before {
+                    let moved_track = after.as_ref().is_none_or(|a| a.track != b.track);
+                    if b.roll && moved_track {
+                        control(b.roll_op(known, false));
+                    } else if !b.roll && (moved_track || after.as_ref().is_some_and(|a| a.roll)) {
+                        ops.extend(b.note_op(known, false));
+                    }
+                }
+                match &after {
+                    Some(a) if a.roll => control(a.roll_op(known, true)),
+                    // A newer key, or back to the one before: a bass glides.
+                    Some(a) => ops.extend(a.note_op(known, true)),
+                    None => {}
+                }
+            } else if let Some(r) = &released {
+                // Two keys can snap to one note: it stops when the last does.
+                let held = match kind {
+                    ZoneKind::Bass => &self.bass_held,
+                    _ => &self.lead_held,
+                };
+                if !held.iter().any(|h| h.track == r.track && h.note == r.note) {
+                    ops.extend(r.note_op(known, false));
+                }
+            } else if let Some(a) = &after {
+                ops.extend(a.note_op(known, true));
+            }
+            plans.extend(ops.into_iter().map(|op| Plan::Play { base, op }));
+        }
+        // A bend held while the key changes: in degrees its reach depends on
+        // the note, and it follows the newest key's track.
+        if self.bend != 0.0 {
+            plans.extend(self.bend_plans());
+        }
+        plans
+    }
+
+    /// The song as the latest engine has it.
+    pub fn song(&self) -> Option<&Song> {
+        self.pending.as_ref().or(self.running.as_ref()).map(|k| &k.ast)
+    }
+
+    /// What a key on the keyboard channel plays now, for the screen: its
+    /// zone, the track, and the note after the scale lock and the zone's
+    /// register. `None` outside the bass and lead zones, or for a key that
+    /// plays nothing.
+    pub fn zone_note(&self, note: u8) -> Option<(ZoneKind, String, u8, bool)> {
+        let known = self.pending.as_ref().or(self.running.as_ref())?;
+        let kind = known.controls.zone_of(note)?.kind;
+        if kind == ZoneKind::Triggers {
+            return None;
+        }
+        let scene = self.scene.as_deref();
+        let t = known.controls.zone_target(kind, scene)?;
+        let (scale, lock) = known.controls.lock_under(scene);
+        let out = match scale {
+            Some(s) => s.lock(lock, note)?,
+            None => note,
+        } as i32
+            + t.shift as i32;
+        let out = u8::try_from(out).ok().filter(|n| *n <= 127)?;
+        Some((kind, known.tracks.get(t.track)?.clone(), out, t.roll))
+    }
+
+    /// The scenes the song has, in the order written.
+    pub fn scene_names(&self) -> Vec<String> {
+        self.pending
+            .as_ref()
+            .or(self.running.as_ref())
+            .map(|k| k.ast.perform.scenes.iter().map(|s| s.name.clone()).collect())
+            .unwrap_or_default()
+    }
+
+    /// The scene playing.
+    pub fn scene(&self) -> Option<&str> {
+        self.scene.as_deref()
+    }
+
+    /// A short line for the screen: `drop · E phrygian_dominant · roll`.
+    pub fn describe_scene(&self, name: &str) -> String {
+        let Some(k) = self.pending.as_ref().or(self.running.as_ref()) else { return String::from(name) };
+        let Some(sc) = k.ast.perform.scenes.iter().find(|s| s.name == name) else { return String::from(name) };
+        let scale = sc.scale.as_ref().or(k.ast.globals.scale.as_ref());
+        let mut out = String::from(name);
+        if let Some(s) = scale {
+            out.push_str(&alloc::format!(" · {} {}", s.root, s.kind));
+        }
+        if let Some(b) = &sc.bass {
+            out.push_str(&alloc::format!(" · bass {}{}", b.track, if b.roll { " roll" } else { "" }));
+        }
+        if let Some(l) = &sc.lead {
+            out.push_str(&alloc::format!(" · lead {}", l.track));
+        }
+        out
+    }
+
+    /// Scene `name`'s `set` values, to land on bar `bar` as the engine
+    /// counts bars (`None`: at once). Sent when the scene is asked for, so
+    /// they wait on the audio thread and land on the sample of the line.
+    /// `None` when the song has no such scene.
+    pub fn scene_values(&mut self, name: &str, bar: Option<usize>, playing: Generation) -> Option<Vec<Plan>> {
+        self.catch_up(playing);
+        self.pending.as_ref().or(self.running.as_ref())?.controls.scene(name)?;
+        let mut plans = Vec::new();
+        for known in self.known() {
+            let base = known.generation;
+            let Some(sc) = known.controls.scene(name) else { continue };
+            let ops: Vec<FastOp> = sc.sets.iter().flat_map(|k| k.ops(0)).collect();
+            match bar {
+                Some(bar) => {
+                    for op in ops {
+                        plans.push(Plan::AtBar { bar, inner: Deferred::Set { base, op } });
+                    }
+                }
+                None if !ops.is_empty() => plans.push(Plan::Fast { base, ops }),
+                None => {}
+            }
+        }
+        Some(plans)
+    }
+
+    /// Scene `name` takes the keyboard: what the zones play and the scale
+    /// they keep to change from the next key. A key already held sounds on
+    /// where it started until it is let go, so a note played on the line
+    /// is not cut. `None` when the song has no such scene.
+    ///
+    /// What the leaving scene's controller lines moved goes back to the
+    /// bottom of their travel, where a scene's ranges start from the sound
+    /// as written. The new scene's lines that answer where the hands are
+    /// move to where each controller is, and a controller or the strip held
+    /// away from rest carries on with them.
+    pub fn enter_scene(&mut self, name: &str, playing: Generation) -> Option<Vec<Plan>> {
+        self.catch_up(playing);
+        self.pending.as_ref().or(self.running.as_ref())?.controls.scene(name)?;
+        let old = self.scene.replace(String::from(name));
+        let mut plans = Vec::new();
+        for known in self.known() {
+            let base = known.generation;
+            if let Some(sc) = old.as_deref().and_then(|o| known.controls.scene(o)) {
+                for op in sc.knobs.iter().flat_map(|(_, k)| k.ops(0)) {
+                    plans.push(Plan::Control { base, op });
+                }
+            }
+        }
+        self.knob_gesture.clear();
+        let ccs: Vec<u8> = self
+            .pending
+            .as_ref()
+            .or(self.running.as_ref())
+            .and_then(|k| k.controls.scene(name))
+            .map(|sc| sc.knobs.iter().map(|(_, k)| k.cc).collect())
+            .unwrap_or_default();
+        for cc in ccs {
+            let value = self.knob_values.iter().find(|(c, _)| *c == cc).map_or(0, |(_, v)| *v);
+            let lines = self.knob_lines(cc, value);
+            for known in self.known() {
+                for op in self.scene_knob_ops(known, &lines, value) {
+                    plans.push(Plan::Control { base: known.generation, op });
+                }
+            }
+        }
+        self.bend_gesture = None;
+        if self.bend.abs() > BEND_REST {
+            self.bend_gesture = Some(self.bend_lines_now());
+        }
+        plans.extend(self.bend_plans());
+        Some(plans)
+    }
+
+    /// Where the hands are: the zone of the newest key held in the bass or
+    /// the lead zone, `None` with both empty.
+    pub fn hands(&self) -> Option<ZoneKind> {
+        match (self.bass_held.last(), self.lead_held.last()) {
+            (Some(b), Some(l)) => Some(if b.seq > l.seq { ZoneKind::Bass } else { ZoneKind::Lead }),
+            (Some(_), None) => Some(ZoneKind::Bass),
+            (None, Some(_)) => Some(ZoneKind::Lead),
+            (None, None) => None,
+        }
+    }
+
+    /// The scene's lines for controller `cc` that move at `value`, starting
+    /// or ending a gesture: away from rest, the ones the gesture started
+    /// on (chosen now if it starts now); back at rest, those and the ones
+    /// the hands choose now, so whatever was moved comes home. `None` when
+    /// the scene has no line for it.
+    fn knob_lines(&mut self, cc: u8, value: u8) -> Option<Vec<usize>> {
+        let latest = self.pending.as_ref().or(self.running.as_ref())?;
+        let scene = self.scene.as_deref();
+        let all = latest.controls.scene_knobs(cc, scene)?;
+        let sc = latest.controls.scene(scene?)?;
+        let hands = self.hands();
+        let now: Vec<usize> = all.iter().copied().filter(|&i| sc.knobs[i].0.answers(hands)).collect();
+        let started = self.knob_gesture.iter().position(|(c, _)| *c == cc);
+        if value <= KNOB_REST {
+            let mut lines = started.map(|i| self.knob_gesture.remove(i).1).unwrap_or_default();
+            for i in now {
+                if !lines.contains(&i) {
+                    lines.push(i);
+                }
+            }
+            return Some(lines);
+        }
+        match started {
+            Some(i) => Some(self.knob_gesture[i].1.clone()),
+            None => {
+                self.knob_gesture.push((cc, now.clone()));
+                Some(now)
+            }
+        }
+    }
+
+    /// What `lines` of the scene (or, with none, the `midi` block's line)
+    /// do to `known` at `value`.
+    fn scene_knob_ops(&self, known: &Known, lines: &Option<Vec<usize>>, value: u8) -> Vec<FastOp> {
+        let sc = self.scene.as_deref().and_then(|n| known.controls.scene(n));
+        match (lines, sc) {
+            (Some(lines), Some(sc)) => {
+                lines.iter().filter_map(|&i| sc.knobs.get(i)).flat_map(|(_, k)| k.ops(value)).collect()
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// The song's `keyboard` bindings, and how many bars a scene called
+    /// from them waits for (1: the next bar).
+    pub fn keyboard(&self) -> (Vec<crate::dsl::ast::KeyBinding>, u32) {
+        match self.pending.as_ref().or(self.running.as_ref()) {
+            Some(k) => (k.ast.perform.keyboard.clone(), k.ast.perform.scene_bars.unwrap_or(1).max(1)),
+            None => (Vec::new(), 1),
+        }
+    }
+
+    /// Whether the song has scenes or binds computer keys.
+    pub fn has_keyboard(&self) -> bool {
+        self.pending
+            .as_ref()
+            .or(self.running.as_ref())
+            .is_some_and(|k| !k.ast.perform.keyboard.is_empty() || !k.ast.perform.scenes.is_empty())
+    }
+
+    /// The pitch strip moved to `value`, 14 bits with 8192 at rest. On a
+    /// zone it bends as the scene says (`bend lead 24st`, `bend lead 2deg`);
+    /// `keys >` tracks, up to two semitones either way. Sent like a knob, to
+    /// the engine playing and the one queued, since it is a position rather
+    /// than an event.
+    pub fn bend(&mut self, value: u16, playing: Generation) -> Vec<Plan> {
+        self.catch_up(playing);
+        self.bend = ((value.min(16383) as f32 - 8192.0) / 8192.0).clamp(-1.0, 1.0);
+        if self.bend.abs() <= BEND_REST {
+            let plans = self.bend_plans();
+            self.bend_gesture = None;
+            return plans;
+        }
+        if self.bend_gesture.is_none() {
+            self.bend_gesture = Some(self.bend_lines_now());
+        }
+        self.bend_plans()
+    }
+
+    /// The bend line each zone follows with the hands where they are now:
+    /// the first of its lines that answers them.
+    fn bend_lines_now(&self) -> Vec<(ZoneKind, crate::dsl::ast::BendRange)> {
+        let Some(latest) = self.pending.as_ref().or(self.running.as_ref()) else { return Vec::new() };
+        let hands = self.hands();
+        let scene = self.scene.as_deref();
+        [ZoneKind::Bass, ZoneKind::Lead]
+            .into_iter()
+            .filter_map(|zone| {
+                let line = latest.controls.bends_under(zone, scene).into_iter().find(|(_, h)| h.answers(hands));
+                line.map(|(range, _)| (zone, range))
+            })
+            .collect()
+    }
+
+    fn bend_plans(&self) -> Vec<Plan> {
+        let mut plans = Vec::new();
+        for known in self.known() {
+            for op in self.bend_ops(known) {
                 plans.push(Plan::Control { base: known.generation, op });
             }
         }
         plans
+    }
+
+    /// Where the strip puts every instrument it reaches in `known`. A zone
+    /// bends the track its newest held key sounds on, or the one the scene
+    /// gives it; in degrees, from that key's note to the note so many
+    /// degrees of the scale away, so a full bend lands in the scale.
+    fn bend_ops(&self, known: &Known) -> Vec<FastOp> {
+        let v = self.bend;
+        let ratio = |st: f32| crate::math::pow(2.0, st / 12.0);
+        let mut ops: Vec<FastOp> = known
+            .controls
+            .keys
+            .iter()
+            .map(|k| FastOp::PitchBend { instrument: k.instrument, ratio: ratio(v * BEND_SEMITONES) })
+            .collect();
+        let scene = self.scene.as_deref();
+        for (zone, held) in [(ZoneKind::Bass, &self.bass_held), (ZoneKind::Lead, &self.lead_held)] {
+            if !known.controls.zones.iter().any(|z| z.kind == zone) {
+                continue;
+            }
+            let newest = held.last();
+            let track = newest
+                .and_then(|h| known.tracks.iter().position(|t| *t == h.track))
+                .or_else(|| known.controls.zone_target(zone, scene).map(|t| t.track));
+            let Some(&instrument) = track.and_then(|t| known.track_instruments.get(t)) else { continue };
+            if instrument == usize::MAX {
+                continue;
+            }
+            // With the strip at rest, nothing is bent; away from it, the
+            // gesture's line for this zone, or none.
+            let range = match &self.bend_gesture {
+                Some(lines) => lines.iter().find(|l| l.0 == zone).map(|l| l.1),
+                None => None,
+            };
+            let st = self.zone_semitones(known, zone, range, newest);
+            ops.push(FastOp::PitchBend { instrument, ratio: ratio(st) });
+        }
+        ops
+    }
+
+    /// How far the strip, where it is, takes `zone` under `range`.
+    fn zone_semitones(
+        &self,
+        known: &Known,
+        zone: ZoneKind,
+        range: Option<crate::dsl::ast::BendRange>,
+        newest: Option<&ZoneNote>,
+    ) -> f32 {
+        let v = self.bend;
+        let scene = self.scene.as_deref();
+        match range.unwrap_or(crate::dsl::ast::BendRange::Off) {
+            crate::dsl::ast::BendRange::Off => 0.0,
+            crate::dsl::ast::BendRange::Semitones(n) => v * n,
+            crate::dsl::ast::BendRange::Degrees(d) => {
+                let (scale, _) = known.controls.lock_under(scene);
+                let scale = scale.unwrap_or(crate::perform::scale::Scale::new(0, [0, 2, 4, 5, 7, 9, 11]));
+                // With nothing held, the root of the octave the zone
+                // starts in stands in for the note.
+                let note = newest.map(|h| h.note).unwrap_or_else(|| {
+                    let low = known.controls.zones.iter().find(|z| z.kind == zone).map_or(60, |z| z.low);
+                    scale.snap(low)
+                });
+                let to = scale.degrees_from(note, if v >= 0.0 { d as i32 } else { -(d as i32) });
+                v.abs() * (to as f32 - note as f32)
+            }
+        }
+    }
+
+    /// What the pitch strip does right now, for the screen: `strip: bass
+    /// -7.2 st (idle)`, or what it waits for.
+    pub fn bend_reading(&self) -> String {
+        let Some(known) = self.pending.as_ref().or(self.running.as_ref()) else { return String::from("strip") };
+        if self.bend.abs() <= BEND_REST {
+            return String::from("strip at rest");
+        }
+        let scene = self.scene.as_deref();
+        let mut said = Vec::new();
+        for (zone, range) in self.bend_gesture.iter().flatten() {
+            let held = match zone {
+                ZoneKind::Bass => &self.bass_held,
+                _ => &self.lead_held,
+            };
+            let newest = held.last();
+            let track = newest
+                .map(|h| h.track.clone())
+                .or_else(|| known.controls.zone_target(*zone, scene).and_then(|t| known.tracks.get(t.track).cloned()));
+            let st = self.zone_semitones(known, *zone, Some(*range), newest);
+            said.push(format!("{} {:+.1} st", track.unwrap_or_else(|| String::from(zone.word())), st));
+        }
+        if said.is_empty() {
+            // Nothing answers where the hands were as the strip left rest.
+            let when: Vec<String> = [ZoneKind::Bass, ZoneKind::Lead]
+                .into_iter()
+                .flat_map(|z| known.controls.bends_under(z, scene).into_iter().map(move |(_, h)| (z, h)))
+                .map(|(z, h)| match h {
+                    crate::dsl::ast::Hands::Playing(_) => format!("{} while played", z.word()),
+                    other => format!("{} {}", z.word(), other.word()),
+                })
+                .collect();
+            return if when.is_empty() {
+                String::from("strip: nothing to bend here")
+            } else {
+                format!("strip: bends {}", when.join(", "))
+            };
+        }
+        format!("strip: {}", said.join(", "))
     }
 
     /// Controller `cc` moved to `value` (0..127). Returns a plan per
@@ -678,27 +1325,265 @@ impl LivePlanner {
     pub fn knob(&mut self, cc: u8, value: u8, playing: Generation) -> KnobTurn {
         self.catch_up(playing);
         let mut turn = KnobTurn { plans: Vec::new(), readings: Vec::new() };
-        let Some(latest) = self.pending.as_ref().or(self.running.as_ref()) else { return turn };
-        turn.readings = latest
-            .controls
-            .knobs
-            .iter()
-            .filter(|k| k.cc == cc && !k.moves.is_empty())
-            .map(|k| k.reading(value))
-            .collect();
-        if turn.readings.is_empty() {
+        if self.pending.is_none() && self.running.is_none() {
             return turn;
         }
-        for known in self.known() {
-            for op in known.knob_ops(cc, value) {
-                turn.plans.push(Plan::Control { base: known.generation, op });
+        let lines = self.knob_lines(cc, value);
+        let latest = self.pending.as_ref().or(self.running.as_ref()).expect("checked above");
+        match (&lines, self.scene.as_deref().and_then(|n| latest.controls.scene(n))) {
+            (Some(lines), Some(sc)) => {
+                turn.readings = lines
+                    .iter()
+                    .filter_map(|&i| sc.knobs.get(i))
+                    .filter(|(_, k)| !k.moves.is_empty())
+                    .map(|(_, k)| k.reading(value))
+                    .collect();
+                if turn.readings.is_empty() {
+                    // The scene has lines for it, waiting for the hands.
+                    let when: Vec<&str> = sc.knobs.iter().filter(|(_, k)| k.cc == cc).map(|(h, _)| h.word()).collect();
+                    turn.readings.push(format!("cc {}: this scene moves it with {}", cc, when.join(", ")));
+                }
+                for known in self.known() {
+                    for op in self.scene_knob_ops(known, &Some(lines.clone()), value) {
+                        turn.plans.push(Plan::Control { base: known.generation, op });
+                    }
+                }
+            }
+            _ => {
+                // A controller that chooses the knobs' voice.
+                if let Some(&(_, step)) = latest.controls.voice_knobs.iter().find(|v| v.0 == cc) {
+                    let pages = latest.controls.pages.len();
+                    let last = self.knob_values.iter().find(|(c, _)| *c == cc).map(|(_, v)| *v);
+                    self.remember(cc, value);
+                    let mv = if step {
+                        // An encoder: past the middle is a step on, below it
+                        // a step back (Arturia's relative mode); 64 is none.
+                        match value {
+                            65..=127 => Some(VoiceMove::Next),
+                            0..=63 => Some(VoiceMove::Prev),
+                            _ => None,
+                        }
+                    } else {
+                        let at = (value as usize * pages.max(1) / 128).min(pages.saturating_sub(1));
+                        let before = last.map(|v| (v as usize * pages.max(1) / 128).min(pages.saturating_sub(1)));
+                        (before != Some(at)).then(|| VoiceMove::To(self.page_name(at).unwrap_or_default()))
+                    };
+                    if let Some(said) = mv.and_then(|mv| self.voice(&mv, playing)) {
+                        turn.readings.push(said);
+                    }
+                    return turn;
+                }
+                let page = self.page_with(cc);
+                let key = page.and_then(|i| self.page_name(i)).unwrap_or_default();
+                let latest = self.pending.as_ref().or(self.running.as_ref()).expect("checked above");
+                let readings: Vec<String> = match page.and_then(|i| latest.controls.pages.get(i)) {
+                    Some(p) => p
+                        .lines(cc)
+                        .map(|k| {
+                            if k.moves.is_empty() {
+                                format!("{} (not in this track)", k.target.replace('.', " "))
+                            } else {
+                                k.reading(value)
+                            }
+                        })
+                        .collect(),
+                    None => latest
+                        .controls
+                        .knobs
+                        .iter()
+                        .filter(|k| k.cc == cc && !k.moves.is_empty())
+                        .map(|k| k.reading(value))
+                        .collect(),
+                };
+                if readings.is_empty() {
+                    return turn;
+                }
+                // The first touch of a `guard` knob whose target the text
+                // puts somewhere else: with `takeover pickup`, it waits for
+                // the knob to get there rather than jump. Other knobs jump,
+                // as they always have.
+                let first_touch = !self.knob_values.iter().any(|(c, _)| *c == cc);
+                let latest = self.pending.as_ref().or(self.running.as_ref()).expect("checked above");
+                if first_touch && latest.controls.pickup && !self.pickups.iter().any(|p| p.0 == cc) {
+                    let lines: Vec<&midi::Knob> = match page.and_then(|i| latest.controls.pages.get(i)) {
+                        Some(p) => p.lines(cc).collect(),
+                        None => latest.controls.knobs.iter().filter(|k| k.cc == cc).collect(),
+                    };
+                    let at = lines.iter().filter(|k| k.guard && !k.moves.is_empty()).find_map(|k| {
+                        let now = midi::text_value(&latest.ast, &k.target)?;
+                        k.position_of(now)
+                    });
+                    if let Some(t) = at.filter(|t| t.abs_diff(value) > 3) {
+                        self.pickups.push((cc, t, value < t));
+                    }
+                }
+                // A page chosen before this knob was ever touched: it takes
+                // over from where the text has its target.
+                if let Some(i) = self.armed.iter().position(|a| a.0 == cc) {
+                    let (_, t) = self.armed.remove(i);
+                    if t.abs_diff(value) > 3 && !self.pickups.iter().any(|p| p.0 == cc) {
+                        self.pickups.push((cc, t, value < t));
+                    }
+                }
+                // Soft takeover: after a page change a knob that is not
+                // where its new target is moves nothing until it gets there.
+                if let Some(i) = self.pickups.iter().position(|p| p.0 == cc) {
+                    let (_, t, below) = self.pickups[i];
+                    let there = if below { value + 1 >= t } else { value <= t.saturating_add(1) };
+                    if !there {
+                        let arrow = if below { "→" } else { "←" };
+                        turn.readings = readings
+                            .iter()
+                            .map(|r| format!("{}  {} turn {} to {} to take it", r, value, arrow, t))
+                            .collect();
+                        self.remember_physical(cc, value);
+                        return turn;
+                    }
+                    self.pickups.remove(i);
+                }
+                turn.readings = readings;
+                for known in self.known() {
+                    for op in self.page_ops(known, cc, value, page) {
+                        turn.plans.push(Plan::Control { base: known.generation, op });
+                    }
+                }
+                self.page_memory.retain(|(k, c, _)| !(k == &key && *c == cc));
+                self.page_memory.push((key, cc, value));
             }
         }
+        self.remember_physical(cc, value);
+        turn
+    }
+
+    fn remember_physical(&mut self, cc: u8, value: u8) {
         match self.knob_values.iter_mut().find(|(c, _)| *c == cc) {
             Some(slot) => slot.1 = value,
             None => self.knob_values.push((cc, value)),
         }
-        turn
+    }
+
+    fn remember(&mut self, cc: u8, value: u8) {
+        self.remember_physical(cc, value);
+    }
+
+    /// The page chosen, when it has lines for controller `cc`.
+    fn page_with(&self, cc: u8) -> Option<usize> {
+        let latest = self.pending.as_ref().or(self.running.as_ref())?;
+        latest.controls.pages.get(self.page).filter(|p| p.lines(cc).next().is_some()).map(|_| self.page)
+    }
+
+    fn page_name(&self, i: usize) -> Option<String> {
+        self.pending.as_ref().or(self.running.as_ref())?.controls.pages.get(i).map(|p| p.name.clone())
+    }
+
+    /// What controller `cc` at `value` does to `known` on `page`: the
+    /// page's lines for it, or else the `midi` block's.
+    fn page_ops(&self, known: &Known, cc: u8, value: u8, page: Option<usize>) -> Vec<FastOp> {
+        match page.and_then(|i| known.controls.pages.get(i)).filter(|p| p.lines(cc).next().is_some()) {
+            Some(p) => p.lines(cc).flat_map(|k| k.ops(value)).collect(),
+            None => known.block_knob_ops(cc, value).collect(),
+        }
+    }
+
+    /// Every knob and fader the hands have moved, on every page and in the
+    /// scene, back to where the text has its targets, and forgotten: the
+    /// next touch of each is a first touch again. The scene's own values go
+    /// back on after, since the scene is still playing.
+    pub fn reset_knobs(&mut self, playing: Generation) -> Vec<Plan> {
+        self.catch_up(playing);
+        let mut touched: Vec<u8> = self.knob_values.iter().map(|(c, _)| *c).collect();
+        touched.extend(self.page_memory.iter().map(|(_, c, _)| *c));
+        touched.sort();
+        touched.dedup();
+        let mut plans = Vec::new();
+        for known in self.known() {
+            let c = &known.controls;
+            let lines = c
+                .knobs
+                .iter()
+                .chain(c.pages.iter().flat_map(|p| p.knobs.iter()))
+                .chain(c.scenes.iter().flat_map(|s| s.knobs.iter().map(|(_, k)| k)))
+                .filter(|k| touched.contains(&k.cc));
+            let ops: Vec<FastOp> = lines.flat_map(|k| k.rest_ops(&known.ast)).collect();
+            if !ops.is_empty() {
+                plans.push(Plan::Fast { base: known.generation, ops });
+            }
+        }
+        self.knob_values.clear();
+        self.page_memory.clear();
+        self.pickups.clear();
+        self.armed.clear();
+        self.knob_gesture.clear();
+        if let Some(scene) = self.scene.clone() {
+            plans.extend(self.scene_values(&scene, None, playing).unwrap_or_default());
+        }
+        plans
+    }
+
+    /// The knobs' voice: the page chosen, by name.
+    pub fn voice_name(&self) -> Option<String> {
+        self.page_name(self.page)
+    }
+
+    /// Choose the knobs' page. Returns what it now moves, for the screen:
+    /// `voice bass: cutoff · resonance · decay`. With `takeover pickup`, a
+    /// knob whose position does not match its new target's value (where it
+    /// left it, else where the text has it) waits until it passes it.
+    pub fn voice(&mut self, mv: &VoiceMove, playing: Generation) -> Option<String> {
+        self.catch_up(playing);
+        let latest = self.pending.as_ref().or(self.running.as_ref())?;
+        let pages = &latest.controls.pages;
+        let n = pages.len();
+        if n == 0 {
+            return None;
+        }
+        let to = match mv {
+            VoiceMove::Next => (self.page + 1) % n,
+            VoiceMove::Prev => (self.page + n - 1) % n,
+            VoiceMove::To(name) => pages.iter().position(|p| &p.name == name)?,
+        };
+        let old = pages.get(self.page).cloned();
+        let new = pages[to].clone();
+        let pickup = latest.controls.pickup;
+        let mut ccs: Vec<u8> = new.knobs.iter().map(|k| k.cc).collect();
+        ccs.extend(old.iter().flat_map(|p| p.knobs.iter().map(|k| k.cc)));
+        ccs.sort();
+        ccs.dedup();
+        // Where the text has each knob's target on the new page (or, for a
+        // knob the page leaves out, in the `midi` block): what a knob not
+        // yet moved there takes over from.
+        let rest: Vec<(u8, Option<u8>)> = ccs
+            .iter()
+            .map(|&cc| {
+                let lines: Vec<&midi::Knob> = if new.lines(cc).next().is_some() {
+                    new.lines(cc).collect()
+                } else {
+                    latest.controls.knobs.iter().filter(|k| k.cc == cc).collect()
+                };
+                (cc, lines.iter().filter(|k| !k.moves.is_empty()).find_map(|k| k.rest_position(&latest.ast)))
+            })
+            .collect();
+        self.page = to;
+        self.pickups.clear();
+        self.armed.clear();
+        if pickup {
+            for (cc, rest) in rest {
+                let key = if new.lines(cc).next().is_some() { new.name.clone() } else { String::new() };
+                let left = self.page_memory.iter().find(|(k, c, _)| *k == key && *c == cc).map(|(_, _, v)| *v);
+                let here = self.knob_values.iter().find(|(c, _)| *c == cc).map(|(_, v)| *v);
+                match (left.or(rest), here) {
+                    (Some(t), Some(h)) => {
+                        if h.abs_diff(t) > 2 {
+                            self.pickups.push((cc, t, h < t));
+                        }
+                    }
+                    // Never touched: where it is, the first touch tells.
+                    (Some(t), None) => self.armed.push((cc, t)),
+                    _ => {}
+                }
+            }
+        }
+        Some(format!("voice {}: {}", new.name, new.summary()))
     }
 
     /// Controller at `value` put on `target` (`acid.cutoff`) as if a `midi`
@@ -715,6 +1600,7 @@ impl LivePlanner {
                 target: target.into(),
                 moves: midi::resolve(&known.ast, &names, target),
                 span: None,
+                guard: false,
             };
             if knob.moves.is_empty() {
                 continue;
@@ -766,6 +1652,11 @@ impl LivePlanner {
         self.isolation.apply(&mut ast);
         let compiled = crate::dsl::compiler::compile(&ast).map_err(DslError::Compile)?;
         self.forget_edited_knobs(&ast);
+        // A performance starts in the first scene its text writes, so the
+        // wheel and the strip answer before any key has called one.
+        if self.scene.is_none() {
+            self.scene = ast.perform.scenes.first().map(|s| s.name.clone());
+        }
 
         let latest = self.pending.as_mut().or(self.running.as_mut());
         if let Some(latest) = latest {
@@ -806,15 +1697,39 @@ impl LivePlanner {
         let known = Known::new(generation, ast, &engine);
         // The new engine starts where the knobs were left, not where the
         // text puts them, so a save does not undo what the hands did.
+        // What the other pages' knobs were left at, then the knobs as the
+        // chosen page and the scene have them.
+        let current = self.page_name(self.page).unwrap_or_default();
+        for (key, cc, value) in &self.page_memory {
+            if key.is_empty() || *key == current {
+                continue;
+            }
+            if let Some(p) = known.controls.pages.iter().find(|p| &p.name == key) {
+                for op in p.lines(*cc).flat_map(|k| k.ops(*value)) {
+                    engine.hold(op);
+                }
+            }
+        }
         for &(cc, value) in &self.knob_values {
-            for op in known.knob_ops(cc, value) {
+            let scene_has = known.controls.scene_knobs(cc, self.scene.as_deref()).is_some();
+            let gesture = self.knob_gesture.iter().find(|(c, _)| *c == cc).map(|(_, l)| l.clone());
+            let ops: Vec<FastOp> = if scene_has {
+                self.scene_knob_ops(&known, &gesture, value)
+            } else if known.controls.voice_knobs.iter().any(|v| v.0 == cc) {
+                Vec::new()
+            } else {
+                let page =
+                    known.controls.pages.get(self.page).filter(|p| p.lines(cc).next().is_some()).map(|_| self.page);
+                self.page_ops(&known, cc, value, page)
+            };
+            for op in ops {
                 engine.hold(op);
             }
         }
         for op in self.pad_ops(&known) {
             engine.hold(op);
         }
-        for op in known.bend_ops(self.bend) {
+        for op in self.bend_ops(&known) {
             apply_op(&mut engine, op);
         }
         let mut inherit = Vec::with_capacity(2);
@@ -1228,14 +2143,19 @@ pub struct LivePlayer {
     blind_swaps: u32,
     /// A `repeat` pad's roll over the whole output.
     repeat: Repeat,
+    /// The output effects pads and keys hold.
+    fx: crate::perform::fx::PadFx,
     /// Samples rendered since the player was made: the clock quantized pads
     /// are queued against.
     clock: u64,
     /// Quantized pad actions waiting for their line, with the sample it is.
     waiting: [Option<(u64, Deferred)>; MAX_WAITING],
-    /// Per pad note, the line its last press landed on (or will) and the
-    /// division it was on, so a release is never earlier than the next one.
-    pressed: [Option<(u64, u64)>; 128],
+    /// Per pad note (and trigger key, with the top bit set), the line its
+    /// last press landed on (or will) and the division it was on, so a
+    /// release is never earlier than the next one.
+    pressed: [Option<(u64, u64)>; 256],
+    /// Actions waiting for the start of a bar, by the bar's number.
+    at_bar: [Option<(usize, Deferred)>; MAX_WAITING],
 }
 
 impl Default for LivePlayer {
@@ -1257,9 +2177,11 @@ impl LivePlayer {
             swaps: 0,
             blind_swaps: 0,
             repeat: Repeat::new(),
+            fx: crate::perform::fx::PadFx::new(),
             clock: 0,
             waiting: [None; MAX_WAITING],
-            pressed: [None; 128],
+            pressed: [None; 256],
+            at_bar: [None; MAX_WAITING],
         }
     }
 
@@ -1356,6 +2278,14 @@ impl LivePlayer {
                 self.quantize(grid, pad, down, inner);
                 Applied::Control
             }
+            Plan::AtBar { bar, inner } => {
+                match self.at_bar.iter_mut().find(|w| w.is_none()) {
+                    Some(free) => *free = Some((bar, inner)),
+                    None => self.apply_deferred(inner),
+                }
+                self.schedule_bars();
+                Applied::Control
+            }
             Plan::Repeat(Some(sixteenths)) => {
                 if let Some(e) = self.engine.as_deref() {
                     let step = SAMPLE_RATE * 60.0 / e.tempo().max(1.0) / 4.0;
@@ -1368,6 +2298,14 @@ impl LivePlayer {
             }
             Plan::Repeat(None) => {
                 self.repeat.release();
+                Applied::Control
+            }
+            Plan::Fx { fx, on, amount } => {
+                self.fx.set(fx, on, amount);
+                Applied::Control
+            }
+            Plan::FxAmount { fx, amount } => {
+                self.fx.amount(fx, amount);
                 Applied::Control
             }
             Plan::Swap { engine, generation, inherit, blend_bars } => {
@@ -1409,7 +2347,7 @@ impl LivePlayer {
         } else {
             (self.clock + until, self.clock + until)
         };
-        let slot = &mut self.pressed[pad as usize & 127];
+        let slot = &mut self.pressed[pad as usize];
         if down {
             *slot = Some((line, div));
         } else if let Some((pressed, d)) = *slot {
@@ -1430,8 +2368,55 @@ impl LivePlayer {
         let plan = match inner {
             Deferred::Control { base, op } => Plan::Control { base, op },
             Deferred::Play { base, op } => Plan::Play { base, op },
+            Deferred::Set { base, op } => {
+                let target = if self.generation == base {
+                    self.engine.as_deref_mut()
+                } else {
+                    match self.pending.as_mut() {
+                        Some((e, g, _)) if *g == base => Some(e.as_mut()),
+                        _ => None,
+                    }
+                };
+                if let Some(engine) = target {
+                    engine.release(op);
+                }
+                return;
+            }
         };
         self.apply(plan);
+    }
+
+    /// Move what waits for a bar onto the sample of its line once that line
+    /// is the next one; a bar already begun acts at once. Counted where the
+    /// playing engine counts, so a tempo ramp cannot put it off the line.
+    fn schedule_bars(&mut self) {
+        let Some(e) = self.engine.as_deref().filter(|e| e.running()) else {
+            // Nothing is playing: there is no line to wait for.
+            for i in 0..MAX_WAITING {
+                if let Some((_, inner)) = self.at_bar[i].take() {
+                    self.apply_deferred(inner);
+                }
+            }
+            return;
+        };
+        let line = e.next_bar_line();
+        let until = e.samples_until_grid(e.steps_per_bar() as f32) as u64;
+        for i in 0..MAX_WAITING {
+            let Some((bar, inner)) = self.at_bar[i] else { continue };
+            if bar > line {
+                continue;
+            }
+            self.at_bar[i] = None;
+            let at = if bar < line { self.clock } else { self.clock + until };
+            if at <= self.clock {
+                self.apply_deferred(inner);
+                continue;
+            }
+            match self.waiting.iter_mut().find(|w| w.is_none()) {
+                Some(free) => *free = Some((at, inner)),
+                None => self.apply_deferred(inner),
+            }
+        }
     }
 
     /// Apply every waiting action whose line has come, in the order queued.
@@ -1460,8 +2445,10 @@ impl LivePlayer {
     /// Stop. A queued engine takes over at once, with nothing to inherit.
     pub fn stop(&mut self) {
         self.repeat.state = RepeatState::Off;
+        self.fx.reset();
         self.waiting = [None; MAX_WAITING];
-        self.pressed = [None; 128];
+        self.pressed = [None; 256];
+        self.at_bar = [None; MAX_WAITING];
         if let Some(e) = self.engine.as_mut() {
             e.reset();
         }
@@ -1488,6 +2475,9 @@ impl LivePlayer {
         let mut done = 0;
         let mut swapped = None;
         loop {
+            if self.at_bar.iter().any(|w| w.is_some()) {
+                self.schedule_bars();
+            }
             self.release_due();
             if done >= len {
                 break;
@@ -1519,10 +2509,12 @@ impl LivePlayer {
             }
         }
         let engine = self.engine.as_mut().expect("engine present");
+        let (step, into_step) = engine.step_timing();
         engine.process_block_stereo(out_l, out_r);
         // What the previous engine still owns fades out on top.
         self.render_fade(out_l, out_r);
         self.render_blend(out_l, out_r);
+        self.fx.process(out_l, out_r, step, into_step);
         self.repeat.process(out_l, out_r);
         swapped
     }
@@ -1659,5 +2651,8 @@ pub(crate) fn apply_op(engine: &mut SongEngine, op: FastOp) {
         FastOp::NoteOn { track, note, velocity } => engine.live_note_on(track, note, velocity),
         FastOp::NoteOff { track, note } => engine.live_note_off(track, note),
         FastOp::PitchBend { instrument, ratio } => engine.set_pitch_bend(instrument, ratio),
+        FastOp::Roll { track, note, velocity, kick } => {
+            engine.set_roll(track, (velocity > 0.0).then_some((note, velocity)), kick)
+        }
     }
 }

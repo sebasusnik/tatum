@@ -579,14 +579,32 @@ track call {
 
 # The KeyLab, per CONTROLES.md (base maps F7 reverb, F8 echo, F9 DJ filter,
 # A4 freeze, A7 prev, A8 next)
+# The keyboard's lead in this track: its own oud voice (oud), for the
+# lead zone, through the same chain, plus a filter (`klp`) and a vowel
+# (`talk`) the wheel and the knobs reach, and its own gain (`kgain`).
+track ktema {
+    play krest
+    using oud
+    level 0.5
+    velocity 1.0
+    gate 0.6
+    pan -0.3
+    delay_send 0.16
+    reverb_send 0.08
+    sidechain 0.35
+
+    out > highpass(180hz, 0.05) > saturate(0.2) > autopan(0.3, bars=4) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(3.622) as kgain > master
+}
+
 midi {
-    cc 73 > drums level
-    cc 75 > perc level
-    cc 79 > bass level
-    cc 72 > oud level
+    # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
+    # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw
+    # that were pads A2 and A3. Knobs: the page `tema`.
+    cc 75 > bass level
+    cc 80 > oud level
     cc 80 > veil level
-    cc 81 > chime level 0..0.5
-    cc 81 > bell level 0..0.35
+    cc 80 > chime level 0..0.5
+    cc 80 > bell level 0..0.35
 
     cc 74 > hollow cutoff 60hz..260hz
     cc 74 > hollow cutoff_env 500hz..1.6khz
@@ -603,11 +621,8 @@ midi {
     cc 16 > kit hihat_pitch 1x..1.8x
     cc 17 > bass dirt drive 0.1..1.2
 
-    pad 36 > mute drums q=bar
-    pad 37 > toggle perc
-    pad 38 > throw oud q=1/16
-    pad 40 > repeat 1/8
-    pad 41 > repeat 1/16
+    key 46 > toggle perc
+    key 47 > throw oud q=1/16
 
     pad 44 > play bell E5 q=1/16
     pad 45 > hold rise q=beat

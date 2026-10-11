@@ -51,6 +51,7 @@ In short:
 | `x` `u` | every transform off; undo the last change made from the screen |
 | `k` | put a knob on the chosen track (see "Knobs and faders" in [DSL.md](DSL.md#knobs-and-faders)) |
 | `l` | the session's log |
+| `i` | MIDI in: every message the controller sends, and what the song does with it |
 | `space` `n` `p` | in a set: the next step, the one before |
 | `←` `→` `Enter` | in a set: look through the steps, go to the one looked at |
 | `1`-`9` `g` `Tab` | in a set: go to a step on screen; pick from every step |

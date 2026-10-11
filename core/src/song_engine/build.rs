@@ -249,6 +249,7 @@ impl SongEngine {
                     delay_send: t.delay_send,
                     muted: false,
                     thrown: false,
+                    roll: None,
                     reverb_send: t.reverb_send,
                     sidechain_amount: t.sidechain,
                     current_step: 0,
@@ -405,6 +406,8 @@ impl SongEngine {
             master_in_samples: 0,
             pending_triggers: Vec::with_capacity(MAX_PENDING_TRIGGERS),
             track_silent: vec![false; track_buf_count],
+            track_quiet: vec![0; track_buf_count],
+            track_rests: vec![false; track_buf_count],
             track_bufs_l: vec![[0.0f32; BLOCK_SIZE]; track_buf_count],
             track_bufs_r: vec![[0.0f32; BLOCK_SIZE]; track_buf_count],
             taps: None,
@@ -412,7 +415,36 @@ impl SongEngine {
         };
         engine.retune_fx(tempo);
         engine.resolve_sidechain_sources(usize::MAX);
+        engine.refresh_track_rests();
         engine
+    }
+
+    /// Which tracks play no notes of their own, for the idle skip. Runs on
+    /// the audio thread when a scene starts, so it allocates nothing.
+    pub(super) fn refresh_track_rests(&mut self) {
+        use crate::dsl::compiler::CompiledStep;
+        let sounds = |p: &crate::dsl::compiler::CompiledPattern| {
+            !p.lanes.is_empty()
+                || p.steps.iter().any(|s| match *s {
+                    CompiledStep::NoteOn { velocity, .. } => velocity > 0.0,
+                    CompiledStep::Chord { count, .. } => count > 0,
+                    CompiledStep::Subdiv { notes, count, .. } => {
+                        notes[..count as usize].iter().any(|n| n.velocity > 0.0)
+                    }
+                    CompiledStep::DrumHit { .. } | CompiledStep::DrumSub { .. } => true,
+                    CompiledStep::Rest | CompiledStep::Tie => false,
+                })
+        };
+        for ti in 0..self.tracks.len() {
+            let t = &self.tracks[ti];
+            let mut plays = self.patterns.get(t.pattern_idx).is_some_and(sounds);
+            if let Some(plan) = t.play.and_then(|p| self.plays.get(p)) {
+                plays |= plan.variants.iter().any(|&i| self.patterns.get(i).is_some_and(sounds));
+            }
+            if let Some(slot) = self.track_rests.get_mut(ti) {
+                *slot = !plays;
+            }
+        }
     }
 
     /// Bar-synced modulation inside chains follows the tempo.

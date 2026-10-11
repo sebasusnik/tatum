@@ -1,0 +1,211 @@
+# hiperespacio — the keyboard's own voices
+#
+# What the KeyLab's zones play over any track of the set (`_keylab.synth`
+# says which, scene by scene). Every one plays a pattern of rests, so none
+# is heard until a key is held, and none moves the set's loudness. Each sits
+# behind its own high-pass so the low end stays the kick's and the bass's.
+#
+#   kpluck   intro: a dark two-operator pluck, the warp_drive sound;
+#            the wheel opens its low-pass (`lp`)
+#   kzap     build: a zap that falls a fifth every sixteenth; the wheel
+#            brings in a bitcrusher (`crush`)
+#   klaser   drop:  the serial-FM laser lead, growling index; the wheel
+#            makes it talk, a vowel filter (`talk`) fading in from a to u
+#   kvox     break: a breathing pad through a vowel filter; the wheel
+#            takes the vowel from the LFO and walks it a-e-i-o-u
+#   kruido   a key held: noise whose band climbs for as long as it is held
+#   kfill    a snare roll in straight sixteenths
+#   kimpact  a crash of noise, for the one after a build
+
+pattern krest { -*16 }
+
+module fm kpluck_v {
+    algorithm two_op
+    level 1.3
+    mod_index 48%
+    feedback 12%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 2x
+    op0_envelope 0.002 0.22 0.0 0.12
+    op1_envelope 0.001 0.09 0.0 0.06
+}
+
+module fm kzap_v {
+    algorithm two_op
+    level 1.5
+    mod_index 80%
+    feedback 30%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 3.5x
+    op0_envelope 0.001 0.09 0.0 0.05
+    op1_envelope 0.001 0.05 0.0 0.03
+    lfo_target pitch
+    lfo_sync sixteenth
+    lfo_waveform saw
+    lfo_depth 45%
+}
+
+module fm klaser_v {
+    algorithm serial4
+    level 1.5
+    mod_index 55%
+    feedback 22%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 2x
+    op2_ratio 1.005x
+    op3_ratio 3x
+    op0_envelope 0.004 0.25 0.7 0.15
+    op1_envelope 0.002 0.18 0.5 0.12
+    op2_envelope 0.002 0.30 0.4 0.12
+    op3_envelope 0.001 0.10 0.2 0.08
+    lfo_target mod_index
+    lfo_sync bars_2
+    lfo_waveform triangle
+    lfo_depth 35%
+    vibrato_rate 5.5hz
+    vibrato_depth 18%
+}
+
+module keys kvox_v {
+    voice_mode poly
+    cutoff 1400hz
+    resonance 25%
+    detune 22%
+    chorus_mix 30%
+    attack 250ms
+    decay 600ms
+    sustain 75%
+    release 500ms
+    lfo_target cutoff
+    lfo_sync bars_4
+    lfo_waveform triangle
+    lfo_depth 15%
+}
+
+instrument kruido_v {
+    gain 2.0
+    noise() as n
+    n > bandpass(300, 0.4, ea=8.0, ed=0.1, es=1.0, er=0.4, edepth=7000) as bp
+    bp > adsr(2.5, 0.1, 1.0, 0.4) as amp
+    amp > out
+}
+
+# The fill's snare and the impact are noise, not a drum kit: a `beats`
+# module here would come before every rig's kit and take the sidechain's
+# kick away from it.
+instrument ksnare_v {
+    gain 1.8
+    noise() as n
+    n > bandpass(1900, 0.45) as bp
+    bp > perc(0.001, 0.11) as amp
+    amp > out
+}
+
+instrument kimpact_v {
+    gain 1.6
+    noise() as n
+    n > highpass(3000, 0.1) as hp
+    hp > perc(0.002, 1.6) as amp
+    amp > out
+}
+
+# One bar of snare in straight sixteenths, rising: held, it rolls on the grid.
+pattern kroll { o:0.3 o:0.3 o:0.35 o:0.35  o:0.4 o:0.4 o:0.45 o:0.45  x:0.5 x:0.5 x:0.55 x:0.55  x:0.6 x:0.65 x:0.7 x:0.8 }
+
+track kpluck {
+    play krest
+    using kpluck_v
+    level 0.32
+    gate 0.9
+    pan 0.1
+    delay_send 0.3
+    reverb_send 0.18
+    sidechain 0.45
+    out > highpass(250hz, 0.05) > lowpass(2500hz, 0.25) as lp > master
+}
+
+track kzap {
+    play krest
+    using kzap_v
+    level 0.22
+    gate 0.9
+    pan -0.15
+    delay_send 0.25
+    reverb_send 0.12
+    sidechain 0.4
+    out > highpass(350hz, 0.05) > bitcrush(6, 0.35, wet=0) as crush > master
+}
+
+track klaser {
+    play krest
+    using klaser_v
+    level 0.11
+    gate 0.95
+    pan 0.05
+    delay_send 0.22
+    reverb_send 0.2
+    sidechain 0.45
+    out > highpass(300hz, 0.05) > saturate(0.25) > vowel(a, wet=0) as talk > master
+}
+
+track kvox {
+    play krest
+    using kvox_v
+    level 0.2
+    pan 0.0
+    delay_send 0.1
+    reverb_send 0.45
+    sidechain 0.6
+    out > highpass(220hz, 0.05) > vowel(a, o, bars=4) as vox > master
+}
+
+track kruido {
+    play krest
+    using kruido_v
+    level 0.28
+    reverb_send 0.3
+    sidechain 0.2
+    out > highpass(300hz, 0.05) > autopan(0.5, hz=0.5) > master
+}
+
+# F8: a riser by fader. Noise held as long as the fader is up, opening its
+# band as it rises. A note on every beat starts it within a beat of the
+# fader leaving the bottom; while it sounds the next ones only hold it.
+instrument kriser_v {
+    gain 2.0
+    noise() as n
+    n > adsr(0.01, 0.1, 1.0, 0.3) as amp
+    amp > out
+}
+
+pattern kheld { C3 ..*3  C3 ..*3  C3 ..*3  C3 ..*3 }
+
+track kriser {
+    play kheld
+    using kriser_v
+    level 0
+    reverb_send 0.25
+    sidechain 0.3
+    out > highpass(200hz, 0.05) > bandpass(400hz, 0.35) as band > autopan(0.5, hz=0.25) > master
+}
+
+track kfill {
+    play kroll
+    using ksnare_v
+    level 0.4
+    pan 0.05
+    reverb_send 0.15
+    out > highpass(200hz, 0.05) > master
+}
+
+track kimpact {
+    play krest
+    using kimpact_v
+    level 0.35
+    pan 0.2
+    reverb_send 0.4
+    out > master
+}

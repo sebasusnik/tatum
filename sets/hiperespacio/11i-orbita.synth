@@ -1,6 +1,6 @@
 # set: bars=16 phase=11-drop energy=10
 # set-note: drop 2/4: the acid steps out and the shard arp takes its place; the haze grows its octave (F#5 under the G)
-# cue: 15 A1 held · kick out
+# cue: 15 key D held · kick out
 use "_t11.synth"
 
 auto haze level 0.112 > 0.119 > 0.106 > 0.119 over 16

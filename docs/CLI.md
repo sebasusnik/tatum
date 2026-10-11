@@ -48,8 +48,10 @@ report is in [MIX.md](MIX.md#reading-a-mix).
 ## play and watch
 
 ```
-tatum play  song.synth [--tui] [--device <name>] [--rate <hz>] [--midi <name>]
-tatum watch song.synth [--tui] [--device <name>] [--rate <hz>] [--midi <name>]
+tatum play  song.synth [--tui] [--device <name>] [--rate <hz>] [--midi <name>] [--buffer <frames>]
+tatum watch song.synth [--tui] [--device <name>] [--rate <hz>] [--midi <name>] [--buffer <frames>]
+tatum midi monitor [<song.synth> | <set dir> [--step N]] [--midi <name>]
+tatum midi list
 ```
 
 `play` plays the song on the default output device until it ends or you type `q`.
@@ -67,8 +69,16 @@ See "Livecoding semantics" in [DSL.md](DSL.md#livecoding-semantics).
   `--midi` names one; `--list-midi` lists them. See [DSL.md](DSL.md#midi-knobs-keys-and-pads).
 - `--tui` runs full screen; `--glass` is the same for a terminal with translucent cells.
   See [TUI.md](TUI.md).
+- `--buffer 1024` asks the device for that many frames a callback, for headroom when
+  its default leaves too little.
+- `tatum midi monitor` prints every message a controller sends (notes, pads, knobs, the
+  pitch strip, aftertouch, program changes) with its channel and bytes, and, given a
+  song or a set, what its `midi` block, zones and trigger keys do with it: the way to
+  find out what a controller really sends before mapping it. `i` on the live screen
+  shows the same.
 
-On exit both print the worst audio callback time against its budget.
+On exit both print the worst audio callback time against its budget, and how many
+dropouts the device reported.
 
 ## debug
 
@@ -118,7 +128,8 @@ walked in filename order. A step's header says how long it holds and what it is:
 tatum set check  <dir> [--bars N] [--json]
 tatum set render <dir> [-o set.wav] [--bars N] [--phrase 1] [--ramp 4] [--blend 0] [--perform script.txt]
 tatum set next   <dir> <candidate.synth> [--json] [--max-voices N]
-tatum set play   <dir> [--tui] [--auto] [--phrase 8] [--ramp 4] [--blend 0] [--device <name>] [--midi <name>]
+tatum set play   <dir> [--tui] [--auto] [--phrase 8] [--ramp 4] [--blend 0] [--device <name>] [--midi <name>] [--buffer <frames>]
+tatum set controls <dir> [--step N] [--bars 2]
 ```
 
 - **`check`** validates every step and reports the set's arc.
@@ -126,6 +137,10 @@ tatum set play   <dir> [--tui] [--auto] [--phrase 8] [--ramp 4] [--blend 0] [--d
   ramps and blends, into one continuous WAV, and prints where each step starts.
   `--perform` plays a script of knobs, pads, keys and step moves on top, for review
   audio without the hardware.
+- **`controls`** tries every control of every step the way a hand would -- each knob
+  on each page turned end to end, each pad and trigger key held, the strip and the
+  wheel thrown, with the key or pad a voice needs held when it needs one -- and prints
+  per step the ones that changed nothing (`NOTHING`) and how much the others did.
 - **`next`** is the gate a proposed step has to pass against the last one: it says yes
   or no and why. It is meant for an agent writing a set step by step.
 - **`play`** plays it live. The space bar, a key or a pad asks for the next step, which
@@ -140,12 +155,15 @@ A set is a directory of numbered `.synth` files, each the whole rig at one momen
 (`sets/` has five). `tatum set play <dir>` plays it with a controller in hand:
 
 ```
-tatum set play sets/mine --phrase 8 --ramp 4 --midi keylab
+tatum set play sets/mine --phrase 8 --ramp 4
 ```
 
 It starts on the first step. The space bar (or `n`, or →) asks for the next one, ←
-for the one before, a digit for a step by number, and a pad does the same with
-`pad 48 > next`, `prev` or `step 3`. What was asked for does not come in at once: it
+for the one before, a digit for a step by number, and a pad can do the same with
+`pad 48 > next`, `prev` or `step 3`; a song's `keyboard { }` block binds the
+computer's keys to its performance scenes and to these moves (see "Zones, scenes and
+the computer's keys" in [DSL.md](DSL.md)). A step's header can bring a scene in as it
+lands: `# set: perform=drop`. What was asked for does not come in at once: it
 lands on the next phrase line, the next bar that is a multiple of `--phrase` (8 by
 default), so the set keeps its phrasing whoever is at the controls. The status line
 counts down the bars to it. Asking for the step that plays cancels the move.
@@ -205,6 +223,9 @@ set's first downbeat and fractional:
 20.5   key 48 100      # a key down (velocity 0 lets it go)
 21.0   bend 12000      # the pitch strip, 0..16383, 8192 at rest
 35.0   next            # ask for the next step; also `prev`, `step 3`
+40.0   perform drop    # a scene, as its computer key would call it
+41.0   press pad 40 90 # aftertouch on a held pad (or `press key 45 90`)
+42.0   voice bass      # the knobs' page (also `voice next`, `voice prev`)
 96.0   end             # stop here
 ```
 
