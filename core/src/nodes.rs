@@ -134,12 +134,18 @@ const FILTER_POS: &[Arg] = &[
     arg!("resonance", 0.0, 1.0, 0.01, "0.01 is flat, 0.1 a bump, 0.3 a whistle, 1 self-oscillation (Q = 0.5 + n*19.5)"),
 ];
 const OSC_POS: &[Arg] = &[arg!("freq", 1.0, 20000.0, 440.0, "base frequency in Hz; notes retune it")];
+const PULSE_WIDTH: Arg =
+    arg!("width", 0.05, 0.95, 0.5, "pulse duty cycle, the share of each cycle spent high; pulse only");
 
 pub const NODES: &[NodeDefSpec] = &[
     NodeDefSpec { name: "osc", aliases: &[], category: Category::Source, positional: OSC_POS,
-        named: &[arg!("pitch", -48.0, 48.0, 0.0, "offset in semitones")], waveform: true, rhythm: false, in_chains: false,
-        doc: "Oscillator that follows the played note. Waveform word: sine | saw | square | triangle. Has analog drift." },
-    NodeDefSpec { name: "fixosc", aliases: &[], category: Category::Source, positional: OSC_POS, named: &[],
+        named: &[arg!("pitch", -48.0, 48.0, 0.0, "offset in semitones"),
+                 PULSE_WIDTH,
+                 arg!("pitch_env", -5000.0, 5000.0, 0.0, "Hz added to the note at its start, falling away with pitch_decay: the click on a pluck's attack"),
+                 arg!("pitch_decay", 0.1, 2000.0, 5.0, "ms pitch_env takes to fall away, timed like an envelope stage")],
+        waveform: true, rhythm: false, in_chains: false,
+        doc: "Oscillator that follows the played note. Waveform word: sine | saw | square | triangle | pulse. Has analog drift." },
+    NodeDefSpec { name: "fixosc", aliases: &[], category: Category::Source, positional: OSC_POS, named: &[PULSE_WIDTH],
         waveform: true, rhythm: false, in_chains: false, doc: "Fixed-frequency oscillator (ignores the note), for metallic stacks." },
     NodeDefSpec { name: "pitch_osc", aliases: &[], category: Category::Source,
         positional: &[arg!("start_freq", 1.0, 20000.0, 300.0, "Hz at trigger"), arg!("end_freq", 1.0, 20000.0, 55.0, "Hz it decays to"), arg!("decay", 0.9, 0.99999, 0.995, "per-sample pitch decay factor")],
@@ -147,6 +153,7 @@ pub const NODES: &[NodeDefSpec] = &[
             arg!("decay", 0.9, 0.99999, 0.995, "per-sample pitch decay factor"),
             arg!("mid", 1.0, 20000.0, 20000.0, "Hz between start and end where a fast first stage hands over to the slow one; unset, one stage"),
             arg!("fast", 0.9, 0.99999, 0.99, "per-sample decay factor of the fast stage, start to mid"),
+            PULSE_WIDTH,
         ],
         waveform: true, rhythm: false, in_chains: false,
         doc: "Pitch-sweeping oscillator for kicks and toms. `mid=` splits the sweep in two: a snap from start to mid at `fast=`, then the body from mid to end at `decay`: `pitch_osc sine(1200, 49, 0.9993, mid=160, fast=0.97)`." },
