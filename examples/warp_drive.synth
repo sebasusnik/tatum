@@ -552,7 +552,7 @@ track pad {
 track bell {
     play bell_line
     using bell
-    level 0.42
+    level 0.21
     velocity 1.0
     pan 0.3
     delay_send 0.3
