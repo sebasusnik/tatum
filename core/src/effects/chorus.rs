@@ -57,7 +57,7 @@ impl Chorus {
             buffer_r: [0.0; 4096],
             write_pos: 0,
             lfo,
-            base_delay: 1100.0, // ~25ms at 44100
+            base_delay: if crate::SAMPLE_RATE == 44100.0 { 1100.0 } else { 1100.0 * crate::SAMPLE_RATE / 44100.0 }, // ~25ms
             depth: DEPTH_SAMPLES,
             mix: 0.3,
         }

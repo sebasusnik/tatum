@@ -297,4 +297,8 @@ pub struct CompiledSong {
     pub delay_return: Vec<ChainStep>,
     /// Top-level `auto ... over N` lanes of a song without scenes.
     pub automations: Vec<CompiledAutomation>,
+    /// The slowest tempo the song can be played at: its own, its scenes', and
+    /// the bottom of any knob on `tempo` (60 BPM for a knob with no range).
+    /// Delay lines are sized for an echo at this tempo.
+    pub slowest_tempo: f32,
 }

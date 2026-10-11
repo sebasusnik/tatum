@@ -689,7 +689,7 @@ impl FmModule {
             // sums across every track that uses one, and it made a C4 note read
             // as 74% sub in the band report -- there was no sub, it was the
             // offset. A 5 Hz blocker takes it out below anything audible.
-            const DC_R: f32 = 0.99929;
+            const DC_R: f32 = crate::per_sample(0.99929);
             let blocked = sum - self.dc_x1 + DC_R * self.dc_y1;
             self.dc_x1 = sum;
             self.dc_y1 = blocked;

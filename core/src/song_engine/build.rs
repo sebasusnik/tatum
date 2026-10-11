@@ -211,13 +211,18 @@ impl SongEngine {
         n_inst: usize,
         tempo: f32,
     ) -> Self {
+        // The slowest tempo the song plays at, knobs included: what sizes its
+        // delay lines.
+        let slowest = song.slowest_tempo.min(tempo);
+
         // Build buses
-        let buses: Vec<SongBus> = song.buses.iter().map(|b| SongBus::new(b.name.clone(), &b.fx_chain)).collect();
+        let buses: Vec<SongBus> =
+            song.buses.iter().map(|b| SongBus::new(b.name.clone(), &b.fx_chain, slowest)).collect();
 
         // Build master FX chain
-        let master_fx = FxChain::new(&song.master.fx_chain);
-        let reverb_return = FxChain::new(&song.reverb_return);
-        let delay_return = FxChain::new(&song.delay_return);
+        let master_fx = FxChain::new(&song.master.fx_chain, slowest);
+        let reverb_return = FxChain::new(&song.reverb_return, slowest);
+        let delay_return = FxChain::new(&song.delay_return, slowest);
         let reverb_sidechain = song.globals.send_reverb.sidechain.unwrap_or(0.0);
         let delay_sidechain = song.globals.send_delay.sidechain.unwrap_or(0.0);
 
@@ -242,7 +247,7 @@ impl SongEngine {
                     pan_r,
                     gate: t.gate,
                     rng: Rng::new(seed_from_name(&t.name)),
-                    insert_fx: FxChain::new(&t.insert_fx),
+                    insert_fx: FxChain::new(&t.insert_fx, slowest),
                     fx_labels: t.insert_fx_labels.iter().map(|l| l.as_deref().and_then(InlineName::new)).collect(),
                     bus_send: t.bus_send,
                     to_master: t.to_master,
@@ -308,8 +313,13 @@ impl SongEngine {
         // Global send effects — match reference Engine defaults
         // Defaults: 16th-note delay, small tight room. Overridable with the
         // top-level `delay ...` / `reverb ...` lines.
-        let mut send_delay = Delay::new(SAMPLE_RATE, 2.0);
         let d = &song.globals.send_delay;
+        // The buffer holds the longest echo the song can ask for: a quarter
+        // (the longest synced division) at its slowest tempo, or the free
+        // time, with a fifth to spare for a tempo ramp. Two seconds at most,
+        // as before; the rest of a two-second buffer is never read.
+        let longest = (60.0 / slowest).max(d.time.unwrap_or(0.0));
+        let mut send_delay = Delay::new(SAMPLE_RATE, (longest * 1.2).min(2.0));
         let sync = match d.sync.as_deref() {
             Some("free") => DelaySync::Free,
             Some("quarter") => DelaySync::Quarter,

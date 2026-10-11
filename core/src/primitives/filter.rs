@@ -213,7 +213,7 @@ impl LadderFilter {
         self.process_inner(input);
         let out = self.process_inner(input) * self.gain_comp;
         // One-pole DC blocker at about 5 Hz.
-        const R: f32 = 0.99929;
+        const R: f32 = crate::per_sample(0.99929);
         let y = out - self.dc_x1 + R * self.dc_y1;
         self.dc_x1 = out;
         self.dc_y1 = y;
