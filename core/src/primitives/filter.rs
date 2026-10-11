@@ -52,7 +52,14 @@ impl BiquadFilter {
     fn recalc(&mut self) {
         let w0 = math::TWO_PI * self.cutoff / self.sample_rate;
         let sin_w0 = math::sin(w0);
-        let cos_w0 = math::cos(w0);
+        // The cosine as 1 - 2 sin²(w0/2): at a low cutoff it sits within a
+        // few millionths of 1, the size of the sine table's own error, and
+        // read from the table it moved the filter. A `highpass(20hz, 0.05)`,
+        // meant as +3.7 dB at 25 Hz, played +6.9 dB at 30 Hz at 44.1 kHz and
+        // something else again at 32 kHz. The sine of a small angle reads
+        // true off the table, so this lands on the designed filter.
+        let half = math::sin(w0 * 0.5);
+        let cos_w0 = 1.0 - 2.0 * half * half;
         // Q from resonance: map 0-1 to 0.5-20
         let q = 0.5 + self.resonance * 19.5;
         let alpha = sin_w0 / (2.0 * q);
