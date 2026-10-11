@@ -10,6 +10,13 @@ use super::sequencer::NO_RELEASE;
 use super::track::{glide, settle};
 use super::SongEngine;
 
+/// How long an idle track has to put out nothing before it is skipped:
+/// about 90 ms of blocks, longer than any gap inside a note's own tail.
+const QUIET_BLOCKS: u16 = 32;
+
+/// What counts as nothing: -120 dB.
+const QUIET_LEVEL: f32 = 1e-6;
+
 impl SongEngine {
     /// Process one stereo block.
     pub fn process_block_stereo(&mut self, output_l: &mut [f32], output_r: &mut [f32]) {
@@ -145,10 +152,25 @@ impl SongEngine {
             if muted && self.tracks[ti].current_notes_count > 0 {
                 Self::release_track_notes(&mut self.tracks[ti], &mut self.instruments);
             }
-            let silent = muted && self.instruments.get(self.tracks[ti].instrument_idx).is_some_and(|i| i.is_idle());
+            let idle = self.instruments.get(self.tracks[ti].instrument_idx).is_some_and(|i| i.is_idle());
+            // A track with its fader up but no notes of its own -- a voice
+            // kept for the keys or a pad, a pattern of rests -- costs nothing
+            // either, once what its chain was still ringing has died away. It
+            // comes back the block a note arrives. A track of the song is
+            // never skipped this way, so its chain's modulation keeps running;
+            // nor is the sidechain source.
+            let quiet = idle
+                && self.track_rests.get(ti).copied().unwrap_or(false)
+                && self.track_quiet[ti] >= QUIET_BLOCKS
+                && !self.tracks[ti].is_sc_source
+                && self.tracks[ti].leaving == 0;
+            if !idle {
+                self.track_quiet[ti] = 0;
+            }
+            let silent = (muted && idle) || quiet;
             // Clear the chain on the way in, so a delay or reverb sitting in it
             // does not come back stale when the track is brought back.
-            if silent && !self.track_silent[ti] {
+            if muted && silent && !self.track_silent[ti] {
                 self.tracks[ti].insert_fx.reset();
             }
             self.track_silent[ti] = silent;
@@ -187,6 +209,20 @@ impl SongEngine {
                 track_bufs_l[ti][s] = fl;
                 track_bufs_r[ti][s] = fr;
             }
+        }
+
+        // Count the blocks each idle track has put out nothing, for the skip
+        // above.
+        for ti in 0..track_count {
+            if self.track_silent[ti] || !self.tracks[ti].sounding() {
+                continue;
+            }
+            let idle = self.instruments.get(self.tracks[ti].instrument_idx).is_some_and(|i| i.is_idle());
+            let out = track_bufs_l[ti][..len]
+                .iter()
+                .chain(track_bufs_r[ti][..len].iter())
+                .fold(0.0f32, |m, v| m.max(crate::math::abs(*v)));
+            self.track_quiet[ti] = if idle && out < QUIET_LEVEL { self.track_quiet[ti].saturating_add(1) } else { 0 };
         }
 
         // Sidechain ducking: use kick track to duck other tracks

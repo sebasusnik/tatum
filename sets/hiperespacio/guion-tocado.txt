@@ -1,8 +1,9 @@
-# hiperespacio - the hour performed, sparse: pads and K3 only
+# hiperespacio - the hour performed, sparse: pads, the lowest octave's keys and K3 only
+# (kick out is key D, 38; the throw key B, 47; the 1/8 roll pad A1; freeze pad A8)
 0.0000 cc 76 40
 # T01: kick out two bars
-94.0000 pad 36 110
-96.0000 pad 36 0
+94.0000 key 38 110
+96.0000 key 38 0
 # T01: the turbine by hand, RPM up and cut
 120.0000 pad 44 100
 120.0000 cc 76 20
@@ -31,8 +32,8 @@
 264.0000 pad 46 120
 264.1000 pad 46 0
 # T02: throw the pluck
-287.5000 pad 38 110
-288.0000 pad 38 0
+287.5000 key 47 110
+288.0000 key 47 0
 # T03: the talking drone by hand
 404.0000 pad 44 100
 404.0000 cc 76 20
@@ -56,11 +57,11 @@
 432.0000 pad 46 120
 432.1000 pad 46 0
 # T03: kick out two bars
-470.0000 pad 36 110
-472.0000 pad 36 0
+470.0000 key 38 110
+472.0000 key 38 0
 # T04: throw the acid
-591.5000 pad 38 110
-592.0000 pad 38 0
+591.5000 key 47 110
+592.0000 key 47 0
 # T04: in the hole, the 303 held and opened
 606.0000 pad 44 100
 606.0000 cc 76 30
@@ -88,8 +89,8 @@
 624.0000 pad 46 120
 624.1000 pad 46 0
 # T04: kick out two bars
-654.0000 pad 36 110
-656.0000 pad 36 0
+654.0000 key 38 110
+656.0000 key 38 0
 # T05: the zap figure
 760.0000 pad 47 110
 762.0000 pad 47 0
@@ -129,8 +130,8 @@
 957.7500 pad 44 0
 959.0000 cc 76 40
 # T06: kick out, back on the new section
-982.0000 pad 36 110
-984.0000 pad 36 0
+982.0000 key 38 110
+984.0000 key 38 0
 # T07: the laser alone in the hole
 1124.0000 pad 44 100
 1124.0000 cc 76 20
@@ -158,14 +159,14 @@
 1144.0000 pad 46 120
 1144.1000 pad 46 0
 # T07: throw the laser
-1175.5000 pad 38 110
-1176.0000 pad 38 0
+1175.5000 key 47 110
+1176.0000 key 47 0
 # T08: crash on the landing after the grinder gap
 1296.0000 pad 46 120
 1296.1000 pad 46 0
 # T08: kick out two bars
-1342.0000 pad 36 110
-1344.0000 pad 36 0
+1342.0000 key 38 110
+1344.0000 key 38 0
 # T08: the grinder by hand, idle to scream, cut
 1360.0000 pad 44 100
 1360.0000 cc 76 0
@@ -209,8 +210,8 @@
 1560.0000 pad 49 0
 1561.5000 cc 76 40
 # T09: the room frozen
-1566.0000 pad 39 110
-1570.0000 pad 39 0
+1566.0000 pad 43 110
+1570.0000 pad 43 0
 # T09: riser to the edge, released before the silent beat
 1588.0000 pad 45 110
 1591.5000 pad 45 0
@@ -221,8 +222,8 @@
 1656.0000 pad 46 120
 1656.1000 pad 46 0
 # T10: 1/8 roll into the next section
-1703.5000 pad 40 110
-1704.0000 pad 40 0
+1703.5000 pad 36 110
+1704.0000 pad 36 0
 # T10: the shard motor, RPM up
 1740.0000 pad 44 100
 1740.0000 cc 76 20
@@ -262,8 +263,8 @@
 1849.7500 pad 44 0
 1851.0000 cc 76 40
 # T11: the lead call thrown into the echo
-1895.5000 pad 38 110
-1896.0000 pad 38 0
+1895.5000 key 47 110
+1896.0000 key 47 0
 # T11: build - riser, 1/32 roll, then the silent bar
 1916.0000 pad 45 110
 1918.5000 pad 48 110
@@ -273,8 +274,8 @@
 1920.0000 pad 46 120
 1920.1000 pad 46 0
 # T11: kick out, crash back on 11j
-1950.0000 pad 36 110
-1952.0000 pad 36 0
+1950.0000 key 38 110
+1952.0000 key 38 0
 1952.0000 pad 46 120
 1952.1000 pad 46 0
 # T11: the machine-gun before the last section

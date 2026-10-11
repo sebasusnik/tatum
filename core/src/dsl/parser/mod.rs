@@ -114,10 +114,11 @@ impl Parser {
                 Some(name)
             }
             // `x`, `X` and `o` lex as drum hits but are fine as names outside patterns.
-            Token::DrumHit | Token::DrumAccent | Token::DrumGhost => {
+            Token::DrumHit | Token::DrumAccent | Token::DrumGhost(_) => {
                 let name = match self.peek() {
                     Token::DrumHit => String::from("x"),
                     Token::DrumAccent => String::from("X"),
+                    Token::DrumGhost(c) => String::from(*c),
                     _ => String::from("o"),
                 };
                 self.advance();
@@ -329,6 +330,7 @@ impl Parser {
             grooves: Vec::new(),
             midi: Vec::new(),
             automations: Vec::new(),
+            perform: Default::default(),
         };
         // Where the first top-level `auto` is, for the error if the song
         // turns out to have scenes.
@@ -412,7 +414,23 @@ impl Parser {
                 // `midi {` would otherwise read as a bus chain named midi.
                 Token::Ident(ref name) if name == "midi" && matches!(self.peek_ahead(1), Token::LBrace) => {
                     self.advance();
-                    self.parse_midi(&mut song.midi);
+                    self.parse_midi(&mut song.midi, &mut song.perform);
+                }
+                // `perform drop {`: a scene of a performance.
+                Token::Ident(ref name)
+                    if name == "perform"
+                        && matches!(
+                            self.peek_ahead(1),
+                            Token::Ident(_) | Token::DrumHit | Token::DrumAccent | Token::DrumGhost(_)
+                        )
+                        && matches!(self.peek_ahead(2), Token::LBrace) =>
+                {
+                    self.advance();
+                    self.parse_perform(&mut song.perform);
+                }
+                Token::Ident(ref name) if name == "keyboard" && matches!(self.peek_ahead(1), Token::LBrace) => {
+                    self.advance();
+                    self.parse_keyboard(&mut song.perform);
                 }
                 // `delay key=value ...` / `reverb key=value ...` configure the global sends.
                 // `reverb {` is still a bus chain, so only take this path on `ident =`.
@@ -465,7 +483,7 @@ fn describe_token(t: &Token) -> String {
         Token::Note(n) => format!("note {}", n),
         Token::DrumHit => String::from("'x'"),
         Token::DrumAccent => String::from("'X'"),
-        Token::DrumGhost => String::from("'o'"),
+        Token::DrumGhost(_) => String::from("'o'"),
         Token::LBrace => String::from("'{'"),
         Token::RBrace => String::from("'}'"),
         Token::Newline => String::from("end of line"),

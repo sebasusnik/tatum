@@ -1,7 +1,7 @@
 # set: bars=16 phase=11-drop energy=10
 # set-note: drop 3/4: glitch drums, gallop octave roll, the lead an octave up with an answer that does not stop, the fifth piles into the haze, acid back instead of the arp
 # cue: 1 B3 crash
-# cue: 1 let go of A1
+# cue: 1 let go of key D
 # cue: 15 B4 held · machine-gun
 use "_t11.synth"
 

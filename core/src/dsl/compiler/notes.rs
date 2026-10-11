@@ -26,39 +26,14 @@ pub fn resolve_note(note: &crate::dsl::ast::NoteRef, scale_intervals: &[u8], roo
 }
 
 /// Get scale intervals and root pitch class from the song's scale definition.
+/// With none, C major. A name the table does not know is a compile error
+/// (see `validate_scale`); here it falls back the same way.
 pub fn scale_context(song: &Song) -> ([u8; 7], u8) {
-    if let Some(ref scale_def) = song.globals.scale {
-        let intervals = match scale_def.kind.as_str() {
-            "major" => [0, 2, 4, 5, 7, 9, 11],
-            "minor" => [0, 2, 3, 5, 7, 8, 10],
-            "dorian" => [0, 2, 3, 5, 7, 9, 10],
-            "mixolydian" => [0, 2, 4, 5, 7, 9, 10],
-            "phrygian" => [0, 1, 3, 5, 7, 8, 10],
-            "lydian" => [0, 2, 4, 6, 7, 9, 11],
-            "locrian" => [0, 1, 3, 5, 6, 8, 10],
-            _ => [0, 2, 4, 5, 7, 9, 11], // default major
-        };
-        // Root pitch class (0=C, 2=D, 4=E, 5=F, 7=G, 9=A, 11=B)
-        let root_pc = match scale_def.root.as_str() {
-            "C" => 0,
-            "C#" | "Db" => 1,
-            "D" => 2,
-            "D#" | "Eb" => 3,
-            "E" => 4,
-            "F" => 5,
-            "F#" | "Gb" => 6,
-            "G" => 7,
-            "G#" | "Ab" => 8,
-            "A" => 9,
-            "A#" | "Bb" => 10,
-            "B" => 11,
-            _ => 0,
-        };
-        (intervals, root_pc)
-    } else {
-        // Default: C major
-        ([0, 2, 4, 5, 7, 9, 11], 0)
-    }
+    song.globals
+        .scale
+        .as_ref()
+        .and_then(|d| crate::perform::scale::Scale::named(&d.root, &d.kind))
+        .map_or(([0, 2, 4, 5, 7, 9, 11], 0), |s| (s.intervals, s.root))
 }
 
 /// The note a drum lane plays on a `beats` module, `None` for a name that is

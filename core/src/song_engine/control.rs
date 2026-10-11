@@ -181,6 +181,22 @@ impl SongEngine {
         }
     }
 
+    /// Roll `note` on `track` in place of its pattern, from the next
+    /// sixteenth: the three after each beat, and on the beat the kick of
+    /// `kick` (track, drum note) if given. `None` stops it, and the pattern
+    /// plays on from where it has got to.
+    pub fn set_roll(&mut self, track: usize, roll: Option<(u8, f32)>, kick: Option<(usize, u8)>) {
+        if let Some(t) = self.tracks.get_mut(track) {
+            t.roll =
+                roll.map(|(note, velocity)| super::track::LiveRoll { note, velocity: velocity.clamp(0.0, 1.0), kick });
+        }
+    }
+
+    /// The note a track is rolling, if a key holds one.
+    pub fn track_roll(&self, track: usize) -> Option<u8> {
+        self.tracks.get(track).and_then(|t| t.roll).map(|r| r.note)
+    }
+
     /// Bend instrument `inst_idx` by `ratio` of its frequency (1.0 is none).
     pub fn set_pitch_bend(&mut self, inst_idx: usize, ratio: f32) {
         if !ratio.is_finite() {
@@ -258,6 +274,41 @@ impl SongEngine {
 
     /// The live instrument a track plays right now. With one copy per track
     /// that names a module this is not the compiled index.
+    /// The note a track's patterns sound most often, over every pattern its
+    /// `play` line can choose: where its register is. `None` for a track
+    /// whose patterns play no notes.
+    pub fn track_home_note(&self, idx: usize) -> Option<u8> {
+        use crate::dsl::compiler::CompiledStep;
+        let t = self.tracks.get(idx)?;
+        let mut patterns = alloc::vec![t.pattern_idx];
+        if let Some(plan) = t.play.and_then(|p| self.plays.get(p)) {
+            patterns.extend(plan.variants.iter().copied());
+        }
+        let mut count = [0u32; 128];
+        for p in patterns.iter().filter_map(|&i| self.patterns.get(i)) {
+            for step in &p.steps {
+                match *step {
+                    CompiledStep::NoteOn { midi_note, velocity, .. } if velocity > 0.0 => {
+                        count[midi_note as usize & 127] += 1
+                    }
+                    CompiledStep::Chord { notes, count: n, .. } => {
+                        for c in &notes[..n as usize] {
+                            count[c.midi_note as usize & 127] += 1;
+                        }
+                    }
+                    CompiledStep::Subdiv { notes, count: n, .. } => {
+                        for c in notes[..n as usize].iter().filter(|c| c.velocity > 0.0) {
+                            count[c.midi_note as usize & 127] += 1;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let (note, n) = count.iter().enumerate().max_by_key(|(i, n)| (**n, core::cmp::Reverse(*i)))?;
+        (*n > 0).then_some(note as u8)
+    }
+
     pub fn track_instrument(&self, idx: usize) -> Option<usize> {
         self.tracks.get(idx).map(|t| t.instrument_idx)
     }

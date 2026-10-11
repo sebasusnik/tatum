@@ -1,0 +1,201 @@
+# hiperespacio — the KeyLab Essential 49 mk3 as a performer splits it
+#
+# Every number here is the controller's, as Arturia ships it, and every one
+# is an assumption until `tatum midi monitor sets/hiperespacio` shows it:
+# press each key, pad and knob once and read what arrives. The octave
+# buttons move the keyboard by twelve notes; move the zones with them.
+#
+#   36..47  triggers  the lowest octave: each key does one thing (below)
+#   48..59  bass      held, the track's own bass rolls the note on the three
+#                     sixteenths after each beat, in place of its line
+#   60..84  lead      the track's own lead voice (`ktema`, in its rig) in that
+#                     voice's register, or the scene's sound; kept to the scale
+#
+# Scenes change what the zones play, the pitch strip's range and what the
+# mod wheel moves; F1-F4 call them, on the next bar.
+# The set moves only from the computer: space or → next, ← back.
+
+use "_voces.synth"
+
+midi {
+    zone triggers 36..47
+    zone bass     48..59 > bass roll
+    zone lead     60..84 > ktema
+    lock snap
+
+    # ── The lowest octave: one thing a key ──
+    key 36 > play kruido              # C   riser: noise that climbs while held
+    key 37 > play kimpact q=beat      # C#  impact, on the beat
+    key 38 > mute drums q=bar         # D   drums out while held, back on the one
+    key 39 > mute bass q=bar          # D#  bass out while held
+    key 40 > cut                      # E   the whole mix under a low-pass, harder the harder struck
+    key 41 > sweep                    # F   a high-pass climbing for as long as it is held
+    key 42 > hold kfill q=beat        # F#  snare roll while held
+    key 43 > throw ktema              # G   the lead into the echo while held,
+    key 43 > throw kzap               #     whichever the scene plays
+    key 43 > throw kvox
+    key 44 > freeze                   # G#  the reverb frozen while held
+    key 45 > tapestop                 # A   the whole mix slows to a stop
+    # A# and B: each track's own toggle and throw (its rig).
+
+    # ── Faders ──
+    cc 73 > drums kick_level 0..1.3                   # F1 kick (a track name reaches its kit)
+    cc 75 > bass level 0..1.5                         # F2 bass (each track writes its own)
+    cc 79 > drums hihat_level 0..1.2                  # F3 hats
+    cc 72 > ktema level 0..1                          # F4 lead: the keyboard's voices
+    cc 72 > kzap level 0..0.4                         #    (as written at half way)
+    cc 72 > kvox level 0..0.2
+                                                      # F5 FX: each track's own voices (its rig)
+    cc 81 > ktema delay_send 0..80%                   # F6 the lead into the echo
+    cc 81 > kzap delay_send 0..80%
+    cc 81 > kvox delay_send 0..80%
+    cc 82 > ktema reverb_send 0..80%                  # F7 the lead into the room
+    cc 82 > kzap reverb_send 0..80%
+    cc 82 > kvox reverb_send 0..80%
+    cc 83 > kriser level 0..0.45                      # F8 the noise riser: louder and brighter
+    cc 83 > kriser band cutoff 400hz..9khz
+    cc 85 > master dj cutoff 150hz..20khz..20khz guard  # F9 DJ filter: centre open,
+    cc 85 > master hp cutoff 20hz..20hz..3khz guard     #    down darker, up thinner
+
+    # After a page change, a knob that is not where its target was left
+    # waits until it gets there. A `guard` line (the DJ filter, the master
+    # volume) also waits on its first touch; every other knob moves at once.
+    takeover pickup
+
+    # ── Knobs: one page per voice; Tab (or an encoder, below) changes it ──
+    # The first page is the track's own nine knobs, as its rig maps them.
+    page tema {
+    }
+    # Each line reaches what the track's bass has: a `bass` module's filter,
+    # or an `fm` bass's index (T05); the other line of the pair reads
+    # `(not in this track)`.
+    page bass {
+        cc 74 > bass cutoff 40hz..3khz                # K1 cutoff (FM: index)
+        cc 74 > bass mod_index
+        cc 71 > bass resonance                        # K2 resonance (FM: feedback)
+        cc 71 > bass feedback
+        cc 76 > bass decay                            # K3 decay
+        cc 77 > bass cutoff_env                       # K4 envelope amount (FM: the modulator's decay)
+        cc 77 > bass op1_decay
+        cc 93 > bass sustain                          # K5 sustain: plucked to held
+        cc 18 > bass delay_send 0..60%                # K6 echo
+        cc 19 > bass osc2_pitch -12st..12st           # K7 the second oscillator (FM: its ratio)
+        cc 19 > bass op1_ratio 0.5x..4x
+        cc 16 > bass vibrato_depth                    # K8 vibrato
+        cc 17 > bass level 0..1.5                     # K9 level
+    }
+    # The lead page moves the track's own lead (`ktema`): a line its module
+    # lacks reads `(not in this track)`.
+    page lead {
+        cc 74 > ktema klp cutoff 300hz..18khz         # K1 brightness
+        cc 71 > ktema resonance                       # K2 resonance (FM: feedback)
+        cc 71 > ktema feedback
+        cc 76 > ktema decay                           # K3 decay
+        cc 77 > ktema mod_index                       # K4 FM index (filter: envelope)
+        cc 77 > ktema cutoff_env
+        cc 93 > ktema vibrato_depth                   # K5 vibrato
+        cc 18 > ktema talk wet 0%..100%               # K6 vowel: the lead talks,
+        cc 18 > ktema talk position 0..1              #    a to u, and the pad's vowel
+        cc 18 > kvox vox position 0..1
+        cc 19 > kzap crush wet 0%..80%                # K7 the zap's crusher
+        cc 16 > kzap_v lfo_depth                      # K8 the zap's fall
+        cc 17 > ktema kgain gain 0..1                 # K9 the lead's level
+    }
+    page drums {
+        cc 74 > drums kick_decay                      # K1 kick decay
+        cc 71 > drums kick_pitch 0.8x..1.6x           # K2 kick pitch
+        cc 76 > drums kick_click                      # K3 kick click
+        cc 77 > drums kick_drive                      # K4 kick drive
+        cc 93 > drums hihat_level 0..1.2              # K5 hats level
+        cc 18 > drums hihat_pitch 0.8x..2x            # K6 hats pitch
+        cc 19 > drums snare_level 0..1                # K7 snare (where a fill plays it)
+        cc 19 > drums snare_decay
+        cc 16 > drums hihat_pan                       # K8 hats pan
+        cc 17 > drums level 0..1.3                    # K9 the whole kit
+    }
+    page master {
+        cc 74 > master vol gain 0..1 guard            # K1 master volume (top: as written)
+        cc 71 > master hp cutoff 20hz..1500hz         # K2 thin the floor
+        cc 76 > reverb_mix                            # K3 room
+        cc 77 > delay_mix                             # K4 echo
+        cc 93 > master eq_low -12db..12db             # K5 low
+        cc 18 > master eq_mid -12db..12db             # K6 mid
+        cc 19 > master eq_high -12db..12db            # K7 high
+    }
+    # The big encoder steps through the pages (relative: above 64 is on,
+    # below it back), as Tab does on the computer.
+    cc 114 > voice step
+
+    # ── Pads, bank A: effects on the whole mix while held, as hard as struck,
+    #    then as hard as pressed ──
+    pad 36 > repeat 1/8               # A1 roll
+    pad 37 > repeat 1/16              # A2 tighter
+    pad 38 > repeat 1/32              # A3 the stutter before a drop
+    pad 39 > tapestop                 # A4 slows to a stop: struck harder, sooner
+    pad 40 > gate 1/16                # A5 trance gate: harder, deeper
+    pad 41 > crush                    # A6 bitcrusher: harder, fewer bits
+    pad 42 > scream                   # A7 formant scream: pressure moves the vowel
+    pad 43 > freeze                   # A8 the reverb frozen (free: put anything here)
+    # Bank B (44-51): each track's own sounds, in its rig.
+}
+
+# Each scene: what the zones play, what the pitch strip and the mod wheel
+# do, and the values it starts from. A bend or wheel line says when it
+# answers: with `lead` or `bass` (or a bend with no word), while a key of
+# that zone is the newest held -- the sound you play; with `idle`, only
+# with the hands off the keys -- the song; with `always`, both. A gesture
+# belongs to what it started on: the lines are chosen as the strip or the
+# wheel leaves rest, and kept until it comes back. Every wheel range starts
+# at the sound as written, so the wheel at rest changes nothing.
+
+perform intro {
+    bass > bass roll
+    lead > ktema
+    bend lead 2deg                                  # playing: to the note two degrees away, in the scale
+    bend bass 12st idle                             # hands off: the song's bass line bends, up to an octave
+    wheel lead > ktema klp cutoff 18khz..900hz      # playing: the lead closes into the dark
+    wheel idle > master dj cutoff 20khz..1200hz     # hands off: the whole song goes under
+
+}
+
+perform build {
+    bass > bass roll
+    lead > kzap
+    bend lead 24st                                  # playing: the zap dives and climbs two octaves
+    bend bass 12st idle                             # hands off: the song's bass line falls an octave
+    wheel lead > kzap crush wet 0%..70%             # playing: the crusher on the zap
+    wheel idle > master hp cutoff 20hz..1500hz      # hands off: the floor thins out, the build tightens
+    set kzap delay_send 30%
+}
+
+perform drop {
+    bass > bass roll
+    lead > ktema
+    bend lead 2deg
+    bend bass 12st idle                             # hands off: the song's bass line bends
+    wheel lead > ktema talk wet 0%..100%            # playing: the lead starts to talk...
+    wheel lead > ktema talk position 0..1           # ...and walks a-e-i-o-u
+    wheel idle > master dj cutoff 20khz..600hz      # hands off: a DJ filter sweep on the drop
+
+}
+
+# In a break the kick is gone: a held bass key brings it back with the roll.
+perform break {
+    bass > bass roll kick=drums
+    lead > kvox
+    bend lead 1deg
+    bend bass 12st idle                             # hands off: whatever bass is left dives
+    wheel lead > kvox vox position 0..1             # playing: the pad says a-e-i-o-u
+    wheel idle > master dj cutoff 20khz..400hz      # hands off: the break goes under water
+    set kvox reverb_send 50%
+}
+
+keyboard {
+    tab > voice next
+    0 > reset                         # every knob and fader back to the text
+    f1 > perform intro
+    f2 > perform build
+    f3 > perform drop
+    f4 > perform break
+    quantize bar
+}

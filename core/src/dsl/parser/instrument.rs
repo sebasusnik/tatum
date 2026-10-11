@@ -253,7 +253,7 @@ impl Parser {
                         self.advance();
                     }
                 }
-            } else if matches!(self.peek(), Token::DrumGhost) {
+            } else if matches!(self.peek(), Token::DrumGhost(_)) {
                 // `o` lexes as a ghost hit; inside arguments it is the vowel word
                 self.advance();
                 params.push(Param::Waveform(String::from("o")));

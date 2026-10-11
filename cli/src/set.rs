@@ -39,6 +39,9 @@ pub struct Step {
     /// bar 8). `set play --tui` shows the cue that comes next, so a set can
     /// carry its own practice sheet.
     pub cues: Vec<(f32, String)>,
+    /// `perform=drop` in the header: the scene the keyboard comes into
+    /// when this step lands, as if its key had been pressed.
+    pub perform: Option<String>,
 }
 
 impl Step {
@@ -79,6 +82,16 @@ fn parse_header(src: &str, default_bars: u32) -> (u32, String, Option<f32>, Stri
         }
     }
     (bars, phase, energy, note, blend)
+}
+
+/// `perform=<scene>` in the `# set:` header.
+fn parse_perform(src: &str) -> Option<String> {
+    src.lines()
+        .filter_map(|l| l.trim().strip_prefix("# set:").or_else(|| l.trim().strip_prefix("#set:")))
+        .flat_map(str::split_whitespace)
+        .filter_map(|f| f.strip_prefix("perform="))
+        .next_back()
+        .map(String::from)
 }
 
 /// Every `# cue: <bar> <what>` in the file, in bar order. A line whose bar
@@ -123,7 +136,8 @@ pub fn load(dir: &Path, default_bars: u32) -> Result<Vec<Step>, String> {
             let src = crate::include::Source::load(&path)?.text;
             let (bars, phase, energy, note, blend) = parse_header(&raw, default_bars);
             let cues = parse_cues(&raw);
-            Ok(Step { path, src, bars, phase, energy, note, blend, cues })
+            let perform = parse_perform(&raw);
+            Ok(Step { path, src, bars, phase, energy, note, blend, cues, perform })
         })
         .collect()
 }
@@ -224,6 +238,15 @@ pub enum Act {
     Next,
     Prev,
     Step(usize),
+    /// A performance scene, called as its computer key would call it: it
+    /// takes the keyboard on the bar the song's `keyboard` block says.
+    Perform(String),
+    /// Aftertouch: a held pad (`true`) or key pressed this hard.
+    Pressure(bool, u8, u8),
+    /// The knobs' page: `voice next`, `voice prev`, `voice bass`.
+    Voice(tatum_core::dsl::ast::VoiceMove),
+    /// Every knob touched back to the text, as the reset key does.
+    Reset,
     End,
 }
 
@@ -243,6 +266,9 @@ impl Act {
 ///     20.0  key 48 100      a key down (channel 1), `key 48 0` up
 ///     21.0  bend 12000      the pitch strip
 ///     35.0  next            ask for the next step (also `prev`, `step 3`)
+///     40.0  perform drop    call a scene, as its key in `keyboard` would
+///     41.0  press pad 40 90 aftertouch on a held pad (or `press key 45 90`)
+///     42.0  voice bass      the knobs' page (also `voice next`, `voice prev`)
 ///     64.0  end             stop here
 pub fn parse_script(text: &str) -> Result<Vec<(f64, Act)>, String> {
     let mut out = Vec::new();
@@ -284,7 +310,24 @@ pub fn parse_script(text: &str) -> Result<Vec<(f64, Act)>, String> {
                     .ok_or_else(|| bad("step <n>, from 1"))?,
             ),
             Some("end") => Act::End,
-            _ => return Err(bad("expected cc, pad, key, bend, next, prev, step or end")),
+            Some("perform") => Act::Perform(w.get(2).ok_or_else(|| bad("perform <scene>"))?.to_string()),
+            Some("reset") => Act::Reset,
+            Some("press") => Act::Pressure(
+                match w.get(2) {
+                    Some(&"pad") => true,
+                    Some(&"key") => false,
+                    _ => return Err(bad("press pad|key <note> <0-127>")),
+                },
+                byte(3).ok_or_else(|| bad("press pad|key <note> <0-127>"))?,
+                byte(4).ok_or_else(|| bad("press pad|key <note> <0-127>"))?,
+            ),
+            Some("voice") => Act::Voice(match w.get(2).copied() {
+                Some("next") => tatum_core::dsl::ast::VoiceMove::Next,
+                Some("prev") => tatum_core::dsl::ast::VoiceMove::Prev,
+                Some(p) => tatum_core::dsl::ast::VoiceMove::To(p.to_string()),
+                None => return Err(bad("voice next|prev|<page>")),
+            }),
+            _ => return Err(bad("expected cc, pad, key, press, bend, voice, reset, next, prev, step, perform or end")),
         };
         out.push((bar, act));
     }
@@ -354,6 +397,18 @@ pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Resul
 
     let mut nav = crate::setnav::SetNav::new(steps, walk.phrase, walk.ramp_bars);
     nav.blend_bars = walk.blend_bars;
+    if let Some(scene) = nav.steps[0].perform.clone() {
+        let g = player.generation();
+        let plans: Vec<_> = planner
+            .enter_scene(&scene, g)
+            .into_iter()
+            .flatten()
+            .chain(planner.scene_values(&scene, None, g).into_iter().flatten())
+            .collect();
+        for p in plans {
+            player.apply(p);
+        }
+    }
     let (mut l, mut r) = (Vec::new(), Vec::new());
     let mut applied = Vec::new();
     let mut log = Vec::new();
@@ -362,6 +417,8 @@ pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Resul
     let mut next_event = 0;
     // Where the step playing landed, in bars, for a scripted walk's end.
     let mut landed_at = 0usize;
+    // A scene the script called, and the bar it takes the keyboard on.
+    let mut pending_scene: Option<(String, usize)> = None;
     loop {
         let e = player.engine().ok_or("the set did not load")?;
         let (bar, tempo, g) = (e.current_bar(), e.tempo(), player.generation());
@@ -400,7 +457,7 @@ pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Resul
             next_event += 1;
             let mut plans = Vec::new();
             let mut said = String::new();
-            match *act {
+            match act.clone() {
                 Act::Cc(cc, v) => {
                     let turn = planner.knob(cc, v, g);
                     said = turn.readings.join(", ");
@@ -434,6 +491,27 @@ pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Resul
                 Act::Next => said = ask(&mut nav, crate::setnav::Move::Next, bar),
                 Act::Prev => said = ask(&mut nav, crate::setnav::Move::Prev, bar),
                 Act::Step(n) => said = ask(&mut nav, crate::setnav::Move::To(n), bar),
+                Act::Perform(scene) => {
+                    let q = planner.keyboard().1 as usize;
+                    let origin = bar + 1 - nav.bar_in_step(bar);
+                    let target = origin + ((bar - origin) / q + 1) * q;
+                    match planner.scene_values(&scene, Some(target), g) {
+                        Some(p) => {
+                            plans = p;
+                            said = format!("scene {}, on bar {}", scene, target);
+                            pending_scene = Some((scene, target));
+                        }
+                        None => said = format!("no scene named {}", scene),
+                    }
+                }
+                Act::Pressure(pad, note, v) => plans = planner.pressure(pad, Some(note), v),
+                Act::Reset => {
+                    plans = planner.reset_knobs(g);
+                    said = String::from("reset: every knob back to the text");
+                }
+                Act::Voice(mv) => {
+                    said = planner.voice(&mv, g).unwrap_or_else(|| String::from("no knob pages"));
+                }
                 Act::End => {}
             }
             if !said.is_empty() {
@@ -441,6 +519,15 @@ pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Resul
             }
             for p in plans {
                 player.apply(p);
+            }
+        }
+        if let Some((scene, target)) = pending_scene.clone() {
+            if bar >= target {
+                pending_scene = None;
+                for p in planner.enter_scene(&scene, g).unwrap_or_default() {
+                    player.apply(p);
+                }
+                log.push((l.len(), format!("bar {}: scene {}", bar, planner.describe_scene(&scene))));
             }
         }
         let now = l.len() as f32 / SAMPLE_RATE;
@@ -459,6 +546,20 @@ pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Resul
         }
         if nav.current != before {
             landed_at = player.engine().map_or(bar, |e| e.current_bar());
+            if let Some(scene) = nav.steps[nav.current].perform.clone().filter(|s| planner.scene() != Some(s)) {
+                let g = player.generation();
+                let plans: Vec<_> = planner
+                    .enter_scene(&scene, g)
+                    .into_iter()
+                    .flatten()
+                    .chain(planner.scene_values(&scene, None, g).into_iter().flatten())
+                    .collect();
+                for p in plans {
+                    player.apply(p);
+                }
+                pending_scene = None;
+                log.push((l.len(), format!("bar {}: scene {}", landed_at, planner.describe_scene(&scene))));
+            }
             if scripted {
                 applied.push((nav.steps[nav.current].name(), l.len()));
                 log.push((l.len(), format!("bar {}: now {}", landed_at, nav.describe(nav.current))));
@@ -588,11 +689,13 @@ pub fn cmd(args: &[String]) {
         "check" => run(cmd_check(rest)),
         "next" => run(cmd_next(rest)),
         "play" => run(cmd_play(rest)),
+        "controls" => run(crate::controls::cmd(rest)),
         _ => {
             eprintln!("usage:");
             eprintln!(
                 "    tatum set render <dir> [-o out.wav] [--bars N] [--phrase 1] [--ramp 4] [--blend 0] [--perform script.txt]"
             );
+            eprintln!("    tatum set controls <dir> [--step N] [--bars 2]   every control of every step, tried");
             eprintln!("    tatum set check  <dir> [--bars N] [--json]");
             eprintln!("    tatum set next   <dir> <candidate.synth> [--json]");
             eprintln!(
@@ -669,6 +772,14 @@ fn cmd_play(args: &[String]) -> Result<(), String> {
             }
             "--tui" => tui = true,
             "--auto" => auto = true,
+            "--buffer" => {
+                let n = value(i)
+                    .and_then(|v| v.parse::<u32>().ok())
+                    .filter(|n| (64..=8192).contains(n))
+                    .ok_or("--buffer needs a number of frames, 64 to 8192 (like 1024)")?;
+                let _ = crate::live::BUFFER.set(n);
+                i += 1;
+            }
             "--glass" => {
                 tui = true;
                 glass = true;
@@ -981,6 +1092,15 @@ fn emit(json: bool, verdict: &str, transition: &str, problems: &[String], pr: Op
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_header_names_its_scene_and_a_script_calls_one() {
+        assert_eq!(parse_perform("# set: bars=16 perform=drop phase=x\n"), Some(String::from("drop")));
+        assert_eq!(parse_perform("# set: bars=16\n"), None);
+        let script = parse_script("4.0 perform break\n").unwrap();
+        assert_eq!(script[0], (4.0, Act::Perform(String::from("break"))));
+        assert!(parse_script("4.0 perform\n").is_err());
+    }
 
     const RIG: &str = r#"
 tempo 120

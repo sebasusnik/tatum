@@ -24,6 +24,14 @@ use super::fx_chain::FxChain;
 /// disagreed was the one nobody had written a file against.
 pub const MAX_TRACK_LEVEL: f32 = 4.0;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct LiveRoll {
+    pub(super) note: u8,
+    pub(super) velocity: f32,
+    /// Track and drum note.
+    pub(super) kick: Option<(usize, u8)>,
+}
+
 pub(super) struct TrackPlayback {
     pub(super) instrument_idx: usize,
     pub(super) pattern_idx: usize,
@@ -47,6 +55,10 @@ pub(super) struct TrackPlayback {
     /// while held, and the send falls back to `delay_send` on release, with
     /// the repeats still ringing.
     pub(super) thrown: bool,
+    /// A key held in a `roll` zone: the note this track rolls on the three
+    /// sixteenths after each beat in place of its pattern, and the drum
+    /// track whose kick it strikes on the beat, if any.
+    pub(super) roll: Option<LiveRoll>,
     /// This track's own sidechain amount, or `None` to take the song's.
     /// `sidechain 0` used to mean "the song's amount" too, because the
     /// override was a float with 0 standing for unset, so a track written

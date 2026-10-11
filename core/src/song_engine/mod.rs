@@ -176,6 +176,14 @@ pub struct SongEngine {
     /// Recomputed every block: a track that is muted and has nothing left
     /// ringing is skipped whole. Allocated once, like the buffers above.
     track_silent: Vec<bool>,
+    /// Per track, how many blocks in a row it has had nothing playing and
+    /// its chain has put out nothing: past `QUIET_BLOCKS` it is skipped too,
+    /// fader up or not, until a note comes.
+    track_quiet: Vec<u16>,
+    /// Per track, whether its patterns play no notes at all: a voice only
+    /// the keys or a pad play. Only such a track is skipped while idle, so a
+    /// track of the song never has its chain's modulation stopped.
+    track_rests: Vec<bool>,
 
     /// What `tatum debug` listens to: every part of the last block on its own.
     /// `None` unless asked for; see [`Taps`].

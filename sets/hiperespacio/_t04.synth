@@ -22,6 +22,7 @@ master {
        > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
        > eq(low=0.5, mid=-0.5, high=1)
        > gain(0.966) as trim
+       > gain(1.0) as vol
        > out
 }
 
@@ -633,16 +634,33 @@ track silbido {
 # K3. T04 has no second drum track, so F2 is the kit's hats and A2 takes the
 # roll in and out instead. The base already maps F7 reverb, F8 echo, F9 DJ
 # filter, A4 freeze, A7 prev, A8 next. B8 is left free.
+# The keyboard's lead in this track: its own acid voice (tb), for the
+# lead zone, through the same chain, plus a filter (`klp`) and a vowel
+# (`talk`) the wheel and the knobs reach, and its own gain (`kgain`).
+track ktema {
+    play krest
+    using tb
+    level 0.5
+    velocity 1.0
+    gate 0.55
+    pan 0.28
+    delay_send 0.2
+    reverb_send 0.05
+    sidechain 0.6
+
+    out > highpass(180hz, 0.05) > saturate(0.7) as dirt > lowpass(9khz, 0.05) as lp > limiter(0.5) > autopan(0.3, bars=4) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(2.393) as kgain > master
+}
+
 midi {
-    # Faders
-    cc 73 > drums level
-    cc 75 > akit hihat_level 0..0.9
-    cc 79 > bass level 0..1.5
-    cc 79 > gallop level 0..0.64
-    cc 72 > acid level
+    # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
+    # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw
+    # that were pads A2 and A3. Knobs: the page `tema`.
+    cc 75 > bass level 0..1.5
+    cc 75 > gallop level 0..0.64
+    cc 80 > acid level
     cc 80 > drone level 0..0.1
-    cc 81 > squeal level 0..0.8
-    cc 81 > alto level 0..1
+    cc 80 > squeal level 0..0.8
+    cc 80 > alto level 0..1
     # K1 bass filter: roll and gallop together
     cc 74 > rodillo cutoff 60hz..240hz
     cc 74 > rodillo cutoff_env 600hz..2.2khz
@@ -660,6 +678,7 @@ midi {
     # K4 the drone open
     cc 77 > pozo mod_index 25%..65%
     cc 77 > drone lp cutoff 400hz..2.5khz
+    cc 77 > acid reverb_send 0.05..0.5           # and the 303 into the room, which plays in most steps
     # K5 tension: thin from below, the 303 into the echo
     cc 93 > master hp cutoff 20hz..400hz
     cc 93 > acid delay_send 0.2..0.5
@@ -670,12 +689,9 @@ midi {
     cc 16 > akit hihat_pitch 1.3x..2x
     # K9 dirt: the 303's drive
     cc 17 > acid dirt drive 0.3..2
-    # Bank A
-    pad 36 > mute drums q=bar
-    pad 37 > toggle bass
-    pad 38 > throw acid q=1/16
-    pad 40 > repeat 1/8
-    pad 41 > repeat 1/16
+    # Keys A# and B: the toggle and the throw
+    key 46 > toggle bass
+    key 47 > throw acid q=1/16
     # Bank B
     pad 44 > play squeal q=1/16
     pad 45 > hold silbido q=beat
