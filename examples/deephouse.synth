@@ -29,11 +29,11 @@ module beats deep {
     kick_pitch 0.75x
     kick_click 12%
     kick_drive 30%
-    clap_level 0.55
+    clap_level 1.1
     clap_pan 0.05
-    hihat_level 0.45
-    hihat_decay 18%
-    hihat_pitch 0.9x
+    hihat_level 1.0
+    hihat_decay 25%
+    hihat_pitch 1.2x
     hihat_pan 0.3
 }
 
