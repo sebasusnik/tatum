@@ -1,0 +1,46 @@
+# subsuelo — the ground every tema of the set stands on
+#
+# About forty minutes of deep house in the manner of examples/deephouse.synth:
+# a deep kick, a sub under a bass with a voice of its own, chords that live on
+# their echo, a swung grid. Eight temas, each with its own rig (`_tNN.synth`,
+# which `use`s this file), mixed like records with `# set: blend=` on the
+# first step of each one. PLAN.md has the arc.
+#
+#   tatum set play sets/subsuelo --tui
+#
+# This file holds what every tema shares: the grid, the sidechain, the sends,
+# the returns, the drum bus and the master. A tema overrides any of it by
+# writing it again after its `use`.
+
+tempo 118
+meter 4/4
+scale C minor
+swing 0.54
+humanize 0.04 timing 0.004
+sidechain 0.45 attack=2ms release=150ms
+
+delay sync=dotted_eighth feedback=0.5 filter=0.35
+reverb size=0.85 damp=0.65 predelay=30 sidechain=0.5
+
+reverb_return { in > highpass(400hz, 0.05) > lowpass(4khz, 0.05) > out }
+delay_return  { in > highpass(300hz, 0.05) > lowpass(2500hz, 0.05) > autopan(0.5, bars=4) > out }
+
+bus drums
+drums { in > compressor(-8, ratio=2, attack=10, release=80, makeup=0db) > master }
+
+# The low end as one instrument: sub and bass squeezed together, the attack
+# slow enough that each note's front gets through.
+bus low
+low { in > compressor(-26, ratio=6, attack=15, release=60, makeup=6db) > master }
+
+# `dj` and `hp` are the hands' filters (F9, the idle mod wheel, the steps'
+# `auto master dj cutoff`); at rest out of the way.
+master {
+    in > lowpass(20khz, 0.05) as dj
+       > highpass(20hz, 0.05) as hp
+       > eq(low=2, mid=-1, high=-1.5)
+       > gain(1.0) as vol
+       > out
+}
+
+use "_keylab.synth"

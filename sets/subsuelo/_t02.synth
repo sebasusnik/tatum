@@ -1,0 +1,599 @@
+# T02 rhodes — C minor, 119 BPM
+#
+# The fog lifts into a warmer, smaller room and the groove opens up. A deeper
+# kick with a little more knock than T01's, brighter hats, a shaker in
+# sixteenths hard to the left, low bongos tuned to the key. The bass is FM: a
+# sine knocked by a short modulator, a round woody pluck in place of T01's
+# hum, syncopated, with an octave in it; the sine sub holds the roots long.
+#
+# The harmony leans between Cm11 and Abmaj7#11 (the bVI, its #11 the D):
+# rootless Rhodes voicings above C3, comped short on the offbeat, the bass
+# carrying the roots.
+#
+# The signature is a dark Rhodes line, low, a few notes with room between
+# them, the quarter-note echo answering each one a beat later. It arrives in
+# `firma` (twelve bars of each phrase), comes back changed for eight bars of
+# each phrase in `variacion`, and is gone for the `salida`. K3 is its tine:
+# from a muffled thump to a bark.
+
+use "_base.synth"
+
+# The tema's level in the set: -1.2 dB, measured against T01 on the render
+master {
+    in > lowpass(20khz, 0.05) as dj
+       > highpass(20hz, 0.05) as hp
+       > eq(low=2, mid=-1, high=-1.5)
+       > gain(0.87) as trim
+       > gain(1.0) as vol
+       > out
+}
+
+tempo 119
+scale C minor
+swing 0.56
+
+# A warmer, smaller room than T01's fog: the echo a beat late, fewer repeats
+delay sync=quarter feedback=0.42 filter=0.4
+reverb size=0.62 damp=0.6 predelay=22 sidechain=0.5
+
+delay_return  { in > highpass(300hz, 0.05) > lowpass(3khz, 0.05) > autopan(0.45, bars=4) > out }
+reverb_return { in > highpass(350hz, 0.05) > lowpass(4500hz, 0.05, lfo_bars=8, lfo_depth=900) > out }
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# Kick: lower and longer than T01's, a little more knock; clap and hats a
+# shade brighter
+module beats rkit {
+    kick_level 1.0
+    kick_decay 62%
+    kick_pitch 0.72x
+    kick_click 16%
+    kick_drive 32%
+    clap_level 0.5
+    clap_pan 0.05
+    hihat_level 0.55
+    hihat_decay 15%
+    hihat_pitch 1.1x
+    hihat_pan 0.2
+}
+
+# Shaker: a second kit, hats only, very short and high, to the left
+module beats shk {
+    kick_level 0.0
+    hihat_level 0.6
+    hihat_decay 3%
+    hihat_pitch 1.9x
+    hihat_pan -0.4
+}
+
+module fm rsub {
+    algorithm two_op
+    level 2.0
+    mod_index 0%
+    feedback 0%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op0_envelope 0.002 1.0 1.0 0.12
+    op1_envelope 0.002 1.0 1.0 0.12
+}
+
+# Bass: a sine knocked by a modulator that dies in 60 ms, a touch of
+# feedback: a round, woody pluck that rings a little
+module fm pluck {
+    algorithm two_op
+    level 2.4
+    mod_index 34%
+    feedback 10%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op0_envelope 0.002 0.45 0.25 0.12
+    op1_envelope 0.001 0.06 0.05 0.05
+}
+
+# The Rhodes line: the tine turned down, played low; K3 brings the tine up
+module fm rhodes {
+    algorithm dual_pairs
+    level 2.0
+    mod_index 22%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op2_ratio 1x
+    op3_ratio 14x
+    op0_envelope 0.002 1.4 0.25 0.6
+    op1_envelope 0.002 0.8 0.2 0.5
+    op2_envelope 0.002 1.0 0.1 0.5
+    op3_envelope 0.001 0.05 0.0 0.04
+    vibrato_rate 4.5hz
+    vibrato_depth 3%
+}
+
+# The comping Rhodes: softer still, shorter, the tine almost gone
+module fm rcomp {
+    algorithm dual_pairs
+    level 1.8
+    mod_index 14%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op2_ratio 1x
+    op3_ratio 14x
+    op0_envelope 0.002 0.9 0.15 0.35
+    op1_envelope 0.002 0.6 0.15 0.3
+    op2_envelope 0.002 0.7 0.1 0.3
+    op3_envelope 0.001 0.03 0.0 0.03
+    vibrato_rate 4.2hz
+    vibrato_depth 2%
+}
+
+# Bongos: low FM hits, a short pitch drop, tuned to Eb and Bb
+module fm bongo {
+    algorithm two_op
+    level 2.0
+    mod_index 25%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1.5x
+    op0_envelope 0.001 0.18 0.0 0.09
+    op1_envelope 0.001 0.04 0.0 0.03
+    lfo_target pitch
+    lfo_sync sixteenth
+    lfo_waveform saw
+    lfo_depth 6%
+}
+
+# ────────────────────────────────────────────────
+# DRUMS (2-bar cells; eight make a 16-bar phrase)
+# ────────────────────────────────────────────────
+
+pattern r_in {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -
+}
+
+pattern r_in_turn {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  - - - -
+    hat:   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  x o x x
+}
+
+pattern r_main {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap:  - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - -
+    hat:   - - x -  - - x -  - - x -  - - x o   - - x -  - - x -  - - x -  - - x o
+}
+
+pattern r_main_turn {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  - - - -
+    clap:  - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - x -
+    hat:   - - x -  - - x -  - - x -  - - x o   - - x -  - - x -  - - x o  x o x x
+}
+
+# Shaker: eighths for the mix-in, sixteenths with the accent on the "e" and
+# "a" for the floor
+pattern s_in {
+    hat:   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -
+}
+
+pattern s_main {
+    hat:   o x o x  o x o x  o x o x  o x o x   o x o x  o x o x  o x o x  o x o x
+}
+
+# A shaker roll, on the grid: the pad's
+pattern s_roll {
+    hat:   o o x o  o x x o  x x x o  x*2 x*2 x*2 x*3
+}
+
+# ────────────────────────────────────────────────
+# BONGOS (2-bar cells, the same place every time)
+# ────────────────────────────────────────────────
+
+pattern bg_a {
+    - - Eb3:0.6 -  - - - Bb2:0.4   - - Eb3:0.7 -  - - - -
+    - - Eb3:0.6 -  - - - Bb2:0.4   - - Eb3:0.7 -  - - Bb2:0.5 -
+}
+
+# Busier: the low one answers in the gaps
+pattern bg_b {
+    - - Eb3:0.6 -  - Bb2:0.4 - Bb2:0.35   - - Eb3:0.7 -  - Bb2:0.4 - -
+    - - Eb3:0.6 -  - Bb2:0.4 - Bb2:0.35   - - Eb3:0.7 -  Eb3:0.4 - Bb2:0.5 Bb2:0.4
+}
+
+# A fill, rising: the pad's
+pattern bg_fill {
+    Bb2:0.4 Bb2:0.45 Eb3:0.5 Bb2:0.45  Eb3:0.55 Bb2:0.5 Eb3:0.6 Eb3:0.6
+    Bb2:0.6 Eb3:0.65 Eb3:0.7 Bb2:0.65  Eb3:0.75 Eb3:0.8 Eb3:0.85 Eb3:0.9
+}
+
+# ────────────────────────────────────────────────
+# LOW END (4-bar cells): Cm11 two bars, Abmaj7#11 one, back
+# ────────────────────────────────────────────────
+
+pattern b_a {
+    - - C2:0.9 ..  - - - C2:0.6   - - Eb2:0.7 ..  - - C2:0.6 -
+    - - C2:0.9 ..  .. .. - -      - - - Bb1:0.7   .. - - -
+    - - Ab1:0.9 .. .. .. - Ab1:0.6   - - - -  C2:0.7 .. - -
+    - - C2:0.9 ..  - - - -        - - G1:0.8 ..   .. - Bb1:0.6 -
+}
+
+# The turn: the Ab stays a bar longer
+pattern b_a_turn {
+    - - C2:0.9 ..  - - - C2:0.6   - - Eb2:0.7 ..  - - C2:0.6 -
+    - - C2:0.9 ..  .. .. - -      - - - Bb1:0.7   .. - - -
+    - - Ab1:0.9 .. .. .. - Ab1:0.6   - - - -  C2:0.7 .. - -
+    - - Ab1:0.9 .. .. - - -       - - Ab1:0.7 ..  - G1:0.7 .. -
+}
+
+# The octave in it, the line pushed into the gaps
+pattern b_b {
+    - - C2:0.9 -  - - C3:0.5 -    - - C2:0.8 ..  - Bb1:0.6 - -
+    - - C2:0.9 .. - - - -         - - Eb2:0.7 .. - F2:0.6 - -
+    - - Ab1:0.9 .. - - Ab2:0.5 -  - - Ab1:0.8 .. - G1:0.6 - -
+    - - C2:0.9 .. - - - -         - - G1:0.8 ..  - Bb1:0.6 .. -
+}
+
+pattern b_b_turn {
+    - - C2:0.9 -  - - C3:0.5 -    - - C2:0.8 ..  - Bb1:0.6 - -
+    - - C2:0.9 .. - - - -         - - Eb2:0.7 .. - F2:0.6 - -
+    - - Ab1:0.9 .. - - Ab2:0.5 -  - - Ab1:0.8 .. - G1:0.6 - -
+    - - Ab1:0.9 .. - - Ab2:0.5 -  - - G1:0.8 ..  - G2:0.5 G1:0.6 -
+}
+
+# Plain: C and G only, for the mix-in and the mix-out (G sits under T03 too)
+pattern b_plain {
+    - - C2:0.9 ..  .. .. - -   - - C2:0.6 ..  - - - -
+    - - C2:0.9 ..  .. .. - -   - - C2:0.6 ..  - - - -
+    - - C2:0.9 ..  .. .. - -   - - C2:0.6 ..  - - - -
+    - - C2:0.9 ..  .. - - -    - - G1:0.7 ..  .. - - -
+}
+
+# The sub: the roots held long
+pattern sb_a {
+    - - C2:0.9 ..*13
+    .. .. .. .. .. .. .. .. .. .. - - - - - -
+    - - Ab1:0.9 ..*11 - -
+    - - C2:0.9 ..*9 - - - -
+}
+
+pattern sb_a_turn {
+    - - C2:0.9 ..*13
+    .. .. .. .. .. .. .. .. .. .. - - - - - -
+    - - Ab1:0.9 ..*13
+    .. .. .. .. .. .. .. .. - - G1:0.8 .. .. .. - -
+}
+
+pattern sb_plain {
+    - - C2:0.9 ..*11 - -
+    - - C2:0.9 ..*11 - -
+    - - C2:0.9 ..*11 - -
+    - - C2:0.9 ..*5 - -  G1:0.8 .. .. .. - -
+}
+
+# ────────────────────────────────────────────────
+# THE COMPING RHODES (4-bar cells, rootless, above C3)
+#   Cm11       [Eb3 Bb3 D4 F4]
+#   Abmaj7#11  [Eb3 G3 C4 D4]
+# ────────────────────────────────────────────────
+
+pattern cp_a {
+    - - - -  - - [Eb3 Bb3 D4 F4]:0.6 ..  .. .. - -  - - - -
+    - - - [Eb3 Bb3 D4 F4]:0.45 ..  - - -  - - - -  - - - -
+    - - - -  - - [Eb3 G3 C4 D4]:0.6 ..  .. .. .. ..  - - - -
+    - - - -  - - - -  - - [Eb3 Bb3 D4 F4]:0.5 ..  .. - - -
+}
+
+pattern cp_a_turn {
+    - - - -  - - [Eb3 Bb3 D4 F4]:0.6 ..  .. .. - -  - - - -
+    - - - [Eb3 Bb3 D4 F4]:0.45 ..  - - -  - - - -  - - - -
+    - - - -  - - [Eb3 G3 C4 D4]:0.6 ..  .. .. .. ..  - - - -
+    - - - -  - - [Eb3 G3 C4 D4]:0.5 ..  - - [G3 C4 D4]:0.4 ..  .. - - -
+}
+
+# Thin: one chord a bar, the line has the air
+pattern cp_thin {
+    - - - -  - - [Eb3 Bb3 D4 F4]:0.5 ..  .. .. - -  - - - -
+    -*16
+    - - - -  - - [Eb3 G3 C4 D4]:0.5 ..  .. .. .. ..  - - - -
+    -*16
+}
+
+# Another voicing: the eleventh on top, closer
+pattern cp_b {
+    - - [F3 Bb3 Eb4]:0.55 ..  - - - -  - - [F3 Bb3 Eb4]:0.4 -  - - - -
+    - - - -  - - [Eb3 F3 Bb3 D4]:0.55 ..  .. - - -  - - - -
+    - - [G3 C4 D4]:0.55 ..  - - - -  - - [G3 C4 Eb4]:0.45 ..  .. - - -
+    - - - -  - - [Eb3 F3 Bb3 D4]:0.5 ..  .. .. - -  - - - -
+}
+
+pattern cp_b_turn {
+    - - [F3 Bb3 Eb4]:0.55 ..  - - - -  - - [F3 Bb3 Eb4]:0.4 -  - - - -
+    - - - -  - - [Eb3 F3 Bb3 D4]:0.55 ..  .. - - -  - - - -
+    - - [G3 C4 D4]:0.55 ..  - - - -  - - [G3 C4 Eb4]:0.45 ..  .. - - -
+    - - [G3 C4 D4]:0.5 ..  .. .. - -  - - - -  - - - -
+}
+
+# ────────────────────────────────────────────────
+# THE RHODES LINE (4-bar cells): a few low notes, the echo answers
+# ────────────────────────────────────────────────
+
+pattern rl_a {
+    - - - -  - - G3:0.7 ..  .. .. - -  Bb3:0.6 .. .. -
+    -*16
+    - - - -  - - C4:0.7 ..  .. - D4:0.6 ..  .. .. .. ..
+    .. .. - -  - - - -  - - - -  - - - -
+}
+
+pattern rl_b {
+    - - - -  - - Eb3:0.7 ..  .. .. - -  F3:0.6 .. G3:0.65 ..
+    .. .. .. ..  - - - -  - - - -  - - - -
+    - - - -  - - D4:0.6 ..  C4:0.55 .. .. ..  - - - -
+    -*16
+}
+
+# The variacion's: higher, it starts on the Ab and falls
+pattern rl_c {
+    - - - -  - - - -  - - Bb3:0.6 ..  .. .. - -
+    - - - -  - - G3:0.7 ..  .. .. .. ..  - - - -
+    - - Eb4:0.65 ..  .. - D4:0.6 ..  .. .. - -  C4:0.55 .. .. ..
+    -*16
+}
+
+pattern rl_c_turn {
+    - - - -  - - - -  - - Bb3:0.6 ..  .. .. - -
+    - - - -  - - G3:0.7 ..  .. .. .. ..  - - - -
+    - - Eb4:0.65 ..  .. - D4:0.6 ..  .. .. - -  - - - -
+    - - C4:0.6 ..  .. .. .. ..  .. .. .. ..  - - - -
+}
+
+pattern rl_rest { -*64 }
+
+# The pad's cell: two notes and the echo
+pattern rl_cell { - - - -  - - G3:0.7 ..  .. .. Bb3:0.55 ..  - - - - }
+
+# The pad's chord: Abmaj7#11 on the offbeat
+pattern cp_hit { - - [Eb3 G3 C4 D4]:0.6 ..  - - - -  - - - -  - - - - }
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+# The kit: dry, no sends
+track drums {
+    play r_in, r_in, r_in, r_in, r_in, r_in, r_in, r_in_turn
+    using rkit
+    level 0.85
+    velocity 1.0
+    out > highpass(30hz, 0.05) > drums
+}
+
+track shaker {
+    play s_in
+    using shk
+    level 0.3
+    velocity 1.0
+    reverb_send 0.08
+    out > highpass(4khz, 0.05) as hp > autopan(0.2, bars=2) > drums
+}
+
+track bongo {
+    play bg_a
+    using bongo
+    level 0
+    velocity 1.0
+    gate 0.5
+    pan 0.4
+    reverb_send 0.15
+    delay_send 0.05
+    out > highpass(100hz, 0.05) as hp > master
+}
+
+track sub {
+    play sb_a, sb_a, sb_a, sb_a_turn
+    using rsub
+    level 0.12
+    velocity 1.0
+    gate 0.9
+    sidechain 0.3
+    out > highpass(28hz, 0.05) > lowpass(120hz, 0.05) > low
+}
+
+track bass {
+    play b_a, b_a, b_a, b_a_turn
+    using pluck
+    level 0.4
+    velocity 1.0
+    gate 0.8
+    sidechain 0.25
+    out > highpass(60hz, 0.05) > lowpass(1500hz, 0.05) as lp > saturate(0.4) as drv > low
+}
+
+track chords {
+    play cp_a, cp_a, cp_a, cp_a_turn
+    using rcomp
+    level 0
+    velocity 1.0
+    gate 0.9
+    pan -0.2
+    delay_send 0.15
+    reverb_send 0.25
+    sidechain 0.4
+    out > highpass(200hz, 0.05) > autopan(0.35, bars=2) > master
+}
+
+track rhodes {
+    play rl_a, rl_b, rl_a, rl_rest
+    using rhodes
+    level 0
+    velocity 1.0
+    gate 0.95
+    pan 0.15
+    delay_send 0.4
+    reverb_send 0.25
+    sidechain 0.3
+    out > highpass(150hz, 0.05) > lowpass(5khz, 0.05) as lp > autopan(0.25, bars=4) > master
+}
+
+# ────────────────────────────────────────────────
+# PERFORMANCE VOICES (the pads and the keyboard; steps never touch these)
+# ────────────────────────────────────────────────
+
+track rhcell {
+    play rl_cell
+    using rhodes
+    level 0.26
+    velocity 1.0
+    gate 0.95
+    pan 0.15
+    delay_send 0.5
+    reverb_send 0.25
+    sidechain 0.3
+    out > highpass(150hz, 0.05) > lowpass(5khz, 0.05) > master
+}
+
+track cphit {
+    play cp_hit
+    using rcomp
+    level 0.3
+    velocity 1.0
+    gate 0.9
+    pan -0.2
+    delay_send 0.5
+    reverb_send 0.3
+    sidechain 0.4
+    out > highpass(200hz, 0.05) > master
+}
+
+track bgfill {
+    play bg_fill
+    using bongo
+    level 0.17
+    velocity 1.0
+    gate 0.5
+    pan 0.4
+    reverb_send 0.15
+    out > highpass(100hz, 0.05) > master
+}
+
+track shroll {
+    play s_roll
+    using shk
+    level 0.3
+    velocity 1.0
+    reverb_send 0.1
+    out > highpass(4khz, 0.05) > drums
+}
+
+# The keyboard's lead: the Rhodes, through the line's chain
+track ktema {
+    play krest
+    using rhodes
+    level 0.26
+    velocity 1.0
+    gate 0.95
+    pan 0.15
+    delay_send 0.4
+    reverb_send 0.25
+    sidechain 0.3
+    out > highpass(150hz, 0.05) > lowpass(5khz, 0.05) as lp > autopan(0.25, bars=4) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(1.0) as kgain > master
+}
+
+midi {
+    # Faders
+    cc 75 > bass level 0..0.8                 # F2 the bass (written 0.4 at half)
+    cc 80 > bongo level 0..0.44               # F5 the bongos and the shaker
+    cc 80 > shaker level 0..0.6
+    cc 83 > chords delay_send 0..80%          # F8 the Rhodes into the echo
+    cc 83 > rhodes delay_send 0..80%
+
+    # The tema page (K1-K9)
+    cc 74 > bass lp cutoff 250hz..4khz        # K1 the bass: dark thump to a wooden bark
+    cc 74 > pluck mod_index 20%..55%
+    cc 71 > rcomp mod_index 5%..45%           # K2 the comping's colour: felt to tine
+    cc 71 > rcomp op0_decay 300ms..1.6s
+    cc 76 > rhodes mod_index 8%..60%          # K3 the line's tine: muffled to a bark
+    cc 76 > rhodes lp cutoff 1200hz..9khz
+    cc 77 > bongo mod_index 10%..50%          # K4 the bongos: soft skin to a slap
+    cc 77 > bongo lfo_depth 0%..20%
+    cc 93 > master hp cutoff 20hz..300hz      # K5 tension: the floor thins, the comping goes out
+    cc 93 > chords delay_send 15%..70%
+    cc 18 > rhodes delay_send 0..85%          # K6 the line's throw
+    cc 19 > rkit kick_decay 40%..62%..85%     # K7 the kick's body
+    cc 16 > rkit hihat_pitch 0.8x..1.1x..1.6x # K8 the hats and the shaker: darker, or brighter
+    cc 16 > shk hihat_pitch 1.4x..1.9x..2x
+    cc 17 > rhodes reverb_send 0..70%         # K9 the room, and the bass's grit
+    cc 17 > chords reverb_send 0..70%
+    cc 17 > bass drv drive 0.2..1.4
+
+    key 46 > toggle bongo                     # A# the bongos in and out
+    key 47 > throw rhodes q=1/16              # B  the Rhodes line into the echo
+
+    # Pads, bank B
+    pad 44 > hold rhcell q=beat               # B1 the Rhodes cell, by hand
+    pad 45 > hold cphit q=beat                # B2 the Abmaj7#11 stab
+    pad 46 > hold bgfill q=beat               # B3 a bongo fill
+    pad 47 > hold shroll q=beat               # B4 a shaker roll
+    pad 48 > throw bongo q=1/16               # B5 the bongos into the echo
+    pad 49 > throw rhcell q=1/16              # B6 the hand's cell into the echo
+    pad 50 > throw cphit q=1/16               # B7 the stab into the echo
+    pad 51 > drums clap q=beat                # B8 a clap
+
+    # The Rhodes line's page: the low dark line, and the hand's cell on F5-F6
+    page rhodes {
+        cc 74 > rhodes lp cutoff 1khz..5khz..8khz     # K1 the line's top: muffled to open
+        cc 71 > rhodes mod_index 8%..22%..50%         # K2 its tine: felt to a bark
+        cc 76 > rhodes vibrato_depth 0%..15%          # K3 the tremble in it
+        cc 77 > rhodes op0_decay 400ms..2s            # K4 its length: a knock to a ring
+        cc 77 > rhodes op0_release 150ms..1200ms
+        cc 93 > rhodes feedback 0%..35%               # K5 tension: the tone grows a grain
+        cc 18 > rhodes op3_decay 20ms..200ms          # K6 the tine's ping: a tick to a bell
+        cc 19 > rhodes chorus_mix 0%..60%             # K7 the chorus: a dry Rhodes to a wide one
+        cc 16 > rhodes vibrato_rate 2hz..4.5hz..7hz   # K8 how fast it trembles
+        cc 17 > rhodes op0_attack 1ms..300ms          # K9 the note softened into a swell
+        cc 73 > rhodes level 0..0.52                  # F1 the line (written 0.26 at half)
+        cc 75 > rhodes delay_send 0..80%              # F2 its echo
+        cc 79 > rhodes reverb_send 0..60%             # F3 its room
+        cc 72 > rhodes pan -0.7..0.7                  # F4 where it sits
+        cc 80 > rhcell level 0..0.52                  # F5 the hand's cell (pad B1)
+        cc 81 > rhcell delay_send 0..90%              # F6 the cell into the echo
+    }
+    # The comping's page: the rootless chords on the offbeat, and the stab on F5-F6
+    page acorde {
+        cc 74 > chords mod_index 5%..14%..40%         # K1 the comping's brightness: felt to tine
+        cc 71 > chords feedback 0%..30%               # K2 its colour: clean to grainy
+        cc 76 > chords vibrato_depth 0%..12%          # K3 the tremble in it
+        cc 77 > chords op0_decay 300ms..900ms..1600ms # K4 its length: short to ringing
+        cc 77 > chords op0_release 100ms..350ms..900ms
+        cc 93 > chords op1_decay 200ms..600ms..1500ms # K5 tension: the brightness held longer
+        cc 18 > chords op3_decay 10ms..30ms..150ms    # K6 the tine's ping
+        cc 19 > chords chorus_mix 0%..60%             # K7 the chorus
+        cc 16 > chords vibrato_rate 2hz..4.2hz..7hz   # K8 how fast it trembles
+        cc 73 > chords level 0..0.6                   # F1 the comping (written 0.3 at half)
+        cc 75 > chords delay_send 0..60%              # F2 its echo
+        cc 79 > chords reverb_send 0..60%             # F3 its room
+        cc 72 > chords pan -0.7..0.7                  # F4 where it sits
+        cc 80 > cphit level 0..0.6                    # F5 the Abmaj7#11 stab (pad B2)
+        cc 81 > cphit delay_send 0..90%               # F6 the stab into the echo
+    }
+    # The percussion's page: the bongos and the shaker
+    page perc {
+        cc 74 > bongo mod_index 10%..25%..50%         # K1 the bongos: soft skin to a slap
+        cc 71 > bongo op1_ratio 1x..1.5x..3x          # K2 their colour: wood to metal
+        cc 76 > bongo lfo_depth 0%..6%..20%           # K3 the pitch drop in each hit
+        cc 77 > bongo op0_decay 60ms..180ms..500ms    # K4 their length
+        cc 93 > bongo feedback 0%..30%                # K5 tension: grit in the skin
+        cc 18 > shk hihat_pitch 1.4x..1.9x..2x        # K6 the shaker: darker, or brighter
+        cc 16 > shaker hp cutoff 2khz..4khz..8khz     # K8 the shaker's floor: full to a whisper
+        cc 17 > bongo hp cutoff 60hz..100hz..400hz    # K9 the bongos' body: full to thin
+        cc 73 > bongo level 0..0.44                   # F1 the bongos (written 0.22 at half)
+        cc 75 > bongo delay_send 0..60%               # F2 their echo
+        cc 79 > bongo reverb_send 0..50%              # F3 their room
+        cc 72 > bongo pan -0.7..0.7                   # F4 where they sit
+        cc 80 > shaker level 0..0.6                   # F5 the shaker
+        cc 81 > shk hihat_pan -0.8..-0.4..0.4         # F6 where the shaker sits
+        cc 82 > bgfill level 0..0.34                  # F7 the bongo fill (pad B3)
+        cc 83 > shroll level 0..0.6                   # F8 the shaker roll (pad B4)
+    }
+}

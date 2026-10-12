@@ -1,0 +1,12 @@
+# set: bars=32 phase=01-niebla energy=4
+# set-note: The chord comes only twice a phrase now, and leans to Fm9 over the bass's F before it comes back; brighter than before. Between, the hats run in sixteenths and the rim knocks twice a bar.
+# cue: 9 B6 (pad 49) en el último golpe del rim: tirarlo al eco
+# cue: 11 K3 a la derecha y volver: el filtro respira con el Fm9
+use "_t01.synth"
+
+track drums  { play n_drive, n_drive, n_drive, n_drive, n_drive, n_drive, n_drive, n_main_turn }
+track rim    { play rim_b level 0.45 }
+track sub    { play low_b, low_b, low_b, low_b_turn }
+track bass   { play low_b, low_b, low_b, low_b_turn }
+track chords { play c_lean, c_rest, c_lean, c_rest level 0.5 }
+auto dubc cutoff 0.29 > 0.37 > 0.31 over 32      # 760 Hz, up to 1.1 kHz, back

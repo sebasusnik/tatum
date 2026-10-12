@@ -1,0 +1,10 @@
+# set: bars=32 phase=05-metal energy=6
+# set-note: La firma: la campana llama F-Ab-C de a tres en los compases impares; en el 17 la placa le contesta C-Eb-Db en los pares. Los toms a su figura entera.
+# cue: 9 K3 despacio hacia la derecha: la campana pasa de madera a vidrio
+# cue: 17 la placa contesta; K3 de vuelta al centro
+# cue: 29 tecla B (47) en el último compás impar: la llamada al eco
+use "_t05.synth"
+
+track toms  { play t_a, t_a, t_a, t_a_turn level 0.22 }
+track bell  { play call_a level 0.25 }
+track plate { play rest16, resp_a level 0.36 }

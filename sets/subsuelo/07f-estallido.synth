@@ -1,0 +1,15 @@
+# set: bars=64 phase=07-subsuelo energy=7
+# set-note: The peak: the floor back with the open hat, the pluck on its octaves, the 303 open on its drop riff (gesture 3); the pad (Cm11, the Db on the turn) heard for the first time; the 303 steps out for bars 33-48 and returns for the last phrase.
+# cue: 1 B3 crash en el uno
+# cue: 33 el 303 sale: B6 un par de veces, el acorde al eco
+# cue: 49 vuelve el 303: K3 arriba despacio hasta abrirlo del todo, al centro en el 63
+use "_t07.synth"
+
+track drums  { play d_peak, d_peak, d_peak, d_peak, d_peak, d_peak, d_peak, d_peak_turn }
+track perc   { play p_b level 0.45 }
+track sub    { play s_a, s_a, s_a, s_turn }
+track bass   { play b_peak, b_peak, b_peak, b_peak, b_peak, b_peak, b_peak, b_peak_turn }
+track acid   { play ac_open, ac_open, ac_open, ac_open_turn, ac_open2, ac_open2, ac_open2, ac_open_turn, ac_rest, ac_rest, ac_rest, ac_rest, ac_open, ac_open2, ac_open, ac_open_turn level 0.32 }
+track chords { play ch_a level 0.12 }
+
+auto s7tb cutoff 0.5 > 0.6 > 0.55 over 64

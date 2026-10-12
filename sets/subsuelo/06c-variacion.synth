@@ -1,0 +1,10 @@
+# set: bars=32 phase=06-voz energy=6
+# set-note: Variación: la sílaba contesta al clap una semicorchea después, cada vez otra vocal; el bajo salta la octava en los huecos y los hats van en semicorcheas.
+# cue: 15 B6: la sílaba al eco en el giro
+# cue: 25 K4 a la derecha: la sílaba zumba
+use "_t06.synth"
+
+track drums  { play v_wide, v_wide, v_wide, v_wide, v_wide, v_wide, v_wide, v_main_turn }
+track bass   { play w_b, w_b, w_b, w_b_turn }
+track chords { level 0.18 }
+track syl    { play syl_a, syl_a, syl_a, syl_a_turn level 0.4 }

@@ -1,0 +1,8 @@
+# set: bars=32 phase=05-metal energy=6
+# set-note: Salida pelada para que T06 entre encima: bombo, hats a contratiempo, el stab simple en F y el sub; el metal y los toms se fueron.
+# cue: 1 tecla A# (46) si los toms siguen sonando: afuera
+use "_t05.synth"
+
+track drums { play m_plain, m_plain, m_plain, m_plain, m_plain, m_plain, m_plain, m_plain_turn }
+track bass  { play b_plain }
+track sub   { play s_plain }

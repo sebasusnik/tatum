@@ -1,0 +1,11 @@
+# set: bars=32 phase=03-organo energy=5
+# set-note: La firma: el bajo de órgano deja el pedal y camina (G-Bb-C-D, el Eb abajo, el Ab de paso de vuelta a G); el piso se arma con clap, semicorcheas y el rim; los drawbars se abren en 32 compases.
+# cue: 1 el bajo empieza a caminar: dejalo sonar solo
+# cue: 17 K3 arriba despacio en 8 compases: se tiran los drawbars
+# cue: 32 B5: la corrida del bajo hacia el 1
+use "_t03.synth"
+
+track drums { play d_main, d_main, d_main, d_main, d_main, d_main, d_main, d_main_turn }
+track sub   { play s_walk }
+track bass  { play o_walk, o_walk, o_walk, o_walk_turn }
+auto organ mod_index 0.18 > 0.42 over 32

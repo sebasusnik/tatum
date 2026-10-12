@@ -1,0 +1,136 @@
+# subsuelo — the keyboard's own voices
+#
+# What the KeyLab plays over any tema when the scene asks for it
+# (`_keylab.synth`). Every one plays a pattern of rests, so none is heard
+# until a key is held, and none moves the set's loudness. Each sits behind
+# its own high-pass: the low end is the kick's, the sub's and the bass's.
+#
+#   kdub     scene dub: a short dark chord stab that lives on its echo; hold
+#            three keys for a chord. The wheel opens its filter (`lp`)
+#   kpad     scene break: a slow dark pad through a vowel; the wheel walks
+#            the vowel
+#   kruido   a key held: a soft wash of noise opening while held
+#   kconga   a key held: a conga roll on the grid, rising
+#   kimpact  a soft hit of noise into the room, for the one after a break
+
+pattern krest { -*16 }
+
+module keys kdub_v {
+    voice_mode poly
+    cutoff 650hz
+    resonance 35%
+    detune 8%
+    chorus_mix 0%
+    attack 3ms
+    decay 260ms
+    sustain 5%
+    release 300ms
+    lfo_target cutoff
+    lfo_sync bars_8
+    lfo_waveform triangle
+    lfo_depth 15%
+}
+
+module keys kpad_v {
+    voice_mode poly
+    cutoff 900hz
+    resonance 18%
+    detune 22%
+    chorus_mix 25%
+    attack 900ms
+    decay 1s
+    sustain 80%
+    release 1.2s
+    lfo_target cutoff
+    lfo_sync bars_8
+    lfo_waveform triangle
+    lfo_depth 15%
+    vibrato_rate 0.5hz
+    vibrato_depth 4%
+}
+
+instrument kruido_v {
+    gain 1.6
+    noise() as n
+    n > bandpass(400, 0.35, ea=6.0, ed=0.1, es=1.0, er=0.8, edepth=4000) as bp
+    bp > adsr(3.0, 0.1, 1.0, 0.8) as amp
+    amp > out
+}
+
+instrument kimpact_v {
+    gain 1.4
+    noise() as n
+    n > lowpass(2500, 0.1) as lp
+    lp > perc(0.004, 1.8) as amp
+    amp > out
+}
+
+# A conga: two operators, a short pitch drop on the hit. A drum kit here
+# would come before every rig's kit and take the sidechain's kick away.
+module fm kconga_v {
+    algorithm two_op
+    level 2.0
+    mod_index 22%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1.5x
+    op0_envelope 0.001 0.18 0.0 0.08
+    op1_envelope 0.001 0.03 0.0 0.02
+    lfo_target pitch
+    lfo_sync sixteenth
+    lfo_waveform saw
+    lfo_depth 5%
+}
+
+# One bar of congas in sixteenths, two pitches, rising: held, it rolls.
+pattern kcroll {
+    C4:0.3 G3:0.3 C4:0.35 G3:0.3  C4:0.4 G3:0.35 C4:0.45 G3:0.4
+    C4:0.5 G3:0.45 C4:0.55 G3:0.5  C4:0.6 C4:0.65 G4:0.7 C4:0.8
+}
+
+track kdub {
+    play krest
+    using kdub_v
+    level 0.3
+    gate 0.4
+    pan -0.15
+    delay_send 0.5
+    reverb_send 0.25
+    sidechain 0.5
+    out > highpass(220hz, 0.05) > lowpass(20khz, 0.1) as lp > master
+}
+
+track kpad {
+    play krest
+    using kpad_v
+    level 0.16
+    reverb_send 0.45
+    sidechain 0.55
+    out > highpass(300hz, 0.05) > vowel(o, u, bars=4, mix=0.8) as vox > master
+}
+
+track kruido {
+    play krest
+    using kruido_v
+    level 0.2
+    reverb_send 0.4
+    sidechain 0.3
+    out > highpass(300hz, 0.05) > autopan(0.5, hz=0.25) > master
+}
+
+track kconga {
+    play kcroll
+    using kconga_v
+    level 0.18
+    pan -0.35
+    reverb_send 0.15
+    out > highpass(120hz, 0.05) > master
+}
+
+track kimpact {
+    play krest
+    using kimpact_v
+    level 0.3
+    reverb_send 0.5
+    out > highpass(80hz, 0.05) > master
+}

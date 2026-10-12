@@ -1,0 +1,14 @@
+# set: bars=32 phase=04-hipnosis energy=6
+# set-note: La firma: la secuencia de semicorcheas entra y su filtro respira en 16 compases, abriéndose a lo largo de los 32; los acordes se raleán a uno cada dos compases para dejarle lugar.
+# cue: 1 la secuencia entra cerrada: no tocar nada
+# cue: 17 K3 hacia arriba en 8 compases: la secuencia se abre y resuena
+# cue: 32.75 tecla B (47) en el último tiempo: la secuencia al eco
+use "_t04.synth"
+
+track drums  { play h_main, h_main, h_main, h_main, h_main, h_main, h_main, h_main_turn }
+track rim    { level 0.45 }
+track sub    { play sub_line, sub_line, sub_line, sub_line_turn }
+track bass   { play sub_line, sub_line, sub_line, sub_line_turn }
+track chords { play dub_sparse level 0.28 }
+track seq    { level 0.16 }
+auto seq cutoff 0.15 > 0.35 over 32

@@ -1,0 +1,12 @@
+# set: bars=16 auto phase=07-subsuelo energy=4
+# set-note: The breakdown: the floor goes, the sub and the pluck too; only the 303 is left, sparse, alone with its echo, its filter opening over sixteen bars (gesture 2).
+# cue: 1 tecla G# (44) un instante: congelá la sala en la cola del último bombo
+# cue: 13 F8 arriba: el 303 al eco, bajalo en el 16
+use "_t07.synth"
+
+track drums { play d_rest }
+track sub   { level 0 }
+track bass  { level 0 }
+track acid  { play ac_hollow level 1.0 delay_send 0.55 reverb_send 0.3 }
+
+auto s7tb cutoff 0.4 > 0.5 over 16

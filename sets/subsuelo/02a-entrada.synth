@@ -1,0 +1,7 @@
+# set: bars=32 phase=02-rhodes energy=4 blend=32
+# set-note: T02 mixes in under T01's salida: its deeper kick, plain offbeat hats, the shaker in eighths, the FM bass and the sub on C and G only; nothing tonal above them.
+# cue: 17 F5 un poco arriba: el shaker se hace oír
+use "_t02.synth"
+
+track sub  { play sb_plain }
+track bass { play b_plain }

@@ -1,0 +1,6 @@
+# set: bars=32 phase=04-hipnosis energy=5 blend=32
+# set-note: T04 entra bajo la salida de T03: el bombo más hondo y largo del set, hats a contratiempo, el hiss de cinta, y el sub con el growl en pedal de C; nada tonal arriba.
+# cue: 17 K9 un poco a la derecha: más cinta mientras el órgano se va
+use "_t04.synth"
+
+auto growl cutoff 0.2 > 0.3 over 32

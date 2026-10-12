@@ -1,0 +1,540 @@
+# T06 voz — F minor, 122 BPM, swing 0.55
+#
+# After T05's dry metal, the room opens again: a big dark reverb, the dotted
+# eighth echo long. The kick is the softest and roundest of the middle of
+# the set, longer and lower than T05's; the hats are darker and a little
+# open. The bass is warm: a square and a saw a hair apart, held long, sliding
+# from Eb back to F, under a sine sub.
+#
+# The harmony leans and never resolves: Fm9 for two bars, Dbmaj7#11 (the
+# bVI), Eb11sus, back; the turn leans on Gbmaj7, the bII. The chords are a
+# soft breath struck off the beat, phased.
+#
+# The signature is the voice, in three placed moments:
+#   1. 06b bars 1-16: a low unison choir through `vowel(o, u)`, turning from
+#      "oh" to "uh" over eight bars on the fifth, C, leaning up to the b6, Db,
+#      and back; gone at bar 17.
+#   2. 06c: the syllable, a buzzy FM tone chopped through a vowel, answering
+#      the clap a sixteenth later, a different syllable each time.
+#   3. 06d: the choir back an octave down under the syllable, turning faster.
+# K3 walks the choir's vowel (and the syllable's) by hand.
+
+use "_base.synth"
+
+# The tema's level in the set: `trim`, set by measurement.
+master {
+    in > lowpass(20khz, 0.05) as dj
+       > highpass(20hz, 0.05) as hp
+       > eq(low=2, mid=-1, high=-1.5)
+       > gain(1.0) as trim
+       > gain(1.0) as vol
+       > out
+}
+
+tempo 122
+scale F minor
+swing 0.55
+humanize 0.04 timing 0.004
+
+delay sync=dotted_eighth feedback=0.55 filter=0.32
+reverb size=0.92 damp=0.62 predelay=35 sidechain=0.5
+
+reverb_return { in > highpass(350hz, 0.05) > lowpass(3800hz, 0.05, lfo_bars=16, lfo_depth=1000) > autopan(0.4, bars=8) > out }
+delay_return  { in > highpass(300hz, 0.05) > lowpass(2400hz, 0.05) > autopan(0.5, bars=4) > out }
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# Kick: low and round, a long body, almost no click; the hats dark and loose
+module beats vkit {
+    kick_level 1.0
+    kick_decay 62%
+    kick_pitch 0.76x
+    kick_click 9%
+    kick_drive 25%
+    clap_level 0.55
+    clap_pan 0.1
+    hihat_level 0.42
+    hihat_decay 30%
+    hihat_pitch 0.85x
+    hihat_pan -0.25
+    crash_pan -0.3
+}
+
+module fm vsub {
+    algorithm two_op
+    level 2.0
+    mod_index 0%
+    feedback 0%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op0_envelope 0.003 1.0 1.0 0.15
+    op1_envelope 0.003 1.0 1.0 0.15
+}
+
+# The warm bass: a square and a saw a hair apart, a low filter that barely
+# opens, held notes, glides on the slides
+module bass warm {
+    osc1_wave square
+    osc2_wave saw
+    osc2_pitch 0.08st
+    cutoff 230hz
+    cutoff_env 500hz
+    resonance 14%
+    glide 8%
+    attack 4ms
+    decay 450ms
+    sustain 55%
+    release 160ms
+    lfo_target cutoff
+    lfo_sync bars_16
+    lfo_waveform triangle
+    lfo_depth 8%
+}
+
+# The breath chord: a soft struck chord with a slow decay, phased
+module keys breath {
+    voice_mode poly
+    cutoff 950hz
+    resonance 25%
+    detune 12%
+    chorus_mix 20%
+    attack 40ms
+    decay 700ms
+    sustain 12%
+    release 700ms
+    lfo_target cutoff
+    lfo_sync bars_16
+    lfo_waveform triangle
+    lfo_depth 20%
+}
+
+# The choir: a low unison voice; the vowel in the chain does the turning
+module keys choir {
+    voice_mode unison
+    level 1.3
+    cutoff 1800hz
+    resonance 10%
+    detune 18%
+    chorus_mix 0%
+    attack 900ms
+    decay 1s
+    sustain 80%
+    release 1.4s
+    vibrato_rate 4.5hz
+    vibrato_depth 6%
+}
+
+# The syllable: feedback turns the sine near a saw, so the formants have
+# harmonics to shape; short, a mouth closing
+module fm syl {
+    algorithm two_op
+    level 2.0
+    mod_index 55%
+    feedback 58%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op0_envelope 0.002 0.14 0.0 0.06
+    op1_envelope 0.002 0.1 0.1 0.05
+    lfo_target mod_index
+    lfo_sync bars_4
+    lfo_waveform triangle
+    lfo_depth 20%
+}
+
+# ────────────────────────────────────────────────
+# DRUMS (2-bar cells)
+# ────────────────────────────────────────────────
+
+pattern rest { -*16 }
+pattern rest16 { -*256 }
+
+pattern v_plain {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -
+}
+
+pattern v_plain_turn {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x o
+}
+
+# The floor: the clap on two and four, the hats with a ghost before
+pattern v_main {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap:  - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - -
+    hat:   - o x -  - o x -  - o x -  - o x -   - o x -  - o x -  - o x -  - o x -
+}
+
+pattern v_main_turn {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap:  - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - o
+    hat:   - o x -  - o x -  - o x -  - o x -   - o x -  - o x -  - o x o  x o x x
+}
+
+# Broken: the hats in sixteenths with the ghost pattern, the clap pushed
+# into the end of every second bar, on the grid
+pattern v_wide {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap:  - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - o
+    hat:   o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  o o x o  o o x o
+}
+
+# ────────────────────────────────────────────────
+# LOW END (4-bar cells): F, the bVI Db, Eb sliding back to F
+# ────────────────────────────────────────────────
+
+pattern w_plain {
+    - - F2:0.9 ..  .. .. - F2:0.6  .. - - -  F2:0.8 .. .. -
+    - - F2:0.9 ..  .. .. - F2:0.6  .. - - -  F2:0.8 .. .. -
+    - - F2:0.9 ..  .. .. - F2:0.6  .. - - -  F2:0.8 .. .. -
+    - - F2:0.9 ..  .. .. - F2:0.6  .. - - -  C2:0.8 .. .. -
+}
+
+pattern w_a {
+    - - F2:0.9 ..  .. .. - F2:0.6  .. - - -  F2:0.8 .. .. -
+    - - F2:0.9 ..  .. .. - F2:0.6  .. - - -  C2:0.8 .. .. -
+    - - Db2:0.9 .. .. .. - Db2:0.6 .. - - -  Db2:0.8 .. .. -
+    - - Eb2:0.9 .. .. .. - Eb2:0.6 .. - - -  ~F2:0.8 .. .. -
+}
+
+pattern w_a_turn {
+    - - F2:0.9 ..  .. .. - F2:0.6  .. - - -  F2:0.8 .. .. -
+    - - F2:0.9 ..  .. .. - F2:0.6  .. - - -  C2:0.8 .. .. -
+    - - Db2:0.9 .. .. .. - Db2:0.6 .. - - -  Db2:0.8 .. .. -
+    - - Gb2:0.9 .. .. .. - Gb2:0.6 .. - - -  ~F2:0.8 .. ~Eb2:0.7 -
+}
+
+# Syncopated: the octave jumps in the gaps, the same roots
+pattern w_b {
+    - - F2:0.9 -  F3:0.5 - - F2:0.7  .. - Ab2:0.6 -  F2:0.8 .. - C3:0.5
+    - - F2:0.9 -  F3:0.5 - - F2:0.7  .. - - -  C2:0.8 .. Eb2:0.6 -
+    - - Db2:0.9 -  Db3:0.5 - - Db2:0.7  .. - F2:0.6 -  Db2:0.8 .. - Ab2:0.5
+    - - Eb2:0.9 -  Eb3:0.5 - - Eb2:0.7  .. - - -  ~F2:0.8 .. .. -
+}
+
+pattern w_b_turn {
+    - - F2:0.9 -  F3:0.5 - - F2:0.7  .. - Ab2:0.6 -  F2:0.8 .. - C3:0.5
+    - - F2:0.9 -  F3:0.5 - - F2:0.7  .. - - -  C2:0.8 .. Eb2:0.6 -
+    - - Db2:0.9 -  Db3:0.5 - - Db2:0.7  .. - F2:0.6 -  Db2:0.8 .. - Ab2:0.5
+    - - Gb2:0.9 -  Gb3:0.5 - - Gb2:0.7  .. - - -  ~F2:0.8 .. ~Eb2:0.7 -
+}
+
+pattern ws_plain {
+    - - F1:0.9 ..  .. .. .. ..  .. .. - -  F1:0.8 .. .. -
+    - - F1:0.9 ..  .. .. .. ..  .. .. - -  F1:0.8 .. .. -
+    - - F1:0.9 ..  .. .. .. ..  .. .. - -  F1:0.8 .. .. -
+    - - F1:0.9 ..  .. .. .. ..  .. .. - -  C1:0.8 .. .. -
+}
+
+pattern ws_a {
+    - - F1:0.9 ..  .. .. .. ..  .. .. - -  F1:0.8 .. .. -
+    - - F1:0.9 ..  .. .. .. ..  .. .. - -  C1:0.8 .. .. -
+    - - Db1:0.9 .. .. .. .. ..  .. .. - -  Db1:0.8 .. .. -
+    - - Eb1:0.9 .. .. .. .. ..  .. .. - -  F1:0.8 .. .. -
+}
+
+pattern ws_a_turn {
+    - - F1:0.9 ..  .. .. .. ..  .. .. - -  F1:0.8 .. .. -
+    - - F1:0.9 ..  .. .. .. ..  .. .. - -  C1:0.8 .. .. -
+    - - Db1:0.9 .. .. .. .. ..  .. .. - -  Db1:0.8 .. .. -
+    - - Gb1:0.9 .. .. .. .. ..  .. .. - -  F1:0.8 .. Eb1:0.7 -
+}
+
+# ────────────────────────────────────────────────
+# CHORDS: no roots (the bass has them), all above Ab3
+#   Fm9: Ab C Eb G   Dbmaj7#11 over Db: Ab C F G   Eb11sus over Eb: Bb Db F Ab
+#   the turn, Gbmaj7 over Gb: Bb Db F
+# ────────────────────────────────────────────────
+
+pattern br_a {
+    - - - -  - - [Ab3 C4 Eb4 G4]:0.7 -  - - - -  - - - -
+    - - - -  - - - -  - - [Ab3 C4 Eb4 G4]:0.5 -  - - - -
+    - - - -  - - [Ab3 C4 F4 G4]:0.7 -  - - - -  - - - -
+    - - - -  - - [Bb3 Db4 F4 Ab4]:0.6 -  - - - -  - - - -
+}
+
+pattern br_a_turn {
+    - - - -  - - [Ab3 C4 Eb4 G4]:0.7 -  - - - -  - - - -
+    - - - -  - - - -  - - [Ab3 C4 Eb4 G4]:0.5 -  - - - -
+    - - - -  - - [Ab3 C4 F4 G4]:0.7 -  - - - -  - - - -
+    - - - -  - - [Bb3 Db4 F4]:0.6 -  - - - -  - - [Bb3 Db4 F4]:0.4 -
+}
+
+# Turned: struck on the 'e' twice a bar, voiced closer, darker
+pattern br_b {
+    - [G3 C4 Eb4 F4]:0.6 - -  - - - -  - [G3 C4 Eb4 F4]:0.45 - -  - - - -
+    - - - -  - - - -  - [Ab3 C4 Eb4 G4]:0.55 - -  - - - -
+    - [G3 C4 F4 Ab4]:0.6 - -  - - - -  - [G3 C4 F4 Ab4]:0.45 - -  - - - -
+    - - - -  - [Bb3 Db4 F4 Ab4]:0.55 - -  - - - -  - - - -
+}
+
+# ────────────────────────────────────────────────
+# THE VOICE
+# ────────────────────────────────────────────────
+
+# Gesture 1: sixteen bars of choir on the fifth, the b6 leaning, back; then out
+pattern choir_firma {
+    C4:0.7 ..*127
+    Db4:0.7 ..*63
+    C4:0.7 ..*47  -*16
+    -*256
+}
+
+# Gesture 3: the choir an octave down, the bVI's Ab to the fifth
+pattern choir_low {
+    F3:0.7 ..*63
+    Gb3:0.7 ..*63
+    Ab3:0.7 ..*63
+    F3:0.7 ..*47  -*16
+}
+
+# Gesture 2: the syllable a sixteenth after the clap, three in four bars;
+# the vowel turns once a bar, so no two say the same thing
+pattern syl_a {
+    - - - -  - C4:0.8 - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - Ab3:0.7 - -
+    - - - -  - C4:0.8 - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+}
+
+pattern syl_a_turn {
+    - - - -  - C4:0.8 - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - Ab3:0.7 - -
+    - - - -  - C4:0.8 - -  - - - -  - C4:0.6 - -
+    - - - -  - Db4:0.8 - -  - - - -  - C4:0.7 Ab3:0.5 -
+}
+
+# A pad's figure: one bar of the syllable after both claps, doubled on the last
+pattern syl_fig {
+    - - - -  - C4:0.8 - -  - - - -  - Ab3:0.7 C4:0.6 -
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track drums {
+    play v_main, v_main, v_main, v_main, v_main, v_main, v_main, v_main_turn
+    using vkit
+    level 0.82
+    velocity 1.0
+    out > highpass(25hz, 0.05) > drums
+}
+
+track sub {
+    play ws_a, ws_a, ws_a, ws_a_turn
+    using vsub
+    level 0.13
+    velocity 1.0
+    gate 0.85
+    sidechain 0.3
+    out > highpass(28hz, 0.05) > lowpass(120hz, 0.05) > low
+}
+
+track bass {
+    play w_a, w_a, w_a, w_a_turn
+    using warm
+    level 0.5
+    velocity 1.0
+    gate 0.85
+    sidechain 0.3
+    out > highpass(85hz, 0.05) > saturate(0.5) as drv > lowpass(1300hz, 0.05) as lp > highpass(55hz, 0.01) > low
+}
+
+track chords {
+    play br_a, br_a, br_a, br_a_turn
+    using breath
+    level 0
+    velocity 1.0
+    gate 0.5
+    pan 0.2
+    delay_send 0.35
+    reverb_send 0.3
+    sidechain 0.5
+    out > highpass(250hz, 0.05) > phaser(0.35, bars=8) as ph > autopan(0.3, bars=8) > master
+}
+
+track choir {
+    play choir_firma
+    using choir
+    level 0
+    velocity 1.0
+    pan -0.15
+    reverb_send 0.5
+    delay_send 0.12
+    sidechain 0.4
+    out > highpass(200hz, 0.05) > vowel(o, u, bars=8, mix=0.85) as vox > master
+}
+
+track syl {
+    play syl_a, syl_a, syl_a, syl_a_turn
+    using syl
+    level 0
+    velocity 1.0
+    gate 0.4
+    pan 0.3
+    delay_send 0.3
+    reverb_send 0.25
+    sidechain 0.35
+    out > highpass(220hz, 0.05) > vowel(a, u, bars=1, mix=0.9) as vx > lowpass(6khz, 0.05) as lp > autopan(0.3, bars=2) > master
+}
+
+# ────────────────────────────────────────────────
+# PERFORMANCE VOICES (the pads; steps never touch these)
+# ────────────────────────────────────────────────
+
+track cpad {
+    play rest
+    using choir
+    level 0.3
+    velocity 1.0
+    pan 0.15
+    reverb_send 0.55
+    sidechain 0.4
+    out > highpass(200hz, 0.05) > vowel(o, u, bars=4, mix=0.85) > master
+}
+
+track sylpad {
+    play rest
+    using syl
+    level 0.3
+    velocity 1.0
+    gate 1.0
+    pan -0.3
+    delay_send 0.35
+    reverb_send 0.25
+    sidechain 0.35
+    out > highpass(220hz, 0.05) > vowel(o, i, bars=1, mix=0.9) > lowpass(6khz, 0.05) > master
+}
+
+track sylfig {
+    play syl_fig
+    using syl
+    level 0.28
+    velocity 1.0
+    gate 0.4
+    pan 0.3
+    delay_send 0.35
+    reverb_send 0.25
+    sidechain 0.35
+    out > highpass(220hz, 0.05) > vowel(a, u, bars=1, mix=0.9) > lowpass(6khz, 0.05) > master
+}
+
+track brfig {
+    play br_b
+    using breath
+    level 0.2
+    velocity 1.0
+    gate 0.5
+    pan -0.2
+    delay_send 0.45
+    reverb_send 0.3
+    sidechain 0.5
+    out > highpass(250hz, 0.05) > phaser(0.35, bars=8) > master
+}
+
+# The keyboard's lead: the choir, its chain, then the hands' filter, vowel
+# and gain
+track ktema {
+    play krest
+    using choir
+    level 0.5
+    velocity 1.0
+    pan -0.15
+    reverb_send 0.5
+    delay_send 0.12
+    sidechain 0.4
+    out > highpass(200hz, 0.05) > vowel(o, u, bars=8, mix=0.85) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(1.0) as kgain > master
+}
+
+midi {
+    # Faders: F2 the warm bass, F5 the voice, F8 the chords into the echo
+    cc 75 > bass level 0..1.0
+    cc 80 > choir level 0..0.6
+    cc 80 > syl level 0..0.7
+    cc 83 > chords delay_send 0..80%
+    cc 83 > syl delay_send 0..80%
+
+    # The tema page
+    cc 74 > bass cutoff 90hz..1200hz              # K1 the warm bass opens
+    cc 71 > breath cutoff 400hz..3500hz           # K2 the chords: dark to open
+    cc 76 > choir vox position 0..1               # K3 the voice: walk the vowel a-e-i-o-u
+    cc 76 > syl vx position 0..1
+    cc 77 > syl mod_index 30%..85%                # K4 the syllable: soft to buzzing
+    cc 77 > syl feedback 35%..75%
+    cc 93 > master hp cutoff 20hz..300hz          # K5 tension: the floor thins, the voice washes
+    cc 93 > choir reverb_send 0.5..0.9
+    cc 18 > syl delay_send 0..80%                 # K6 the syllable into the echo
+    cc 19 > vkit kick_decay 40%..80%              # K7 kick: tight to long
+    cc 16 > vkit hihat_pitch 0.65x..0.85x..1.2x   # K8 hats: darker left, as written in the middle
+    cc 17 > reverb_mix 0..1                       # K9 the room
+    cc 17 > bass drv drive 0.3..1.5
+
+    # The choir through its vowel
+    page coro {
+        cc 74 > choir cutoff 500hz..4khz              # K1 brightness: a hum to a voice
+        cc 71 > choir detune 5%..45%                  # K2 colour: one throat to many
+        cc 76 > choir vox position 0..1               # K3 the vowel by hand, a to u
+        cc 77 > choir attack 150ms..2s                # K4 the swell: breathed in to slow
+        cc 93 > choir resonance 5%..45%               # K5 tension: the formant sharpens
+        cc 18 > choir vox wet 0%..100%                # K6 the vowel in and out
+        cc 19 > choir vibrato_depth 0%..25%           # K7 vibrato
+        cc 16 > choir lfo_depth 0%..40%               # K8 a slow sway on its filter
+        cc 17 > choir vibrato_rate 2hz..7hz           # K9 the vibrato's speed
+        # The faders: the choir's strip
+        cc 73 > choir level 0..0.6                    # F1 the choir (written at half)
+        cc 75 > choir delay_send 0..40%               # F2 its echo
+        cc 79 > choir reverb_send 0..90%              # F3 its room
+        cc 72 > choir pan -0.7..0.7                   # F4 where it stands
+    }
+    # The syllable answering the clap
+    page silaba {
+        cc 74 > syl lp cutoff 1500hz..9khz            # K1 brightness
+        cc 71 > syl op1_ratio 1x..3x                  # K2 colour: buzz to nasal
+        cc 76 > syl vx position 0..1                  # K3 the mouth by hand, a to u
+        cc 77 > syl decay 50ms..500ms                 # K4 the syllable: clipped to drawn
+        cc 93 > syl mod_index 30%..85%                # K5 tension: soft to buzzing
+        cc 93 > syl feedback 35%..75%
+        cc 18 > syl vx wet 0%..100%                   # K6 the vowel in and out
+        cc 19 > syl lfo_depth 0%..50%                 # K7 movement: the buzz breathing
+        cc 16 > syl op1_decay 30ms..400ms             # K8 the bite on the attack
+        cc 17 > syl release 20ms..400ms               # K9 the tail
+        # The faders: the syllable's strip
+        cc 73 > syl level 0..0.8                      # F1 the syllable (written at half)
+        cc 75 > syl delay_send 0..80%                 # F2 its echo
+        cc 79 > syl reverb_send 0..60%                # F3 its room
+        cc 72 > syl pan -0.7..0.7                     # F4 where it answers from
+    }
+    # The breath chords, phased
+    page acordes {
+        cc 74 > chords cutoff 300hz..3500hz           # K1 brightness: dark to open
+        cc 71 > chords resonance 5%..55%              # K2 colour: soft to vocal
+        cc 76 > chords lfo_depth 0%..50%              # K3 movement: the filter breathing
+        cc 77 > chords release 200ms..2s              # K4 the breath: short to long
+        cc 93 > chords detune 0%..40%                 # K5 tension: the voices rub
+        cc 18 > chords chorus_mix 0%..60%             # K6 width
+        cc 19 > chords attack 2ms..400ms              # K7 struck to swelled
+        cc 16 > chords ph wet 0%..100%                # K8 the phaser in and out
+        # The faders: the chords' strip
+        cc 73 > chords level 0..0.4                   # F1 the chords (written at half)
+        cc 75 > chords delay_send 0..80%              # F2 their echo
+        cc 79 > chords reverb_send 0..70%             # F3 their room
+        cc 72 > chords pan -0.7..0.7                  # F4 where they sit
+    }
+
+    key 46 > toggle chords
+    key 47 > throw choir q=1/16
+
+    pad 44 > play cpad F3 q=beat                  # B1 the choir held on the root
+    pad 45 > play cpad Gb3 q=beat                 # B2 the choir on the bII
+    pad 46 > play sylpad C4 q=1/16                # B3 one syllable, held
+    pad 47 > hold sylfig q=beat                   # B4 the syllable figure
+    pad 48 > hold brfig q=beat                    # B5 the chords turned, on the 'e'
+    pad 49 > throw syl q=1/16                     # B6 the syllable into the echo
+    pad 50 > throw chords q=1/16                  # B7 the chords into the echo
+    pad 51 > drums crash q=beat                   # B8 crash
+}

@@ -1,0 +1,8 @@
+# set: bars=32 phase=05-metal energy=6 blend=32
+# set-note: T05 entra seca bajo la salida de T04: el bombo más tenso, hats a contratiempo y el stab corto en F con el sub en los huecos; nada tonal arriba.
+# cue: 17 F2 arriba de a poco: el stab toma el piso cuando el bajo de T04 se va
+use "_t05.synth"
+
+track drums { play m_plain, m_plain, m_plain, m_plain, m_plain, m_plain, m_plain, m_plain_turn }
+track bass  { play b_plain }
+track sub   { play s_plain }

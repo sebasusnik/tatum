@@ -1,0 +1,9 @@
+# set: bars=16 phase=07-subsuelo energy=7
+# set-note: The floor lands: the clap on two and four, sixteenth hats with ghosts, the pluck's syncopated line in the gaps, the sub's long roots, the rim and the low tom.
+# cue: 16 tecla D# (39) un compás: el bajo y el sub afuera, vuelven en el uno
+use "_t07.synth"
+
+track drums { play d_main, d_main, d_main, d_main, d_main, d_main, d_main, d_main_turn }
+track sub   { play s_a, s_a, s_a, s_turn }
+track bass  { play b_main, b_main, b_main, b_main, b_main, b_main, b_main, b_turn }
+track perc  { level 0.45 }

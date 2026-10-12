@@ -1,0 +1,15 @@
+# set: bars=32 phase=04-hipnosis energy=6 perform=groove
+# set-note: El estallido, suave: vuelve el piso con el clap fantasma, el bajo y los acordes completos; la secuencia regresa abierta con el compás del Db escrito adentro (lo nuevo), y el coro grave canta ahora sobre el bombo.
+# cue: 1 B4 crash en el 1
+# cue: 17 K3 a fondo y de vuelta en 4 compases: la secuencia grita y se cierra
+use "_t04.synth"
+
+track drums  { play h_peak, h_peak, h_peak, h_peak, h_peak, h_peak, h_peak, h_peak_turn }
+track rim    { level 0.45 }
+track sub    { play sub_line, sub_line, sub_line, sub_line_turn }
+track bass   { play sub_line, sub_line, sub_line, sub_line_turn level 0.6 }
+track chords { level 0.32 }
+track seq    { play hypno_db level 0.16 }
+track choir  { level 0.5 }
+auto seq cutoff 0.42 > 0.3 > 0.4 over 32
+auto dub cutoff 0.25 > 0.4 over 32

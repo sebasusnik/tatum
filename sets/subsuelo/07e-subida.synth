@@ -1,0 +1,12 @@
+# set: bars=8 auto phase=07-subsuelo energy=6
+# set-note: One pass of tension: the kick back for four bars then gone, the clap packing to ratchets, the sub on the root then out, the 303 hammering its root as its filter climbs and the floor thins; one beat of nothing.
+# cue: 8.75 soltá todo: el uno siguiente es el estallido
+use "_t07.synth"
+
+track drums { play d_b1, d_b2, d_b3, d_b4 }
+track sub   { play s_pedal }
+track bass  { level 0 }
+track acid  { play ac_rise level 0.32 delay_send 0.15 }
+
+auto s7tb cutoff 0.4 > 0.52 over 8
+auto master hp cutoff 20 > 160 over 8
