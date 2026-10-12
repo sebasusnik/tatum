@@ -20,6 +20,7 @@ master {
        > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
        > eq(low=0.5, mid=-0.5, high=1)
        > gain(0.891) as trim
+       > gain(1.0) as vol
        > out
 }
 
@@ -389,13 +390,31 @@ track ping {
 # The KeyLab, in the set's fixed layout (CONTROLES.md). The base maps F7 F8 F9,
 # A4 freeze, A7 prev and A8 next. Level ranges put the top of a fader a little
 # over where the steps run each voice
+# The keyboard's lead in this track: its own drone voice (abyss), for the
+# lead zone, through the same chain, plus a filter (`klp`) and a vowel
+# (`talk`) the wheel and the knobs reach, and its own gain (`kgain`).
+track ktema {
+    play krest
+    using abyss
+    level 0.5
+    velocity 1.0
+    gate 1.0
+    pan -0.1
+    reverb_send 0.45
+    delay_send 0.08
+    sidechain 0.5
+
+    out > highpass(140hz, 0.05) > saturate(0.25) > bitcrush(9, 0.25, wet=0) as crush > phaser(0.3, bars=16) > autopan(0.3, bars=4) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(0.366) as kgain > master
+}
+
 midi {
-    cc 73 > drums level 0..1.0                # F1 drums
-    cc 75 > ride level 0..2.0                 # F2 the ride
-    cc 79 > bass level 0..2.4                 # F3 the deep roll
-    cc 72 > drone level 0..0.18               # F4 the drone (D)
-    cc 80 > rub level 0..0.1                  # F5 the rub (Eb)
-    cc 81 > dpad level 0..0.2                 # F6 signature: the pad drone
+    # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
+    # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw
+    # that were pads A2 and A3. Knobs: the page `tema`.
+    cc 75 > bass level 0..2.4
+    cc 80 > drone level 0..0.18
+    cc 80 > rub level 0..0.1
+    cc 80 > dpad level 0..0.2
     cc 74 > deep cutoff 45hz..260hz           # K1 bass filter
     cc 74 > deep cutoff_env 200hz..700hz
     cc 71 > abyss mod_index 25%..65%          # K2 drone: open
@@ -413,11 +432,8 @@ midi {
     cc 17 > drone crush wet 0..0.6            # K9 dirt: every crusher on the drones
     cc 17 > rub crush wet 0..0.5
     cc 17 > dpad crush wet 0.1..0.7
-    pad 36 > mute drums q=bar    # A1 kick out
-    pad 37 > toggle ride                      # A2 ride in/out
-    pad 38 > throw drone q=1/16    # A3 drone into the echo
-    pad 40 > repeat 1/8                       # A5 roll
-    pad 41 > repeat 1/16                      # A6 tighter roll
+    key 46 > toggle ride
+    key 47 > throw drone q=1/16
     pad 44 > play dpad D3 q=1/16    # B1 the drone, held
     pad 45 > hold rise q=beat    # B2 riser
     pad 46 > drums crash q=beat    # B3 crash

@@ -1,6 +1,6 @@
 # set: bars=16 phase=08-amoladora energy=8
 # set-note: variation after the peak, new material: the kit turns to toms in three tunings with the clap displaced, the gallop climbs root, b2, minor third a bar at a time; no zaps, no grinder
-# cue: 15 A1 held · kick out
+# cue: 15 key D held · kick out
 use "_t08.synth"
 
 track drums { play g8_chatter }

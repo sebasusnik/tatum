@@ -307,6 +307,31 @@ impl SongEngine {
                     step = CompiledStep::Rest;
                 }
             }
+            // A key held in a roll zone plays instead of the pattern: the
+            // beat left to the kick, the note on the three sixteenths after
+            // it, each one gated by the track as its own notes are.
+            let rolling = self.tracks[ti].roll;
+            if let Some(roll) = rolling {
+                if self.global_step.is_multiple_of(4) {
+                    step = CompiledStep::Rest;
+                    if let Some((kt, drum)) = roll.kick {
+                        if kt < self.tracks.len() {
+                            let ki = self.trigger_instrument(kt);
+                            if ki < self.instruments.len() {
+                                let vel = 0.9 * self.tracks[kt].velocity;
+                                self.instruments[ki].note_on(drum, vel);
+                            }
+                        }
+                    }
+                } else {
+                    step = CompiledStep::NoteOn {
+                        midi_note: roll.note,
+                        velocity: roll.velocity,
+                        plock: Default::default(),
+                        slide: false,
+                    };
+                }
+            }
             // A sequential pattern of hits plays a split hit as its first:
             // the spread across the step is a drum-lane thing.
             if let CompiledStep::DrumSub { hits, plock, .. } = step {
@@ -316,7 +341,7 @@ impl SongEngine {
             let gate = self.tracks[ti].gate;
 
             // Arp tracks: the step only updates the held notes; the arp plays them.
-            if self.tracks[ti].arp.is_some() && !matches!(step, CompiledStep::Tie) {
+            if self.tracks[ti].arp.is_some() && rolling.is_none() && !matches!(step, CompiledStep::Tie) {
                 let next_step_idx = (step_idx + 1) % pattern.steps.len();
                 let next_is_tie = matches!(pattern.steps[next_step_idx], CompiledStep::Tie);
                 let timing = StepTiming {
@@ -364,9 +389,10 @@ impl SongEngine {
                     // Peek at next step: if it's a Tie, force gate=1.0 so note
                     // survives until the Tie can extend it.
                     let next_step_idx = (step_idx + 1) % pattern.steps.len();
-                    let next_is_tie = matches!(pattern.steps[next_step_idx], CompiledStep::Tie);
+                    let next_is_tie = rolling.is_none() && matches!(pattern.steps[next_step_idx], CompiledStep::Tie);
                     // A `~note` next step needs this note still gated to glide from.
-                    let next_slides = matches!(pattern.steps[next_step_idx], CompiledStep::NoteOn { slide: true, .. });
+                    let next_slides = rolling.is_none()
+                        && matches!(pattern.steps[next_step_idx], CompiledStep::NoteOn { slide: true, .. });
 
                     match step {
                         // A run inside one step. The first note fires now and the

@@ -24,6 +24,7 @@ master {
        > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
        > eq(low=0.5, mid=-0.5, high=1)
        > gain(1.059) as trim
+       > gain(1.0) as vol
        > out
 }
 
@@ -425,13 +426,31 @@ track zaphold {
 # A7 prev, A8 next come from _base). T08 has no lead: its main voice (F4, K2,
 # A3, K5/K6) is the zaps, its second voice (F5, K4) the grinder of the steps'
 # gestures. B7 hits the clap, B8 takes the bass out.
+# The keyboard's lead in this track: its own zap voice (zap8), for the
+# lead zone, through the same chain, plus a filter (`klp`) and a vowel
+# (`talk`) the wheel and the knobs reach, and its own gain (`kgain`).
+track ktema {
+    play krest
+    using zap8
+    level 0.5
+    velocity 1.0
+    gate 0.3
+    pan 0.35
+    delay_send 0.22
+    reverb_send 0.06
+    sidechain 0.2
+
+    out > highpass(300hz, 0.05) > lowpass(10khz, 0.05) > panenv(0.8, release=250) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(0.323) as kgain > master
+}
+
 midi {
-    cc 73 > drums level 0..0.8
-    cc 75 > rims level 0..0.8
-    cc 79 > bass level 0..0.6
-    cc 72 > zap level 0..0.32
+    # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
+    # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw
+    # that were pads A2 and A3. Knobs: the page `tema`.
+    cc 75 > bass level 0..0.6
+    cc 80 > zap level 0..0.32
     cc 80 > grind level 0..0.3
-    cc 81 > grindpad level 0..0.65
+    cc 80 > grindpad level 0..0.65
     cc 74 > gallop cutoff 55hz..260hz
     cc 74 > gallop cutoff_env 900hz..2.4khz
     cc 74 > gallop resonance 18%..32%
@@ -446,15 +465,14 @@ midi {
     cc 93 > master hp cutoff 20hz..400hz
     cc 93 > zap delay_send 22%..50%
     cc 18 > zap delay_send 0%..60%
+    cc 18 > grind delay_send 0%..40%             # and the grinder, where the zap is out
     cc 19 > grindkit kick_decay 12%..34%
     cc 16 > grindkit hihat_pitch 1.16x..1.55x..1.86x    # K8 hats: darker left, the written tuning in the middle (hihat_decay does nothing in the engine yet)
     cc 17 > bass drive drive 0.3..1.1
     cc 17 > grindpad grit wet 20%..70%
-    pad 36 > mute drums q=bar
-    pad 37 > toggle rims
-    pad 38 > throw zap q=1/16
-    pad 40 > repeat 1/8
-    pad 41 > repeat 1/16
+    key 46 > toggle rims
+    key 47 > throw zap q=1/16
+    key 47 > throw grind q=1/16
     pad 44 > play grindpad q=1/16
     pad 45 > hold sparks q=beat
     pad 46 > drums crash q=beat

@@ -24,6 +24,7 @@ master {
        > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
        > eq(low=0.5, mid=-0.5, high=1)
        > gain(0.944) as trim
+       > gain(1.0) as vol
        > out
 }
 
@@ -509,14 +510,32 @@ track stabs {
 
 # The KeyLab, per CONTROLES.md (base maps F7 reverb, F8 echo, F9 DJ filter,
 # A4 freeze, A7 prev, A8 next)
+# The keyboard's lead in this track: its own acid voice (scream), for the
+# lead zone, through the same chain, plus a filter (`klp`) and a vowel
+# (`talk`) the wheel and the knobs reach, and its own gain (`kgain`).
+track ktema {
+    play krest
+    using scream
+    level 0.5
+    velocity 1.0
+    gate 0.55
+    pan 0.15
+    delay_send 0.12
+    reverb_send 0.05
+    sidechain 0.55
+
+    out > highpass(170hz, 0.05) > saturate(1.2) > bitcrush(9, 0.25, wet=0) as crush > limiter(0.45) > autopan(0.3, bars=2) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(2.624) as kgain > master
+}
+
 midi {
-    cc 73 > drums level
-    cc 75 > perc level
-    cc 79 > bass level
-    cc 72 > acid level
+    # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
+    # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw
+    # that were pads A2 and A3. Knobs: the page `tema`.
+    cc 75 > bass level
+    cc 80 > acid level
     cc 80 > needle level 0..0.3
-    cc 81 > shard level 0..1
-    cc 81 > motor level 0..0.9
+    cc 80 > shard level 0..1
+    cc 80 > motor level 0..0.9
 
     cc 74 > gallop cutoff 70hz..300hz
     cc 74 > gallop cutoff_env 1khz..3khz
@@ -534,11 +553,8 @@ midi {
     cc 16 > kit hihat_pitch 1.4x..2x
     cc 17 > acid crush wet 0..0.6
 
-    pad 36 > mute drums q=bar
-    pad 37 > toggle perc
-    pad 38 > throw acid q=1/16
-    pad 40 > repeat 1/8
-    pad 41 > repeat 1/16
+    key 46 > toggle perc
+    key 47 > throw acid q=1/16
 
     pad 44 > play motor A3 q=1/16
     pad 45 > hold rise q=beat

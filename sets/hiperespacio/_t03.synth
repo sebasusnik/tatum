@@ -18,6 +18,7 @@ master {
        > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
        > eq(low=0.5, mid=-0.5, high=1)
        > gain(0.944) as trim
+       > gain(1.0) as vol
        > out
 }
 
@@ -475,15 +476,32 @@ track viento {
 # talking drone's gestures are the second voice and its pad voice the
 # signature. The base already maps F7 reverb, F8 echo, F9 DJ filter,
 # A4 freeze, A7 prev, A8 next.
+# The keyboard's lead in this track: its own talk voice (lengua), for the
+# lead zone, through the same chain, plus a filter (`klp`) and a vowel
+# (`talk`) the wheel and the knobs reach, and its own gain (`kgain`).
+track ktema {
+    play krest
+    using lengua
+    level 0.5
+    velocity 1.0
+    gate 1.0
+    pan 0.12
+    delay_send 0.15
+    reverb_send 0.3
+    sidechain 0.5
+
+    out > highpass(220hz, 0.05) > vowel(o, a, bars=1, mix=0.9) as mouth > saturate(0.25) > lowpass(6khz, 0.05) as lp > autopan(0.3, bars=4) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(0.574) as kgain > master
+}
+
 midi {
-    # Faders
-    cc 73 > drums level
-    cc 75 > clap level
-    cc 79 > bass level
-    cc 72 > toms level 0..0.8
+    # Faders: F2 (cc 75) the track's bass, F5 (cc 80) its own voices together;
+    # the rest are _keylab.synth's. Keys A# and B: the toggle and the throw
+    # that were pads A2 and A3. Knobs: the page `tema`.
+    cc 75 > bass level
+    cc 80 > toms level 0..0.8
     cc 80 > talk level 0..0.3
-    cc 81 > sig level 0..0.45
-    cc 81 > canto level 0..0.9
+    cc 80 > sig level 0..0.45
+    cc 80 > canto level 0..0.9
     # K1 bass filter
     cc 74 > hueco cutoff 50hz..700hz
     cc 74 > hueco cutoff_env 250hz..3khz
@@ -499,6 +517,7 @@ midi {
     # K4 second voice open: the drone's index and its lowpass
     cc 77 > lengua mod_index 35%..75%
     cc 77 > talk lp cutoff 1.5khz..8khz
+    cc 77 > clap reverb_send 0.05..0.6           # and the clap's room, where the drone is silent
     # K5 tension: thin from below, toms into the echo
     cc 93 > master hp cutoff 20hz..400hz
     cc 93 > toms delay_send 0.12..0.4
@@ -509,12 +528,9 @@ midi {
     cc 16 > tkit hihat_pitch 1x..1.8x
     # K9 dirt: the bass's drive
     cc 17 > bass dirt drive 0.15..1.0
-    # Bank A
-    pad 36 > mute drums q=bar
-    pad 37 > toggle clap
-    pad 38 > throw toms q=1/16
-    pad 40 > repeat 1/8
-    pad 41 > repeat 1/16
+    # Keys A# and B: the toggle and the throw
+    key 46 > toggle clap
+    key 47 > throw toms q=1/16
     # Bank B
     pad 44 > play sig q=1/16
     pad 45 > hold viento q=beat

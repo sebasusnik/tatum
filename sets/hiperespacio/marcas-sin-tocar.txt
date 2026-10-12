@@ -1,0 +1,113 @@
+sets/hiperespacio: 111 steps, 2128 bars
+    0:00  01a-vacio.synth  16 bars  01-ignicion the hour opens almost in silence: the hollow pad, the wind swelling, a hat ticking the last sixteenth of each beat
+    0:27  01b-ralenti.synth  16 bars  01-ignicion a rim answers the tick far off, the pad thins to fifths; near the end the turbine turns over for three bars and dies (the false start)
+    0:55  01c-arranque.synth   8 bars  01-ignicion the ignition: the turbine spins up over eight bars (RPM curve on its ratios, putter speeding into a whine), the hat packs tighter, the wind rises; everything cuts on the last beat
+    1:09  01d-ignicion.synth   8 bars  01-ignicion the kick lands in the hole with a crash, the bass comes in shut under it; the pad stays, the turbine is gone
+    1:23  01e-grieta.synth  16 bars  01-ignicion the floor with a rim; the bass cracks open bar by bar on its cutoff locks; the pad fades out
+    1:51  01f-abre.synth  16 bars  01-ignicion the clap arrives and the hat goes to sixteenths; the bass is open; the tok starts answering in the gaps
+    2:19  01g-motor.synth  32 bars  01-ignicion the full floor: open hat, rim ghosts, turns at 8 and 16; the bass open with its octave kicks; one throttle blip from the turbine closes the phrase
+    3:14  01h-crucero.synth  16 bars  01-ignicion broken: the rim cuts across in threes, the hat stutters, the bass gallops on beats 1 and 3, the tok goes 3-3-2
+    3:42  01i-salida.synth  32 bars  01-ignicion the way out for the next record: kick, tick, open hat, rim, the tok, the plain open roll; nothing tonal but the bass
+    4:38  02a-entrada.synth  32 bars  02-orbita  the next record comes in under T01's outro: a lower, darker kick, an off-beat hat, shaker eighths and the dark roll; nothing tonal but the bass
+    5:33  02b-pulso.synth  16 bars  02-orbita  the open hat takes the off-beat, the shaker goes to sixteenths with its accent on the e; the pluck appears as two strokes a bar, dark
+    6:01  02c-orbita.synth  32 bars  02-orbita  the clap lands and the pluck plays its motif, brightening over the 32 bars as its index climbs
+    6:56  02d-giro.synth  12 bars  02-orbita  the groove breaks: the clap slips late every fourth bar, the bass sits on the b2, the pluck's motif turns (octave first); the release comes next
+    7:17  02e-vacio.synth   8 bars  02-orbita  Release 1: the floor is gone, the bass shut to one dull note a beat, the pluck alone throwing into the echo
+    7:30  02f-redoble.synth   4 bars  02-orbita  the snare packs tighter for four bars with no kick; the bass rolls again, still shut, opening; the pluck brightens into it
+    7:37  02g-caida.synth  24 bars  02-orbita  the drop: the pluck's ratchets and octave leaps for the first time, the bass pushes up the octave, the shaker ratchets, a crash on each eight
+    8:19  02h-deriva.synth  16 bars  02-orbita  after the drop the pluck thins to its ratcheted strokes and the echo carries the rest; the bass moves to the b2 again
+    8:46  02i-salida.synth  32 bars  02-orbita  the way out for the tribal record: kick, open hat, hat on the e, shaker sixteenths, the plain dark roll; nothing tonal but the bass
+    9:42  03a-tambores.synth  32 bars  03-tribu   T03 mixes in under T02's outro: the round low kick, offbeat hats and the low tom in threes; nothing tonal yet
+   10:37  03b-hueco.synth  32 bars  03-tribu   the hollow gapped bass lands (plain, then with octave pops every 16), rim answers in the kit, the three toms get their phrases
+   11:31  03c-habla.synth  16 bars  03-tribu   the clap goes into the dark room and the drone talks once (bars 5-14), cut before the next section
+   11:59  03d-rueda.synth  12 bars  03-tribu   groove variation: hats in 3-3-2, the toms talk to each other every bar, clap ghosts; it runs into the gap
+   12:19  03e-cuero.synth   4 bars  03-tribu   the gap: kit and bass out, the three toms alone packing tighter into the one
+   12:26  03f-vuelta.synth  32 bars  03-tribu   back in on the one: full groove, the bass octave figure first, the drone's second gesture leaning on the b2
+   13:21  03g-quiebre.synth  16 bars  03-tribu   broken variation: the kick drops beats in bars 4 and 8, sixteenth hats, busy toms, a last short drone answer
+   13:49  03h-salida.synth  32 bars  03-tribu   DJ outro: kick, offbeat hats, rim, the low tom and the sparse hollow bass; nothing tonal on top
+   14:43  04a-mezcla.synth  32 bars  04-acido   T04 mixes in under T03's outro: the hard clicky kick, offbeat hats, the open hat from bar 5, and the square-saw roll
+   15:38  04b-despierta.synth  16 bars  04-acido   the drive kit with snare ghosts; the 303 wakes up closed on its base filter
+   16:05  04c-abre.synth  16 bars  04-acido   the 303 opens bar by bar over sixteen bars (p-locks), the roll moves to the b2 on the turns
+   16:32  04d-chilla.synth  16 bars  04-acido   the second riff, octave leaps and the b2 on top, further open; the kit gets busier and drops a beat in bar 4
+   17:00  04e-eco.synth    8 bars  04-acido   echo throw: the snare steps away, the 303 plays a few open notes and the dotted-eighth echo answers
+   17:13  04f-hueco.synth  16 bars  04-acido   breakdown: no drums, no roll; a low drone and the 303 with its filter nearly shut
+   17:40  04g-sube.synth   8 bars  04-acido   build: kick for four bars then gone, the roll thins then stops, snare packs to ratchets, riser climbs, the drone gone, 303 hammers the root opening; one beat of silence
+   17:54  04h-estalla.synth  32 bars  04-acido   THE DROP: crash on the one, the 303 wide open on a new riff, the gallop bass for the first time; crash again at bar 17
+   18:49  04i-galope.synth  16 bars  04-acido   drop variation: the riff turned over from the octave, the gallop leans on the b2, the kit's accents move
+   19:16  04j-salida.synth  32 bars  04-acido   DJ outro: kick, hats, open hat, a few ghosts and the thinned roll; no acid, nothing tonal on top
+   20:10  05a-maquina-entra.synth  32 bars  05-maquina T05 enters dry under T04's acid outro: the high knock kick, offbeat hats, 3-3-2 metal ticks and the FM bass bouncing root-octave-root; nothing else tonal.
+   21:04  05b-maquina-robot.synth  16 bars  05-maquina The robot speaks: the formant stab's fixed E cell arrives, the kit goes to its main pattern with clap and rim.
+   21:31  05c-maquina-giro.synth  16 bars  05-maquina The robot's cell gets its octave leap and a second hit, the glitch hats come off the grid; the zaps idle then spin up in the last two bars and cut (gesture 1).
+   21:58  05d-maquina-empuje.synth  14 bars  05-maquina The floor at 8: sixteenth hats and rims answering every beat, the ticks doubled with a second voice; runs straight into the stutter gap.
+   22:22  05e-maquina-traba.synth   2 bars  05-maquina The machine jams for two bars: one kick, bass out, hats packing to ratchets, the robot stuck on one syllable, a beat of nothing, a rim roll.
+   22:25  05f-maquina-aterriza.synth  16 bars  05-maquina Out of the jam: the bass's new ratchet figure with the b2 every second bar, the robot run into sixteenths, and a crushed zap burst on the one (gesture 2).
+   22:53  05g-maquina-sala.synth  16 bars  05-maquina The robot steps out and the room is all machine: busy ticks, the glitch hats at their busiest, the ratchet bass; the kit back to its main groove.
+   23:20  05h-maquina-vuelve.synth  16 bars  05-maquina The robot returns on its leaping cell, the drums drive again, ticks back to plain 3-3-2 so the stab has the air.
+   23:47  05i-maquina-rafaga.synth  16 bars  05-maquina Last push: the robot in sixteenths, busy ticks, and the zaps' last burst spinning up over bars 8-10 then gone (gesture 3).
+   24:14  05j-maquina-sale.synth  32 bars  05-maquina Stripped outro for T06 to blend over: kick, offbeat hats, ticks in 3-3-2 and the plain bouncing FM bass; robot and zaps gone.
+   25:08  06a-hondo-entra.synth  32 bars  06-hondo   T06 comes in under T05's outro: the rounder kick with rims only (no hats yet), the offbeat ride, the deep roll with its filter nearly shut.
+   26:01  06b-hondo-dron.synth  16 bars  06-hondo   The drone rises out of the long room on D alone, clean, its index low; the roll takes a tribal gap every second beat so the ride speaks.
+   26:28  06c-hondo-hats.synth  16 bars  06-hondo   A minute in, the hats finally arrive (ghosted sixteenths, a walking accent); the roll closes again; the drone's crusher starts to bite.
+   26:55  06d-hondo-roce.synth  16 bars  06-hondo   The Eb comes in over the D -- the semitone rub, the track's dark heart; the ride gets its pickup; crush and index keep climbing, never smoothly.
+   27:22  06e-hondo-palma.synth  16 bars  06-hondo   The clap, last of the kit, lands on two and four; the roll back to straight; the drone's dirt swells and ebbs, higher each time.
+   27:49  06f-hondo-tira.synth   8 bars  06-hondo   Eight bars withheld without a break: hats, clap and ride out, the roll down to one note per gap, and the drone pushed up and crushed so it fills the space.
+   28:02  06g-hondo-fondo.synth  24 bars  06-hondo   Everything back at once plus what was saved: the roll pulling on the b2 and the low seventh with its filter lifting, the Eb doubled at the octave, the crush at its dirtiest.
+   28:43  06h-hondo-sale.synth  32 bars  06-hondo   Stripped outro for T07 (F# phrygian) to blend over: kick, hats, ride and the deep roll; the drone and its rub sink back into the room in the first eight bars.
+   29:36  07a-boca.synth  32 bars  07-tunel   T07 tunel mixes in: tight clicky kick, ticking hat, the hollow tube roll closed and opening over 32 bars; nothing else tonal
+   30:30  07b-rueda.synth  16 bars  07-tunel   the floor: main kit with clap and open hat, the tunnel roll with its walking accent and b2 turn, metal ticks in
+   30:56  07c-vidrio.synth  16 bars  07-tunel   the glass arp enters gated and closed (stutters a beat on, a beat off), opening a little over the 16
+   31:23  07d-avance.synth  16 bars  07-tunel   drive kit with 16th hats and snare turns, busy ticks, the arp held and opening across the phrase; last floor before the hole
+   31:50  07e-hueco.synth  16 bars  07-break   breakdown: kick, bass, arp gone; the vault pad and the laser cell alone in the tunnel, index breathing
+   32:16  07f-subida.synth   8 bars  07-build   build, one pass: no kick, the snare packs tighter every two bars, the roll thins to one note and closes, the master hp thins the floor, the wind rises; the last beat is silence
+   32:30  07g-estallido.synth  32 bars  07-drop    RELEASE 3: crash, the laser an octave up with machine-gun answers, a new roll (octave jumps, gallop), the arp held wide open
+   33:23  07h-galeria.synth  24 bars  07-drop    one notch under the peak, the lead rests: drive kit, the tunnel roll back with its turns, the arp gated and wide open, ticks busy
+   34:03  07i-salida.synth  32 bars  07-outro   T07 outro for mixing: main kit, ticks, the plain roll; no arp, pad, lead or riser
+   34:56  08a-arranque.synth  32 bars  08-amoladora T08 amoladora mixes in at 145: a dirtier lower kick, offbeat hats, the plain three-saw roll opening over 32 bars, rims joining
+   35:49  08b-chispa.synth  16 bars  08-amoladora the floor lands: main kit, the gallop roll (ratchet on the middle sixteenth); grinder gesture 1 in bars 9-16: idle, spin up with a catch, hold, cut on beat 3 of bar 16 (all drawn by auto on one drone)
+   36:16  08c-rafaga.synth  12 bars  08-amoladora grinder gone; glitch drums (rolls inside the step, snare stutters), glitch rims, the first zaps, sparse
+   36:36  08d-disco.synth   4 bars  08-gap     the 4-bar gap: everything out but the grinder, gesture 2: idle, spin up hard, hold, and one beat of silence before the landing
+   36:42  08e-impacto.synth  32 bars  08-amoladora the landing: crash, the gallop, the zaps busy for the first time, glitch rims; the peak of the track
+   37:35  08f-viruta.synth  16 bars  08-amoladora variation after the peak, new material: the kit turns to toms in three tunings with the clap displaced, the gallop climbs root, b2, minor third a bar at a time; no zaps, no grinder
+   38:02  08g-limalla.synth  24 bars  08-amoladora sustain one notch down: glitch drums, the broken gallop with gaps and octaves, plain rims; the zaps are gone again
+   38:41  08h-freno.synth  16 bars  08-amoladora grinder gesture 3 in bars 9-16: spins up, then down into a stall and out before the outro; main kit, the gallop, no zaps
+   39:08  08i-polvo.synth  32 bars  08-outro   T08 outro, stripped for the long breath that blends over it: kick, hats, rims, the plain roll; no grinder, no zaps
+   40:01  09a-umbral.synth  32 bars  09-nebulosa T09 comes in under T08's F# outro with only its round low kick, a ticking hat and the hollow square roll on E; nothing else tonal yet.
+   40:54  09b-hijaz.synth  16 bars  09-nebulosa The Hijaz colour arrives: the roll turns to F and walks G#-F-E at the phrase end, the oud pluck enters sparse, the groove gets its clap and shaker.
+   41:20  09c-darbuka.synth  16 bars  09-nebulosa Darbuka toms on the maqsum take the hats' place, the roll opens gaps on beats 2 and 4, the oud plays its full cell with B and C.
+   41:47  09d-campana.synth  16 bars  09-nebulosa The busy groove with ghost snares; in bars 7-8 of each phrase three bell strokes fall into the quarter echo, a first look at what the breath will be.
+   42:13  09e-velo.synth  16 bars  09-nebulosa The oud turns into ratchets and octave jumps over the busy then the clap groove, the Hijaz pad rises underneath.
+   42:40  09f-zaffa.synth  32 bars  09-nebulosa New groove before the breath: the toms double up in a zaffa pattern under sixteenth hats, the oud cell climbs E, G#, B, C to ratcheted high E and its filter opens across the 32 bars; ends on a tom fill with the last kick gone.
+   43:33  09g-nebulosa.synth  16 bars  09-breath  The long breath: kick and bass out, the Hijaz pad walks its clusters and the bells throw intervals into the quarter echo and a dark hall.
+   43:59  09h-congelada.synth  16 bars  09-breath  The room freezes on the bells and holds them; the pad opens upward into higher Hijaz voicings, a faint tom pulse and hat under the fog.
+   44:26  09i-rodando.synth   8 bars  09-build   Kickless tension: the roll takes every sixteenth, the snare goes from quarters to sixteenths, the noise riser starts and the master begins to close.
+   44:39  09j-filo.synth   8 bars  09-build   The top of the build: snare packs into ratchets, the bass thins to single notes and stops, the riser climbs, the master closes to 700 Hz; the last beat is silence. No drop: T10 is the drop.
+   44:52  10a-impacto.synth  16 bars  10-hipervelocidad Release 4 lands: hard cut on the one after T09's silent beat, crash, the master wide open, the gallop bass and the screamer at once over the glitch kit.
+   45:19  10b-grito.synth  16 bars  10-hipervelocidad The screamer switches to its octave leaps (two and three octaves), the needle ticks enter on a five-over-sixteen grid.
+   45:45  10c-esquirla.synth  16 bars  10-hipervelocidad Straighter drive drums, the gallop goes to triple ratchets, the screamer back to its first riff; shard's first gesture, three stabs at bar 4 and a burst at bar 8.
+   46:11  10d-carrera.synth  12 bars  10-hipervelocidad The screamer runs sixteenths with slides and its filter opens bar by bar; glitch drums, needle back at seven-over-sixteen.
+   46:31  10e-tartamudeo.synth   4 bars  10-gap     The 4-bar stutter gap: kick, clap and bass out, the screamer and the snare stutter the root through a crusher and roll back in.
+   46:37  10f-regreso.synth  16 bars  10-hipervelocidad Back in with a crash: a new double-gallop bass with the octave popping, the screamer an octave up with doubled ratchets, shard's offbeat chain in the second phrase.
+   47:04  10g-meseta.synth  32 bars  10-hipervelocidad Riding the peak: drums alternate drive and glitch every 8 bars, the bass alternates double and triple gallops, the screamer its leaps and its running line.
+   47:56  10h-trenza.synth  16 bars  10-hipervelocidad Something new on the plateau: the screamer braids groups of three against the kick with the crusher half in, the bass back to the single gallop, the needle on seven.
+   48:23  10i-cumbre.synth  32 bars  10-hipervelocidad Last stretch of the peak: the wide screamer against the first riff, glitch drums with the turns, shard's last gesture.
+   49:15  10j-desarme.synth   8 bars  10-hipervelocidad The screamer leaves; drive drums and the plain gallop carry on, the needle ticks the last phrase.
+   49:28  10k-salida.synth  32 bars  10-outro   Stripped for T11 to mix over: kick, hats, open hat, a tom on the turn and the plain A roll; nothing else tonal.
+   50:21  11a-entrada.synth  32 bars  11-singularidad T11 enters under T10's outro: the hardest kick of the set, a tick kit and the saw+square roll, the roll's filter opening over 32 bars
+   51:13  11b-acido.synth  16 bars  11-singularidad the floor lands (clap, open hats) and the square acid starts underneath, closed and climbing
+   51:39  11c-arp.synth   32 bars  11-singularidad drive drums with snare ghosts, busier perc, the FM shard arp in on F#-G-C#; the acid keeps its low line
+   52:32  11d-giro.synth  16 bars  11-singularidad the arp goes, the acid turns screamer (ratchets, octave leaps) over glitch drums
+   52:58  11e-horizonte.synth  16 bars  11-break   the break: everything stops but the haze (F# held, G rubbing over it, crush breathing) and the lead's call alone into the triplet echo
+   53:24  11f-rodillo.synth   8 bars  11-build   build 1/2: no kick; the roll comes back alone and opens bar by bar under clap and hats, the haze thins, the master filter closes
+   53:37  11g-compresion.synth   8 bars  11-build   build 2/2: snare and hats pack tighter every bar, the kick back on bar 5, bass down to one note, riser up, the master filter opens; bar 8 is silence
+   53:50  11h-singularidad.synth  16 bars  11-drop    FINAL DROP: crash, the octave-bounce roll never heard before, the lead's call with its machine-gun answer, the haze full (F# + G rub), the acid screaming wide open
+   54:16  11i-orbita.synth  16 bars  11-drop    drop 2/4: the acid steps out and the shard arp takes its place; the haze grows its octave (F#5 under the G)
+   54:42  11j-colapso.synth  16 bars  11-drop    drop 3/4: glitch drums, gallop octave roll, the lead an octave up with an answer that does not stop, the fifth piles into the haze, acid back instead of the arp
+   55:08  11k-horizonte-de-eventos.synth  16 bars  11-drop    drop 4/4: the whole pile (F#, G, the octaves and the fifth) with the crush at its worst, call and machine-gun alternating, peak drums, the gallop roll
+   55:34  11l-salida.synth  32 bars  11-outro   DJ outro: the floor stripped to kick, hats, tick perc and the plain roll; nothing tonal but the bass, for T12 to come in over
+   56:27  12a-estela.synth  32 bars  12-estela  T12 enters under T11's outro: the softest kick of the set, darker hats, a low shut roll; nothing tonal but the bass
+   57:19  12b-giro.synth  16 bars  12-estela  the grinder is still at full RPM from the peak, holds six bars and spins DOWN to a third; T01's hollow pad comes back under it
+   57:45  12c-brasa.synth  16 bars  12-estela  the grinder is gone; the hats thin to two a bar, the bass drops to offbeats, the wind rises under the pad
+   58:11  12d-chispa.synth   8 bars  12-estela  the motor sputters once (a half-hearted rev) and dies; half the kicks gone, the bass a note a bar
+   58:24  12e-humo.synth   8 bars  12-estela  no kick, no bass: a hat ticking far off, the pad and the wind, the room opening
+   58:37  12f-viento.synth  32 bars  12-estela  the end: the master filter closes over 32 bars, the reverb swells, the pad holds its open fifth and fades, a last whir far away, the wind is the last thing left
+wrote /tmp/hora/sin.wav (59:30)

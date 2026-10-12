@@ -38,7 +38,7 @@ fn same_target(a: &FastOp, b: &FastOp) -> bool {
 /// Notes and the pitch strip are events and positions of the keys, not
 /// values a scene would overwrite.
 fn holdable(op: &FastOp) -> bool {
-    !matches!(op, FastOp::NoteOn { .. } | FastOp::NoteOff { .. } | FastOp::PitchBend { .. })
+    !matches!(op, FastOp::NoteOn { .. } | FastOp::NoteOff { .. } | FastOp::PitchBend { .. } | FastOp::Roll { .. })
 }
 
 impl SongEngine {
