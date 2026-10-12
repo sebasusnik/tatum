@@ -1,0 +1,653 @@
+# T05 metal — F minor, 122 BPM, swing 0.53
+#
+# The driest and most pushed tema of the set, a fourth up from T04's C. No
+# pad and almost no room: a tight kick with a little more knock than the
+# others, sixteenth hats, a rim on fixed places. Between the drums, tribal
+# toms tuned to F (FM, a pitch drop on every hit) walking in threes against
+# the four. The bass is short: a square and its octave stabbed through a
+# resonant pluck, the sine sub holding the root under it in the gaps.
+#
+# The signature is a call and response between two metal voices, both FM
+# and tuned to the key: the bell (a sine knocked by an inharmonic 3.5x
+# modulator) calls F-Ab-C in threes, the plate (lower, gamelan ratios)
+# answers C-Eb-Db, the bII leaning. Placed, not laid: the call alone at
+# 05c, the answer joining it at 05c bar 17, both turned into the full
+# three-grid at 05d bar 17. Between them the metal chord stab (Fm9 / Gbmaj7,
+# struck once in four bars, most of it its echo) carries 05d's first half.
+#
+# The room is small and dark; the echo is the dotted eighth, short.
+
+use "_base.synth"
+
+# The tema's level in the set: `trim`, set by measurement.
+master {
+    in > lowpass(20khz, 0.05) as dj
+       > highpass(20hz, 0.05) as hp
+       > eq(low=2, mid=-1, high=-1.5)
+       > gain(1.0) as trim
+       > gain(1.0) as vol
+       > out
+}
+
+tempo 122
+scale F minor
+swing 0.53
+humanize 0.03 timing 0.004
+
+delay sync=dotted_eighth feedback=0.38 filter=0.4
+reverb size=0.32 damp=0.75 predelay=8 sidechain=0.6
+
+reverb_return { in > highpass(500hz, 0.05) > lowpass(3500hz, 0.05) > out }
+delay_return  { in > highpass(400hz, 0.05) > lowpass(3khz, 0.05) > autopan(0.6, bars=2) > out }
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# Kick: deep but tighter than its neighbours, a little more knock
+module beats mkit {
+    kick_level 1.0
+    kick_decay 47%
+    kick_pitch 0.84x
+    kick_click 18%
+    kick_drive 42%
+    clap_level 0.5
+    clap_pan -0.05
+    hihat_level 0.5
+    hihat_decay 8%
+    hihat_pitch 1.25x
+    hihat_pan 0.25
+    snare_level 0.45
+    snare_decay 2%
+    snare_pitch 1.7x
+    snare_snap 18%
+    snare_drive 15%
+    snare_pan -0.3
+    crash_pan 0.3
+}
+
+# Sub: a sine, the root in the gaps between kicks
+module fm msub {
+    algorithm two_op
+    level 2.0
+    mod_index 0%
+    feedback 0%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op0_envelope 0.002 1.0 1.0 0.1
+    op1_envelope 0.002 1.0 1.0 0.1
+}
+
+# The stab: a square and a saw an octave up, plucked hard through a resonant
+# filter, no sustain. Short is the point
+module bass stab {
+    osc1_wave square
+    osc2_wave saw
+    osc2_pitch 12st
+    cutoff 300hz
+    cutoff_env 2200hz
+    resonance 42%
+    vel_env 40%
+    glide 5%
+    attack 1ms
+    decay 110ms
+    sustain 0%
+    release 70ms
+}
+
+# Toms: a sine with a pitch drop on every hit, tuned to F; low index, wood
+module fm tom {
+    algorithm two_op
+    level 2.0
+    mod_index 18%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1.5x
+    op0_envelope 0.001 0.32 0.0 0.14
+    op1_envelope 0.001 0.05 0.0 0.04
+    lfo_target pitch
+    lfo_sync sixteenth
+    lfo_waveform saw
+    lfo_depth 9%
+}
+
+# The bell, the call: a sine knocked by an inharmonic 3.5x, the index dies
+# faster than the tone, so it strikes bright and rings dark. Its index
+# breathes over eight bars
+module fm bell {
+    algorithm two_op
+    level 1.8
+    mod_index 48%
+    feedback 8%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 3.5x
+    op0_envelope 0.001 0.7 0.0 0.45
+    op1_envelope 0.001 0.22 0.0 0.18
+    lfo_target mod_index
+    lfo_sync bars_8
+    lfo_waveform triangle
+    lfo_depth 18%
+}
+
+# The plate, the answer: lower, gamelan ratios, a duller longer ring
+module fm plate {
+    algorithm dual_pairs
+    level 1.8
+    mod_index 40%
+    waveform abs_sine
+    op0_ratio 1x
+    op1_ratio 2.76x
+    op2_ratio 1x
+    op3_ratio 5.4x
+    op0_envelope 0.001 0.9 0.0 0.5
+    op1_envelope 0.001 0.3 0.0 0.2
+    op2_envelope 0.001 0.6 0.0 0.4
+    op3_envelope 0.001 0.08 0.0 0.05
+    lfo_target mod_index
+    lfo_sync bars_16
+    lfo_waveform triangle
+    lfo_depth 15%
+}
+
+# The metal chord: struck, short, most of it the echo
+module fm mchord {
+    algorithm two_op
+    level 1.4
+    mod_index 34%
+    feedback 5%
+    waveform half_sine
+    op0_ratio 1x
+    op1_ratio 4x
+    op0_envelope 0.001 0.35 0.0 0.25
+    op1_envelope 0.001 0.12 0.0 0.1
+    lfo_target mod_index
+    lfo_sync bars_16
+    lfo_waveform triangle
+    lfo_depth 20%
+}
+
+# A low gong for the pads: the plate's ratios, an octave down, long
+module fm gongv {
+    algorithm dual_pairs
+    level 1.8
+    mod_index 45%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 2.76x
+    op2_ratio 1x
+    op3_ratio 5.4x
+    op0_envelope 0.001 1.8 0.0 1.2
+    op1_envelope 0.001 0.8 0.0 0.6
+    op2_envelope 0.001 1.4 0.0 1.0
+    op3_envelope 0.001 0.15 0.0 0.1
+}
+
+# ────────────────────────────────────────────────
+# DRUMS (2-bar cells, chained into 16-bar phrases)
+# ────────────────────────────────────────────────
+
+pattern rest { -*16 }
+pattern rest16 { -*256 }
+
+# The mix-in and mix-out: kick and offbeat hats
+pattern m_plain {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -
+}
+
+pattern m_plain_turn {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  x o x x
+}
+
+# The floor: sixteenth hats, the clap, the rim in two fixed places
+pattern m_main {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap:  - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - -
+    hat:   o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  o o x o  o o x o
+    snare: - - - -  - - - -  - - - x  - - - -   - - - -  - - - -  - - - x  - - x -
+}
+
+# The turn: the rim runs the last beat in sixteenths, on the grid
+pattern m_main_turn {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap:  - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - -
+    hat:   o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  o o x o  - - - -
+    snare: - - - -  - - - -  - - - x  - - - -   - - - -  - - - -  x - x -  x x x X
+}
+
+# Pushed: the hats lean on the offbeat, the rim answers every clap
+pattern m_push {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap:  - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - -
+    hat:   o x X x  o x X x  o x X x  o x X x   o x X x  o x X x  o x X x  o x X x
+    snare: - - - -  - - x -  - - - -  - - x -   - - - -  - - x -  - - - -  - - x -
+}
+
+pattern m_push_turn {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap:  - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - x x
+    hat:   o x X x  o x X x  o x X x  o x X x   o x X x  o x X x  o x X x  - - - -
+    snare: - - - -  - - x -  - - - -  - - x -   - - - -  - - x -  x - - x  - - x -
+}
+
+# ────────────────────────────────────────────────
+# TOMS: threes against the four (4-bar cells)
+# ────────────────────────────────────────────────
+
+pattern t_sparse {
+    - - F2:0.8 -  - - - -  F2:0.6 - - -  - - C3:0.5 -
+    - - F2:0.8 -  - - - -  F2:0.6 - - -  - - - -
+    - - F2:0.8 -  - - - -  F2:0.6 - - -  - - C3:0.5 -
+    - - F2:0.8 -  - - - -  F2:0.6 - - -  - - Ab2:0.5 -
+}
+
+pattern t_a {
+    - - F2:0.8 -  - C3:0.5 - -  F2:0.6 - - Ab2:0.6  - - C3:0.5 -
+    - - F2:0.8 -  - C3:0.5 - -  F2:0.6 - - -  - - - -
+    - - F2:0.8 -  - C3:0.5 - -  F2:0.6 - - Bb2:0.6  - - C3:0.5 -
+    - - F2:0.8 -  - C3:0.5 - -  F2:0.6 - - -  - - Ab2:0.5 -
+}
+
+# The turn: the threes climb to the bII and fall back on the root
+pattern t_a_turn {
+    - - F2:0.8 -  - C3:0.5 - -  F2:0.6 - - Ab2:0.6  - - C3:0.5 -
+    - - F2:0.8 -  - C3:0.5 - -  F2:0.6 - - -  - - - -
+    - - F2:0.8 -  - C3:0.5 - -  F2:0.6 - - Bb2:0.6  - - C3:0.5 -
+    - - F2:0.8 -  - C3:0.5 - -  Db3:0.7 - - C3:0.7  Ab2:0.7 - F2:0.8 F2:0.6
+}
+
+# Busy: every three, a low F under the high ones
+pattern t_busy {
+    F2:0.5 - F2:0.8 C3:0.4  - C3:0.5 - Ab2:0.4  F2:0.6 - - Ab2:0.6  - F2:0.4 C3:0.5 -
+    F2:0.5 - F2:0.8 C3:0.4  - C3:0.5 - Ab2:0.4  F2:0.6 - - Bb2:0.6  - F2:0.4 - -
+    F2:0.5 - F2:0.8 C3:0.4  - C3:0.5 - Ab2:0.4  F2:0.6 - - Ab2:0.6  - F2:0.4 C3:0.5 -
+    F2:0.5 - F2:0.8 C3:0.4  - C3:0.5 - Ab2:0.4  Db3:0.7 - - C3:0.7  Ab2:0.7 - F2:0.8 F2:0.6
+}
+
+# A pad's fill: one bar of toms in sixteenths, falling from the bII
+pattern t_fill {
+    Db3:0.6 C3:0.5 Ab2:0.6 Db3:0.7  C3:0.6 Ab2:0.7 Db3:0.8 C3:0.7  Ab2:0.8 F2:0.7 C3:0.8 Ab2:0.8  F2:0.9 F2:0.7 F2:0.8 F2:1.0
+}
+
+# ────────────────────────────────────────────────
+# LOW END (2-bar cells; the sub holds the gaps, never on the kick)
+# ────────────────────────────────────────────────
+
+pattern b_plain {
+    - - F2:0.9 -  - - - -  - - F2:0.85 -  - - - -   - - F2:0.9 -  - - - -  - - F2:0.85 -  - - - -
+}
+
+pattern b_a {
+    - - F2:0.9 -  - - - F2:0.6  - - F2:0.85 -  - - - C3:0.6   - - F2:0.9 -  - - - F2:0.6  - - Eb2:0.8 -  - - F2:0.5 -
+}
+
+pattern b_a_turn {
+    - - F2:0.9 -  - - - F2:0.6  - - F2:0.85 -  - - - C3:0.6   - - Db2:0.9 -  - - - Db2:0.6  - - C2:0.85 -  C2:0.6 - Eb2:0.7 -
+}
+
+# Pushed: a second stab in each gap, the bII Gb on the second bar
+pattern b_b {
+    - - F2:0.9 F2:0.5  - - - F2:0.7  - Ab2:0.6 - F2:0.85  - - C3:0.6 -   - - Gb2:0.9 -  - - - Gb2:0.6  - - F2:0.85 F2:0.5  - - - -
+}
+
+pattern b_b_turn {
+    - - F2:0.9 F2:0.5  - - - F2:0.7  - Ab2:0.6 - F2:0.85  - - C3:0.6 -   - - Gb2:0.9 -  - Gb2:0.6 - -  Eb2:0.8 - - C2:0.7  - C2:0.6 Eb2:0.7 -
+}
+
+pattern s_plain {
+    - - F1:0.9 ..  .. .. - -  - - F1:0.8 ..  .. .. - -   - - F1:0.9 ..  .. .. - -  - - F1:0.8 ..  .. .. - -
+}
+
+pattern s_a {
+    - - F1:0.9 ..  .. .. - -  - - F1:0.8 ..  .. .. - -   - - F1:0.9 ..  .. .. - -  - - Eb1:0.8 ..  .. .. - -
+}
+
+pattern s_a_turn {
+    - - F1:0.9 ..  .. .. - -  - - F1:0.8 ..  .. .. - -   - - Db1:0.9 ..  .. .. - -  - - C1:0.8 ..  .. .. - -
+}
+
+pattern s_b {
+    - - F1:0.9 ..  .. .. - -  - - F1:0.8 ..  .. .. - -   - - Gb1:0.9 ..  .. .. - -  - - F1:0.8 ..  .. .. - -
+}
+
+pattern s_b_turn {
+    - - F1:0.9 ..  .. .. - -  - - F1:0.8 ..  .. .. - -   - - Gb1:0.9 ..  .. .. - -  Eb1:0.8 .. .. -  - C1:0.7 .. -
+}
+
+# ────────────────────────────────────────────────
+# THE METAL: call and response (16-bar phrases)
+# ────────────────────────────────────────────────
+
+# The call: F-Ab-C in threes on the odd bars, the even bars left for the
+# answer. Bar 7 leans on the Eb, bar 13 on the Db; bar 15 is the turn
+pattern call_a {
+    - - F4:0.9 -  - Ab4:0.6 - -  C5:0.7 - - -  - - - -     -*16
+    - - F4:0.9 -  - Ab4:0.6 - -  C5:0.7 - - -  - - - -     -*16
+    - - F4:0.9 -  - Ab4:0.6 - -  C5:0.7 - - -  - - - -     -*16
+    - - F4:0.9 -  - Ab4:0.6 - -  Eb5:0.6 - - -  - - - -    -*16
+    - - F4:0.9 -  - Ab4:0.6 - -  C5:0.7 - - -  - - - -     -*16
+    - - F4:0.9 -  - Ab4:0.6 - -  C5:0.7 - - -  - - - -     -*16
+    - - F4:0.9 -  - Ab4:0.6 - -  Db5:0.7 - - -  - - C5:0.5 -   -*16
+    - - F4:0.9 -  - Ab4:0.6 - -  C5:0.7 - - Ab4:0.5  - - F4:0.6 -   -*16
+}
+
+# The answer, in the gaps the call leaves: C-Eb-Db, the bII leaning
+pattern resp_a {
+    -*16   - - C4:0.8 -  - Eb4:0.5 - -  Db4:0.7 - - -  - - - -
+    -*16   - - C4:0.8 -  - Eb4:0.5 - -  Db4:0.7 - - -  - - - -
+    -*16   - - C4:0.8 -  - Eb4:0.5 - -  Db4:0.7 - - -  - - - -
+    -*16   - - C4:0.8 -  - Eb4:0.5 - -  C4:0.7 - - -  - - - -
+    -*16   - - C4:0.8 -  - Eb4:0.5 - -  Db4:0.7 - - -  - - - -
+    -*16   - - C4:0.8 -  - Eb4:0.5 - -  Db4:0.7 - - -  - - - -
+    -*16   - - C4:0.8 -  - Eb4:0.5 - -  Db4:0.7 - - -  - - - -
+    -*16   - - C4:0.8 -  - Eb4:0.5 - -  Db4:0.7 - - Db4:0.5  C4:0.6 - - -
+}
+
+# Turned: the call fills the whole three-grid of its bar (0 3 6 9 12)
+pattern call_b {
+    F4:0.9 - - Ab4:0.6  - - C5:0.7 -  - Db5:0.6 - -  C5:0.5 - - -    -*16
+    F4:0.9 - - Ab4:0.6  - - C5:0.7 -  - Db5:0.6 - -  C5:0.5 - - -    -*16
+    F4:0.9 - - Ab4:0.6  - - C5:0.7 -  - Eb5:0.6 - -  C5:0.5 - - -    -*16
+    F4:0.9 - - Ab4:0.6  - - C5:0.7 -  - Db5:0.6 - -  C5:0.5 - - -    -*16
+    F4:0.9 - - Ab4:0.6  - - C5:0.7 -  - Db5:0.6 - -  C5:0.5 - - -    -*16
+    F4:0.9 - - Ab4:0.6  - - C5:0.7 -  - Db5:0.6 - -  C5:0.5 - - -    -*16
+    F4:0.9 - - Ab4:0.6  - - C5:0.7 -  - Eb5:0.6 - -  C5:0.5 - - -    -*16
+    F4:0.9 - - Ab4:0.6  - - C5:0.7 -  - Db5:0.6 - -  C5:0.5 - F4:0.5 -    -*16
+}
+
+pattern resp_b {
+    -*16   - - - -  Eb4:0.7 - - C4:0.6  - - Db4:0.6 -  - Bb3:0.5 - -
+    -*16   - - - -  Eb4:0.7 - - C4:0.6  - - Db4:0.6 -  - Bb3:0.5 - -
+    -*16   - - - -  Eb4:0.7 - - C4:0.6  - - Db4:0.6 -  - C4:0.5 - -
+    -*16   - - - -  Eb4:0.7 - - C4:0.6  - - Db4:0.6 -  - Bb3:0.5 - -
+    -*16   - - - -  Eb4:0.7 - - C4:0.6  - - Db4:0.6 -  - Bb3:0.5 - -
+    -*16   - - - -  Eb4:0.7 - - C4:0.6  - - Db4:0.6 -  - Bb3:0.5 - -
+    -*16   - - - -  Eb4:0.7 - - C4:0.6  - - Db4:0.6 -  - C4:0.5 - -
+    -*16   - - - -  Eb4:0.7 - - C4:0.6  - - Db4:0.6 -  Db4:0.5 C4:0.6 - -
+}
+
+# The metal chord: Fm9 (no root: the bass has it) struck once, the bII
+# Gbmaj7 at the end of the four; the echo is the rest
+pattern mst_a {
+    - - - -  - - [Ab3 C4 Eb4 G4]:0.75 -  - - - -  - - - -
+    -*16
+    - - - -  - - - -  - - [Ab3 C4 Eb4 G4]:0.55 -  - - - -
+    - - - -  - - [Bb3 Db4 F4 Ab4]:0.7 -  - - - -  - - - -
+}
+
+# A pad's figure: the chord struck twice, then the bII
+pattern mst_fig {
+    - - [Ab3 C4 Eb4 G4]:0.7 -  - - [Ab3 C4 Eb4 G4]:0.5 -  - - - -  [Bb3 Db4 F4 Ab4]:0.7 - - -
+}
+
+# A pad's figure: the call held, one bar of it
+pattern call_fig {
+    - - F4:0.9 -  - Ab4:0.6 - -  C5:0.7 - - Db5:0.6  - - C5:0.5 -
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track drums {
+    play m_main, m_main, m_main, m_main, m_main, m_main, m_main, m_main_turn
+    using mkit
+    level 0.8
+    velocity 1.0
+    out > highpass(25hz, 0.05) > drums
+}
+
+track sub {
+    play s_a, s_a, s_a, s_a, s_a, s_a, s_a, s_a_turn
+    using msub
+    level 0.13
+    velocity 1.0
+    gate 0.85
+    sidechain 0.3
+    out > highpass(28hz, 0.05) > lowpass(120hz, 0.05) > low
+}
+
+track bass {
+    play b_a, b_a, b_a, b_a, b_a, b_a, b_a, b_a_turn
+    using stab
+    level 0.5
+    velocity 1.0
+    gate 0.5
+    sidechain 0.25
+    out > highpass(65hz, 0.05) > saturate(0.8) as drv > lowpass(2500hz, 0.05) as lp > low
+}
+
+track toms {
+    play t_a, t_a, t_a, t_a_turn
+    using tom
+    level 0
+    velocity 1.0
+    gate 0.6
+    pan -0.3
+    reverb_send 0.08
+    sidechain 0.15
+    out > highpass(70hz, 0.05) > lowpass(5khz, 0.05) as lp > panenv(0.3, release=150) > drums
+}
+
+track bell {
+    play call_a
+    using bell
+    level 0
+    velocity 1.0
+    gate 0.5
+    pan 0.3
+    delay_send 0.22
+    reverb_send 0.12
+    sidechain 0.3
+    out > highpass(300hz, 0.05) > lowpass(9khz, 0.05) as lp > master
+}
+
+track plate {
+    play resp_a
+    using plate
+    level 0
+    velocity 1.0
+    gate 0.6
+    pan -0.35
+    delay_send 0.15
+    reverb_send 0.15
+    sidechain 0.3
+    out > highpass(220hz, 0.05) > lowpass(7khz, 0.05) as lp > master
+}
+
+track chords {
+    play mst_a
+    using mchord
+    level 0
+    velocity 1.0
+    gate 0.4
+    pan 0.1
+    delay_send 0.45
+    reverb_send 0.2
+    sidechain 0.5
+    out > highpass(250hz, 0.05) > lowpass(6khz, 0.05) as lp > master
+}
+
+# ────────────────────────────────────────────────
+# PERFORMANCE VOICES (the pads; steps never touch these)
+# ────────────────────────────────────────────────
+
+track bpad {
+    play rest
+    using bell
+    level 0.28
+    velocity 1.0
+    gate 1.0
+    pan 0.2
+    delay_send 0.3
+    reverb_send 0.15
+    sidechain 0.3
+    out > highpass(300hz, 0.05) > lowpass(9khz, 0.05) > master
+}
+
+track gong {
+    play rest
+    using gongv
+    level 0.3
+    velocity 1.0
+    gate 1.0
+    pan -0.1
+    reverb_send 0.35
+    sidechain 0.4
+    out > highpass(120hz, 0.05) > lowpass(5khz, 0.05) > master
+}
+
+track tfill {
+    play t_fill
+    using tom
+    level 0.3
+    velocity 1.0
+    gate 0.6
+    pan 0.2
+    reverb_send 0.1
+    out > highpass(70hz, 0.05) > lowpass(5khz, 0.05) > drums
+}
+
+track bfig {
+    play call_fig
+    using bell
+    level 0.26
+    velocity 1.0
+    gate 0.5
+    pan 0.35
+    delay_send 0.3
+    reverb_send 0.12
+    sidechain 0.3
+    out > highpass(300hz, 0.05) > lowpass(9khz, 0.05) > master
+}
+
+track mfig {
+    play mst_fig
+    using mchord
+    level 0.22
+    velocity 1.0
+    gate 0.4
+    pan 0.1
+    delay_send 0.5
+    reverb_send 0.2
+    sidechain 0.5
+    out > highpass(250hz, 0.05) > lowpass(6khz, 0.05) > master
+}
+
+# The keyboard's lead: the bell, its chain, then the hands' filter, vowel
+# and gain
+track ktema {
+    play krest
+    using bell
+    level 0.5
+    velocity 1.0
+    gate 0.5
+    pan 0.3
+    delay_send 0.22
+    reverb_send 0.12
+    sidechain 0.3
+    out > highpass(300hz, 0.05) > lowpass(9khz, 0.05) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(1.0) as kgain > master
+}
+
+midi {
+    # Faders: F2 the stab bass, F5 the metal, F8 the metal into the echo
+    cc 75 > bass level 0..1.0
+    cc 80 > bell level 0..0.5
+    cc 80 > plate level 0..0.72
+    cc 80 > toms level 0..0.44
+    cc 83 > bell delay_send 0..80%
+    cc 83 > plate delay_send 0..80%
+    cc 83 > chords delay_send 0..80%
+
+    # The tema page
+    cc 74 > bass cutoff 90hz..1500hz              # K1 the stab's filter
+    cc 74 > bass resonance 25%..65%
+    cc 71 > plate mod_index 20%..80%              # K2 the answer: dull wood to bright gong
+    cc 76 > bell mod_index 22%..85%               # K3 the call: wood, glass, broken metal
+    cc 76 > bell op1_ratio 2.5x..5.5x
+    cc 77 > tom lfo_depth 0%..22%                 # K4 the toms: flat to talking
+    cc 77 > tom mod_index 10%..45%
+    cc 93 > master hp cutoff 20hz..300hz          # K5 tension: the floor thins, the call washes
+    cc 93 > bell reverb_send 0.12..0.6
+    cc 18 > plate delay_send 0..80%               # K6 the answer and the toms into the echo
+    cc 18 > toms delay_send 0..50%
+    cc 19 > mkit kick_decay 30%..70%              # K7 kick: knock to boom
+    cc 16 > mkit hihat_pitch 0.9x..1.25x..1.6x    # K8 hats: darker left, as written in the middle
+    cc 17 > bass drv drive 0.2..2.0               # K9 dirt on the stab
+    cc 17 > reverb_mix 0..1
+
+    # The call and the answer: the bell and the plate, one strip each
+    page metal {
+        cc 74 > bell lp cutoff 1500hz..10khz          # K1 brightness: both rings dark to open
+        cc 74 > plate lp cutoff 1200hz..8khz
+        cc 71 > bell op1_ratio 2x..5.5x               # K2 colour: wood, glass, broken metal
+        cc 71 > plate op3_ratio 3x..7x
+        cc 76 > bell lfo_depth 0%..50%                # K3 movement: the index breathing
+        cc 76 > plate lfo_depth 0%..45%
+        cc 77 > bell decay 250ms..1600ms              # K4 the ring: struck to hanging
+        cc 77 > plate decay 300ms..2s
+        cc 93 > bell mod_index 25%..80%               # K5 tension: the strike harder
+        cc 93 > plate mod_index 20%..75%
+        cc 18 > bell feedback 0%..40%                 # K6 grit on the call
+        cc 19 > bell op1_decay 60ms..700ms            # K7 the call's bright tail
+        cc 16 > plate op1_decay 100ms..900ms          # K8 the answer's clang: dull to ringing
+        cc 17 > bell chorus_mix 0%..40%               # K9 shimmer on both
+        cc 17 > plate chorus_mix 0%..40%
+        # The faders: the bell's strip, then the plate's
+        cc 73 > bell level 0..0.5                     # F1 the call (written at half)
+        cc 75 > bell delay_send 0..60%                # F2 its echo
+        cc 79 > bell reverb_send 0..50%               # F3 its room
+        cc 72 > bell pan -0.7..0.7                    # F4 where it calls from
+        cc 80 > plate level 0..0.72                   # F5 the answer (written at half)
+        cc 81 > plate delay_send 0..60%               # F6 its echo
+        cc 82 > plate reverb_send 0..50%              # F7 its room
+        cc 83 > plate pan -0.7..0.7                   # F8 where it answers from
+    }
+    # The tuned toms, walking in threes
+    page toms {
+        cc 74 > toms lp cutoff 1200hz..8khz           # K1 brightness: muffled to slapped
+        cc 71 > tom mod_index 8%..45%                 # K2 colour: wood to skin with a ring
+        cc 76 > tom lfo_depth 0%..22%                 # K3 the pitch drop: flat to talking
+        cc 77 > tom decay 120ms..800ms                # K4 the body: dead to booming
+        cc 93 > tom op1_ratio 1x..3.5x                # K5 tension: tuned to metallic
+        cc 18 > tom op1_decay 15ms..200ms             # K6 the knock on the attack
+        cc 19 > tom feedback 0%..30%                  # K7 grit
+        cc 16 > tom release 60ms..500ms               # K8 the tail after the hit
+        # The faders: the toms' strip
+        cc 73 > toms level 0..0.44                    # F1 the toms (written at half)
+        cc 75 > toms delay_send 0..50%                # F2 their echo
+        cc 79 > toms reverb_send 0..40%               # F3 their room
+        cc 72 > toms pan -0.7..0.7                    # F4 where they walk
+    }
+    # The metal chord, struck once in four, most of it its echo
+    page acorde {
+        cc 74 > chords lp cutoff 1200hz..8khz         # K1 brightness
+        cc 71 > mchord feedback 0%..35%               # K2 colour: clean to rough
+        cc 76 > mchord lfo_depth 0%..50%              # K3 movement: the index breathing
+        cc 77 > mchord decay 120ms..1200ms            # K4 the strike: short to ringing
+        cc 77 > mchord release 100ms..1s
+        cc 93 > mchord op1_ratio 3x..5.5x             # K5 tension: in tune to clanging
+        cc 18 > mchord op1_decay 40ms..400ms          # K6 the strike's bright tail
+        cc 19 > mchord chorus_mix 0%..40%             # K7 width
+        # The faders: the chord's strip
+        cc 73 > chords level 0..0.44                  # F1 the chord (written at half)
+        cc 75 > chords delay_send 0..80%              # F2 its echo
+        cc 79 > chords reverb_send 0..50%             # F3 its room
+        cc 72 > chords pan -0.7..0.7                  # F4 where it sits
+    }
+
+    key 46 > toggle toms
+    key 47 > throw bell q=1/16
+
+    pad 44 > play bpad F4 q=1/16                  # B1 the bell on the root
+    pad 45 > play bpad Db5 q=1/16                 # B2 the bell on the bII
+    pad 46 > hold bfig q=beat                     # B3 the call, held
+    pad 47 > hold tfill q=beat                    # B4 a tom fill falling from the bII
+    pad 48 > hold mfig q=beat                     # B5 the metal chord figure
+    pad 49 > throw plate q=1/16                   # B6 the answer into the echo
+    pad 50 > play gong F3 q=beat                  # B7 a low gong
+    pad 51 > drums crash q=beat                   # B8 crash
+}

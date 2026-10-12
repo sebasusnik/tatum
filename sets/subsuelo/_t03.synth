@@ -1,0 +1,489 @@
+# T03 organo — G minor, 120 BPM
+#
+# After T02's Rhodes and bongos the room gets smaller and drier: a tight kick
+# a little higher than its neighbours', short hats in sixteenths, a rim on a
+# fixed figure. Almost no chords. The voice with a face is the bass itself, an
+# organ in the manner of Larry Heard: a sine on 8' with its 4' and 2 2/3'
+# drawbars, a modulator on the 8' for the key click, a slow tremolo for the
+# leslie. Its brightness (the FM index: the drawbars pulled) is what moves.
+#
+# The signature is the walk: the organ bass leaving the pedal and walking a
+# minor line, G-Bb-C-D down to F, the bVI (Eb) under it, the flat second (Ab)
+# as the passing note back to G. It is placed twice, not laid: it arrives in
+# 03b-firma (the drawbars opening over 32 bars), withdraws in 03c (the pedal
+# again, a sparse organ stab in its place), and comes back high in
+# 03d-variacion2 with the Ab3-G3 sigh and the drawbars wide open. K3 pulls the
+# drawbars; pad B5 throws the run under the hand.
+#
+# The room is short: a quarter-note echo that dies in three repeats, a small
+# dark reverb. The organ's own top is the air.
+
+use "_base.synth"
+
+# The tema's level in the set: `trim`, set by measurement.
+master {
+    in > lowpass(20khz, 0.05) as dj
+       > highpass(20hz, 0.05) as hp
+       > eq(low=2, mid=-1, high=-1.5)
+       > gain(1.0) as trim
+       > gain(1.0) as vol
+       > out
+}
+
+tempo 120
+scale G minor
+swing 0.55
+
+delay sync=quarter feedback=0.38 filter=0.3
+reverb size=0.5 damp=0.75 predelay=12 sidechain=0.5
+
+reverb_return { in > highpass(450hz, 0.05) > lowpass(3500hz, 0.05) > out }
+delay_return  { in > highpass(350hz, 0.05) > lowpass(2800hz, 0.05) > autopan(0.4, bars=2) > out }
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# Kick: tighter and a little higher than T02's, a short body; the organ has
+# the space after it. Hats short and bright, the rim on the snare lane.
+module beats tight {
+    kick_level 1.0
+    kick_decay 47%
+    kick_pitch 0.83x
+    kick_click 16%
+    kick_drive 22%
+    clap_level 0.42
+    clap_pan -0.06
+    hihat_level 0.42
+    hihat_decay 8%
+    hihat_pitch 1.4x
+    hihat_pan 0.28
+    snare_level 0.4
+    snare_decay 2%
+    snare_pitch 1.75x
+    snare_snap 18%
+    snare_drive 8%
+    snare_pan -0.3
+    crash_pan 0.25
+}
+
+# The rim alone, for the fill pad. No kick: the sidechain listens to `drums`.
+module beats rimk {
+    kick_level 0.0
+    snare_level 0.45
+    snare_decay 2%
+    snare_pitch 1.75x
+    snare_snap 18%
+    snare_drive 8%
+    snare_pan -0.3
+}
+
+# Sub: a pure sine under the organ, the root only
+module fm sub3 {
+    algorithm two_op
+    level 2.0
+    mod_index 0%
+    feedback 0%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op0_envelope 0.002 1.0 1.0 0.1
+    op1_envelope 0.002 1.0 1.0 0.1
+}
+
+# The organ: op0 the 8' drawbar, op1 its modulator an octave up (the index is
+# how far the drawbars are pulled, and its fast decay the key click), op2 the
+# 4', op3 the 2 2/3'. A slow amplitude LFO is the leslie on the slow rotor.
+module fm organ {
+    algorithm pair_plus_two
+    level 2.0
+    mod_index 22%
+    feedback 0%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 2x
+    op2_ratio 2x
+    op3_ratio 3x
+    op0_envelope 0.003 0.5 0.9 0.07
+    op1_envelope 0.001 0.09 0.45 0.07
+    op2_envelope 0.003 0.5 0.4 0.07
+    op3_envelope 0.003 0.3 0.12 0.07
+    lfo_target amplitude
+    lfo_sync free
+    lfo_rate 5.5hz
+    lfo_depth 7%
+}
+
+# The organ stab: the same drawbars, shorter, for the few chords there are
+module fm organst {
+    algorithm pair_plus_two
+    level 0.9
+    mod_index 30%
+    feedback 0%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 2x
+    op2_ratio 2x
+    op3_ratio 3x
+    op0_envelope 0.003 0.22 0.0 0.12
+    op1_envelope 0.001 0.06 0.0 0.05
+    op2_envelope 0.003 0.18 0.0 0.1
+    op3_envelope 0.003 0.1 0.0 0.08
+    lfo_target amplitude
+    lfo_sync free
+    lfo_rate 5.5hz
+    lfo_depth 7%
+}
+
+# ────────────────────────────────────────────────
+# DRUMS (2-bar cells; the tracks chain eight into a 16-bar phrase)
+# ────────────────────────────────────────────────
+
+# The mix-in and mix-out: kick and offbeat hats
+pattern d_in {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x o
+}
+
+pattern d_in_turn {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  - - - -
+    hat:   - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  x o x x
+}
+
+# The floor: tight sixteenths with the offbeat up, the clap light, the rim
+# on a fixed figure (the "a" of two, the "and" of three)
+pattern d_main {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap:  - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - -
+    hat:   o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  o o x o  o o x o
+    snare: - - - -  - - - x  - - x -  - - - -   - - - -  - - - x  - - x -  - - - -
+}
+
+pattern d_main_turn {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap:  - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - -
+    hat:   o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  o o x o  - - - -
+    snare: - - - -  - - - x  - - x -  - - - -   - - - -  - - - x  - - x -  o x x X
+}
+
+# Other hats: the open hat on the offbeat, closed ghosts around it
+pattern d_var {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    clap:    - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  x - - -
+    hat:     o - - o  o - - o  o - - o  o - - o   o - - o  o - - o  o - - o  o - - o
+    openhat: - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -
+    snare:   - - - -  - - - x  - - x -  - - - -   - - - -  - - - x  - - x -  - - - -
+}
+
+pattern d_var_turn {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  - - - -
+    clap:    - - - -  x - - -  - - - -  x - - -   - - - -  x - - -  - - - -  - - - -
+    hat:     o - - o  o - - o  o - - o  o - - o   o - - o  o - - o  o - - o  - - - -
+    openhat: - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - - -
+    snare:   - - - -  - - - x  - - x -  - - - -   - - - -  - - - x  - - x -  o x x X
+}
+
+# Stripped for the next tema: kick and the sixteenths, no clap, no rim
+pattern d_out {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:   o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  o o x o  o o x o
+}
+
+pattern d_out_turn {
+    kick:  X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:   o o x o  o o x o  o o x o  o o x o   o o x o  o o x o  - - x -  - - x o
+}
+
+# The fill pad: the rim on the grid, a bar climbing to the one
+pattern rimroll {
+    snare: o - o -  o - x -  o o x o  x x x X
+}
+
+# ────────────────────────────────────────────────
+# LOW END (4-bar phrases; four make sixteen bars, the last one the turn)
+# ────────────────────────────────────────────────
+
+# The pedal: G between the kicks, the drawbars almost closed
+pattern o_plain {
+    - - G2:0.9 ..  .. - - G2:0.55  - - G2:0.85 ..  - - - -
+    - - G2:0.9 ..  .. - - G2:0.55  - - G2:0.85 ..  - - - -
+    - - G2:0.9 ..  .. - - G2:0.55  - - G2:0.85 ..  - - - -
+    - - G2:0.9 ..  .. - - G2:0.55  - - F2:0.8 ..   - - G2:0.6 -
+}
+
+pattern o_plain_turn {
+    - - G2:0.9 ..  .. - - G2:0.55  - - G2:0.85 ..  - - - -
+    - - G2:0.9 ..  .. - - G2:0.55  - - G2:0.85 ..  - - - -
+    - - G2:0.9 ..  .. - - G2:0.55  - - G2:0.85 ..  - - - -
+    - - G2:0.9 ..  .. - Bb2:0.6 -  - C3:0.8 .. -   Ab2:0.75 .. - -
+}
+
+# The walk: the bass is the melody. Two bars on G, one on the bVI, and the
+# flat second to bring it home
+pattern o_walk {
+    G2:0.95 .. - G2:0.5   - - Bb2:0.8 ..   - C3:0.7 - D3:0.85   .. .. - -
+    - - D3:0.7 -          C3:0.6 - Bb2:0.8 ..   - - G2:0.7 -    F2:0.6 - G2:0.85 ..
+    Eb2:0.95 .. - Eb2:0.5   - - G2:0.7 ..  - Bb2:0.75 - C3:0.8   .. - Bb2:0.6 -
+    - - Ab2:0.85 ..       .. - G2:0.6 -    - - F2:0.7 -        ~G2:0.9 .. - -
+}
+
+pattern o_walk_turn {
+    G2:0.95 .. - G2:0.5   - - Bb2:0.8 ..   - C3:0.7 - D3:0.85   .. .. - -
+    - - D3:0.7 -          C3:0.6 - Bb2:0.8 ..   - - G2:0.7 -    F2:0.6 - G2:0.85 ..
+    Eb2:0.95 .. - Eb2:0.5   - - G2:0.7 ..  - Bb2:0.75 - C3:0.8   .. - Bb2:0.6 -
+    - - Ab2:0.85 -        Bb2:0.6 - C3:0.75 -   D3:0.85 .. Eb3:0.7 -   D3:0.75 - Ab2:0.8 -
+}
+
+# The walk again, higher: the line climbs to G3 and sighs Ab3-G3 over the Eb
+pattern o_hi {
+    G2:0.95 .. - -        - - G3:0.75 ..   - F3:0.6 - D3:0.8    .. .. - -
+    - - Bb2:0.7 -         C3:0.75 - D3:0.8 ..   - - Eb3:0.7 -   D3:0.6 - - -
+    Eb2:0.95 .. - -       - - Bb3:0.7 ..   - Ab3:0.8 .. ..      G3:0.8 .. - -
+    - - Ab2:0.85 ..       .. - G2:0.6 -    - - F2:0.7 -        ~G2:0.9 .. - -
+}
+
+pattern o_hi_turn {
+    G2:0.95 .. - -        - - G3:0.75 ..   - F3:0.6 - D3:0.8    .. .. - -
+    - - Bb2:0.7 -         C3:0.75 - D3:0.8 ..   - - Eb3:0.7 -   D3:0.6 - - -
+    Eb2:0.95 .. - -       - - Bb3:0.7 ..   - Ab3:0.8 .. ..      G3:0.8 .. - -
+    - - Ab2:0.85 -        Bb2:0.6 - C3:0.75 -   D3:0.85 .. Eb3:0.7 -   D3:0.75 - Ab2:0.8 -
+}
+
+# The sub: the root between the kicks, never on them
+pattern s_plain {
+    - - G1:0.9 ..  .. .. - -  - - G1:0.8 ..  .. .. - -
+    - - G1:0.9 ..  .. .. - -  - - G1:0.8 ..  .. .. - -
+    - - G1:0.9 ..  .. .. - -  - - G1:0.8 ..  .. .. - -
+    - - G1:0.9 ..  .. .. - -  - - G1:0.8 ..  .. .. - -
+}
+
+# Under the walk: G, G, the Eb, then the Ab back to G
+pattern s_walk {
+    - - G1:0.9 ..   .. .. - -  - - G1:0.8 ..  .. .. - -
+    - - G1:0.9 ..   .. .. - -  - - G1:0.8 ..  .. .. - -
+    - - Eb1:0.9 ..  .. .. - -  - - Eb1:0.8 .. .. .. - -
+    - - Ab1:0.9 ..  .. .. - -  - - G1:0.8 ..  .. .. - -
+}
+
+# One bar of the walk run fast, up and back down to the flat second: the
+# bass fill the pad plays in place of the line
+pattern bturn {
+    G2:0.9 - Bb2:0.7 -  C3:0.8 - D3:0.85 -  Eb3:0.75 - D3:0.75 -  C3:0.7 - Ab2:0.85 -
+}
+
+# ────────────────────────────────────────────────
+# THE FEW CHORDS: one organ stab every other bar, rootless above C3
+# ────────────────────────────────────────────────
+
+# Gm11 (Bb C D F) and once the bII, Abmaj7, rubbing on the way back
+pattern c_sparse {
+    - - - -  - - [Bb3 C4 D4 F4]:0.75 -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - [Bb3 C4 D4 F4]:0.6 -  - - - -
+    - - - -  - - [Ab3 C4 Eb4 G4]:0.75 -  - - - -  - - - -
+}
+
+pattern c_sparse_turn {
+    - - - -  - - [Bb3 C4 D4 F4]:0.75 -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - [Bb3 C4 D4 F4]:0.6 -  - - - -
+    - - - -  - - [Ab3 C4 Eb4 G4]:0.75 -  - - [Ab3 C4 Eb4 G4]:0.5 -  - - - -
+}
+
+# The stab figure the pad holds: three hits a bar into the echo
+pattern c_figure {
+    - - [Bb3 C4 D4 F4]:0.7 -  - - [Bb3 C4 D4 F4]:0.55 -  - - - -  [Ab3 C4 Eb4 G4]:0.7 - - -
+}
+
+pattern krest3 { -*16 }
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+track drums {
+    play d_in, d_in, d_in, d_in, d_in, d_in, d_in, d_in_turn
+    using tight
+    level 0.8
+    velocity 1.0
+    out > highpass(28hz, 0.05) > drums
+}
+
+track sub {
+    play s_plain
+    using sub3
+    level 0.1
+    velocity 1.0
+    gate 0.85
+    sidechain 0.3
+    out > highpass(28hz, 0.05) > lowpass(110hz, 0.05) > low
+}
+
+track bass {
+    play o_plain, o_plain, o_plain, o_plain_turn
+    using organ
+    level 0.36
+    velocity 1.0
+    gate 0.9
+    sidechain 0.25
+    out > highpass(70hz, 0.05) > lowpass(2400hz, 0.05) as draw > saturate(0.3) as drv > low
+}
+
+track chords {
+    play c_sparse, c_sparse, c_sparse, c_sparse_turn
+    using organst
+    level 0
+    velocity 1.0
+    gate 0.5
+    pan 0.25
+    delay_send 0.4
+    reverb_send 0.2
+    sidechain 0.45
+    out > highpass(250hz, 0.05) > lowpass(3200hz, 0.05) as lp > autopan(0.3, bars=4) > master
+}
+
+# ── The pads' voices (bank B); steps never touch these ──
+
+# The organ held from the pads, an octave over the bass: three pads make the
+# Gm chord, a fourth the flat second
+track korg {
+    play krest3
+    using organ
+    level 0.26
+    velocity 1.0
+    pan -0.2
+    delay_send 0.15
+    reverb_send 0.2
+    sidechain 0.35
+    out > highpass(150hz, 0.05) > lowpass(3khz, 0.05) > autopan(0.35, bars=2) > master
+}
+
+# The bass run under the hand (the pad also mutes the line while held)
+track bfill {
+    play bturn
+    using organ
+    level 0.36
+    velocity 1.0
+    gate 0.9
+    sidechain 0.25
+    out > highpass(70hz, 0.05) > lowpass(2400hz, 0.05) as draw > saturate(0.3) as drv > low
+}
+
+track rimfill {
+    play rimroll
+    using rimk
+    level 0.6
+    velocity 1.0
+    reverb_send 0.15
+    out > highpass(250hz, 0.05) > drums
+}
+
+track stabx {
+    play c_figure
+    using organst
+    level 0.3
+    velocity 1.0
+    gate 0.5
+    pan 0.25
+    delay_send 0.6
+    reverb_send 0.25
+    sidechain 0.45
+    out > highpass(250hz, 0.05) > lowpass(3200hz, 0.05) > master
+}
+
+# The keyboard's lead: the organ, through the bass's chain, ending on master
+track ktema {
+    play krest
+    using organ
+    level 0.36
+    velocity 1.0
+    gate 0.9
+    sidechain 0.25
+    out > highpass(70hz, 0.05) > lowpass(2400hz, 0.05) as draw > saturate(0.3) as drv > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(1.0) as kgain > master
+}
+
+midi {
+    cc 75 > bass level 0..0.72                  # F2 the organ bass (0.36 at half)
+    cc 80 > chords level 0..0.5                 # F5 the colour: the organ stab
+    cc 80 > tight snare_level 0.15..0.7         #    and the rim
+    cc 83 > chords delay_send 0..80%            # F8 the dub send: the stab
+    cc 83 > bass delay_send 0..30%              #    and a little of the organ
+
+    # ── page tema ──
+    cc 74 > bass draw cutoff 250hz..5khz        # K1 the organ's filter
+    cc 71 > organ lfo_depth 0%..35%             # K2 the leslie: slow tremolo to a deep wobble
+    cc 76 > organ mod_index 5%..75%             # K3 the drawbars: closed sine to a reedy full organ
+    cc 76 > organ op3_sustain 0%..45%           #    and the 2 2/3' pulled with them
+    cc 77 > chords lp cutoff 500hz..8khz        # K4 the stab's filter
+    cc 77 > organst mod_index 10%..70%
+    cc 93 > master hp cutoff 20hz..300hz        # K5 tension: the floor thins
+    cc 93 > chords reverb_send 0.2..0.7         #    and the stab goes to the room
+    cc 18 > bass delay_send 0..60%              # K6 throw: the organ into the echo
+    cc 19 > tight kick_decay 25%..70%           # K7 the kick: tight to boomy
+    cc 16 > tight hihat_pitch 0.9x..1.4x..1.9x  # K8 hats: darker left, written in the middle
+    cc 17 > bass drv drive 0.1..1.6             # K9 dirt: the organ driven
+    cc 17 > reverb_mix 0.2..0.7                 #    and the room
+
+    key 46 > toggle chords                      # A# the stab in and out
+    key 47 > throw bass q=1/16                  # B  the walk into the echo
+
+    pad 44 > play korg G3 q=1/16                # B1-B3 the organ held: G, Bb, D,
+    pad 45 > play korg Bb3 q=1/16               #       together the Gm
+    pad 46 > play korg D4 q=1/16
+    pad 47 > play korg Ab3 q=1/16               # B4 the flat second, to rub
+    pad 48 > hold bfill q=bar                   # B5 the bass run, in place of the line
+    pad 48 > mute bass q=bar
+    pad 49 > hold rimfill q=beat                # B6 rim fill
+    pad 50 > hold stabx q=bar                   # B7 the stab figure into the echo
+    pad 51 > drums openhat q=1/16               # B8 an open hat
+
+    # The organ's page: the drawbars, the click and the leslie of the bass
+    page organo {
+        cc 74 > bass draw cutoff 250hz..2400hz..5khz  # K1 the organ's filter: muffled to open
+        cc 71 > organ op2_sustain 10%..40%..80%       # K2 its colour: the 4' drawbar pulled
+        cc 76 > organ lfo_depth 0%..7%..30%           # K3 the leslie: still to a deep wobble
+        cc 77 > organ op1_decay 20ms..90ms..300ms     # K4 the key click: a tick to a short bark
+        cc 93 > organ feedback 0%..30%                # K5 tension: the drawbars growl
+        cc 18 > organ lfo_rate 1hz..5.5hz..7hz        # K6 the rotor: slow to fast
+        cc 19 > organ op3_sustain 0%..12%..45%        # K7 the 2 2/3' drawbar
+        cc 16 > organ chorus_mix 0%..40%              # K8 width: a second rotor
+        cc 17 > bass drv drive 0.1..0.3..1.2          # K9 dirt: the organ driven
+        cc 73 > bass level 0..0.72                    # F1 the organ bass (written 0.36 at half)
+        cc 75 > bass delay_send 0..40%                # F2 its echo
+        cc 79 > bass reverb_send 0..30%               # F3 its room
+        cc 72 > bass pan -0.7..0.7                    # F4 where it sits
+        cc 80 > korg level 0..0.52                    # F5 the held organ (pads B1-B4)
+        cc 81 > korg reverb_send 0..60%               # F6 the held organ into the room
+    }
+    # The stab's page: the organ chord of 03c and its figure on pad B7
+    page stab {
+        cc 74 > chords lp cutoff 500hz..3200hz..8khz  # K1 the stab's filter: dark to open
+        cc 71 > chords mod_index 10%..30%..70%        # K2 its colour: the drawbars pulled
+        cc 76 > chords lfo_depth 0%..7%..30%          # K3 the leslie on the stab
+        cc 77 > chords decay 40ms..220ms..800ms       # K4 its length: a chop to a ring
+        cc 93 > chords feedback 0%..30%               # K5 tension: grit in the chord
+        cc 18 > chords op3_decay 20ms..100ms..500ms   # K6 the 2 2/3' ringing on
+        cc 19 > chords release 20ms..600ms            # K7 its tail
+        cc 16 > chords chorus_mix 0%..40%             # K8 width
+        cc 73 > chords level 0..0.6                   # F1 the stab (written 0.3 at half, in 03c)
+        cc 75 > chords delay_send 0..80%              # F2 its echo
+        cc 79 > chords reverb_send 0..40%             # F3 its room
+        cc 72 > chords pan -0.7..0.7                  # F4 where it sits
+        cc 80 > stabx level 0..0.6                    # F5 the stab figure (pad B7)
+        cc 81 > stabx delay_send 0..100%              # F6 the figure into the echo
+    }
+    # The rim's page: the knock on the fixed figure, and its fill on pad B6
+    page rim {
+        cc 74 > tight snare_pitch 1.2x..1.75x..2x     # K1 the rim's pitch: wood to a high knock
+        cc 74 > rimk snare_pitch 1.2x..1.75x..2x
+        cc 71 > tight snare_snap 0%..18%..50%         # K2 the crack in it
+        cc 71 > rimk snare_snap 0%..18%..50%
+        cc 93 > tight snare_drive 0%..40%             # K5 tension: grit on the wood
+        cc 93 > rimk snare_drive 0%..40%
+        cc 73 > tight snare_level 0..0.8              # F1 the rim (written 0.4 at half)
+        cc 75 > rimfill level 0..1.2                  # F2 the rim fill (pad B6)
+        cc 79 > rimfill reverb_send 0..50%            # F3 the fill's room
+        cc 72 > tight snare_pan -0.7..0.7             # F4 where it knocks
+        cc 72 > rimk snare_pan -0.7..0.7
+    }
+}

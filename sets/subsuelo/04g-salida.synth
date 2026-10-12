@@ -1,0 +1,8 @@
+# set: bars=32 phase=04-hipnosis energy=5
+# set-note: Despojado para que T05 entre encima: bombo hondo, hats, el sub y el growl en pedal de C cerrándose; sin clap, sin rim, nada tonal arriba.
+# cue: 17 F2 abajo despacio: el growl deja lugar al bajo de T05
+use "_t04.synth"
+
+track drums { play h_out, h_out, h_out, h_out, h_out, h_out, h_out, h_out_turn }
+track tape  { level 0.03 }
+auto growl cutoff 0.3 > 0.18 over 32

@@ -1,0 +1,9 @@
+# set: bars=32 phase=01-niebla energy=3
+# set-note: The set opens in fog: the soft round kick, one dark hat on the offbeat, tape hiss breathing; the sine sub and the round bass come up under it at bar 17, on the root only.
+# cue: 9 K9 a la derecha despacio: más cinta, más aire
+# cue: 17 F2 desde abajo: el bajo redondo entra con el sub
+use "_t01.synth"
+
+track sub  { play rest4, rest4, rest4, rest4, low_plain }
+track bass { play rest4, rest4, rest4, rest4, low_plain }
+auto hiss level 0 > 0.05 over 8

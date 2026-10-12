@@ -1,0 +1,212 @@
+# subsuelo — the KeyLab Essential 49 mk3, played as a deep house DJ plays
+#
+# The same layout as hiperespacio (the hands learn it once), with house
+# gestures in it: dub throws, filter rides, EQ kills, the bass out for a bar.
+# `tatum midi monitor sets/subsuelo` shows what each control sends and does.
+#
+#   36..47  triggers  the lowest octave: one thing a key (below)
+#   48..59  bass      the tema's bass plays the note held, in its register
+#   60..84  lead      the tema's own lead voice (`ktema`, in its rig), or the
+#                     scene's sound; kept to the scale. Hold three keys for a
+#                     chord on a chord voice
+#
+# Scenes (F1-F4 on the computer, on the next bar) change what the zones play
+# and what the wheels do. The set moves only from the computer: space or →
+# next, ← back.
+
+use "_voces.synth"
+
+midi {
+    zone triggers 36..47
+    zone bass     48..59 > bass notes
+    zone lead     60..84 > ktema
+    lock snap
+
+    # ── The lowest octave: one thing a key ──
+    key 36 > play kruido              # C   a wash of noise opening while held
+    key 37 > play kimpact q=beat      # C#  a soft hit into the room, on the beat
+    key 38 > mute drums q=bar         # D   drums out while held, back on the one
+    key 39 > mute bass q=bar          # D#  the bass out while held (the sub stays)
+    key 39 > mute sub q=bar           #     and the sub
+    key 40 > cut                      # E   the whole mix under a low-pass
+    key 41 > sweep                    # F   a high-pass climbing while held
+    key 42 > hold kconga q=beat       # F#  a conga roll while held
+    key 43 > throw ktema              # G   the lead into the echo while held,
+    key 43 > throw kdub               #     whichever the scene plays
+    key 43 > throw kpad
+    key 44 > freeze                   # G#  the room frozen on what it holds
+    key 45 > throw chords             # A   dub throw: the tema's chords into the echo
+    # A# and B: each tema's own toggle and throw (its rig).
+
+    # ── Faders ──
+    cc 73 > drums kick_level 0..1.3                   # F1 kick
+                                                      # F2 the bass (each rig)
+    cc 79 > drums hihat_level 0..1.3                  # F3 hats
+    cc 72 > ktema level 0..1                          # F4 the keyboard's voices
+    cc 72 > kdub level 0..0.6                         #    (as written at half way)
+    cc 72 > kpad level 0..0.32
+                                                      # F5 the tema's colour voices (each rig)
+    cc 81 > ktema delay_send 0..80%                   # F6 the lead into the echo
+    cc 81 > kdub delay_send 0..90%
+    cc 82 > ktema reverb_send 0..80%                  # F7 the lead into the room
+    cc 82 > kdub reverb_send 0..80%
+    cc 82 > kpad reverb_send 0..90%
+                                                      # F8 the dub send (each rig)
+    cc 85 > master dj cutoff 150hz..20khz..20khz guard  # F9 DJ filter: centre open,
+    cc 85 > master hp cutoff 20hz..20hz..3khz guard     #    down darker, up thinner
+
+    # After a page change a knob waits until it passes its target's value.
+    takeover pickup
+
+    # ── Knobs and faders: one page per voice; Tab or the big encoder ──
+    # changes it. On `tema` the faders are the mixer above; on any other
+    # page they are that voice's strip. F9 (the DJ filter) never changes.
+    # Each rig adds pages for its own instruments after these; Tab passes
+    # over a page whose tracks play nothing in the step.
+    page tema {
+    }
+    page bass {
+        cc 74 > bass cutoff 40hz..3khz                # K1 cutoff (FM: index)
+        cc 74 > bass mod_index
+        cc 71 > bass resonance                        # K2 resonance (FM: feedback)
+        cc 71 > bass feedback
+        cc 76 > bass decay                            # K3 decay
+        cc 77 > bass cutoff_env                       # K4 envelope (FM: the modulator's decay)
+        cc 77 > bass op1_decay
+        cc 93 > bass sustain                          # K5 sustain: plucked to held
+        cc 18 > bass delay_send 0..60%                # K6 echo
+        cc 19 > sub level 0..0.4                      # K7 the sub under it
+        cc 16 > bass glide                            # K8 glide
+        cc 17 > bass level 0..1.5                     # K9 level
+        # The faders: the low end's strip
+        cc 73 > bass level 0..1.5                     # F1 the bass
+        cc 75 > sub level 0..0.8                      # F2 the sub
+        cc 79 > bass delay_send 0..60%                # F3 the bass into the echo
+        cc 72 > bass reverb_send 0..40%               # F4 and into the room
+        cc 80 > bass pan -0.6..0.6                    # F5 where it sits
+    }
+    page lead {
+        cc 74 > ktema klp cutoff 300hz..18khz         # K1 brightness
+        cc 71 > ktema resonance                       # K2 resonance (FM: feedback)
+        cc 71 > ktema feedback
+        cc 76 > ktema decay                           # K3 decay
+        cc 77 > ktema mod_index                       # K4 FM index (filter: envelope)
+        cc 77 > ktema cutoff_env
+        cc 77 > ktema cutoff 300hz..6khz              #    (keys: its filter)
+        cc 93 > ktema vibrato_depth                   # K5 vibrato
+        cc 18 > ktema talk wet 0%..100%               # K6 vowel: the lead talks, a to u,
+        cc 18 > ktema talk position 0..1              #    and the pad's vowel
+        cc 18 > kpad vox position 0..1
+        cc 19 > kdub lp cutoff 400hz..20khz           # K7 the dub stab's filter
+        cc 16 > kdub_v decay                          # K8 the dub stab's length
+        cc 17 > ktema kgain gain 0..1                 # K9 the lead's level
+        # The faders: each keyboard voice's level and sends
+        cc 73 > ktema level 0..1                      # F1 the tema's lead (written at half)
+        cc 75 > ktema delay_send 0..80%               # F2 its echo
+        cc 79 > ktema reverb_send 0..80%              # F3 its room
+        cc 72 > kdub level 0..0.6                     # F4 the dub stab
+        cc 80 > kdub delay_send 0..90%                # F5 its echo
+        cc 81 > kpad level 0..0.32                    # F6 the vowel pad
+        cc 82 > kpad reverb_send 0..90%               # F7 its room
+        cc 83 > kconga level 0..0.36                  # F8 the congas (held on F#)
+    }
+    page drums {
+        cc 74 > drums kick_decay                      # K1 kick decay
+        cc 71 > drums kick_pitch 0.6x..1.1x           # K2 kick pitch
+        cc 76 > drums kick_click                      # K3 kick click
+        cc 77 > drums kick_drive                      # K4 kick drive
+        cc 93 > drums hihat_level 0..1.3              # K5 hats level
+        cc 18 > drums hihat_pitch 0.8x..2x            # K6 hats pitch
+        cc 19 > drums clap_level 0..1.3               # K7 clap
+        cc 16 > drums hihat_pan                       # K8 hats pan
+        cc 17 > drums level 0..1.3                    # K9 the whole kit
+        # The faders: the kit as a mixer, one voice each
+        cc 73 > drums kick_level 0..1.3               # F1 kick
+        cc 75 > drums clap_level 0..1.3               # F2 clap
+        cc 79 > drums hihat_level 0..1.3              # F3 hats
+        cc 72 > drums hihat_pitch 0.6x..1.6x          # F4 the hats: darker, brighter
+        cc 80 > drums hihat_pan                       # F5 the hats across
+        cc 81 > drums kick_click                      # F6 the kick's click
+        cc 82 > drums kick_pitch 0.6x..1.1x           # F7 the kick's pitch
+        cc 83 > drums level 0..1.3                    # F8 the whole kit
+    }
+    # The isolator: K5-K7 kill a band (left) or push it (right), DJ style.
+    page master {
+        cc 74 > master vol gain 0..1 guard            # K1 master volume (top: as written)
+        cc 71 > master hp cutoff 20hz..1500hz         # K2 thin the floor
+        cc 76 > reverb_mix                            # K3 room
+        cc 77 > delay_mix                             # K4 echo
+        cc 93 > master eq_low -12db..6db              # K5 lows
+        cc 18 > master eq_mid -12db..6db              # K6 mids
+        cc 19 > master eq_high -12db..6db             # K7 highs
+        # The faders: the isolator under the fingers, then the space
+        cc 73 > master eq_low -12db..6db              # F1 lows
+        cc 75 > master eq_mid -12db..6db              # F2 mids
+        cc 79 > master eq_high -12db..6db             # F3 highs
+        cc 72 > reverb_mix                            # F4 room
+        cc 80 > delay_mix                             # F5 echo
+        cc 81 > master hp cutoff 20hz..1500hz         # F6 thin the floor
+    }
+    cc 114 > voice step
+
+    # ── Pads, bank A: house gestures, as hard as struck, then as pressed ──
+    pad 36 > throw chords             # A1 dub throw: the chords into the echo
+    pad 37 > throw ktema              # A2 the lead into the echo
+    pad 38 > freeze                   # A3 the room frozen on a chord's tail
+    pad 39 > cut                      # A4 the mix under a low-pass: harder, darker
+    pad 40 > sweep                    # A5 a high-pass climbing while held
+    pad 41 > gate 1/16                # A6 the chopped pad: everything gated in sixteenths
+    pad 42 > repeat 1/8               # A7 a loop roll of the beat
+    pad 43 > mute drums q=bar         # A8 drums out, back on the one
+    # Bank B (44-51): each tema's own sounds, in its rig.
+}
+
+# The scenes. A bend or wheel line answers with `lead`/`bass` while a key of
+# that zone is the newest held (the sound you play), with `idle` only with the
+# hands off the keys (the song). Every wheel range starts at the sound as
+# written, so the wheel at rest changes nothing.
+
+perform groove {
+    bass > bass notes
+    lead > ktema
+    bend lead 2deg                                  # playing: two degrees of the scale away
+    wheel lead > ktema klp cutoff 18khz..900hz      # playing: the lead closes into the dark
+    wheel idle > master dj cutoff 20khz..900hz      # hands off: the song goes under
+}
+
+perform dub {
+    bass > bass notes
+    lead > kdub
+    bend lead 1deg
+    wheel lead > kdub lp cutoff 20khz..600hz        # playing: the stab goes dark
+    wheel lead > kdub delay_send 50%..90%           #   and further into the echo
+    wheel idle > master hp cutoff 20hz..800hz       # hands off: the floor thins
+}
+
+perform voz {
+    bass > bass notes
+    lead > ktema
+    bend lead 2deg
+    wheel lead > ktema talk wet 0%..100%            # playing: the lead starts to talk...
+    wheel lead > ktema talk position 0..1           # ...and walks a-e-i-o-u
+    wheel idle > master dj cutoff 20khz..600hz      # hands off: a slow filter sweep
+}
+
+# In a break the kick is gone; the bass zone plays the sub.
+perform break {
+    bass > sub notes
+    lead > kpad
+    bend lead 1deg
+    wheel lead > kpad vox position 0..1             # playing: the pad says o to u
+    wheel idle > master dj cutoff 20khz..400hz      # hands off: under water
+}
+
+keyboard {
+    tab > voice next
+    0 > reset                         # every knob and fader back to the text
+    f1 > perform groove
+    f2 > perform dub
+    f3 > perform voz
+    f4 > perform break
+    quantize bar
+}

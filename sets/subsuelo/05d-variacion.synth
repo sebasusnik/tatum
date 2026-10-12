@@ -1,0 +1,14 @@
+# set: bars=32 phase=05-metal energy=6
+# set-note: Variación: el metal se calla y queda el acorde de metal (Fm9 / Gbmaj7) golpeado una vez cada cuatro, casi todo eco; el bajo empuja con el Gb, los toms a todo. En el 17 vuelve la llamada y respuesta, girada a la grilla de tres entera.
+# cue: 5 F8 arriba: el acorde se va al eco
+# cue: 15 B4 y soltar en el 17: los toms abren la vuelta del metal
+use "_t05.synth"
+
+track drums  { play m_push, m_push, m_push, m_push, m_push, m_push, m_push, m_push_turn }
+track bass   { play b_b, b_b, b_b, b_b, b_b, b_b, b_b, b_b_turn }
+track sub    { play s_b, s_b, s_b, s_b, s_b, s_b, s_b, s_b_turn }
+track toms   { play t_busy, t_busy, t_busy, t_a_turn level 0.2 }
+track chords { play mst_a level 0.22 }
+track bell   { play rest16, call_b level 0.25 }
+track plate  { play rest16, resp_b level 0.34 }
+auto mchord mod_index 0.2 > 0.45 over 16

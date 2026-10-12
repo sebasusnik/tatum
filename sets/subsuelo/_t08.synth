@@ -1,0 +1,642 @@
+# T08 ceniza — C minor, 124 BPM, the close of the set
+#
+# Ash after the peak. Dub techno: a shorter, higher kick than T07's (a knock
+# with a little click, the body gone), dark offbeat hats, a rim always in the
+# same place, and under it a sine sub and a round dub bass, two saws an octave
+# apart filtered into a hum, long notes that start off the beat.
+#
+# The signature is one chord, Cm11 voiced open above C3, struck short on the
+# offbeat through a detuned chorused voice and swallowed by a big room: the
+# reverb, more than the echo, is most of what is heard. Vinyl crackle runs
+# under it from `firma` to the very end. Three placed moments: the chord
+# arrives sparse in `firma`, its filter opening; in `variacion` it leans to
+# Db (the bII, the bass under it) and the kick thins; in `final` it thins
+# to a last stab on bar 15 that the room freezes and holds while the master
+# filter closes over the 32 bars. The energy falls from 6 to 3 on purpose:
+# this is the end of the set.
+
+use "_base.synth"
+
+# The tema's level in the set: +0.5 dB, its shorter kick sits a little
+# under T07's floor (measured on the render)
+master {
+    in > lowpass(20khz, 0.05) as dj
+       > highpass(20hz, 0.05) as hp
+       > eq(low=2, mid=-1, high=-1.5)
+       > gain(1.06) as trim
+       > gain(1.0) as vol
+       > out
+}
+
+tempo 124
+scale C minor
+swing 0.52
+
+# The room is the instrument: a big hall that breathes with the kick, an echo
+# that darkens on every repeat
+delay sync=dotted_eighth feedback=0.55 filter=0.3 sidechain=0.3
+reverb size=0.93 damp=0.5 predelay=40 sidechain=0.45
+
+delay_return  { in > highpass(260hz, 0.15) > lowpass(4khz, 0.1, lfo_bars=8, lfo_depth=1500) > autopan(0.5, bars=8) > out }
+reverb_return { in > highpass(280hz, 0.12) > lowpass(5khz, 0.1, lfo_bars=8, lfo_depth=1800) > autopan(0.3, bars=8) > out }
+
+# ────────────────────────────────────────────────
+# MODULES
+# ────────────────────────────────────────────────
+
+# A shorter, higher kick than T07's, a touch of click; dark offbeat hats
+module beats s8kit {
+    kick_level 1.0
+    kick_decay 48%
+    kick_pitch 0.82x
+    kick_click 15%
+    kick_drive 34%
+    hihat_level 0.3
+    hihat_decay 10%
+    hihat_pitch 1.4x
+    hihat_pan 0.4
+}
+
+# The rim (a very short high snare) and the dub tom
+module beats s8rim {
+    kick_level 0.0
+    snare_level 0.5
+    snare_decay 5%
+    snare_pitch 1.75x
+    snare_snap 58%
+    snare_drive 10%
+    snare_pan -0.35
+    tom_pan 0.3
+}
+
+# Vinyl crackle: the hat and the snare cut to clicks, tuned to the top
+module beats s8dust {
+    level 2.0
+    kick_level 0.0
+    hihat_level 2.0
+    hihat_decay 0%
+    hihat_pitch 2x
+    hihat_pan 0.2
+    snare_level 1.5
+    snare_decay 0%
+    snare_pitch 2x
+    snare_snap 100%
+    snare_drive 0%
+    snare_pan -0.25
+}
+
+module fm s8sub {
+    algorithm two_op
+    level 2.0
+    mod_index 0%
+    feedback 0%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op0_envelope 0.002 1.0 1.0 0.12
+    op1_envelope 0.002 1.0 1.0 0.12
+}
+
+# The dub bass: two saws an octave apart, filtered to a hum, a slow pluck
+module bass s8dub {
+    osc1_wave saw
+    osc2_wave saw
+    osc2_pitch -12st
+    cutoff 165hz
+    cutoff_env 600hz
+    resonance 8%
+    glide 24%
+    keytrack 18%
+    attack 2ms
+    decay 220ms
+    sustain 40%
+    release 120ms
+}
+
+# The chord: detuned, chorused, filtered down to a murmur; short, so what is
+# heard is mostly the room
+module keys s8chord {
+    voice_mode poly
+    detune 22%
+    chorus_mix 55%
+    cutoff 1.2khz
+    resonance 26%
+    attack 14ms
+    decay 220ms
+    sustain 6%
+    release 300ms
+    lfo_target cutoff
+    lfo_sync bars_8
+    lfo_waveform triangle
+    lfo_depth 14%
+    vibrato_rate 0.6hz
+    vibrato_depth 3%
+}
+
+# The air: band-passed noise that swells rather than starts
+instrument s8hiss {
+    gain 0.9
+    noise() as n
+    n > bandpass(760, 0.22) as bp
+    bp > adsr(2.5, 1.0, 0.8, 3.0) as amp
+    amp > out
+}
+
+# ────────────────────────────────────────────────
+# DRUMS
+# ────────────────────────────────────────────────
+
+pattern e_in {
+    kick:  X - - -  x - - -  X - - -  x - - -   X - - -  x - - -  X - - -  x - - -
+    hat:   - - o -  - - o -  - - o -  - - o -   - - o -  - - o -  - - o -  - - x -
+}
+
+pattern e_in_turn {
+    kick:  X - - -  x - - -  X - - -  x - - -   X - - -  x - - -  X - - -  x - - -
+    hat:   - - o -  - - o -  - - o -  - - o -   - - o -  - - o -  - - x -  o - x o
+}
+
+pattern e_main {
+    kick:  X - - -  x - - -  X - - -  x - - -   X - - -  x - - -  X - - -  x - - -
+    hat:   - - o -  - - x -  - - o -  - - x -   - - o -  - - x -  - - o -  - - x:0.5 -
+}
+
+pattern e_main_turn {
+    kick:  X - - -  x - - -  X - - -  x - - -   X - - -  x - - -  X - - -  x - - -
+    hat:   - - o -  - - x -  - - o -  - - x -   - - o -  - - x -  - - o o  - - x o
+}
+
+# Thinner: the kick on one and three, the ghost before the three
+pattern e_thin {
+    kick:  X - - -  - - - -  x - - -  - - - -   X - - -  - - - -  x - - -  - - - o
+    hat:   - - - -  - - o -  - - - -  - - o -   - - - -  - - o -  - - - -  - - o -
+}
+
+# ────────────────────────────────────────────────
+# THE RIM, always in the same place; the dub tom
+# ────────────────────────────────────────────────
+
+pattern r_a {
+    snare: - - - -  - - - -  - - - -  - - - -   - - - -  - - x -  - - - -  - - - -
+}
+
+pattern r_b {
+    snare: - - - -  - - - -  - - - -  - - x:0.6 -   - - - -  - - x -  - - - -  - - - -
+}
+
+# A pad's fill: the rim on the eighths, then the last beat in sixteenths
+pattern r_fill {
+    snare: - - x -  - - x -  - - x -  x x x x
+}
+
+pattern t_dub {
+    tom:   - - - -  - - x -  - - - -  - - - -
+}
+
+# ────────────────────────────────────────────────
+# THE CRACKLE: clicks on a chance, never the same twice in a bar
+# ────────────────────────────────────────────────
+
+pattern dust_a {
+    hat:   x?0.3 - x?0.2 -  - x?0.25 - x?0.15  x?0.3 - - x?0.2  - x?0.25 x?0.15 -   - x?0.3 - x?0.2  x?0.15 - x?0.3 -  - x?0.2 - x?0.25  x?0.3 - - x?0.2
+    snare: - - - x?0.12  - - - -  - - x?0.1 -  - - - -   - x?0.12 - -  - - - -  - - - -  x?0.1 - - -
+}
+
+# A pad's burst: the needle in a deep scratch
+pattern dust_b {
+    hat:   x?0.7 x?0.5 x?0.7 x?0.5  x?0.7 x?0.5 x?0.7 x?0.5  x?0.7 x?0.5 x?0.7 x?0.5  x?0.7 x?0.5 x?0.7 x?0.5
+    snare: x?0.4 - x?0.4 -  x?0.4 - x?0.4 -  x?0.4 - x?0.4 -  x?0.4 - x?0.4 -
+}
+
+pattern hiss_hold {
+    C3:0.7 ..*15
+}
+
+# ────────────────────────────────────────────────
+# THE LOW END
+# ────────────────────────────────────────────────
+
+pattern sub_c {
+    - - C2:0.85 ..*9  - - - -
+}
+
+# Three bars on C, the fourth on the flat second
+pattern sub_db {
+    - - C2:0.85 ..*9   - - - -
+    - - C2:0.8 ..*9    - - - -
+    - - C2:0.85 ..*9   - - - -
+    - - Db2:0.85 ..*9  - - - -
+}
+
+pattern b8_plain {
+    - - C2:0.8 .. .. - - -  - - C2:0.7 .. .. - - -
+}
+
+pattern b8_long {
+    - - C2:0.8 .. .. .. .. -  - - C2:0.6 .. - - - -
+    - - C2:0.8 .. .. .. - -  - - Bb1:0.65 .. .. - - -
+}
+
+pattern b8_long_turn {
+    - - C2:0.8 .. .. .. .. -  - - C2:0.6 .. - - - -
+    - - C2:0.8 .. .. .. - -  - - G1:0.65 .. .. - ~Bb1:0.6 -
+}
+
+pattern b8_db {
+    - - C2:0.8 .. .. .. .. -  - - C2:0.6 .. - - - -
+    - - C2:0.8 .. .. .. - -  - - Bb1:0.65 .. .. - - -
+    - - C2:0.8 .. .. .. .. -  - - C2:0.6 .. - - - -
+    - - Db2:0.8 .. .. .. - -  - - Ab1:0.65 .. .. - - -
+}
+
+# ────────────────────────────────────────────────
+# THE CHORD: Cm11 open above C3, Db for the lean
+# ────────────────────────────────────────────────
+
+# Sparse: the "and" of one and of three
+pattern st_half {
+    - - [C3 G3 Bb3 Eb4 F4]:0.68 -  - - - -  - - [C3 G3 Bb3 Eb4 F4]:0.52 -  - - - -
+}
+
+# Every offbeat but the last, the velocity breathing
+pattern st_full {
+    - - [C3 G3 Bb3 Eb4 F4]:0.7 -  - - [C3 G3 Bb3 Eb4 F4]:0.5 -  - - [C3 G3 Bb3 Eb4 F4]:0.62 -  - - - -
+}
+
+# Three bars of Cm11, the fourth leans on Db and comes back
+pattern st_dub {
+    - - [C3 G3 Bb3 Eb4 F4]:0.7 -  - - [C3 G3 Bb3 Eb4 F4]:0.5 -  - - [C3 G3 Bb3 Eb4 F4]:0.62 -  - - - -
+    - - [C3 G3 Bb3 Eb4 F4]:0.7 -  - - - -  - - [C3 G3 Bb3 Eb4 F4]:0.6 -  - - - -
+    - - [C3 G3 Bb3 Eb4 F4]:0.68 -  - - [C3 G3 Bb3 Eb4 F4]:0.5 -  - - [C3 G3 Bb3 Eb4 F4]:0.6 -  - - - -
+    - - [Db3 Ab3 C4 F4]:0.68 -  - - [Db3 Ab3 C4 F4]:0.5 -  - - [Db3 Ab3 C4 F4]:0.62 -  - - - -
+}
+
+# A pad's lean: the Db chord on the offbeats while held
+pattern st_db {
+    - - [Db3 Ab3 C4 F4]:0.7 -  - - [Db3 Ab3 C4 F4]:0.5 -  - - [Db3 Ab3 C4 F4]:0.62 -  - - - -
+}
+# The close (08d-final), 32 bars: the chord thins to its last stab on bar 15
+# for the room to freeze; the kick thins to nothing by bar 17; the sub and
+# the bass fade out over the first sixteen
+pattern st_out {
+    - - [C3 G3 Bb3 Eb4 F4]:0.6 -  - - - -  - - - -  - - - -
+    - - [C3 G3 Bb3 Eb4 F4]:0.5 -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - [C3 G3 Bb3 Eb4 F4]:0.48 -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - [C3 G3 Bb3 Eb4 F4]:0.42 -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - [C3 G3 Bb3 Eb4 F4]:0.38 -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - [C3 G3 Bb3 Eb4 F4]:0.34 -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - [C3 G3 Bb3 Eb4 F4]:0.42 ..  .. - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+}
+
+pattern e_out {
+    kick: X - - -  - - - -  x - - -  - - - -   X - - -  - - - -  x - - -  - - - -   X - - -  - - - -  x - - -  - - - -   X - - -  - - - -  x - - -  - - - -   X - - -  - - - -  x - - -  - - - -   X - - -  - - - -  x - - -  - - - -   X - - -  - - - -  x - - -  - - - -   X - - -  - - - -  x - - -  - - - -   X - - -  - - - -  o - - -  - - - -   X - - -  - - - -  o - - -  - - - -   X - - -  - - - -  o - - -  - - - -   X - - -  - - - -  o - - -  - - - -   x - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   x - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -
+    hat: - - o -  - - o -  - - o -  - - o -   - - o -  - - o -  - - o -  - - o -   - - o -  - - o -  - - o -  - - o -   - - o -  - - o -  - - o -  - - o -   - - o -  - - o -  - - o -  - - o -   - - o -  - - o -  - - o -  - - o -   - - o -  - - o -  - - o -  - - o -   - - o -  - - o -  - - o -  - - o -   - - - -  - - o -  - - - -  - - o -   - - - -  - - o -  - - - -  - - o -   - - - -  - - o -  - - - -  - - o -   - - - -  - - o -  - - - -  - - o -   - - - -  - - - -  - - - -  - - o -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - o -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - - -  - - - -
+}
+
+pattern sub_out {
+    - - C2:0.85 ..*9  - - - -
+    - - C2:0.82 ..*9  - - - -
+    - - C2:0.8 ..*9  - - - -
+    - - C2:0.77 ..*9  - - - -
+    - - C2:0.75 ..*9  - - - -
+    - - C2:0.72 ..*9  - - - -
+    - - C2:0.7 ..*9  - - - -
+    - - C2:0.67 ..*9  - - - -
+    - - C2:0.65 ..*9  - - - -
+    - - C2:0.62 ..*9  - - - -
+    - - C2:0.6 ..*9  - - - -
+    - - C2:0.57 ..*9  - - - -
+    - - C2:0.55 ..*9  - - - -
+    - - C2:0.52 ..*9  - - - -
+    - - C2:0.5 ..*9  - - - -
+    - - C2:0.47 ..*9  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+}
+
+pattern b8_out {
+    - - C2:0.85 .. .. .. - -  - - - -  - - - -
+    - - C2:0.82 .. .. .. - -  - - - -  - - - -
+    - - C2:0.8 .. .. .. - -  - - - -  - - - -
+    - - C2:0.77 .. .. .. - -  - - - -  - - - -
+    - - C2:0.75 .. .. .. - -  - - - -  - - - -
+    - - C2:0.72 .. .. .. - -  - - - -  - - - -
+    - - C2:0.7 .. .. .. - -  - - - -  - - - -
+    - - C2:0.67 .. .. .. - -  - - - -  - - - -
+    - - C2:0.65 .. .. .. - -  - - - -  - - - -
+    - - C2:0.62 .. .. .. - -  - - - -  - - - -
+    - - C2:0.6 .. .. .. - -  - - - -  - - - -
+    - - C2:0.57 .. .. .. - -  - - - -  - - - -
+    - - C2:0.55 .. .. .. - -  - - - -  - - - -
+    - - C2:0.52 .. .. .. - -  - - - -  - - - -
+    - - C2:0.5 .. .. .. - -  - - - -  - - - -
+    - - C2:0.47 .. .. .. - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+    - - - -  - - - -  - - - -  - - - -
+}
+
+# ────────────────────────────────────────────────
+# TRACKS
+# ────────────────────────────────────────────────
+
+# The kick is dry: no sends
+track drums {
+    play e_in, e_in, e_in, e_in, e_in, e_in, e_in, e_in_turn
+    using s8kit
+    level 0.82
+    velocity 1.0
+    out > highpass(25hz, 0.05) > eq(high=-1) > drums
+}
+
+track rim {
+    play r_a
+    using s8rim
+    level 0
+    velocity 1.0
+    reverb_send 0.3
+    delay_send 0.25
+    out > highpass(300hz, 0.05) as hp > lowpass(6khz, 0.05) as lp > drums
+}
+
+track dust {
+    play dust_a
+    using s8dust
+    level 0
+    velocity 1.0
+    reverb_send 0.05
+    sidechain 0
+    out > highpass(1800hz, 0.1) as hp > lowpass(7khz, 0.1) as lp > autopan(0.6, bars=2) > master
+}
+
+track hiss {
+    play hiss_hold
+    using s8hiss
+    level 0.08
+    velocity 1.0
+    pan -0.3
+    reverb_send 0.3
+    sidechain 0.35
+    out > highpass(300hz, 0.12) as hp > lowpass(2.2khz, 0.2, lfo_bars=8, lfo_depth=1400) as lp > autopan(0.5, bars=8) > master
+}
+
+track sub {
+    play sub_c
+    using s8sub
+    level 0.13
+    velocity 1.0
+    gate 0.9
+    sidechain 0.3
+    out > highpass(28hz, 0.05) > lowpass(120hz, 0.05) > low
+}
+
+track bass {
+    play b8_plain
+    using s8dub
+    level 0.5
+    velocity 1.0
+    gate 0.9
+    sidechain 0.25
+    out > highpass(55hz, 0.05) > saturate(0.3) as drv > lowpass(700hz, 0.1) > low
+}
+
+track chords {
+    play st_half
+    using s8chord
+    level 0
+    velocity 0.75
+    gate 0.18
+    pan -0.12
+    delay_send 0.5
+    reverb_send 0.6
+    sidechain 0.5
+    out > highpass(300hz, 0.15) > lowpass(3.6khz, 0.12, lfo_bars=8, lfo_depth=1400) as lp > saturate(0.2) as sat > master
+}
+
+# ────────────────────────────────────────────────
+# PERFORMANCE VOICES (the KeyLab's pads; steps never touch these)
+# ────────────────────────────────────────────────
+
+# B1: the Cm11 stab on the offbeats while held
+track stab1 {
+    play st_full
+    using s8chord
+    level 0.26
+    velocity 0.75
+    gate 0.18
+    pan 0.2
+    delay_send 0.55
+    reverb_send 0.6
+    sidechain 0.5
+    out > highpass(300hz, 0.15) > lowpass(3.6khz, 0.12) > saturate(0.2) > master
+}
+
+# B2: the Db lean while held
+track stabdb {
+    play st_db
+    using s8chord
+    level 0.26
+    velocity 0.75
+    gate 0.18
+    pan 0.2
+    delay_send 0.55
+    reverb_send 0.6
+    sidechain 0.5
+    out > highpass(300hz, 0.15) > lowpass(3.6khz, 0.12) > saturate(0.2) > master
+}
+
+# B3: a rim fill
+track rimfill {
+    play r_fill
+    using s8rim
+    level 0.35
+    velocity 1.0
+    reverb_send 0.3
+    delay_send 0.2
+    out > highpass(300hz, 0.05) > lowpass(6khz, 0.05) > drums
+}
+
+# B5: the needle in a scratch
+track dustb {
+    play dust_b
+    using s8dust
+    level 0.4
+    velocity 1.0
+    sidechain 0
+    out > highpass(1800hz, 0.1) > lowpass(7khz, 0.1) > autopan(0.6, bars=1) > master
+}
+
+# B6: the dub tom, into the echo
+track dubtom {
+    play t_dub
+    using s8rim
+    level 0.4
+    velocity 1.0
+    delay_send 0.6
+    reverb_send 0.3
+    out > highpass(90hz, 0.05) > lowpass(4khz, 0.05) > master
+}
+
+# The keyboard's lead: the chord's voice through the chord's chain, plus the
+# filter (`klp`), the vowel (`talk`) and the level (`kgain`) the keylab reaches
+track ktema {
+    play krest
+    using s8chord
+    level 0.26
+    velocity 0.75
+    gate 0.18
+    pan -0.12
+    delay_send 0.5
+    reverb_send 0.6
+    sidechain 0.5
+    out > highpass(300hz, 0.15) > lowpass(3.6khz, 0.12, lfo_bars=8, lfo_depth=1400) > saturate(0.2) > lowpass(18khz, 0.1) as klp > vowel(a, wet=0) as talk > gain(1.0) as kgain > master
+}
+
+midi {
+    # Faders
+    cc 75 > bass level 0..1.0                 # F2 the bass (written 0.5 at half)
+    cc 80 > rim level 0..0.9                  # F5 the rim, the crackle and the air
+    cc 80 > dust level 0..1.0
+    cc 80 > hiss level 0..0.2
+    cc 83 > chords delay_send 0..90%          # F8 the chord into the echo
+
+    # The tema page (K1-K9)
+    cc 74 > bass cutoff 70hz..800hz           # K1 the bass: hum to growl
+    cc 71 > s8chord detune 5%..22%..45%       # K2 the chord's colour: tight to smeared
+    cc 71 > s8chord chorus_mix 15%..55%..85%
+    cc 76 > s8chord cutoff 500hz..1.2khz..4khz    # K3 the chord opening out of the murk
+    cc 76 > chords lp cutoff 1.2khz..3.6khz..9khz
+    cc 77 > dust level 0..0.5..1.0           # K4 the vinyl: the crackle and the air
+    cc 77 > hiss lp cutoff 600hz..2.2khz..5khz
+    cc 93 > master hp cutoff 20hz..300hz      # K5 tension: the floor thins, the chord further into the room
+    cc 93 > chords reverb_send 60%..95%
+    cc 18 > rim delay_send 0..80%             # K6 the throw: the rim and the tom into the echo
+    cc 18 > dubtom delay_send 0..90%
+    cc 19 > drums kick_decay 25%..48%..75%    # K7 the kick's body
+    cc 16 > drums hihat_pitch 0.9x..1.4x..1.9x    # K8 the hats: darker, or brighter
+    cc 17 > reverb_mix 0.3..1.0               # K9 the room
+
+    # ── This tema's pages, after `master`: Tab passes over them while they rest ──
+    # The chord: Cm11 swallowed by the room. Its module's cutoff is the steps'
+    # `auto`; K1 here is the chain's filter, which leaves that sweep alone
+    page acorde {
+        cc 74 > chords lp cutoff 1.2khz..3.6khz..9khz # K1 the chord's brightness, over the sweep
+        cc 71 > chords resonance 5%..26%..55%         # K2 the chord's resonance
+        cc 76 > chords lfo_depth 0%..14%..40%         # K3 the filter's breathing
+        cc 77 > chords decay 80ms..220ms..900ms       # K4 the stab's length
+        cc 77 > chords release 100ms..300ms..1.2s     #    and its tail
+        cc 93 > chords sat drive 0..0.2..1.2          # K5 tension: the chord's grit
+        cc 18 > chords detune 5%..22%..45%            # K6 its colour: tight to smeared
+        cc 19 > chords chorus_mix 15%..55%..85%       # K7 its chorus
+        cc 16 > chords vibrato_depth 0%..3%..12%      # K8 its warble
+        cc 17 > chords sustain 0%..6%..40%            # K9 struck to held
+        # The faders: the chord's strip
+        cc 73 > chords level 0..0.52                  # F1 the chord (0.26 at half)
+        cc 75 > chords delay_send 0..90%              # F2 its echo
+        cc 79 > chords reverb_send 0..100%            # F3 its room
+        cc 72 > chords pan -0.7..0.7                  # F4 where it sits
+    }
+    # The vinyl: the crackle and the air under it
+    page polvo {
+        cc 74 > dust lp cutoff 3khz..7khz..12khz      # K1 the crackle's top
+        cc 71 > dust hihat_pitch 1.2x..2x             # K2 the clicks: duller to finer
+        cc 76 > dust hp cutoff 600hz..1800hz..4khz    # K3 the crackle thinned
+        cc 77 > dust snare_level 0..1.5..2            # K4 the pops under the clicks
+        cc 93 > hiss lp cutoff 600hz..2.2khz..5khz    # K5 tension: the air opening
+        cc 18 > hiss hp cutoff 120hz..300hz..1.2khz   # K6 the air thinned
+        cc 19 > dust snare_pitch 1.2x..2x             # K7 the pops' pitch
+        cc 16 > dust hihat_pan -0.6..0.2..0.6         # K8 the clicks across
+        cc 17 > dust hihat_level 0.5..2               # K9 the clicks' density
+        # The faders: the crackle's strip, then the air's
+        cc 73 > dust level 0..1                       # F1 the crackle (0.5 at half)
+        cc 75 > dust delay_send 0..40%                # F2 its echo
+        cc 79 > dust reverb_send 0..30%               # F3 its room
+        cc 72 > dust pan -0.7..0.7                    # F4 where it sits
+        cc 80 > hiss level 0..0.22                    # F5 the air (0.11 at half)
+        cc 81 > hiss reverb_send 0..60%               # F6 the air into the room
+        cc 82 > hiss delay_send 0..50%                # F7 the air into the echo
+        cc 83 > hiss pan -0.7..0.7                    # F8 where the air sits
+    }
+    # The rim in its one place
+    page rim {
+        cc 74 > rim lp cutoff 1.5khz..6khz..10khz     # K1 the rim's top
+        cc 71 > rim snare_pitch 1.3x..1.75x..2x       # K2 the rim's pitch
+        cc 76 > rim snare_pan -0.6..0.6               # K3 the rim across
+        cc 77 > rim snare_snap 20%..58%..90%          # K4 the rim's crack
+        cc 93 > rim snare_drive 0%..10%..50%          # K5 tension: the rim's grit
+        cc 18 > rim delay_send 0..60%                 # K6 the throw: the rim into the echo
+        cc 19 > rim tom_pan -0.6..0.6                 # K7 the dub tom across
+        cc 16 > rim snare_level 0..0.5..1             # K8 the rim's hit
+        cc 17 > rim hp cutoff 100hz..300hz..800hz     # K9 the rim thinned
+        # The faders: the rim's strip
+        cc 73 > rim level 0..0.9                      # F1 the rim (0.45 at half)
+        cc 75 > rim delay_send 0..60%                 # F2 its echo
+        cc 79 > rim reverb_send 0..60%                # F3 its room
+        cc 72 > rim pan -0.7..0.7                     # F4 where it sits
+    }
+
+    key 46 > toggle dust                      # A# the crackle in and out
+    key 47 > throw chords q=1/16              # B  the chord into the echo, on the grid
+
+    # Pads, bank B
+    pad 44 > hold stab1 q=1/16                # B1 the Cm11 stab, by hand
+    pad 45 > hold stabdb q=1/16               # B2 the Db lean
+    pad 46 > hold rimfill q=beat              # B3 a rim fill
+    pad 47 > throw rim q=1/16                 # B4 the rim into the echo
+    pad 48 > hold dustb q=beat                # B5 the needle in a scratch
+    pad 49 > hold dubtom q=beat               # B6 the dub tom into the echo
+    pad 50 > throw stab1 q=1/16               # B7 the hand's stab into the echo
+    pad 51 > drums openhat q=1/16             # B8 an open hat
+}

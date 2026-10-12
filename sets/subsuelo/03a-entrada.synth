@@ -1,0 +1,6 @@
+# set: bars=32 phase=03-organo energy=5 blend=32
+# set-note: T03 entra bajo la salida de T02: el bombo seco y apretado, hats a contratiempo, el sub en G y el órgano en pedal con los drawbars casi cerrados; nada más tonal.
+# cue: 17 K1 a la mitad: el filtro del órgano se abre un poco mientras T02 se va
+use "_t03.synth"
+
+auto organ mod_index 0.12 > 0.2 over 32

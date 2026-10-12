@@ -1,0 +1,13 @@
+# set: bars=32 phase=08-ceniza energy=5
+# set-note: The chord arrives: Cm11 on the "and" of one and three, short, swallowed by the room, its filter opening over the 32 bars (gesture 1); the crackle starts under it, the rim in its one place, the dub bass's long line.
+# cue: 9 F8 arriba en la segunda mitad del compás: el acorde al eco
+# cue: 25 B3 un relleno de rim antes de la vuelta
+use "_t08.synth"
+
+track drums  { play e_main, e_main, e_main, e_main, e_main, e_main, e_main, e_main_turn }
+track rim    { level 0.45 }
+track dust   { level 0.5 }
+track bass   { play b8_long, b8_long, b8_long, b8_long, b8_long, b8_long, b8_long, b8_long_turn }
+track chords { play st_half level 0.26 }
+
+auto s8chord cutoff 0.3 > 0.45 over 32

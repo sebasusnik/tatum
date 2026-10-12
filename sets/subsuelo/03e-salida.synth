@@ -1,0 +1,7 @@
+# set: bars=32 phase=03-organo energy=5
+# set-note: Despojado para que T04 entre encima: bombo, semicorcheas, el sub y el órgano en pedal con los drawbars cerrándose; sin clap, sin rim, nada tonal arriba.
+# cue: 17 F2 abajo despacio: el órgano deja lugar al bajo de T04
+use "_t03.synth"
+
+track drums { play d_out, d_out, d_out, d_out, d_out, d_out, d_out, d_out_turn }
+auto organ mod_index 0.25 > 0.1 over 16

@@ -1,0 +1,7 @@
+# set: bars=32 phase=01-niebla energy=3
+# set-note: The floor lands: the soft clap on two and four, the hat with its ghost, the rim on the "and" of four, the bass's line with its fifth below at the end of each cell.
+# cue: 15 tecla D# (39) un compás: el bajo afuera, vuelve en el uno
+use "_t01.synth"
+
+track drums { play n_main, n_main, n_main, n_main, n_main, n_main, n_main, n_main_turn }
+track rim   { level 0.45 }

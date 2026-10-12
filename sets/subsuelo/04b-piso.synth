@@ -1,0 +1,11 @@
+# set: bars=16 phase=04-hipnosis energy=5
+# set-note: El piso: clap, el rim en 3-3-2, el bajo se mueve al Db frigio y vuelve; los acordes dub Cm11 / Dbmaj7 aparecen cerrados y viven en su eco.
+# cue: 9 A (tecla 45) en el Db: tiro de acordes al eco
+use "_t04.synth"
+
+track drums  { play h_main, h_main, h_main, h_main, h_main, h_main, h_main, h_main_turn }
+track rim    { level 0.45 }
+track sub    { play sub_line, sub_line, sub_line, sub_line_turn }
+track bass   { play sub_line, sub_line, sub_line, sub_line_turn }
+track chords { level 0.3 }
+auto dub cutoff 0.15 > 0.3 over 16

@@ -1,0 +1,15 @@
+# set: bars=16 auto phase=04-hipnosis energy=4 perform=break
+# set-note: El hueco: se va el piso, sin bombo ni growl; quedan los hats, el sub en raíces largas, el pad oscuro y el coro grave diciendo "o" a "u", y la secuencia cerrándose en la sala.
+# cue: 1 entra la escena break: el teclado toca el pad, la zona de bajo el sub
+# cue: 16 A3 (freeze) sostenido en el último compás: la sala congelada hacia la subida
+use "_t04.synth"
+
+track drums  { play h_break }
+track sub    { play sub_break level 0.065 }
+track bass   { play krest4 }
+track pad    { level 0.14 }
+track choir  { level 0.4 }
+track seq    { level 0.14 }
+track tape   { level 0.05 }
+auto seq cutoff 0.35 > 0.12 over 16
+auto reverb_mix 0.4 > 0.6 over 16

@@ -1,0 +1,10 @@
+# set: bars=16 auto phase=03-organo energy=5
+# set-note: La caminata vuelve, más alta: el órgano sube a G3 y suspira Ab3-G3 sobre el Eb; los drawbars abiertos del todo y cerrándose; el stab se va, el piso vuelve a las semicorcheas.
+# cue: 1 K3 todo arriba: el órgano lleno
+# cue: 16 B6: fill de rim hacia la salida
+use "_t03.synth"
+
+track drums { play d_main, d_main, d_main, d_main, d_main, d_main, d_main, d_main_turn }
+track sub   { play s_walk }
+track bass  { play o_hi, o_hi, o_hi, o_hi_turn }
+auto organ mod_index 0.45 > 0.62 > 0.35 over 16

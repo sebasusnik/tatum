@@ -1,0 +1,6 @@
+# set: bars=16 phase=05-metal energy=6
+# set-note: El piso: hats en semicorcheas, clap y rim fijos; los toms afinados en F entran caminando de a tres, ralos; el stab toma su figura con el Eb.
+# cue: 13 B4: los toms caen del bII al final de la frase
+use "_t05.synth"
+
+track toms { play t_sparse, t_sparse, t_sparse, t_a_turn level 0.22 }

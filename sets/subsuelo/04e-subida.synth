@@ -1,0 +1,14 @@
+# set: bars=8 auto phase=04-hipnosis energy=5
+# set-note: La subida, una sola pasada: el pad se va, los hats a semicorcheas y el clap de negras a corcheas a semicorcheas en la grilla, la secuencia se abre de golpe en 8 compases y el piso se afina desde abajo; corte seco en el último tiempo.
+# cue: 5 K5 arriba despacio: más tensión
+# cue: 8.75 soltá todo: K5 al centro, vuelve el piso
+use "_t04.synth"
+
+track drums  { play h_rise_a, h_rise_b, h_rise_c, h_rise_d }
+track sub    { play sub_break level 0.065 }
+track bass   { play krest4 }
+track choir  { level 0.32 }
+track seq    { level 0.16 }
+track tape   { level 0.06 }
+auto seq cutoff 0.2 > 0.45 over 8
+auto master hp cutoff 20 > 180 over 8

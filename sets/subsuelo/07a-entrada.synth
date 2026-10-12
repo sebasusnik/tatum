@@ -1,0 +1,4 @@
+# set: bars=32 phase=07-subsuelo energy=6 blend=32
+# set-note: T07 enters under T06's salida: the deepest kick of the set with its offbeat hat, the sine sub and the square pluck on the offbeats; nothing above the bass.
+# cue: 17 F1 (bombo) arriba despacio: el bombo hondo toma el piso
+use "_t07.synth"

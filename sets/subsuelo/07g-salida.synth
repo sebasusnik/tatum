@@ -1,0 +1,6 @@
+# set: bars=32 phase=07-subsuelo energy=6
+# set-note: Stripped for T08 to mix over: the deep kick and the sixteenth hats without the clap, the plain pluck on the offbeats, the sub; nothing tonal above the bass.
+# cue: 17 F1 abajo despacio mientras entra el bombo de T08
+use "_t07.synth"
+
+track drums { play d_out }

@@ -1,0 +1,4 @@
+# set: bars=32 phase=08-ceniza energy=6 blend=32
+# set-note: T08 enters under T07's salida: a shorter, higher kick with dark offbeat hats, the sine sub and the round dub bass on long offbeat notes, the air of the room underneath; nothing tonal above the bass.
+# cue: 17 K8 un poco a la izquierda: los hats más oscuros que los de T07
+use "_t08.synth"

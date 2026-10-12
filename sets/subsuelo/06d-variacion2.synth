@@ -1,0 +1,10 @@
+# set: bars=16 auto phase=06-voz energy=6
+# set-note: Todo junto, una vez: el coro vuelve una octava abajo (F, Gb, Ab) bajo la sílaba, los acordes girados al 'e'; el bajo vuelve a sostener.
+# cue: 1 K3 del todo a la izquierda y subirlo en 16 compases: el coro de "a" a "u"
+# cue: 13 tecla B (47): el coro al eco y se va
+use "_t06.synth"
+
+track drums  { play v_wide, v_wide, v_wide, v_wide, v_wide, v_wide, v_wide, v_main_turn }
+track chords { play br_b, br_b, br_b, br_a_turn level 0.16 }
+track choir  { play choir_low level 0.26 }
+track syl    { play syl_a, syl_a, syl_a, syl_a_turn level 0.32 }

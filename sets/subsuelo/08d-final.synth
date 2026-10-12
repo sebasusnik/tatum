@@ -1,0 +1,16 @@
+# set: bars=32 phase=08-ceniza energy=3
+# set-note: The end of the set: the chord thins to its last stab on bar 15 and the room freezes on it from bar 16 (gesture 3); the kick thins to nothing by bar 17, the sub and the bass fade, the crackle runs on, and the master filter closes over the 32 bars.
+# cue: 15 no toques nada: el último acorde, la sala lo congela en el 16
+# cue: 25 F9 si querés, terminá de cerrar a mano
+use "_t08.synth"
+
+track drums  { play e_out }
+track dust   { level 0.6 }
+track hiss   { level 0.11 }
+track sub    { play sub_out }
+track bass   { play b8_out }
+track chords { play st_out level 0.28 reverb_send 0.85 }
+
+auto s8chord cutoff 0.4 > 0.3 over 32
+auto reverb_freeze 0 > 0 > 1 > 1 over 32
+auto master dj cutoff 20000 > 6000 > 1500 > 250 over 32
