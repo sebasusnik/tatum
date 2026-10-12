@@ -1,4 +1,4 @@
-# set: bars=64 phase=07-subsuelo energy=7
+# set: bars=64 max=1 phase=07-subsuelo energy=7
 # set-note: The peak: the floor back with the open hat, the pluck on its octaves, the 303 open on its drop riff (gesture 3); the pad (Cm11, the Db on the turn) heard for the first time; the 303 steps out for bars 33-48 and returns for the last phrase.
 # cue: 1 B3 crash en el uno
 # cue: 33 el 303 sale: B6 un par de veces, el acorde al eco

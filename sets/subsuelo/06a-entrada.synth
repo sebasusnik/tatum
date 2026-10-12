@@ -1,4 +1,4 @@
-# set: bars=32 phase=06-voz energy=6 blend=32
+# set: bars=32 max=2 phase=06-voz energy=6 blend=32
 # set-note: T06 entra bajo la salida seca de T05: el bombo más redondo y largo, hats oscuros sueltos, el bajo cálido sostenido en F con el sub; la sala ya más grande.
 # cue: 25 K9 un poco a la derecha: la sala se abre antes de la voz
 use "_t06.synth"

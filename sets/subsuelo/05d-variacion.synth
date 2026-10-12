@@ -1,4 +1,4 @@
-# set: bars=32 phase=05-metal energy=6
+# set: bars=32 max=2 phase=05-metal energy=6
 # set-note: Variación: el metal se calla y queda el acorde de metal (Fm9 / Gbmaj7) golpeado una vez cada cuatro, casi todo eco; el bajo empuja con el Gb, los toms a todo. En el 17 vuelve la llamada y respuesta, girada a la grilla de tres entera.
 # cue: 5 F8 arriba: el acorde se va al eco
 # cue: 15 B4 y soltar en el 17: los toms abren la vuelta del metal

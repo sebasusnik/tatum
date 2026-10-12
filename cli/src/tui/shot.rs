@@ -128,9 +128,11 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
             bar: 1,
             bars: steps[current].length(),
             cues: steps[current].cues.clone(),
-            moves_in: steps[current].auto.map(|_| steps[current].length()),
+            moves_in: steps[current].passes().map(|n| steps[current].bars as usize * n as usize),
+            capped: steps[current].max.filter(|_| steps[current].auto.is_none()),
             looping: false,
-            pass: steps[current].auto.filter(|n| *n > 1).map(|n| (1, n as usize)),
+            pass: steps[current].passes().filter(|n| *n > 1).map(|n| (1, n as usize)),
+            bar_loop: None,
         });
     }
     let source = Source::load(Path::new(&path))?;
@@ -146,6 +148,7 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     screen.set_song(SongInfo::from_source(&title, &source.text).ok_or("the song does not compile")?);
     screen.set = set;
     screen.pages = planner.pages();
+    screen.pad_voices = planner.waiting_for_pads();
     screen.say(format!("watching {}", path), Tone::Info);
     screen.say("saved: parameter change, applied instantly", Tone::Good);
 

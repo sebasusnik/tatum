@@ -1,4 +1,4 @@
-# set: bars=32 phase=01-niebla energy=4
+# set: bars=32 max=2 phase=01-niebla energy=4
 # set-note: The chord arrives: Cm9 struck on the offbeat, three stabs in four bars and the echo carrying the rest; its filter shut, opening a little over the step. The rim steps out to leave it the air.
 # cue: 13 F8 arriba: el único acorde de estos cuatro compases se queda en el eco
 # cue: 25 K3 despacio a la derecha: la niebla se levanta

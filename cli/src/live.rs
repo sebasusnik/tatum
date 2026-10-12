@@ -538,16 +538,28 @@ pub fn run(
                 Midi::Note { channel, note, velocity } => {
                     let generation = stats.generation.load(Ordering::Relaxed);
                     let pad = channel == DRUM_CHANNEL;
+                    // A `loop` pad or key: held, the bars it is held over loop.
+                    let loops = if pad {
+                        planner.pad_navigation(note) == Some(tatum_core::midi::PadAction::Loop)
+                    } else {
+                        planner.key_loops(note)
+                    };
+                    if loops {
+                        if let Some(nav) = set.as_mut() {
+                            let bar = stats.bar.load(Ordering::Relaxed) as usize;
+                            let done = if velocity > 0 { Some(nav.loop_press(bar)) } else { nav.loop_release(bar) };
+                            if let Some((op, said)) = done {
+                                let _ = plan_tx.send(tatum_core::live::Plan::Control { base: generation, op });
+                                ui.say(now_s(), &said, crate::tui::Tone::Good);
+                            }
+                        }
+                        continue;
+                    }
                     if pad && velocity > 0 {
                         if let Some(action) = planner.pad_navigation(note) {
                             match set.as_mut() {
                                 Some(nav) => {
                                     let bar = stats.bar.load(Ordering::Relaxed) as usize;
-                                    if action == tatum_core::midi::PadAction::Loop {
-                                        let said = nav.toggle_loop(bar);
-                                        ui.say(now_s(), &said, crate::tui::Tone::Good);
-                                        continue;
-                                    }
                                     let m = match action {
                                         tatum_core::midi::PadAction::Prev => crate::setnav::Move::Prev,
                                         tatum_core::midi::PadAction::Step(n) => crate::setnav::Move::To(n),
@@ -562,13 +574,6 @@ pub fn run(
                             }
                             continue;
                         }
-                    }
-                    if !pad && velocity > 0 && planner.key_loops(note) {
-                        if let Some(nav) = set.as_mut() {
-                            let said = nav.toggle_loop(stats.bar.load(Ordering::Relaxed) as usize);
-                            ui.say(now_s(), &said, crate::tui::Tone::Good);
-                        }
-                        continue;
                     }
                     let plans = if pad {
                         planner.pad(note, velocity, generation)
@@ -676,6 +681,8 @@ pub fn run(
                     crate::tui::Key::Prev => keys.push(crate::keys::Key::Prev),
                     crate::tui::Key::Step(n) => keys.push(crate::keys::Key::Step(n)),
                     crate::tui::Key::Loop => keys.push(crate::keys::Key::Loop),
+                    crate::tui::Key::LoopUp => keys.push(crate::keys::Key::LoopUp),
+                    crate::tui::Key::Keep => keys.push(crate::keys::Key::Keep),
                     crate::tui::Key::Named(n) => keys.push(crate::keys::Key::Named(n)),
                     // The screen writes the line in the file; the save is
                     // picked up below like one from the editor.
@@ -814,10 +821,25 @@ pub fn run(
                 crate::keys::Key::Next => crate::setnav::Move::Next,
                 crate::keys::Key::Prev => crate::setnav::Move::Prev,
                 crate::keys::Key::Step(n) => crate::setnav::Move::To(n),
-                crate::keys::Key::Loop => {
+                crate::keys::Key::Loop | crate::keys::Key::LoopUp => {
                     if let Some(nav) = set.as_mut() {
                         let bar = stats.bar.load(Ordering::Relaxed) as usize;
-                        let said = nav.toggle_loop(bar);
+                        let done = if key == crate::keys::Key::Loop {
+                            Some(nav.loop_press(bar))
+                        } else {
+                            nav.loop_release(bar)
+                        };
+                        if let Some((op, said)) = done {
+                            let base = stats.generation.load(Ordering::Relaxed);
+                            let _ = plan_tx.send(tatum_core::live::Plan::Control { base, op });
+                            ui.say(now_s(), &said, crate::tui::Tone::Good);
+                        }
+                    }
+                    continue;
+                }
+                crate::keys::Key::Keep => {
+                    if let Some(nav) = set.as_mut() {
+                        let said = nav.toggle_loop(stats.bar.load(Ordering::Relaxed) as usize);
                         ui.say(now_s(), &said, crate::tui::Tone::Good);
                     }
                     continue;
@@ -945,6 +967,7 @@ pub fn run(
             screen.bound = bindings.iter().map(|b| b.key.clone()).collect();
             screen.voice = planner.voice_name();
             screen.pages = planner.pages();
+            screen.pad_voices = planner.waiting_for_pads();
             screen.perform = match (planner.scene(), &pending_scene) {
                 (now, Some((next, bar))) => Some(format!("{} → {} @ bar {}", now.unwrap_or("—"), next, bar + 1)),
                 (Some(now), None) => Some(now.to_string()),
@@ -961,8 +984,10 @@ pub fn run(
                     bars: nav.steps[nav.current].length(),
                     cues: nav.steps[nav.current].cues.clone(),
                     moves_in: nav.moves_in(bar),
+                    capped: nav.steps[nav.current].max.filter(|_| nav.steps[nav.current].auto.is_none()),
                     looping: nav.looping,
                     pass: nav.pass(bar),
+                    bar_loop: nav.loop_view(),
                 });
             }
             screen.position(
@@ -1107,7 +1132,7 @@ fn print_keyboard(planner: &LivePlanner) {
                 KeyAction::Voice(tatum_core::dsl::ast::VoiceMove::Prev) => "voice before".into(),
                 KeyAction::Voice(tatum_core::dsl::ast::VoiceMove::To(p)) => format!("voice {}", p),
                 KeyAction::Next => "next".into(),
-                KeyAction::Loop => "keep the step, or let it move on".into(),
+                KeyAction::Loop => "loop the bars held over".into(),
                 KeyAction::Prev => "prev".into(),
                 KeyAction::Step(n) => format!("step {}", n),
             };

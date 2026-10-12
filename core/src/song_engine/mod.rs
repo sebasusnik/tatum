@@ -28,6 +28,7 @@ mod fx_chain;
 mod held;
 mod handover;
 mod instrument;
+mod looper;
 mod meters;
 mod mix;
 mod scene;
@@ -157,6 +158,8 @@ pub struct SongEngine {
     arrangement_bar_count: u32,
     current_bar: usize,
     global_step: usize,
+    /// A loop of bars caught by hand. See `looper.rs`.
+    looper: looper::Looper,
 
     // Pending nudge triggers: (samples_remaining, instrument_idx, midi_note, velocity)
     // Capacity is reserved up front; see `push_trigger` for what happens when it fills.

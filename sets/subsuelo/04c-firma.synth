@@ -1,4 +1,4 @@
-# set: bars=32 phase=04-hipnosis energy=6
+# set: bars=32 max=2 phase=04-hipnosis energy=6
 # set-note: La firma: la secuencia de semicorcheas entra y su filtro respira en 16 compases, abriéndose a lo largo de los 32; los acordes se raleán a uno cada dos compases para dejarle lugar.
 # cue: 1 la secuencia entra cerrada: no tocar nada
 # cue: 17 K3 hacia arriba en 8 compases: la secuencia se abre y resuena

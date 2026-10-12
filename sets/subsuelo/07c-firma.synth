@@ -1,4 +1,4 @@
-# set: bars=32 phase=07-subsuelo energy=7
+# set: bars=32 max=2 phase=07-subsuelo energy=7
 # set-note: The 303 surfaces under the sub for sixteen bars (9-24), its filter shut and opening a hair, then sinks again (gesture 1).
 # cue: 9 el 303 aparece bajo el sub: no toques K3 todavía, dejalo abrir solo
 # cue: 21 F8 un toque arriba y abajo: una cola del 303 al eco

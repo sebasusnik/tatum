@@ -1,10 +1,17 @@
-# set: bars=32 phase=01-niebla energy=4
+# set: bars=32 max=2 phase=01-niebla energy=4
 # set-note: Stripped for T02 to mix over: the kick, the plain offbeat hat, the rim, the bass on its root; the chord is gone, the tape hiss thins out.
 # cue: 1 tecla B (47): el último Cm9 al eco mientras se va
 use "_t01.synth"
 
-track drums { play n_out, n_out, n_out, n_out, n_out, n_out, n_out, n_in_turn }
-track rim   { level 0.4 }
-track sub   { play low_plain }
-track bass  { play low_plain }
+track drums { play n_out, n_out, n_out, n_out, n_out, n_out, n_out, n_in_turn degrade 25% }
+track rim   { play rim_a degrade 25% level 0.4 }
+track sub   { play low_plain degrade 25% }
+track bass  { play low_plain degrade 25% }
 auto hiss level 0.05 > 0.02 over 32
+track kconga { play kcroll up -1 degrade 25% }
+track hiss { play hiss_bed degrade 25% }
+track chit { play chit_cm degrade 25% }
+track chitf { play chit_fm degrade 25% }
+track swell { play swell_cm degrade 25% }
+track rimfill { play rim_fill degrade 25% }
+track tom { play tom_fig degrade 25% }

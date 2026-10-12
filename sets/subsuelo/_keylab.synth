@@ -6,7 +6,8 @@
 #
 #   36..47  triggers  the lowest octave: one thing a key (below)
 #   48..59  bass      the tema's bass plays the note held, in its register
-#   60..84  lead      the tema's own lead voice (`ktema`, in its rig), or the
+#   60..84  lead      the keys' own voice (`ktema`, in its rig: the tema's sound
+#                     on a module of its own, shaped on the `teclas` page), or the
 #                     scene's sound; kept to the scale. Hold three keys for a
 #                     chord on a chord voice
 #
@@ -85,30 +86,59 @@ midi {
         cc 72 > bass reverb_send 0..40%               # F4 and into the room
         cc 80 > bass pan -0.6..0.6                    # F5 where it sits
     }
-    page lead {
+    # The keys' own voice: what the hands play, apart from the tema. Each
+    # rig gives `ktema` a module of its own (`kvoz`), so these move only the
+    # keys; every line reaches `kdub` and `kpad` too, whichever the scene
+    # has the keys play. Several lines on one knob: each voice answers the
+    # ones its kind of module has (a filter, FM, a bass).
+    page teclas {
         cc 74 > ktema klp cutoff 300hz..18khz         # K1 brightness
-        cc 71 > ktema resonance                       # K2 resonance (FM: feedback)
+        cc 74 > kdub lp cutoff 400hz..20khz
+        cc 74 > kpad cutoff 300hz..4khz
+        cc 71 > ktema resonance                       # K2 character: resonance, or FM feedback
         cc 71 > ktema feedback
-        cc 76 > ktema decay                           # K3 decay
-        cc 77 > ktema mod_index                       # K4 FM index (filter: envelope)
-        cc 77 > ktema cutoff_env
-        cc 77 > ktema cutoff 300hz..6khz              #    (keys: its filter)
-        cc 93 > ktema vibrato_depth                   # K5 vibrato
-        cc 18 > ktema talk wet 0%..100%               # K6 vowel: the lead talks, a to u,
-        cc 18 > ktema talk position 0..1              #    and the pad's vowel
-        cc 18 > kpad vox position 0..1
-        cc 19 > kdub lp cutoff 400hz..20khz           # K7 the dub stab's filter
-        cc 16 > kdub_v decay                          # K8 the dub stab's length
-        cc 17 > ktema kgain gain 0..1                 # K9 the lead's level
-        # The faders: each keyboard voice's level and sends
-        cc 73 > ktema level 0..1                      # F1 the tema's lead (written at half)
-        cc 75 > ktema delay_send 0..80%               # F2 its echo
-        cc 79 > ktema reverb_send 0..80%              # F3 its room
-        cc 72 > kdub level 0..0.6                     # F4 the dub stab
-        cc 80 > kdub delay_send 0..90%                # F5 its echo
-        cc 81 > kpad level 0..0.32                    # F6 the vowel pad
-        cc 82 > kpad reverb_send 0..90%               # F7 its room
-        cc 83 > kconga level 0..0.36                  # F8 the congas (held on F#)
+        cc 71 > kdub resonance
+        cc 71 > kpad resonance
+        cc 76 > ktema mod_index                       # K3 colour: FM index, the bass's envelope,
+        cc 76 > ktema cutoff_env                      #    or the keys' detune
+        cc 76 > ktema detune
+        cc 76 > kdub detune
+        cc 76 > kpad detune
+        cc 77 > ktema attack 1ms..800ms               # K4 attack: struck to swelling
+        cc 77 > kdub attack 1ms..400ms
+        cc 77 > kpad attack 50ms..2s
+        cc 93 > ktema decay 40ms..2s                  # K5 decay
+        cc 93 > kdub decay 60ms..1500ms
+        cc 93 > kpad decay 200ms..2s
+        cc 18 > ktema sustain                         # K6 sustain: plucked to held
+        cc 18 > kdub sustain
+        cc 18 > kpad sustain
+        cc 19 > ktema release 20ms..2s                # K7 release: the tail
+        cc 19 > kdub release 30ms..1500ms
+        cc 19 > kpad release 200ms..2s
+        cc 16 > ktema talk position 0..1              # K8 the vowel, a to u (F8 brings it in)
+        cc 16 > kpad vox position 0..1
+        cc 17 > ktema vibrato_depth                   # K9 vibrato
+        cc 17 > kpad vibrato_depth
+        # The faders: the keys' strip
+        cc 73 > ktema kgain gain 0..2                 # F1 the keys' level (as measured at half)
+        cc 73 > kdub level 0..0.6
+        cc 73 > kpad level 0..0.32
+        cc 75 > ktema delay_send 0..80%               # F2 echo
+        cc 75 > kdub delay_send 0..90%
+        cc 79 > ktema reverb_send 0..80%              # F3 room
+        cc 79 > kdub reverb_send 0..80%
+        cc 79 > kpad reverb_send 0..90%
+        cc 72 > ktema pan -0.7..0.7                   # F4 where they sit
+        cc 72 > kdub pan -0.7..0.7
+        cc 80 > ktema lfo_depth                       # F5 movement: the voice's own LFO (in time)
+        cc 80 > kpad lfo_depth
+                                                      # F6 as on the first page
+        cc 82 > ktema chorus_mix                      # F7 width (the bass: its glide)
+        cc 82 > ktema glide
+        cc 82 > kpad chorus_mix
+        cc 83 > ktema talk wet 0%..100%               # F8 the vowel in: the keys talk
+        cc 83 > kpad vox wet 0%..100%
     }
     page drums {
         cc 74 > drums kick_decay                      # K1 kick decay

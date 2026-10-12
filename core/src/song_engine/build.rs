@@ -410,6 +410,7 @@ impl SongEngine {
             arrangement_bar_count: 0,
             current_bar: 0,
             global_step: 0,
+            looper: super::looper::Looper::new(track_buf_count),
             band_metering: false,
             master_in_peak: 0.0,
             master_in_sum_sq: 0.0,

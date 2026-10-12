@@ -21,8 +21,12 @@ pub enum Key {
     Prev,
     /// A step by its number on screen, counting from 1.
     Step(usize),
-    /// Keep the step that would move on by itself, or let it go.
+    /// `l`: a loop of bars, in and out (see `SetNav::loop_press`).
     Loop,
+    /// `l` let go, where the terminal says so.
+    LoopUp,
+    /// Shift+L: keep the step that would move on by itself, or let it go.
+    Keep,
     Named(KeyName),
 }
 
@@ -64,7 +68,8 @@ impl KeyName {
             KeyName::Space | KeyName::Right | KeyName::Char('n' | 'N') => Some(Key::Next),
             KeyName::Left | KeyName::Char('p' | 'P') => Some(Key::Prev),
             KeyName::Char(c @ '1'..='9') => Some(Key::Step(c as usize - '0' as usize)),
-            KeyName::Char('o' | 'O') => Some(Key::Loop),
+            KeyName::Char('l') => Some(Key::Loop),
+            KeyName::Char('L') => Some(Key::Keep),
             _ => None,
         }
     }

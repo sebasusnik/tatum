@@ -510,6 +510,31 @@ fn mute_and_solo_from_the_keyboard() {
     assert_eq!(muted(&player), vec![false, false, false]);
 }
 
+/// A track a `hold` pad plays is out until the pad is held; `m` from the
+/// keyboard brings it in as if held, and again takes it out.
+#[test]
+fn the_keyboard_brings_in_a_track_a_hold_pad_plays() {
+    let song = format!("{LIVE}\nmidi {{\n  pad 44 > hold pad\n}}\n");
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    player.apply(planner.plan(&song, player.generation()).unwrap_or_else(|e| panic!("{}", e.to_json())));
+    player.start();
+    let pad_muted = |player: &LivePlayer| player.engine().unwrap().track_muted(2);
+    // The engine starts with it out: the planner says so on the first mute.
+    for p in planner.toggle_mute("kick", player.generation()) {
+        player.apply(p);
+    }
+    assert!(pad_muted(&player), "a hold track is out until held");
+    for p in planner.toggle_mute("pad", player.generation()) {
+        player.apply(p);
+    }
+    assert!(!pad_muted(&player), "m brings it in");
+    for p in planner.toggle_mute("pad", player.generation()) {
+        player.apply(p);
+    }
+    assert!(pad_muted(&player), "and m again takes it out");
+}
+
 /// A group soloed together: only its tracks sound.
 #[test]
 fn a_group_can_be_soloed() {

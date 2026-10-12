@@ -537,9 +537,26 @@ track cstab {
 
 # The keyboard's lead: the 303, through the acid's chain, plus the filter
 # (`klp`), the vowel (`talk`) and the level (`kgain`) the keylab reaches
+# The keys' own voice: `s7tb` as written, under another name, so a knob
+# on it (the `teclas` page) moves only what the hands play, and the tema's
+# `auto` lines on `s7tb` leave it alone.
+module bass kvoz {
+    osc1_wave saw
+    cutoff 140hz
+    cutoff_env 700hz
+    resonance 80%
+    glide 14%
+    keytrack 15%
+    attack 1ms
+    decay 170ms
+    sustain 10%
+    release 40ms
+    vel_env 55%
+}
+
 track ktema {
     play krest
-    using s7tb
+    using kvoz
     level 0.35
     velocity 1.0
     gate 0.55

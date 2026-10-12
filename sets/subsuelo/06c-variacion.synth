@@ -1,4 +1,4 @@
-# set: bars=32 phase=06-voz energy=6
+# set: bars=32 max=2 phase=06-voz energy=6
 # set-note: Variación: la sílaba contesta al clap una semicorchea después, cada vez otra vocal; el bajo salta la octava en los huecos y los hats van en semicorcheas.
 # cue: 15 B6: la sílaba al eco en el giro
 # cue: 25 K4 a la derecha: la sílaba zumba

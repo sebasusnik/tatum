@@ -45,8 +45,12 @@ pub struct Step {
     /// `auto` or `auto=2` in the header: a bridge, a break, a build. In
     /// `set play` the step plays its bars this many times and then moves on
     /// by itself, where any other step loops until the performer moves; the
-    /// performer can still keep it (`o`, or a `loop` pad or key).
+    /// performer can still keep it (Shift+L).
     pub auto: Option<u32>,
+    /// `max=2` in the header: in `set play`, the most times the step plays
+    /// its bars before it moves on by itself, so a step left alone does not
+    /// loop for ever. `set render` plays it once, as written.
+    pub max: Option<u32>,
 }
 
 impl Step {
@@ -59,6 +63,21 @@ impl Step {
     pub fn length(&self) -> usize {
         self.bars as usize * self.auto.unwrap_or(1) as usize
     }
+
+    /// The passes it plays in `set play` before moving on by itself, if it
+    /// does: its `auto=`, else its `max=`.
+    pub fn passes(&self) -> Option<u32> {
+        self.auto.or(self.max)
+    }
+}
+
+/// `max=N` in the `# set:` header.
+fn parse_max(src: &str) -> Option<u32> {
+    src.lines()
+        .filter_map(|l| l.trim().strip_prefix("# set:").or_else(|| l.trim().strip_prefix("#set:")))
+        .flat_map(str::split_whitespace)
+        .filter_map(|f| f.strip_prefix("max=")?.parse::<u32>().ok().filter(|n| *n > 0))
+        .next_back()
 }
 
 /// `auto` or `auto=N` in the `# set:` header: the passes a step plays before
@@ -163,7 +182,8 @@ pub fn load(dir: &Path, default_bars: u32) -> Result<Vec<Step>, String> {
             let cues = parse_cues(&raw);
             let perform = parse_perform(&raw);
             let auto = parse_auto(&raw);
-            Ok(Step { path, src, bars, phase, energy, note, blend, cues, perform, auto })
+            let max = parse_max(&raw);
+            Ok(Step { path, src, bars, phase, energy, note, blend, cues, perform, auto, max })
         })
         .collect()
 }
@@ -495,11 +515,15 @@ pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Resul
                     plans = turn.plans;
                 }
                 Act::Pad(note, v) => {
-                    if v > 0 {
+                    // A `loop` pad: the bars it is held over loop.
+                    if planner.pad_navigation(note) == Some(tatum_core::midi::PadAction::Loop) {
+                        let done = if v > 0 { Some(nav.loop_press(bar)) } else { nav.loop_release(bar) };
+                        if let Some((op, s)) = done {
+                            plans.push(tatum_core::live::Plan::Control { base: g, op });
+                            said = s;
+                        }
+                    } else if v > 0 {
                         if let Some(action) = planner.pad_navigation(note) {
-                            if action == tatum_core::midi::PadAction::Loop {
-                                said = nav.toggle_loop(bar);
-                            }
                             let m = match action {
                                 tatum_core::midi::PadAction::Prev => crate::setnav::Move::Prev,
                                 tatum_core::midi::PadAction::Step(n) => crate::setnav::Move::To(n),
@@ -511,7 +535,7 @@ pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Resul
                         }
                     }
                     // A set move is only that, as in `set play`.
-                    if said.is_empty() {
+                    if said.is_empty() && plans.is_empty() && planner.pad_navigation(note).is_none() {
                         match planner.pad(note, v, g) {
                             Some(p) => plans = p,
                             None if v > 0 => said = format!("pad {} (not mapped)", note),
@@ -884,7 +908,7 @@ fn cmd_render(args: &[String]) -> Result<(), String> {
             clock(*at),
             step.name(),
             step.bars,
-            step.auto.map(|n| format!(" x{} auto", n)).unwrap_or_default(),
+            step.auto.map(|n| format!(" x{} auto", n)).or(step.max.map(|n| format!(" max x{}", n))).unwrap_or_default(),
             step.phase,
             step.note,
             moved.map(|b| format!("  (plays {} to reach the phrase line)", b)).unwrap_or_default()

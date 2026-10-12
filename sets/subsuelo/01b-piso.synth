@@ -1,4 +1,4 @@
-# set: bars=32 phase=01-niebla energy=3
+# set: bars=32 max=2 phase=01-niebla energy=3
 # set-note: The floor lands: the soft clap on two and four, the hat with its ghost, the rim on the "and" of four, the bass's line with its fifth below at the end of each cell.
 # cue: 15 tecla D# (39) un compás: el bajo afuera, vuelve en el uno
 use "_t01.synth"

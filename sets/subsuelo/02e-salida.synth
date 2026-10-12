@@ -1,4 +1,4 @@
-# set: bars=32 phase=02-rhodes energy=5
+# set: bars=32 max=2 phase=02-rhodes energy=5
 # set-note: Stripped for T03 to mix over: kick, plain hats, the shaker in sixteenths, the bass and the sub on C and G only; the Rhodes, the comping and the bongos gone.
 # cue: 1 B4 (pad 47) en el último compás de la frase: el shaker se enrolla hacia el nuevo tema
 use "_t02.synth"
@@ -7,3 +7,4 @@ track drums  { play r_in, r_in, r_in, r_in, r_in, r_in, r_in, r_in_turn }
 track shaker { play s_main }
 track sub    { play sb_plain }
 track bass   { play b_plain }
+track kconga { play kcroll rev }

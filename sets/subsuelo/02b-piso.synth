@@ -1,4 +1,4 @@
-# set: bars=16 phase=02-rhodes energy=4
+# set: bars=16 max=2 phase=02-rhodes energy=4
 # set-note: The groove opens: clap on two and four, the shaker in sixteenths, the bongos in their place, the bass's line between Cm11 and Abmaj7#11 and the comping Rhodes on the offbeat.
 # cue: 9 tecla A# (46): las bongós afuera
 # cue: 13 tecla A# (46): las bongós vuelven

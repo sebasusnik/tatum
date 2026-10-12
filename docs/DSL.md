@@ -617,7 +617,7 @@ midi {
     pad 46 > throw stab        # the whole track into the delay while held; the repeats ring on
     pad 47 > freeze            # the reverb frozen while held
     pad 48 > next              # in `tatum set play`: the next step; also prev, step 3
-    pad 51 > loop              # in a set: keep a step that moves on by itself (`# set: auto`)
+    pad 51 > loop              # in a set: held, the bars it is held over loop; a tap lets them go
 }
 ```
 

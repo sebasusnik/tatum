@@ -1,4 +1,4 @@
-# set: bars=32 phase=01-niebla energy=4
+# set: bars=32 max=2 phase=01-niebla energy=4
 # set-note: The chord comes only twice a phrase now, and leans to Fm9 over the bass's F before it comes back; brighter than before. Between, the hats run in sixteenths and the rim knocks twice a bar.
 # cue: 9 B6 (pad 49) en el último golpe del rim: tirarlo al eco
 # cue: 11 K3 a la derecha y volver: el filtro respira con el Fm9
