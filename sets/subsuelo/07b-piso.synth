@@ -1,4 +1,4 @@
-# set: bars=16 phase=07-subsuelo energy=7
+# set: bars=16 max=2 phase=07-subsuelo energy=7
 # set-note: The floor lands: the clap on two and four, sixteenth hats with ghosts, the pluck's syncopated line in the gaps, the sub's long roots, the rim and the low tom.
 # cue: 16 tecla D# (39) un compás: el bajo y el sub afuera, vuelven en el uno
 use "_t07.synth"

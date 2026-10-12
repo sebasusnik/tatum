@@ -536,9 +536,28 @@ track kchoir {
 }
 
 # The keyboard's lead: the sequence's pluck, through the sequence's chain
+# The keys' own voice: `seq` as written, under another name, so a knob
+# on it (the `teclas` page) moves only what the hands play, and the tema's
+# `auto` lines on `seq` leave it alone.
+module keys kvoz {
+    voice_mode poly
+    cutoff 600hz
+    resonance 40%
+    detune 5%
+    chorus_mix 0%
+    attack 4ms
+    decay 150ms
+    sustain 0%
+    release 250ms
+    lfo_target cutoff
+    lfo_sync bars_16
+    lfo_waveform triangle
+    lfo_depth 35%
+}
+
 track ktema {
     play krest
-    using seq
+    using kvoz
     level 0.5
     velocity 1.0
     gate 0.5

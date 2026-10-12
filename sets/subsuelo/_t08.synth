@@ -531,9 +531,30 @@ track dubtom {
 
 # The keyboard's lead: the chord's voice through the chord's chain, plus the
 # filter (`klp`), the vowel (`talk`) and the level (`kgain`) the keylab reaches
+# The keys' own voice: `s8chord` as written, under another name, so a knob
+# on it (the `teclas` page) moves only what the hands play, and the tema's
+# `auto` lines on `s8chord` leave it alone.
+module keys kvoz {
+    voice_mode poly
+    detune 22%
+    chorus_mix 55%
+    cutoff 1.2khz
+    resonance 26%
+    attack 14ms
+    decay 220ms
+    sustain 6%
+    release 300ms
+    lfo_target cutoff
+    lfo_sync bars_8
+    lfo_waveform triangle
+    lfo_depth 14%
+    vibrato_rate 0.6hz
+    vibrato_depth 3%
+}
+
 track ktema {
     play krest
-    using s8chord
+    using kvoz
     level 0.26
     velocity 0.75
     gate 0.18

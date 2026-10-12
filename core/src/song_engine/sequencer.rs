@@ -181,6 +181,9 @@ impl SongEngine {
                 }
             }
         }
+        if self.global_step.is_multiple_of(self.steps_per_bar.max(1)) {
+            self.loop_bar_line();
+        }
         self.scene_step += 1;
 
         let track_count = self.tracks.len();

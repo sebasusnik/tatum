@@ -487,9 +487,29 @@ track shroll {
 }
 
 # The keyboard's lead: the Rhodes, through the line's chain
+# The keys' own voice: `rhodes` as written, under another name, so a knob
+# on it (the `teclas` page) moves only what the hands play, and the tema's
+# `auto` lines on `rhodes` leave it alone.
+module fm kvoz {
+    algorithm dual_pairs
+    level 2.0
+    mod_index 22%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op2_ratio 1x
+    op3_ratio 14x
+    op0_envelope 0.002 1.4 0.25 0.6
+    op1_envelope 0.002 0.8 0.2 0.5
+    op2_envelope 0.002 1.0 0.1 0.5
+    op3_envelope 0.001 0.05 0.0 0.04
+    vibrato_rate 4.5hz
+    vibrato_depth 3%
+}
+
 track ktema {
     play krest
-    using rhodes
+    using kvoz
     level 0.26
     velocity 1.0
     gate 0.95

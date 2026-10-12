@@ -1,4 +1,4 @@
-# set: bars=32 phase=06-voz energy=6
+# set: bars=32 max=2 phase=06-voz energy=6
 # set-note: Salida pelada para que T07 entre encima: bombo, hats, el bajo cálido simple en F y el sub; la voz y los acordes se fueron.
 # cue: 17 F2 abajo de a poco: el bajo deja el lugar al de T07
 use "_t06.synth"

@@ -1,4 +1,4 @@
-# set: bars=32 phase=06-voz energy=6
+# set: bars=32 max=2 phase=06-voz energy=6
 # set-note: La firma: el clap y los acordes de aliento (Fm9, Dbmaj7#11, Eb11sus) entran con el coro grave que gira de "oh" a "uh" sobre la quinta, se apoya en el Db y se va en el 17.
 # cue: 9 K3 despacio: el coro camina la vocal a mano
 # cue: 17 el coro se fue: F8 arriba, los acordes al eco

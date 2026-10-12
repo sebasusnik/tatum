@@ -44,17 +44,20 @@ In short:
 | key | what it does |
 |-----|--------------|
 | `↑` `↓` | choose a track; `v` marks it, `Shift+↑↓` marks as it moves, `a` marks every lane, `Esc` clears |
-| `m` `s` | mute / solo the marked tracks, else the chosen one, at once |
+| `m` `s` | mute / solo the marked tracks, else the chosen one, at once. A pad's voice (`hold`, marked `pad`) is out until its pad is held: `m` brings it in, again takes it out |
 | `r` `f` `h` | write `rev`, `fast 2`, `slow 2` on their `play` line |
 | `[` `]` `-` `+` | `shift -1 / 1`, `up -1 / 1` |
 | `e` `d` | `every 4 rev`; `degrade` 25%, then 50% |
 | `x` `u` | every transform off; undo the last change made from the screen |
 | `k` | put a knob on the chosen track (see "Knobs and faders" in [DSL.md](DSL.md#knobs-and-faders)) |
-| `l` | the session's log |
+| `j` | the session's log |
 | `i` | MIDI in: every message the controller sends, and what the song does with it |
 | `space` `n` `p` | in a set: the next step, the one before |
 | `←` `→` `Enter` | in a set: look through the steps, go to the one looked at |
 | `1`-`9` `g` `Tab` | in a set: go to a step on screen; pick from every step |
+| `l` | in a set: held, the bars it is held over loop (tapped: in, then out); again lets go |
+| `Shift+L` | in a set: keep a step that would move on by itself (`auto`, `max`) |
+| `?` | every key |
 | `q` `Ctrl-C` | quit; `Esc` never quits |
 
 `k` lists everything the chosen track offers a knob, with what each controller already

@@ -1,4 +1,4 @@
-# set: bars=32 phase=02-rhodes energy=5
+# set: bars=32 max=2 phase=02-rhodes energy=5
 # set-note: Played differently: the bass pushes into the gaps with its octave, the comping takes a closer voicing with the eleventh on top, the bongos answer in the gaps; the line comes back changed, from the Ab falling, only in the second half of each phrase.
 # cue: 9 B2 (pad 45) en el uno del compás: el Abmaj7#11 al eco
 # cue: 13 F8 arriba: la línea del Rhodes se queda en el eco

@@ -1,4 +1,4 @@
-# set: bars=32 phase=04-hipnosis energy=5
+# set: bars=32 max=2 phase=04-hipnosis energy=5
 # set-note: Despojado para que T05 entre encima: bombo hondo, hats, el sub y el growl en pedal de C cerrándose; sin clap, sin rim, nada tonal arriba.
 # cue: 17 F2 abajo despacio: el growl deja lugar al bajo de T05
 use "_t04.synth"

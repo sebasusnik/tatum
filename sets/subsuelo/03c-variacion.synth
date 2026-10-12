@@ -1,4 +1,4 @@
-# set: bars=32 phase=03-organo energy=5
+# set: bars=32 max=2 phase=03-organo energy=5
 # set-note: El bajo vuelve al pedal y en su lugar aparece el único acorde del tema, un stab de órgano (Gm11, y el Abmaj7 del bII) que vive en su eco de negra; los hats pasan al abierto a contratiempo.
 # cue: 9 F8 arriba: el stab al eco
 # cue: 25 K4 a la derecha: el stab se abre
@@ -7,6 +7,6 @@ use "_t03.synth"
 track drums  { play d_var, d_var, d_var, d_var, d_var, d_var, d_var, d_var_turn }
 track sub    { play s_walk }
 track bass   { play o_plain, o_plain, o_plain, o_plain_turn }
-track chords { level 0.3 }
+track chords { play c_sparse, c_sparse, c_sparse, c_sparse_turn level 0.3 }
 auto organ mod_index 0.3 > 0.2 over 16
 auto organst mod_index 0.2 > 0.38 over 32

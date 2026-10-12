@@ -152,6 +152,13 @@ pub enum FastOp {
         velocity: f32,
         kick: Option<(usize, u8)>,
     },
+    /// A loop of bars by hand: it starts on the bar playing, is closed
+    /// `bars` long, and is let go. See `song_engine/looper.rs`.
+    LoopIn,
+    LoopOut {
+        bars: usize,
+    },
+    LoopExit,
 }
 
 /// What a new engine takes over from the one it replaces, by index in the new
@@ -513,6 +520,9 @@ pub struct LivePlanner {
     knob_values: Vec<(u8, u8)>,
     /// Tracks a `toggle` pad or the keyboard has taken out, by name.
     muted: Vec<String>,
+    /// Tracks a `hold` pad plays, brought in from the keyboard as if the
+    /// pad were held: `m` on one of them latches it in, and again lets go.
+    latched: Vec<String>,
     /// The tracks soloed from the keyboard, and what was muted before, to put
     /// back when the solo comes off.
     solo: Option<(Vec<String>, Vec<String>)>,
@@ -581,6 +591,7 @@ impl LivePlanner {
             next_generation: 1,
             knob_values: Vec::new(),
             muted: Vec::new(),
+            latched: Vec::new(),
             solo: None,
             pads_down: Vec::new(),
             keys_down: Vec::new(),
@@ -830,13 +841,40 @@ impl LivePlanner {
     /// so a pad, a key and a save all see the same thing.
     pub fn toggle_mute(&mut self, name: &str, playing: Generation) -> Vec<Plan> {
         self.catch_up(playing);
-        match self.muted.iter().position(|m| m == name) {
+        // A track a `hold` pad plays is out until held: muting it more would
+        // do nothing, so the key brings it in instead.
+        let held_track = self
+            .known()
+            .any(|k| k.tracks.iter().position(|t| t == name).is_some_and(|track| Self::is_held_track(k, track)));
+        let list = if held_track { &mut self.latched } else { &mut self.muted };
+        match list.iter().position(|m| m == name) {
             Some(i) => {
-                self.muted.remove(i);
+                list.remove(i);
             }
-            None => self.muted.push(String::from(name)),
+            None => list.push(String::from(name)),
         }
         self.mute_plans()
+    }
+
+    /// Whether a `hold` pad or trigger key plays `track`, so it is out until
+    /// held.
+    fn is_held_track(known: &Known, track: usize) -> bool {
+        let c = &known.controls;
+        c.pads
+            .iter()
+            .chain(c.triggers.iter())
+            .any(|p| matches!(p.action, midi::PadAction::Hold { track: t } if t == track))
+    }
+
+    /// The tracks a `hold` pad plays and that wait for it now (not latched
+    /// in with `m`): out by design, not muted, for the screen.
+    pub fn waiting_for_pads(&self) -> Vec<String> {
+        let Some(latest) = self.pending.as_ref().or(self.running.as_ref()) else { return Vec::new() };
+        (0..latest.tracks.len())
+            .filter(|&t| Self::is_held_track(latest, t))
+            .map(|t| latest.tracks[t].clone())
+            .filter(|n| !self.latched.contains(n))
+            .collect()
     }
 
     /// Solo a track: every other one muted. The same track again takes the
@@ -882,11 +920,13 @@ impl LivePlanner {
     /// Whether a track is out right now: toggled or soloed out, a `mute`
     /// pad on it held down, or a `hold` pad on it not held.
     fn muted_now(&self, known: &Known, track: usize) -> bool {
-        let toggled = known.tracks.get(track).is_some_and(|n| self.muted.contains(n));
+        let name = known.tracks.get(track);
+        let toggled = name.is_some_and(|n| self.muted.contains(n));
+        let latched = name.is_some_and(|n| self.latched.contains(n));
         let out = |list: &[midi::Pad], down: &[u8]| {
             list.iter().any(|p| match p.action {
                 midi::PadAction::Mute { track: t } => t == track && down.contains(&p.note),
-                midi::PadAction::Hold { track: t } => t == track && !down.contains(&p.note),
+                midi::PadAction::Hold { track: t } => t == track && !down.contains(&p.note) && !latched,
                 _ => false,
             })
         };
@@ -2758,6 +2798,9 @@ pub(crate) fn apply_op(engine: &mut SongEngine, op: FastOp) {
         }
         FastOp::NoteOn { track, note, velocity } => engine.live_note_on(track, note, velocity),
         FastOp::NoteOff { track, note } => engine.live_note_off(track, note),
+        FastOp::LoopIn => engine.loop_in(),
+        FastOp::LoopOut { bars } => engine.loop_out(bars),
+        FastOp::LoopExit => engine.loop_exit(),
         FastOp::PitchBend { instrument, ratio } => engine.set_pitch_bend(instrument, ratio),
         FastOp::Roll { track, note, velocity, kick } => {
             engine.set_roll(track, (velocity > 0.0).then_some((note, velocity)), kick)

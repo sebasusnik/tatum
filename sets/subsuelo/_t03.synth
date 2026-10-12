@@ -392,9 +392,32 @@ track stabx {
 }
 
 # The keyboard's lead: the organ, through the bass's chain, ending on master
+# The keys' own voice: `organ` as written, under another name, so a knob
+# on it (the `teclas` page) moves only what the hands play, and the tema's
+# `auto` lines on `organ` leave it alone.
+module fm kvoz {
+    algorithm pair_plus_two
+    level 2.0
+    mod_index 22%
+    feedback 0%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 2x
+    op2_ratio 2x
+    op3_ratio 3x
+    op0_envelope 0.003 0.5 0.9 0.07
+    op1_envelope 0.001 0.09 0.45 0.07
+    op2_envelope 0.003 0.5 0.4 0.07
+    op3_envelope 0.003 0.3 0.12 0.07
+    lfo_target amplitude
+    lfo_sync free
+    lfo_rate 5.5hz
+    lfo_depth 7%
+}
+
 track ktema {
     play krest
-    using organ
+    using kvoz
     level 0.36
     velocity 1.0
     gate 0.9

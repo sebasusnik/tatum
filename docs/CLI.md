@@ -257,11 +257,26 @@ A bridge, a break or a build should not have to be watched. `# set: bars=16 auto
 makes one step walk on its own without `--auto`: it plays its bars and the next step
 lands where they end, even off the phrase line. `auto=2` plays them twice first (and
 `set render` plays the step for its bars times two). The TUI counts down to it
-(`AUTO → next in 4 bars`, flashing in the last two). `o`, a `keyboard` line
-`o > loop`, or a pad or key `> loop` keeps the step looping instead (`⟲ LOOP`);
-pressed again, it lets it go, at the end of its bars or, if they have passed, on the
-next phrase line. Every step lands with the loop off. Under `--auto` the same key
-keeps any step.
+(`AUTO → next in 4 bars`, flashing in the last two). Shift+L keeps the whole step
+looping instead; pressed again, it lets it go, at the end of its bars or, if they
+have passed, on the next phrase line. Under `--auto` the same key keeps any step.
+
+`# set: max=2` caps a step instead: it loops for the performer like any other, but
+left alone it moves on by itself after two passes of its bars, so a set never sits on
+one step waiting for a hand. The TUI says so quietly (`max x2 → next in 40 bars`) and
+louder in its last four bars; Shift+L keeps it. `set render` plays such a step once,
+as written.
+
+`l` loops bars, the way a looper or a DJ player's loop does. Held, the bar it went
+down in is the loop's first and the bar it comes up in its last; from the next bar
+line those bars play again and again (`⟲ LOOP bars 5-8`). A tap lets it go and the
+step plays on from where the music is: the bars looped do not count against its own,
+so a step that moves on by itself waits while it loops. It is the sequence that
+loops, not a recording: the knobs and faders still move what plays, and the `auto`
+lanes go back with it. Knowing when a key comes up needs a terminal with the kitty
+keyboard protocol (Ghostty, kitty, WezTerm, iTerm2); elsewhere one tap is the in and
+the next the out. A pad or trigger key with `> loop` works the same way, held. A step
+that lands ends the loop.
 
 A step can carry its own practice sheet. `# cue: <bar> <what>` lines, with the bar of
 the step counted from 1 and a fraction for the beat (`8.75` is bar 8, beat 4), show

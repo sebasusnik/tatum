@@ -69,6 +69,10 @@ pub struct SetNav {
     /// The bar a move the step asked for itself lands on: where its bars
     /// end, which need not be a phrase line.
     land_at: Option<usize>,
+    /// A loop of bars caught by hand (`l` held): the bar it starts on and,
+    /// once closed, how many bars it is. The engine plays them again; the
+    /// bar count here keeps going, and `music` says where the step is.
+    pub bar_loop: Option<(usize, Option<usize>)>,
 }
 
 impl SetNav {
@@ -90,41 +94,101 @@ impl SetNav {
             headers: true,
             looping: false,
             land_at: None,
+            bar_loop: None,
         }
+    }
+
+    /// The bar the music is on: inside a closed loop, the loop's bar.
+    fn music(&self, bar: usize) -> usize {
+        match self.bar_loop {
+            Some((start, Some(len))) if bar >= start + len => start + (bar - start) % len,
+            _ => bar,
+        }
+    }
+
+    /// `l` down (or a `loop` pad): a loop starts on the bar playing; with
+    /// one open, it closes on this bar; with one playing, it is let go and
+    /// the step goes on from where the music is. Returns what to send the
+    /// engine and what to tell the performer.
+    pub fn loop_press(&mut self, bar: usize) -> (FastOp, String) {
+        match self.bar_loop {
+            None => {
+                self.bar_loop = Some((bar, None));
+                (FastOp::LoopIn, format!("loop in: bar {}", self.bar_in_step(bar)))
+            }
+            Some((_, None)) => self.loop_close(bar).expect("open"),
+            Some((_, Some(_))) => {
+                // The bars looped do not count against the step's own.
+                self.started += bar - self.music(bar);
+                self.bar_loop = None;
+                (FastOp::LoopExit, String::from("loop out: on from here"))
+            }
+        }
+    }
+
+    /// `l` let go: an open loop is the bars it was held over, this one
+    /// included.
+    pub fn loop_release(&mut self, bar: usize) -> Option<(FastOp, String)> {
+        self.loop_close(bar)
+    }
+
+    fn loop_close(&mut self, bar: usize) -> Option<(FastOp, String)> {
+        let (start, None) = self.bar_loop? else { return None };
+        let bars = bar.saturating_sub(start) + 1;
+        self.bar_loop = Some((start, Some(bars)));
+        let from = start.saturating_sub(self.started) + 1;
+        Some((
+            FastOp::LoopOut { bars },
+            format!(
+                "loop: bar{} {} · l lets it go",
+                if bars == 1 { "" } else { "s" },
+                if bars == 1 { from.to_string() } else { format!("{}-{}", from, from + bars - 1) }
+            ),
+        ))
+    }
+
+    /// The loop on screen: its first bar in the step, and its length once
+    /// closed.
+    pub fn loop_view(&self) -> Option<(usize, Option<usize>)> {
+        self.bar_loop.map(|(start, len)| (start.saturating_sub(self.started) + 1, len))
     }
 
     /// Whether the step playing moves on by itself: `--auto`, or its own
     /// `auto` header, and not kept by the performer.
     pub fn moves_on(&self) -> bool {
-        (self.auto || (self.headers && self.steps[self.current].auto.is_some()))
-            && !self.looping
-            && self.current + 1 < self.steps.len()
+        self.own() && !self.looping && self.bar_loop.is_none() && self.current + 1 < self.steps.len()
     }
 
     /// The bar the step playing runs out on.
     fn ends(&self) -> usize {
-        self.started + self.steps[self.current].length()
+        let s = &self.steps[self.current];
+        self.started + s.bars as usize * s.passes().unwrap_or(1) as usize
+    }
+
+    /// Whether the step playing moves on by itself, kept or not: `--auto`,
+    /// or its own `auto` or `max` header.
+    fn own(&self) -> bool {
+        self.auto || (self.headers && self.steps[self.current].passes().is_some())
     }
 
     /// Bars until the step playing moves on by itself, while it will.
     pub fn moves_in(&self, bar: usize) -> Option<usize> {
-        (self.moves_on() && self.waiting(bar).is_none()).then(|| self.ends().saturating_sub(bar).max(1))
+        (self.moves_on() && self.waiting(bar).is_none()).then(|| self.ends().saturating_sub(self.music(bar)).max(1))
     }
 
     /// The pass of an `auto=N` step playing, from 1, and N.
     pub fn pass(&self, bar: usize) -> Option<(usize, usize)> {
         let step = &self.steps[self.current];
-        let n = step.auto.filter(|n| *n > 1)? as usize;
-        let into = bar.saturating_sub(self.started) / (step.bars as usize).max(1);
+        let n = step.passes().filter(|n| *n > 1)? as usize;
+        let into = self.music(bar).saturating_sub(self.started) / (step.bars as usize).max(1);
         Some(((into + 1).min(n), n))
     }
 
-    /// `o`, or a `loop` pad: keep the step playing, or let it move on again.
+    /// Shift+L: keep the step playing, or let it move on again.
     /// A move it already asked for is called off while it can be. Returns
     /// what to tell the performer.
     pub fn toggle_loop(&mut self, bar: usize) -> String {
-        let own = self.auto || (self.headers && self.steps[self.current].auto.is_some());
-        if !own {
+        if !self.own() {
             return format!("{} loops until you move", self.describe(self.current));
         }
         self.looping = !self.looping;
@@ -152,7 +216,7 @@ impl SetNav {
 
     /// The bar of the step playing, from 1, for a performer reading cues.
     pub fn bar_in_step(&self, bar: usize) -> usize {
-        bar.saturating_sub(self.started) + 1
+        self.music(bar).saturating_sub(self.started) + 1
     }
 
     pub fn path(&self) -> PathBuf {
@@ -166,10 +230,11 @@ impl SetNav {
         if !s.phase.is_empty() {
             d += &format!("  {}", s.phase);
         }
-        match s.auto {
-            Some(1) => d += "  (auto)",
-            Some(n) => d += &format!("  (auto x{})", n),
-            None => {}
+        match (s.auto, s.max) {
+            (Some(1), _) => d += "  (auto)",
+            (Some(n), _) => d += &format!("  (auto x{})", n),
+            (None, Some(n)) => d += &format!("  (max x{})", n),
+            (None, None) => {}
         }
         d
     }
@@ -239,6 +304,11 @@ impl SetNav {
             self.started = bar;
             self.looping = false;
             self.land_at = None;
+            // A step that only changed values runs on the same engine: its
+            // loop has to be let go.
+            if self.bar_loop.take().is_some() {
+                plans.push(Plan::Control { base: generation, op: FastOp::LoopExit });
+            }
         }
         // In its last bar, a step asks for the next one, which then lands
         // on the line its bars end on.
@@ -392,7 +462,20 @@ track bass  { play line using acid out > master }
         seen
     }
 
-    fn play_nav(bars: usize, mut nav: SetNav, mut at_bar: impl FnMut(usize, &mut SetNav)) -> Vec<(usize, f32)> {
+    fn play_nav(bars: usize, nav: SetNav, mut at_bar: impl FnMut(usize, &mut SetNav)) -> Vec<(usize, f32)> {
+        play_nav_ops(bars, nav, |bar, nav| {
+            at_bar(bar, nav);
+            Vec::new()
+        })
+    }
+
+    /// `play_nav`, sending the engine what `at_bar` returns, as the session
+    /// does for a key.
+    fn play_nav_ops(
+        bars: usize,
+        mut nav: SetNav,
+        mut at_bar: impl FnMut(usize, &mut SetNav) -> Vec<FastOp>,
+    ) -> Vec<(usize, f32)> {
         let mut planner = LivePlanner::new();
         let mut player = LivePlayer::new();
         let first = Source::load(&nav.path()).unwrap();
@@ -407,7 +490,9 @@ track bass  { play line using acid out > master }
             let (bar, tempo) = (e.current_bar(), e.tempo());
             let first_block = bar == seen.len();
             if first_block {
-                at_bar(bar, &mut nav);
+                for op in at_bar(bar, &mut nav) {
+                    player.apply(Plan::Control { base: player.generation(), op });
+                }
             }
             let (plans, _) = nav.tick(bar, tempo, player.generation(), now, &mut planner);
             for p in plans {
@@ -487,6 +572,19 @@ track bass  { play line using acid out > master }
         assert_eq!((loaded[1].auto, loaded[1].length()), (None, 32));
     }
 
+    /// `max=2`: live, a step left alone moves on after two passes; the
+    /// render plays it once.
+    #[test]
+    fn a_step_with_a_max_moves_on_after_that_many_passes() {
+        let steps = play_headers(["# set: bars=2 max=2", "# set: bars=2", "# set: bars=2"], 1, 7, |_, _| {});
+        assert_eq!(steps, [0, 0, 0, 0, 1, 1, 1], "{steps:?}");
+        let dir = set_dir();
+        std::fs::write(dir.join("00.synth"), format!("# set: bars=4 max=3\n{BASE}")).unwrap();
+        let loaded = crate::set::load(&dir, 32).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!((loaded[0].max, loaded[0].passes(), loaded[0].length()), (Some(3), Some(3), 4));
+    }
+
     /// Kept before its end, the step loops; let go after its end has
     /// passed, it moves on at the next phrase line.
     #[test]
@@ -515,6 +613,44 @@ track bass  { play line using acid out > master }
             }
         });
         assert_eq!(steps, [0, 0, 0, 0, 0], "{steps:?}");
+    }
+
+    /// `l` held over bars 2 and 3 of a step that moves on by itself: they
+    /// loop, the step stays, and let go it plays on from where the music is
+    /// and moves on when its own bars are done.
+    #[test]
+    fn a_loop_of_bars_holds_the_step_and_lets_it_go_where_the_music_is() {
+        let dir = set_dir();
+        for (f, h) in
+            ["01.synth", "02.synth", "03.synth"].iter().zip(["# set: bars=6 auto", "# set: bars=4", "# set: bars=4"])
+        {
+            let text = std::fs::read_to_string(dir.join(f)).unwrap();
+            std::fs::write(dir.join(f), format!("{h}\n{text}")).unwrap();
+        }
+        let steps = crate::set::load(&dir, 32).unwrap();
+        let mut music = Vec::new();
+        let seen = play_nav_ops(15, SetNav::new(steps, 1, 0.0), |bar, nav| {
+            let mut ops = Vec::new();
+            if bar == 1 {
+                ops.push(nav.loop_press(bar).0);
+            }
+            if bar == 2 {
+                ops.push(nav.loop_release(bar).unwrap().0);
+            }
+            if bar == 9 {
+                // Let go in bar 10, the loop's first bar again (bar 2 of the step).
+                ops.push(nav.loop_press(bar).0);
+            }
+            music.push(nav.bar_in_step(bar));
+            ops
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        let steps: Vec<usize> = seen.iter().map(|s| s.0).collect();
+        // Bars of the step as the music has them, from 1: 2 and 3 over and
+        // over; let go on a 2, on to 3, 4, 5, 6 and then the next step.
+        assert_eq!(&music[..10], &[1, 2, 3, 2, 3, 2, 3, 2, 3, 2], "{music:?}");
+        assert_eq!(&music[10..14], &[3, 4, 5, 6], "{music:?}");
+        assert_eq!(steps, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], "{steps:?}");
     }
 
     #[test]

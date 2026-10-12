@@ -1,4 +1,4 @@
-# set: bars=32 phase=05-metal energy=6
+# set: bars=32 max=2 phase=05-metal energy=6
 # set-note: La firma: la campana llama F-Ab-C de a tres en los compases impares; en el 17 la placa le contesta C-Eb-Db en los pares. Los toms a su figura entera.
 # cue: 9 K3 despacio hacia la derecha: la campana pasa de madera a vidrio
 # cue: 17 la placa contesta; K3 de vuelta al centro

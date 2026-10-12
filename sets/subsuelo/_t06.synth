@@ -439,9 +439,27 @@ track brfig {
 
 # The keyboard's lead: the choir, its chain, then the hands' filter, vowel
 # and gain
+# The keys' own voice: `choir` as written, under another name, so a knob
+# on it (the `teclas` page) moves only what the hands play, and the tema's
+# `auto` lines on `choir` leave it alone.
+module keys kvoz {
+    voice_mode unison
+    level 1.3
+    cutoff 1800hz
+    resonance 10%
+    detune 18%
+    chorus_mix 0%
+    attack 900ms
+    decay 1s
+    sustain 80%
+    release 1.4s
+    vibrato_rate 4.5hz
+    vibrato_depth 6%
+}
+
 track ktema {
     play krest
-    using choir
+    using kvoz
     level 0.5
     velocity 1.0
     pan -0.15

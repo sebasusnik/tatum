@@ -539,9 +539,28 @@ track mfig {
 
 # The keyboard's lead: the bell, its chain, then the hands' filter, vowel
 # and gain
+# The keys' own voice: `bell` as written, under another name, so a knob
+# on it (the `teclas` page) moves only what the hands play, and the tema's
+# `auto` lines on `bell` leave it alone.
+module fm kvoz {
+    algorithm two_op
+    level 1.8
+    mod_index 48%
+    feedback 8%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 3.5x
+    op0_envelope 0.001 0.7 0.0 0.45
+    op1_envelope 0.001 0.22 0.0 0.18
+    lfo_target mod_index
+    lfo_sync bars_8
+    lfo_waveform triangle
+    lfo_depth 18%
+}
+
 track ktema {
     play krest
-    using bell
+    using kvoz
     level 0.5
     velocity 1.0
     gate 0.5

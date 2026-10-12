@@ -1,4 +1,4 @@
-# set: bars=32 phase=02-rhodes energy=5
+# set: bars=32 max=2 phase=02-rhodes energy=5
 # set-note: The Rhodes line arrives: a few low notes with room between them, the echo answering a beat later, twelve bars of each phrase; the comping thins to one chord a bar to leave it the air.
 # cue: 9 K3 despacio a la derecha: el tine del Rhodes empieza a ladrar
 # cue: 15 tecla B (47): la última nota de la línea al eco

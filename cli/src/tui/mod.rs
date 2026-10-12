@@ -135,10 +135,16 @@ pub struct SetView {
     pub cues: Vec<(f32, String)>,
     /// Bars until the step moves on by itself (`# set: auto`), while it will.
     pub moves_in: Option<usize>,
+    /// It moves on only because its `max=` ran out, not as a bridge: said
+    /// quietly until its last bars.
+    pub capped: Option<u32>,
     /// The performer keeps a step that would move on by itself.
     pub looping: bool,
     /// The pass of an `auto=N` step, from 1, and N.
     pub pass: Option<(usize, usize)>,
+    /// A loop of bars by hand: its first bar in the step, and its length
+    /// once closed.
+    pub bar_loop: Option<(usize, Option<usize>)>,
 }
 
 /// What a key asks for.
@@ -148,8 +154,12 @@ pub enum Key {
     Next,
     Prev,
     Step(usize),
-    /// Keep the step that would move on by itself, or let it go.
+    /// `l` down: a loop of bars starts on the bar playing, or ends.
     Loop,
+    /// `l` let go: the loop is the bars it was held over.
+    LoopUp,
+    /// Shift+L: keep the step that would move on by itself, or let it go.
+    Keep,
     /// Change the selected track's `play` line.
     Edit(edit::Op),
     /// Put back what the last edit from the screen changed.
@@ -238,6 +248,10 @@ const HISTORY: usize = 600;
 pub struct Screen {
     /// Lent out while a frame is drawn, since drawing borrows the rest.
     term: Option<DefaultTerminal>,
+    /// The terminal says when a key is let go (the kitty keyboard protocol:
+    /// Ghostty, kitty, WezTerm, iTerm2): `l` held is a loop's in and out.
+    /// Elsewhere a tap is the in and the next the out.
+    pub key_release: bool,
     telemetry: Arc<Telemetry>,
     pub song: Option<SongInfo>,
     pub set: Option<SetView>,
@@ -275,6 +289,9 @@ pub struct Screen {
     knob_list: Option<KnobList>,
     transformed: Vec<bool>,
     muted: Vec<bool>,
+    /// Tracks a `hold` pad plays, out until it is held: shown as waiting
+    /// for their pad rather than muted.
+    pub pad_voices: Vec<String>,
     /// The tracks soloed from the keyboard, by name, for their mark.
     pub soloed: Vec<String>,
     /// Tracks added to the selection with Shift+↑↓, besides `selected`.
@@ -312,6 +329,17 @@ impl Screen {
     pub fn new(telemetry: Arc<Telemetry>, device: String, midi: Vec<String>) -> io::Result<Self> {
         let mut screen = Self::headless(telemetry, device, midi);
         screen.term = Some(ratatui::try_init()?);
+        if ratatui::crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false) {
+            use ratatui::crossterm::event::{KeyboardEnhancementFlags as F, PushKeyboardEnhancementFlags};
+            // Alternate keys: Shift+/ arrives as `?`, Shift+L as `L`, as
+            // without the protocol.
+            let flags = F::DISAMBIGUATE_ESCAPE_CODES
+                | F::REPORT_EVENT_TYPES
+                | F::REPORT_ALL_KEYS_AS_ESCAPE_CODES
+                | F::REPORT_ALTERNATE_KEYS;
+            screen.key_release =
+                ratatui::crossterm::execute!(io::stdout(), PushKeyboardEnhancementFlags(flags)).is_ok();
+        }
         Ok(screen)
     }
 
@@ -322,6 +350,7 @@ impl Screen {
         let n = fft.len();
         Self {
             term: None,
+            key_release: false,
             telemetry,
             song: None,
             set: None,
@@ -351,6 +380,7 @@ impl Screen {
             knob_list: None,
             transformed: Vec::new(),
             muted: Vec::new(),
+            pad_voices: Vec::new(),
             soloed: Vec::new(),
             marked: Vec::new(),
             bound: Vec::new(),
@@ -418,7 +448,17 @@ impl Screen {
         let mut out = Vec::new();
         while event::poll(Duration::ZERO).unwrap_or(false) {
             let Ok(Event::Key(k)) = event::read() else { continue };
+            // `l` let go closes a loop held open; Shift+L keeps the step.
+            let l = matches!(k.code, KeyCode::Char('l')) && !k.modifiers.contains(KeyModifiers::SHIFT);
+            if l && k.kind == KeyEventKind::Release {
+                out.push(Key::LoopUp);
+                continue;
+            }
             if k.kind != KeyEventKind::Press {
+                continue;
+            }
+            if matches!(k.code, KeyCode::Char('L')) || (matches!(k.code, KeyCode::Char('l')) && !l) {
+                out.push(Key::Keep);
                 continue;
             }
             // The knob list, then the step list, take every key while open.
@@ -459,7 +499,7 @@ impl Screen {
                     self.help = !self.help;
                     None
                 }
-                KeyCode::Char('l') => {
+                KeyCode::Char('j') => {
                     self.log_open = !self.log_open;
                     None
                 }
@@ -548,7 +588,7 @@ impl Screen {
                 KeyCode::Enter => self.browse.take().map(|b| Key::Step(b + 1)),
                 KeyCode::Char(' ') | KeyCode::Char('n') => Some(Key::Next),
                 KeyCode::Char('p') => Some(Key::Prev),
-                KeyCode::Char('o') => Some(Key::Loop),
+                KeyCode::Char('l') => Some(Key::Loop),
                 KeyCode::Char('r') => Some(Key::Edit(Op::Toggle(Toggle::Rev))),
                 KeyCode::Char('f') => Some(Key::Edit(Op::Toggle(Toggle::Fast))),
                 KeyCode::Char('h') => Some(Key::Edit(Op::Toggle(Toggle::Slow))),
@@ -1241,7 +1281,8 @@ impl Screen {
             key("1-9", "a step", "go to the one in that place on screen"),
             key("Enter", "go", "to the step looked at, on the next phrase · Esc stays"),
             key("space", "next step", "g or Tab: every step, to pick one"),
-            key("o", "loop", "keep a step that moves on by itself (auto) · again lets it go"),
+            key("l", "loop", "held: the bars it is held over loop · tapped: in, then out · again lets go"),
+            key("shift L", "keep", "keep a step that moves on by itself (auto, max) · again lets it go"),
             key("↑ ↓", "a track", "move the cursor · Esc clears the marks"),
             key("v", "mark", "the track under the cursor, any of them · a marks all"),
             key("shift ↑ ↓", "mark", "the tracks passed over"),
@@ -1258,7 +1299,7 @@ impl Screen {
             key("x", "", "every transform off"),
             key("u", "", "undo the last change made from here"),
             key("k", "knobs", "put a knob on the track: turn it to try, Enter keeps"),
-            key("l", "log", "what happened this session"),
+            key("j", "log", "what happened this session"),
             key("i", "midi in", "every message the controller sends, and what it does here"),
             Line::raw(""),
             Line::styled(
@@ -1463,10 +1504,41 @@ impl Screen {
         // A step that moves on by itself says so, and counts down; the last
         // bars flash on the beat. Kept by the performer, it says that.
         let badge = match (set.moves_in, set.looping) {
-            (_, true) => Some((" ⟲ LOOP · o lets it go ".to_string(), Style::new().fg(Color::Black).bg(OK))),
+            _ if set.bar_loop.is_some() => {
+                let (from, len) = set.bar_loop.expect("checked");
+                let s = match len {
+                    None if self.key_release => format!(" ● LOOP IN bar {} · let go of l on the last bar ", from),
+                    None => format!(" ● LOOP IN bar {} · l again on the last bar ", from),
+                    Some(1) => format!(" ⟲ LOOP bar {} · l lets it go ", from),
+                    Some(n) => format!(" ⟲ LOOP bars {}-{} · l lets it go ", from, from + n - 1),
+                };
+                let style = if len.is_none() {
+                    Style::new().fg(Color::Black).bg(ERR).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::new().fg(Color::Black).bg(OK).add_modifier(Modifier::BOLD)
+                };
+                Some((s, style))
+            }
+            (_, true) => Some((" ■ KEPT · shift+L lets it go ".to_string(), Style::new().fg(Color::Black).bg(OK))),
             (Some(n), false) => {
-                let s = format!(" AUTO → next in {} bar{} · o keeps it ", n, if n == 1 { "" } else { "s" });
-                let style = if n <= 2 && (self.step / 4).is_multiple_of(2) {
+                let s = match set.capped {
+                    Some(max) => format!(
+                        " max x{} → next in {} bar{} · shift+L keeps it · l loops ",
+                        max,
+                        n,
+                        if n == 1 { "" } else { "s" }
+                    ),
+                    None => {
+                        format!(
+                            " AUTO → next in {} bar{} · shift+L keeps it · l loops ",
+                            n,
+                            if n == 1 { "" } else { "s" }
+                        )
+                    }
+                };
+                let style = if set.capped.is_some() && n > 4 {
+                    Style::new().fg(DIM).bg(BG)
+                } else if n <= 2 && (self.step / 4).is_multiple_of(2) {
                     Style::new().fg(Color::Black).bg(HOT).add_modifier(Modifier::BOLD)
                 } else if n <= 4 {
                     Style::new().fg(Color::Black).bg(GOLD)
@@ -1760,6 +1832,9 @@ impl Screen {
                     " S  ",
                     Style::new().fg(Color::Black).bg(GOLD).add_modifier(Modifier::BOLD),
                 );
+            } else if is_muted && self.pad_voices.contains(name) {
+                // A pad's voice, waiting for its pad (or `m`).
+                buf.set_string(area.x + 11, y0, "pad ", Style::new().fg(DIM).bg(PANEL));
             } else if is_muted {
                 buf.set_string(
                     area.x + 11,
@@ -1892,6 +1967,9 @@ impl Screen {
 
 impl Drop for Screen {
     fn drop(&mut self) {
+        if self.key_release {
+            let _ = ratatui::crossterm::execute!(io::stdout(), ratatui::crossterm::event::PopKeyboardEnhancementFlags);
+        }
         if self.term.is_some() {
             ratatui::restore();
         }

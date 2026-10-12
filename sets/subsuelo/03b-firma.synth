@@ -1,4 +1,4 @@
-# set: bars=32 phase=03-organo energy=5
+# set: bars=32 max=2 phase=03-organo energy=5
 # set-note: La firma: el bajo de órgano deja el pedal y camina (G-Bb-C-D, el Eb abajo, el Ab de paso de vuelta a G); el piso se arma con clap, semicorcheas y el rim; los drawbars se abren en 32 compases.
 # cue: 1 el bajo empieza a caminar: dejalo sonar solo
 # cue: 17 K3 arriba despacio en 8 compases: se tiran los drawbars

@@ -101,9 +101,12 @@ freeze, a hard cut). In a house set fewer, and softer.
 — a `hueco`, a `subida`, a short bridge between two variations — gets `auto`
 in its header (`# set: bars=8 auto`; `auto=2` plays it twice first): in
 `set play` it moves to the next step where its bars end, without a hand, and
-the TUI counts down to it. The performer keeps it with `o` (or a `loop` pad or
-key) when the room wants more. Everything else loops until the performer
-moves: that is where the DJ chooses when.
+the TUI counts down to it. The performer keeps the whole step with Shift+L,
+or holds `l` (or a `loop` pad) over a few bars to loop just those, when the
+room wants more. Everything else loops until the performer
+moves — that is where the DJ chooses when — but with a cap: `max=2` on every
+other step (`max=1` on a 64-bar one, none on the last), so a step left alone
+moves on after two passes instead of looping for ever.
 
 **Energy must not sawtooth.** Once the floor lands it stays; variation at
 the same energy is the normal move. Dropping the energy is a device, used at
@@ -188,8 +191,11 @@ set, and let each rig add its lines. Start from
 `sets/hiperespacio/_keylab.synth`; keep its layout, change what it does:
 
 - **Zones**: the lowest octave triggers, then the bass, then the lead.
-  The lead zone plays each tema's own lead voice (`ktema`, the main voice's
-  module in a silent track, measured to sit about 14 dB under the mix). What
+  The lead zone plays each tema's own lead voice (`ktema`: a copy of the main
+  voice's module under its own name, in a silent track, measured to sit about
+  14 dB under the mix). A copy, not the same module: a knob names a module
+  and reaches every track that plays it, so a shared one would turn the
+  tema's voice too. One page (`teclas`) shapes it, knobs and faders. What
   the zones play suits the genre: in psy, the bass rolls the held note; in
   house, the bass zone plays the sub's notes and the lead zone a Rhodes or
   the chord voice.
