@@ -1,4 +1,4 @@
-# set: bars=32 phase=06-hondo energy=7
+# set: bars=32 max=2 phase=06-hondo energy=7
 # set-note: Stripped outro for T07 (F# phrygian) to blend over: kick, hats, ride and the deep roll; the drone and its rub sink back into the room in the first eight bars.
 use "_t06.synth"
 

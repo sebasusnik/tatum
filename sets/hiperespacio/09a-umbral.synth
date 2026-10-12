@@ -1,4 +1,4 @@
-# set: bars=32 phase=09-nebulosa energy=5 blend=32
+# set: bars=32 max=2 phase=09-nebulosa energy=5 blend=32
 # set-note: T09 comes in under T08's F# outro with only its round low kick, a ticking hat and the hollow square roll on E; nothing else tonal yet.
 use "_t09.synth"
 tempo 145

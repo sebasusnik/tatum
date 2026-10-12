@@ -1,4 +1,4 @@
-# set: bars=8 phase=02-orbita energy=3
+# set: bars=8 auto phase=02-orbita energy=3
 # set-note: Release 1: the floor is gone, the bass shut to one dull note a beat, the pluck alone throwing into the echo
 use "_t02.synth"
 

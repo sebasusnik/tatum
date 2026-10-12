@@ -1,4 +1,4 @@
-# set: bars=16 phase=10-hipervelocidad energy=9
+# set: bars=16 max=2 phase=10-hipervelocidad energy=9
 # set-note: Straighter drive drums, the gallop goes to triple ratchets, the screamer back to its first riff; shard's first gesture, three stabs at bar 4 and a burst at bar 8.
 use "_t10.synth"
 

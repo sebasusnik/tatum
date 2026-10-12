@@ -1,4 +1,4 @@
-# set: bars=8 phase=12-estela energy=2
+# set: bars=8 auto phase=12-estela energy=2
 # set-note: no kick, no bass: a hat ticking far off, the pad and the wind, the room opening
 use "_t12.synth"
 

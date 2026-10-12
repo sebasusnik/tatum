@@ -1,4 +1,4 @@
-# set: bars=32 phase=06-hondo energy=7 blend=32
+# set: bars=32 max=2 phase=06-hondo energy=7 blend=32
 # set-note: T06 comes in under T05's outro: the rounder kick with rims only (no hats yet), the offbeat ride, the deep roll with its filter nearly shut.
 tempo 143
 use "_t06.synth"

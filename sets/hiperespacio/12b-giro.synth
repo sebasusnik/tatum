@@ -1,4 +1,4 @@
-# set: bars=16 phase=12-estela energy=5
+# set: bars=16 max=2 phase=12-estela energy=5
 # set-note: the grinder is still at full RPM from the peak, holds six bars and spins DOWN to a third; T01's hollow pad comes back under it
 use "_t12.synth"
 

@@ -1,4 +1,4 @@
-# set: bars=8 phase=12-estela energy=3
+# set: bars=8 auto phase=12-estela energy=3
 # set-note: the motor sputters once (a half-hearted rev) and dies; half the kicks gone, the bass a note a bar
 use "_t12.synth"
 

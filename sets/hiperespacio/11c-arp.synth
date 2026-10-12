@@ -1,4 +1,4 @@
-# set: bars=32 phase=11-singularidad energy=8
+# set: bars=32 max=2 phase=11-singularidad energy=8
 # set-note: drive drums with snare ghosts, busier perc, the FM shard arp in on F#-G-C#; the acid keeps its low line
 # cue: 7 B1 held + K3 ↑ slowly · the haze
 # cue: 10.75 let go of B1 (K3 to center)

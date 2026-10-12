@@ -1,4 +1,4 @@
-# set: bars=32 phase=02-orbita energy=6
+# set: bars=32 max=2 phase=02-orbita energy=6
 # set-note: the clap lands and the pluck plays its motif, brightening over the 32 bars as its index climbs
 # cue: 15 B4 held · ratchets into the echo
 # cue: 17 let go of B4

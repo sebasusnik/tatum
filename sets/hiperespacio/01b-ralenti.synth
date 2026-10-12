@@ -1,4 +1,4 @@
-# set: bars=16 phase=01-ignicion energy=2
+# set: bars=16 max=2 phase=01-ignicion energy=2
 # set-note: a rim answers the tick far off, the pad thins to fifths; near the end the turbine turns over for three bars and dies (the false start)
 use "_t01.synth"
 

@@ -1,4 +1,4 @@
-# set: bars=12 phase=08-amoladora energy=9
+# set: bars=12 auto phase=08-amoladora energy=9
 # set-note: grinder gone; glitch drums (rolls inside the step, snare stutters), glitch rims, the first zaps, sparse
 use "_t08.synth"
 

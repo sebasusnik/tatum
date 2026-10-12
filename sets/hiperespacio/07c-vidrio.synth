@@ -1,4 +1,4 @@
-# set: bars=16 phase=07-tunel energy=7
+# set: bars=16 max=2 phase=07-tunel energy=7
 # set-note: the glass arp enters gated and closed (stutters a beat on, a beat off), opening a little over the 16
 use "_t07.synth"
 

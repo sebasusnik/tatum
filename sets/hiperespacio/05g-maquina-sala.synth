@@ -1,4 +1,4 @@
-# set: bars=16 phase=05-maquina energy=8
+# set: bars=16 max=2 phase=05-maquina energy=8
 # set-note: The robot steps out and the room is all machine: busy ticks, the glitch hats at their busiest, the ratchet bass; the kit back to its main groove.
 use "_t05.synth"
 

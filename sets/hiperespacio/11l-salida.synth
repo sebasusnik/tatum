@@ -1,4 +1,4 @@
-# set: bars=32 phase=11-outro energy=7
+# set: bars=32 max=2 phase=11-outro energy=7
 # set-note: DJ outro: the floor stripped to kick, hats, tick perc and the plain roll; nothing tonal but the bass, for T12 to come in over
 use "_t11.synth"
 

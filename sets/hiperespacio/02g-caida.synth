@@ -1,4 +1,4 @@
-# set: bars=24 phase=02-orbita energy=6
+# set: bars=24 max=2 phase=02-orbita energy=6
 # set-note: the drop: the pluck's ratchets and octave leaps for the first time, the bass pushes up the octave, the shaker ratchets, a crash on each eight
 # cue: 1 B3 crash · DROP!
 # cue: 24.5 low key B: throw the pluck (half bar)

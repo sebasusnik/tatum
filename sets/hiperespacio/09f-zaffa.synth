@@ -1,4 +1,4 @@
-# set: bars=32 phase=09-nebulosa energy=6
+# set: bars=32 max=2 phase=09-nebulosa energy=6
 # set-note: New groove before the breath: the toms double up in a zaffa pattern under sixteenth hats, the oud cell climbs E, G#, B, C to ratcheted high E and its filter opens across the 32 bars; ends on a tom fill with the last kick gone.
 use "_t09.synth"
 

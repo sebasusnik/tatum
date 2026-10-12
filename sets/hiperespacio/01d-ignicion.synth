@@ -1,4 +1,4 @@
-# set: bars=8 phase=01-ignicion energy=4
+# set: bars=8 max=2 phase=01-ignicion energy=4
 # set-note: the kick lands in the hole with a crash, the bass comes in shut under it; the pad stays, the turbine is gone
 use "_t01.synth"
 

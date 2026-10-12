@@ -1,4 +1,4 @@
-# set: bars=4 phase=10-gap energy=7
+# set: bars=4 auto phase=10-gap energy=7
 # set-note: The 4-bar stutter gap: kick, clap and bass out, the screamer and the snare stutter the root through a crusher and roll back in.
 use "_t10.synth"
 

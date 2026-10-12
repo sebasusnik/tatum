@@ -1,4 +1,4 @@
-# set: bars=32 phase=08-outro energy=7
+# set: bars=32 max=2 phase=08-outro energy=7
 # set-note: T08 outro, stripped for the long breath that blends over it: kick, hats, rims, the plain roll; no grinder, no zaps
 use "_t08.synth"
 

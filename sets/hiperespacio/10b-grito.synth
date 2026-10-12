@@ -1,4 +1,4 @@
-# set: bars=16 phase=10-hipervelocidad energy=9
+# set: bars=16 max=2 phase=10-hipervelocidad energy=9
 # set-note: The screamer switches to its octave leaps (two and three octaves), the needle ticks enter on a five-over-sixteen grid.
 use "_t10.synth"
 

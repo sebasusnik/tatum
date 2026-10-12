@@ -1,4 +1,4 @@
-# set: bars=16 phase=11-singularidad energy=8
+# set: bars=16 max=2 phase=11-singularidad energy=8
 # set-note: the floor lands (clap, open hats) and the square acid starts underneath, closed and climbing
 use "_t11.synth"
 

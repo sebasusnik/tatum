@@ -1,4 +1,4 @@
-# set: bars=16 phase=11-singularidad energy=8
+# set: bars=16 auto phase=11-singularidad energy=8
 # set-note: the arp goes, the acid turns screamer (ratchets, octave leaps) over glitch drums
 use "_t11.synth"
 

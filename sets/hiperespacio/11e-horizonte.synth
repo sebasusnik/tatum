@@ -1,4 +1,4 @@
-# set: bars=16 phase=11-break energy=3
+# set: bars=16 auto phase=11-break energy=3
 # set-note: the break: everything stops but the haze (F# held, G rubbing over it, crush breathing) and the lead's call alone into the triplet echo
 # cue: 8.5 low key B: throw the call (half bar)
 use "_t11.synth"

@@ -1,4 +1,4 @@
-# set: bars=16 phase=03-tribu energy=6
+# set: bars=16 max=2 phase=03-tribu energy=6
 # set-note: the clap goes into the dark room and the drone talks once (bars 5-14), cut before the next section
 # cue: 5 B1 held + K3 ↑ slowly · talking drone
 # cue: 8.75 let go of B1 (K3 to center)

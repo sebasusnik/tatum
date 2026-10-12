@@ -1,4 +1,4 @@
-# set: bars=14 phase=05-maquina energy=7
+# set: bars=14 auto phase=05-maquina energy=7
 # set-note: The floor at 8: sixteenth hats and rims answering every beat, the ticks doubled with a second voice; runs straight into the stutter gap.
 use "_t05.synth"
 

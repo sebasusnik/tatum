@@ -1,4 +1,4 @@
-# set: bars=8 phase=11-build energy=5
+# set: bars=8 auto phase=11-build energy=5
 # set-note: build 1/2: no kick; the roll comes back alone and opens bar by bar under clap and hats, the haze thins, the master filter closes
 use "_t11.synth"
 

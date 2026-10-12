@@ -1,4 +1,4 @@
-# set: bars=32 phase=03-tribu energy=6
+# set: bars=32 max=2 phase=03-tribu energy=6
 # set-note: the hollow gapped bass lands (plain, then with octave pops every 16), rim answers in the kit, the three toms get their phrases
 use "_t03.synth"
 
