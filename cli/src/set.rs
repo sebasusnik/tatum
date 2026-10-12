@@ -42,12 +42,37 @@ pub struct Step {
     /// `perform=drop` in the header: the scene the keyboard comes into
     /// when this step lands, as if its key had been pressed.
     pub perform: Option<String>,
+    /// `auto` or `auto=2` in the header: a bridge, a break, a build. In
+    /// `set play` the step plays its bars this many times and then moves on
+    /// by itself, where any other step loops until the performer moves; the
+    /// performer can still keep it (`o`, or a `loop` pad or key).
+    pub auto: Option<u32>,
 }
 
 impl Step {
     pub fn name(&self) -> String {
         self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
     }
+
+    /// Bars the step plays when the set walks on its own: its header's bars,
+    /// as many times as its `auto=` says.
+    pub fn length(&self) -> usize {
+        self.bars as usize * self.auto.unwrap_or(1) as usize
+    }
+}
+
+/// `auto` or `auto=N` in the `# set:` header: the passes a step plays before
+/// it moves on by itself. A bare `auto` is one.
+fn parse_auto(src: &str) -> Option<u32> {
+    src.lines()
+        .filter_map(|l| l.trim().strip_prefix("# set:").or_else(|| l.trim().strip_prefix("#set:")))
+        .flat_map(str::split_whitespace)
+        .filter_map(|f| match f.split_once('=') {
+            None if f == "auto" => Some(1),
+            Some(("auto", n)) => n.parse::<u32>().ok().filter(|n| *n > 0),
+            _ => None,
+        })
+        .next_back()
 }
 
 /// `# set: bars=48 phase=warm-up energy=2` and `# set-note: ...`, anywhere in
@@ -137,7 +162,8 @@ pub fn load(dir: &Path, default_bars: u32) -> Result<Vec<Step>, String> {
             let (bars, phase, energy, note, blend) = parse_header(&raw, default_bars);
             let cues = parse_cues(&raw);
             let perform = parse_perform(&raw);
-            Ok(Step { path, src, bars, phase, energy, note, blend, cues, perform })
+            let auto = parse_auto(&raw);
+            Ok(Step { path, src, bars, phase, energy, note, blend, cues, perform, auto })
         })
         .collect()
 }
@@ -219,7 +245,7 @@ pub fn landings(steps: &[Step], phrase: usize) -> (Vec<usize>, usize) {
     let mut lands = Vec::with_capacity(steps.len());
     for (i, s) in steps.iter().enumerate() {
         lands.push(at);
-        at += s.bars as usize;
+        at += s.length();
         if i + 1 < steps.len() {
             at = at.div_ceil(phrase) * phrase;
         }
@@ -397,6 +423,8 @@ pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Resul
 
     let mut nav = crate::setnav::SetNav::new(steps, walk.phrase, walk.ramp_bars);
     nav.blend_bars = walk.blend_bars;
+    // The render walks the steps itself, `auto=` passes included.
+    nav.headers = false;
     if let Some(scene) = nav.steps[0].perform.clone() {
         let g = player.generation();
         let plans: Vec<_> = planner
@@ -429,7 +457,7 @@ pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Resul
         let end = match explicit_end {
             Some(b) => b.ceil() as usize,
             None if scripted => {
-                let played_out = landed_at + nav.steps[nav.current].bars as usize;
+                let played_out = landed_at + nav.steps[nav.current].length();
                 if next_event < script.len() || nav.waiting(bar).is_some() {
                     usize::MAX
                 } else {
@@ -469,12 +497,17 @@ pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Resul
                 Act::Pad(note, v) => {
                     if v > 0 {
                         if let Some(action) = planner.pad_navigation(note) {
+                            if action == tatum_core::midi::PadAction::Loop {
+                                said = nav.toggle_loop(bar);
+                            }
                             let m = match action {
                                 tatum_core::midi::PadAction::Prev => crate::setnav::Move::Prev,
                                 tatum_core::midi::PadAction::Step(n) => crate::setnav::Move::To(n),
                                 _ => crate::setnav::Move::Next,
                             };
-                            said = ask(&mut nav, m, bar);
+                            if said.is_empty() {
+                                said = ask(&mut nav, m, bar);
+                            }
                         }
                     }
                     // A set move is only that, as in `set play`.
@@ -845,12 +878,13 @@ fn cmd_render(args: &[String]) -> Result<(), String> {
         let moved = (rendered.applied.len() == rendered.steps.len() && k == i)
             .then(|| lands.get(i + 1).map(|n| n - lands[i]))
             .flatten()
-            .filter(|b| *b != step.bars as usize);
+            .filter(|b| *b != step.length());
         eprintln!(
-            "  {}  {:<14} {:>3} bars  {:<10} {}{}",
+            "  {}  {:<14} {:>3} bars{}  {:<10} {}{}",
             clock(*at),
             step.name(),
             step.bars,
+            step.auto.map(|n| format!(" x{} auto", n)).unwrap_or_default(),
             step.phase,
             step.note,
             moved.map(|b| format!("  (plays {} to reach the phrase line)", b)).unwrap_or_default()

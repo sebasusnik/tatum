@@ -257,3 +257,54 @@ fn reset_puts_every_touched_knob_back_to_the_text() {
     // Forgotten: back on the bass page the knob moves at once, no pickup.
     assert!(!planner.knob(74, 90, g).plans.is_empty());
 }
+
+/// A page can hold the faders too: on it they move what it says, off it
+/// what the `midi` block says. And `voice next` passes over a page whose
+/// tracks play nothing in this step, unless the hands play them.
+#[test]
+fn faders_change_with_the_page_and_a_silent_page_is_passed_over() {
+    let song = SONG
+        .replace(
+            "track lead  { play rest",
+            "module keys pad_v { cutoff 0.5 }\ntrack pad { play rest using pad_v level 0.4 out > master }\ntrack lead  { play rest",
+        )
+        .replace("    page drums {", "    page pad {\n        cc 74 > pad cutoff\n    }\n    page drums {")
+        .replace("    cc 74 > bass level 0..1.6\n", "    cc 74 > bass level 0..1.6\n    cc 73 > drums level\n")
+        .replace("        cc 71 > bass resonance\n", "        cc 71 > bass resonance\n        cc 73 > bass sustain\n");
+    let mut planner = LivePlanner::new();
+    planner.set_output_gain(1.0);
+    let mut player = LivePlayer::new();
+    player.apply(planner.plan(&song, player.generation()).expect("compiles"));
+    player.start();
+    let g = player.generation();
+    // F1 on `tema`: the drums' level, from the `midi` block.
+    let turn = planner.knob(73, 115, g);
+    assert!(turn.readings[0].starts_with("drums level"), "{:?}", turn.readings);
+    // On `bass`, the same fader is the bass's sustain.
+    planner.voice(&VoiceMove::Next, g).unwrap();
+    let turn = planner.knob(73, 76, g);
+    assert!(turn.readings[0].starts_with("bass sustain"), "{:?}", turn.readings);
+    // `pad` plays only rests here and no key plays it: next skips to drums.
+    let pages = planner.pages();
+    assert!(pages.iter().any(|(n, _, alive)| n == "pad" && !alive), "{pages:?}");
+    assert!(pages.iter().all(|(n, _, alive)| n == "pad" || *alive), "{pages:?}");
+    assert!(planner.voice(&VoiceMove::Next, g).unwrap().starts_with("voice drums"));
+    assert!(planner.voice(&VoiceMove::Prev, g).unwrap().starts_with("voice bass"));
+    // By name it is still there.
+    assert!(planner.voice(&VoiceMove::To("pad".into()), g).unwrap().starts_with("voice pad"));
+}
+
+/// A track the step takes out with `level 0` is as silent as one resting.
+#[test]
+fn a_track_at_level_zero_has_its_page_passed_over() {
+    let song = SONG.replace("track drums { play beat using kit level 0.9", "track drums { play beat using kit level 0");
+    let mut planner = LivePlanner::new();
+    let mut player = LivePlayer::new();
+    player.apply(planner.plan(&song, player.generation()).expect("compiles"));
+    let pages = planner.pages();
+    assert!(pages.iter().any(|(n, _, alive)| n == "drums" && !alive), "{pages:?}");
+    let raised = format!("{song}\nauto drums level 0 > 0.9 over 4\n");
+    planner.plan(&raised, player.generation()).expect("compiles");
+    let pages = planner.pages();
+    assert!(pages.iter().any(|(n, _, alive)| n == "drums" && *alive), "{pages:?}");
+}

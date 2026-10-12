@@ -910,6 +910,10 @@ impl Parser {
                     self.advance();
                     Some(KeyAction::Prev)
                 }
+                Token::Ident(w) if w == "loop" => {
+                    self.advance();
+                    Some(KeyAction::Loop)
+                }
                 Token::Ident(w) if w == "step" => {
                     self.advance();
                     match self.peek().clone() {

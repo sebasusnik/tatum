@@ -320,12 +320,15 @@ pub enum PadAction {
     Next,
     Prev,
     Step(usize),
+    /// `pad 51 > loop`: keep the step that would move on by itself, or let
+    /// it go again.
+    Loop,
 }
 
 impl PadAction {
     /// A set move rather than something the engine does.
     pub fn navigation(&self) -> bool {
-        matches!(self, PadAction::Next | PadAction::Prev | PadAction::Step(_))
+        matches!(self, PadAction::Next | PadAction::Prev | PadAction::Step(_) | PadAction::Loop)
     }
 }
 
@@ -757,6 +760,7 @@ fn pad_action(song: &Song, track: &impl Fn(&str) -> Option<usize>, target: &str)
     match pad_words(target).as_slice() {
         ["freeze"] => Some(PadAction::Freeze),
         ["next"] => Some(PadAction::Next),
+        ["loop"] => Some(PadAction::Loop),
         ["prev"] => Some(PadAction::Prev),
         ["step", n] => n.parse::<usize>().ok().filter(|&n| n >= 1).map(PadAction::Step),
         ["mute", t] => track(t).map(|track| PadAction::Mute { track }),

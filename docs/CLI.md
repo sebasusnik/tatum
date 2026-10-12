@@ -253,6 +253,16 @@ its header gives and asks for the next in its last bar, so the hands are free fo
 music. The phrase becomes 1 bar unless `--phrase` says otherwise, because a step's bars
 need not be a multiple of 8. A key or a pad still moves the set at any time.
 
+A bridge, a break or a build should not have to be watched. `# set: bars=16 auto`
+makes one step walk on its own without `--auto`: it plays its bars and the next step
+lands where they end, even off the phrase line. `auto=2` plays them twice first (and
+`set render` plays the step for its bars times two). The TUI counts down to it
+(`AUTO → next in 4 bars`, flashing in the last two). `o`, a `keyboard` line
+`o > loop`, or a pad or key `> loop` keeps the step looping instead (`⟲ LOOP`);
+pressed again, it lets it go, at the end of its bars or, if they have passed, on the
+next phrase line. Every step lands with the loop off. Under `--auto` the same key
+keeps any step.
+
 A step can carry its own practice sheet. `# cue: <bar> <what>` lines, with the bar of
 the step counted from 1 and a fraction for the beat (`8.75` is bar 8, beat 4), show
 under the steps in `set play --tui`: the bar of the step and its beat, the cue whose

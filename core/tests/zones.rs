@@ -120,6 +120,12 @@ fn the_blocks_parse_and_redefine() {
     assert!(drop.bass.is_none() && drop.sets.is_empty(), "a scene is replaced whole");
     assert_eq!(p.keyboard.iter().find(|b| b.key == "f1").unwrap().action, dsl::ast::KeyAction::Perform("raga".into()));
     assert_eq!(p.scene_bars, Some(8));
+
+    // `loop` keeps a set's step: from the computer, a pad or a trigger key.
+    let looped = format!("{SONG}\nkeyboard {{\n  o > loop\n}}\nmidi {{\n  pad 51 > loop\n  key 46 > loop\n}}\n");
+    let song = dsl::parse(&looped).unwrap();
+    assert_eq!(song.perform.keyboard.iter().find(|b| b.key == "o").unwrap().action, dsl::ast::KeyAction::Loop);
+    assert!(SongEngine::from_source(&looped).is_ok(), "{:?}", SongEngine::from_source(&looped).err());
 }
 
 #[test]

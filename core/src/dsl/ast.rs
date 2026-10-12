@@ -238,6 +238,9 @@ pub enum KeyAction {
     Next,
     Prev,
     Step(usize),
+    /// `o > loop`: in a set, keep the step playing instead of moving on by
+    /// itself (`# set: auto`), or let it go again.
+    Loop,
 }
 
 /// One line of a `midi { }` block. The target is stored joined with dots, the

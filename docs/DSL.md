@@ -617,6 +617,7 @@ midi {
     pad 46 > throw stab        # the whole track into the delay while held; the repeats ring on
     pad 47 > freeze            # the reverb frozen while held
     pad 48 > next              # in `tatum set play`: the next step; also prev, step 3
+    pad 51 > loop              # in a set: keep a step that moves on by itself (`# set: auto`)
 }
 ```
 
@@ -755,7 +756,7 @@ perform break {
 keyboard {
     f1 > perform intro
     f4 > perform break
-    space > next                      # also prev, step 3
+    space > next                      # also prev, step 3, loop
     quantize bar                      # bar, phrase (8 bars) or a number of bars
 }
 ```
@@ -857,6 +858,7 @@ midi {
     page bass {
         cc 74 > bass cutoff
         cc 71 > bass resonance
+        cc 73 > bass sustain        # a fader too: any controller can change with the page
     }
     cc 114 > voice step             # an encoder steps through the pages
 }
@@ -872,6 +874,13 @@ written with `guard` also waits on its very first touch, before any page
 change, when the text puts its target somewhere else: for what a jump would
 hurt, a DJ filter or a master volume. On the first page, before any change,
 every other knob jumps on its first touch.
+
+`voice next` and `voice prev` pass over a page that moves nothing heard in the
+step playing: every track it names plays only rests or sits at `level 0` (or is not in this rig),
+and no zone or scene plays it from the keys (a pad's one-shot does not count). A page with no lines, and
+one that reaches the master, a bus, the returns or the tempo, is always
+there. `voice <name>` and a `voice` knob reach any page. The screen lists the
+pages with the one chosen lit and the silent ones dimmed.
 
 A pad or a trigger key can hold an effect on the whole output, coming in and
 out over a few milliseconds, as strong as the pad was struck and then as hard

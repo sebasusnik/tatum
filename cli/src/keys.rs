@@ -21,6 +21,8 @@ pub enum Key {
     Prev,
     /// A step by its number on screen, counting from 1.
     Step(usize),
+    /// Keep the step that would move on by itself, or let it go.
+    Loop,
     Named(KeyName),
 }
 
@@ -62,6 +64,7 @@ impl KeyName {
             KeyName::Space | KeyName::Right | KeyName::Char('n' | 'N') => Some(Key::Next),
             KeyName::Left | KeyName::Char('p' | 'P') => Some(Key::Prev),
             KeyName::Char(c @ '1'..='9') => Some(Key::Step(c as usize - '0' as usize)),
+            KeyName::Char('o' | 'O') => Some(Key::Loop),
             _ => None,
         }
     }

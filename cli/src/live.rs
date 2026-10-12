@@ -542,12 +542,17 @@ pub fn run(
                         if let Some(action) = planner.pad_navigation(note) {
                             match set.as_mut() {
                                 Some(nav) => {
+                                    let bar = stats.bar.load(Ordering::Relaxed) as usize;
+                                    if action == tatum_core::midi::PadAction::Loop {
+                                        let said = nav.toggle_loop(bar);
+                                        ui.say(now_s(), &said, crate::tui::Tone::Good);
+                                        continue;
+                                    }
                                     let m = match action {
                                         tatum_core::midi::PadAction::Prev => crate::setnav::Move::Prev,
                                         tatum_core::midi::PadAction::Step(n) => crate::setnav::Move::To(n),
                                         _ => crate::setnav::Move::Next,
                                     };
-                                    let bar = stats.bar.load(Ordering::Relaxed) as usize;
                                     let said = nav.ask(m, bar);
                                     ui.say(now_s(), &said, crate::tui::Tone::Info);
                                 }
@@ -557,6 +562,13 @@ pub fn run(
                             }
                             continue;
                         }
+                    }
+                    if !pad && velocity > 0 && planner.key_loops(note) {
+                        if let Some(nav) = set.as_mut() {
+                            let said = nav.toggle_loop(stats.bar.load(Ordering::Relaxed) as usize);
+                            ui.say(now_s(), &said, crate::tui::Tone::Good);
+                        }
+                        continue;
                     }
                     let plans = if pad {
                         planner.pad(note, velocity, generation)
@@ -663,6 +675,7 @@ pub fn run(
                     crate::tui::Key::Next => keys.push(crate::keys::Key::Next),
                     crate::tui::Key::Prev => keys.push(crate::keys::Key::Prev),
                     crate::tui::Key::Step(n) => keys.push(crate::keys::Key::Step(n)),
+                    crate::tui::Key::Loop => keys.push(crate::keys::Key::Loop),
                     crate::tui::Key::Named(n) => keys.push(crate::keys::Key::Named(n)),
                     // The screen writes the line in the file; the save is
                     // picked up below like one from the editor.
@@ -784,6 +797,7 @@ pub fn run(
                         Some(KeyAction::Next) => crate::keys::Key::Next,
                         Some(KeyAction::Prev) => crate::keys::Key::Prev,
                         Some(KeyAction::Step(n)) => crate::keys::Key::Step(*n),
+                        Some(KeyAction::Loop) => crate::keys::Key::Loop,
                         None => match name.default_move() {
                             Some(k) => k,
                             None => continue,
@@ -800,6 +814,14 @@ pub fn run(
                 crate::keys::Key::Next => crate::setnav::Move::Next,
                 crate::keys::Key::Prev => crate::setnav::Move::Prev,
                 crate::keys::Key::Step(n) => crate::setnav::Move::To(n),
+                crate::keys::Key::Loop => {
+                    if let Some(nav) = set.as_mut() {
+                        let bar = stats.bar.load(Ordering::Relaxed) as usize;
+                        let said = nav.toggle_loop(bar);
+                        ui.say(now_s(), &said, crate::tui::Tone::Good);
+                    }
+                    continue;
+                }
                 crate::keys::Key::Named(_) => continue,
             };
             if let Some(nav) = set.as_mut() {
@@ -922,6 +944,7 @@ pub fn run(
         if let Ui::Screen(screen) = &mut ui {
             screen.bound = bindings.iter().map(|b| b.key.clone()).collect();
             screen.voice = planner.voice_name();
+            screen.pages = planner.pages();
             screen.perform = match (planner.scene(), &pending_scene) {
                 (now, Some((next, bar))) => Some(format!("{} → {} @ bar {}", now.unwrap_or("—"), next, bar + 1)),
                 (Some(now), None) => Some(now.to_string()),
@@ -935,8 +958,11 @@ pub fn run(
                     next: nav.waiting(bar),
                     phrase: nav.phrase,
                     bar: nav.bar_in_step(bar),
-                    bars: nav.steps[nav.current].bars as usize,
+                    bars: nav.steps[nav.current].length(),
                     cues: nav.steps[nav.current].cues.clone(),
+                    moves_in: nav.moves_in(bar),
+                    looping: nav.looping,
+                    pass: nav.pass(bar),
                 });
             }
             screen.position(
@@ -1081,6 +1107,7 @@ fn print_keyboard(planner: &LivePlanner) {
                 KeyAction::Voice(tatum_core::dsl::ast::VoiceMove::Prev) => "voice before".into(),
                 KeyAction::Voice(tatum_core::dsl::ast::VoiceMove::To(p)) => format!("voice {}", p),
                 KeyAction::Next => "next".into(),
+                KeyAction::Loop => "keep the step, or let it move on".into(),
                 KeyAction::Prev => "prev".into(),
                 KeyAction::Step(n) => format!("step {}", n),
             };

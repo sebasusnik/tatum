@@ -60,6 +60,15 @@ pub struct SetNav {
     /// header's bars run out, the way `set render` walks a set, so the
     /// performer's hands are free for the music. A key or a pad still moves.
     pub auto: bool,
+    /// A step whose header says `auto` moves on by itself after its passes.
+    /// Off where something else walks the set (`set render`).
+    pub headers: bool,
+    /// The performer kept the step playing: no move on its own until they
+    /// let it go. Every step lands with it off.
+    pub looping: bool,
+    /// The bar a move the step asked for itself lands on: where its bars
+    /// end, which need not be a phrase line.
+    land_at: Option<usize>,
 }
 
 impl SetNav {
@@ -78,7 +87,67 @@ impl SetNav {
             counted: 0,
             started: 0,
             auto: false,
+            headers: true,
+            looping: false,
+            land_at: None,
         }
+    }
+
+    /// Whether the step playing moves on by itself: `--auto`, or its own
+    /// `auto` header, and not kept by the performer.
+    pub fn moves_on(&self) -> bool {
+        (self.auto || (self.headers && self.steps[self.current].auto.is_some()))
+            && !self.looping
+            && self.current + 1 < self.steps.len()
+    }
+
+    /// The bar the step playing runs out on.
+    fn ends(&self) -> usize {
+        self.started + self.steps[self.current].length()
+    }
+
+    /// Bars until the step playing moves on by itself, while it will.
+    pub fn moves_in(&self, bar: usize) -> Option<usize> {
+        (self.moves_on() && self.waiting(bar).is_none()).then(|| self.ends().saturating_sub(bar).max(1))
+    }
+
+    /// The pass of an `auto=N` step playing, from 1, and N.
+    pub fn pass(&self, bar: usize) -> Option<(usize, usize)> {
+        let step = &self.steps[self.current];
+        let n = step.auto.filter(|n| *n > 1)? as usize;
+        let into = bar.saturating_sub(self.started) / (step.bars as usize).max(1);
+        Some(((into + 1).min(n), n))
+    }
+
+    /// `o`, or a `loop` pad: keep the step playing, or let it move on again.
+    /// A move it already asked for is called off while it can be. Returns
+    /// what to tell the performer.
+    pub fn toggle_loop(&mut self, bar: usize) -> String {
+        let own = self.auto || (self.headers && self.steps[self.current].auto.is_some());
+        if !own {
+            return format!("{} loops until you move", self.describe(self.current));
+        }
+        self.looping = !self.looping;
+        if !self.looping {
+            let left = self.ends().saturating_sub(bar);
+            return if left > 0 {
+                format!("auto: moves on in {} bar{}", left, if left == 1 { "" } else { "s" })
+            } else {
+                String::from("auto: moves on at the next line")
+            };
+        }
+        // A move it asked for itself and that only waits for its line is
+        // dropped; a new engine already sent cannot be called back.
+        if self.land_at.is_some() {
+            if self.in_flight.is_some() {
+                self.looping = false;
+                return String::from("too late: the next step is on its way");
+            }
+            self.queued = None;
+            self.held = None;
+            self.land_at = None;
+        }
+        format!("loop: {} stays until you move", self.describe(self.current))
     }
 
     /// The bar of the step playing, from 1, for a performer reading cues.
@@ -97,11 +166,21 @@ impl SetNav {
         if !s.phase.is_empty() {
             d += &format!("  {}", s.phase);
         }
+        match s.auto {
+            Some(1) => d += "  (auto)",
+            Some(n) => d += &format!("  (auto x{})", n),
+            None => {}
+        }
         d
     }
 
     /// Queue a move. Returns what to tell the performer.
     pub fn ask(&mut self, m: Move, bar: usize) -> String {
+        self.land_at = None;
+        self.ask_inner(m, bar)
+    }
+
+    fn ask_inner(&mut self, m: Move, bar: usize) -> String {
         let from = self.queued.unwrap_or(self.current);
         let last = self.steps.len() - 1;
         let to = match m {
@@ -121,7 +200,7 @@ impl SetNav {
         }
         self.queued = Some(to);
         self.built_on = None;
-        format!("next: {}, on bar {}", self.describe(to), self.next_line(bar) + 1)
+        format!("next: {}, on bar {}", self.describe(to), self.landing(bar) + 1)
     }
 
     /// The bar the next phrase starts on, counting from 0.
@@ -129,10 +208,16 @@ impl SetNav {
         (bar / self.phrase + 1) * self.phrase
     }
 
+    /// The bar a move asked for now lands on: where the step's own bars end
+    /// when it asked, else the next phrase line.
+    fn landing(&self, bar: usize) -> usize {
+        self.land_at.filter(|l| *l > bar).unwrap_or_else(|| self.next_line(bar))
+    }
+
     /// Bars until the queued step lands, for the status line.
     pub fn waiting(&self, bar: usize) -> Option<(usize, usize)> {
         let q = self.queued.or(self.held.as_ref().map(|h| h.1)).or(self.in_flight.map(|f| f.0))?;
-        Some((q, self.next_line(bar) - bar))
+        Some((q, self.landing(bar).saturating_sub(bar).max(1)))
     }
 
     /// Called every tick with the bar the player is in, the tempo playing,
@@ -152,24 +237,28 @@ impl SetNav {
         if self.current != self.counted {
             self.counted = self.current;
             self.started = bar;
+            self.looping = false;
+            self.land_at = None;
         }
         // In its last bar, a step asks for the next one, which then lands
         // on the line its bars end on.
-        let ends = self.started + self.steps[self.current].bars as usize;
-        if self.auto
+        let ends = self.ends();
+        if self.moves_on()
             && self.queued.is_none()
             && self.held.is_none()
             && self.in_flight.is_none()
-            && self.current + 1 < self.steps.len()
             && bar + 1 >= ends
             && self.built_on.is_none_or(|b| b < self.started)
         {
-            said.push(self.ask(Move::Next, bar));
+            // Let go after its bars ran out, it waits for the phrase line.
+            self.land_at = Some(ends).filter(|e| *e > bar);
+            said.push(format!("auto {}", self.ask_inner(Move::Next, bar)));
         }
 
-        // A values-only step waiting for its line.
+        // A values-only step waiting for its line: the bar after the one it
+        // was built in.
         if let Some((_, _, _, _)) = &self.held {
-            if bar.is_multiple_of(self.phrase) && self.built_on != Some(bar) {
+            if self.built_on.is_some_and(|b| bar > b) {
                 let (plan, step, from, to) = self.held.take().expect("held");
                 plans.push(plan);
                 self.current = step;
@@ -185,7 +274,7 @@ impl SetNav {
 
         // A queued step, built in the last bar of the phrase.
         if let Some(step) = self.queued {
-            let last_bar = (bar + 1).is_multiple_of(self.phrase);
+            let last_bar = bar + 1 >= self.landing(bar);
             if (last_bar || self.phrase == 1) && self.built_on != Some(bar) {
                 self.built_on = Some(bar);
                 self.queued = None;
@@ -357,6 +446,75 @@ track bass  { play line using acid out > master }
         // The bar of the step a performer reads, one behind the landing:
         // the step is counted from the tick after it lands.
         assert_eq!(&counted[..3], &[1, 2, 3], "{counted:?}");
+    }
+
+    /// A set whose steps carry these headers, played with `phrase` bars to
+    /// a phrase; `at_bar` runs at the start of each bar.
+    fn play_headers(
+        headers: [&str; 3],
+        phrase: usize,
+        bars: usize,
+        at_bar: impl FnMut(usize, &mut SetNav),
+    ) -> Vec<usize> {
+        let dir = set_dir();
+        for (f, h) in ["01.synth", "02.synth", "03.synth"].iter().zip(headers) {
+            let text = std::fs::read_to_string(dir.join(f)).unwrap();
+            std::fs::write(dir.join(f), format!("{h}\n{text}")).unwrap();
+        }
+        let steps = crate::set::load(&dir, 32).unwrap();
+        let seen = play_nav(bars, SetNav::new(steps, phrase, 0.0), at_bar);
+        let _ = std::fs::remove_dir_all(&dir);
+        seen.iter().map(|s| s.0).collect()
+    }
+
+    /// A bridge moves on by itself where its bars end, off the phrase line,
+    /// without `--auto`; the step after it, with no `auto`, stays.
+    #[test]
+    fn an_auto_step_moves_on_by_itself_where_its_bars_end() {
+        let steps = play_headers(["# set: bars=3 auto", "# set: bars=2", "# set: bars=2"], 4, 10, |_, _| {});
+        assert_eq!(steps, [0, 0, 0, 1, 1, 1, 1, 1, 1, 1], "{steps:?}");
+    }
+
+    #[test]
+    fn auto_n_plays_the_step_n_times() {
+        let steps = play_headers(["# set: bars=2 auto=3", "# set: bars=2", "# set: bars=2"], 8, 8, |_, _| {});
+        assert_eq!(steps, [0, 0, 0, 0, 0, 0, 1, 1], "{steps:?}");
+        let dir = set_dir();
+        std::fs::write(dir.join("00.synth"), format!("# set: bars=4 auto=2 phase=x\n{BASE}")).unwrap();
+        let loaded = crate::set::load(&dir, 32).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!((loaded[0].auto, loaded[0].length()), (Some(2), 8));
+        assert_eq!((loaded[1].auto, loaded[1].length()), (None, 32));
+    }
+
+    /// Kept before its end, the step loops; let go after its end has
+    /// passed, it moves on at the next phrase line.
+    #[test]
+    fn a_kept_step_loops_until_it_is_let_go() {
+        let steps = play_headers(["# set: bars=2 auto", "# set: bars=2", "# set: bars=2"], 4, 12, |bar, nav| {
+            if bar == 1 {
+                assert!(nav.moves_in(bar).is_some());
+                nav.toggle_loop(bar);
+                assert_eq!(nav.moves_in(bar), None);
+            }
+            if bar == 5 {
+                nav.toggle_loop(bar);
+            }
+        });
+        assert_eq!(steps, [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1], "{steps:?}");
+    }
+
+    /// Kept after it asked for the next, while that waits for its line:
+    /// the move is called off.
+    #[test]
+    fn keeping_a_step_calls_off_the_move_it_asked_for() {
+        let steps = play_headers(["# set: bars=2 auto", "# set: bars=2", "# set: bars=2"], 1, 5, |bar, nav| {
+            if bar == 2 {
+                assert!(nav.waiting(bar).is_some());
+                nav.toggle_loop(bar);
+            }
+        });
+        assert_eq!(steps, [0, 0, 0, 0, 0], "{steps:?}");
     }
 
     #[test]

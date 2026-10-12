@@ -282,7 +282,7 @@ fn validate_maps(song: &Song, maps: &[MidiMapDef], head: impl Fn(&str, &str) -> 
                 String::from("the set moves from the computer's keys, not the controller: `keyboard { space > next }`"),
             )),
             MidiSource::Pad(_) | MidiSource::Key(_) => match words.as_slice() {
-                ["freeze"] | ["next"] | ["prev"] => {}
+                ["freeze"] | ["next"] | ["prev"] | ["loop"] => {}
                 ["step", n] => {
                     if !n.parse::<usize>().is_ok_and(|n| n >= 1) {
                         errors.push(err(String::from("a set's steps count from 1: `pad 50 > step 3`")));

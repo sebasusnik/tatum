@@ -307,6 +307,9 @@ struct Known {
     /// the text changes, which needs only the names above, so remapping a
     /// knob takes effect at once instead of waiting for a swap.
     controls: midi::Controls,
+    /// Per track, whether the text has it play anything: a note or a hit in
+    /// a pattern its `play` line can choose, at a level above 0.
+    heard: Vec<bool>,
 }
 
 impl Known {
@@ -325,14 +328,88 @@ impl Known {
                 .collect(),
             track_home: (0..engine.track_count()).map(|i| engine.track_home_note(i)).collect(),
             controls: midi::Controls::default(),
+            heard: Vec::new(),
         };
         known.resolve_controls();
+        known.hear();
         known
     }
 
     fn set_ast(&mut self, ast: Song) {
         self.ast = ast;
         self.resolve_controls();
+        self.hear();
+    }
+
+    /// Which tracks the text has play something. A `play` line can change
+    /// without a new engine, so this reads the text, not the engine.
+    fn hear(&mut self) {
+        let compiled = crate::dsl::compiler::compile(&self.ast).ok();
+        // A track a pad holds is out until it is held.
+        let held = midi::held_out(&self.ast);
+        self.heard = self
+            .tracks
+            .iter()
+            .map(|name| {
+                if held.contains(name) {
+                    return false;
+                }
+                let Some(song) = compiled.as_ref() else { return true };
+                let Some(t) = song.tracks.iter().find(|t| &t.name == name) else { return true };
+                let mut patterns = Vec::from([t.pattern_idx]);
+                if let Some(plan) = t.play.and_then(|p| song.plays.get(p)) {
+                    patterns.extend(plan.variants.iter().copied());
+                }
+                // At level 0 it is out, unless an `auto` brings it up.
+                let raised = song
+                    .automations
+                    .iter()
+                    .any(|a| a.target == alloc::format!("{}.level", name) && a.keyframes.iter().any(|k| *k > 0.0));
+                (t.level > 0.0 || raised)
+                    && patterns.iter().filter_map(|&i| song.patterns.get(i)).any(|p| {
+                        p.steps.iter().any(|s| s.is_onset())
+                            || p.lanes.iter().any(|l| l.steps.iter().any(|s| s.is_onset()))
+                    })
+            })
+            .collect();
+    }
+
+    /// Whether track `t` sounds in this step: its patterns play something,
+    /// or the keyboard plays it (a zone or a scene's zone). A pad's one-shot
+    /// does not count: a page that names one beside its instrument would
+    /// never be passed over.
+    fn track_alive(&self, t: usize) -> bool {
+        if self.heard.get(t).copied().unwrap_or(true) {
+            return true;
+        }
+        let c = &self.controls;
+        let zone = |z: &Option<midi::ZoneTarget>| z.as_ref().is_some_and(|z| z.track == t);
+        c.zones.iter().any(|z| zone(&z.play))
+            || c.scenes.iter().any(|s| zone(&s.bass) || zone(&s.lead))
+            || c.keys.iter().any(|k| k.track == t)
+    }
+
+    /// Whether a page moves something heard in this step: a page whose
+    /// every target is a track that plays nothing here is skipped by
+    /// `voice next`. The master, the returns and the tempo are always heard.
+    fn page_alive(&self, page: &midi::Page) -> bool {
+        // An empty page leaves every knob to the `midi` block.
+        page.knobs.is_empty()
+            || page.knobs.iter().flat_map(|k| k.moves.iter()).any(|m| match *m {
+                // A module the keyboard's voice shares with the chords is the
+                // chords' page: it counts only where a pattern plays it.
+                midi::Move::Module { instrument, .. } => self
+                    .track_instruments
+                    .iter()
+                    .enumerate()
+                    .any(|(t, &i)| i == instrument && self.heard.get(t).copied().unwrap_or(true)),
+                midi::Move::TrackLevel { track }
+                | midi::Move::TrackPan { track }
+                | midi::Move::NodeWet { track, .. }
+                | midi::Move::TrackSend { track, .. }
+                | midi::Move::NodeParam { track: Some(track), .. } => self.track_alive(track),
+                _ => true,
+            })
     }
 
     fn names(&self) -> midi::Names<'_> {
@@ -838,6 +915,12 @@ impl LivePlanner {
     pub fn pad_navigation(&self, note: u8) -> Option<midi::PadAction> {
         let latest = self.pending.as_ref().or(self.running.as_ref())?;
         latest.controls.pads.iter().find(|p| p.note == note && p.action.navigation()).map(|p| p.action)
+    }
+
+    /// `key 46 > loop`: a trigger key that keeps the set's step.
+    pub fn key_loops(&self, note: u8) -> bool {
+        let Some(latest) = self.pending.as_ref().or(self.running.as_ref()) else { return false };
+        latest.controls.triggers.iter().any(|p| p.note == note && p.action == midi::PadAction::Loop)
     }
 
     /// What the pads hold on a fresh engine: toggled tracks out, and whatever
@@ -1525,6 +1608,19 @@ impl LivePlanner {
         self.page_name(self.page)
     }
 
+    /// Every page by name, the one playing marked, and whether each moves
+    /// something heard in this step: the screen's list of pages.
+    pub fn pages(&self) -> Vec<(String, bool, bool)> {
+        let Some(latest) = self.pending.as_ref().or(self.running.as_ref()) else { return Vec::new() };
+        latest
+            .controls
+            .pages
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (p.name.clone(), i == self.page, latest.page_alive(p)))
+            .collect()
+    }
+
     /// Choose the knobs' page. Returns what it now moves, for the screen:
     /// `voice bass: cutoff · resonance · decay`. With `takeover pickup`, a
     /// knob whose position does not match its new target's value (where it
@@ -1537,9 +1633,21 @@ impl LivePlanner {
         if n == 0 {
             return None;
         }
+        // Next and back pass over a page whose tracks play nothing in this
+        // step; by name, any page.
+        let walk = |by: usize| {
+            let mut i = self.page;
+            for _ in 0..n {
+                i = (i + by) % n;
+                if latest.page_alive(&pages[i]) {
+                    return i;
+                }
+            }
+            (self.page + by) % n
+        };
         let to = match mv {
-            VoiceMove::Next => (self.page + 1) % n,
-            VoiceMove::Prev => (self.page + n - 1) % n,
+            VoiceMove::Next => walk(1),
+            VoiceMove::Prev => walk(n - 1),
             VoiceMove::To(name) => pages.iter().position(|p| &p.name == name)?,
         };
         let old = pages.get(self.page).cloned();

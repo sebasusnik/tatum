@@ -133,6 +133,12 @@ pub struct SetView {
     pub bars: usize,
     /// The playing step's `# cue:` lines: bar (from 1) and what to do.
     pub cues: Vec<(f32, String)>,
+    /// Bars until the step moves on by itself (`# set: auto`), while it will.
+    pub moves_in: Option<usize>,
+    /// The performer keeps a step that would move on by itself.
+    pub looping: bool,
+    /// The pass of an `auto=N` step, from 1, and N.
+    pub pass: Option<(usize, usize)>,
 }
 
 /// What a key asks for.
@@ -142,6 +148,8 @@ pub enum Key {
     Next,
     Prev,
     Step(usize),
+    /// Keep the step that would move on by itself, or let it go.
+    Loop,
     /// Change the selected track's `play` line.
     Edit(edit::Op),
     /// Put back what the last edit from the screen changed.
@@ -291,6 +299,9 @@ pub struct Screen {
     pub perform: Option<String>,
     /// The page the knobs are on: `bass`.
     pub voice: Option<String>,
+    /// Every page: its name, whether the knobs are on it, and whether it
+    /// moves something heard in this step (Tab passes over the rest).
+    pub pages: Vec<(String, bool, bool)>,
     bar: usize,
     step: usize,
     tempo: f32,
@@ -345,6 +356,7 @@ impl Screen {
             bound: Vec::new(),
             perform: None,
             voice: None,
+            pages: Vec::new(),
             picker: None,
             view: 0,
             followed: None,
@@ -536,6 +548,7 @@ impl Screen {
                 KeyCode::Enter => self.browse.take().map(|b| Key::Step(b + 1)),
                 KeyCode::Char(' ') | KeyCode::Char('n') => Some(Key::Next),
                 KeyCode::Char('p') => Some(Key::Prev),
+                KeyCode::Char('o') => Some(Key::Loop),
                 KeyCode::Char('r') => Some(Key::Edit(Op::Toggle(Toggle::Rev))),
                 KeyCode::Char('f') => Some(Key::Edit(Op::Toggle(Toggle::Fast))),
                 KeyCode::Char('h') => Some(Key::Edit(Op::Toggle(Toggle::Slow))),
@@ -1228,6 +1241,7 @@ impl Screen {
             key("1-9", "a step", "go to the one in that place on screen"),
             key("Enter", "go", "to the step looked at, on the next phrase · Esc stays"),
             key("space", "next step", "g or Tab: every step, to pick one"),
+            key("o", "loop", "keep a step that moves on by itself (auto) · again lets it go"),
             key("↑ ↓", "a track", "move the cursor · Esc clears the marks"),
             key("v", "mark", "the track under the cursor, any of them · a marks all"),
             key("shift ↑ ↓", "mark", "the tracks passed over"),
@@ -1310,7 +1324,18 @@ impl Screen {
             spans.push(Span::styled("  ⚑ ", Style::new().fg(DIM)));
             spans.push(Span::styled(perform.clone(), Style::new().fg(GOLD).add_modifier(Modifier::BOLD)));
         }
-        if let Some(voice) = &self.voice {
+        if !self.pages.is_empty() {
+            spans.push(Span::styled("  knobs:", Style::new().fg(DIM)));
+            for (name, on, alive) in &self.pages {
+                let style = match (on, alive) {
+                    (true, _) => Style::new().fg(Color::Black).bg(HOT).add_modifier(Modifier::BOLD),
+                    (false, true) => Style::new().fg(TEXT),
+                    (false, false) => Style::new().fg(KEYCAP),
+                };
+                spans.push(Span::raw(" "));
+                spans.push(Span::styled(format!(" {} ", name), style));
+            }
+        } else if let Some(voice) = &self.voice {
             spans.push(Span::styled("  knobs: ", Style::new().fg(DIM)));
             spans.push(Span::styled(voice.clone(), Style::new().fg(HOT).add_modifier(Modifier::BOLD)));
         }
@@ -1430,6 +1455,32 @@ impl Screen {
         );
         buf.set_string(area.x, area.y, &here, Style::new().fg(TEXT).bg(BG));
         let mut x = area.x + here.chars().count() as u16;
+        if let Some((pass, of)) = set.pass {
+            let s = format!("pass {}/{} ", pass, of);
+            buf.set_string(x, area.y, &s, Style::new().fg(TEXT).bg(BG));
+            x += s.chars().count() as u16;
+        }
+        // A step that moves on by itself says so, and counts down; the last
+        // bars flash on the beat. Kept by the performer, it says that.
+        let badge = match (set.moves_in, set.looping) {
+            (_, true) => Some((" ⟲ LOOP · o lets it go ".to_string(), Style::new().fg(Color::Black).bg(OK))),
+            (Some(n), false) => {
+                let s = format!(" AUTO → next in {} bar{} · o keeps it ", n, if n == 1 { "" } else { "s" });
+                let style = if n <= 2 && (self.step / 4).is_multiple_of(2) {
+                    Style::new().fg(Color::Black).bg(HOT).add_modifier(Modifier::BOLD)
+                } else if n <= 4 {
+                    Style::new().fg(Color::Black).bg(GOLD)
+                } else {
+                    Style::new().fg(GOLD).bg(PANEL)
+                };
+                Some((s, style))
+            }
+            (None, false) => None,
+        };
+        if let Some((s, style)) = badge {
+            buf.set_string(x, area.y, &s, style);
+            x += s.chars().count() as u16 + 1;
+        }
         if set.cues.is_empty() {
             return;
         }
