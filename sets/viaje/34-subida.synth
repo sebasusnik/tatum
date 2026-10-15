@@ -1,13 +1,13 @@
-# set: bars=16 phase=subida energy=8
+# set: bars=16 phase=10-tunel energy=8
 # set-note: La subida: el 303 se abre del todo y termina martillando la tónica, un redoble de rim que va de negras a semicorcheas, sirena y aire, y un tiempo de silencio antes del pico.
 use "_rig.synth"
 tempo 134
 
-module beats kit { kick_decay 28% kick_pitch 0.88x kick_click 46% kick_drive 48% hihat_level 72% }
+module beats kit { kick_decay 20% kick_pitch 1.0x kick_click 60% kick_drive 55% hihat_level 72% hihat_decay 12% hihat_pitch 1.7x }
 
 track beat   { play kick_build16 level 1.12 }
 track hats   { play hat_16_open level 1.07 }
-track roll   { play roll_stutter level 0.67 }
-track acid   { play acid_rise16 level 0.61 }
+track roll   { play roll_stutter_bb level 0.67 }
+track acid   { play acid_rise16_bb level 0.61 }
 track siren  { play siren_hold level 0.29 }
 track air    { play air_hold level 1.2 }

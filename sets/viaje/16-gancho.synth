@@ -1,0 +1,17 @@
+# set: bars=64 phase=05-gancho energy=6 blend=16
+# set-note: Aparece el protagonista: un pluck FM metálico con un motivo corto sobre la tónica, su octava, Eb y C. Se abre de a poco a lo largo del bloque. Los acordes quedan de colchón oscuro debajo.
+use "_rig.synth"
+tempo 127
+
+module fm pluck { mod_index 34% }
+
+module keys warmth { cutoff 900hz }
+
+module beats kit { kick_decay 28% kick_pitch 0.82x kick_click 38% hihat_level 70% hihat_decay 28% }
+
+track beat   { play kick_gancho8 level 1.24 }
+track hats   { play hat_gancho8 level 1.493 }
+track perc    { play perc_detroit8 level 0.804 delay_send 0.15 reverb_send 0.12 }
+track bass    { play bs_ab16 level 1.091 }
+track pluck  { play pluck_a level 0.165 }
+track shaker { play shake_b level 0.08 }

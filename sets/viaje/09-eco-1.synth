@@ -1,0 +1,15 @@
+# set: bars=48 phase=03-eco energy=5 blend=16
+# set-note: Eco, en Do menor: el acorde dub transportado, a medio tiempo y oscuro; el bombo más seco; el shaker, el tick en 3-3-2 y el ride marcando la grilla.
+use "_rig.synth"
+tempo 124
+
+module beats kit { kick_decay 46% kick_pitch 0.7x kick_click 22% kick_drive 38% }
+module keys chord { cutoff 1.6khz }
+
+track stab   { play stab_half8_c level 0.26 delay_send 0.5 }
+track beat   { play kick_dub8 level 0.8 }
+track hats   { play hat_ghost8 level 1.6 }
+track sub    { play sub_f8_c level 0.74 }
+track shaker { play shake4 level 0.07 }
+track tick   { play tick332 level 0.075 }
+track ride   { play ride_off level 0.035 }

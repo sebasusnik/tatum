@@ -1,0 +1,12 @@
+# set: bars=64 phase=09-maquina energy=8
+# set-note: El segundo riff del 303, más denso y saltando de octava; un rim fantasma entre los claps; el bajo rodante recorre la F y sube a Ab y C al final de cada frase.
+use "_rig.synth"
+tempo 132
+
+module beats kit { kick_decay 30% kick_pitch 0.86x kick_click 42% kick_drive 45% hihat_level 72% }
+
+track beat   { play kick_acidrim8 level 1.16 }
+track hats   { play hat_16_8 level 1.1 }
+track roll   { play roll_move level 0.69 }
+track acid   { play acid_riff_b16 level 0.6 }
+track ride   { play ride_q level 0.05 }

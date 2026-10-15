@@ -1,0 +1,13 @@
+# set: bars=48 phase=11-pico energy=3
+# set-note: El respiro largo después del pico: sin batería, los acordes con su reverb, el viento y la estática, y lo que queda del pluck: tres notas por compás, apagadas, tiradas al eco.
+use "_rig.synth"
+tempo 135
+
+module fm pluck { mod_index 22% }
+
+track under  { play ch_low level 0.08 }
+track chords { play ch_b level 0.24 reverb_send 0.3 }
+track sub    { play sub_long level 0.3 }
+track static { play static_bed level 0.06 }
+track pluck  { play pluck_d level 0.13 delay_send 0.4 }
+track bed    { play hiss_swell level 0.4 }
