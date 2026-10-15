@@ -1,4 +1,4 @@
-# set: bars=16 phase=05-maquina energy=8
+# set: bars=16 max=2 phase=05-maquina energy=8
 # set-note: The robot returns on its leaping cell, the drums drive again, ticks back to plain 3-3-2 so the stab has the air.
 use "_t05.synth"
 

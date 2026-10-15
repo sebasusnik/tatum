@@ -1,4 +1,4 @@
-# set: bars=24 phase=07-drop energy=8
+# set: bars=24 max=2 phase=07-drop energy=8
 # set-note: one notch under the peak, the lead rests: drive kit, the tunnel roll back with its turns, the arp gated and wide open, ticks busy
 use "_t07.synth"
 

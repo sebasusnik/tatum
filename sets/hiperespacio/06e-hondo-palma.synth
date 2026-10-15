@@ -1,4 +1,4 @@
-# set: bars=16 phase=06-hondo energy=7
+# set: bars=16 max=2 phase=06-hondo energy=7
 # set-note: The clap, last of the kit, lands on two and four; the roll back to straight; the drone's dirt swells and ebbs, higher each time.
 use "_t06.synth"
 

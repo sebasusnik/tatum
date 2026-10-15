@@ -1,4 +1,4 @@
-# set: bars=4 phase=08-gap energy=4
+# set: bars=4 auto phase=08-gap energy=4
 # set-note: the 4-bar gap: everything out but the grinder, gesture 2: idle, spin up hard, hold, and one beat of silence before the landing
 use "_t08.synth"
 

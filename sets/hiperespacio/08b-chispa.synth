@@ -1,4 +1,4 @@
-# set: bars=16 phase=08-amoladora energy=9
+# set: bars=16 max=2 phase=08-amoladora energy=9
 # set-note: the floor lands: main kit, the gallop roll (ratchet on the middle sixteenth); grinder gesture 1 in bars 9-16: idle, spin up with a catch, hold, cut on beat 3 of bar 16 (all drawn by auto on one drone)
 use "_t08.synth"
 

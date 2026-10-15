@@ -1,4 +1,4 @@
-# set: bars=16 phase=03-tribu energy=6
+# set: bars=16 max=2 phase=03-tribu energy=6
 # set-note: broken variation: the kick drops beats in bars 4 and 8, sixteenth hats, busy toms, a last short drone answer
 # cue: 7 key D held · kick out
 # cue: 9 let go of key D

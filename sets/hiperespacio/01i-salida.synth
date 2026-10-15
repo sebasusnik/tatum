@@ -1,4 +1,4 @@
-# set: bars=32 phase=01-ignicion energy=5
+# set: bars=32 max=2 phase=01-ignicion energy=5
 # set-note: the way out for the next record: kick, tick, open hat, rim, the tok, the plain open roll; nothing tonal but the bass
 use "_t01.synth"
 

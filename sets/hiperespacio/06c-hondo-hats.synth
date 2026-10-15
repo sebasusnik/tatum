@@ -1,4 +1,4 @@
-# set: bars=16 phase=06-hondo energy=7
+# set: bars=16 max=2 phase=06-hondo energy=7
 # set-note: A minute in, the hats finally arrive (ghosted sixteenths, a walking accent); the roll closes again; the drone's crusher starts to bite.
 use "_t06.synth"
 

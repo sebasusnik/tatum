@@ -1,4 +1,4 @@
-# set: bars=8 phase=01-ignicion energy=3
+# set: bars=8 auto phase=01-ignicion energy=3
 # set-note: the ignition: the turbine spins up over eight bars (RPM curve on its ratios, putter speeding into a whine), the hat packs tighter, the wind rises; everything cuts on the last beat
 use "_t01.synth"
 

@@ -1,4 +1,4 @@
-# set: bars=32 phase=01-ignicion energy=5
+# set: bars=32 max=2 phase=01-ignicion energy=5
 # set-note: the full floor: open hat, rim ghosts, turns at 8 and 16; the bass open with its octave kicks; one throttle blip from the turbine closes the phrase
 # cue: 15 key D held · kick out
 # cue: 17 let go of key D

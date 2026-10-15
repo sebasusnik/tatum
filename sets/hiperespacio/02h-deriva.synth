@@ -1,4 +1,4 @@
-# set: bars=16 phase=02-orbita energy=6
+# set: bars=16 max=2 phase=02-orbita energy=6
 # set-note: after the drop the pluck thins to its ratcheted strokes and the echo carries the rest; the bass moves to the b2 again
 use "_t02.synth"
 

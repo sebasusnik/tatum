@@ -1,4 +1,4 @@
-# set: bars=8 phase=09-build energy=3
+# set: bars=8 auto phase=09-build energy=3
 # set-note: Kickless tension: the roll takes every sixteenth, the snare goes from quarters to sixteenths, the noise riser starts and the master begins to close.
 use "_t09.synth"
 

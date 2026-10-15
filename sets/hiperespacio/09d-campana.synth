@@ -1,4 +1,4 @@
-# set: bars=16 phase=09-nebulosa energy=6
+# set: bars=16 max=2 phase=09-nebulosa energy=6
 # set-note: The busy groove with ghost snares; in bars 7-8 of each phrase three bell strokes fall into the quarter echo, a first look at what the breath will be.
 use "_t09.synth"
 

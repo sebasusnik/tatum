@@ -1,4 +1,4 @@
-# set: bars=32 phase=08-amoladora energy=8 blend=32
+# set: bars=32 max=2 phase=08-amoladora energy=8 blend=32
 # set-note: T08 amoladora mixes in at 145: a dirtier lower kick, offbeat hats, the plain three-saw roll opening over 32 bars, rims joining
 use "_t08.synth"
 tempo 145

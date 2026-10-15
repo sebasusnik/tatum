@@ -1,4 +1,4 @@
-# set: bars=16 phase=08-amoladora energy=8
+# set: bars=16 max=2 phase=08-amoladora energy=8
 # set-note: grinder gesture 3 in bars 9-16: spins up, then down into a stall and out before the outro; main kit, the gallop, no zaps
 use "_t08.synth"
 

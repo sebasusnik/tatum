@@ -1,4 +1,4 @@
-# set: bars=16 phase=10-hipervelocidad energy=9
+# set: bars=16 max=2 phase=10-hipervelocidad energy=9
 # set-note: Something new on the plateau: the screamer braids groups of three against the kick with the crusher half in, the bass back to the single gallop, the needle on seven.
 use "_t10.synth"
 

@@ -1,4 +1,4 @@
-# set: bars=32 phase=07-outro energy=7
+# set: bars=32 max=2 phase=07-outro energy=7
 # set-note: T07 outro for mixing: main kit, ticks, the plain roll; no arp, pad, lead or riser
 use "_t07.synth"
 

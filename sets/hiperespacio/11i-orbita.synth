@@ -1,4 +1,4 @@
-# set: bars=16 phase=11-drop energy=10
+# set: bars=16 max=2 phase=11-drop energy=10
 # set-note: drop 2/4: the acid steps out and the shard arp takes its place; the haze grows its octave (F#5 under the G)
 # cue: 15 key D held · kick out
 use "_t11.synth"

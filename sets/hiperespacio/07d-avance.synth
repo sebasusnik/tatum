@@ -1,4 +1,4 @@
-# set: bars=16 phase=07-tunel energy=7
+# set: bars=16 auto phase=07-tunel energy=7
 # set-note: drive kit with 16th hats and snare turns, busy ticks, the arp held and opening across the phrase; last floor before the hole
 use "_t07.synth"
 

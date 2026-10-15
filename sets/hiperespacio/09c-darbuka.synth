@@ -1,4 +1,4 @@
-# set: bars=16 phase=09-nebulosa energy=6
+# set: bars=16 max=2 phase=09-nebulosa energy=6
 # set-note: Darbuka toms on the maqsum take the hats' place, the roll opens gaps on beats 2 and 4, the oud plays its full cell with B and C.
 use "_t09.synth"
 

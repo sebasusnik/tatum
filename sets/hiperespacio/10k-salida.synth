@@ -1,4 +1,4 @@
-# set: bars=32 phase=10-outro energy=6
+# set: bars=32 max=2 phase=10-outro energy=6
 # set-note: Stripped for T11 to mix over: kick, hats, open hat, a tom on the turn and the plain A roll; nothing else tonal.
 use "_t10.synth"
 
