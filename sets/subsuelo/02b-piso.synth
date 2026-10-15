@@ -4,7 +4,7 @@
 # cue: 13 tecla A# (46): las bongós vuelven
 use "_t02.synth"
 
-track drums  { play r_main, r_main, r_main, r_main, r_main, r_main, r_main, r_main_turn }
+track drums  { play r_main, r_main, r_main, r_main, r_main, r_main, r_main, r_main_turn slow 2 }
 track shaker { play s_main }
 track bongo  { level 0.22 }
 track chords { level 0.3 }
