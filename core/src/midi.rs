@@ -19,6 +19,52 @@ use crate::perform::scale::{Lock, Scale};
 use crate::live::FastOp;
 use crate::params::{self, ModuleKind, ParamSpec, Range};
 
+/// What arrives from a controller, reduced to what a session uses. The
+/// bytes are the same from a MIDI port and from a browser's WebMIDI.
+#[derive(Debug, Clone, Copy)]
+pub enum Message {
+    /// A knob or a fader: controller number and value.
+    Cc(u8, u8),
+    /// A key or a pad. Velocity 0 is a release, which is also how most
+    /// controllers send one. `channel` counts from 1, so pads are 10.
+    Note { channel: u8, note: u8, velocity: u8 },
+    /// The pitch strip, 14 bits with 8192 at rest.
+    Bend(u16),
+    /// Aftertouch: how hard a held key or pad is pressed, 0..127. `note`
+    /// is the key for polyphonic aftertouch, `None` for the channel's.
+    Pressure { channel: u8, note: Option<u8>, value: u8 },
+    /// Anything else on a channel (a program change, a mode message): only
+    /// shown, so a monitor can say a button sent something.
+    Other { bytes: [u8; 3], len: u8 },
+}
+
+/// The channel pads send on, by General MIDI convention.
+pub const DRUM_CHANNEL: u8 = 10;
+
+/// One MIDI message as a [`Message`], on any channel; `None` for what a
+/// session has no use for (clock, sysex, a lone byte).
+pub fn decode(message: &[u8]) -> Option<Message> {
+    if let [status, value] = *message {
+        return match status & 0xF0 {
+            0xD0 => Some(Message::Pressure { channel: (status & 0x0F) + 1, note: None, value: value & 0x7F }),
+            0x80..=0xE0 => Some(Message::Other { bytes: [status, value, 0], len: 2 }),
+            _ => None,
+        };
+    }
+    let [status, a, b, ..] = *message else { return None };
+    let channel = (status & 0x0F) + 1;
+    let (a, b) = (a & 0x7F, b & 0x7F);
+    match status & 0xF0 {
+        0xB0 => Some(Message::Cc(a, b)),
+        0x90 => Some(Message::Note { channel, note: a, velocity: b }),
+        0x80 => Some(Message::Note { channel, note: a, velocity: 0 }),
+        0xE0 => Some(Message::Bend((b as u16) << 7 | a as u16)),
+        0xA0 => Some(Message::Pressure { channel, note: Some(a), value: b }),
+        0xC0 | 0xD0 => Some(Message::Other { bytes: [status, a, 0], len: 2 }),
+        _ => None,
+    }
+}
+
 /// One thing a knob moves, resolved to engine indices.
 #[derive(Debug, Clone, Copy)]
 pub enum Move {

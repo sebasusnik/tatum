@@ -12,26 +12,9 @@ use std::sync::mpsc::Sender;
 
 use midir::{Ignore, MidiInput, MidiInputConnection};
 
-/// What arrives from a controller, reduced to what the session uses.
-#[derive(Debug, Clone, Copy)]
-pub enum Event {
-    /// A knob or a fader: controller number and value.
-    Cc(u8, u8),
-    /// A key or a pad. Velocity 0 is a release, which is also how most
-    /// controllers send one. `channel` counts from 1, so pads are 10.
-    Note { channel: u8, note: u8, velocity: u8 },
-    /// The pitch strip, 14 bits with 8192 at rest.
-    Bend(u16),
-    /// Aftertouch: how hard a held key or pad is pressed, 0..127. `note`
-    /// is the key for polyphonic aftertouch, `None` for the channel's.
-    Pressure { channel: u8, note: Option<u8>, value: u8 },
-    /// Anything else on a channel (a program change, a mode message): only
-    /// shown, so the monitor can say a button sent something.
-    Other { bytes: [u8; 3], len: u8 },
-}
-
-/// The channel pads send on, by General MIDI convention.
-pub const DRUM_CHANNEL: u8 = 10;
+/// What arrives from a controller, reduced to what the session uses: the
+/// core's, since a browser gets the same bytes.
+pub use tatum_core::midi::{decode, Message as Event, DRUM_CHANNEL};
 
 /// Open connections. Dropping this closes them.
 pub struct Inputs {
@@ -99,29 +82,6 @@ pub fn open(wanted: Option<&str>, tx: &Sender<Event>) -> Result<Inputs, String> 
         });
     }
     Ok(Inputs { _connections: connections, names })
-}
-
-/// One MIDI message as an [`Event`], on any channel.
-fn decode(message: &[u8]) -> Option<Event> {
-    if let [status, value] = *message {
-        return match status & 0xF0 {
-            0xD0 => Some(Event::Pressure { channel: (status & 0x0F) + 1, note: None, value: value & 0x7F }),
-            0x80..=0xE0 => Some(Event::Other { bytes: [status, value, 0], len: 2 }),
-            _ => None,
-        };
-    }
-    let [status, a, b, ..] = *message else { return None };
-    let channel = (status & 0x0F) + 1;
-    let (a, b) = (a & 0x7F, b & 0x7F);
-    match status & 0xF0 {
-        0xB0 => Some(Event::Cc(a, b)),
-        0x90 => Some(Event::Note { channel, note: a, velocity: b }),
-        0x80 => Some(Event::Note { channel, note: a, velocity: 0 }),
-        0xE0 => Some(Event::Bend((b as u16) << 7 | a as u16)),
-        0xA0 => Some(Event::Pressure { channel, note: Some(a), value: b }),
-        0xC0 | 0xD0 => Some(Event::Other { bytes: [status, a, 0], len: 2 }),
-        _ => None,
-    }
 }
 
 /// Whether a port is a DAW-control port, where notes are buttons.
