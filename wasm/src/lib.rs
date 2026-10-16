@@ -3,7 +3,8 @@
 //! session as a whole -- files, `use`, knobs by name, the loop of `compose`
 //! -- in `tatum_core::command`, shared with the native CLI; this file only
 //! carries strings and buffers across the WASM boundary. The exported API
-//! is what `examples/worklet/tatum-processor.js` calls, plus [`Tatum::command`].
+//! is what `js/src/tatum-processor.js` calls: [`Tatum::command`] and
+//! [`Tatum::process`], plus the older per-value exports.
 
 extern crate alloc;
 

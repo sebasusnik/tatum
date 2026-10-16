@@ -1,0 +1,4 @@
+# Built: the wasm-pack output and the compiled TypeScript. `npm run build`.
+pkg/
+dist/
+node_modules/
