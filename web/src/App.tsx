@@ -1,6 +1,7 @@
 import { Show } from "solid-js";
 import { Rows } from "./components/Rows";
 import { Knobs } from "./components/Knobs";
+import { Pattern } from "./components/Pattern";
 import { Transport } from "./components/Transport";
 import { Spectrum } from "./components/Spectrum";
 import { said, view } from "./store";
@@ -13,6 +14,7 @@ export function App() {
         {(v) => (
           <>
             <Rows view={v()} />
+            <Pattern />
             <Knobs view={v()} />
           </>
         )}

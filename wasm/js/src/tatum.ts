@@ -99,6 +99,37 @@ export interface ComposeAnswer extends Answer {
   view: View;
 }
 
+export interface PatternStep {
+  /** As the pattern writes it: `1.2:0.9`, `x`, `..`, `[1.3 5.3]`. */
+  token: string;
+  kind: "rest" | "tie" | "note" | "chord" | "hit" | "sub" | "drumsub";
+  note?: string;
+  velocity?: number | null;
+  slide?: boolean;
+  roll?: number;
+}
+
+export interface PatternLane {
+  /** The drum, or `null` for a melodic pattern's one lane. */
+  label: string | null;
+  steps: PatternStep[];
+}
+
+export interface Pattern {
+  track: string;
+  name: string;
+  drums: boolean;
+  steps_per_bar: number;
+  length: number;
+  lanes: PatternLane[];
+}
+
+export interface PatternAnswer extends Answer {
+  writes: { path: string; text: string }[];
+  loaded: Loaded;
+  pattern: Pattern;
+}
+
 export interface CreateOptions {
   /** `tatum_wasm_bg.wasm`, fetched here and handed to the worklet. */
   wasmUrl: string | URL;
@@ -260,6 +291,21 @@ export class Tatum {
 
   compose(action: ComposeAction): Promise<ComposeAnswer> {
     return this.command<ComposeAnswer>({ op: "compose", ...action });
+  }
+
+  /** The pattern a track plays, as a grid. */
+  patternGet(track: string): Promise<Answer & { pattern: Pattern }> {
+    return this.command({ op: "pattern_get", track });
+  }
+
+  /**
+   * One step of a track's pattern set to `token` (`x`, `1.2:0.8`, `..`,
+   * `~5.2`, `[1.3 5.3]`), rewritten in the file that defines the pattern
+   * and reloaded on the next bar. Refused, with nothing changed, when the
+   * token is not one step or the file would not compile.
+   */
+  patternSet(track: string, lane: number, step: number, token: string): Promise<PatternAnswer> {
+    return this.command<PatternAnswer>({ op: "pattern_set", track, lane, step, token });
   }
 
   /** The rows and the knobs of the row chosen; `focus` chooses it. */

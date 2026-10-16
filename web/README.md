@@ -1,9 +1,18 @@
 # tatum · compose, in the browser
 
 The loop of `tatum compose` with a mouse: a groove, one voice per role from
-`compose/voices`, the chosen voice's knobs to drag (or a controller's, over
-WebMIDI), A/B, and a save that writes the voice as it sounds -- into this
-browser, and down to the disk as a `.synth` any song can `use`.
+`compose/voices`, the chosen row's pattern as a grid to click into, the
+voice's knobs to drag (or a controller's, over WebMIDI), A/B, and a save that
+writes the voice as it sounds -- into this browser, and down to the disk as a
+`.synth` any song can `use`.
+
+The grid is the pattern the row plays, a lane per drum or one lane of notes,
+sixteen cells a bar. A click cycles a cell (rest, hit, accent, ghost on a
+drum; rest, note, tie on a voice), a drag up or down moves a note by scale
+degrees, the wheel moves its velocity, a double click opens the token itself
+for anything the language has (chords, slides, runs), and a right click rests
+the step. Each change is one token to the engine, which rewrites the pattern
+in the file that defines it and takes it on the next bar.
 
 ```
 cd wasm/js && npm ci && npm run build     # the engine: wasm-pack + tsc

@@ -285,6 +285,100 @@ button:disabled {
   stroke: var(--gold);
 }
 
+/* ── pattern ───────────────────────────────────────── */
+
+.pattern {
+  border-top: 1px solid var(--panel);
+  padding-top: 8px;
+}
+
+.pattern header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.pattern .heading {
+  color: var(--hot);
+  font-weight: bold;
+}
+
+.pattern .hint {
+  font-size: 12px;
+}
+
+.lane {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.lane .label {
+  color: var(--dim);
+  font-size: 12px;
+  text-align: right;
+  padding-right: 4px;
+}
+
+.steps {
+  display: grid;
+  gap: 2px;
+  overflow-x: auto;
+}
+
+.cell {
+  height: 26px;
+  border-radius: 3px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  position: relative;
+}
+
+.cell.beat {
+  margin-left: 3px;
+}
+
+.cell.bar {
+  margin-left: 8px;
+}
+
+.cell.hit,
+.cell.drumsub {
+  background: color-mix(in srgb, var(--hot) calc(var(--v) * 100%), var(--panel));
+}
+
+.cell.note,
+.cell.chord,
+.cell.sub {
+  background: color-mix(in srgb, var(--gold) calc(var(--v) * 100%), var(--panel));
+  color: #000;
+}
+
+.cell.tie {
+  background: color-mix(in srgb, var(--gold) 35%, var(--panel));
+  color: var(--text);
+}
+
+.cell:hover {
+  outline: 1px solid var(--text);
+}
+
+.cell.now {
+  outline: 2px solid var(--ok);
+}
+
 /* ── spectrum ──────────────────────────────────────── */
 
 .spectrum {

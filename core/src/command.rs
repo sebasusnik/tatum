@@ -15,7 +15,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use crate::compose::{self, Action, Library, Session, GROOVE_ROLE};
-use crate::dsl::ast::VoiceMove;
+use crate::dsl::ast::{PatternDef, Step, VoiceMove};
 use crate::include::{dir_of, normalize, Files, Source};
 use crate::json::{self, Obj, Value};
 use crate::live::{Applied, LivePlanner, LivePlayer, Plan};
@@ -323,6 +323,30 @@ impl Live {
             }
             // The rows and the knobs of the row chosen; `focus` chooses it,
             // for the controller's knobs too.
+            // The pattern a track plays, as a grid: one lane, or one per
+            // drum, every step as its token and what it is.
+            "pattern_get" => {
+                let track = msg.get("track").and_then(Value::str).ok_or("pattern_get takes a track")?.to_string();
+                Ok(ok().raw("pattern", &self.pattern_json(&track)?).finish())
+            }
+            // `{"track", "lane", "step", "token"}`: one step of the track's
+            // pattern rewritten, in the file that defines the pattern, and
+            // the song reloaded. A token the parser refuses, or a file that
+            // does not compile with it, is refused and nothing changes.
+            "pattern_set" => {
+                let track = msg.get("track").and_then(Value::str).ok_or("pattern_set takes a track")?.to_string();
+                let lane = int(&msg, "lane")? as usize;
+                let step = int(&msg, "step")? as usize;
+                let token = msg.get("token").and_then(Value::str).ok_or("pattern_set takes a token")?.to_string();
+                let (writes, loaded) = self.pattern_set(&track, lane, step, &token)?;
+                let writes: Vec<String> =
+                    writes.iter().map(|(p, t)| Obj::new().str("path", p).str("text", t).finish()).collect();
+                Ok(ok()
+                    .raw("writes", &json::array(&writes))
+                    .raw("loaded", &loaded)
+                    .raw("pattern", &self.pattern_json(&track)?)
+                    .finish())
+            }
             "compose_view" => {
                 if let Some(focus) = msg.get("focus").and_then(Value::int) {
                     self.focus = focus.max(0) as usize;
@@ -332,6 +356,120 @@ impl Live {
             }
             other => Err(format!("no operation called {}", other)),
         }
+    }
+
+    /// The pattern `track` plays first, from the latest text.
+    fn pattern_of(&self, track: &str) -> Result<PatternDef, String> {
+        let ast = self.planner.song().ok_or("nothing loaded yet")?;
+        let def =
+            ast.tracks.iter().rev().find(|t| t.name == track).ok_or_else(|| format!("no track called {}", track))?;
+        ast.patterns
+            .iter()
+            .rev()
+            .find(|p| p.name == def.play)
+            .cloned()
+            .ok_or_else(|| format!("{} plays {}, which is not a pattern", track, def.play))
+    }
+
+    fn pattern_json(&self, track: &str) -> Result<String, String> {
+        let p = self.pattern_of(track)?;
+        let (lanes, length): (Vec<String>, usize) = if p.lane_labels.is_empty() {
+            let steps: Vec<&Step> = p.rows.iter().flatten().collect();
+            (vec![lane_json(None, &steps)], steps.len())
+        } else {
+            let lanes: Vec<String> = p
+                .lane_labels
+                .iter()
+                .zip(&p.rows)
+                .map(|(label, row)| lane_json(Some(label), &row.iter().collect::<Vec<_>>()))
+                .collect();
+            (lanes, p.rows.iter().map(Vec::len).max().unwrap_or(0))
+        };
+        Ok(Obj::new()
+            .str("track", track)
+            .str("name", &p.name)
+            .bool("drums", !p.lane_labels.is_empty())
+            .int("steps_per_bar", 16)
+            .int("length", length as i64)
+            .raw("lanes", &json::array(&lanes))
+            .finish())
+    }
+
+    /// One step of `track`'s pattern set to `token`, in the file that
+    /// defines the pattern; the song reloaded over it. Returns the file to
+    /// write and the reload's answer.
+    fn pattern_set(
+        &mut self,
+        track: &str,
+        lane: usize,
+        step: usize,
+        token: &str,
+    ) -> Result<(Vec<(String, String)>, String), String> {
+        let mut p = self.pattern_of(track)?;
+        let drums = !p.lane_labels.is_empty();
+        // The token through the parser itself, as the one step of a pattern
+        // of its own: every form the language has, with its own errors.
+        let probe = if drums {
+            format!("pattern _t {{ {}: {} }}\n", p.lane_labels.get(lane).ok_or("no such lane")?, token)
+        } else {
+            format!("pattern _t {{ {} }}\n", token)
+        };
+        let parsed = crate::dsl::parse(&probe)
+            .map_err(|e| e.first().map(|e| e.message.clone()).unwrap_or_else(|| String::from("not a step")))?;
+        let steps: Vec<Step> =
+            parsed.patterns.first().map(|t| t.rows.iter().flatten().cloned().collect()).unwrap_or_default();
+        if steps.len() != 1 {
+            return Err(format!("`{}` is {} steps; one at a time", token, steps.len()));
+        }
+        let new = steps.into_iter().next().unwrap_or(Step::Rest);
+        if drums {
+            let row = p.rows.get_mut(lane).ok_or("no such lane")?;
+            *row.get_mut(step).ok_or("no such step")? = new;
+        } else {
+            let mut at = step;
+            let mut placed = false;
+            for row in &mut p.rows {
+                if at < row.len() {
+                    row[at] = new.clone();
+                    placed = true;
+                    break;
+                }
+                at -= row.len();
+            }
+            if !placed {
+                return Err(String::from("no such step"));
+            }
+        }
+        // The file that defines the pattern: the last one in `use` order
+        // that has its block, since a later definition wins.
+        let root = self.root.clone().ok_or("nothing loaded yet")?;
+        let source = Source::load(&root, &Map(&self.files))?;
+        let mut found = None;
+        for path in source.files.iter().rev() {
+            let Some(text) = Map(&self.files).read(path) else { continue };
+            if let Some((start, end)) = compose::edit::block(&text, "pattern", &p.name) {
+                found = Some((path.clone(), text, start, end));
+                break;
+            }
+        }
+        let (path, before, start, end) = found.ok_or_else(|| format!("no file defines pattern {}", p.name))?;
+        let after = format!("{}{}{}", &before[..start], crate::dsl::write::pattern_body(&p), &before[end..]);
+        self.put_file(&path, &after);
+        let loaded = self.load()?;
+        if Value::parse(&loaded).ok().and_then(|v| v.get("ok").and_then(Value::bool)) != Some(true) {
+            self.put_file(&path, &before);
+            let _ = self.load();
+            let why = Value::parse(&loaded)
+                .ok()
+                .and_then(|v| {
+                    v.get("lines")
+                        .and_then(Value::arr)
+                        .map(|l| l.iter().filter_map(Value::str).map(String::from).collect::<Vec<_>>())
+                })
+                .unwrap_or_default();
+            return Err(format!("that does not compile: {}", why.join(" · ")));
+        }
+        Ok((vec![(path, after)], loaded))
     }
 
     fn put_file(&mut self, path: &str, text: &str) {
@@ -525,6 +663,45 @@ impl Live {
 
 fn ok() -> Obj {
     Obj::new().bool("ok", true)
+}
+
+/// One lane of a pattern: every step as its token, and what it is for a
+/// grid to draw it -- its kind, its note, its velocity.
+fn lane_json(label: Option<&str>, steps: &[&Step]) -> String {
+    use crate::dsl::write::{note_ref_text, step_text};
+    let items: Vec<String> = steps
+        .iter()
+        .map(|s| {
+            let o = Obj::new().str("token", &step_text(s));
+            match s {
+                Step::Rest => o.str("kind", "rest"),
+                Step::Tie => o.str("kind", "tie"),
+                Step::Note(n) => {
+                    let o = o.str("kind", "note").str("note", &note_ref_text(&n.note)).bool("slide", n.slide);
+                    match n.velocity {
+                        Some(v) => o.num("velocity", v as f64),
+                        None => o.raw("velocity", "null"),
+                    }
+                }
+                Step::Chord(c) => {
+                    let notes: Vec<String> = c.notes.iter().map(|n| note_ref_text(&n.note)).collect();
+                    let o = o.str("kind", "chord").str("note", &notes.join(" "));
+                    match c.velocity {
+                        Some(v) => o.num("velocity", v as f64),
+                        None => o.raw("velocity", "null"),
+                    }
+                }
+                Step::DrumHit(d) => o.str("kind", "hit").num("velocity", d.velocity as f64).int("roll", d.roll as i64),
+                Step::Subdiv(notes) => {
+                    let names: Vec<String> = notes.iter().map(|n| note_ref_text(&n.note)).collect();
+                    o.str("kind", "sub").str("note", &names.join(" "))
+                }
+                Step::DrumSub(_) => o.str("kind", "drumsub"),
+            }
+            .finish()
+        })
+        .collect();
+    Obj::new().opt_str("label", label).raw("steps", &json::array(&items)).finish()
 }
 
 fn int(msg: &Value, key: &str) -> Result<i64, String> {
@@ -724,5 +901,61 @@ mod tests {
             Some(127),
             "the saved text leaves the knob where it was turned"
         );
+    }
+
+    #[test]
+    fn a_pattern_reads_as_a_grid_and_a_step_set_rewrites_its_file() {
+        let mut live = Live::new();
+        live.command(&files_message());
+        live.command("{\"op\":\"compose_open\",\"root\":\"session.synth\"}");
+        let got = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"bass\"}")).unwrap();
+        let pattern = got.get("pattern").unwrap();
+        assert_eq!(pattern.get("name").and_then(Value::str), Some("acid_line"));
+        assert_eq!(pattern.get("drums").and_then(Value::bool), Some(false));
+        assert_eq!(pattern.get("length").and_then(Value::int), Some(32));
+        let steps = pattern.get("lanes").unwrap().arr().unwrap()[0].get("steps").unwrap().arr().unwrap();
+        assert_eq!(steps[0].get("token").and_then(Value::str), Some("1.2:0.9"));
+        assert_eq!(steps[0].get("kind").and_then(Value::str), Some("note"));
+        assert_eq!(steps[2].get("slide").and_then(Value::bool), Some(true));
+
+        // Step 1 of the bass line becomes a slide up; the voice file carries it.
+        let set = Value::parse(
+            &live.command("{\"op\":\"pattern_set\",\"track\":\"bass\",\"lane\":0,\"step\":1,\"token\":\"~5.2:0.7\"}"),
+        )
+        .unwrap();
+        assert_eq!(set.get("ok").and_then(Value::bool), Some(true), "{:?}", set);
+        let writes = set.get("writes").unwrap().arr().unwrap();
+        assert_eq!(writes[0].get("path").and_then(Value::str), Some("voices/bass/acid.synth"));
+        let text = writes[0].get("text").unwrap().str().unwrap();
+        assert!(text.contains("1.2:0.9 ~5.2:0.7 ~2.2:0.8 1.2:0.6"), "{text}");
+        assert!(text.contains("module bass acid {"), "the rest of the file is kept:\n{text}");
+        let steps =
+            set.get("pattern").unwrap().get("lanes").unwrap().arr().unwrap()[0].get("steps").unwrap().arr().unwrap();
+        assert_eq!(steps[1].get("token").and_then(Value::str), Some("~5.2:0.7"));
+
+        // The drums: a lane and a step; what is not one step is refused.
+        let drums = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"drums\"}")).unwrap();
+        let lanes = drums.get("pattern").unwrap().get("lanes").unwrap().arr().unwrap();
+        assert_eq!(lanes[0].get("label").and_then(Value::str), Some("kick"));
+        let set = Value::parse(
+            &live.command("{\"op\":\"pattern_set\",\"track\":\"drums\",\"lane\":0,\"step\":2,\"token\":\"o\"}"),
+        )
+        .unwrap();
+        assert_eq!(set.get("ok").and_then(Value::bool), Some(true), "{:?}", set);
+        assert!(writes_text(&set).contains("kick:"));
+        let bad = Value::parse(
+            &live.command("{\"op\":\"pattern_set\",\"track\":\"drums\",\"lane\":0,\"step\":2,\"token\":\"- -\"}"),
+        )
+        .unwrap();
+        assert_eq!(bad.get("ok").and_then(Value::bool), Some(false));
+        let bad = Value::parse(
+            &live.command("{\"op\":\"pattern_set\",\"track\":\"bass\",\"lane\":0,\"step\":0,\"token\":\"nope!\"}"),
+        )
+        .unwrap();
+        assert_eq!(bad.get("ok").and_then(Value::bool), Some(false), "{:?}", bad);
+    }
+
+    fn writes_text(answer: &Value) -> String {
+        answer.get("writes").unwrap().arr().unwrap()[0].get("text").unwrap().str().unwrap().to_string()
     }
 }

@@ -1,4 +1,4 @@
-import { For, Show } from "solid-js";
+import { Index, Show } from "solid-js";
 import type { View } from "@tatum/engine";
 import { act } from "../store";
 import { Knob } from "./Knob";
@@ -27,17 +27,19 @@ export function Knobs(props: { view: View }) {
         </button>
       </header>
       <Show when={props.view.macros.length} fallback={<p class="hint">choose a voice first</p>}>
+        {/* By index, not by object: every answer is a new view, and a knob
+            mid-drag has to stay the same element to keep the pointer. */}
         <div class="grid">
-          <For each={props.view.macros}>
+          <Index each={props.view.macros}>
             {(m, i) => (
-              <div class={`macro ${m.held ? "held" : ""}`}>
-                <span class="number">{i() < 9 ? i() + 1 : ""}</span>
-                <Knob value={m.position} onChange={(value) => act({ action: "turn", row: props.view.focus, knob: i(), value })} />
-                <span class="label">{m.label}</span>
-                <span class="reading">{m.reading}</span>
+              <div class={`macro ${m().held ? "held" : ""}`}>
+                <span class="number">{i < 9 ? i + 1 : ""}</span>
+                <Knob value={m().position} onChange={(value) => act({ action: "turn", row: props.view.focus, knob: i, value })} />
+                <span class="label">{m().label}</span>
+                <span class="reading">{m().reading}</span>
               </div>
             )}
-          </For>
+          </Index>
         </div>
       </Show>
     </section>
