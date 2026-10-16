@@ -3,7 +3,7 @@
 // the engine and comes back as a view; nothing here knows what a voice is.
 
 import { createSignal } from "solid-js";
-import type { ComposeAction, Position, Tatum, View } from "@tatum/engine";
+import type { ComposeAction, Pattern, Position, Tatum, View } from "@tatum/engine";
 import { Tatum as Engine } from "@tatum/engine";
 import { download, shipped, store, stored } from "./library";
 
@@ -15,8 +15,9 @@ const [said, setSaid] = createSignal<{ text: string; bad: boolean }>({ text: "pr
 const [running, setRunning] = createSignal(false);
 const [midi, setMidi] = createSignal<string[]>([]);
 const [analyser, setAnalyser] = createSignal<AnalyserNode | null>(null);
+const [pattern, setPattern] = createSignal<Pattern | null>(null);
 
-export { view, position, said, running, midi, analyser };
+export { view, position, said, running, midi, analyser, pattern };
 
 let engine: Tatum | null = null;
 
@@ -43,7 +44,34 @@ async function boot(): Promise<Tatum> {
   setView(opened.view);
   store(SESSION, opened.session);
   engine = t;
+  await refreshPattern();
   return t;
+}
+
+/** The chosen row's pattern, from the engine, as the text has it now. */
+async function refreshPattern(): Promise<void> {
+  const v = view();
+  const track = v?.rows[v.focus]?.track;
+  if (!engine || !track) {
+    setPattern(null);
+    return;
+  }
+  const a = await engine.patternGet(track);
+  setPattern(a.ok ? a.pattern : null);
+}
+
+/** One step of the chosen row's pattern, as a token. */
+export async function setStep(lane: number, step: number, token: string): Promise<void> {
+  const p = pattern();
+  if (!engine || !p) return;
+  const a = await engine.patternSet(p.track, lane, step, token);
+  if (!a.ok) {
+    say(a.error ?? "refused", true);
+    return;
+  }
+  for (const w of a.writes) store(w.path, w.text);
+  setPattern(a.pattern);
+  say(`${p.track}: step ${step + 1} is ${token} · on the next bar`);
 }
 
 export async function play(): Promise<void> {
@@ -78,12 +106,14 @@ export async function act(action: ComposeAction): Promise<void> {
   }
   setView(a.view);
   say(a.said);
+  if (action.action !== "turn") await refreshPattern();
 }
 
 export async function focus(row: number): Promise<void> {
   if (!engine) return;
   const a = await engine.composeView(row);
   if (a.ok) setView(a.view);
+  await refreshPattern();
 }
 
 export async function connectMidi(): Promise<void> {

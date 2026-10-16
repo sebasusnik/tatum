@@ -37,7 +37,8 @@ How it fits together:
   walked in blocks of 128.
 - `src/tatum.ts` is the page side: `Tatum.create`, one method per message of
   `tatum_core::command` (`load`, `tryKnob`, `probeKnob`, `mute`, `scene`,
-  `song`, `composeOpen`, `compose`, `composeView`...), `on("position")`,
+  `song`, `composeOpen`, `compose`, `composeView`, `patternGet`,
+  `patternSet`...), `on("position")`,
   `connectMidi`. Every method returns the engine's answer as a Promise.
 
 The messages themselves are documented in `core/src/command.rs`; this package
