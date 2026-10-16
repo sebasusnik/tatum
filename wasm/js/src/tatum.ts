@@ -253,8 +253,8 @@ export class Tatum {
     return this.command<Song>({ op: "song" });
   }
 
-  /** The loop: the library beside `root` among the files, the session its text or new. */
-  composeOpen(root: string, knobCcs?: number[]): Promise<Answer & { loaded: Loaded; view: View }> {
+  /** The loop: the library beside `root` among the files, the session its text or new (`session` is that text). */
+  composeOpen(root: string, knobCcs?: number[]): Promise<Answer & { loaded: Loaded; view: View; session: string }> {
     return this.command({ op: "compose_open", root, ...(knobCcs ? { knob_ccs: knobCcs } : {}) });
   }
 

@@ -1,0 +1,4 @@
+node_modules/
+dist/
+# Copied from @tatum/engine by scripts/copy-engine.mjs.
+public/engine/
