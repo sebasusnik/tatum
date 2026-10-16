@@ -10,6 +10,12 @@ of the WASM crate in a browser. The UI itself is gone.
 - `TatumAudio.ts`: the page side. It creates the `AudioContext` at 44.1 kHz,
   loads the worklet, fetches the `.wasm` and sends its bytes over.
 
+Everything else the live session does -- a song made of files with `use`
+lines, knobs by name, mute and solo, keys and pads from a controller's
+bytes, scenes, the loop of `tatum compose` -- is one export, `command`: a
+JSON message in, a JSON answer out, as `tatum_core::command` defines them.
+The worklet here predates it and does not call it yet.
+
 Build the module with `wasm-pack build wasm --target web` and serve
 `tatum_wasm_bg.wasm` next to the page. The release profile optimizes for
 speed; the `wasm` profile (`--profile wasm`) makes the module about 40%
