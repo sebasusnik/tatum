@@ -227,6 +227,12 @@ impl Knob {
         self.position_of(rest_value(self.moves.first()?, written)?)
     }
 
+    /// The value the engine reads on this knob's first target at `value`:
+    /// what a file would have to say to leave it there.
+    pub fn value_at(&self, value: u8) -> Option<f32> {
+        self.moves.first().map(|m| scaled(m, value, self.span))
+    }
+
     /// What the knob reads at `value`: `acid cutoff 1.2khz`, `pad level -6.0 dB`.
     pub fn reading(&self, value: u8) -> String {
         let label = self.target.replace('.', " ");

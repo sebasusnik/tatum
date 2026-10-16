@@ -1,0 +1,31 @@
+# An inharmonic ride on the offbeat, a long shimmering tail
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named by its role. `use` it from any song.
+module fm ride {
+    algorithm two_op
+    level 1.4
+    mod_index 65%
+    feedback 20%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 4.27x
+    op0_envelope 0.001 0.6 0.0 0.4
+    op1_envelope 0.001 0.25 0.0 0.2
+}
+
+pattern ride_line {
+    - - 1.5:0.6 -   - - 1.5:0.5 -   - - 1.5:0.6 -   - - 1.5:0.5 -
+}
+
+track perc {
+    play ride_line
+    using ride
+    level 0.07
+    velocity 1.0
+    gate 0.5
+    pan -0.25
+    reverb_send 0.15
+    out > highpass(3khz, 0.05)
+        > lowpass(12khz, 0.05) as lp
+        > master
+}

@@ -855,7 +855,7 @@ fn cmd_play(args: &[String]) -> Result<(), String> {
     let mut nav = crate::setnav::SetNav::new(steps, phrase, ramp);
     nav.blend_bars = blend;
     nav.auto = auto;
-    crate::live::run(&first, true, device, rate, midi, Default::default(), Some(nav), tui, glass)
+    crate::live::run(&first, true, device, rate, midi, Default::default(), Some(nav), tui, glass, None)
 }
 
 fn cmd_render(args: &[String]) -> Result<(), String> {

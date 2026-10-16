@@ -1763,6 +1763,23 @@ impl LivePlanner {
         turn
     }
 
+    /// A knob on `target` (`bass.cutoff`) as a `midi` line would resolve it
+    /// against the latest text, without one: what a screen that turns
+    /// parameters by name reads them through -- where the text leaves them,
+    /// what a position reads, what value it writes. `None` when the target
+    /// names nothing there.
+    pub fn probe_knob(&self, target: &str) -> Option<midi::Knob> {
+        let known = self.pending.as_ref().or(self.running.as_ref())?;
+        let knob = midi::Knob {
+            cc: 0,
+            target: target.into(),
+            moves: midi::resolve(&known.ast, &known.names(), target),
+            span: None,
+            guard: false,
+        };
+        (!knob.moves.is_empty()).then_some(knob)
+    }
+
     /// Forget the knobs whose target the text now writes differently.
     fn forget_edited_knobs(&mut self, new: &Song) {
         let Some(latest) = self.pending.as_ref().or(self.running.as_ref()) else { return };

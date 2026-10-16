@@ -1,0 +1,36 @@
+# Rubber: a saw and a square beating slowly, a resonant low filter plucked hard, slides between notes
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named by its role. `use` it from any song.
+module bass rondo {
+    osc1_wave saw
+    osc2_wave square
+    osc2_pitch 0.07st
+    cutoff 110hz
+    cutoff_env 750hz
+    resonance 55%
+    keytrack 30%
+    vel_env 40%
+    glide 25%
+    attack 1ms
+    decay 150ms
+    sustain 15%
+    release 80ms
+}
+
+pattern rondo_line {
+    1.1:0.9 - - 1.1:0.6   - - ~5.1:0.8 -   1.1:0.9 - - -   ~3.1:0.7 - - -
+    1.1:0.9 - - 1.1:0.6   - - ~5.1:0.8 -   1.1:0.9 - - -   ~6.0:0.8 - 7.0:0.6 -
+}
+
+track bass {
+    play rondo_line
+    using rondo
+    level 0.55
+    velocity 1.0
+    gate 0.8
+    sidechain 0.4
+    out > highpass(30hz, 0.05)
+        > saturate(0.4) as drive
+        > lowpass(2.5khz, 0.1) as lp
+        > master
+}

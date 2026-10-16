@@ -1,0 +1,35 @@
+# A glassy two-op bell, drenched in delay: punctuation, not a lead
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named by its role. `use` it from any song.
+module fm bell {
+    algorithm two_op
+    level 1.6
+    mod_index 48%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 3.5x
+    op0_envelope 0.001 0.9 0.0 0.8
+    op1_envelope 0.001 0.5 0.0 0.4
+    vibrato_rate 4hz
+    vibrato_depth 4%
+}
+
+pattern bell_line {
+    1.5:0.8  -  -  5.4:0.6   -  -  2.5:0.7  -   -  -  -  -   7.4:0.6  -  -  -
+    -  -  -  -   1.5:0.7  -  -  3.5:0.6   -  -  2.5:0.7  -   -  -  -  -
+    1.5:0.8  -  -  5.4:0.6   -  -  2.5:0.7  -   -  -  5.5:0.8  -   4.5:0.6  -  3.5:0.6  -
+    2.5:0.8  -  -  -   -  -  -  -   1.5:0.6  -  -  -   -  -  -  -
+}
+
+track lead {
+    play bell_line
+    using bell
+    level 0.21
+    velocity 1.0
+    pan 0.3
+    delay_send 0.3
+    reverb_send 0.35
+    out > highpass(350hz, 0.05)
+        > chorus(0.3, wet=0) as cho
+        > master
+}

@@ -1,0 +1,52 @@
+# 137 BPM F minor · a long dry kick, driven hats on a straight grid, no room
+# A groove: the globals, the sends, the drums and the master. Voices are
+# pulled in beside it by the session; its scale is what their degrees follow.
+tempo 137
+meter 4/4
+scale F minor
+swing 0.5
+humanize 0.0 timing 0.0
+sidechain 0.3 attack=1ms release=70ms
+
+delay sync=dotted_eighth feedback=0.35 filter=0.4
+reverb size=0.4 damp=0.6 predelay=10 sidechain=0
+
+reverb_return { in > highpass(500hz, 0.05) > lowpass(6khz, 0.05) > out }
+delay_return  { in > highpass(500hz, 0.05) > lowpass(5khz, 0.05) > autopan(0.5, bars=2) > out }
+
+module beats kit_dark {
+    kick_level 1.0
+    kick_decay 55%
+    kick_pitch 0.78x
+    kick_click 40%
+    kick_drive 35%
+    hihat_level 0.6
+    hihat_decay 12%
+    hihat_pitch 1.5x
+    hihat_pan 0.15
+    clap_level 0.6
+    clap_pan 0.0
+    snare_level 0.55
+    snare_decay 8%
+    snare_pitch 1.4x
+    snare_snap 50%
+    snare_pan -0.15
+}
+
+pattern beat_dark {
+    kick:    X - - -  X - - -  X - - -  X - - -   X - - -  X - - -  X - - -  X - - -
+    hat:     x o o x  o x o o  x o o x  o x o o   x o o x  o x o o  x o o x  o x o o
+    openhat: - - x -  - - x -  - - x -  - - x -   - - x -  - - x -  - - x -  - - x -
+}
+
+track drums {
+    play beat_dark
+    using kit_dark
+    level 0.8
+    velocity 1.0
+    out > highpass(28hz, 0.05) > saturate(0.15, wet=0) as drive > master
+}
+
+master {
+    in > highpass(20hz, 0.05) > saturate(0.3) > eq(low=1, high=0.5) > out
+}

@@ -12,6 +12,7 @@
 //! 100 Hz / 1 kHz / 10 kHz lines, so the live screen and the pictures read
 //! the same way.
 
+pub mod compose;
 pub mod edit;
 pub mod fft;
 pub mod knobs;
@@ -148,7 +149,7 @@ pub struct SetView {
 }
 
 /// What a key asks for.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Key {
     Quit,
     Next,
@@ -173,6 +174,8 @@ pub enum Key {
     /// A key the song's `keyboard` block binds: it goes to the session
     /// before anything the screen would do with it.
     Named(crate::keys::KeyName),
+    /// `tatum compose`: a voice chosen, a knob turned, a voice saved.
+    Compose(compose::Action),
 }
 
 /// A key as the `keyboard` block names it.
@@ -319,6 +322,9 @@ pub struct Screen {
     /// Every page: its name, whether the knobs are on it, and whether it
     /// moves something heard in this step (Tab passes over the rest).
     pub pages: Vec<(String, bool, bool)>,
+    /// `tatum compose`: the loop's rows and knobs, drawn in place of the
+    /// arrangement and the bottom, and first to every key.
+    pub compose: Option<compose::Panel>,
     bar: usize,
     step: usize,
     tempo: f32,
@@ -391,6 +397,7 @@ impl Screen {
             view: 0,
             followed: None,
             glass: false,
+            compose: None,
             bar: 0,
             step: 0,
             tempo: 0.0,
@@ -456,6 +463,13 @@ impl Screen {
             }
             if k.kind != KeyEventKind::Press {
                 continue;
+            }
+            // The compose panel takes every key that is about the loop.
+            if let Some(panel) = self.compose.as_mut() {
+                if let Some(key) = panel.key(k) {
+                    out.extend(key);
+                    continue;
+                }
             }
             if matches!(k.code, KeyCode::Char('L')) || (matches!(k.code, KeyCode::Char('l')) && !l) {
                 out.push(Key::Keep);
@@ -903,6 +917,10 @@ impl Screen {
     fn render(&self, f: &mut Frame) {
         let area = f.area();
         f.buffer_mut().set_style(area, Style::new().bg(BG).fg(TEXT));
+        if let Some(panel) = &self.compose {
+            self.render_compose(f, area, panel);
+            return;
+        }
         // The lanes take two rows each when there is room, one when not, and
         // the spectrogram everything left over.
         let active = self.active_lanes();
@@ -959,6 +977,61 @@ impl Screen {
             self.midi_overlay(f, area);
         }
         self.picker_overlay(f, area);
+    }
+
+    /// `tatum compose`: the header, the loop's panel, then the mix and the
+    /// lanes as the live screen draws them, and the footer.
+    fn render_compose(&self, f: &mut Frame, area: Rect, panel: &compose::Panel) {
+        let active = self.active_lanes();
+        let quiet = self.lanes.len() > active.len();
+        let tracks = active.len() as u16;
+        let panel_rows = panel.height().min(area.height.saturating_sub(10));
+        let rest = area.height.saturating_sub(1 + panel_rows + 1);
+        let lane_rows = if rest >= tracks * 2 + 10 {
+            tracks * 2
+        } else if rest >= tracks + 6 {
+            tracks
+        } else {
+            rest.saturating_sub(6)
+        } + quiet as u16;
+        let [header, loop_area, spectrum, lanes, footer] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(panel_rows),
+            Constraint::Min(4),
+            Constraint::Length(lane_rows),
+            Constraint::Length(1),
+        ])
+        .areas(area);
+        self.header(f, header);
+        panel.render(self, f, loop_area);
+        self.spectrogram(f.buffer_mut(), spectrum);
+        self.lanes(f.buffer_mut(), lanes, &active);
+        let now = self.started.elapsed().as_secs_f32();
+        match self.log.back().filter(|(t, _, _)| now - t < NEWS_SECS) {
+            Some((_, line, tone)) => {
+                let text: String = format!(" {}", line).chars().take(footer.width as usize).collect();
+                f.render_widget(Paragraph::new(text).style(Style::new().fg(tone.color()).bg(BG)), footer);
+            }
+            None => {
+                let hint = " compose · ? every key · j log · i midi in · q quit";
+                f.render_widget(Paragraph::new(hint).style(Style::new().fg(DIM).bg(BG)), footer);
+            }
+        }
+        if self.log_open {
+            self.log_overlay(f, area);
+        } else if self.midi_open {
+            self.midi_overlay(f, area);
+        }
+        panel.overlays(f, area);
+    }
+
+    /// Whether the track called `name` is muted now, for the compose rows.
+    pub fn muted_track(&self, name: &str) -> bool {
+        self.song
+            .as_ref()
+            .and_then(|s| s.tracks.iter().position(|t| t == name))
+            .and_then(|i| self.muted.get(i).copied())
+            .unwrap_or(false)
     }
 
     /// The chosen track's pattern as it plays this loop -- transformed when

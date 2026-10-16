@@ -1,0 +1,60 @@
+# 145 BPM F# phrygian · a short clicky kick, offbeat open hat, a clap on 2 and 4
+# A groove: the globals, the sends, the drums and the master. Voices are
+# pulled in beside it by the session; its scale is what their degrees follow.
+tempo 145
+meter 4/4
+scale F# phrygian
+swing 0.5
+humanize 0.0 timing 0.0
+sidechain 0.5 attack=1ms release=90ms
+
+delay sync=dotted_eighth feedback=0.3 filter=0.55
+reverb size=0.62 damp=0.5 predelay=25 sidechain=0.6
+
+delay_return  { in > highpass(400hz, 0.05) > autopan(0.5, bars=2) > out }
+reverb_return { in > highpass(300hz, 0.05) > lowpass(6000, 0.05, lfo_bars=16, lfo_depth=2500) > out }
+
+module beats kit_psy {
+    kick_level 1.0
+    kick_decay 18%
+    kick_pitch 1.05x
+    kick_click 65%
+    kick_drive 55%
+    snare_level 0.55
+    snare_decay 12%
+    snare_pitch 1.2x
+    snare_snap 70%
+    snare_drive 40%
+    hihat_level 0.8
+    hihat_decay 12%
+    hihat_pitch 1.7x
+    hihat_pan 0.25
+    clap_level 0.7
+    clap_pan -0.05
+}
+
+pattern beat_psy {
+    kick:    X - - -  X - - -  X - - -  X - - -
+    clap:    - - - -  X - - -  - - - -  X - - -
+    hat:     o o - o  o o - o  o o - o  o o - x
+    openhat: - - x:0.7 -  - - x:0.7 -  - - x:0.7 -  - - x:0.7 -
+}
+
+track drums {
+    play beat_psy
+    using kit_psy
+    level 0.8
+    velocity 1.0
+    out > highpass(28hz, 0.05)
+        > eq(low=1.5, mid=-1.5, high=2)
+        > compressor(-10, ratio=4, attack=3, release=45, makeup=2db)
+        > saturate(0.15) as drive
+        > master
+}
+
+master {
+    in > lowpass(20000, 0.05)
+       > compressor(-12, ratio=2, attack=10, release=80, makeup=0db)
+       > eq(low=0.5, mid=-0.5, high=1)
+       > out
+}

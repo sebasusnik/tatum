@@ -1,0 +1,54 @@
+# 130 BPM F minor · a 909: short kick, crisp hats in sixteenths, a clap left
+# A groove: the globals, the sends, the drums and the master. Voices are
+# pulled in beside it by the session; its scale is what their degrees follow.
+tempo 130
+meter 4/4
+scale F minor
+swing 0.54
+humanize 0.05 timing 0.02
+sidechain 0.35 attack=2ms release=110ms
+
+delay sync=dotted_eighth feedback=0.34 filter=0.55 sidechain=0.35
+reverb size=0.62 damp=0.3 predelay=28 sidechain=0.45
+
+delay_return  { in > highpass(300hz, 0.1) > lowpass(7khz, 0.1) > autopan(0.4, bars=4) > out }
+reverb_return { in > highpass(250hz, 0.1) > lowpass(8khz, 0.1) > out }
+
+module beats kit_909 {
+    kick_level 100%
+    kick_decay 30%
+    kick_pitch 30%
+    kick_click 34%
+    kick_drive 22%
+    clap_level 72%
+    clap_pan -14%
+    hihat_level 66%
+    hihat_decay 22%
+    hihat_pitch 44%
+    hihat_pan 28%
+}
+
+pattern beat_909 {
+    kick:    X - - -  X - - -  X - - -  X - - -
+    clap:    - - - -  X - - -  - - - -  X - - -
+    hat:     x:0.5 x:0.3 x:0.6 x:0.3  x:0.5 x:0.3 x:0.6 x:0.3  x:0.5 x:0.3 x:0.6 x:0.3  x:0.5 x:0.3 x:0.6 x:0.4
+    openhat: - - x:0.6 -  - - x:0.6 -  - - x:0.6 -  - - x:0.6 -
+}
+
+track drums {
+    play beat_909
+    using kit_909
+    level 0.85
+    velocity 1.0
+    out > highpass(30hz, 0.05)
+        > compressor(-12, ratio=3, attack=5, release=80, makeup=1.5db)
+        > saturate(0.2) as drive
+        > master
+}
+
+master {
+    in > highpass(20hz, 0.05)
+       > eq(low=1.0, mid=-0.5, high=0.5)
+       > compressor(-9, ratio=1.8, attack=20, release=200, makeup=1db)
+       > out
+}

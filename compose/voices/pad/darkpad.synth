@@ -1,0 +1,37 @@
+# A dark minor triad held under everything, the filter closed, slow movement
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named by its role. `use` it from any song.
+module keys darkpad {
+    voice_mode poly
+    cutoff 290hz
+    resonance 10%
+    detune 20%
+    chorus_mix 30%
+    attack 600ms
+    decay 500ms
+    sustain 90%
+    release 900ms
+    lfo_target cutoff
+    lfo_sync bars_8
+    lfo_waveform triangle
+    lfo_depth 15%
+}
+
+pattern darkpad_chord {
+    [1.3 3.3 5.3]:0.5 ..*63
+}
+
+track pad {
+    play darkpad_chord
+    using darkpad
+    level 0.4
+    velocity 1.0
+    pan -0.3
+    reverb_send 0.25
+    delay_send 0.1
+    sidechain 0.6
+    out > highpass(150hz, 0.05)
+        > lowpass(2khz, 0.1) as lp
+        > autopan(0.3, bars=12) as pan
+        > master
+}

@@ -19,7 +19,7 @@ use super::{Screen, SongInfo, Telemetry, Tone};
 use crate::include::Source;
 
 const USAGE: &str =
-    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--font <file.ttf>] [--frames N] [--fps 10] [--see-through] [--glass] [--select <track>] [--mute <track>] [--solo <track>] [--pick N] [--help] [--log] [--look N] [--mark <track>] [--knobs N] [-o shot.png | -o dir]";
+    "usage: tatum tui-shot <song.synth | set dir> [--step N] [--at <seconds>] [--size 160x48] [--font <file.ttf>] [--frames N] [--fps 10] [--see-through] [--glass] [--select <track>] [--mute <track>] [--solo <track>] [--pick N] [--help] [--log] [--look N] [--mark <track>] [--knobs N] [--compose [--row N] [--knob N]] [-o shot.png | -o dir]";
 const CELL_W: usize = 12;
 const CELL_H: usize = 24;
 
@@ -40,6 +40,12 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     let mut font: Option<String> = None;
     let mut frames: usize = 0;
     let mut fps: f32 = 10.0;
+    // `--compose`: the loop's panel over the screen, as `tatum compose`
+    // draws it for the session file given, on row `--row` (the groove is
+    // 0) and, with `--knob N`, on its knob N.
+    let mut compose = false;
+    let mut row: usize = 1;
+    let mut knob: Option<usize> = None;
     let mut i = 0;
     while i < args.len() {
         let value = |i: usize| args.get(i + 1).cloned().ok_or(USAGE);
@@ -102,6 +108,15 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
             }
             "--step" => {
                 step = value(i)?.parse().map_err(|_| "--step needs a number")?;
+                i += 1;
+            }
+            "--compose" => compose = true,
+            "--row" => {
+                row = value(i)?.parse().map_err(|_| "--row needs a row number")?;
+                i += 1;
+            }
+            "--knob" => {
+                knob = Some(value(i)?.parse().map_err(|_| "--knob needs a knob number")?);
                 i += 1;
             }
             "-o" => {
@@ -220,6 +235,17 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
     }
     if let Some(n) = pick {
         screen.open_picker(n);
+    }
+    if compose {
+        let session = crate::compose::Session::open(Path::new(&path), crate::compose::DEFAULT_KNOB_CCS.to_vec())?;
+        let mut panel = super::compose::Panel::new(session.view(&planner, row));
+        panel.focus = row;
+        panel.view = session.view(&planner, row);
+        if let Some(n) = knob {
+            panel.on_knob(n.saturating_sub(1));
+        }
+        panel.help = help;
+        screen.compose = Some(panel);
     }
     if frames == 0 {
         paint(&screen.snapshot(size.0, size.1), see_through, glass, font.as_ref()).save(Path::new(&out))?;

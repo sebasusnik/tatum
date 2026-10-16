@@ -1,5 +1,6 @@
 mod analyze;
 mod audit;
+mod compose;
 mod controls;
 mod fmt;
 mod debug;
@@ -35,6 +36,7 @@ fn main() {
         "set" => set::cmd(&args[2..]),
         "play" => live::cmd(&args[2..], false),
         "watch" => live::cmd(&args[2..], true),
+        "compose" => compose::cmd(&args[2..]),
         "midi" => midi::cmd(&args[2..]),
         // A picture of the live screen, for looking at it without a terminal.
         "tui-shot" => {
@@ -69,6 +71,7 @@ USAGE:
     tatum analyze <reference.wav> [--from 1:04] [--to 1:36]
     tatum compare <reference.wav> <song.synth | other.wav> [--from S] [--to S] [--bars N | A-B] [--solo a,b]
     tatum watch <song.synth> [--tui] [--device <name>] [--rate <hz>] [--midi <name>] [--buffer <frames>]
+    tatum compose [<dir> | <session.synth>] [--knobs 74,71,...] [--device <name>] [--midi <name>]
     tatum midi monitor [<song.synth> | <set dir> [--step N]] [--midi <name>] | midi list
     tatum tui-shot <song.synth | set dir> [--at <seconds>] [--size 160x48] [--font f.ttf] [--frames N] [-o shot.png]
 
@@ -93,6 +96,14 @@ COMMANDS:
               keys mute, solo and transform the tracks and put knobs on them
               (? lists every key). --glass is --tui for a terminal with
               translucent cell backgrounds.
+    compose   A loop to try voices in. A groove plays; each role (bass,
+              lead, pad, perc) holds one voice from <dir>/voices, chosen
+              with ← → and swapped on the next bar; the chosen row's knobs
+              turn from the keyboard or the controller (--knobs says which
+              cc numbers, the KeyLab's eight by default); s saves the voice
+              as it sounds, in units, as a .synth any song can `use`. The
+              session is <dir>/session.synth (compose/ by default), a file
+              of `use` lines, watched like any other.
     midi      `monitor` prints every message the controller sends (notes,
               pads, knobs, the pitch strip, aftertouch, program changes) with
               its channel and bytes, and, given a song or a set, what its
