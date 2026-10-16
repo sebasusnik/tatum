@@ -275,12 +275,13 @@ impl Live {
                         s
                     }
                 };
+                let text = session.text();
                 self.compose = Some(session);
                 self.root = Some(root);
                 self.focus = 1;
                 let loaded = self.load()?;
                 let view = self.view_json();
-                Ok(ok().raw("loaded", &loaded).raw("view", &view).finish())
+                Ok(ok().raw("loaded", &loaded).raw("view", &view).str("session", &text).finish())
             }
             // `{"action": "choose", "row": 1, "by": 1}`, `turn` with `knob`
             // and `value`, `mute`, `reset`, `compare`, `save` with `name`.

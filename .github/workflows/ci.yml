@@ -169,6 +169,11 @@ jobs:
         working-directory: wasm/js
       - run: npm test
         working-directory: wasm/js
+      # The web app over the package: type-checked and bundled.
+      - run: npm ci
+        working-directory: web
+      - run: npm run build
+        working-directory: web
 
   # A smaller machine can build the engine at a lower rate (TATUM_SAMPLE_RATE).
   # Lengths written in samples at 44.1 kHz fall off the end of shorter buffers
