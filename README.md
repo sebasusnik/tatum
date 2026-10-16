@@ -196,8 +196,8 @@ more parts pile up on the same range.
   `tatum set play`, a key or a pad moving to the next step on the next phrase.
 
 Workspace: `core` (engine, DSL, registry), `cli`, `debug` (the analysis behind `tatum
-debug`), `mcp`, `wasm` (browser bindings; `wasm/examples/worklet/` runs them in an
-AudioWorklet).
+debug`), `mcp`, `wasm` (browser bindings; `wasm/js/` is `@tatum/engine`, the
+AudioWorklet and the TypeScript API over them).
 
 ## License
 

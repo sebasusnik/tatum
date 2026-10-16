@@ -1,0 +1,33 @@
+{
+  "name": "@tatum/engine",
+  "version": "0.1.0",
+  "description": "The tatum engine in the browser: the .synth language, its live session and the loop of `compose`, in an AudioWorklet",
+  "license": "MIT OR Apache-2.0",
+  "repository": "github:sebasusnik/tatum",
+  "type": "module",
+  "private": true,
+  "main": "./dist/tatum.js",
+  "types": "./dist/tatum.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/tatum.d.ts",
+      "default": "./dist/tatum.js"
+    },
+    "./processor": "./src/tatum-processor.js",
+    "./wasm": "./pkg/tatum_wasm_bg.wasm"
+  },
+  "files": [
+    "dist",
+    "src",
+    "pkg"
+  ],
+  "scripts": {
+    "build:wasm": "wasm-pack build .. --target web --release --out-dir js/pkg --out-name tatum_wasm",
+    "build:ts": "tsc",
+    "build": "npm run build:wasm && npm run build:ts",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3"
+  }
+}

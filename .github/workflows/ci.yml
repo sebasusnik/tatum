@@ -153,6 +153,22 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       # The browser runs the same core; `no_std` is only proven by this target.
       - run: cargo build -p tatum-wasm --target wasm32-unknown-unknown --locked
+      # The package: wasm-pack's module and glue, the TypeScript over it, and
+      # the engine driven through that glue by Node, the way the worklet does.
+      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa # v0.4.0
+        with:
+          version: v0.13.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: wasm/js/package-lock.json
+      - run: npm ci
+        working-directory: wasm/js
+      - run: npm run build
+        working-directory: wasm/js
+      - run: npm test
+        working-directory: wasm/js
 
   # A smaller machine can build the engine at a lower rate (TATUM_SAMPLE_RATE).
   # Lengths written in samples at 44.1 kHz fall off the end of shorter buffers
