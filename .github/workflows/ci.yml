@@ -155,10 +155,10 @@ jobs:
       - run: cargo build -p tatum-wasm --target wasm32-unknown-unknown --locked
       # The package: wasm-pack's module and glue, the TypeScript over it, and
       # the engine driven through that glue by Node, the way the worklet does.
-      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa # v0.4.0
+      - uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2
         with:
-          version: v0.13.1
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+          tool: wasm-pack
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm
