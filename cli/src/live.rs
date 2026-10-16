@@ -52,10 +52,46 @@ struct Stats {
     tempo: AtomicU64,
 }
 
+/// The flags `play`, `watch` and `compose` share.
+struct Flags<'a> {
+    path: Option<&'a str>,
+    device: Option<&'a str>,
+    rate: Option<u32>,
+    midi: Option<&'a str>,
+    tui: bool,
+    glass: bool,
+}
+
 pub fn cmd(args: &[String], watch: bool) {
     let mut args = args.to_vec();
     let isolation = crate::debug::take_isolation(&mut args);
     let verb = if watch { "watch" } else { "play" };
+    let Some(flags) = parse_flags(&args) else { return };
+    let Some(path) = flags.path else {
+        eprintln!("error: missing input file");
+        eprintln!("usage: tatum {} <song.synth> [--device <name>] [--midi <name>] [--tui | --glass]", verb);
+        std::process::exit(1);
+    };
+    let Flags { device, rate, midi, tui, glass, .. } = flags;
+    if let Err(msg) = run(path, watch, device, rate, midi, isolation, None, tui, glass, None) {
+        eprintln!("error: {}", msg);
+        std::process::exit(1);
+    }
+}
+
+/// `tatum compose`: the session file watched on the full screen, with the
+/// loop's panel on it.
+pub fn cmd_with(path: &str, args: &[String], compose: Option<crate::compose::Session>) {
+    let Some(flags) = parse_flags(args) else { return };
+    let Flags { device, rate, midi, glass, .. } = flags;
+    if let Err(msg) = run(path, true, device, rate, midi, Default::default(), None, true, glass, compose) {
+        eprintln!("error: {}", msg);
+        std::process::exit(1);
+    }
+}
+
+/// `None` when a flag did all that was asked (`--list-devices`).
+fn parse_flags(args: &[String]) -> Option<Flags<'_>> {
     let mut path: Option<&str> = None;
     let mut device: Option<&str> = None;
     let mut rate: Option<u32> = None;
@@ -83,7 +119,7 @@ pub fn cmd(args: &[String], watch: bool) {
             }
             "--list-devices" => {
                 list_devices();
-                return;
+                return None;
             }
             "--midi" => {
                 i += 1;
@@ -95,7 +131,7 @@ pub fn cmd(args: &[String], watch: bool) {
             }
             "--list-midi" => {
                 crate::midi::list();
-                return;
+                return None;
             }
             "--tui" => tui = true,
             "--buffer" => {
@@ -124,15 +160,7 @@ pub fn cmd(args: &[String], watch: bool) {
         }
         i += 1;
     }
-    let Some(path) = path else {
-        eprintln!("error: missing input file");
-        eprintln!("usage: tatum {} <song.synth> [--device <name>] [--midi <name>] [--tui | --glass]", verb);
-        std::process::exit(1);
-    };
-    if let Err(msg) = run(path, watch, device, rate, midi, isolation, None, tui, glass) {
-        eprintln!("error: {}", msg);
-        std::process::exit(1);
-    }
+    Some(Flags { path, device, rate, midi, tui, glass })
 }
 
 fn list_devices() {
@@ -232,6 +260,7 @@ pub fn run(
     mut set: Option<crate::setnav::SetNav>,
     tui: bool,
     glass: bool,
+    mut compose: Option<crate::compose::Session>,
 ) -> Result<(), String> {
     let mut source = Source::load(std::path::Path::new(path))?;
     if !isolation.is_empty() {
@@ -411,6 +440,9 @@ pub fn run(
                     .map_err(|e| format!("cannot open the screen: {}", e))?;
             screen.glass = glass;
             screen.say(format!("{} {}", verb(watch), path), crate::tui::Tone::Info);
+            if let Some(session) = &compose {
+                screen.compose = Some(crate::tui::compose::Panel::new(session.view(&planner, 1)));
+            }
             Ui::Screen(Box::new(screen))
         }
         None => Ui::Plain(Status::new()),
@@ -626,6 +658,37 @@ pub fn run(
             let generation = stats.generation.load(Ordering::Relaxed);
             for (cc, slot) in unsent.iter_mut().enumerate() {
                 let Some(value) = *slot else { continue };
+                // On the compose screen the controller's knobs are the
+                // chosen row's: knob i turns its macro i.
+                let macro_on = match (&compose, &ui) {
+                    (Some(session), Ui::Screen(s)) => {
+                        session.knob_index(cc as u8).and_then(|i| s.compose.as_ref().map(|p| (p.focus, i)))
+                    }
+                    _ => None,
+                };
+                if let (Some(session), Some((row, knob))) = (compose.as_mut(), macro_on) {
+                    let action = crate::tui::compose::Action::Turn { row, knob, value };
+                    match session.act(action, &mut planner, generation) {
+                        Ok((plans, said)) => {
+                            let mut full = false;
+                            for plan in plans {
+                                if let Err(TrySendError::Full(_)) = plan_tx.try_send(plan) {
+                                    full = true;
+                                }
+                            }
+                            if !full {
+                                *slot = None;
+                            }
+                            knob_moves += 1;
+                            readings.push(said);
+                        }
+                        Err(e) => {
+                            *slot = None;
+                            readings.push(e);
+                        }
+                    }
+                    continue;
+                }
                 // With the knob list open, a knob tries the parameter the
                 // list points at instead of whatever it is mapped to.
                 let trying = match &ui {
@@ -731,6 +794,23 @@ pub fn run(
                         },
                         None => screen.say("nothing to put a knob on", crate::tui::Tone::Info),
                     },
+                    // The loop: a voice chosen writes the session file,
+                    // picked up below like a save; a knob turned is held.
+                    crate::tui::Key::Compose(action) => {
+                        let generation = stats.generation.load(Ordering::Relaxed);
+                        match compose.as_mut().map(|s| s.act(action, &mut planner, generation)) {
+                            Some(Ok((plans, said))) => {
+                                for plan in plans {
+                                    if plan_tx.send(plan).is_err() {
+                                        break;
+                                    }
+                                }
+                                screen.say(said, crate::tui::Tone::Good);
+                            }
+                            Some(Err(e)) => screen.say(e, crate::tui::Tone::Bad),
+                            None => {}
+                        }
+                    }
                     crate::tui::Key::Undo => match undo.pop() {
                         Some(files) => {
                             let failed: Vec<String> = files
@@ -950,6 +1030,16 @@ pub fn run(
                         }
                         None => ui.say(t, &format!("swapped at bar {}", bar), crate::tui::Tone::Good),
                     }
+                    // The new engine starts from the text: the loop's knobs
+                    // are held on it again.
+                    if let Some(session) = compose.as_ref() {
+                        let generation = stats.generation.load(Ordering::Relaxed);
+                        for plan in session.reapply(&mut planner, generation) {
+                            if plan_tx.send(plan).is_err() {
+                                break;
+                            }
+                        }
+                    }
                 }
                 Event::Finished => {
                     finished = true;
@@ -995,6 +1085,9 @@ pub fn run(
                 stats.step.load(Ordering::Relaxed) as usize,
                 f32::from_bits(stats.tempo.load(Ordering::Relaxed) as u32),
             );
+            if let (Some(session), Some(panel)) = (compose.as_ref(), screen.compose.as_mut()) {
+                panel.view = session.view(&planner, panel.focus);
+            }
             if let Err(e) = screen.draw() {
                 drop(ui);
                 return Err(format!("cannot draw the screen: {}", e));

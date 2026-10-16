@@ -1,0 +1,35 @@
+# Rolling psy bass: two saws a hair apart, a fast filter pluck, the three sixteenths between kicks
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named by its role. `use` it from any song.
+module bass roll_psy {
+    osc1_wave saw
+    osc2_wave saw
+    osc2_pitch 0.083st
+    cutoff 90hz
+    cutoff_env 1400hz
+    resonance 28%
+    keytrack 30%
+    glide 0%
+    attack 1ms
+    decay 95ms
+    sustain 0%
+    release 25ms
+}
+
+pattern roll_psy_line {
+    - 1.1:0.95 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8  - 1.1:0.95 1.1:0.7 1.1:0.8
+    - 1.1:0.95 1.1:0.7 1.1:0.8  - 2.1:0.95 2.1:0.7 2.1:0.8  - 1.1:0.95 1.1:0.7 1.2:0.9  - 7.0:0.95 2.1:0.8 1.2:0.9
+}
+
+track bass {
+    play roll_psy_line
+    using roll_psy
+    level 0.62
+    velocity 1.0
+    gate 0.7
+    sidechain 0.3
+    out > highpass(32hz, 0.05)
+        > saturate(0.35) as drive
+        > eq(low=1, mid=-2, high=1)
+        > master
+}

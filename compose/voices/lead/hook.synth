@@ -1,0 +1,40 @@
+# A metallic FM pluck: an inharmonic modulator gives each note a metal attack that decays into a warm body
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named by its role. `use` it from any song.
+module fm hook {
+    algorithm two_op
+    level 2.0
+    mod_index 45%
+    feedback 12%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1.41x
+    op0_envelope 0.001 0.28 0.0 0.12
+    op1_envelope 0.001 0.07 0.05 0.05
+    vibrato_rate 5hz
+    vibrato_depth 2%
+}
+
+pattern hook_line {
+    1.2:0.9 - 1.2:0.5 1.3:0.8   - 1.2:0.6 - 3.2:0.8   1.2:0.9 - 5.2:0.7 -   ~4.2:0.8 - 1.2:0.5 -
+    1.2:0.9 - 1.2:0.5 1.3:0.8   - 1.2:0.6 - 3.2:0.8   7.2:0.9 - ~5.2:0.7 -   1.2:0.8 1.2:0.5 ~2.2:0.9 -
+}
+
+track lead {
+    play hook_line
+    using hook
+    level 0.22
+    velocity 1.0
+    gate 0.7
+    pan 0.1
+    delay_send 0.2
+    reverb_send 0.1
+    sidechain 0.3
+    out > highpass(120hz, 0.05)
+        > vowel(a, e, bars=2, wet=0) as talk
+        > bitcrush(10, 0.2, wet=0) as crush
+        > panenv(0.45, release=250)
+        > phaser(0.15, bars=8)
+        > lowpass(9khz, 0.05)
+        > master
+}

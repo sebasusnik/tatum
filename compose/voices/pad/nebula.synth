@@ -1,0 +1,41 @@
+# A dark wide bed, breathing filter, four bars of chords
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named by its role. `use` it from any song.
+module keys nebula {
+    voice_mode poly
+    cutoff 900hz
+    resonance 30%
+    detune 35%
+    chorus_mix 45%
+    attack 1.5s
+    decay 800ms
+    sustain 80%
+    release 600ms
+    lfo_target cutoff
+    lfo_sync bars_8
+    lfo_waveform triangle
+    lfo_depth 14%
+    vibrato_rate 0.6hz
+    vibrato_depth 5%
+}
+
+pattern nebula_chords {
+    [1.2 5.2 1.3 3.3]:0.6  ..*31
+    [2.2 6.2 2.3 4.3]:0.6  ..*15
+    [7.1 4.2 7.2 2.3]:0.6  ..*15
+}
+
+track pad {
+    play nebula_chords
+    using nebula
+    level 0.26
+    velocity 1.0
+    pan 0.0
+    reverb_send 0.45
+    delay_send 0.08
+    sidechain 0.6
+    out > highpass(220hz, 0.05)
+        > phaser(0.35, bars=16) as ph
+        > autopan(0.45, bars=8) as pan
+        > master
+}

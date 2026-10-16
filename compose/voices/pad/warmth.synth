@@ -1,0 +1,40 @@
+# Detroit chords: poly, detuned, a soft attack, the filter breathing over four bars
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named by its role. `use` it from any song.
+module keys warmth {
+    voice_mode poly
+    detune 16%
+    chorus_mix 16%
+    cutoff 800hz
+    resonance 6%
+    attack 82ms
+    decay 205ms
+    sustain 82%
+    release 277ms
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync bars_4
+    lfo_depth 10%
+    vibrato_rate 0.5hz
+    vibrato_depth 2%
+}
+
+pattern warmth_chords {
+    [1.3 3.3 5.3 7.3 2.4]:0.6  ..*31
+    [6.2 1.3 3.3 5.3 7.3]:0.6  ..*31
+}
+
+track pad {
+    play warmth_chords
+    using warmth
+    level 0.3
+    velocity 1.0
+    pan -0.2
+    reverb_send 0.4
+    delay_send 0.15
+    sidechain 0.45
+    out > highpass(200hz, 0.05)
+        > lowpass(4khz, 0.1) as lp
+        > autopan(0.4, bars=8) as pan
+        > master
+}

@@ -1,0 +1,32 @@
+# FM bass on the off-sixteenths: the modulator's envelope is the pluck
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named by its role. `use` it from any song.
+module fm roller {
+    algorithm two_op
+    level 2.0
+    mod_index 45%
+    feedback 10%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 1x
+    op0_envelope 0.002 0.16 0.25 0.05
+    op1_envelope 0.001 0.05 0.1 0.04
+}
+
+pattern roller_line {
+    - - 1.1:0.9 -   - - 1.1:0.8 -   - - 1.1:0.9 -   - - 1.1:0.8 -
+    - - 1.1:0.9 -   - - 1.1:0.8 -   - - 1.1:0.9 -   - - 1.1:0.8 3.1:0.6
+}
+
+track bass {
+    play roller_line
+    using roller
+    level 0.26
+    velocity 1.0
+    gate 0.7
+    sidechain 0.5
+    out > highpass(30hz, 0.05)
+        > saturate(0.5) as drive
+        > lowpass(3khz, 0.05) as lp
+        > master
+}

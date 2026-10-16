@@ -1,0 +1,36 @@
+# Almost a sine, a filter pluck on each note, half a bar then silence
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named by its role. `use` it from any song.
+module bass sub_dub {
+    cutoff 165hz
+    cutoff_env 700hz
+    resonance 8%
+    glide 24%
+    osc1_wave saw
+    osc2_wave saw
+    osc2_pitch -12st
+    keytrack 18%
+    attack 2ms
+    decay 220ms
+    sustain 40%
+    release 120ms
+}
+
+pattern sub_dub_line {
+    1.1:0.8  ..*7   -*8
+    1.1:0.8  ..*7   -*8
+    1.1:0.8  ..*7   -*8
+    6.0:0.75 ..*7   -*8
+}
+
+track bass {
+    play sub_dub_line
+    using sub_dub
+    level 0.9
+    gate 0.92
+    sidechain 0.2
+    out > saturate(0.3) as drive
+        > lowpass(700hz, 0.1) as lp
+        > highpass(30hz, 0.01)
+        > master
+}

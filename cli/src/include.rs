@@ -127,7 +127,7 @@ impl Source {
 
 /// `use "file"` or `use file` on a line of its own. Anything else after the
 /// keyword is an error rather than a line silently handed to the parser.
-fn use_target(line: &str) -> Option<Result<String, String>> {
+pub(crate) fn use_target(line: &str) -> Option<Result<String, String>> {
     let t = line.trim();
     let rest = t.strip_prefix("use")?;
     if !rest.starts_with(char::is_whitespace) {

@@ -1,0 +1,35 @@
+# A tiny metal tick on a 3-3-2, ghosts coming and going over four bars
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named by its role. `use` it from any song.
+module fm click {
+    algorithm two_op
+    level 1.6
+    mod_index 70%
+    feedback 25%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 3.73x
+    op0_envelope 0.001 0.035 0.0 0.02
+    op1_envelope 0.001 0.02 0.0 0.01
+}
+
+pattern click_line {
+    1.6:0.8 - - 1.6:0.6 - - 1.6:0.8 - - 1.6:0.43 - 1.6:0.7 - 1.6:0.37 - -
+    1.6:0.8 - - 1.6:0.6 - - 1.6:0.8 - - - - 1.6:0.7 - - - -
+    1.6:0.8 - - 1.6:0.6 - - 1.6:0.8 - - - - 1.6:0.7 - - - -
+    1.6:0.8 - - 1.6:0.6 - - 1.6:0.8 - - 1.6:0.36 - 1.6:0.7 - 1.6:0.43 - -
+}
+
+track perc {
+    play click_line
+    using click
+    level 0.14
+    velocity 1.0
+    gate 0.2
+    pan -0.4
+    reverb_send 0.15
+    delay_send 0.1
+    out > highpass(2khz, 0.05)
+        > lowpass(12khz, 0.05) as lp
+        > master
+}

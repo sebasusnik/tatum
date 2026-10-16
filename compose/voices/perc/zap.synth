@@ -1,0 +1,39 @@
+# Zaps: FM pitch-drop blips between the drums, the psy percussion
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named by its role. `use` it from any song.
+module fm zap {
+    algorithm two_op
+    level 1.8
+    mod_index 82%
+    feedback 30%
+    waveform sine
+    op0_ratio 1x
+    op1_ratio 3.5x
+    op0_envelope 0.001 0.07 0.0 0.05
+    op1_envelope 0.001 0.04 0.0 0.03
+    lfo_target pitch
+    lfo_sync sixteenth
+    lfo_waveform saw
+    lfo_depth 45%
+}
+
+pattern zap_line {
+    - - 1.5:0.7 -  - - - 5.4:0.8  - - 1.5:0.7 -  - 2.5:0.6 - -
+    - - 1.5:0.7 -  - <1.5:0.6 1.5:0.6 1.5:0.6> - 5.4:0.8  - - 1.5:0.7 -  <1.5:0.5 2.5:0.6 3.5:0.7 5.5:0.8> - - 7.4:0.7
+}
+
+track perc {
+    play zap_line
+    using zap
+    level 0.28
+    velocity 1.0
+    gate 0.3
+    pan -0.35
+    delay_send 0.15
+    reverb_send 0.1
+    sidechain 0.2
+    out > highpass(250hz, 0.05)
+        > lowpass(11khz, 0.05) as lp
+        > panenv(0.7, release=300)
+        > master
+}

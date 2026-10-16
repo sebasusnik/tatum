@@ -1,0 +1,68 @@
+# 122 BPM F minor · deep kick, a soft offbeat hat, a dark long room
+# A groove: the globals, the sends, the drums and the master. Voices are
+# pulled in beside it by the session; its scale is what their degrees follow.
+tempo 122
+meter 4/4
+scale F minor
+swing 0.52
+humanize 0.12 timing 0.05
+sidechain 0.45 attack=1ms release=150ms
+
+delay sync=dotted_eighth feedback=0.74 filter=0.28 sidechain=0.35
+reverb size=0.88 damp=0.5 predelay=38 sidechain=0.5
+
+delay_return {
+    in > highpass(210hz, 0.2)
+       > lowpass(6khz, 0.1, lfo_bars=8, lfo_depth=2000)
+       > autopan(0.5, bars=8)
+       > out
+}
+
+reverb_return {
+    in > highpass(260hz, 0.15)
+       > lowpass(6.5khz, 0.1, lfo_bars=8, lfo_depth=2200)
+       > autopan(0.32, bars=8)
+       > out
+}
+
+module beats kit_dub {
+    kick_level 100%
+    kick_decay 66%
+    kick_pitch 0.58x
+    kick_click 5%
+    kick_drive 34%
+    snare_level -13db
+    snare_decay 5%
+    snare_pitch 1.75x
+    snare_drive 10%
+    snare_snap 58%
+    snare_pan -38%
+    hihat_level 24%
+    hihat_decay 16%
+    hihat_pitch 1.4x
+    hihat_pan 42%
+}
+
+pattern beat_dub {
+    kick:  X - - -  x - - -  X - - -  x - - -    X - - -  x - - -  X - - -  x - - -
+    hat:   - - o -  - - x -  - - o -  - - x -    - - o -  - - x -  - - o -  - - x:0.5 -
+    snare: - - - -  - - - -  - - - -  - - - -    - - - -  - - o -  - - - -  - - - -
+}
+
+track drums {
+    play beat_dub
+    using kit_dub
+    level 0.92
+    out > compressor(-16, ratio=2.4, attack=20, release=200, makeup=1.5db)
+        > saturate(0.3) as drive
+        > lowpass(6khz, 0.1) as lp
+        > master
+}
+
+master {
+    in > tilt(-0.16)
+       > lowpass(16khz, 0.05)
+       > eq(low=1.8, mid=-1.0, high=-2.5)
+       > compressor(-8, ratio=1.6, attack=30, release=280, makeup=1db)
+       > out
+}

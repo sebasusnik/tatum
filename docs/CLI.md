@@ -9,6 +9,7 @@
 | [`render`](#render) | render a song to a WAV, with a report of the mix |
 | [`play`](#play-and-watch) | play a song on the audio device |
 | [`watch`](#play-and-watch) | play it, and play every save of the file on the next bar |
+| [`compose`](#compose) | a loop to try voices in: pick one per role, turn its knobs, save it as a file |
 | [`debug`](#debug) | render every part apart, with spectrograms and a report of clicks and mud |
 | [`audit`](#audit) | measure every note of every tonal track for what is not its harmonics |
 | [`analyze`](#analyze-and-compare) | measure a reference track: tempo, key, the kick, the spectrum, density |
@@ -81,6 +82,31 @@ See "Livecoding semantics" in [DSL.md](DSL.md#livecoding-semantics).
 
 On exit both print the worst audio callback time against its budget, and how many
 dropouts the device reported.
+
+## compose
+
+```
+tatum compose [<dir> | <session.synth>] [--knobs 74,71,76,77,93,18,19,16] [--device <name>] [--midi <name>] [--glass]
+```
+
+A loop to try voices in, on the live screen. A groove plays -- tempo, scale, sends,
+master and drums -- and each role (`bass`, `lead`, `pad`, `perc`) holds one voice from
+a library: ↑↓ chooses a row, ← → the next voice of its library, which takes over on the
+next bar line. Tab moves to the chosen row's knobs: the five module parameters a hand
+reaches for first, its level and sends, and the wet of every node its chain names;
+← → turns them, `1`-`9` jumps to one, and a controller's knobs turn knobs 1 to 8
+(`--knobs` says which numbers; the KeyLab Essential mk3's are the default). `m` mutes
+the row, `a` compares every knob with the text's values, `x` puts them back, and `s`
+saves the voice as it sounds, in units, under a name: the same name writes over it,
+another is a new voice. `?` lists every key.
+
+The session is `<dir>/session.synth` (`compose/` by default), a file of `use` lines
+the screen rewrites and `watch` picks up like any save; anything else written in it
+is kept. The library is `<dir>/grooves/*.synth` and `<dir>/voices/<role>/*.synth`: one
+module, a pattern in scale degrees, a track named by its role. What a voice file looks
+like, and how to add one, is in [compose/README.md](../compose/README.md).
+
+`tatum tui-shot <session.synth> --compose [--row N] [--knob N]` takes a picture of it.
 
 ## debug
 

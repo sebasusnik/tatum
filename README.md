@@ -135,6 +135,7 @@ cargo run --release -p tatum-cli -- debug examples/acid_arp.synth --solo acid
 | `check` | compile a song and report errors and design warnings, without sound |
 | `render` | render a song to a WAV, with a report of the mix |
 | `play`, `watch` | play a song live; `watch` swaps in each save on the next bar, and a save that does not compile is reported while the last good version keeps playing |
+| `compose` | a loop to try voices in: a groove, one voice per role from a library, a few knobs each, and a save that writes the voice as a file |
 | `debug` | render every part apart, with spectrograms and a report of clicks and mud, bar by bar |
 | `audit` | measure every note of every tonal track for what is not its harmonics |
 | `analyze`, `compare` | measure a record you want to sound like; compare your song with it and say what to change |
@@ -156,6 +157,15 @@ mix as a scrolling spectrogram, a lane per track, the chosen track's pattern, th
 as they turn, and a save that did not compile, in red, until one does. Its keys mute,
 solo and transform the tracks, writing the words into the file (`rev`, `fast 2`,
 `every 4 rev`), and put knobs on them. See [docs/TUI.md](docs/TUI.md).
+
+### Composing in a loop
+
+`tatum compose` is the same screen with a loop on it: a groove plays, and each role --
+bass, lead, pad, perc -- holds one voice from `compose/voices`, swapped with the arrow
+keys on the next bar. The chosen voice's knobs turn from the keyboard or a controller:
+what a hand reaches for first, then the level, the sends and every named effect. A
+voice that sounds right is saved as it sounds, as a `.synth` of its own, and any song
+gets it with one `use` line. See [compose/README.md](compose/README.md).
 
 ### Finding a noise
 
