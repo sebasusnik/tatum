@@ -237,7 +237,7 @@ pub fn cmd(args: &[String]) -> Result<(), String> {
         screen.open_picker(n);
     }
     if compose {
-        let session = crate::compose::Session::open(Path::new(&path), crate::compose::DEFAULT_KNOB_CCS.to_vec())?;
+        let session = crate::compose::open(Path::new(&path), tatum_core::compose::DEFAULT_KNOB_CCS.to_vec())?;
         let mut panel = super::compose::Panel::new(session.view(&planner, row));
         panel.focus = row;
         panel.view = session.view(&planner, row);

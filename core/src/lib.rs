@@ -16,6 +16,8 @@ pub mod graph;
 pub mod dsl;
 pub mod song_engine;
 pub mod live;
+pub mod include;
+pub mod compose;
 pub mod midi;
 pub mod perform;
 pub mod params;

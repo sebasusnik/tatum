@@ -81,7 +81,7 @@ pub fn cmd(args: &[String], watch: bool) {
 
 /// `tatum compose`: the session file watched on the full screen, with the
 /// loop's panel on it.
-pub fn cmd_with(path: &str, args: &[String], compose: Option<crate::compose::Session>) {
+pub fn cmd_with(path: &str, args: &[String], compose: Option<tatum_core::compose::Session>) {
     let Some(flags) = parse_flags(args) else { return };
     let Flags { device, rate, midi, glass, .. } = flags;
     if let Err(msg) = run(path, true, device, rate, midi, Default::default(), None, true, glass, compose) {
@@ -260,7 +260,7 @@ pub fn run(
     mut set: Option<crate::setnav::SetNav>,
     tui: bool,
     glass: bool,
-    mut compose: Option<crate::compose::Session>,
+    mut compose: Option<tatum_core::compose::Session>,
 ) -> Result<(), String> {
     let mut source = Source::load(std::path::Path::new(path))?;
     if !isolation.is_empty() {
@@ -667,11 +667,11 @@ pub fn run(
                     _ => None,
                 };
                 if let (Some(session), Some((row, knob))) = (compose.as_mut(), macro_on) {
-                    let action = crate::tui::compose::Action::Turn { row, knob, value };
+                    let action = tatum_core::compose::Action::Turn { row, knob, value };
                     match session.act(action, &mut planner, generation) {
-                        Ok((plans, said)) => {
+                        Ok(outcome) => {
                             let mut full = false;
-                            for plan in plans {
+                            for plan in outcome.plans {
                                 if let Err(TrySendError::Full(_)) = plan_tx.try_send(plan) {
                                     full = true;
                                 }
@@ -680,7 +680,7 @@ pub fn run(
                                 *slot = None;
                             }
                             knob_moves += 1;
-                            readings.push(said);
+                            readings.push(outcome.said);
                         }
                         Err(e) => {
                             *slot = None;
@@ -798,14 +798,17 @@ pub fn run(
                     // picked up below like a save; a knob turned is held.
                     crate::tui::Key::Compose(action) => {
                         let generation = stats.generation.load(Ordering::Relaxed);
-                        match compose.as_mut().map(|s| s.act(action, &mut planner, generation)) {
-                            Some(Ok((plans, said))) => {
-                                for plan in plans {
+                        let done = compose.as_mut().map(|s| {
+                            s.act(action, &mut planner, generation).and_then(|o| crate::compose::commit(&o).map(|_| o))
+                        });
+                        match done {
+                            Some(Ok(outcome)) => {
+                                for plan in outcome.plans {
                                     if plan_tx.send(plan).is_err() {
                                         break;
                                     }
                                 }
-                                screen.say(said, crate::tui::Tone::Good);
+                                screen.say(outcome.said, crate::tui::Tone::Good);
                             }
                             Some(Err(e)) => screen.say(e, crate::tui::Tone::Bad),
                             None => {}
