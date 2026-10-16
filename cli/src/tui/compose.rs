@@ -12,62 +12,7 @@ use ratatui::Frame;
 
 use super::palette::{BG, DIM, ERR, GOLD, HOT, KEYCAP, OK, PANEL, TEXT};
 use super::{Key, Screen};
-
-/// One row of the loop: the groove, or a role and the voice it holds.
-pub struct Row {
-    pub role: String,
-    /// `None`: the role holds nothing.
-    pub name: Option<String>,
-    pub kind: String,
-    pub doc: String,
-    pub track: String,
-    /// Which of the library's this is, from 1, and how many it offers.
-    pub index: Option<usize>,
-    pub count: usize,
-    /// A knob was turned on it and not saved.
-    pub held: bool,
-}
-
-/// One knob of the chosen row.
-pub struct MacroRow {
-    pub label: String,
-    pub position: u8,
-    pub reading: String,
-    pub held: bool,
-}
-
-pub struct View {
-    pub rows: Vec<Row>,
-    pub macros: Vec<MacroRow>,
-    pub comparing: bool,
-    pub knob_ccs: Vec<u8>,
-}
-
-/// What a key asks of the session.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Action {
-    /// The next (or previous) voice in the row's library, on the next bar.
-    Choose {
-        row: usize,
-        by: i32,
-    },
-    /// Knob `knob` of `row` put at `value`, held on the engine.
-    Turn {
-        row: usize,
-        knob: usize,
-        value: u8,
-    },
-    Mute(usize),
-    /// Every knob of the row back where the text has it.
-    Reset(usize),
-    /// Every knob turned heard at the text's value, then back: A/B.
-    Compare,
-    /// The row's voice written with its knobs as a voice called `name`.
-    Save {
-        row: usize,
-        name: String,
-    },
-}
+pub use tatum_core::compose::{Action, View};
 
 #[derive(Clone, Copy, PartialEq)]
 enum Pane {
