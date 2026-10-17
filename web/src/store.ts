@@ -129,7 +129,7 @@ export async function act(action: ComposeAction): Promise<void> {
   }
   setView(a.view);
   say(a.said);
-  if (action.action !== "turn") await refreshPattern();
+  if (action.action !== "turn" && action.action !== "mix") await refreshPattern();
 }
 
 export async function focus(row: number): Promise<void> {

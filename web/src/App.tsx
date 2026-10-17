@@ -1,11 +1,19 @@
-import { Show } from "solid-js";
+import { Match, Show, Switch, createSignal } from "solid-js";
 import { Rows } from "./components/Rows";
 import { Knobs } from "./components/Knobs";
+import { Mixer } from "./components/Mixer";
 import { Pattern } from "./components/Pattern";
 import { Display, Top } from "./components/Transport";
 import { play, view } from "./store";
 
+type Mode = "edit" | "mix";
+const MODES: { mode: Mode; label: string; title: string }[] = [
+  { mode: "edit", label: "EDIT", title: "the chosen row's pattern and sound" },
+  { mode: "mix", label: "MIX", title: "every row's level, pan and sends" },
+];
+
 export function App() {
+  const [mode, setMode] = createSignal<Mode>("edit");
   return (
     <div class="device">
       <Top />
@@ -26,8 +34,23 @@ export function App() {
         {(v) => (
           <>
             <Rows view={v()} />
-            <Pattern />
-            <Knobs view={v()} />
+            <nav class="modes">
+              {MODES.map((m) => (
+                <button class={`key mode ${mode() === m.mode ? "lit" : ""}`} onClick={() => setMode(m.mode)} title={m.title}>
+                  <i class="led" />
+                  {m.label}
+                </button>
+              ))}
+            </nav>
+            <Switch>
+              <Match when={mode() === "edit"}>
+                <Pattern />
+                <Knobs view={v()} />
+              </Match>
+              <Match when={mode() === "mix"}>
+                <Mixer view={v()} />
+              </Match>
+            </Switch>
           </>
         )}
       </Show>

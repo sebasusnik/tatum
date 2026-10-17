@@ -75,6 +75,8 @@ export interface Row {
   held: boolean;
   /** Muted from the loop's key. */
   muted: boolean;
+  /** Alone, from the mixer's solo. */
+  soloed: boolean;
 }
 
 export interface Macro {
@@ -88,6 +90,8 @@ export interface View {
   focus: number;
   rows: Row[];
   macros: Macro[];
+  /** Every row's channel: level, pan, reverb_send, delay_send; `[]` for a row with nothing. */
+  mix: Macro[][];
   comparing: boolean;
   knob_ccs: number[];
   /** The song's key as the text has it; `own` when the session sets it over the groove's. */
@@ -100,6 +104,9 @@ export type ComposeAction =
   | { action: "choose"; row: number; by: number }
   | { action: "turn"; row: number; knob: number; value: number }
   | { action: "mute"; row: number }
+  | { action: "solo"; row: number }
+  /** A channel of the mixer, held like a knob and written by the row's save. */
+  | { action: "mix"; row: number; what: "level" | "pan" | "reverb_send" | "delay_send"; value: number }
   | { action: "reset"; row: number }
   | { action: "compare" }
   | { action: "save"; row: number; name: string }

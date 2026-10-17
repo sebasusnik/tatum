@@ -215,10 +215,15 @@ pub struct MacroRow {
     pub held: bool,
 }
 
+/// What a mixer has of every row, in this order.
+pub const MIX: [&str; 4] = ["level", "pan", "reverb_send", "delay_send"];
+
 /// What a screen draws: every row, and the knobs of the row chosen.
 pub struct View {
     pub rows: Vec<Row>,
     pub macros: Vec<MacroRow>,
+    /// Every row's channel, [`MIX`] in order; empty for a row with nothing.
+    pub mix: Vec<Vec<MacroRow>>,
     pub comparing: bool,
     pub knob_ccs: Vec<u8>,
 }
@@ -247,6 +252,15 @@ pub enum Action {
         row: usize,
         name: String,
     },
+    /// A channel of the mixer: `what`, one of [`MIX`], of `row`'s track put
+    /// at `value`, held like a knob and written by the row's save.
+    Mix {
+        row: usize,
+        what: String,
+        value: u8,
+    },
+    /// The row's track alone, or back with the rest.
+    Solo(usize),
     /// The song in another key: `Some((root, kind))` writes `scale root
     /// kind` into the session, after the groove's, so it wins; `None` takes
     /// it out and the groove's scale is the song's again. Patterns written
@@ -422,29 +436,60 @@ impl Session {
         .collect();
         let macros = match self.voice_at(focus) {
             Some(voice) => {
-                let held = self.held_at(focus);
-                voice
-                    .macros()
-                    .into_iter()
-                    .map(|(label, words)| {
-                        let dotted = words.replace(' ', ".");
-                        let turned = held.iter().find(|(t, _)| *t == dotted).map(|(_, v)| *v);
-                        let knob = planner.probe_knob(&dotted);
-                        let rest = knob.as_ref().and_then(|k| planner.song().and_then(|s| k.rest_position(s)));
-                        let position = turned.or(rest).unwrap_or(0);
-                        // `bass cutoff 1.2khz` without its words: the row names them.
-                        let reading = knob
-                            .as_ref()
-                            .map(|k| k.reading(position))
-                            .map(|r| r.strip_prefix(&words).map(|v| v.trim_start().to_string()).unwrap_or(r))
-                            .unwrap_or_else(|| "—".into());
-                        MacroRow { label, position, reading, held: turned.is_some() }
-                    })
-                    .collect()
+                voice.macros().into_iter().map(|(label, words)| self.knob_row(planner, focus, label, &words)).collect()
             }
             None => Vec::new(),
         };
-        View { rows, macros, comparing: self.comparing, knob_ccs: self.knob_ccs.clone() }
+        // Every row's channel: level, pan and sends, for a mixer.
+        let mix = (0..=self.slots.len())
+            .map(|row| match self.voice_at(row) {
+                Some(voice) => MIX
+                    .iter()
+                    .map(|what| self.knob_row(planner, row, what.to_string(), &format!("{} {}", voice.track, what)))
+                    .collect(),
+                None => Vec::new(),
+            })
+            .collect();
+        View { rows, macros, mix, comparing: self.comparing, knob_ccs: self.knob_ccs.clone() }
+    }
+
+    /// `words` (`bass cutoff`) held at `value` on the engine and kept as the
+    /// row's, for a save to write.
+    fn hold(
+        &mut self,
+        row: usize,
+        words: &str,
+        value: u8,
+        planner: &mut LivePlanner,
+        generation: Generation,
+    ) -> Result<Outcome, String> {
+        let dotted = words.replace(' ', ".");
+        let held = self.held_at_mut(row).ok_or("no such row")?;
+        match held.iter_mut().find(|(t, _)| *t == dotted) {
+            Some(h) => h.1 = value,
+            None => held.push((dotted.clone(), value)),
+        }
+        self.comparing = false;
+        let turn = planner.try_knob(&dotted, value, generation);
+        let said = turn.readings.first().cloned().unwrap_or_else(|| format!("{}: moves nothing", words));
+        Ok(Outcome { plans: turn.plans, said, writes: Vec::new() })
+    }
+
+    /// One knob of a row: where it is (turned, or where the text has it)
+    /// and what that reads in units.
+    fn knob_row(&self, planner: &LivePlanner, row: usize, label: String, words: &str) -> MacroRow {
+        let dotted = words.replace(' ', ".");
+        let turned = self.held_at(row).iter().find(|(t, _)| *t == dotted).map(|(_, v)| *v);
+        let knob = planner.probe_knob(&dotted);
+        let rest = knob.as_ref().and_then(|k| planner.song().and_then(|s| k.rest_position(s)));
+        let position = turned.or(rest).unwrap_or(0);
+        // `bass cutoff 1.2khz` without its words: the row names them.
+        let reading = knob
+            .as_ref()
+            .map(|k| k.reading(position))
+            .map(|r| r.strip_prefix(words).map(|v| v.trim_start().to_string()).unwrap_or(r))
+            .unwrap_or_else(|| "—".into());
+        MacroRow { label, position, reading, held: turned.is_some() }
     }
 
     /// Do what a key or a knob asked. Choosing a voice rewrites the session
@@ -487,16 +532,25 @@ impl Session {
             Action::Turn { row, knob, value } => {
                 let voice = self.voice_at(row).ok_or("nothing to turn")?;
                 let (_, words) = voice.macros().into_iter().nth(knob).ok_or("no such knob")?;
-                let dotted = words.replace(' ', ".");
-                let held = self.held_at_mut(row).ok_or("no such row")?;
-                match held.iter_mut().find(|(t, _)| *t == dotted) {
-                    Some(h) => h.1 = value,
-                    None => held.push((dotted.clone(), value)),
+                self.hold(row, &words, value, planner, generation)
+            }
+            Action::Mix { row, what, value } => {
+                if !MIX.contains(&what.as_str()) {
+                    return Err(format!("{} is not on a channel: {}", what, MIX.join(", ")));
                 }
-                self.comparing = false;
-                let turn = planner.try_knob(&dotted, value, generation);
-                let said = turn.readings.first().cloned().unwrap_or_else(|| format!("{}: moves nothing", words));
-                Ok(Outcome { plans: turn.plans, said, writes: Vec::new() })
+                let voice = self.voice_at(row).ok_or("nothing on that channel")?;
+                let words = format!("{} {}", voice.track, what);
+                self.hold(row, &words, value, planner, generation)
+            }
+            Action::Solo(row) => {
+                let track = self.voice_at(row).ok_or("nothing to solo")?.track.clone();
+                let plans = planner.toggle_solo(&track, generation);
+                let on = planner.soloed().contains(&track);
+                Ok(Outcome {
+                    plans,
+                    said: format!("{} {}", track, if on { "alone" } else { "with the rest" }),
+                    writes: Vec::new(),
+                })
             }
             Action::Mute(row) => {
                 let track = self.voice_at(row).ok_or("nothing to mute")?.track.clone();
