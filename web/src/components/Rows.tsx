@@ -1,9 +1,11 @@
-// The rows of the loop as a strip of cards, one per role: its shape, the
-// voice it plays with keys for the one before and the next, and its mute.
-// A click on a card chooses the row the pattern and the knobs are for.
+// The rows of the loop as a strip of cards: its shape, the voice it plays
+// with keys for the one before and the next, the pattern it plays among its
+// voice's, its mute, and a key to take it out. A role can have several rows;
+// the + keys after them add one. A click on a card chooses the row the
+// pattern and the knobs are for.
 
-import { Index } from "solid-js";
-import type { View } from "@tatum/engine";
+import { Index, Show } from "solid-js";
+import type { Row, View } from "@tatum/engine";
 import { act, focus } from "../store";
 
 /** A shape and a colour for each role, Bauhaus primaries; others cycle. */
@@ -14,7 +16,17 @@ export function shapeOf(role: string, i: number): string {
   return ROLE_SHAPE[role] ?? SHAPES[i % SHAPES.length];
 }
 
+/** A pattern without what its voice's all begin with: `amen_chop` as `chop`. */
+function short(row: Row, name: string): string {
+  const all = row.patterns;
+  let common = all[0] ?? "";
+  for (const p of all) while (!p.startsWith(common)) common = common.slice(0, -1);
+  const cut = common.lastIndexOf("_") + 1;
+  return (all.length > 1 && cut < name.length ? name.slice(cut) : name).replace(/_/g, " ");
+}
+
 export function Rows(props: { view: View }) {
+  const roles = () => [...new Set(props.view.rows.slice(1).map((r) => r.role))];
   return (
     <section class="rows">
       <Index each={props.view.rows}>
@@ -28,6 +40,15 @@ export function Rows(props: { view: View }) {
               <i class={`shape ${shapeOf(row().role, i)}`} />
               <span class="role">{row().role.toUpperCase()}</span>
               <span class={`held ${row().held ? "on" : ""}`} title="knobs turned, not saved" />
+              <Show when={i > 0}>
+                <button
+                  class="row-out"
+                  onClick={(e) => (e.stopPropagation(), act({ action: "remove", row: i }))}
+                  title="the row out of the loop"
+                >
+                  ×
+                </button>
+              </Show>
             </div>
             <div class="row-voice">
               <button class="key small dark arrow" onClick={(e) => (e.stopPropagation(), act({ action: "choose", row: i, by: -1 }))} title="the voice before">
@@ -38,6 +59,22 @@ export function Rows(props: { view: View }) {
                 ▶
               </button>
             </div>
+            <Show when={row().patterns.length > 1}>
+              <div class="row-play">
+                <button class="lcd-step" onClick={(e) => (e.stopPropagation(), act({ action: "vary", row: i, by: -1 }))} title="the pattern before">
+                  ◀
+                </button>
+                <span class="play" title={row().play}>
+                  {short(row(), row().play).toUpperCase()}
+                  <i>
+                    {row().patterns.indexOf(row().play) + 1}/{row().patterns.length}
+                  </i>
+                </span>
+                <button class="lcd-step" onClick={(e) => (e.stopPropagation(), act({ action: "vary", row: i, by: 1 }))} title="the next pattern">
+                  ▶
+                </button>
+              </div>
+            </Show>
             <div class="row-foot">
               <span class="kind">{row().name ? row().kind : `${row().count} voices`}</span>
               <span class="which">{row().index ? `${row().index}/${row().count}` : ""}</span>
@@ -53,6 +90,16 @@ export function Rows(props: { view: View }) {
           </div>
         )}
       </Index>
+      <div class="row add">
+        <span class="role">+ ROW</span>
+        <Index each={roles()}>
+          {(role) => (
+            <button class="key small" onClick={() => act({ action: "add", role: role() })} title={`another ${role()} voice in the loop`}>
+              + {role().toUpperCase()}
+            </button>
+          )}
+        </Index>
+      </div>
     </section>
   );
 }

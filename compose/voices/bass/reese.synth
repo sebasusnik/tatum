@@ -1,6 +1,6 @@
 # Reese: two saws a sixth of a semitone apart beating, a slow filter breathing
 # A voice: one module, its pattern in degrees of whatever scale the groove
-# sets, and a track named by its role. `use` it from any song.
+# sets, and a track named as the voice. `use` it from any song.
 module bass reese {
     osc2_pitch 0.16st
     osc3_pitch -12st
@@ -26,7 +26,13 @@ pattern reese_line {
     ~5.1:0.9 ..*5  - -  5.1:0.8 -  ~6.1 ..  ~5.1 ..  4.1:0.8 ..
 }
 
-track bass {
+# The switch: the reese alone on the root, bending.
+pattern reese_switch {
+    1.2:0.95 ..*11  ~2.2 .. ~1.2 ..
+    ..*8  - -  1.2:0.7 -  ~7.1 .. .. ..
+}
+
+track reese {
     play reese_line
     using reese
     level 0.42

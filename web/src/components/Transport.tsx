@@ -4,7 +4,7 @@
 // engine last said, and the mix's spectrum.
 
 import { Show } from "solid-js";
-import { act, connectMidi, midi, pattern, position, running, said, sessionText, view } from "../store";
+import { act, connectMidi, midi, pattern, position, root, running, said, sessionText, view } from "../store";
 import { download, forgetStored } from "../library";
 import { Spectrum } from "./Spectrum";
 
@@ -17,8 +17,8 @@ export function Top() {
           {midi().length ? `MIDI ${midi().length}` : "MIDI"}
         </button>
         <Show when={view()}>
-          <button class="tab" onClick={() => download("session.synth", sessionText())} title="the session file, as the terminal would have it">
-            SESSION ↓
+          <button class="tab" onClick={() => download(root(), sessionText())} title="the loop file, as the terminal would have it">
+            LOOP ↓
           </button>
           <button
             class="tab"

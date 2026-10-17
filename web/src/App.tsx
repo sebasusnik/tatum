@@ -2,6 +2,7 @@ import { Match, Show, Switch, createSignal } from "solid-js";
 import { Rows } from "./components/Rows";
 import { Knobs } from "./components/Knobs";
 import { Fx } from "./components/Fx";
+import { Loops } from "./components/Loops";
 import { Mixer } from "./components/Mixer";
 import { Pattern } from "./components/Pattern";
 import { Display, Top } from "./components/Transport";
@@ -35,6 +36,7 @@ export function App() {
       >
         {(v) => (
           <>
+            <Loops />
             <Rows view={v()} />
             <nav class="modes">
               {MODES.map((m) => (

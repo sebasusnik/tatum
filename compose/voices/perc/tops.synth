@@ -1,6 +1,6 @@
 # Tops: a second break's hats, sixteenths with the accents off the beat
 # A voice: one module, its pattern in degrees of whatever scale the groove
-# sets, and a track named by its role. `use` it from any song.
+# sets, and a track named as the voice. `use` it from any song.
 module beats tops {
     hihat_level 0.55
     hihat_decay 0.18
@@ -18,7 +18,7 @@ pattern tops_line {
     snare: -*16  - - - -  - - - -  - - - -  - - - o
 }
 
-track perc {
+track tops {
     play tops_line
     using tops
     level 1.8

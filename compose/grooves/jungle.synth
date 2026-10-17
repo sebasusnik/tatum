@@ -47,6 +47,40 @@ pattern amen_roll {
     hat:   x - x:0.6 -  x - x:0.6 -  x - x:0.6 -  x - x:0.6 -   x - x:0.6 -  x - x:0.6 -  x - x:0.6 -  x - x:0.6 -   x - x:0.6 -  x - x:0.6 -  x - x:0.6 -  x - x:0.6 -   x - x:0.6 -  x - x:0.6 -  x - x:0.6 -  x - x:0.6 x:0.5
 }
 
+# The two-step: kick on one and the and-of-three, the snare answering off
+# the beat. Bar 4 is a chop: the snare pushes into the next phrase.
+pattern amen_step {
+    kick:  X - - -  - - - -  - - X -  - - - -   - - X -  - - - -  - - X -  - - - x:0.6   X - - -  - - - -  - - X -  - - - -   - - X -  - - - -  X - - -  - - - -
+    snare: - - - -  X - - o  - o - -  X - - o   - o - -  X - - o  - - o -  X - o -   - - - -  X - - o  - o - -  X - - o   - o - -  X - o -  - o X -  o x:0.6 X o
+    hat:   x - x:0.6 -  x - x:0.6 -  x - x:0.6 -  x - x:0.6 -   x - x:0.6 -  x - x:0.6 -  x - x:0.6 -  x - x:0.6 -   x - x:0.6 -  x - x:0.6 -  x - x:0.6 -  x - x:0.6 -   x - x:0.6 -  x - x:0.6 -  x - - -  - - - -
+}
+
+# The darker chop: kicks off the grid, snares doubled and moved, more space.
+pattern amen_chop {
+    kick:  X - - x:0.7  - - X -  - - X -  - - - -   X - X -  - - - -  - x:0.7 - -  - - X -   X - - x:0.7  - - X -  - - X -  - - - -   - - X -  - - X -  - - - -  X - - -
+    snare: - - o -  X - - o  - o - o  X - - -   - o - -  X - o -  X - - o  - X - o   - - o -  X - - o  - o - o  X - - -   - o - o  X - - o  - - X -  o X o x:0.7
+    hat:   x - - -  x - x:0.5 -  x - - -  x - x:0.5 -   x - - -  x - x:0.5 -  x - - -  x - x:0.5 -   x - - -  x - x:0.5 -  x - - -  x - x:0.5 -   x - - -  x - x:0.5 -  - - - -  - - - -
+}
+
+# Half time: the breakdown's pulse.
+pattern amen_half {
+    kick:  X - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - X -  - - - -   X - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - X -  - - - -
+    snare: - - - -  - - - -  X - - -  - - - o   - - - -  - - - -  X - - -  - - - -   - - - -  - - - -  X - - -  - - - o   - - - -  - - - -  X - - -  - o - o
+    hat:   x - x:0.5 -  x - x:0.5 -  x - x:0.5 -  x - x:0.5 -   x - x:0.5 -  x - x:0.5 -  x - x:0.5 -  x - x:0.5 -   x - x:0.5 -  x - x:0.5 -  x - x:0.5 -  x - x:0.5 -   x - x:0.5 -  x - x:0.5 -  x - x:0.5 -  x - x:0.5 -
+}
+
+# The ride alone, for the intro and the tail.
+pattern amen_ride {
+    hat:   x - x:0.5 -  x - x:0.5 -  x - x:0.5 -  x - x:0.5 -
+}
+
+# One bar into a drop: sixteenths climbing to the accent.
+pattern amen_fill {
+    kick:  X - - -  - - - -  X - - -  - - - -
+    snare: - - o -  X - o o  x:0.5 o x:0.6 o  x:0.65 x:0.72 x:0.8 X
+    hat:   x - x -  - - - -  - - - -  - - - -
+}
+
 # The kit through a sampler of the year: squashed, driven, ten bits at a
 # lowered rate, nothing left above 9 kHz.
 track drums {

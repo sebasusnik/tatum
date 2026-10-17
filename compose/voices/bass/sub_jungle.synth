@@ -1,6 +1,6 @@
 # Jungle sub: the fundamental and a hair of the second, holding and sliding
 # A voice: one module, its pattern in degrees of whatever scale the groove
-# sets, and a track named by its role. `use` it from any song.
+# sets, and a track named as the voice. `use` it from any song.
 module bass sub_jungle {
     cutoff 115hz
     cutoff_env 60hz
@@ -20,7 +20,13 @@ pattern sub_jungle_line {
     ~4.1:0.9 ..*5  - -  5.1:0.85 ..  ~6.1 ..  ~5.1 .. .. ..
 }
 
-track bass {
+# The breakdown: one root, let go.
+pattern sub_jungle_hold {
+    1.1:0.85 ..*31
+    6.1:0.85 ..*15  5.1:0.8 ..*15
+}
+
+track sub_jungle {
     play sub_jungle_line
     using sub_jungle
     level 0.5

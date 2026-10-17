@@ -1,6 +1,6 @@
 # Dub siren: a sine swept up and down a fifth, two bars, then the delay's
 # A voice: one module, its pattern in degrees of whatever scale the groove
-# sets, and a track named by its role. `use` it from any song.
+# sets, and a track named as the voice. `use` it from any song.
 module fm siren {
     algorithm two_op
     mod_index 0.2
@@ -20,7 +20,15 @@ pattern siren_line {
     -*32
 }
 
-track lead {
+# Heard once in four bars.
+pattern siren_once {
+    5.4:0.9 ..*31
+    -*32
+    -*32
+    -*32
+}
+
+track siren {
     play siren_line
     using siren
     level 0.08

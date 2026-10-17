@@ -7,9 +7,20 @@ import type { Chain, ComposeAction, FxNodeEdit, FxSpec, Pattern, PatternEdit, Po
 import { Tatum as Engine } from "@tatum/engine";
 import { download, shipped, store, stored } from "./library";
 
+/** The scratch loop, beside the library. */
 export const SESSION = "session.synth";
 
+/** A set's loops: `sets/<name>/<nn>-<part>.synth`, in file order. */
+export interface LoopSet {
+  name: string;
+  loops: string[];
+}
+
 const [view, setView] = createSignal<View | null>(null);
+/** The loop open: the scratch session or a loop of a set. */
+const [root, setRoot] = createSignal(SESSION);
+/** Bumped when the browser's files change, for the sets to be listed again. */
+const [filesVersion, setFilesVersion] = createSignal(0);
 const [position, setPosition] = createSignal<Position | null>(null);
 const [said, setSaid] = createSignal<{ text: string; bad: boolean }>({ text: "press play", bad: false });
 const [running, setRunning] = createSignal(false);
@@ -19,9 +30,72 @@ const [pattern, setPattern] = createSignal<Pattern | null>(null);
 const [chain, setChain] = createSignal<Chain | null>(null);
 const [catalog, setCatalog] = createSignal<FxSpec[]>([]);
 
-export { view, position, said, running, midi, analyser, pattern, chain, catalog };
+export { view, position, said, running, midi, analyser, pattern, chain, catalog, root };
 
 let engine: Tatum | null = null;
+
+/** Every file there is: what the app ships, and over it what this browser saved. */
+function allFiles(): Record<string, string> {
+  return { ...shipped(), ...stored() };
+}
+
+function keep(path: string, text: string): void {
+  store(path, text);
+  setFilesVersion((v) => v + 1);
+}
+
+/** Every set, by name, its loops in order. */
+export function sets(): LoopSet[] {
+  filesVersion();
+  const by = new Map<string, string[]>();
+  for (const path of Object.keys(allFiles())) {
+    const m = /^sets\/([^/]+)\/[^/]+\.synth$/.exec(path);
+    if (!m) continue;
+    by.set(m[1], [...(by.get(m[1]) ?? []), path]);
+  }
+  return [...by.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, loops]) => ({ name, loops: loops.sort() }));
+}
+
+/** `sets/jungle/05-drop1.synth` as `drop1`. */
+export function loopName(path: string): string {
+  const file = path.split("/").pop() ?? path;
+  return file.replace(/\.synth$/, "").replace(/^\d+-/, "");
+}
+
+/** Another loop: the engine swaps to it on the next bar. */
+export async function openLoop(path: string): Promise<void> {
+  const t = await boot();
+  const opened = await t.composeOpen(path, { library: "" });
+  if (!opened.ok) {
+    say(opened.error ?? "the loop did not open", true);
+    return;
+  }
+  setRoot(path);
+  setView(opened.view);
+  keep(path, opened.session);
+  say(`${loopName(path)} · on the next bar`);
+  await refreshRow();
+}
+
+/**
+ * The loop open copied as the next one of its set (the scratch's go to a
+ * set called `mine`), and opened: a part built from the one before.
+ */
+export async function dupLoop(name: string): Promise<void> {
+  const from = root();
+  const text = allFiles()[from];
+  if (!text) return;
+  const dir = from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : "sets/mine";
+  const loops = sets().find((s) => `sets/${s.name}` === dir)?.loops ?? [];
+  const number = (p: string) => parseInt((p.split("/").pop() ?? "").split("-")[0], 10) || 0;
+  const n = loops.reduce((top, p) => Math.max(top, number(p)), 0) + 1;
+  const path = `${dir}/${String(n).padStart(2, "0")}-${name}.synth`;
+  // The scratch's `use` lines point beside it; a set's are two directories down.
+  const moved = from.includes("/") ? text : text.replace(/^use "(?!\.\.\/)/gm, 'use "../../');
+  await engine?.files({ [path]: moved });
+  keep(path, moved);
+  await openLoop(path);
+}
 
 function say(text: string, bad = false): void {
   setSaid({ text, bad });
@@ -48,11 +122,11 @@ async function boot(): Promise<Tatum> {
     if (late < 5) setPosition(p);
     else setTimeout(() => setPosition(p), late);
   });
-  await t.files({ ...shipped(), ...stored() });
-  const opened = await t.composeOpen(SESSION);
+  await t.files(allFiles());
+  const opened = await t.composeOpen(root(), { library: "" });
   if (!opened.ok) throw new Error(opened.error ?? "the loop did not open");
   setView(opened.view);
-  store(SESSION, opened.session);
+  keep(root(), opened.session);
   engine = t;
   const c = await t.fxCatalog();
   if (c.ok) setCatalog(c.catalog);
@@ -146,8 +220,9 @@ export async function act(action: ComposeAction): Promise<void> {
     return;
   }
   for (const w of a.writes) {
-    store(w.path, w.text);
-    if (w.path !== SESSION) download(w.path, w.text);
+    keep(w.path, w.text);
+    // A voice saved is offered to the disk; the loop's own file is not.
+    if (w.path !== root()) download(w.path, w.text);
   }
   setView(a.view);
   say(a.said);
@@ -173,5 +248,5 @@ export async function connectMidi(): Promise<void> {
 }
 
 export function sessionText(): string {
-  return stored()[SESSION] ?? "";
+  return allFiles()[root()] ?? "";
 }

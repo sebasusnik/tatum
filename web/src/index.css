@@ -585,6 +585,99 @@ button {
   box-shadow: 0 1px 0 var(--orange-deep);
 }
 
+.row-out {
+  background: none;
+  border: none;
+  color: var(--grey);
+  font: 700 14px/1 var(--sans);
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.row-out:hover {
+  color: var(--orange);
+}
+
+/* The pattern a row plays, on a strip of the display's black. */
+.row-play {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 4px;
+  background: #111;
+  border-radius: 4px;
+  padding: 3px;
+}
+
+.row-play .play {
+  color: var(--lcd-text);
+  font: 700 10px/1 var(--mono);
+  text-align: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.row-play .play i {
+  font-style: normal;
+  color: var(--grey);
+  margin-left: 6px;
+}
+
+.row.add {
+  background: none;
+  box-shadow: none;
+  border: 2px dashed #c4c0b8;
+  justify-content: center;
+  align-items: flex-start;
+  cursor: default;
+}
+
+.row.add .role {
+  flex: none;
+}
+
+/* ── loops ─────────────────────────────────────────── */
+
+.loops {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.loops .set {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  font: 700 11px/1 var(--sans);
+  letter-spacing: 0.1em;
+  padding: 5px 6px;
+  cursor: pointer;
+}
+
+.loop-keys {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.key.loop {
+  letter-spacing: 0.06em;
+}
+
+.key.loop .n {
+  font: 700 9px/1 var(--mono);
+  color: var(--grey);
+  margin-right: 5px;
+}
+
+.key.loop.lit .n {
+  color: inherit;
+}
+
 /* ── pattern ───────────────────────────────────────── */
 
 .pattern .hint {

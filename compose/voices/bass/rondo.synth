@@ -1,6 +1,6 @@
 # Rubber: a saw and a square beating slowly, a resonant low filter plucked hard, slides between notes
 # A voice: one module, its pattern in degrees of whatever scale the groove
-# sets, and a track named by its role. `use` it from any song.
+# sets, and a track named as the voice. `use` it from any song.
 module bass rondo {
     osc1_wave saw
     osc2_wave square
@@ -22,7 +22,7 @@ pattern rondo_line {
     1.1:0.9 - - 1.1:0.6   - - ~5.1:0.8 -   1.1:0.9 - - -   ~6.0:0.8 - 7.0:0.6 -
 }
 
-track bass {
+track rondo {
     play rondo_line
     using rondo
     level 0.55

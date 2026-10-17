@@ -1,6 +1,6 @@
 # FM bass on the off-sixteenths: the modulator's envelope is the pluck
 # A voice: one module, its pattern in degrees of whatever scale the groove
-# sets, and a track named by its role. `use` it from any song.
+# sets, and a track named as the voice. `use` it from any song.
 module fm roller {
     algorithm two_op
     level 2.0
@@ -18,7 +18,7 @@ pattern roller_line {
     - - 1.1:0.9 -   - - 1.1:0.8 -   - - 1.1:0.9 -   - - 1.1:0.8 3.1:0.6
 }
 
-track bass {
+track roller {
     play roller_line
     using roller
     level 0.26

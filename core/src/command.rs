@@ -276,11 +276,17 @@ impl Live {
                     Some(ccs) => ccs.iter().filter_map(|c| c.int().map(|n| n as u8)).collect(),
                     None => compose::DEFAULT_KNOB_CCS.to_vec(),
                 };
-                let library = self.library(&root)?;
+                // `"library": ""` for a loop of a set, `sets/jungle/01-intro.synth`,
+                // over the library at the top; beside the root without it.
+                let library_dir = match msg.get("library").and_then(Value::str) {
+                    Some(dir) => normalize(dir).trim_start_matches('.').to_string(),
+                    None => dir_of(&root).to_string(),
+                };
+                let library = self.library(&library_dir)?;
                 let session = match Map(&self.files).read(&root) {
-                    Some(text) => Session::from_text(library, &root, knob_ccs, &text),
+                    Some(text) => Session::from_text_in(library, &root, &library_dir, knob_ccs, &text),
                     None => {
-                        let s = Session::new(library, &root, knob_ccs);
+                        let s = Session::new_in(library, &root, &library_dir, knob_ccs);
                         self.put_file(&root, &s.text());
                         s
                     }
@@ -312,6 +318,9 @@ impl Live {
                         value: int(&msg, "value")?.clamp(0, 127) as u8,
                     },
                     "reset" => Action::Reset(int(&msg, "row")? as usize),
+                    "add" => Action::Add(msg.get("role").and_then(Value::str).ok_or("add takes a role")?.to_string()),
+                    "remove" => Action::Remove(int(&msg, "row")? as usize),
+                    "vary" => Action::Vary { row: int(&msg, "row")? as usize, by: int(&msg, "by")? as i32 },
                     "compare" => Action::Compare,
                     "save" => Action::Save {
                         row: int(&msg, "row")? as usize,
@@ -726,8 +735,8 @@ impl Live {
 
     /// The library beside `root` among the files: `grooves/*.synth` and
     /// `voices/<role>/*.synth`, relative to the session's directory.
-    fn library(&self, root: &str) -> Result<Library, String> {
-        let dir = dir_of(root);
+    /// Every groove and voice under `dir`.
+    fn library(&self, dir: &str) -> Result<Library, String> {
         let prefix = if dir.is_empty() { String::new() } else { format!("{}/", dir) };
         let mut entries: Vec<(String, &str, &str)> = Vec::new();
         for (path, text) in &self.files {
@@ -766,6 +775,8 @@ impl Live {
                 };
                 o.int("count", r.count as i64)
                     .bool("held", r.held)
+                    .str("play", &r.play)
+                    .strs("patterns", &r.patterns)
                     .bool("muted", self.planner.is_muted(&r.track))
                     .bool("soloed", self.planner.soloed().contains(&r.track))
                     .finish()
@@ -1113,7 +1124,7 @@ mod tests {
         let song = Value::parse(&live.command("{\"op\":\"song\"}")).unwrap();
         let tracks = song.get("tracks").unwrap().arr().unwrap();
         assert_eq!(tracks.len(), 2);
-        assert_eq!(tracks[1].get("name").and_then(Value::str), Some("bass"));
+        assert_eq!(tracks[1].get("name").and_then(Value::str), Some("sub_dub"));
         let knobs = tracks[1].get("knobs").unwrap().arr().unwrap();
         assert_eq!(knobs[0].get("target").and_then(Value::str), Some("sub_dub.cutoff"));
     }
@@ -1172,7 +1183,7 @@ mod tests {
         live.command("{\"op\":\"compose_view\",\"focus\":1}");
         let turned = Value::parse(&live.command("{\"op\":\"midi\",\"bytes\":[176,74,127]}")).unwrap();
         let readings = turned.get("readings").unwrap().arr().unwrap();
-        assert!(readings[0].str().unwrap().starts_with("bass cutoff"), "{:?}", readings);
+        assert!(readings[0].str().unwrap().starts_with("acid cutoff"), "{:?}", readings);
         let view = Value::parse(&live.command("{\"op\":\"compose_view\"}")).unwrap();
         let macros = view.get("view").unwrap().get("macros").unwrap().arr().unwrap();
         assert_eq!(macros[0].get("position").and_then(Value::int), Some(127));
@@ -1187,7 +1198,7 @@ mod tests {
         assert_eq!(writes[0].get("path").and_then(Value::str), Some("voices/bass/acid_open.synth"));
         assert!(writes[0].get("text").unwrap().str().unwrap().contains("cutoff 20000hz"));
         assert_eq!(saved.get("loaded").unwrap().get("plan").and_then(Value::str), Some("swap"));
-        let probe = Value::parse(&live.command("{\"op\":\"probe_knob\",\"target\":\"bass.cutoff\"}")).unwrap();
+        let probe = Value::parse(&live.command("{\"op\":\"probe_knob\",\"target\":\"acid_open.cutoff\"}")).unwrap();
         assert_eq!(
             probe.get("rest").and_then(Value::int),
             Some(127),
@@ -1200,7 +1211,7 @@ mod tests {
         let mut live = Live::new();
         live.command(&files_message());
         live.command("{\"op\":\"compose_open\",\"root\":\"session.synth\"}");
-        let got = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"bass\"}")).unwrap();
+        let got = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"acid\"}")).unwrap();
         let pattern = got.get("pattern").unwrap();
         assert_eq!(pattern.get("name").and_then(Value::str), Some("acid_line"));
         assert_eq!(pattern.get("drums").and_then(Value::bool), Some(false));
@@ -1212,7 +1223,7 @@ mod tests {
 
         // Step 1 of the bass line becomes a slide up; the voice file carries it.
         let set = Value::parse(
-            &live.command("{\"op\":\"pattern_set\",\"track\":\"bass\",\"lane\":0,\"step\":1,\"token\":\"~5.2:0.7\"}"),
+            &live.command("{\"op\":\"pattern_set\",\"track\":\"acid\",\"lane\":0,\"step\":1,\"token\":\"~5.2:0.7\"}"),
         )
         .unwrap();
         assert_eq!(set.get("ok").and_then(Value::bool), Some(true), "{:?}", set);
@@ -1241,7 +1252,7 @@ mod tests {
         .unwrap();
         assert_eq!(bad.get("ok").and_then(Value::bool), Some(false));
         let bad = Value::parse(
-            &live.command("{\"op\":\"pattern_set\",\"track\":\"bass\",\"lane\":0,\"step\":0,\"token\":\"nope!\"}"),
+            &live.command("{\"op\":\"pattern_set\",\"track\":\"acid\",\"lane\":0,\"step\":0,\"token\":\"nope!\"}"),
         )
         .unwrap();
         assert_eq!(bad.get("ok").and_then(Value::bool), Some(false), "{:?}", bad);
@@ -1265,7 +1276,7 @@ mod tests {
         assert!(!names.iter().any(|n| n == "osc"), "a source is not an effect");
 
         // acid: highpass, saturate as drive, autopan as pan, then master.
-        let got = Value::parse(&live.command("{\"op\":\"fx_get\",\"track\":\"bass\"}")).unwrap();
+        let got = Value::parse(&live.command("{\"op\":\"fx_get\",\"track\":\"acid\"}")).unwrap();
         let fx = got.get("fx").unwrap();
         let nodes = fx.get("nodes").unwrap().arr().unwrap();
         let kinds: Vec<&str> = nodes.iter().map(|n| n.get("kind").and_then(Value::str).unwrap()).collect();
@@ -1279,7 +1290,7 @@ mod tests {
         // Drop the highpass, open the drive's filter... keep autopan as it is,
         // add a chorus at the end: one rewrite of the routing, master kept.
         let set = Value::parse(&live.command(
-            "{\"op\":\"fx_set\",\"track\":\"bass\",\"nodes\":[\
+            "{\"op\":\"fx_set\",\"track\":\"acid\",\"nodes\":[\
              {\"kind\":\"saturate\",\"label\":\"drive\",\"args\":[{\"name\":\"drive\",\"value\":0.4}]},\
              {\"kind\":\"autopan\",\"label\":\"pan\",\"args\":[{\"name\":\"depth\",\"value\":0.35},\
                {\"name\":\"bars\",\"value\":4,\"named\":true,\"set\":true},{\"name\":\"wet\",\"value\":0,\"named\":true,\"set\":true}]},\
@@ -1323,10 +1334,10 @@ mod tests {
         assert!(voice.contains("> chorus"), "{voice}");
 
         // Not an effect, or not a name: refused, and the chain is as it was.
-        let bad = live.command("{\"op\":\"fx_set\",\"track\":\"bass\",\"nodes\":[{\"kind\":\"osc\"}]}");
+        let bad = live.command("{\"op\":\"fx_set\",\"track\":\"acid\",\"nodes\":[{\"kind\":\"osc\"}]}");
         assert!(bad.contains("\"ok\":false"), "{bad}");
         let bad = live
-            .command("{\"op\":\"fx_set\",\"track\":\"bass\",\"nodes\":[{\"kind\":\"chorus\",\"label\":\"no way\"}]}");
+            .command("{\"op\":\"fx_set\",\"track\":\"acid\",\"nodes\":[{\"kind\":\"chorus\",\"label\":\"no way\"}]}");
         assert!(bad.contains("\"ok\":false"), "{bad}");
     }
 
@@ -1395,7 +1406,7 @@ mod tests {
         assert!(!own);
         assert!(opened.get("view").unwrap().get("scales").unwrap().arr().unwrap().len() > 7);
         let first_midi = |live: &mut Live| {
-            let got = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"bass\"}")).unwrap();
+            let got = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"acid\"}")).unwrap();
             got.get("pattern").unwrap().get("lanes").unwrap().arr().unwrap()[0].get("steps").unwrap().arr().unwrap()[0]
                 .get("midi")
                 .unwrap()
@@ -1437,6 +1448,50 @@ mod tests {
     }
 
     #[test]
+    fn rows_join_and_leave_patterns_vary_and_a_loop_of_a_set_reads_the_library_above() {
+        let mut live = Live::new();
+        live.command(&files_message());
+        live.command("{\"op\":\"compose_open\",\"root\":\"session.synth\"}");
+        let ok = |a: &Value| a.get("ok").and_then(Value::bool) == Some(true);
+        let loaded = |a: &Value| a.get("loaded").unwrap().get("ok").and_then(Value::bool) != Some(false);
+
+        // A second bass beside the first: both voices in the text, and it plays.
+        let add = Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"add\",\"role\":\"bass\"}")).unwrap();
+        assert!(ok(&add) && loaded(&add), "{:?}", add);
+        assert_eq!(writes_text(&add).matches("use \"voices/bass/").count(), 2, "{}", writes_text(&add));
+        let rows = |a: &Value| a.get("view").unwrap().get("rows").unwrap().arr().unwrap().to_vec();
+        assert_eq!(rows(&add)[1].get("role").and_then(Value::str), Some("bass"));
+        assert_eq!(rows(&add)[2].get("role").and_then(Value::str), Some("bass"));
+
+        // The groove's next pattern, written as a play line, and back.
+        let patterns = rows(&add)[0].get("patterns").unwrap().arr().unwrap().len();
+        let vary = Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"vary\",\"row\":0,\"by\":1}")).unwrap();
+        assert!(ok(&vary) && loaded(&vary), "{:?}", vary);
+        if patterns > 1 {
+            assert!(writes_text(&vary).contains("track drums { play "), "{}", writes_text(&vary));
+        }
+        let back = Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"vary\",\"row\":0,\"by\":-1}")).unwrap();
+        assert!(!writes_text(&back).contains("track drums"), "{}", writes_text(&back));
+
+        // The second bass out again.
+        let out = Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"remove\",\"row\":2}")).unwrap();
+        assert!(ok(&out) && loaded(&out), "{:?}", out);
+        assert_eq!(writes_text(&out).matches("use \"voices/bass/").count(), 1);
+
+        // A loop two directories down reads the library at the top and
+        // writes its `use` lines from where it is.
+        let text = "use \"../../grooves/dub.synth\"\nuse \"../../voices/bass/sub_dub.synth\"\n";
+        live.command(&format!("{{\"op\":\"files\",\"files\":{{\"sets/x/01-a.synth\":\"{}\"}}}}", json::escape(text)));
+        let opened =
+            Value::parse(&live.command("{\"op\":\"compose_open\",\"root\":\"sets/x/01-a.synth\",\"library\":\"\"}"))
+                .unwrap();
+        assert!(ok(&opened) && loaded(&opened), "{:?}", opened);
+        assert_eq!(rows(&opened)[1].get("name").and_then(Value::str), Some("sub_dub"));
+        let session = opened.get("session").and_then(Value::str).unwrap();
+        assert!(session.contains("use \"../../voices/bass/sub_dub.synth\""), "{session}");
+    }
+
+    #[test]
     fn the_session_sets_the_tempo_over_the_grooves_and_gives_it_back() {
         let mut live = Live::new();
         live.command(&files_message());
@@ -1469,7 +1524,7 @@ mod tests {
         let mut live = Live::new();
         live.command(&files_message());
         live.command("{\"op\":\"compose_open\",\"root\":\"session.synth\"}");
-        let got = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"bass\"}")).unwrap();
+        let got = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"acid\"}")).unwrap();
         let pattern = got.get("pattern").unwrap();
         let scale = pattern.get("scale").unwrap();
         assert_eq!(scale.get("intervals").unwrap().arr().unwrap().len(), 7);
@@ -1481,7 +1536,7 @@ mod tests {
 
         // A note four steps long, written in one reload.
         let set = Value::parse(&live.command(
-            "{\"op\":\"pattern_set\",\"track\":\"bass\",\"edits\":[\
+            "{\"op\":\"pattern_set\",\"track\":\"acid\",\"edits\":[\
              {\"lane\":0,\"step\":0,\"token\":\"3.2\"},{\"lane\":0,\"step\":1,\"token\":\"..\"},\
              {\"lane\":0,\"step\":2,\"token\":\"..\"},{\"lane\":0,\"step\":3,\"token\":\"..\"}]}",
         ))
@@ -1490,14 +1545,14 @@ mod tests {
         assert!(writes_text(&set).contains("3.2 .. .. .."), "{}", writes_text(&set));
 
         // One bad token and none of the edits land.
-        let before = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"bass\"}")).unwrap();
+        let before = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"acid\"}")).unwrap();
         let bad = Value::parse(&live.command(
-            "{\"op\":\"pattern_set\",\"track\":\"bass\",\"edits\":[\
+            "{\"op\":\"pattern_set\",\"track\":\"acid\",\"edits\":[\
              {\"lane\":0,\"step\":0,\"token\":\"5.2\"},{\"lane\":0,\"step\":1,\"token\":\"nope!\"}]}",
         ))
         .unwrap();
         assert_eq!(bad.get("ok").and_then(Value::bool), Some(false));
-        let after = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"bass\"}")).unwrap();
+        let after = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"acid\"}")).unwrap();
         assert_eq!(before, after);
     }
 
@@ -1520,7 +1575,7 @@ mod tests {
         live.command(&files_message());
         live.command("{\"op\":\"compose_open\",\"root\":\"session.synth\"}");
         live.command("{\"op\":\"start\"}");
-        let len = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"bass\"}"))
+        let len = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"acid\"}"))
             .unwrap()
             .get("pattern")
             .unwrap()
@@ -1529,7 +1584,7 @@ mod tests {
             .unwrap();
         assert_eq!(len, 32, "a two-bar line, so a swap on an odd bar lands mid-pattern");
         let bar = |p: &Value| p.get("bar").and_then(Value::int).unwrap();
-        let bass = |p: &Value| p.get("tracks").unwrap().get("bass").and_then(Value::int).unwrap();
+        let bass = |p: &Value| p.get("tracks").unwrap().get("acid").and_then(Value::int).unwrap();
 
         // Before any swap the track and the song agree.
         let pos = render_until(&mut live, |p| bar(p) == 0 && p.get("step").and_then(Value::int) == Some(5));
@@ -1537,7 +1592,7 @@ mod tests {
 
         // An edit in bar 2 swaps in on bar 3, and the bass line starts over there.
         render_until(&mut live, |p| bar(p) == 2);
-        let set = live.command("{\"op\":\"pattern_set\",\"track\":\"bass\",\"lane\":0,\"step\":4,\"token\":\"5.2\"}");
+        let set = live.command("{\"op\":\"pattern_set\",\"track\":\"acid\",\"lane\":0,\"step\":4,\"token\":\"5.2\"}");
         assert!(set.contains("\"ok\":true"), "{set}");
         let pos = render_until(&mut live, |p| bar(p) == 3 && p.get("step").and_then(Value::int) == Some(3 * 16 + 5));
         assert_eq!(bass(&pos), 4, "{:?}", pos);

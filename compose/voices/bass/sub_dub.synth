@@ -1,6 +1,6 @@
 # Almost a sine, a filter pluck on each note, half a bar then silence
 # A voice: one module, its pattern in degrees of whatever scale the groove
-# sets, and a track named by its role. `use` it from any song.
+# sets, and a track named as the voice. `use` it from any song.
 module bass sub_dub {
     cutoff 165hz
     cutoff_env 700hz
@@ -23,7 +23,7 @@ pattern sub_dub_line {
     6.0:0.75 ..*7   -*8
 }
 
-track bass {
+track sub_dub {
     play sub_dub_line
     using sub_dub
     level 0.9

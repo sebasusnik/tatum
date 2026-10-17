@@ -1,6 +1,6 @@
 # A glassy two-op bell, drenched in delay: punctuation, not a lead
 # A voice: one module, its pattern in degrees of whatever scale the groove
-# sets, and a track named by its role. `use` it from any song.
+# sets, and a track named as the voice. `use` it from any song.
 module fm bell {
     algorithm two_op
     level 1.6
@@ -21,7 +21,7 @@ pattern bell_line {
     2.5:0.8  -  -  -   -  -  -  -   1.5:0.6  -  -  -   -  -  -  -
 }
 
-track lead {
+track bell {
     play bell_line
     using bell
     level 0.21

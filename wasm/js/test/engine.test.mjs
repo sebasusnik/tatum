@@ -65,7 +65,7 @@ test("a song loaded over files plays, and the loop answers", () => {
 
   // A knob from a controller, by its bytes, then the loop's view says so.
   const turned = send(tatum, { op: "midi", bytes: [0xb0, 74, 127] });
-  assert.match(turned.readings[0], /^bass cutoff/);
+  assert.match(turned.readings[0], /^acid cutoff/);
   const view = send(tatum, { op: "compose_view" }).view;
   assert.equal(view.macros[0].position, 127);
   assert.equal(view.macros[0].held, true);

@@ -1,6 +1,6 @@
 # Rave stab: a minor chord that is all attack, thrown into the delay
 # A voice: one module, its pattern in degrees of whatever scale the groove
-# sets, and a track named by its role. `use` it from any song.
+# sets, and a track named as the voice. `use` it from any song.
 module keys rave_stab {
     voice_mode poly
     attack 1ms
@@ -20,7 +20,7 @@ pattern rave_stab_line {
     - - [1.4 3.4 5.4]:0.8 -  - - - -  - - [7.3 2.4 4.4 6.4]:0.85 -  - - [5.3 7.3 2.4 4.4]:0.7 -
 }
 
-track lead {
+track rave_stab {
     play rave_stab_line
     using rave_stab
     level 0.6

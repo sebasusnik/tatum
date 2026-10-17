@@ -1,6 +1,6 @@
 # A tiny metal tick on a 3-3-2, ghosts coming and going over four bars
 # A voice: one module, its pattern in degrees of whatever scale the groove
-# sets, and a track named by its role. `use` it from any song.
+# sets, and a track named as the voice. `use` it from any song.
 module fm click {
     algorithm two_op
     level 1.6
@@ -20,7 +20,7 @@ pattern click_line {
     1.6:0.8 - - 1.6:0.6 - - 1.6:0.8 - - 1.6:0.36 - 1.6:0.7 - 1.6:0.43 - -
 }
 
-track perc {
+track click {
     play click_line
     using click
     level 0.14

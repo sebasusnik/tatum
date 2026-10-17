@@ -1,0 +1,20 @@
+# Crash: a 909 cymbal once where a drop lands, then sixteen bars of nothing
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named as the voice. `use` it from any song. Kept above
+# 2.2 kHz, where what is left of it is air.
+module beats crash {
+    crash_pan -0.25
+}
+
+pattern crash_once {
+    crash: X -*15  -*16  -*16  -*16  -*16  -*16  -*16  -*16  -*16  -*16  -*16  -*16  -*16  -*16  -*16  -*16
+}
+
+track crash {
+    play crash_once
+    using crash
+    level 0.22
+    reverb_send 0.12
+    sidechain 0
+    out > highpass(2.2khz, 0.05) > lowpass(9khz, 0.05) as lp > master
+}

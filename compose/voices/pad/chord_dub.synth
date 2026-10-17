@@ -1,6 +1,6 @@
 # A dub chord on the offbeat: detuned, chorused, filtered to a mumble; the echoes are the melody
 # A voice: one module, its pattern in degrees of whatever scale the groove
-# sets, and a track named by its role. `use` it from any song.
+# sets, and a track named as the voice. `use` it from any song.
 module keys chord_dub {
     voice_mode poly
     detune 22%
@@ -26,7 +26,7 @@ pattern chord_dub_stabs {
     -  -  [6.2 1.3 3.3 5.3 7.3]:0.66  -    -  -  [6.2 1.3 3.3 5.3 7.3]:0.5   -    -  -  [6.2 1.3 3.3 5.3 7.3]:0.6   -    -  -  -  -
 }
 
-track pad {
+track chord_dub {
     play chord_dub_stabs
     using chord_dub
     level 0.29

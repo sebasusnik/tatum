@@ -1,6 +1,6 @@
 # Zaps: FM pitch-drop blips between the drums, the psy percussion
 # A voice: one module, its pattern in degrees of whatever scale the groove
-# sets, and a track named by its role. `use` it from any song.
+# sets, and a track named as the voice. `use` it from any song.
 module fm zap {
     algorithm two_op
     level 1.8
@@ -22,7 +22,7 @@ pattern zap_line {
     - - 1.5:0.7 -  - <1.5:0.6 1.5:0.6 1.5:0.6> - 5.4:0.8  - - 1.5:0.7 -  <1.5:0.5 2.5:0.6 3.5:0.7 5.5:0.8> - - 7.4:0.7
 }
 
-track perc {
+track zap {
     play zap_line
     using zap
     level 0.28
