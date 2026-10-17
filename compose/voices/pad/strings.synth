@@ -1,0 +1,39 @@
+# Strings: slow in, slow out, ninths on the sub's roots, phased over eight bars
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named by its role. `use` it from any song.
+module keys strings {
+    voice_mode poly
+    attack 900ms
+    decay 1.5s
+    sustain 0.8
+    release 1.6s
+    detune 0.35
+    chorus_mix 0.55
+    cutoff 1.3khz
+    resonance 0.28
+    lfo_target cutoff
+    lfo_waveform triangle
+    lfo_sync bars_8
+    lfo_depth 0.10
+    vibrato_rate 0.5hz
+    vibrato_depth 0.05
+}
+
+# Four bars: two on the root, then the sixth and the fourth.
+pattern strings_line {
+    [1.3 3.3 5.3 7.3 2.4]:0.6 ..*31
+    [6.2 1.3 3.3 5.3 7.3]:0.6 ..*15
+    [4.2 6.2 1.3 3.3 5.3]:0.6 ..*15
+}
+
+track pad {
+    play strings_line
+    using strings
+    level 0.32
+    reverb_send 0.3
+    sidechain 0.35
+    out > highpass(260hz, 0.05)
+        > phaser(0.3, bars=8) as phaser
+        > autopan(0.35, bars=8) as pan
+        > master
+}

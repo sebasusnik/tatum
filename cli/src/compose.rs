@@ -170,7 +170,7 @@ mod tests {
         assert!(text.contains("use \"grooves/dark.synth\""), "{text}");
         assert!(text.contains("use \"voices/bass/acid.synth\""), "{text}");
         assert_eq!(session.slots.iter().map(|s| s.role.as_str()).collect::<Vec<_>>(), ["bass", "lead", "pad", "perc"]);
-        assert_eq!(session.library.grooves.len(), 4);
+        assert_eq!(session.library.grooves.len(), 5);
 
         let source = crate::include::Source::load(&dir.join("session.synth")).unwrap();
         let mut planner = LivePlanner::new();
@@ -185,7 +185,7 @@ mod tests {
         // Reopened, the file on disk is what the session is.
         let again = open(&dir, vec![74]).unwrap();
         assert_eq!(again.slots[0].voice.as_deref(), Some("acid_open"));
-        assert_eq!(again.library.of("bass").len(), 6);
+        assert_eq!(again.library.of("bass").len(), 8);
         let _ = fs::remove_dir_all(&dir);
     }
 }

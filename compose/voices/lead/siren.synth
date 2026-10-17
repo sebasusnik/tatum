@@ -1,0 +1,31 @@
+# Dub siren: a sine swept up and down a fifth, two bars, then the delay's
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named by its role. `use` it from any song.
+module fm siren {
+    algorithm two_op
+    mod_index 0.2
+    feedback 0.1
+    attack 20ms
+    sustain 1.0
+    release 900ms
+    lfo_target pitch
+    lfo_waveform triangle
+    lfo_rate 1.6hz
+    lfo_depth 0.29
+    level 1.6
+}
+
+pattern siren_line {
+    5.4:0.9 ..*31
+    -*32
+}
+
+track lead {
+    play siren_line
+    using siren
+    level 0.08
+    pan -0.3
+    delay_send 0.5
+    reverb_send 0.35
+    out > highpass(400hz, 0.05) as hp > master
+}
