@@ -266,6 +266,9 @@ pub enum Action {
     /// it out and the groove's scale is the song's again. Patterns written
     /// in degrees follow it; notes by name do not.
     Scale(Option<(String, String)>),
+    /// The song at another tempo: `Some(bpm)` writes `tempo bpm` into the
+    /// session, after the groove's, so it wins; `None` takes it out.
+    Tempo(Option<f32>),
 }
 
 /// What an action came to: plans for the engine, a line for the log, and
@@ -582,6 +585,22 @@ impl Session {
                 };
                 Ok(Outcome { plans: Vec::new(), said, writes: vec![(self.path.clone(), self.text())] })
             }
+            Action::Tempo(to) => {
+                if let Some(bpm) = to {
+                    if !(20.0..=400.0).contains(&bpm) {
+                        return Err(format!("{} BPM: a tempo is 20 to 400", bpm));
+                    }
+                }
+                self.extra.retain(|line| !is_tempo_line(line));
+                let said = match to {
+                    Some(bpm) => {
+                        self.extra.push(format!("tempo {}", bpm));
+                        format!("the song at {} BPM", bpm)
+                    }
+                    None => String::from("the groove's own tempo"),
+                };
+                Ok(Outcome { plans: Vec::new(), said, writes: vec![(self.path.clone(), self.text())] })
+            }
             Action::Compare => {
                 let held: Vec<(String, u8)> = self.all_held().cloned().collect();
                 if held.is_empty() {
@@ -705,6 +724,12 @@ fn is_scale_line(line: &str) -> bool {
     words.next() == Some("scale") && words.count() == 2
 }
 
+/// A session line that sets the song's tempo: `tempo 140`.
+fn is_tempo_line(line: &str) -> bool {
+    let mut words = line.split_whitespace();
+    words.next() == Some("tempo") && words.count() == 1
+}
+
 impl Session {
     /// A library file rewritten from outside the loop -- a pattern drawn, a
     /// chain changed -- read again, so the macros it offers and the text a
@@ -721,6 +746,11 @@ impl Session {
     /// Whether the session sets its own scale over the groove's.
     pub fn own_scale(&self) -> bool {
         self.extra.iter().any(|l| is_scale_line(l))
+    }
+
+    /// Whether the session sets its own tempo over the groove's.
+    pub fn own_tempo(&self) -> bool {
+        self.extra.iter().any(|l| is_tempo_line(l))
     }
 }
 

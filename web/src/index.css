@@ -350,6 +350,29 @@ button {
   margin-right: 0;
 }
 
+.lcd-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 14px;
+}
+
+.lcd-input {
+  width: 5ch;
+  margin-right: 0;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--lcd-text);
+  text-align: center;
+  padding: 2px 0;
+}
+
+.lcd-input:hover,
+.lcd-input:focus {
+  border-color: var(--orange);
+  outline: none;
+}
+
 .lcd-select {
   background: #000;
   color: var(--lcd-text);

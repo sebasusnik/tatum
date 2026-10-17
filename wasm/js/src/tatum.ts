@@ -98,6 +98,8 @@ export interface View {
   key: { root?: string | null; kind?: string | null; own: boolean };
   /** Every scale the language knows, by name. */
   scales: string[];
+  /** The song's tempo as the text has it; `own` when the session sets it over the groove's. */
+  tempo: { bpm: number; own: boolean };
 }
 
 export type ComposeAction =
@@ -111,7 +113,9 @@ export type ComposeAction =
   | { action: "compare" }
   | { action: "save"; row: number; name: string }
   /** The song in `root kind`, or without a root, the groove's own scale again. */
-  | { action: "scale"; root?: string; kind?: string };
+  | { action: "scale"; root?: string; kind?: string }
+  /** The song at `bpm`, or without one, the groove's own tempo again. */
+  | { action: "tempo"; bpm?: number };
 
 export interface ComposeAnswer extends Answer {
   said: string;

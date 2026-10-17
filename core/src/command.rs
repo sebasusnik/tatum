@@ -322,6 +322,8 @@ impl Live {
                     "scale" => Action::Scale(msg.get("root").and_then(Value::str).map(|root| {
                         (root.to_string(), msg.get("kind").and_then(Value::str).unwrap_or("minor").to_string())
                     })),
+                    // `{"action": "tempo", "bpm": 140}`; without one, the groove's again.
+                    "tempo" => Action::Tempo(msg.get("bpm").and_then(Value::num).map(|b| b as f32)),
                     other => return Err(format!("no compose action called {}", other)),
                 };
                 let session = self.compose.as_mut().ok_or("no loop open: compose_open first")?;
@@ -800,6 +802,13 @@ impl Live {
             .raw("knob_ccs", &json::array(&ccs))
             .raw("key", &key)
             .raw("scales", &json::array(&kinds))
+            .raw(
+                "tempo",
+                &Obj::new()
+                    .num("bpm", self.planner.song().map_or(0.0, |s| s.globals.tempo as f64))
+                    .bool("own", session.own_tempo())
+                    .finish(),
+            )
             .finish()
     }
 }
@@ -1424,6 +1433,34 @@ mod tests {
         let bad =
             Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"scale\",\"root\":\"H\",\"kind\":\"minor\"}"))
                 .unwrap();
+        assert_eq!(bad.get("ok").and_then(Value::bool), Some(false));
+    }
+
+    #[test]
+    fn the_session_sets_the_tempo_over_the_grooves_and_gives_it_back() {
+        let mut live = Live::new();
+        live.command(&files_message());
+        let opened = Value::parse(&live.command("{\"op\":\"compose_open\",\"root\":\"session.synth\"}")).unwrap();
+        let tempo = |v: &Value| {
+            let t = v.get("view").unwrap().get("tempo").unwrap();
+            (t.get("bpm").and_then(Value::num).unwrap(), t.get("own").and_then(Value::bool).unwrap())
+        };
+        let (groove_bpm, own) = tempo(&opened);
+        assert!(!own);
+
+        let set = Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"tempo\",\"bpm\":140}")).unwrap();
+        assert!(writes_text(&set).contains("\ntempo 140\n"), "{}", writes_text(&set));
+        assert_eq!(set.get("loaded").unwrap().get("ok").and_then(Value::bool), Some(true));
+        assert_eq!(tempo(&set), (140.0, true));
+        let again = Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"tempo\",\"bpm\":128.5}")).unwrap();
+        assert_eq!(writes_text(&again).matches("tempo ").count(), 1, "{}", writes_text(&again));
+        assert_eq!(tempo(&again), (128.5, true));
+
+        let back = Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"tempo\"}")).unwrap();
+        assert!(!writes_text(&back).contains("tempo "), "{}", writes_text(&back));
+        assert_eq!(tempo(&back), (groove_bpm, false));
+
+        let bad = Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"tempo\",\"bpm\":5}")).unwrap();
         assert_eq!(bad.get("ok").and_then(Value::bool), Some(false));
     }
 
