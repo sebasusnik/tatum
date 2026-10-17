@@ -302,6 +302,7 @@ button:disabled {
 .pattern .heading {
   color: var(--hot);
   font-weight: bold;
+  white-space: nowrap;
 }
 
 .pattern .hint {
@@ -359,24 +360,172 @@ button:disabled {
   background: color-mix(in srgb, var(--hot) calc(var(--v) * 100%), var(--panel));
 }
 
-.cell.note,
-.cell.chord,
-.cell.sub {
-  background: color-mix(in srgb, var(--gold) calc(var(--v) * 100%), var(--panel));
-  color: #000;
-}
-
-.cell.tie {
-  background: color-mix(in srgb, var(--gold) 35%, var(--panel));
-  color: var(--text);
-}
-
 .cell:hover {
   outline: 1px solid var(--text);
 }
 
 .cell.now {
   outline: 2px solid var(--ok);
+}
+
+/* ── piano roll ────────────────────────────────────── */
+
+.roll-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.roll-head .scale {
+  color: var(--gold);
+  font-size: 12px;
+  margin-right: 6px;
+}
+
+.roll-head .range {
+  font-size: 11px;
+  padding: 0 6px;
+}
+
+.roll-body {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 6px;
+}
+
+.keys {
+  display: flex;
+  flex-direction: column;
+}
+
+.key {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  padding: 0 4px;
+  color: var(--dim);
+}
+
+.key.root {
+  color: var(--gold);
+}
+
+.key.off {
+  color: var(--err);
+}
+
+.key .degree {
+  font-weight: bold;
+}
+
+.key.vel-key {
+  height: 44px;
+  margin-top: 4px;
+  align-items: flex-end;
+}
+
+.roll-scroll {
+  overflow-x: auto;
+}
+
+.area {
+  position: relative;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+  background: var(--bg);
+}
+
+.stripe {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-bottom: 1px solid #15131e;
+  background: #110f18;
+  pointer-events: none;
+}
+
+.stripe.root {
+  background: #1d1a29;
+}
+
+.stripe.off {
+  background: #1f1015;
+}
+
+.column {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid #191723;
+  pointer-events: none;
+}
+
+.column.beat {
+  border-left-color: #2a2738;
+}
+
+.column.bar {
+  border-left-color: var(--keycap);
+}
+
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  pointer-events: none;
+}
+
+.bar-note {
+  position: absolute;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--gold) calc(40% + var(--v) * 60%), var(--panel));
+  color: #000;
+  font-size: 10px;
+  line-height: 16px;
+  padding-left: 3px;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: grab;
+  box-shadow: inset -3px 0 0 rgba(0, 0, 0, 0.35);
+}
+
+.bar-note.chord {
+  background: color-mix(in srgb, var(--hot) calc(40% + var(--v) * 60%), var(--panel));
+}
+
+.bar-note.sub {
+  background: color-mix(in srgb, var(--ok) 60%, var(--panel));
+}
+
+.bar-note.slide {
+  border-left: 3px solid var(--text);
+}
+
+.bar-note:hover {
+  outline: 1px solid var(--text);
+}
+
+.vel-lane {
+  position: relative;
+  height: 44px;
+  margin-top: 4px;
+  background: var(--panel);
+  border-radius: 3px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.vel {
+  position: absolute;
+  bottom: 0;
+  padding: 0 2px;
+  background-clip: content-box;
+  background-color: var(--gold);
+  pointer-events: none;
 }
 
 /* ── spectrum ──────────────────────────────────────── */

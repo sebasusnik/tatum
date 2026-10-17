@@ -6,13 +6,18 @@ voice's knobs to drag (or a controller's, over WebMIDI), A/B, and a save that
 writes the voice as it sounds -- into this browser, and down to the disk as a
 `.synth` any song can `use`.
 
-The grid is the pattern the row plays, a lane per drum or one lane of notes,
-sixteen cells a bar. A click cycles a cell (rest, hit, accent, ghost on a
-drum; rest, note, tie on a voice), a drag up or down moves a note by scale
-degrees, the wheel moves its velocity, a double click opens the token itself
-for anything the language has (chords, slides, runs), and a right click rests
-the step. Each change is one token to the engine, which rewrites the pattern
-in the file that defines it and takes it on the next bar.
+A voice's pattern is a piano roll: a row per degree of the song's scale, a
+column per step, each note a bar as long as it is held, and a velocity lane
+under it. A click on an empty cell draws a note (drag right while holding to
+make it longer), a drag on a note moves it, a drag on its right edge sets its
+length, a right click deletes it, shift-click slides into it, alt-click adds
+the row to the step as a chord, and a double click opens the token itself
+for what the roll does not draw (runs, notes off the scale). A drum
+pattern is a lane per drum, sixteen cells a bar: a click cycles a cell
+(rest, hit, accent, ghost), the wheel moves its velocity, a right click
+rests it. Each gesture goes to the engine as the steps it changed, which
+rewrites the pattern in the file that defines it and takes it on the next
+bar.
 
 ```
 cd wasm/js && npm ci && npm run build     # the engine: wasm-pack + tsc

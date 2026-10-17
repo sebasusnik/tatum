@@ -3,7 +3,7 @@
 // the engine and comes back as a view; nothing here knows what a voice is.
 
 import { createSignal } from "solid-js";
-import type { ComposeAction, Pattern, Position, Tatum, View } from "@tatum/engine";
+import type { ComposeAction, Pattern, PatternEdit, Position, Tatum, View } from "@tatum/engine";
 import { Tatum as Engine } from "@tatum/engine";
 import { download, shipped, store, stored } from "./library";
 
@@ -72,6 +72,21 @@ export async function setStep(lane: number, step: number, token: string): Promis
   for (const w of a.writes) store(w.path, w.text);
   setPattern(a.pattern);
   say(`${p.track}: step ${step + 1} is ${token} · on the next bar`);
+}
+
+/** Several steps of the chosen row's pattern in one rewrite: a note drawn longer, moved. */
+export async function editSteps(edits: PatternEdit[], what: string): Promise<boolean> {
+  const p = pattern();
+  if (!engine || !p || edits.length === 0) return false;
+  const a = await engine.patternEdit(p.track, edits);
+  if (!a.ok) {
+    say(a.error ?? "refused", true);
+    return false;
+  }
+  for (const w of a.writes) store(w.path, w.text);
+  setPattern(a.pattern);
+  say(`${p.track}: ${what} · on the next bar`);
+  return true;
 }
 
 export async function play(): Promise<void> {
