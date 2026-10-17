@@ -1101,3 +1101,200 @@ button {
   color: var(--ink);
   box-shadow: 0 1px 0 #a88310;
 }
+
+/* ── fx: a row of pedals ───────────────────────────── */
+
+.chain {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px;
+  background: var(--paper);
+  border-radius: 8px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+.jack {
+  flex: none;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  background: var(--ink);
+  color: var(--lcd-text);
+  font: 700 10px/1 var(--sans);
+  letter-spacing: 0.2em;
+  padding: 10px 6px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.jack.out {
+  background: var(--red);
+}
+
+.gap {
+  flex: none;
+  align-self: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px dashed var(--rule);
+  background: transparent;
+  color: var(--grey);
+  font: 700 14px/1 var(--sans);
+  cursor: pointer;
+}
+
+.gap:hover,
+.gap.lit {
+  border-style: solid;
+  border-color: var(--orange);
+  color: var(--orange);
+}
+
+.pedal {
+  flex: none;
+  min-width: 190px;
+  background: var(--plate);
+  border-radius: 8px;
+  box-shadow: 0 3px 0 #b3afa7;
+  border-top: 6px solid var(--orange);
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pedal.blue {
+  border-top-color: var(--blue);
+}
+
+.pedal.yellow {
+  border-top-color: var(--yellow);
+}
+
+.pedal-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pedal-kind {
+  font: 700 12px/1 var(--sans);
+  letter-spacing: 0.1em;
+}
+
+.pedal-sub {
+  display: flex;
+  gap: 6px;
+}
+
+.tag {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  font: 700 9px/1 var(--mono);
+  letter-spacing: 0.05em;
+  padding: 3px 5px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.tag:hover {
+  border-color: var(--orange);
+  color: var(--orange-deep);
+}
+
+.pedal-knobs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  max-width: 280px;
+}
+
+.arg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 60px;
+}
+
+.arg .knob {
+  width: 50px;
+  height: 50px;
+}
+
+.arg .label {
+  font: 700 8px/1.1 var(--sans);
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.arg .reading {
+  font: 10px var(--mono);
+  color: var(--ink-2);
+}
+
+.arg.set .label {
+  color: var(--orange-deep);
+}
+
+.more {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  font: 700 9px/1 var(--sans);
+  letter-spacing: 0.12em;
+  color: var(--grey);
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.more:hover {
+  color: var(--ink);
+}
+
+.picker {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+  background: var(--plate);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.picker-group {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  align-items: start;
+  gap: 10px;
+}
+
+.picker-cat {
+  font: 700 9px/1 var(--sans);
+  letter-spacing: 0.12em;
+  padding: 4px 6px;
+  color: #fff;
+  background: var(--orange);
+  text-align: center;
+}
+
+.picker-cat.blue {
+  background: var(--blue);
+}
+
+.picker-cat.yellow {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
+.picker-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.picker-keys .key {
+  text-transform: none;
+  letter-spacing: 0.02em;
+}

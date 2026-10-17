@@ -140,6 +140,63 @@ export interface PatternScale {
   name?: string | null;
 }
 
+/** One argument of an effect, in the unit its doc names. */
+export interface FxArg {
+  name: string;
+  value: number;
+  min: number;
+  max: number;
+  default: number;
+  doc: string;
+  /** Written `name=value`; otherwise by position. */
+  named: boolean;
+  /** The text writes it (a named one left out takes its default). */
+  set: boolean;
+}
+
+/** An effect the language has, from `fxCatalog`. */
+export interface FxSpec {
+  name: string;
+  category: "filter" | "effect" | "util" | string;
+  doc: string;
+  /** It also takes words: a division (`1/8`) or a mode (`saw`, `a`). */
+  words: boolean;
+  positional: FxArg[];
+  named: FxArg[];
+}
+
+/** One effect of a chain, as `fxGet` gives it: every argument, `wet` last. */
+export interface FxNode {
+  kind: string;
+  label?: string | null;
+  doc: string;
+  category: string;
+  words: string[];
+  args: FxArg[];
+}
+
+export interface Chain {
+  track: string;
+  nodes: FxNode[];
+  /** Where it ends, kept as it is: `master`, a bus. */
+  to: string[];
+}
+
+/** An effect for `fxSet`: what is left out takes its default. */
+export interface FxNodeEdit {
+  kind: string;
+  label?: string | null;
+  words?: string[];
+  args?: { name: string; value: number; named?: boolean; set?: boolean }[];
+}
+
+export interface FxAnswer extends Answer {
+  writes: { path: string; text: string }[];
+  loaded: Loaded;
+  fx: Chain;
+  view: View;
+}
+
 /** One step of a pattern set to a token. */
 export interface PatternEdit {
   lane: number;
@@ -345,6 +402,25 @@ export class Tatum {
    */
   patternSet(track: string, lane: number, step: number, token: string): Promise<PatternAnswer> {
     return this.command<PatternAnswer>({ op: "pattern_set", track, lane, step, token });
+  }
+
+  /** Every effect a chain takes, with its arguments, for a picker. */
+  fxCatalog(): Promise<Answer & { catalog: FxSpec[] }> {
+    return this.command({ op: "fx_catalog" });
+  }
+
+  /** A track's chain: its effects in order, and where it ends. */
+  fxGet(track: string): Promise<Answer & { fx: Chain }> {
+    return this.command({ op: "fx_get", track });
+  }
+
+  /**
+   * A track's chain set to `nodes`, rewritten in the file that defines the
+   * track (where it ends kept) and reloaded. Refused whole, nothing
+   * changed, when a node is not an effect or the file would not compile.
+   */
+  fxSet(track: string, nodes: FxNodeEdit[]): Promise<FxAnswer> {
+    return this.command<FxAnswer>({ op: "fx_set", track, nodes });
   }
 
   /**

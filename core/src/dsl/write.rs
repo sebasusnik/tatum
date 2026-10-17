@@ -9,7 +9,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use super::ast::{ChordStep, DrumStep, NoteRef, NoteStep, PLock, PatternDef, Step};
+use super::ast::{ChordStep, DrumStep, NoteRef, NoteStep, PLock, Param, PatternDef, RoutingNode, Step};
 
 /// A MIDI note as a name the parser reads back to it: `C4` is 60, sharps
 /// for the black keys.
@@ -164,6 +164,76 @@ pub fn pattern_body(p: &PatternDef) -> String {
     out
 }
 
+/// One argument of a chain node, in the unit its spec says it is in:
+/// `700hz`, `1.2khz`, `40ms`, `-3db`; a linear gain (a compressor's
+/// `makeup`) as the decibels the parser wants for it; anything else bare.
+fn arg_text(kind: &str, name: Option<&str>, index: usize, v: f32) -> String {
+    let doc = crate::nodes::arg_at(kind, name, index).map_or("", |a| a.doc);
+    if doc.starts_with("Hz") {
+        if v.abs() >= 1000.0 {
+            format!("{}khz", amount(v / 1000.0))
+        } else {
+            format!("{}hz", amount(v))
+        }
+    } else if doc.starts_with("ms") {
+        format!("{}ms", amount(v))
+    } else if doc.starts_with("dB") {
+        format!("{}db", amount(v))
+    } else if doc.starts_with("linear gain") && v > 0.0 {
+        format!("{}db", amount(20.0 * crate::math::log10(v)))
+    } else {
+        amount(v)
+    }
+}
+
+/// A chain node as the routing line writes it: `lowpass(700hz, 0.1) as lp`.
+/// Numbers in order are the positionals, words (`1/8`, `saw`) as they were.
+pub fn chain_node_text(node: &RoutingNode) -> String {
+    let mut args = Vec::new();
+    let mut index = 0;
+    for p in &node.params {
+        args.push(match p {
+            Param::Float(v) => {
+                index += 1;
+                arg_text(&node.kind, None, index - 1, *v)
+            }
+            Param::Expr(e) => {
+                index += 1;
+                arg_text(&node.kind, None, index - 1, e.eval())
+            }
+            Param::Named(name, v) => format!("{}={}", name, arg_text(&node.kind, Some(name), 0, *v)),
+            Param::Waveform(w) => w.clone(),
+            Param::RhythmDiv(n, d) => format!("{}/{}", n, d),
+        });
+    }
+    let mut out = node.kind.clone();
+    if !args.is_empty() {
+        out.push_str(&format!("({})", args.join(", ")));
+    }
+    if let Some(label) = &node.label {
+        out.push_str(" as ");
+        out.push_str(label);
+    }
+    out
+}
+
+/// A track's routing line, a node per line under the first:
+/// `out > saturate(0.3) as drive\n        > master`.
+pub fn routing_text(nodes: &[RoutingNode], indent: &str) -> String {
+    let mut out = String::from("out");
+    for (i, node) in nodes.iter().enumerate() {
+        if i == 0 {
+            out.push_str(" > ");
+        } else {
+            out.push('\n');
+            out.push_str(indent);
+            out.push_str("    > ");
+        }
+        out.push_str(&chain_node_text(node));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -201,5 +271,58 @@ mod tests {
         assert_eq!(note_name(60), "C4");
         assert_eq!(note_name(61), "C#4");
         assert_eq!(note_name(33), "A1");
+    }
+
+    fn close(a: &Param, b: &Param) -> bool {
+        let near = |x: f32, y: f32| (x - y).abs() <= 1e-3 * x.abs().max(1.0);
+        match (a, b) {
+            (Param::Float(x), Param::Float(y)) => near(*x, *y),
+            (Param::Expr(e), Param::Float(y)) => near(e.eval(), *y),
+            (Param::Named(k, x), Param::Named(l, y)) => k == l && near(*x, *y),
+            _ => a == b,
+        }
+    }
+
+    /// Every chain in the repo's songs and voices, written and read back,
+    /// is the chain it was: kinds, labels, words, numbers in their units.
+    #[test]
+    fn every_chain_in_the_corpus_survives_a_round_trip() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let mut files = Vec::new();
+        for dir in [
+            "examples",
+            "compose/grooves",
+            "compose/voices/bass",
+            "compose/voices/lead",
+            "compose/voices/pad",
+            "compose/voices/perc",
+        ] {
+            for entry in std::fs::read_dir(root.join(dir)).unwrap().flatten() {
+                if entry.path().extension().is_some_and(|e| e == "synth") {
+                    files.push(entry.path());
+                }
+            }
+        }
+        let mut chains = 0;
+        for path in files {
+            let text = std::fs::read_to_string(&path).unwrap();
+            let Ok(song) = parse(&text) else { continue };
+            for t in song.tracks.iter().filter(|t| !t.routing.is_empty()) {
+                let probe = format!("track x {{\n    {}\n}}\n", routing_text(&t.routing, "    "));
+                let back = parse(&probe).unwrap_or_else(|e| panic!("{}: {:?}\n{}", path.display(), e, probe));
+                let got = &back.tracks[0].routing;
+                assert_eq!(got.len(), t.routing.len(), "{}\n{}", path.display(), probe);
+                for (a, b) in t.routing.iter().zip(got) {
+                    assert_eq!(a.kind, b.kind, "{}", path.display());
+                    assert_eq!(a.label, b.label, "{}", path.display());
+                    assert_eq!(a.params.len(), b.params.len(), "{}: {}", path.display(), probe);
+                    for (x, y) in a.params.iter().zip(&b.params) {
+                        assert!(close(x, y), "{}: {:?} came back {:?}\n{}", path.display(), x, y, probe);
+                    }
+                }
+                chains += 1;
+            }
+        }
+        assert!(chains > 50, "only {chains} chains");
     }
 }

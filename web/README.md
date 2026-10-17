@@ -24,6 +24,22 @@ cd wasm/js && npm ci && npm run build     # the engine: wasm-pack + tsc
 cd ../../web && npm ci && npm run dev     # http://localhost:5173
 ```
 
+Three modes under the rows:
+
+- **EDIT**: the pattern (piano roll or drum lanes) and the voice's knobs.
+- **FX**: the row's effects as pedals, from IN to where the chain ends. A
+  `+` between two puts an effect from the language's registry there; on a
+  pedal, ◀ ▶ move it, × takes it out, its knobs turn its arguments (MORE
+  shows the named ones), WET blends it, and its name is what a knob or an
+  `auto` reaches. Each change rewrites the track's `out > ...` line.
+- **MIX**: a strip per row, the level on a fader, pan and the two sends on
+  knobs, mute and solo. Moves are held like knobs; the row's save writes
+  them into the voice's track.
+
+The display's KEY steps the song's root a semitone at a time and picks the
+scale; the session then carries a `scale` line over the groove's, and
+GROOVE takes it out. Patterns in degrees follow it.
+
 What it is made of:
 
 - `@tatum/engine` (`../wasm/js`), the engine in an AudioWorklet and the API

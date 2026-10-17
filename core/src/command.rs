@@ -15,7 +15,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use crate::compose::{self, Action, Library, Session, GROOVE_ROLE};
-use crate::dsl::ast::{PatternDef, Step, VoiceMove};
+use crate::dsl::ast::{Param, PatternDef, RoutingNode, Step, VoiceMove};
 use crate::include::{dir_of, normalize, Files, Source};
 use crate::json::{self, Obj, Value};
 use crate::live::{Applied, LivePlanner, LivePlayer, Plan};
@@ -379,6 +379,30 @@ impl Live {
                     .raw("pattern", &self.pattern_json(&track)?)
                     .finish())
             }
+            // Every effect a chain takes, with its arguments, for a picker.
+            "fx_catalog" => Ok(ok().raw("catalog", &fx_catalog_json()).finish()),
+            // A track's chain: its effects in order, and where it ends.
+            "fx_get" => {
+                let track = msg.get("track").and_then(Value::str).ok_or("fx_get takes a track")?.to_string();
+                Ok(ok().raw("fx", &self.chain_json(&track)?).finish())
+            }
+            // `{"track", "nodes": [{kind, label?, words?, args?}]}`: the
+            // track's chain rewritten in the file that defines the track,
+            // where it ends kept, the song reloaded; refused whole when a
+            // node is not an effect or the file would not compile.
+            "fx_set" => {
+                let track = msg.get("track").and_then(Value::str).ok_or("fx_set takes a track")?.to_string();
+                let nodes = msg.get("nodes").and_then(Value::arr).ok_or("fx_set takes nodes")?.to_vec();
+                let (writes, loaded) = self.chain_set(&track, &nodes)?;
+                let writes: Vec<String> =
+                    writes.iter().map(|(p, t)| Obj::new().str("path", p).str("text", t).finish()).collect();
+                Ok(ok()
+                    .raw("writes", &json::array(&writes))
+                    .raw("loaded", &loaded)
+                    .raw("fx", &self.chain_json(&track)?)
+                    .raw("view", &self.view_json())
+                    .finish())
+            }
             "compose_view" => {
                 if let Some(focus) = msg.get("focus").and_then(Value::int) {
                     self.focus = focus.max(0) as usize;
@@ -489,24 +513,38 @@ impl Live {
                 }
             }
         }
-        // The file that defines the pattern: the last one in `use` order
-        // that has its block, since a later definition wins.
+        let (path, before, start, end) = self.defining("pattern", &p.name)?;
+        let after = format!("{}{}{}", &before[..start], crate::dsl::write::pattern_body(&p), &before[end..]);
+        self.rewrite(path, &before, after)
+    }
+
+    /// The file that defines `<what> <name> { }`, its text, and the inside
+    /// of the block: the last file in `use` order that has it, since a
+    /// later definition wins.
+    fn defining(&self, what: &str, name: &str) -> Result<(String, String, usize, usize), String> {
         let root = self.root.clone().ok_or("nothing loaded yet")?;
         let source = Source::load(&root, &Map(&self.files))?;
-        let mut found = None;
         for path in source.files.iter().rev() {
             let Some(text) = Map(&self.files).read(path) else { continue };
-            if let Some((start, end)) = compose::edit::block(&text, "pattern", &p.name) {
-                found = Some((path.clone(), text, start, end));
-                break;
+            if let Some((start, end)) = compose::edit::block(&text, what, name) {
+                return Ok((path.clone(), text, start, end));
             }
         }
-        let (path, before, start, end) = found.ok_or_else(|| format!("no file defines pattern {}", p.name))?;
-        let after = format!("{}{}{}", &before[..start], crate::dsl::write::pattern_body(&p), &before[end..]);
+        Err(format!("no file defines {} {}", what, name))
+    }
+
+    /// `path` rewritten from `before` to `after` and the song reloaded over
+    /// it; put back as it was, and refused, when it does not compile.
+    fn rewrite(
+        &mut self,
+        path: String,
+        before: &str,
+        after: String,
+    ) -> Result<(Vec<(String, String)>, String), String> {
         self.put_file(&path, &after);
         let loaded = self.load()?;
         if Value::parse(&loaded).ok().and_then(|v| v.get("ok").and_then(Value::bool)) != Some(true) {
-            self.put_file(&path, &before);
+            self.put_file(&path, before);
             let _ = self.load();
             let why = Value::parse(&loaded)
                 .ok()
@@ -518,7 +556,47 @@ impl Live {
                 .unwrap_or_default();
             return Err(format!("that does not compile: {}", why.join(" · ")));
         }
+        if let Some(session) = self.compose.as_mut() {
+            session.reread(&path, &after);
+        }
         Ok((vec![(path, after)], loaded))
+    }
+
+    /// The track's chain from the latest text: its effects, and where it
+    /// ends (`master`, a bus), which are kept as they are.
+    fn chain_of(&self, track: &str) -> Result<(Vec<RoutingNode>, Vec<RoutingNode>), String> {
+        let ast = self.planner.song().ok_or("nothing loaded yet")?;
+        let def =
+            ast.tracks.iter().rev().find(|t| t.name == track).ok_or_else(|| format!("no track called {}", track))?;
+        let (fx, to): (Vec<_>, Vec<_>) =
+            def.routing.iter().cloned().partition(|n| crate::nodes::lookup(&n.kind).is_some_and(|s| s.in_chains));
+        Ok((fx, to))
+    }
+
+    /// The chain as a list of effects, each with its arguments by name,
+    /// their ranges and docs, and the words it was written with.
+    fn chain_json(&self, track: &str) -> Result<String, String> {
+        let (fx, to) = self.chain_of(track)?;
+        let nodes: Vec<String> = fx.iter().map(fx_node_json).collect();
+        let to: Vec<String> = to.iter().map(|n| json::string(&n.kind)).collect();
+        Ok(Obj::new().str("track", track).raw("nodes", &json::array(&nodes)).raw("to", &json::array(&to)).finish())
+    }
+
+    /// The track's chain set to `nodes`, in the file that defines the
+    /// track; where it ends is kept. Refused whole, nothing changed, when a
+    /// node is not an effect or the file would not compile.
+    fn chain_set(&mut self, track: &str, nodes: &[Value]) -> Result<(Vec<(String, String)>, String), String> {
+        let (_, to) = self.chain_of(track)?;
+        let mut routing = Vec::new();
+        for n in nodes {
+            routing.push(fx_node_from(n)?);
+        }
+        routing.extend(to);
+        let (path, before, start, end) = self.defining("track", track)?;
+        let after = compose::edit::set_routing(&before, (start, end), |indent| {
+            crate::dsl::write::routing_text(&routing, indent)
+        });
+        self.rewrite(path, &before, after)
     }
 
     fn put_file(&mut self, path: &str, text: &str) {
@@ -777,6 +855,138 @@ fn lane_json(label: Option<&str>, steps: &[&Step], scale: ([u8; 7], u8)) -> Stri
     Obj::new().opt_str("label", label).raw("steps", &json::array(&items)).finish()
 }
 
+fn arg_json(a: &crate::nodes::Arg, value: f32, named: bool, set: bool) -> String {
+    Obj::new()
+        .str("name", a.name)
+        .num("value", value as f64)
+        .num("min", a.min as f64)
+        .num("max", a.max as f64)
+        .num("default", a.default as f64)
+        .str("doc", a.doc)
+        .bool("named", named)
+        .bool("set", set)
+        .finish()
+}
+
+/// Every chain node's `wet`, which no spec lists: dry to wet, 1 unless written.
+const WET_ARG: crate::nodes::Arg =
+    crate::nodes::Arg { name: crate::nodes::WET, min: 0.0, max: 1.0, default: 1.0, doc: "dry to wet" };
+
+/// What the language has to put in a chain, for a picker: every effect
+/// and filter a track, bus or master chain takes, with its arguments.
+fn fx_catalog_json() -> String {
+    let nodes: Vec<String> = crate::nodes::NODES
+        .iter()
+        .filter(|n| n.in_chains && !matches!(n.name, "capture" | "mix"))
+        .map(|n| {
+            let pos: Vec<String> = n.positional.iter().map(|a| arg_json(a, a.default, false, true)).collect();
+            let named: Vec<String> = n.named.iter().map(|a| arg_json(a, a.default, true, false)).collect();
+            Obj::new()
+                .str("name", n.name)
+                .str("category", n.category.as_str())
+                .str("doc", n.doc)
+                .bool("words", n.waveform || n.rhythm)
+                .raw("positional", &json::array(&pos))
+                .raw("named", &json::array(&named))
+                .finish()
+        })
+        .collect();
+    json::array(&nodes)
+}
+
+/// A chain node for an editor: every positional in the spec's order (its
+/// default where the text leaves it out), every named one with whether
+/// the text sets it, `wet`, and the words (`1/8`, `saw`) as written.
+fn fx_node_json(n: &RoutingNode) -> String {
+    let spec = crate::nodes::lookup(&n.kind);
+    let numbers: Vec<f32> = n
+        .params
+        .iter()
+        .filter_map(|p| match p {
+            Param::Float(v) => Some(*v),
+            Param::Expr(e) => Some(e.eval()),
+            _ => None,
+        })
+        .collect();
+    let named = |name: &str| {
+        n.params.iter().find_map(|p| match p {
+            Param::Named(k, v) if k == name => Some(*v),
+            _ => None,
+        })
+    };
+    let mut args = Vec::new();
+    if let Some(spec) = spec {
+        for (i, a) in spec.positional.iter().enumerate() {
+            args.push(arg_json(a, numbers.get(i).copied().unwrap_or(a.default), false, i < numbers.len()));
+        }
+        for a in spec.named {
+            let v = named(a.name);
+            args.push(arg_json(a, v.unwrap_or(a.default), true, v.is_some()));
+        }
+    }
+    let wet = named(crate::nodes::WET);
+    args.push(arg_json(&WET_ARG, wet.unwrap_or(1.0), true, wet.is_some()));
+    let words: Vec<String> = n
+        .params
+        .iter()
+        .filter_map(|p| match p {
+            Param::Waveform(w) => Some(json::string(w)),
+            Param::RhythmDiv(a, b) => Some(json::string(&format!("{}/{}", a, b))),
+            _ => None,
+        })
+        .collect();
+    Obj::new()
+        .str("kind", spec.map_or(n.kind.as_str(), |s| s.name))
+        .opt_str("label", n.label.as_deref())
+        .str("doc", spec.map_or("", |s| s.doc))
+        .str("category", spec.map_or("", |s| s.category.as_str()))
+        .raw("words", &json::array(&words))
+        .raw("args", &json::array(&args))
+        .finish()
+}
+
+/// A chain node from an editor's `{kind, label?, words?, args?: [{name,
+/// value, named?, set?}]}`: words first, the positionals in the spec's
+/// order, then each named one the editor set or moved off its default.
+fn fx_node_from(v: &Value) -> Result<RoutingNode, String> {
+    let kind = v.get("kind").and_then(Value::str).ok_or("an effect takes a kind")?;
+    let spec = crate::nodes::lookup(kind)
+        .filter(|s| s.in_chains)
+        .ok_or_else(|| format!("{} is not an effect a chain takes", kind))?;
+    let label = v.get("label").and_then(Value::str).map(String::from);
+    if let Some(l) = &label {
+        if l.is_empty() || !l.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            return Err(format!("`{}` is not a name: letters, digits and _", l));
+        }
+    }
+    let args: Vec<&Value> = v.get("args").and_then(Value::arr).map(|a| a.iter().collect()).unwrap_or_default();
+    let arg = |name: &str| args.iter().find(|a| a.get("name").and_then(Value::str) == Some(name)).copied();
+    let mut params = Vec::new();
+    for w in v.get("words").and_then(Value::arr).map(|a| a.to_vec()).unwrap_or_default() {
+        let w = w.str().ok_or("a word is text")?;
+        params.push(match w.split_once('/') {
+            Some((a, b)) => Param::RhythmDiv(
+                a.parse().map_err(|_| format!("{} is not a division", w))?,
+                b.parse().map_err(|_| format!("{} is not a division", w))?,
+            ),
+            None => Param::Waveform(w.to_string()),
+        });
+    }
+    for a in spec.positional {
+        let value = arg(a.name).and_then(|x| x.get("value")).and_then(Value::num).map_or(a.default, |x| x as f32);
+        params.push(Param::Float(value.clamp(a.min, a.max)));
+    }
+    for a in spec.named.iter().chain(core::iter::once(&WET_ARG)) {
+        let Some(x) = arg(a.name) else { continue };
+        let Some(value) = x.get("value").and_then(Value::num).map(|x| x as f32) else { continue };
+        let set = x.get("set").and_then(Value::bool).unwrap_or(false);
+        if set || (value - a.default).abs() > 1e-6 {
+            params.push(Param::Named(a.name.to_string(), value.clamp(a.min, a.max)));
+        }
+    }
+    Ok(RoutingNode { kind: spec.name.to_string(), params, label })
+}
+
 fn int(msg: &Value, key: &str) -> Result<i64, String> {
     msg.get(key).and_then(Value::int).ok_or_else(|| format!("{} takes a number", key))
 }
@@ -1026,6 +1236,89 @@ mod tests {
         )
         .unwrap();
         assert_eq!(bad.get("ok").and_then(Value::bool), Some(false), "{:?}", bad);
+    }
+
+    #[test]
+    fn a_chain_reads_as_effects_and_an_edit_rewrites_the_tracks_routing() {
+        let mut live = Live::new();
+        live.command(&files_message());
+        live.command("{\"op\":\"compose_open\",\"root\":\"session.synth\"}");
+        let catalog = Value::parse(&live.command("{\"op\":\"fx_catalog\"}")).unwrap();
+        let names: Vec<String> = catalog
+            .get("catalog")
+            .unwrap()
+            .arr()
+            .unwrap()
+            .iter()
+            .map(|n| n.get("name").and_then(Value::str).unwrap().to_string())
+            .collect();
+        assert!(names.iter().any(|n| n == "lowpass") && names.iter().any(|n| n == "chorus"), "{names:?}");
+        assert!(!names.iter().any(|n| n == "osc"), "a source is not an effect");
+
+        // acid: highpass, saturate as drive, autopan as pan, then master.
+        let got = Value::parse(&live.command("{\"op\":\"fx_get\",\"track\":\"bass\"}")).unwrap();
+        let fx = got.get("fx").unwrap();
+        let nodes = fx.get("nodes").unwrap().arr().unwrap();
+        let kinds: Vec<&str> = nodes.iter().map(|n| n.get("kind").and_then(Value::str).unwrap()).collect();
+        assert_eq!(kinds, ["highpass", "saturate", "autopan"]);
+        assert_eq!(nodes[1].get("label").and_then(Value::str), Some("drive"));
+        assert_eq!(fx.get("to").unwrap().arr().unwrap()[0].str(), Some("master"));
+        let hp = nodes[0].get("args").unwrap().arr().unwrap();
+        assert_eq!(hp[0].get("name").and_then(Value::str), Some("cutoff"));
+        assert_eq!(hp[0].get("value").and_then(Value::num), Some(150.0));
+
+        // Drop the highpass, open the drive's filter... keep autopan as it is,
+        // add a chorus at the end: one rewrite of the routing, master kept.
+        let set = Value::parse(&live.command(
+            "{\"op\":\"fx_set\",\"track\":\"bass\",\"nodes\":[\
+             {\"kind\":\"saturate\",\"label\":\"drive\",\"args\":[{\"name\":\"drive\",\"value\":0.4}]},\
+             {\"kind\":\"autopan\",\"label\":\"pan\",\"args\":[{\"name\":\"depth\",\"value\":0.35},\
+               {\"name\":\"bars\",\"value\":4,\"named\":true,\"set\":true},{\"name\":\"wet\",\"value\":0,\"named\":true,\"set\":true}]},\
+             {\"kind\":\"lowpass\",\"args\":[{\"name\":\"cutoff\",\"value\":1200},{\"name\":\"resonance\",\"value\":0.2}]},\
+             {\"kind\":\"chorus\"}]}",
+        ))
+        .unwrap();
+        assert_eq!(set.get("ok").and_then(Value::bool), Some(true), "{:?}", set);
+        let text = writes_text(&set);
+        assert!(!text.contains("highpass"), "{text}");
+        assert!(text.contains("lowpass(1.2khz"), "{text}");
+        assert!(text.contains("> chorus"), "{text}");
+        assert!(text.contains("autopan(0.35, bars=4, wet=0) as pan"), "{text}");
+        assert!(text.trim_end().ends_with("> master\n}") || text.contains("> master\n}"), "{text}");
+        assert!(text.contains("module bass acid {"), "{text}");
+        let kinds: Vec<String> = set
+            .get("fx")
+            .unwrap()
+            .get("nodes")
+            .unwrap()
+            .arr()
+            .unwrap()
+            .iter()
+            .map(|n| n.get("kind").and_then(Value::str).unwrap().to_string())
+            .collect();
+        assert_eq!(kinds, ["saturate", "autopan", "lowpass", "chorus"]);
+
+        // The row's save starts from the new chain, not the one it opened with.
+        let saved =
+            Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"save\",\"row\":1,\"name\":\"acid_fx\"}"))
+                .unwrap();
+        let voice = saved
+            .get("writes")
+            .unwrap()
+            .arr()
+            .unwrap()
+            .iter()
+            .find(|w| w.get("path").and_then(Value::str).is_some_and(|p| p.ends_with("acid_fx.synth")))
+            .map(|w| w.get("text").unwrap().str().unwrap().to_string())
+            .unwrap();
+        assert!(voice.contains("> chorus"), "{voice}");
+
+        // Not an effect, or not a name: refused, and the chain is as it was.
+        let bad = live.command("{\"op\":\"fx_set\",\"track\":\"bass\",\"nodes\":[{\"kind\":\"osc\"}]}");
+        assert!(bad.contains("\"ok\":false"), "{bad}");
+        let bad = live
+            .command("{\"op\":\"fx_set\",\"track\":\"bass\",\"nodes\":[{\"kind\":\"chorus\",\"label\":\"no way\"}]}");
+        assert!(bad.contains("\"ok\":false"), "{bad}");
     }
 
     #[test]
