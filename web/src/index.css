@@ -935,3 +935,169 @@ button {
   height: 64px;
   font-size: 13px;
 }
+
+/* ── modes ─────────────────────────────────────────── */
+
+.modes {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.key.mode {
+  min-width: 96px;
+}
+
+.key.mode.lit .led {
+  background: var(--orange);
+}
+
+/* ── mixer ─────────────────────────────────────────── */
+
+.strips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.strip {
+  background: var(--plate);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  box-shadow: 0 2px 0 #b3afa7;
+  padding: 10px 8px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.strip.focused {
+  border-color: var(--ink);
+  background: var(--paper);
+}
+
+.strip.muted {
+  opacity: 0.55;
+}
+
+.strip-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: stretch;
+}
+
+.strip-head .role {
+  font: 700 10px/1 var(--sans);
+  letter-spacing: 0.12em;
+}
+
+.strip-name {
+  font-weight: 700;
+  font-size: 13px;
+  align-self: stretch;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.send {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.send .knob {
+  width: 54px;
+  height: 54px;
+}
+
+.send .label {
+  font: 700 9px/1 var(--sans);
+  letter-spacing: 0.1em;
+}
+
+.send .reading,
+.level .reading {
+  font: 10px var(--mono);
+  color: var(--ink-2);
+}
+
+.send.held .reading,
+.level.held .reading {
+  color: var(--orange-deep);
+}
+
+.send.held .knob .fill {
+  stroke: var(--orange);
+}
+
+.level {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.fader {
+  position: relative;
+  width: 44px;
+  height: 170px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.fader-slot {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  margin-left: -3px;
+  background: #1c1c1c;
+  border-radius: 3px;
+  box-shadow: inset 0 1px 2px #000;
+}
+
+.fader-fill {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 6px;
+  margin-left: -3px;
+  background: var(--orange);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.fader-cap {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  height: 18px;
+  background: var(--cap);
+  border-radius: 3px;
+  box-shadow:
+    0 2px 0 #a7a39b,
+    0 3px 5px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 #fff;
+  border-top: 2px solid var(--ink);
+}
+
+.fader.dragging .fader-cap {
+  border-top-color: var(--orange);
+}
+
+.strip-keys {
+  display: flex;
+  gap: 8px;
+}
+
+.key.solo.lit {
+  background: var(--yellow);
+  color: var(--ink);
+  box-shadow: 0 1px 0 #a88310;
+}

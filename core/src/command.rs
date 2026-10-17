@@ -304,6 +304,13 @@ impl Live {
                         value: int(&msg, "value")? as u8,
                     },
                     "mute" => Action::Mute(int(&msg, "row")? as usize),
+                    "solo" => Action::Solo(int(&msg, "row")? as usize),
+                    // `{"action": "mix", "row": 1, "what": "pan", "value": 80}`
+                    "mix" => Action::Mix {
+                        row: int(&msg, "row")? as usize,
+                        what: msg.get("what").and_then(Value::str).ok_or("mix takes what")?.to_string(),
+                        value: int(&msg, "value")?.clamp(0, 127) as u8,
+                    },
                     "reset" => Action::Reset(int(&msg, "row")? as usize),
                     "compare" => Action::Compare,
                     "save" => Action::Save {
@@ -680,21 +687,22 @@ impl Live {
                 o.int("count", r.count as i64)
                     .bool("held", r.held)
                     .bool("muted", self.planner.is_muted(&r.track))
+                    .bool("soloed", self.planner.soloed().contains(&r.track))
                     .finish()
             })
             .collect();
-        let macros: Vec<String> = view
-            .macros
-            .iter()
-            .map(|m| {
-                Obj::new()
-                    .str("label", &m.label)
-                    .int("position", m.position as i64)
-                    .str("reading", &m.reading)
-                    .bool("held", m.held)
-                    .finish()
-            })
-            .collect();
+        let knob = |m: &compose::MacroRow| {
+            Obj::new()
+                .str("label", &m.label)
+                .int("position", m.position as i64)
+                .str("reading", &m.reading)
+                .bool("held", m.held)
+                .finish()
+        };
+        let macros: Vec<String> = view.macros.iter().map(knob).collect();
+        // A channel per row, level, pan and sends; `[]` for a row with nothing.
+        let mix: Vec<String> =
+            view.mix.iter().map(|channel| json::array(&channel.iter().map(knob).collect::<Vec<_>>())).collect();
         let ccs: Vec<String> = view.knob_ccs.iter().map(|c| c.to_string()).collect();
         // The song's key as the text has it, whether the session set it
         // over the groove's, and every scale the language knows.
@@ -709,6 +717,7 @@ impl Live {
             .int("focus", self.focus as i64)
             .raw("rows", &json::array(&rows))
             .raw("macros", &json::array(&macros))
+            .raw("mix", &json::array(&mix))
             .bool("comparing", view.comparing)
             .raw("knob_ccs", &json::array(&ccs))
             .raw("key", &key)
@@ -1017,6 +1026,54 @@ mod tests {
         )
         .unwrap();
         assert_eq!(bad.get("ok").and_then(Value::bool), Some(false), "{:?}", bad);
+    }
+
+    #[test]
+    fn the_mixer_holds_a_channel_a_save_writes_it_and_solo_toggles() {
+        let mut live = Live::new();
+        live.command(&files_message());
+        let opened = Value::parse(&live.command("{\"op\":\"compose_open\",\"root\":\"session.synth\"}")).unwrap();
+        let mix = opened.get("view").unwrap().get("mix").unwrap().arr().unwrap();
+        assert_eq!(mix[1].arr().unwrap().len(), 4, "level, pan and the two sends");
+        assert_eq!(mix[1].arr().unwrap()[1].get("label").and_then(Value::str), Some("pan"));
+
+        let panned = Value::parse(
+            &live.command("{\"op\":\"compose\",\"action\":\"mix\",\"row\":1,\"what\":\"pan\",\"value\":100}"),
+        )
+        .unwrap();
+        assert_eq!(panned.get("ok").and_then(Value::bool), Some(true), "{:?}", panned);
+        let channel = panned.get("view").unwrap().get("mix").unwrap().arr().unwrap()[1].arr().unwrap().to_vec();
+        assert_eq!(channel[1].get("position").and_then(Value::int), Some(100));
+        assert_eq!(channel[1].get("held").and_then(Value::bool), Some(true));
+        live.command("{\"op\":\"compose\",\"action\":\"mix\",\"row\":1,\"what\":\"level\",\"value\":60}");
+
+        // The row's save writes the channel into the voice's track.
+        let saved =
+            Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"save\",\"row\":1,\"name\":\"bass_mixed\"}"))
+                .unwrap();
+        assert_eq!(saved.get("ok").and_then(Value::bool), Some(true), "{:?}", saved);
+        let voice = saved
+            .get("writes")
+            .unwrap()
+            .arr()
+            .unwrap()
+            .iter()
+            .find(|w| w.get("path").and_then(Value::str).is_some_and(|p| p.ends_with("bass_mixed.synth")))
+            .map(|w| w.get("text").unwrap().str().unwrap().to_string())
+            .unwrap();
+        assert!(voice.contains("pan "), "{voice}");
+        assert!(voice.contains("level "), "{voice}");
+
+        let bad = live.command("{\"op\":\"compose\",\"action\":\"mix\",\"row\":1,\"what\":\"cutoff\",\"value\":10}");
+        assert!(bad.contains("\"ok\":false"), "{bad}");
+
+        let solo = Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"solo\",\"row\":1}")).unwrap();
+        let soloed = |v: &Value| {
+            v.get("view").unwrap().get("rows").unwrap().arr().unwrap()[1].get("soloed").and_then(Value::bool)
+        };
+        assert_eq!(soloed(&solo), Some(true));
+        let back = Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"solo\",\"row\":1}")).unwrap();
+        assert_eq!(soloed(&back), Some(false));
     }
 
     #[test]
