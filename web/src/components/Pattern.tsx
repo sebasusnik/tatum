@@ -30,7 +30,8 @@ export function Pattern() {
   const playhead = () => {
     const p = pattern();
     const pos = position();
-    return p && pos ? pos.step % Math.max(1, p.length) : -1;
+    const at = p && pos?.running ? pos.tracks?.[p.track] : undefined;
+    return p && at !== undefined ? at % Math.max(1, p.length) : -1;
   };
   const wheel = (e: WheelEvent, lane: number, step: number, s: PatternStep) => {
     e.preventDefault();

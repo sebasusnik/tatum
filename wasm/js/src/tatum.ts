@@ -19,7 +19,13 @@ export interface Answer {
 
 export interface Position {
   bar: number;
+  /** The song's next step, from the top. Not where a pattern is: see `tracks`. */
   step: number;
+  /**
+   * Each track's step in the pattern it plays, the one sounding now. A
+   * track's count starts over when a new text takes over on a bar line.
+   */
+  tracks: Record<string, number>;
   tempo: number;
   generation: number;
   running: boolean;

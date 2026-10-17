@@ -242,14 +242,24 @@ impl Live {
                 let said = self.planner.voice(&mv, generation).ok_or("no knob pages in this song")?;
                 Ok(ok().str("said", &said).finish())
             }
+            // `tracks` is where each track is in the pattern it plays, the
+            // step sounding now: a track's count starts over when a new
+            // text takes over, so the song's step is not where a pattern is.
             "position" => {
-                let (bar, step, tempo) = match self.player.engine() {
-                    Some(e) => (e.current_bar(), e.global_step(), e.tempo()),
-                    None => (0, 0, 0.0),
+                let (bar, step, tempo, tracks) = match self.player.engine() {
+                    Some(e) => {
+                        let mut tracks = Obj::new();
+                        for i in 0..e.track_count() {
+                            tracks = tracks.int(e.track_name(i), e.track_step(i) as i64);
+                        }
+                        (e.current_bar(), e.global_step(), e.tempo(), tracks.finish())
+                    }
+                    None => (0, 0, 0.0, String::from("{}")),
                 };
                 Ok(ok()
                     .int("bar", bar as i64)
                     .int("step", step as i64)
+                    .raw("tracks", &tracks)
                     .num("tempo", tempo as f64)
                     .int("generation", generation as i64)
                     .bool("running", self.player.running())
@@ -1025,6 +1035,50 @@ mod tests {
         assert_eq!(bad.get("ok").and_then(Value::bool), Some(false));
         let after = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"bass\"}")).unwrap();
         assert_eq!(before, after);
+    }
+
+    /// Render until the song's position satisfies `until`, 128 samples at a time.
+    fn render_until(live: &mut Live, until: impl Fn(&Value) -> bool) -> Value {
+        let (mut l, mut r) = ([0.0f32; 128], [0.0f32; 128]);
+        for _ in 0..200_000 {
+            live.process(&mut l, &mut r);
+            let pos = Value::parse(&live.command("{\"op\":\"position\"}")).unwrap();
+            if until(&pos) {
+                return pos;
+            }
+        }
+        panic!("the song never got there");
+    }
+
+    #[test]
+    fn the_position_says_where_each_track_is_in_its_pattern_after_a_swap() {
+        let mut live = Live::new();
+        live.command(&files_message());
+        live.command("{\"op\":\"compose_open\",\"root\":\"session.synth\"}");
+        live.command("{\"op\":\"start\"}");
+        let len = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"bass\"}"))
+            .unwrap()
+            .get("pattern")
+            .unwrap()
+            .get("length")
+            .and_then(Value::int)
+            .unwrap();
+        assert_eq!(len, 32, "a two-bar line, so a swap on an odd bar lands mid-pattern");
+        let bar = |p: &Value| p.get("bar").and_then(Value::int).unwrap();
+        let bass = |p: &Value| p.get("tracks").unwrap().get("bass").and_then(Value::int).unwrap();
+
+        // Before any swap the track and the song agree.
+        let pos = render_until(&mut live, |p| bar(p) == 0 && p.get("step").and_then(Value::int) == Some(5));
+        assert_eq!(bass(&pos), 4, "the step sounding is the one before the song's next");
+
+        // An edit in bar 2 swaps in on bar 3, and the bass line starts over there.
+        render_until(&mut live, |p| bar(p) == 2);
+        let set = live.command("{\"op\":\"pattern_set\",\"track\":\"bass\",\"lane\":0,\"step\":4,\"token\":\"5.2\"}");
+        assert!(set.contains("\"ok\":true"), "{set}");
+        let pos = render_until(&mut live, |p| bar(p) == 3 && p.get("step").and_then(Value::int) == Some(3 * 16 + 5));
+        assert_eq!(bass(&pos), 4, "{:?}", pos);
+        let song_step = pos.get("step").and_then(Value::int).unwrap();
+        assert_ne!((song_step - 1) % len, bass(&pos), "the song's step is not where the pattern is");
     }
 
     fn writes_text(answer: &Value) -> String {
