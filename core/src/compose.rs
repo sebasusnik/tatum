@@ -706,6 +706,18 @@ fn is_scale_line(line: &str) -> bool {
 }
 
 impl Session {
+    /// A library file rewritten from outside the loop -- a pattern drawn, a
+    /// chain changed -- read again, so the macros it offers and the text a
+    /// save starts from are the new ones. Not a voice: nothing to do.
+    pub fn reread(&mut self, path: &str, text: &str) {
+        let path = crate::include::normalize(path);
+        let known = self.library.grooves.iter().chain(self.library.voices.iter()).find(|v| v.path == path);
+        let Some(role) = known.map(|v| v.role.clone()) else { return };
+        if let Ok(voice) = Voice::parse(&role, &path, text) {
+            self.library.put(voice);
+        }
+    }
+
     /// Whether the session sets its own scale over the groove's.
     pub fn own_scale(&self) -> bool {
         self.extra.iter().any(|l| is_scale_line(l))
@@ -799,6 +811,46 @@ pub mod edit {
             format!("{}{} {}\n", indent, key, value)
         };
         format!("{}{}{}", &text[..end], insert, &text[end..])
+    }
+
+    /// The block's routing (`out > a(..)\n    > b(..) > master`) put as
+    /// `routing` writes it: the lines it took replaced, comments on them
+    /// with them; added before the block's `}` where it has none. `routing`
+    /// is given the indent of the line it lands on.
+    pub fn set_routing(text: &str, (start, end): (usize, usize), routing: impl Fn(&str) -> String) -> String {
+        let body = &text[start..end];
+        let mut at = 0;
+        let mut found: Option<(usize, usize, String)> = None;
+        let mut open = false;
+        for line in body.split_inclusive('\n') {
+            let code = line.split('#').next().unwrap_or("").trim();
+            let line_end = start + at + line.trim_end_matches('\n').len();
+            match &mut found {
+                None if code == "out" || code.starts_with("out ") || code.starts_with("out>") => {
+                    let indent = &line[..line.len() - line.trim_start().len()];
+                    found = Some((start + at + indent.len(), line_end, indent.to_string()));
+                    open = code.ends_with('>');
+                }
+                Some(f) if open || code.starts_with('>') => {
+                    f.1 = line_end;
+                    open = code.ends_with('>');
+                }
+                Some(_) => break,
+                None => {}
+            }
+            at += line.len();
+        }
+        match found {
+            Some((from, to, indent)) => format!("{}{}{}", &text[..from], routing(&indent), &text[to..]),
+            None => {
+                let indent = body
+                    .lines()
+                    .find(|l| !l.trim().is_empty())
+                    .map(|l| &l[..l.len() - l.trim_start().len()])
+                    .unwrap_or("    ");
+                format!("{}{}{}\n{}", &text[..end], indent, routing(indent), &text[end..])
+            }
+        }
     }
 
     /// `wet=` of the node the block names `as <label>`: set where it is

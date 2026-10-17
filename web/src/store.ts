@@ -3,7 +3,7 @@
 // the engine and comes back as a view; nothing here knows what a voice is.
 
 import { createSignal } from "solid-js";
-import type { ComposeAction, Pattern, PatternEdit, Position, Tatum, View } from "@tatum/engine";
+import type { Chain, ComposeAction, FxNodeEdit, FxSpec, Pattern, PatternEdit, Position, Tatum, View } from "@tatum/engine";
 import { Tatum as Engine } from "@tatum/engine";
 import { download, shipped, store, stored } from "./library";
 
@@ -16,8 +16,10 @@ const [running, setRunning] = createSignal(false);
 const [midi, setMidi] = createSignal<string[]>([]);
 const [analyser, setAnalyser] = createSignal<AnalyserNode | null>(null);
 const [pattern, setPattern] = createSignal<Pattern | null>(null);
+const [chain, setChain] = createSignal<Chain | null>(null);
+const [catalog, setCatalog] = createSignal<FxSpec[]>([]);
 
-export { view, position, said, running, midi, analyser, pattern };
+export { view, position, said, running, midi, analyser, pattern, chain, catalog };
 
 let engine: Tatum | null = null;
 
@@ -52,20 +54,40 @@ async function boot(): Promise<Tatum> {
   setView(opened.view);
   store(SESSION, opened.session);
   engine = t;
-  await refreshPattern();
+  const c = await t.fxCatalog();
+  if (c.ok) setCatalog(c.catalog);
+  await refreshRow();
   return t;
 }
 
-/** The chosen row's pattern, from the engine, as the text has it now. */
-async function refreshPattern(): Promise<void> {
+/** The chosen row's pattern and chain, from the engine, as the text has them now. */
+async function refreshRow(): Promise<void> {
   const v = view();
   const track = v?.rows[v.focus]?.track;
   if (!engine || !track) {
     setPattern(null);
+    setChain(null);
     return;
   }
-  const a = await engine.patternGet(track);
-  setPattern(a.ok ? a.pattern : null);
+  const [p, f] = await Promise.all([engine.patternGet(track), engine.fxGet(track)]);
+  setPattern(p.ok ? p.pattern : null);
+  setChain(f.ok ? f.fx : null);
+}
+
+/** The chosen row's chain set to `nodes`: one rewrite of its routing. */
+export async function setFx(nodes: FxNodeEdit[], what: string): Promise<boolean> {
+  const c = chain();
+  if (!engine || !c) return false;
+  const a = await engine.fxSet(c.track, nodes);
+  if (!a.ok) {
+    say(a.error ?? "refused", true);
+    return false;
+  }
+  for (const w of a.writes) store(w.path, w.text);
+  setChain(a.fx);
+  setView(a.view);
+  say(`${c.track}: ${what}`);
+  return true;
 }
 
 /** One step of the chosen row's pattern, as a token. */
@@ -129,14 +151,14 @@ export async function act(action: ComposeAction): Promise<void> {
   }
   setView(a.view);
   say(a.said);
-  if (action.action !== "turn" && action.action !== "mix") await refreshPattern();
+  if (action.action !== "turn" && action.action !== "mix") await refreshRow();
 }
 
 export async function focus(row: number): Promise<void> {
   if (!engine) return;
   const a = await engine.composeView(row);
   if (a.ok) setView(a.view);
-  await refreshPattern();
+  await refreshRow();
 }
 
 export async function connectMidi(): Promise<void> {
