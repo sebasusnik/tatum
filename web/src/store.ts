@@ -37,7 +37,15 @@ async function boot(): Promise<Tatum> {
   a.smoothingTimeConstant = 0.6;
   t.node.connect(a);
   setAnalyser(a);
-  t.on("position", setPosition);
+  // The engine tells where it has rendered to; the speakers get there
+  // later by the output's latency (a lot more over Bluetooth), so the
+  // playhead waits that long to show it.
+  t.on("position", (p) => {
+    const ctx = t.context;
+    const late = ((ctx.outputLatency || 0) + (ctx.baseLatency || 0)) * 1000;
+    if (late < 5) setPosition(p);
+    else setTimeout(() => setPosition(p), late);
+  });
   await t.files({ ...shipped(), ...stored() });
   const opened = await t.composeOpen(SESSION);
   if (!opened.ok) throw new Error(opened.error ?? "the loop did not open");

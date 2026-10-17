@@ -185,7 +185,8 @@ export function PianoRoll() {
 
   const playhead = () => {
     const pos = position();
-    return pos ? pos.step % Math.max(1, length()) : -1;
+    const at = pos?.running ? pos.tracks?.[p().track] : undefined;
+    return at !== undefined ? at % Math.max(1, length()) : -1;
   };
 
   const cellAt = (e: PointerEvent) => {
