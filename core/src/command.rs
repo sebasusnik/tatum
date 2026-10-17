@@ -310,6 +310,11 @@ impl Live {
                         row: int(&msg, "row")? as usize,
                         name: msg.get("name").and_then(Value::str).ok_or("save takes a name")?.to_string(),
                     },
+                    // `{"action": "scale", "root": "A", "kind": "minor"}`;
+                    // without a root, the groove's scale again.
+                    "scale" => Action::Scale(msg.get("root").and_then(Value::str).map(|root| {
+                        (root.to_string(), msg.get("kind").and_then(Value::str).unwrap_or("minor").to_string())
+                    })),
                     other => return Err(format!("no compose action called {}", other)),
                 };
                 let session = self.compose.as_mut().ok_or("no loop open: compose_open first")?;
@@ -691,12 +696,23 @@ impl Live {
             })
             .collect();
         let ccs: Vec<String> = view.knob_ccs.iter().map(|c| c.to_string()).collect();
+        // The song's key as the text has it, whether the session set it
+        // over the groove's, and every scale the language knows.
+        let scale = self.planner.song().and_then(|s| s.globals.scale.clone());
+        let key = Obj::new()
+            .opt_str("root", scale.as_ref().map(|s| s.root.as_str()))
+            .opt_str("kind", scale.as_ref().map(|s| s.kind.as_str()))
+            .bool("own", session.own_scale())
+            .finish();
+        let kinds: Vec<String> = crate::perform::scale::SCALES.iter().map(|(name, _)| json::string(name)).collect();
         Obj::new()
             .int("focus", self.focus as i64)
             .raw("rows", &json::array(&rows))
             .raw("macros", &json::array(&macros))
             .bool("comparing", view.comparing)
             .raw("knob_ccs", &json::array(&ccs))
+            .raw("key", &key)
+            .raw("scales", &json::array(&kinds))
             .finish()
     }
 }
@@ -1001,6 +1017,64 @@ mod tests {
         )
         .unwrap();
         assert_eq!(bad.get("ok").and_then(Value::bool), Some(false), "{:?}", bad);
+    }
+
+    #[test]
+    fn the_session_sets_the_songs_key_over_the_grooves_and_gives_it_back() {
+        let mut live = Live::new();
+        live.command(&files_message());
+        let opened = Value::parse(&live.command("{\"op\":\"compose_open\",\"root\":\"session.synth\"}")).unwrap();
+        let key = |v: &Value| {
+            let k = v.get("view").unwrap().get("key").unwrap();
+            (
+                k.get("root").and_then(Value::str).unwrap_or("").to_string(),
+                k.get("kind").and_then(Value::str).unwrap_or("").to_string(),
+                k.get("own").and_then(Value::bool).unwrap(),
+            )
+        };
+        let (groove_root, groove_kind, own) = key(&opened);
+        assert!(!own);
+        assert!(opened.get("view").unwrap().get("scales").unwrap().arr().unwrap().len() > 7);
+        let first_midi = |live: &mut Live| {
+            let got = Value::parse(&live.command("{\"op\":\"pattern_get\",\"track\":\"bass\"}")).unwrap();
+            got.get("pattern").unwrap().get("lanes").unwrap().arr().unwrap()[0].get("steps").unwrap().arr().unwrap()[0]
+                .get("midi")
+                .unwrap()
+                .arr()
+                .unwrap()[0]
+                .int()
+                .unwrap()
+        };
+        let before = first_midi(&mut live);
+
+        // A minor: the session carries the line, the degrees follow it.
+        let set =
+            Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"scale\",\"root\":\"A\",\"kind\":\"minor\"}"))
+                .unwrap();
+        assert_eq!(set.get("ok").and_then(Value::bool), Some(true), "{:?}", set);
+        assert!(writes_text(&set).contains("\nscale A minor\n"), "{}", writes_text(&set));
+        assert_eq!(set.get("loaded").unwrap().get("ok").and_then(Value::bool), Some(true));
+        assert_eq!(key(&set), (String::from("A"), String::from("minor"), true));
+        let after = first_midi(&mut live);
+        assert_eq!((after - 9).rem_euclid(12), 0, "the bass line's first degree is A now");
+        assert_ne!(before, after);
+
+        // Again, and the session still has one scale line, not two.
+        let set =
+            Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"scale\",\"root\":\"D\",\"kind\":\"dorian\"}"))
+                .unwrap();
+        assert_eq!(writes_text(&set).matches("scale ").count(), 1, "{}", writes_text(&set));
+
+        // No root: the groove's own scale back.
+        let back = Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"scale\"}")).unwrap();
+        assert!(!writes_text(&back).contains("scale "), "{}", writes_text(&back));
+        assert_eq!(key(&back), (groove_root, groove_kind, false));
+        assert_eq!(first_midi(&mut live), before);
+
+        let bad =
+            Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"scale\",\"root\":\"H\",\"kind\":\"minor\"}"))
+                .unwrap();
+        assert_eq!(bad.get("ok").and_then(Value::bool), Some(false));
     }
 
     #[test]

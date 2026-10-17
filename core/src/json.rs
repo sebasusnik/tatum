@@ -326,6 +326,11 @@ impl Obj {
     }
 }
 
+/// A string as a JSON value, quoted and escaped.
+pub fn string(s: &str) -> String {
+    format!("\"{}\"", escape(s))
+}
+
 /// An array of values already written as JSON.
 pub fn array(items: &[String]) -> String {
     format!("[{}]", items.join(","))
