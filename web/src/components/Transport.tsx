@@ -4,7 +4,7 @@
 // engine last said, and the mix's spectrum.
 
 import { Show } from "solid-js";
-import { connectMidi, midi, pattern, position, running, said, sessionText, view } from "../store";
+import { act, connectMidi, midi, pattern, position, running, said, sessionText, view } from "../store";
 import { download, forgetStored } from "../library";
 import { Spectrum } from "./Spectrum";
 
@@ -48,6 +48,53 @@ export function Top() {
   );
 }
 
+const ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const FLATS: Record<string, string> = { Db: "C#", Eb: "D#", Gb: "F#", Ab: "G#", Bb: "A#", Cb: "B", Fb: "E" };
+
+/**
+ * The song's key on the display: the root a semitone at a time, the kind
+ * from every scale the language has, and, when the session set its own,
+ * a key to give the groove's back. Degrees follow it on the next bar.
+ */
+function Key() {
+  const key = () => view()?.key;
+  const root = () => {
+    const r = key()?.root ?? "C";
+    const name = r.length > 1 ? r[0].toUpperCase() + r.slice(1) : r.toUpperCase();
+    return FLATS[name] ?? name;
+  };
+  const kind = () => key()?.kind ?? "major";
+  const shift = (by: number) => {
+    const i = ROOTS.indexOf(root());
+    const next = ROOTS[(((i < 0 ? 0 : i) + by) % 12 + 12) % 12];
+    void act({ action: "scale", root: next, kind: kind() });
+  };
+  return (
+    <Show when={view()} fallback={<span class="lcd-value">{pattern()?.scale.name?.toUpperCase() ?? "---"}</span>}>
+      <span class={`lcd-tag ${key()?.own ? "own" : ""}`} title={key()?.own ? "the session's key" : "the groove's key"}>
+        KEY
+      </span>
+      <button class="lcd-step" onClick={() => shift(-1)} title="a semitone down">
+        ◀
+      </button>
+      <span class="lcd-value root">{root()}</span>
+      <button class="lcd-step" onClick={() => shift(1)} title="a semitone up">
+        ▶
+      </button>
+      <select class="lcd-select" value={kind()} onChange={(e) => void act({ action: "scale", root: root(), kind: e.currentTarget.value })}>
+        {(view()?.scales ?? []).map((s) => (
+          <option value={s}>{s.replace(/_/g, " ").toUpperCase()}</option>
+        ))}
+      </select>
+      <Show when={key()?.own}>
+        <button class="lcd-step text" onClick={() => void act({ action: "scale" })} title="the groove's own key again">
+          GROOVE
+        </button>
+      </Show>
+    </Show>
+  );
+}
+
 export function Display() {
   const beat = () => {
     const p = position();
@@ -77,8 +124,7 @@ export function Display() {
         <div class="lcd-row">
           <span class="lcd-tag">BPM</span>
           <span class="lcd-value">{position() ? Math.round(position()!.tempo) : "---"}</span>
-          <span class="lcd-tag">KEY</span>
-          <span class="lcd-value">{pattern()?.scale.name?.toUpperCase() ?? "---"}</span>
+          <Key />
         </div>
         <p class={`said ${said().bad ? "bad" : ""}`}>{said().text}</p>
       </div>

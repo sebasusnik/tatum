@@ -318,6 +318,51 @@ button {
   margin-right: 14px;
 }
 
+.lcd-tag.own {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+.lcd-step {
+  background: none;
+  border: 1px solid #2c2c2c;
+  color: var(--lcd-text);
+  font: 700 10px/1 var(--sans);
+  padding: 3px 5px;
+  cursor: pointer;
+}
+
+.lcd-step:hover {
+  border-color: var(--orange);
+  color: var(--orange);
+}
+
+.lcd-step.text {
+  letter-spacing: 0.1em;
+  font-size: 9px;
+  margin-left: 4px;
+}
+
+.lcd-value.root {
+  min-width: 2.2ch;
+  text-align: center;
+  margin-right: 0;
+}
+
+.lcd-select {
+  background: #000;
+  color: var(--lcd-text);
+  border: 1px solid #2c2c2c;
+  font: 700 12px/1 var(--mono);
+  padding: 3px 4px;
+  cursor: pointer;
+}
+
+.lcd-select:hover {
+  border-color: var(--orange);
+}
+
 .said {
   margin: 0;
   font: 12px/1.3 var(--mono);

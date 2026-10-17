@@ -247,6 +247,11 @@ pub enum Action {
         row: usize,
         name: String,
     },
+    /// The song in another key: `Some((root, kind))` writes `scale root
+    /// kind` into the session, after the groove's, so it wins; `None` takes
+    /// it out and the groove's scale is the song's again. Patterns written
+    /// in degrees follow it; notes by name do not.
+    Scale(Option<(String, String)>),
 }
 
 /// What an action came to: plans for the engine, a line for the log, and
@@ -507,6 +512,22 @@ impl Session {
                 let plans = self.rest_plans(&targets, planner, generation);
                 Ok(Outcome { plans, said: format!("{} knobs back to the text", targets.len()), writes: Vec::new() })
             }
+            Action::Scale(to) => {
+                if let Some((root, kind)) = &to {
+                    if crate::perform::scale::Scale::named(root, kind).is_none() {
+                        return Err(format!("no scale called {} {}", root, kind));
+                    }
+                }
+                self.extra.retain(|line| !is_scale_line(line));
+                let said = match &to {
+                    Some((root, kind)) => {
+                        self.extra.push(format!("scale {} {}", root, kind));
+                        format!("the song in {} {}", root, kind)
+                    }
+                    None => String::from("the groove's own scale"),
+                };
+                Ok(Outcome { plans: Vec::new(), said, writes: vec![(self.path.clone(), self.text())] })
+            }
             Action::Compare => {
                 let held: Vec<(String, u8)> = self.all_held().cloned().collect();
                 if held.is_empty() {
@@ -624,6 +645,19 @@ impl Session {
 
 /// A module parameter's value as its line writes it: in units where it has
 /// them, by name for a choice, a plain number otherwise.
+/// A session line that sets the song's scale: `scale A minor`.
+fn is_scale_line(line: &str) -> bool {
+    let mut words = line.split_whitespace();
+    words.next() == Some("scale") && words.count() == 2
+}
+
+impl Session {
+    /// Whether the session sets its own scale over the groove's.
+    pub fn own_scale(&self) -> bool {
+        self.extra.iter().any(|l| is_scale_line(l))
+    }
+}
+
 fn write_param(spec: &params::ParamSpec, value: f32) -> String {
     if let Range::Choice(_) = spec.range {
         return spec.choice_name(value).map(String::from).unwrap_or_else(|| format!("{:.3}", value));

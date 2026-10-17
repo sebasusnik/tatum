@@ -90,6 +90,10 @@ export interface View {
   macros: Macro[];
   comparing: boolean;
   knob_ccs: number[];
+  /** The song's key as the text has it; `own` when the session sets it over the groove's. */
+  key: { root?: string | null; kind?: string | null; own: boolean };
+  /** Every scale the language knows, by name. */
+  scales: string[];
 }
 
 export type ComposeAction =
@@ -98,7 +102,9 @@ export type ComposeAction =
   | { action: "mute"; row: number }
   | { action: "reset"; row: number }
   | { action: "compare" }
-  | { action: "save"; row: number; name: string };
+  | { action: "save"; row: number; name: string }
+  /** The song in `root kind`, or without a root, the groove's own scale again. */
+  | { action: "scale"; root?: string; kind?: string };
 
 export interface ComposeAnswer extends Answer {
   said: string;
