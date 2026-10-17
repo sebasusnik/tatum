@@ -1,0 +1,10 @@
+# tatum compose: the loop. The `use` lines are rewritten from the screen; every other line is kept.
+use "../../grooves/jungle.synth"
+use "../../voices/bass/sub_jungle.synth"
+use "../../voices/bass/reese.synth"
+use "../../voices/lead/rave_stab.synth"
+use "../../voices/pad/strings.synth"
+use "../../voices/perc/tops.synth"
+use "../../voices/perc/crash.synth"
+track drums { play amen_step }
+track strings { level 0.22 }

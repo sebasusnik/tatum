@@ -1,6 +1,6 @@
 # A metallic FM pluck: an inharmonic modulator gives each note a metal attack that decays into a warm body
 # A voice: one module, its pattern in degrees of whatever scale the groove
-# sets, and a track named by its role. `use` it from any song.
+# sets, and a track named as the voice. `use` it from any song.
 module fm hook {
     algorithm two_op
     level 2.0
@@ -20,7 +20,7 @@ pattern hook_line {
     1.2:0.9 - 1.2:0.5 1.3:0.8   - 1.2:0.6 - 3.2:0.8   7.2:0.9 - ~5.2:0.7 -   1.2:0.8 1.2:0.5 ~2.2:0.9 -
 }
 
-track lead {
+track hook {
     play hook_line
     using hook
     level 0.22

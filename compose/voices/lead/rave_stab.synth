@@ -1,0 +1,31 @@
+# Rave stab: a minor chord that is all attack, thrown into the delay
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named as the voice. `use` it from any song.
+module keys rave_stab {
+    voice_mode poly
+    attack 1ms
+    decay 230ms
+    sustain 0
+    release 180ms
+    detune 0.22
+    cutoff 2.6khz
+    resonance 0.18
+    chorus_mix 0.25
+}
+
+pattern rave_stab_line {
+    - - - -  - - [1.4 3.4 5.4]:0.9 -  - - - -  [1.4 3.4 5.4]:0.7 - - -
+    - - [1.4 3.4 5.4]:0.8 -  - - - -  - - [6.3 1.4 3.4 5.4]:0.85 -  - - - -
+    - - - -  - - [1.4 3.4 5.4]:0.9 -  - - - -  [1.4 3.4 5.4]:0.7 - - -
+    - - [1.4 3.4 5.4]:0.8 -  - - - -  - - [7.3 2.4 4.4 6.4]:0.85 -  - - [5.3 7.3 2.4 4.4]:0.7 -
+}
+
+track rave_stab {
+    play rave_stab_line
+    using rave_stab
+    level 0.6
+    pan 0.25
+    delay_send 0.32
+    reverb_send 0.18
+    out > highpass(300hz, 0.05) > saturate(0.3) as drive > master
+}

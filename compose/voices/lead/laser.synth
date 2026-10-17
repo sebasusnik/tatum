@@ -1,6 +1,6 @@
 # Laser lead: serial FM with a growling index LFO and vibrato, held notes
 # A voice: one module, its pattern in degrees of whatever scale the groove
-# sets, and a track named by its role. `use` it from any song.
+# sets, and a track named as the voice. `use` it from any song.
 module fm laser {
     algorithm serial4
     level 1.6
@@ -30,7 +30,7 @@ pattern laser_line {
     1.4:0.9  ..  ..  ..   <5.3:0.6 7.3:0.7 1.4:0.8 2.4:0.9>  <3.4:0.8 5.4:0.9 7.4:0.95 1.5:1.0>  1.5:1.0  ..   ..  ..  ..  ..   -  -  -  -
 }
 
-track lead {
+track laser {
     play laser_line
     using laser
     level 0.12

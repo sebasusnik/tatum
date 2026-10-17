@@ -1,0 +1,46 @@
+# Reese: two saws a sixth of a semitone apart beating, a slow filter breathing
+# A voice: one module, its pattern in degrees of whatever scale the groove
+# sets, and a track named as the voice. `use` it from any song.
+module bass reese {
+    osc2_pitch 0.16st
+    osc3_pitch -12st
+    cutoff 620hz
+    cutoff_env 380hz
+    resonance 0.22
+    glide 0.12
+    attack 3ms
+    decay 500ms
+    sustain 0.85
+    release 120ms
+    lfo_target cutoff
+    lfo_sync bars_2
+    lfo_waveform triangle
+    lfo_depth 0.12
+}
+
+# Four bars on the sub's roots, pushing on the offbeats.
+pattern reese_line {
+    1.2:0.95 ..*5  - -  1.2:0.8 .. ~3.2 ..  - -  1.2:0.8 -
+    ~7.1:0.9 ..*7  - -  1.2:0.75 -  - -  7.1:0.8 ..
+    6.1:0.95 ..*5  - -  6.1:0.8 .. ~1.2 ..  - -  6.1:0.8 -
+    ~5.1:0.9 ..*5  - -  5.1:0.8 -  ~6.1 ..  ~5.1 ..  4.1:0.8 ..
+}
+
+# The switch: the reese alone on the root, bending.
+pattern reese_switch {
+    1.2:0.95 ..*11  ~2.2 .. ~1.2 ..
+    ..*8  - -  1.2:0.7 -  ~7.1 .. .. ..
+}
+
+track reese {
+    play reese_line
+    using reese
+    level 0.42
+    gate 0.95
+    sidechain 0.25
+    delay_send 0.04
+    out > saturate(0.45) as drive
+        > highpass(140hz, 0.05)
+        > lowpass(3.5khz, 0.05) as lp
+        > master
+}

@@ -15,9 +15,10 @@
 //! values go into the new file, in units.
 
 use alloc::string::{String, ToString};
+use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::include::{dir_of, use_target};
+use crate::include::{dir_of, join, use_target};
 use crate::live::{Generation, LivePlanner, Plan};
 use crate::params::{self, ModuleKind, Range};
 
@@ -74,6 +75,12 @@ pub struct Voice {
     pub doc: String,
     /// The `as` names of its chain, for a wet knob each.
     pub nodes: Vec<String>,
+    /// Every track of the file that plays a module, `track` first: a voice
+    /// of layers mutes, solos and changes its pattern as one.
+    pub tracks: Vec<String>,
+    /// The patterns the file writes, the one its track plays first: the
+    /// variations a row chooses from.
+    pub patterns: Vec<String>,
 }
 
 impl Voice {
@@ -98,7 +105,19 @@ impl Voice {
             .find(|l| l.starts_with('#'))
             .map(|l| l.trim_start_matches('#').trim().to_string())
             .unwrap_or_default();
+        let tracks: Vec<String> = core::iter::once(def.name.clone())
+            .chain(
+                song.tracks
+                    .iter()
+                    .filter(|t| !t.using_instrument.is_empty() && t.name != def.name)
+                    .map(|t| t.name.clone()),
+            )
+            .collect();
+        let mut patterns = vec![def.play.clone()];
+        patterns.extend(song.patterns.iter().map(|p| p.name.clone()).filter(|p| *p != def.play));
         Ok(Self {
+            tracks,
+            patterns,
             role: role.to_string(),
             name,
             path: path.to_string(),
@@ -182,13 +201,22 @@ impl Library {
     }
 }
 
-/// One role of the loop: which voice it holds, and the knobs turned on it
-/// since, by target (`bass.cutoff`) and controller position.
+/// One row of the loop: the role it draws from, which voice it holds, the
+/// pattern it plays when not the voice's own, and the knobs turned on it
+/// since, by target (`acid.cutoff`) and controller position. A role can
+/// have several rows: a sub and a reese together.
 #[derive(Debug, Clone)]
 pub struct Slot {
     pub role: String,
     pub voice: Option<String>,
+    pub play: Option<String>,
     pub held: Vec<(String, u8)>,
+}
+
+impl Slot {
+    fn empty(role: &str) -> Self {
+        Self { role: role.to_string(), voice: None, play: None, held: Vec::new() }
+    }
 }
 
 /// One row of the loop as a screen draws it: the groove, or a role and the
@@ -205,6 +233,9 @@ pub struct Row {
     pub count: usize,
     /// A knob was turned on it and not saved.
     pub held: bool,
+    /// The pattern it plays, and every one its voice offers, its own first.
+    pub play: String,
+    pub patterns: Vec<String>,
 }
 
 /// One knob of the chosen row.
@@ -266,6 +297,20 @@ pub enum Action {
     /// it out and the groove's scale is the song's again. Patterns written
     /// in degrees follow it; notes by name do not.
     Scale(Option<(String, String)>),
+    /// The song at another tempo: `Some(bpm)` writes `tempo bpm` into the
+    /// session, after the groove's, so it wins; `None` takes it out.
+    Tempo(Option<f32>),
+    /// A row more for `role`, holding the first of its voices the loop
+    /// does not play yet.
+    Add(String),
+    /// The row out of the loop. Not the groove's.
+    Remove(usize),
+    /// The next (or previous) pattern the row's voice offers, on the next
+    /// bar: its variations, its own first.
+    Vary {
+        row: usize,
+        by: i32,
+    },
 }
 
 /// What an action came to: plans for the engine, a line for the log, and
@@ -291,7 +336,13 @@ pub struct Session {
     pub groove: usize,
     /// Knobs turned on the groove's drums, like a slot's.
     pub groove_held: Vec<(String, u8)>,
+    /// The groove's pattern when not its own.
+    pub groove_play: Option<String>,
     pub slots: Vec<Slot>,
+    /// What the `use` lines put before `grooves/` and `voices/`: `../../`
+    /// for a loop of a set, `sets/jungle/01-intro.synth`, over the library
+    /// two directories up.
+    base: String,
     /// Lines of the session file that are not its `use` lines, kept as they
     /// are: the file is the user's too.
     extra: Vec<String>,
@@ -305,55 +356,106 @@ impl Session {
     /// A session that does not exist yet: the first groove and the first
     /// bass. Its file is [`Session::text`], to write.
     pub fn new(library: Library, path: &str, knob_ccs: Vec<u8>) -> Self {
-        let mut session = Self {
-            slots: library.roles.iter().map(|r| Slot { role: r.clone(), voice: None, held: Vec::new() }).collect(),
-            library,
-            path: path.to_string(),
-            groove: 0,
-            groove_held: Vec::new(),
-            extra: Vec::new(),
-            knob_ccs,
-            comparing: false,
-        };
+        Self::new_in(library, path, dir_of(path), knob_ccs)
+    }
+
+    /// A new session at `path` over the library in `library_dir`, an
+    /// ancestor of `path`'s directory.
+    pub fn new_in(library: Library, path: &str, library_dir: &str, knob_ccs: Vec<u8>) -> Self {
+        let mut session = Self::empty_in(library, path, library_dir, knob_ccs);
+        session.fill_roles();
         if let Some(slot) = session.slots.iter_mut().find(|s| s.role == "bass") {
             slot.voice = session.library.of("bass").first().map(|v| v.name.clone());
         }
         session
     }
 
-    /// The session its file describes: its `use` lines, by where they
-    /// point; a line that points at nothing in the library, or says
-    /// anything else, is kept as it is.
-    pub fn from_text(library: Library, path: &str, knob_ccs: Vec<u8>, text: &str) -> Self {
-        let mut session = Self::new(library, path, knob_ccs);
-        for slot in &mut session.slots {
-            slot.voice = None;
+    fn empty_in(library: Library, path: &str, library_dir: &str, knob_ccs: Vec<u8>) -> Self {
+        let dir = dir_of(path);
+        let below = dir.strip_prefix(library_dir).unwrap_or(dir).trim_start_matches('/');
+        let depth = below.split('/').filter(|p| !p.is_empty()).count();
+        Self {
+            slots: Vec::new(),
+            library,
+            path: path.to_string(),
+            groove: 0,
+            groove_held: Vec::new(),
+            groove_play: None,
+            base: "../".repeat(depth),
+            extra: Vec::new(),
+            knob_ccs,
+            comparing: false,
         }
+    }
+
+    /// An empty row for every role that has none, so each can be chosen.
+    fn fill_roles(&mut self) {
+        for role in self.library.roles.clone() {
+            if !self.slots.iter().any(|s| s.role == role) {
+                self.slots.push(Slot::empty(&role));
+            }
+        }
+        let order = self.library.roles.clone();
+        self.slots.sort_by_key(|s| order.iter().position(|r| *r == s.role).unwrap_or(order.len()));
+    }
+
+    pub fn from_text(library: Library, path: &str, knob_ccs: Vec<u8>, text: &str) -> Self {
+        Self::from_text_in(library, path, dir_of(path), knob_ccs, text)
+    }
+
+    /// The session its file describes: a row per `use` line, by where it
+    /// points, and the pattern a `track <name> { play <pattern> }` line
+    /// gives it; a line that points at nothing in the library, or says
+    /// anything else, is kept as it is.
+    pub fn from_text_in(library: Library, path: &str, library_dir: &str, knob_ccs: Vec<u8>, text: &str) -> Self {
+        let mut session = Self::empty_in(library, path, library_dir, knob_ccs);
+        let prefix = if library_dir.is_empty() { String::new() } else { format!("{}/", library_dir) };
+        let mut plays: Vec<(String, String, String)> = Vec::new();
         for line in text.lines() {
             if line.trim_start().starts_with("# tatum compose") {
+                continue;
+            }
+            if let Some((track, pattern)) = play_line(line) {
+                plays.push((track, pattern, line.to_string()));
                 continue;
             }
             let Some(Ok(target)) = use_target(line) else {
                 session.extra.push(line.to_string());
                 continue;
             };
-            let parts: Vec<&str> = target.split('/').collect();
+            let full = join(path, &target);
+            let rel = full.strip_prefix(&prefix).unwrap_or(&full);
+            let parts: Vec<&str> = rel.split('/').collect();
             let stem = |s: &str| s.trim_end_matches(".synth").to_string();
             match parts.as_slice() {
                 ["grooves", name] => match session.library.grooves.iter().position(|g| g.name == stem(name)) {
                     Some(i) => session.groove = i,
                     None => session.extra.push(line.to_string()),
                 },
-                ["voices", role, name] => {
-                    let known = session.library.of(role).iter().any(|v| v.name == stem(name));
-                    match session.slots.iter_mut().find(|s| s.role == *role) {
-                        Some(slot) if known => slot.voice = Some(stem(name)),
-                        _ => session.extra.push(line.to_string()),
-                    }
+                ["voices", role, name] if session.library.of(role).iter().any(|v| v.name == stem(name)) => {
+                    session.slots.push(Slot { voice: Some(stem(name)), ..Slot::empty(role) });
                 }
                 _ => session.extra.push(line.to_string()),
             }
         }
+        for (track, pattern, line) in plays {
+            let groove = &session.library.grooves[session.groove];
+            if groove.tracks.contains(&track) && groove.patterns.contains(&pattern) {
+                session.groove_play = (pattern != groove.patterns[0]).then_some(pattern);
+                continue;
+            }
+            let at = (0..session.slots.len()).find(|&i| {
+                session.voice_at(i + 1).is_some_and(|v| v.tracks.contains(&track) && v.patterns.contains(&pattern))
+            });
+            match at {
+                Some(i) => {
+                    let own = session.voice_at(i + 1).map(|v| v.patterns[0].clone());
+                    session.slots[i].play = (Some(&pattern) != own.as_ref()).then_some(pattern);
+                }
+                None => session.extra.push(line),
+            }
+        }
+        session.fill_roles();
         session
     }
 
@@ -361,10 +463,24 @@ impl Session {
     pub fn text(&self) -> String {
         let mut text = String::from(HEADER);
         text.push('\n');
-        text.push_str(&format!("use \"grooves/{}.synth\"\n", self.library.grooves[self.groove].name));
+        let groove = &self.library.grooves[self.groove];
+        text.push_str(&format!("use \"{}grooves/{}.synth\"\n", self.base, groove.name));
         for slot in &self.slots {
             if let Some(v) = &slot.voice {
-                text.push_str(&format!("use \"voices/{}/{}.synth\"\n", slot.role, v));
+                text.push_str(&format!("use \"{}voices/{}/{}.synth\"\n", self.base, slot.role, v));
+            }
+        }
+        let mut play = |voice: &Voice, pattern: &Option<String>| {
+            if let Some(p) = pattern {
+                for t in &voice.tracks {
+                    text.push_str(&format!("track {} {{ play {} }}\n", t, p));
+                }
+            }
+        };
+        play(groove, &self.groove_play);
+        for (i, slot) in self.slots.iter().enumerate() {
+            if let Some(v) = self.voice_at(i + 1) {
+                play(v, &slot.play);
             }
         }
         for line in &self.extra {
@@ -417,6 +533,8 @@ impl Session {
             index: Some(self.groove + 1),
             count: self.library.grooves.len(),
             held: !self.groove_held.is_empty(),
+            play: self.groove_play.clone().unwrap_or_else(|| groove.patterns[0].clone()),
+            patterns: groove.patterns.clone(),
         })
         .chain(self.slots.iter().map(|slot| {
             let of = self.library.of(&slot.role);
@@ -431,6 +549,8 @@ impl Session {
                 index: at.map(|i| i + 1),
                 count: of.len(),
                 held: !slot.held.is_empty(),
+                play: slot.play.clone().or_else(|| voice.map(|v| v.patterns[0].clone())).unwrap_or_default(),
+                patterns: voice.map(|v| v.patterns.clone()).unwrap_or_default(),
             }
         }))
         .collect();
@@ -507,14 +627,23 @@ impl Session {
                     let n = self.library.grooves.len();
                     self.groove = (self.groove as i64 + by as i64).rem_euclid(n as i64) as usize;
                     self.groove_held.clear();
+                    self.groove_play = None;
                     let g = &self.library.grooves[self.groove];
                     let said = format!("groove {}: {} · on the next bar", g.name, g.doc);
                     return Ok(Outcome { plans: Vec::new(), said, writes: vec![(self.path.clone(), self.text())] });
                 }
                 let slot = self.slots.get(row - 1).ok_or("no such row")?;
-                let names: Vec<String> = self.library.of(&slot.role).iter().map(|v| v.name.clone()).collect();
+                // A voice another row plays is not offered twice: its
+                // tracks would be defined twice.
+                let names: Vec<String> = self
+                    .library
+                    .of(&slot.role)
+                    .iter()
+                    .map(|v| v.name.clone())
+                    .filter(|n| self.slots.iter().enumerate().all(|(i, s)| i == row - 1 || s.voice.as_ref() != Some(n)))
+                    .collect();
                 if names.is_empty() {
-                    return Err(format!("no voices in voices/{}", slot.role));
+                    return Err(format!("no other voices in voices/{}", slot.role));
                 }
                 // The choices run: nothing, then every voice, around.
                 let at = slot.voice.as_ref().and_then(|v| names.iter().position(|n| n == v)).map_or(0, |i| i + 1);
@@ -523,6 +652,7 @@ impl Session {
                 let slot = &mut self.slots[row - 1];
                 slot.voice = if next == 0 { None } else { Some(names[next - 1].clone()) };
                 slot.held.clear();
+                slot.play = None;
                 let said = match self.voice_at(row) {
                     Some(v) => format!("{}: {} · {} · on the next bar", v.role, v.name, v.doc),
                     None => format!("{}: nothing · on the next bar", self.slots[row - 1].role),
@@ -543,8 +673,9 @@ impl Session {
                 self.hold(row, &words, value, planner, generation)
             }
             Action::Solo(row) => {
-                let track = self.voice_at(row).ok_or("nothing to solo")?.track.clone();
-                let plans = planner.toggle_solo(&track, generation);
+                let voice = self.voice_at(row).ok_or("nothing to solo")?;
+                let (track, tracks) = (voice.track.clone(), voice.tracks.clone());
+                let plans = planner.toggle_solo_group(&tracks, generation);
                 let on = planner.soloed().contains(&track);
                 Ok(Outcome {
                     plans,
@@ -553,9 +684,57 @@ impl Session {
                 })
             }
             Action::Mute(row) => {
-                let track = self.voice_at(row).ok_or("nothing to mute")?.track.clone();
-                let plans = planner.toggle_mute(&track, generation);
-                Ok(Outcome { plans, said: format!("{} muted or back", track), writes: Vec::new() })
+                let voice = self.voice_at(row).ok_or("nothing to mute")?;
+                let (track, tracks) = (voice.track.clone(), voice.tracks.clone());
+                // The layers follow the first: all out, or all back.
+                let out = !planner.is_muted(&track);
+                let turn: Vec<&String> = tracks.iter().filter(|t| planner.is_muted(t) != out).collect();
+                let plans = turn.into_iter().flat_map(|t| planner.toggle_mute(t, generation)).collect();
+                Ok(Outcome {
+                    plans,
+                    said: format!("{} {}", track, if out { "muted" } else { "back" }),
+                    writes: Vec::new(),
+                })
+            }
+            Action::Add(role) => {
+                if !self.library.roles.contains(&role) {
+                    return Err(format!("no voices in voices/{}", role));
+                }
+                let free = self
+                    .library
+                    .of(&role)
+                    .iter()
+                    .map(|v| v.name.clone())
+                    .find(|n| self.slots.iter().all(|s| s.voice.as_ref() != Some(n)))
+                    .ok_or_else(|| format!("every {} voice is in the loop", role))?;
+                let at = self.slots.iter().rposition(|s| s.role == role).map_or(self.slots.len(), |i| i + 1);
+                self.slots.insert(at, Slot { voice: Some(free.clone()), ..Slot::empty(&role) });
+                let said = format!("{}: {} joins · on the next bar", role, free);
+                Ok(Outcome { plans: Vec::new(), said, writes: vec![(self.path.clone(), self.text())] })
+            }
+            Action::Remove(row) => {
+                if row == 0 || row > self.slots.len() {
+                    return Err("the groove stays: choose another".into());
+                }
+                let slot = self.slots.remove(row - 1);
+                self.fill_roles();
+                let said = format!("{} out · on the next bar", slot.voice.as_deref().unwrap_or(&slot.role));
+                Ok(Outcome { plans: Vec::new(), said, writes: vec![(self.path.clone(), self.text())] })
+            }
+            Action::Vary { row, by } => {
+                let voice = self.voice_at(row).ok_or("nothing to vary")?;
+                let (patterns, track) = (voice.patterns.clone(), voice.track.clone());
+                let now = if row == 0 { &self.groove_play } else { &self.slots[row - 1].play };
+                let at = now.as_ref().and_then(|p| patterns.iter().position(|q| q == p)).unwrap_or(0);
+                let next = (at as i64 + by as i64).rem_euclid(patterns.len() as i64) as usize;
+                let play = (next != 0).then(|| patterns[next].clone());
+                if row == 0 {
+                    self.groove_play = play;
+                } else {
+                    self.slots[row - 1].play = play;
+                }
+                let said = format!("{} plays {} · on the next bar", track, patterns[next]);
+                Ok(Outcome { plans: Vec::new(), said, writes: vec![(self.path.clone(), self.text())] })
             }
             Action::Reset(row) => {
                 let held = self.held_at_mut(row).ok_or("no such row")?;
@@ -579,6 +758,22 @@ impl Session {
                         format!("the song in {} {}", root, kind)
                     }
                     None => String::from("the groove's own scale"),
+                };
+                Ok(Outcome { plans: Vec::new(), said, writes: vec![(self.path.clone(), self.text())] })
+            }
+            Action::Tempo(to) => {
+                if let Some(bpm) = to {
+                    if !(20.0..=400.0).contains(&bpm) {
+                        return Err(format!("{} BPM: a tempo is 20 to 400", bpm));
+                    }
+                }
+                self.extra.retain(|line| !is_tempo_line(line));
+                let said = match to {
+                    Some(bpm) => {
+                        self.extra.push(format!("tempo {}", bpm));
+                        format!("the song at {} BPM", bpm)
+                    }
+                    None => String::from("the groove's own tempo"),
                 };
                 Ok(Outcome { plans: Vec::new(), said, writes: vec![(self.path.clone(), self.text())] })
             }
@@ -679,6 +874,10 @@ impl Session {
         if name != voice.module {
             text = edit::rename_module(&text, &voice.module, name);
         }
+        // So does a track named as the voice: both play in one loop.
+        if voice.track == voice.name && name != voice.name {
+            text = edit::rename_track(&text, &voice.track, name);
+        }
         if out != voice.path {
             text = text.replacen('\n', &format!("\n# saved from {} with tatum compose\n", voice.name), 1);
         }
@@ -705,6 +904,22 @@ fn is_scale_line(line: &str) -> bool {
     words.next() == Some("scale") && words.count() == 2
 }
 
+/// A session line that gives a track another pattern, as the session
+/// writes it: `track acid { play acid_half }`.
+fn play_line(line: &str) -> Option<(String, String)> {
+    let code = line.split('#').next().unwrap_or("");
+    match code.split_whitespace().collect::<Vec<_>>().as_slice() {
+        ["track", track, "{", "play", pattern, "}"] => Some((track.to_string(), pattern.to_string())),
+        _ => None,
+    }
+}
+
+/// A session line that sets the song's tempo: `tempo 140`.
+fn is_tempo_line(line: &str) -> bool {
+    let mut words = line.split_whitespace();
+    words.next() == Some("tempo") && words.count() == 1
+}
+
 impl Session {
     /// A library file rewritten from outside the loop -- a pattern drawn, a
     /// chain changed -- read again, so the macros it offers and the text a
@@ -721,6 +936,11 @@ impl Session {
     /// Whether the session sets its own scale over the groove's.
     pub fn own_scale(&self) -> bool {
         self.extra.iter().any(|l| is_scale_line(l))
+    }
+
+    /// Whether the session sets its own tempo over the groove's.
+    pub fn own_tempo(&self) -> bool {
+        self.extra.iter().any(|l| is_tempo_line(l))
     }
 }
 
@@ -893,6 +1113,20 @@ pub mod edit {
                 line = replace_word(&line, "using", old, new);
             }
             out.push_str(&line);
+        }
+        out
+    }
+
+    /// The track called `old` called `new`: the line that opens it.
+    pub fn rename_track(text: &str, old: &str, new: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        for line in text.split_inclusive('\n') {
+            let words: Vec<&str> = line.split_whitespace().collect();
+            if matches!(words.as_slice(), ["track", n, ..] if *n == old) {
+                out.push_str(&line.replacen(&format!("track {}", old), &format!("track {}", new), 1));
+            } else {
+                out.push_str(line);
+            }
         }
         out
     }

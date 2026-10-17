@@ -77,6 +77,9 @@ export interface Row {
   muted: boolean;
   /** Alone, from the mixer's solo. */
   soloed: boolean;
+  /** The pattern it plays, and every one its voice offers, its own first. */
+  play: string;
+  patterns: string[];
 }
 
 export interface Macro {
@@ -98,6 +101,8 @@ export interface View {
   key: { root?: string | null; kind?: string | null; own: boolean };
   /** Every scale the language knows, by name. */
   scales: string[];
+  /** The song's tempo as the text has it; `own` when the session sets it over the groove's. */
+  tempo: { bpm: number; own: boolean };
 }
 
 export type ComposeAction =
@@ -111,7 +116,15 @@ export type ComposeAction =
   | { action: "compare" }
   | { action: "save"; row: number; name: string }
   /** The song in `root kind`, or without a root, the groove's own scale again. */
-  | { action: "scale"; root?: string; kind?: string };
+  | { action: "scale"; root?: string; kind?: string }
+  /** The song at `bpm`, or without one, the groove's own tempo again. */
+  | { action: "tempo"; bpm?: number }
+  /** A row more for `role`, with the first of its voices not in the loop yet. */
+  | { action: "add"; role: string }
+  /** The row out of the loop; not the groove's. */
+  | { action: "remove"; row: number }
+  /** The next (or previous) pattern of the row's voice. */
+  | { action: "vary"; row: number; by: number };
 
 export interface ComposeAnswer extends Answer {
   said: string;
@@ -381,8 +394,22 @@ export class Tatum {
   }
 
   /** The loop: the library beside `root` among the files, the session its text or new (`session` is that text). */
-  composeOpen(root: string, knobCcs?: number[]): Promise<Answer & { loaded: Loaded; view: View; session: string }> {
-    return this.command({ op: "compose_open", root, ...(knobCcs ? { knob_ccs: knobCcs } : {}) });
+  /**
+   * The loop in `root`. `library` is the directory its grooves and voices
+   * are in when not beside it: `""` for a loop of a set,
+   * `sets/jungle/01-intro.synth`. Opening another loop while one plays
+   * swaps to it on the next bar.
+   */
+  composeOpen(
+    root: string,
+    options: { knobCcs?: number[]; library?: string } = {},
+  ): Promise<Answer & { loaded: Loaded; view: View; session: string }> {
+    return this.command({
+      op: "compose_open",
+      root,
+      ...(options.knobCcs ? { knob_ccs: options.knobCcs } : {}),
+      ...(options.library !== undefined ? { library: options.library } : {}),
+    });
   }
 
   compose(action: ComposeAction): Promise<ComposeAnswer> {

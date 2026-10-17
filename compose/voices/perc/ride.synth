@@ -1,6 +1,6 @@
 # An inharmonic ride on the offbeat, a long shimmering tail
 # A voice: one module, its pattern in degrees of whatever scale the groove
-# sets, and a track named by its role. `use` it from any song.
+# sets, and a track named as the voice. `use` it from any song.
 module fm ride {
     algorithm two_op
     level 1.4
@@ -17,7 +17,7 @@ pattern ride_line {
     - - 1.5:0.6 -   - - 1.5:0.5 -   - - 1.5:0.6 -   - - 1.5:0.5 -
 }
 
-track perc {
+track ride {
     play ride_line
     using ride
     level 0.07

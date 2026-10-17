@@ -1,0 +1,106 @@
+# 165 BPM F minor · an amen-style roll through a sampler of '93, ghosts that make it roll
+# A groove: the globals, the sends, the drums and the master. Voices are
+# pulled in beside it by the session; its scale is what their degrees follow.
+tempo 165
+meter 4/4
+scale F minor
+swing 0.53
+humanize 0.10
+sidechain 0.20 attack=1ms release=90ms
+
+delay sync=dotted_eighth feedback=0.42 filter=0.45
+reverb size=0.62 damp=0.5 predelay=18 sidechain=0.3
+# The kick's share of the reverb is only mud under the sub.
+reverb_return { in > highpass(250hz, 0.05) > out }
+
+# The break sits back: the snare a hair behind the grid, the hat pushed
+# into the swing.
+groove chop {
+    snare nudge 0.03
+    hat swing 0.56 nudge 0.01
+}
+
+# A short thumping kick, a snare with its body at 175-225 Hz and the crack
+# under 4 kHz, the hat left ringing to stand in for the ride.
+module beats amen {
+    kick_level 1.0
+    kick_decay 0.30
+    kick_pitch 1.08x
+    kick_click 0.45
+    kick_drive 0.35
+    snare_level 0.85
+    snare_decay 0.36
+    snare_pitch 1.0x
+    snare_snap 0.55
+    snare_drive 0.45
+    snare_pan -0.05
+    hihat_level 0.45
+    hihat_decay 0.55
+    hihat_pitch 1.2x
+    hihat_pan 0.2
+}
+
+# Four bars; bar 4 pulls the kick forward and doubles the last ghosts.
+pattern amen_roll {
+    kick:  X - X -  - - - -  - - X x:0.7  - - - -   X - - -  - - - -  - - X -  - - - -   X - X -  - - - -  - - X x:0.7  - - - -   - - X X  - - - -  - - X -  - - x:0.6 -
+    snare: - - - -  X - - o  - o - -  X - - o   - o - -  X - - o  - o - -  X - - o   - - - -  X - - o  - o - -  X - - o   - o - -  X - - o  - o - o  X - o x
+    hat:   x - x:0.6 -  x - x:0.6 -  x - x:0.6 -  x - x:0.6 -   x - x:0.6 -  x - x:0.6 -  x - x:0.6 -  x - x:0.6 -   x - x:0.6 -  x - x:0.6 -  x - x:0.6 -  x - x:0.6 -   x - x:0.6 -  x - x:0.6 -  x - x:0.6 -  x - x:0.6 x:0.5
+}
+
+# The two-step: kick on one and the and-of-three, the snare answering off
+# the beat. Bar 4 is a chop: the snare pushes into the next phrase.
+pattern amen_step {
+    kick:  X - - -  - - - -  - - X -  - - - -   - - X -  - - - -  - - X -  - - - x:0.6   X - - -  - - - -  - - X -  - - - -   - - X -  - - - -  X - - -  - - - -
+    snare: - - - -  X - - o  - o - -  X - - o   - o - -  X - - o  - - o -  X - o -   - - - -  X - - o  - o - -  X - - o   - o - -  X - o -  - o X -  o x:0.6 X o
+    hat:   x - x:0.6 -  x - x:0.6 -  x - x:0.6 -  x - x:0.6 -   x - x:0.6 -  x - x:0.6 -  x - x:0.6 -  x - x:0.6 -   x - x:0.6 -  x - x:0.6 -  x - x:0.6 -  x - x:0.6 -   x - x:0.6 -  x - x:0.6 -  x - - -  - - - -
+}
+
+# The darker chop: kicks off the grid, snares doubled and moved, more space.
+pattern amen_chop {
+    kick:  X - - x:0.7  - - X -  - - X -  - - - -   X - X -  - - - -  - x:0.7 - -  - - X -   X - - x:0.7  - - X -  - - X -  - - - -   - - X -  - - X -  - - - -  X - - -
+    snare: - - o -  X - - o  - o - o  X - - -   - o - -  X - o -  X - - o  - X - o   - - o -  X - - o  - o - o  X - - -   - o - o  X - - o  - - X -  o X o x:0.7
+    hat:   x - - -  x - x:0.5 -  x - - -  x - x:0.5 -   x - - -  x - x:0.5 -  x - - -  x - x:0.5 -   x - - -  x - x:0.5 -  x - - -  x - x:0.5 -   x - - -  x - x:0.5 -  - - - -  - - - -
+}
+
+# Half time: the breakdown's pulse.
+pattern amen_half {
+    kick:  X - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - X -  - - - -   X - - -  - - - -  - - - -  - - - -   - - - -  - - - -  - - X -  - - - -
+    snare: - - - -  - - - -  X - - -  - - - o   - - - -  - - - -  X - - -  - - - -   - - - -  - - - -  X - - -  - - - o   - - - -  - - - -  X - - -  - o - o
+    hat:   x - x:0.5 -  x - x:0.5 -  x - x:0.5 -  x - x:0.5 -   x - x:0.5 -  x - x:0.5 -  x - x:0.5 -  x - x:0.5 -   x - x:0.5 -  x - x:0.5 -  x - x:0.5 -  x - x:0.5 -   x - x:0.5 -  x - x:0.5 -  x - x:0.5 -  x - x:0.5 -
+}
+
+# The ride alone, for the intro and the tail.
+pattern amen_ride {
+    hat:   x - x:0.5 -  x - x:0.5 -  x - x:0.5 -  x - x:0.5 -
+}
+
+# One bar into a drop: sixteenths climbing to the accent.
+pattern amen_fill {
+    kick:  X - - -  - - - -  X - - -  - - - -
+    snare: - - o -  X - o o  x:0.5 o x:0.6 o  x:0.65 x:0.72 x:0.8 X
+    hat:   x - x -  - - - -  - - - -  - - - -
+}
+
+# The kit through a sampler of the year: squashed, driven, ten bits at a
+# lowered rate, nothing left above 9 kHz.
+track drums {
+    play amen_roll
+    using amen
+    level 1.0
+    reverb_send 0.05
+    sidechain 0
+    out > highpass(35hz, 0.05)
+        > compressor(-18, ratio=5, attack=2, release=40, makeup=4db)
+        > saturate(0.8) as drive
+        > bitcrush(10, 0.03) as crush
+        > lowpass(9khz, 0.08) as lp
+        > highpass(45hz, 0.05)
+        > master
+}
+
+master {
+    in > compressor(-10, ratio=2.5, attack=10, release=80, makeup=2db)
+       > eq(low=1.5, mid=0, high=1.0)
+       > lowpass(20000, 0.05)
+       > out
+}

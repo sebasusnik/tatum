@@ -4,7 +4,7 @@
 // engine last said, and the mix's spectrum.
 
 import { Show } from "solid-js";
-import { act, connectMidi, midi, pattern, position, running, said, sessionText, view } from "../store";
+import { act, connectMidi, midi, pattern, position, root, running, said, sessionText, view } from "../store";
 import { download, forgetStored } from "../library";
 import { Spectrum } from "./Spectrum";
 
@@ -17,8 +17,8 @@ export function Top() {
           {midi().length ? `MIDI ${midi().length}` : "MIDI"}
         </button>
         <Show when={view()}>
-          <button class="tab" onClick={() => download("session.synth", sessionText())} title="the session file, as the terminal would have it">
-            SESSION ↓
+          <button class="tab" onClick={() => download(root(), sessionText())} title="the loop file, as the terminal would have it">
+            LOOP ↓
           </button>
           <button
             class="tab"
@@ -83,7 +83,9 @@ function Key() {
       </button>
       <select class="lcd-select" value={kind()} onChange={(e) => void act({ action: "scale", root: root(), kind: e.currentTarget.value })}>
         {(view()?.scales ?? []).map((s) => (
-          <option value={s}>{s.replace(/_/g, " ").toUpperCase()}</option>
+          <option value={s} selected={s === kind()}>
+            {s.replace(/_/g, " ").toUpperCase()}
+          </option>
         ))}
       </select>
       <Show when={key()?.own}>
@@ -91,6 +93,54 @@ function Key() {
           GROOVE
         </button>
       </Show>
+    </Show>
+  );
+}
+
+/**
+ * The song's tempo on the display: typed, or a BPM at a time (ten with
+ * shift), and, when the session set its own, a key to give the groove's back.
+ */
+function Tempo() {
+  const tempo = () => view()?.tempo;
+  const bpm = () => tempo()?.bpm ?? position()?.tempo ?? 0;
+  const set = (to: number) => {
+    const bpm10 = Math.round(to * 10) / 10;
+    if (!Number.isFinite(bpm10) || bpm10 < 20 || bpm10 > 400 || bpm10 === bpm()) return false;
+    void act({ action: "tempo", bpm: bpm10 });
+    return true;
+  };
+  const shown = () => String(Math.round(bpm() * 10) / 10);
+  return (
+    <Show when={view()} fallback={<span class="lcd-value">{position() ? Math.round(position()!.tempo) : "---"}</span>}>
+      <span class="lcd-group">
+      <button class="lcd-step" onClick={(e) => set(bpm() - (e.shiftKey ? 10 : 1))} title="a BPM slower, ten with shift">
+        ◀
+      </button>
+      <input
+        class="lcd-value lcd-input"
+        type="text"
+        inputmode="decimal"
+        value={shown()}
+        onFocus={(e) => e.currentTarget.select()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") (e.currentTarget.value = shown(), e.currentTarget.blur());
+        }}
+        onChange={(e) => {
+          if (!set(parseFloat(e.currentTarget.value))) e.currentTarget.value = shown();
+        }}
+        title="type a tempo from 20 to 400, enter to set it"
+      />
+      <button class="lcd-step" onClick={(e) => set(bpm() + (e.shiftKey ? 10 : 1))} title="a BPM faster, ten with shift">
+        ▶
+      </button>
+      <Show when={tempo()?.own}>
+        <button class="lcd-step text" onClick={() => void act({ action: "tempo" })} title="the groove's own tempo again">
+          GROOVE
+        </button>
+      </Show>
+      </span>
     </Show>
   );
 }
@@ -122,8 +172,8 @@ export function Display() {
       </div>
       <div class="lcd-mid">
         <div class="lcd-row">
-          <span class="lcd-tag">BPM</span>
-          <span class="lcd-value">{position() ? Math.round(position()!.tempo) : "---"}</span>
+          <span class={`lcd-tag ${view()?.tempo.own ? "own" : ""}`}>BPM</span>
+          <Tempo />
           <Key />
         </div>
         <p class={`said ${said().bad ? "bad" : ""}`}>{said().text}</p>
