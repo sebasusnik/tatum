@@ -107,6 +107,23 @@ export interface PatternStep {
   velocity?: number | null;
   slide?: boolean;
   roll?: number;
+  /** The MIDI notes it sounds: one for a note, several for a chord or a run. */
+  midi?: number[];
+}
+
+/** The song's scale: the root's pitch class (0 for C) and its seven intervals. */
+export interface PatternScale {
+  root: number;
+  intervals: number[];
+  /** As the song writes it, `A minor`; absent when the song has none (C major). */
+  name?: string | null;
+}
+
+/** One step of a pattern set to a token. */
+export interface PatternEdit {
+  lane: number;
+  step: number;
+  token: string;
 }
 
 export interface PatternLane {
@@ -121,6 +138,7 @@ export interface Pattern {
   drums: boolean;
   steps_per_bar: number;
   length: number;
+  scale: PatternScale;
   lanes: PatternLane[];
 }
 
@@ -306,6 +324,14 @@ export class Tatum {
    */
   patternSet(track: string, lane: number, step: number, token: string): Promise<PatternAnswer> {
     return this.command<PatternAnswer>({ op: "pattern_set", track, lane, step, token });
+  }
+
+  /**
+   * Several steps at once, in one rewrite and one reload: a note made
+   * longer, a note moved. Taken whole or refused whole.
+   */
+  patternEdit(track: string, edits: PatternEdit[]): Promise<PatternAnswer> {
+    return this.command<PatternAnswer>({ op: "pattern_set", track, edits });
   }
 
   /** The rows and the knobs of the row chosen; `focus` chooses it. */
