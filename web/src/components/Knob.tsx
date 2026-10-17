@@ -3,7 +3,9 @@
 
 import { createSignal } from "solid-js";
 
-export function Knob(props: { value: number; onChange: (value: number) => void }) {
+export type Tone = "white" | "black" | "orange" | "blue";
+
+export function Knob(props: { value: number; tone?: Tone; onChange: (value: number) => void }) {
   const [dragging, setDragging] = createSignal<{ y: number; start: number } | null>(null);
   let pending: number | null = null;
   let scheduled = false;
@@ -36,9 +38,10 @@ export function Knob(props: { value: number; onChange: (value: number) => void }
     send(props.value - Math.sign(e.deltaY) * (e.shiftKey ? 1 : 4));
   };
 
-  // The arc: 270 degrees from 7 o'clock round to 5.
+  // The arc: 270 degrees from 7 o'clock round to 5, a ring around a
+  // round cap with a notch, the way the hardware draws it.
   const angle = () => -135 + (props.value / 127) * 270;
-  const r = 18;
+  const r = 21;
   const arc = (from: number, to: number) => {
     const p = (a: number) => {
       const rad = ((a - 90) * Math.PI) / 180;
@@ -50,7 +53,7 @@ export function Knob(props: { value: number; onChange: (value: number) => void }
 
   return (
     <svg
-      class={`knob ${dragging() ? "dragging" : ""}`}
+      class={`knob ${props.tone ?? "white"} ${dragging() ? "dragging" : ""}`}
       viewBox="0 0 48 48"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -59,8 +62,10 @@ export function Knob(props: { value: number; onChange: (value: number) => void }
       onWheel={onWheel}
     >
       <path class="track" d={arc(-135, 135)} />
-      <path class="fill" d={arc(-135, angle())} />
-      <line class="needle" x1="24" y1="24" x2="24" y2="9" transform={`rotate(${angle()} 24 24)`} />
+      <path class="fill" d={arc(-135, Math.max(-134.9, angle()))} />
+      <circle class="shadow" cx="24" cy="25.5" r="15" />
+      <circle class="cap" cx="24" cy="24" r="15" />
+      <line class="needle" x1="24" y1="24" x2="24" y2="12" transform={`rotate(${angle()} 24 24)`} />
     </svg>
   );
 }

@@ -73,6 +73,8 @@ export interface Row {
   index: number | null;
   count: number;
   held: boolean;
+  /** Muted from the loop's key. */
+  muted: boolean;
 }
 
 export interface Macro {

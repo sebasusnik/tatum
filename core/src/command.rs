@@ -672,7 +672,10 @@ impl Live {
                     Some(i) => o.int("index", i as i64),
                     None => o.raw("index", "null"),
                 };
-                o.int("count", r.count as i64).bool("held", r.held).finish()
+                o.int("count", r.count as i64)
+                    .bool("held", r.held)
+                    .bool("muted", self.planner.is_muted(&r.track))
+                    .finish()
             })
             .collect();
         let macros: Vec<String> = view

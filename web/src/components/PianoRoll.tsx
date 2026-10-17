@@ -338,10 +338,10 @@ export function PianoRoll() {
     <div class="roll">
       <div class="roll-head">
         <span class="scale">{scale().name ?? "C major"}</span>
-        <button class="range" title="one more octave on top" onClick={() => grow(1, 0)}>
+        <button class="key small range" title="one more octave on top" onClick={() => grow(1, 0)}>
           +▲
         </button>
-        <button class="range" title="one more octave under" onClick={() => grow(0, 1)}>
+        <button class="key small range" title="one more octave under" onClick={() => grow(0, 1)}>
           +▼
         </button>
       </div>
@@ -351,14 +351,14 @@ export function PianoRoll() {
             {(m) => {
               const d = () => degreeOf(m(), scale());
               return (
-                <div class={`key ${d()?.degree === 1 ? "root" : ""} ${d() ? "" : "off"}`} style={{ height: `${ROW}px` }}>
+                <div class={`rowkey ${d()?.degree === 1 ? "root" : ""} ${d() ? "" : "off"}`} style={{ height: `${ROW}px` }}>
                   <span class="degree">{d() ? `${d()!.degree}.${d()!.octave}` : "·"}</span>
                   <span class="pitch">{nameOf(m())}</span>
                 </div>
               );
             }}
           </Index>
-          <div class="key vel-key">vel</div>
+          <div class="rowkey vel-key">VEL</div>
         </div>
         <div class="roll-scroll">
           <div class="roll-inner" style={{ "min-width": `${length() * 18}px` }}>

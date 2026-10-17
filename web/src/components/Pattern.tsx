@@ -45,8 +45,9 @@ export function Pattern() {
   return (
     <Show when={pattern()}>
       {(p) => (
-        <section class="pattern">
-          <header>
+        <section class="panel pattern">
+          <header class="panel-head">
+            <span class="label">PATTERN</span>
             <span class="heading">
               {p().track} · {p().name}
             </span>
@@ -66,7 +67,7 @@ export function Pattern() {
                       <Index each={lane().steps}>
                         {(s, si) => (
                           <div
-                            class={`cell ${s().kind} ${si === playhead() ? "now" : ""} ${si % 16 === 0 ? "bar" : si % 4 === 0 ? "beat" : ""}`}
+                            class={`cell ${s().kind} ${s().kind === "hit" && (s().velocity ?? 0) >= 0.99 ? "acc" : ""} ${si === playhead() ? "now" : ""} ${si % 16 === 0 ? "bar" : si % 4 === 0 ? "beat" : ""}`}
                             style={{ "--v": String(s().kind === "rest" ? 0 : (s().velocity ?? 0.8)) }}
                             title={s().token}
                             onClick={() => void setStep(li, si, nextHit(s()))}
