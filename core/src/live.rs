@@ -837,6 +837,11 @@ impl LivePlanner {
             .collect()
     }
 
+    /// Whether a track is muted from the live surface, by name.
+    pub fn is_muted(&self, name: &str) -> bool {
+        self.muted.iter().any(|m| m == name)
+    }
+
     /// Mute a track, or bring it back, by name: the state a toggle pad keeps,
     /// so a pad, a key and a save all see the same thing.
     pub fn toggle_mute(&mut self, name: &str, playing: Generation) -> Vec<Plan> {
