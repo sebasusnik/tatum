@@ -5,7 +5,7 @@
 import { createSignal } from "solid-js";
 import type { Chain, ComposeAction, FxNodeEdit, FxSpec, LaneTokens, Pattern, PatternEdit, Position, Tatum, View } from "@tatum/engine";
 import { Tatum as Engine } from "@tatum/engine";
-import { download, shipped, store, stored } from "./library";
+import { deleted, download, remove, shipped, store, stored, undelete } from "./library";
 
 /** The scratch loop, beside the library. */
 export const SESSION = "session.synth";
@@ -36,10 +36,13 @@ let engine: Tatum | null = null;
 
 /** Every file there is: what the app ships, and over it what this browser saved. */
 function allFiles(): Record<string, string> {
-  return { ...shipped(), ...stored() };
+  const all: Record<string, string> = { ...shipped(), ...stored() };
+  for (const path of deleted()) delete all[path];
+  return all;
 }
 
 function keep(path: string, text: string): void {
+  undelete(path);
   store(path, text);
   setFilesVersion((v) => v + 1);
 }
@@ -81,20 +84,61 @@ export async function openLoop(path: string): Promise<void> {
  * The loop open copied as the next one of its set (the scratch's go to a
  * set called `mine`), and opened: a part built from the one before.
  */
-export async function dupLoop(name: string): Promise<void> {
+export async function dupLoop(name: string, set?: string): Promise<void> {
   const from = root();
   const text = allFiles()[from];
+  const part = cleanName(name);
   if (!text) return;
-  const dir = from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : "sets/mine";
+  if (!part) return say(`"${name}": a loop's name needs a letter or a digit`, true);
+  // A loop of a set goes on in its set; the scratch starts a set of its own.
+  let dir = from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : "";
+  if (!dir) {
+    const s = cleanName(set ?? "");
+    if (!s) return say(`"${set ?? ""}": a set's name needs a letter or a digit`, true);
+    dir = `sets/${s}`;
+  }
   const loops = sets().find((s) => `sets/${s.name}` === dir)?.loops ?? [];
   const number = (p: string) => parseInt((p.split("/").pop() ?? "").split("-")[0], 10) || 0;
   const n = loops.reduce((top, p) => Math.max(top, number(p)), 0) + 1;
-  const path = `${dir}/${String(n).padStart(2, "0")}-${name}.synth`;
+  const path = `${dir}/${String(n).padStart(2, "0")}-${part}.synth`;
   // The scratch's `use` lines point beside it; a set's are two directories down.
   const moved = from.includes("/") ? text : text.replace(/^use "(?!\.\.\/)/gm, 'use "../../');
   await engine?.files({ [path]: moved });
+  undelete(path);
   keep(path, moved);
   await openLoop(path);
+}
+
+/** A name as a file can have it: lowercase, `_` for spaces, no accents, letters, digits, `_`. */
+export function cleanName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[\s-]+/g, "_")
+    .replace(/[^a-z0-9_]/g, "")
+    .replace(/^_+|_+$/g, "");
+}
+
+/** The next name for a copy of `part`: `drop1` to `drop1_2`, `drop1_2` to `drop1_3`. */
+export function nextName(part: string): string {
+  const m = /^(.*)_(\d+)$/.exec(part);
+  return m ? `${m[1]}_${Number(m[2]) + 1}` : `${part}_2`;
+}
+
+/** A loop out of its set, for good; the loop before it opens if it was the one playing. */
+export async function deleteLoop(path: string): Promise<void> {
+  const set = sets().find((s) => s.loops.includes(path));
+  if (!set) return;
+  const at = set.loops.indexOf(path);
+  remove(path);
+  await engine?.forget(path);
+  setFilesVersion((v) => v + 1);
+  say(`${loopName(path)} deleted`);
+  if (root() !== path) return;
+  const left = set.loops.filter((p) => p !== path);
+  await openLoop(left[Math.max(0, at - 1)] ?? SESSION);
 }
 
 function say(text: string, bad = false): void {

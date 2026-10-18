@@ -349,6 +349,11 @@ export class Tatum {
     return this.command({ op: "files", files });
   }
 
+  /** A file the engine was handed, taken back. */
+  forget(path: string): Promise<Answer> {
+    return this.command({ op: "forget", path });
+  }
+
   /** The song to play, its `use` lines resolved over the files. */
   load(root: string): Promise<Loaded> {
     return this.command<Loaded>({ op: "load", root });

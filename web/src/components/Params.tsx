@@ -3,7 +3,7 @@
 // on drums, by piece. A turn is held on the engine like any knob; the row's
 // save writes it, in units.
 
-import { For, Index, Show } from "solid-js";
+import { Index, Show } from "solid-js";
 import type { Macro } from "@tatum/engine";
 import { act } from "../store";
 import { Knob } from "./Knob";
@@ -46,15 +46,17 @@ export function Params(props: { row: number; params: Macro[]; only?: string }) {
     return (PIECES[prefix] ? label.slice(prefix.length + 1) : label).replace(/_/g, " ").toUpperCase();
   };
   return (
+    // By index, not by object: every answer is a new view, and a knob
+    // mid-drag has to stay the same element to keep the pointer.
     <div class="params">
-      <For each={groups()}>
-        {([group, list]) => (
+      <Index each={groups()}>
+        {(g) => (
           <div class="param-group">
             <Show when={!props.only}>
-              <span class="group-label">{group.toUpperCase()}</span>
+              <span class="group-label">{g()[0].toUpperCase()}</span>
             </Show>
             <div class="param-knobs">
-              <Index each={list}>
+              <Index each={g()[1]}>
                 {(p) => (
                   <div class={`param ${p().m.held ? "held" : ""}`} title={p().m.label}>
                     <Knob
@@ -70,7 +72,7 @@ export function Params(props: { row: number; params: Macro[]; only?: string }) {
             </div>
           </div>
         )}
-      </For>
+      </Index>
     </div>
   );
 }
