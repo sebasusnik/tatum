@@ -16,6 +16,15 @@ export function shapeOf(role: string, i: number): string {
   return ROLE_SHAPE[role] ?? SHAPES[i % SHAPES.length];
 }
 
+/** What a voice from nothing can be: its role in the loop and its instrument. */
+const NEW = [
+  { key: "bass", label: "BAJO", role: "bass", kind: "bass" },
+  { key: "lead-fm", label: "LEAD FM", role: "lead", kind: "fm" },
+  { key: "lead-keys", label: "LEAD TECLADO", role: "lead", kind: "keys" },
+  { key: "pad", label: "PAD", role: "pad", kind: "keys" },
+  { key: "perc", label: "PERC (BATERÍA)", role: "perc", kind: "beats" },
+];
+
 /** A pattern without what its voice's all begin with: `amen_chop` as `chop`. */
 function short(row: Row, name: string): string {
   const all = row.patterns;
@@ -26,7 +35,7 @@ function short(row: Row, name: string): string {
 }
 
 export function Rows(props: { view: View }) {
-  const roles = () => [...new Set(props.view.rows.slice(1).map((r) => r.role))];
+  const roles = () => props.view.roles;
   return (
     <section class="rows">
       <Index each={props.view.rows}>
@@ -86,6 +95,14 @@ export function Rows(props: { view: View }) {
               >
                 M
               </button>
+              <button
+                class={`key small solo ${row().soloed ? "lit" : ""}`}
+                disabled={!row().name}
+                onClick={(e) => (e.stopPropagation(), act({ action: "solo", row: i }))}
+                title="the row alone, or back with the rest"
+              >
+                S
+              </button>
             </div>
           </div>
         )}
@@ -99,6 +116,22 @@ export function Rows(props: { view: View }) {
             </button>
           )}
         </Index>
+        <select
+          class="lane-pick"
+          onChange={(e) => {
+            const choice = NEW.find((n) => n.key === e.currentTarget.value);
+            e.currentTarget.value = "";
+            if (!choice) return;
+            const name = prompt(`The new ${choice.label.toLowerCase()} voice's name (letters, digits, _)`, `${choice.role}_${choice.kind}`)?.trim();
+            if (name) void act({ action: "new", role: choice.role, kind: choice.kind, name });
+          }}
+          title="a voice from nothing, its instrument at its defaults"
+        >
+          <option value="">+ NUEVA</option>
+          {NEW.map((n) => (
+            <option value={n.key}>{n.label}</option>
+          ))}
+        </select>
       </div>
     </section>
   );

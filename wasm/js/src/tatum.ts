@@ -99,6 +99,10 @@ export interface View {
   knob_ccs: number[];
   /** The song's key as the text has it; `own` when the session sets it over the groove's. */
   key: { root?: string | null; kind?: string | null; own: boolean };
+  /** Every parameter of the chosen row's module, by name: the whole instrument. */
+  params: Macro[];
+  /** Every role the library has voices for, in the order it lists them. */
+  roles: string[];
   /** Every scale the language knows, by name. */
   scales: string[];
   /** The song's tempo as the text has it; `own` when the session sets it over the groove's. */
@@ -124,7 +128,11 @@ export type ComposeAction =
   /** The row out of the loop; not the groove's. */
   | { action: "remove"; row: number }
   /** The next (or previous) pattern of the row's voice. */
-  | { action: "vary"; row: number; by: number };
+  | { action: "vary"; row: number; by: number }
+  /** Any parameter of the row's module, held like a knob and written by the row's save. */
+  | { action: "set"; row: number; param: string; value: number }
+  /** A voice from nothing: `kind` is bass, keys, fm or beats; a row for it. */
+  | { action: "new"; role: string; kind: string; name: string };
 
 export interface ComposeAnswer extends Answer {
   said: string;
@@ -143,6 +151,31 @@ export interface PatternStep {
   roll?: number;
   /** The MIDI notes it sounds: one for a note, several for a chord or a run. */
   midi?: number[];
+  /** Each note as written, for a note, a chord or a run inside the step. */
+  notes?: PatternNote[];
+  /** Locked on the step, `null` where the text leaves it: the chance it
+   * sounds (0-1), the gate, the cutoff, the resonance, the envelope depth. */
+  prob?: number | null;
+  gate?: number | null;
+  cutoff?: number | null;
+  res?: number | null;
+  edepth?: number | null;
+  /** A drum step split inside itself: each hit's velocity, 0 a rest. */
+  hits?: number[];
+}
+
+export interface PatternNote {
+  midi: number;
+  /** As the pattern writes it: `1.2`, `C#3`. */
+  text: string;
+  slide: boolean;
+  velocity: number | null;
+}
+
+/** A lane of a whole pattern to put: its drum, and a token a step. */
+export interface LaneTokens {
+  label?: string;
+  tokens: string[];
 }
 
 /** The song's scale: the root's pitch class (0 for C) and its seven intervals. */
@@ -228,6 +261,8 @@ export interface Pattern {
   name: string;
   drums: boolean;
   steps_per_bar: number;
+  /** The lane names a drum pattern can take. */
+  drum_names: string[];
   length: number;
   scale: PatternScale;
   lanes: PatternLane[];
@@ -312,6 +347,11 @@ export class Tatum {
   /** Files handed over, added to or replacing what was: `{"session.synth": text}`. */
   files(files: Record<string, string>): Promise<Answer> {
     return this.command({ op: "files", files });
+  }
+
+  /** A file the engine was handed, taken back. */
+  forget(path: string): Promise<Answer> {
+    return this.command({ op: "forget", path });
   }
 
   /** The song to play, its `use` lines resolved over the files. */
@@ -456,6 +496,11 @@ export class Tatum {
    */
   patternEdit(track: string, edits: PatternEdit[]): Promise<PatternAnswer> {
     return this.command<PatternAnswer>({ op: "pattern_set", track, edits });
+  }
+
+  /** The whole pattern as `lanes`: another length, a drum lane more, a step undone. */
+  patternPut(track: string, lanes: LaneTokens[]): Promise<PatternAnswer> {
+    return this.command<PatternAnswer>({ op: "pattern_put", track, lanes });
   }
 
   /** The rows and the knobs of the row chosen; `focus` chooses it. */

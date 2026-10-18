@@ -321,6 +321,17 @@ impl Live {
                     "add" => Action::Add(msg.get("role").and_then(Value::str).ok_or("add takes a role")?.to_string()),
                     "remove" => Action::Remove(int(&msg, "row")? as usize),
                     "vary" => Action::Vary { row: int(&msg, "row")? as usize, by: int(&msg, "by")? as i32 },
+                    "set" => Action::Set {
+                        row: int(&msg, "row")? as usize,
+                        param: msg.get("param").and_then(Value::str).ok_or("set takes a param")?.to_string(),
+                        value: int(&msg, "value")?.clamp(0, 127) as u8,
+                    },
+                    "new" => {
+                        let word = |k: &str| {
+                            msg.get(k).and_then(Value::str).map(String::from).ok_or(format!("new takes a {}", k))
+                        };
+                        Action::New { role: word("role")?, kind: word("kind")?, name: word("name")? }
+                    }
                     "compare" => Action::Compare,
                     "save" => Action::Save {
                         row: int(&msg, "row")? as usize,
@@ -382,6 +393,34 @@ impl Live {
                     return Err(String::from("pattern_set takes at least one edit"));
                 }
                 let (writes, loaded) = self.pattern_set(&track, &edits)?;
+                let writes: Vec<String> =
+                    writes.iter().map(|(p, t)| Obj::new().str("path", p).str("text", t).finish()).collect();
+                Ok(ok()
+                    .raw("writes", &json::array(&writes))
+                    .raw("loaded", &loaded)
+                    .raw("pattern", &self.pattern_json(&track)?)
+                    .finish())
+            }
+            // `{"track", "lanes": [{"label"?, "tokens": [..]}]}`: the whole
+            // pattern as these lanes, a token a step -- another length, a
+            // drum lane more or less, a step undone. One lane, unlabelled,
+            // for a voice's pattern, written a bar a line.
+            "pattern_put" => {
+                let track = msg.get("track").and_then(Value::str).ok_or("pattern_put takes a track")?.to_string();
+                let lanes = msg.get("lanes").and_then(Value::arr).ok_or("pattern_put takes lanes")?;
+                let lanes: Vec<(Option<String>, Vec<String>)> = lanes
+                    .iter()
+                    .map(|l| {
+                        let label = l.get("label").and_then(Value::str).map(String::from);
+                        let tokens = l.get("tokens").and_then(Value::arr).ok_or("a lane takes tokens")?;
+                        let tokens = tokens
+                            .iter()
+                            .map(|t| t.str().map(String::from).ok_or("a token is a string"))
+                            .collect::<Result<Vec<_>, _>>()?;
+                        Ok((label, tokens))
+                    })
+                    .collect::<Result<_, String>>()?;
+                let (writes, loaded) = self.pattern_put(&track, &lanes)?;
                 let writes: Vec<String> =
                     writes.iter().map(|(p, t)| Obj::new().str("path", p).str("text", t).finish()).collect();
                 Ok(ok()
@@ -463,6 +502,8 @@ impl Live {
             .str("track", track)
             .str("name", &p.name)
             .bool("drums", !p.lane_labels.is_empty())
+            // The lane names a drum pattern can take, for a lane more.
+            .strs("drum_names", &DRUM_NAMES.iter().map(|d| d.to_string()).collect::<Vec<_>>())
             .int("steps_per_bar", 16)
             .int("length", length as i64)
             .raw(
@@ -524,6 +565,54 @@ impl Live {
                 }
             }
         }
+        let (path, before, start, end) = self.defining("pattern", &p.name)?;
+        let after = format!("{}{}{}", &before[..start], crate::dsl::write::pattern_body(&p), &before[end..]);
+        self.rewrite(path, &before, after)
+    }
+
+    /// `track`'s pattern replaced whole by `lanes`, in the file that
+    /// defines it, through the parser as a pattern of its own.
+    fn pattern_put(
+        &mut self,
+        track: &str,
+        lanes: &[(Option<String>, Vec<String>)],
+    ) -> Result<(Vec<(String, String)>, String), String> {
+        let mut p = self.pattern_of(track)?;
+        let drums = !p.lane_labels.is_empty();
+        if lanes.is_empty() || lanes.iter().any(|(_, t)| t.is_empty()) {
+            return Err(String::from("a pattern needs a lane of at least one step"));
+        }
+        let mut probe = String::from("pattern _t {\n");
+        for (label, tokens) in lanes {
+            match (drums, label) {
+                (true, Some(label)) => {
+                    if !DRUM_NAMES.contains(&label.as_str()) {
+                        return Err(format!("{} is not a drum: {}", label, DRUM_NAMES.join(", ")));
+                    }
+                    probe.push_str(&format!("    {}: {}\n", label, tokens.join(" ")));
+                }
+                (true, None) => return Err(String::from("a drum lane takes a label")),
+                (false, _) => {
+                    if lanes.len() > 1 {
+                        return Err(String::from("a voice's pattern is one lane"));
+                    }
+                    for bar in tokens.chunks(16) {
+                        probe.push_str(&format!("    {}\n", bar.join(" ")));
+                    }
+                }
+            }
+        }
+        probe.push_str("}\n");
+        let parsed = crate::dsl::parse(&probe)
+            .map_err(|e| e.first().map(|e| e.message.clone()).unwrap_or_else(|| String::from("not a pattern")))?;
+        let new = parsed.patterns.into_iter().next().ok_or("not a pattern")?;
+        let count: usize = new.rows.iter().map(Vec::len).sum();
+        let want: usize = if drums { lanes.iter().map(|(_, t)| t.len()).sum() } else { lanes[0].1.len() };
+        if count != want {
+            return Err(format!("{} tokens came to {} steps: one step a token", want, count));
+        }
+        p.rows = new.rows;
+        p.lane_labels = new.lane_labels;
         let (path, before, start, end) = self.defining("pattern", &p.name)?;
         let after = format!("{}{}{}", &before[..start], crate::dsl::write::pattern_body(&p), &before[end..]);
         self.rewrite(path, &before, after)
@@ -809,6 +898,8 @@ impl Live {
             .raw("rows", &json::array(&rows))
             .raw("macros", &json::array(&macros))
             .raw("mix", &json::array(&mix))
+            .raw("params", &json::array(&view.params.iter().map(knob).collect::<Vec<_>>()))
+            .strs("roles", &session.library.roles)
             .bool("comparing", view.comparing)
             .raw("knob_ccs", &json::array(&ccs))
             .raw("key", &key)
@@ -831,13 +922,60 @@ fn ok() -> Obj {
 /// One lane of a pattern: every step as its token, and what it is for a
 /// grid to draw it -- its kind, its note and the MIDI notes it sounds, its
 /// velocity.
+/// The drums a `beats` lane is named by, in the order a kit lists them.
+const DRUM_NAMES: [&str; 9] = ["kick", "snare", "clap", "hat", "openhat", "tom", "tom2", "tom3", "crash"];
+
+/// A step's per-step values, `null` where the text leaves them: the
+/// chance it sounds, and the gate, cutoff, resonance and envelope depth
+/// locked on it.
+fn lock_json(o: Obj, p: &crate::dsl::ast::PLock, probability: Option<f32>) -> Obj {
+    let opt = |o: Obj, key: &str, v: Option<f32>| match v {
+        Some(v) => o.num(key, v as f64),
+        None => o.raw(key, "null"),
+    };
+    let o = opt(o, "prob", probability.or(p.probability));
+    let o = opt(o, "gate", p.gate);
+    let o = opt(o, "cutoff", p.cutoff);
+    let o = opt(o, "res", p.resonance);
+    opt(o, "edepth", p.env_depth)
+}
+
 fn lane_json(label: Option<&str>, steps: &[&Step], scale: ([u8; 7], u8)) -> String {
     use crate::dsl::write::{note_ref_text, step_text};
     let midi = |n: &crate::dsl::ast::NoteRef| crate::dsl::compiler::resolve_note(n, &scale.0, scale.1).to_string();
+    // Each note of a step as the grid needs it to write the step again.
+    let notes = |list: &[crate::dsl::ast::NoteStep]| -> String {
+        let items: Vec<String> = list
+            .iter()
+            .map(|n| {
+                let o = Obj::new()
+                    .int("midi", crate::dsl::compiler::resolve_note(&n.note, &scale.0, scale.1) as i64)
+                    .str("text", &note_ref_text(&n.note))
+                    .bool("slide", n.slide);
+                match n.velocity {
+                    Some(v) => o.num("velocity", v as f64),
+                    None => o.raw("velocity", "null"),
+                }
+                .finish()
+            })
+            .collect();
+        json::array(&items)
+    };
     let items: Vec<String> = steps
         .iter()
         .map(|s| {
             let o = Obj::new().str("token", &step_text(s));
+            let o = match s {
+                Step::Note(n) => lock_json(o, &n.plock, None).raw("notes", &notes(core::slice::from_ref(n))),
+                Step::Chord(c) => lock_json(o, &c.plock, None).raw("notes", &notes(&c.notes)),
+                Step::Subdiv(list) => o.raw("notes", &notes(list)),
+                Step::DrumHit(d) => lock_json(o, &d.plock, (d.probability < 0.999).then_some(d.probability)),
+                Step::DrumSub(hits) => {
+                    let v: Vec<String> = hits.iter().map(|h| json::number(*h as f64)).collect();
+                    o.raw("hits", &json::array(&v))
+                }
+                Step::Rest | Step::Tie => o,
+            };
             match s {
                 Step::Rest => o.str("kind", "rest"),
                 Step::Tie => o.str("kind", "tie"),
@@ -1166,15 +1304,15 @@ mod tests {
         assert_eq!(opened.get("ok").and_then(Value::bool), Some(true), "{:?}", opened);
         let view = opened.get("view").unwrap();
         let rows = view.get("rows").unwrap().arr().unwrap();
-        assert_eq!(rows.len(), 5);
+        // A new loop: the groove and the first bass, rows added by hand.
+        assert_eq!(rows.len(), 2);
         assert_eq!(rows[1].get("name").and_then(Value::str), Some("acid"));
         assert!(live.files.iter().any(|(p, _)| p == "session.synth"), "a new session file was written");
         live.command("{\"op\":\"start\"}");
 
-        // The lead's next voice: the session file changes and reloads.
-        let chosen =
-            Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"choose\",\"row\":2,\"by\":1}")).unwrap();
-        assert!(chosen.get("said").unwrap().str().unwrap().starts_with("lead: bell"));
+        // A lead row: the session file changes and reloads.
+        let chosen = Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"add\",\"role\":\"lead\"}")).unwrap();
+        assert!(chosen.get("said").unwrap().str().unwrap().starts_with("lead: bell"), "{:?}", chosen);
         assert_eq!(chosen.get("loaded").unwrap().get("plan").and_then(Value::str), Some("swap"));
         let session_text = live.files.iter().find(|(p, _)| p == "session.synth").map(|(_, t)| t.clone()).unwrap();
         assert!(session_text.contains("use \"voices/lead/bell.synth\""), "{session_text}");
@@ -1489,6 +1627,120 @@ mod tests {
         assert_eq!(rows(&opened)[1].get("name").and_then(Value::str), Some("sub_dub"));
         let session = opened.get("session").and_then(Value::str).unwrap();
         assert!(session.contains("use \"../../voices/bass/sub_dub.synth\""), "{session}");
+    }
+
+    #[test]
+    fn a_voice_from_nothing_plays_and_any_of_its_parameters_turns() {
+        let mut live = Live::new();
+        live.command(&files_message());
+        live.command("{\"op\":\"compose_open\",\"root\":\"session.synth\"}");
+        for (role, kind, name) in [
+            ("bass", "bass", "fresh_bass"),
+            ("lead", "fm", "fresh_fm"),
+            ("pad", "keys", "fresh_keys"),
+            ("perc", "beats", "fresh_kit"),
+        ] {
+            let new = Value::parse(&live.command(&format!(
+                "{{\"op\":\"compose\",\"action\":\"new\",\"role\":\"{role}\",\"kind\":\"{kind}\",\"name\":\"{name}\"}}"
+            )))
+            .unwrap();
+            assert_eq!(new.get("ok").and_then(Value::bool), Some(true), "{:?}", new);
+            assert_eq!(
+                new.get("loaded").unwrap().get("ok").and_then(Value::bool),
+                Some(true),
+                "{:?}",
+                new.get("loaded")
+            );
+            let writes = new.get("writes").unwrap().arr().unwrap();
+            assert_eq!(
+                writes[0].get("path").and_then(Value::str),
+                Some(format!("voices/{role}/{name}.synth").as_str())
+            );
+        }
+        let twice = live.command(
+            "{\"op\":\"compose\",\"action\":\"new\",\"role\":\"bass\",\"kind\":\"bass\",\"name\":\"fresh_bass\"}",
+        );
+        assert!(twice.contains("\"ok\":false"), "{twice}");
+
+        // Row 1 is the bass: a parameter no macro has, turned.
+        let view = Value::parse(&live.command("{\"op\":\"compose_view\",\"focus\":1}")).unwrap();
+        let params = view.get("view").unwrap().get("params").unwrap().arr().unwrap().len();
+        assert!(params > 15, "{params} parameters");
+        let set = Value::parse(
+            &live.command("{\"op\":\"compose\",\"action\":\"set\",\"row\":1,\"param\":\"osc2_pitch\",\"value\":100}"),
+        )
+        .unwrap();
+        assert_eq!(set.get("ok").and_then(Value::bool), Some(true), "{:?}", set);
+        let bad =
+            live.command("{\"op\":\"compose\",\"action\":\"set\",\"row\":1,\"param\":\"mod_index\",\"value\":10}");
+        assert!(bad.contains("\"ok\":false"), "{bad}");
+    }
+
+    #[test]
+    fn a_pattern_is_put_whole_at_another_length_and_with_a_drum_lane_more() {
+        let mut live = Live::new();
+        live.command(&files_message());
+        live.command("{\"op\":\"compose_open\",\"root\":\"session.synth\"}");
+        let get = |live: &mut Live, track: &str| {
+            Value::parse(&live.command(&format!("{{\"op\":\"pattern_get\",\"track\":\"{}\"}}", track))).unwrap()
+        };
+        let pattern = |v: &Value| v.get("pattern").unwrap().clone();
+
+        // The bass line at two bars: a note, a chord with a lock, rests.
+        let mut tokens = vec![String::from("\"1.2:0.9?0.5(gate=0.3)\""), String::from("\"[1.3 3.3 5.3]\"")];
+        tokens.resize(32, String::from("\"-\""));
+        let put = Value::parse(&live.command(&format!(
+            "{{\"op\":\"pattern_put\",\"track\":\"acid\",\"lanes\":[{{\"tokens\":[{}]}}]}}",
+            tokens.join(",")
+        )))
+        .unwrap();
+        assert_eq!(put.get("ok").and_then(Value::bool), Some(true), "{:?}", put);
+        let p = pattern(&put);
+        assert_eq!(p.get("length").and_then(Value::int), Some(32));
+        let first = &p.get("lanes").unwrap().arr().unwrap()[0].get("steps").unwrap().arr().unwrap()[0];
+        assert_eq!(first.get("prob").and_then(Value::num), Some(0.5));
+        assert_eq!(first.get("gate").and_then(Value::num), Some(0.3));
+        let chord = &p.get("lanes").unwrap().arr().unwrap()[0].get("steps").unwrap().arr().unwrap()[1];
+        assert_eq!(chord.get("notes").unwrap().arr().unwrap().len(), 3);
+        assert_eq!(pattern(&get(&mut live, "acid")).get("length").and_then(Value::int), Some(32));
+
+        // The groove's kit with a clap lane added to what it had.
+        let drums = pattern(&get(&mut live, "drums"));
+        let mut lanes: Vec<String> = drums
+            .get("lanes")
+            .unwrap()
+            .arr()
+            .unwrap()
+            .iter()
+            .map(|l| {
+                let tokens: Vec<String> = l
+                    .get("steps")
+                    .unwrap()
+                    .arr()
+                    .unwrap()
+                    .iter()
+                    .map(|s| format!("\"{}\"", s.get("token").and_then(Value::str).unwrap()))
+                    .collect();
+                format!(
+                    "{{\"label\":\"{}\",\"tokens\":[{}]}}",
+                    l.get("label").and_then(Value::str).unwrap(),
+                    tokens.join(",")
+                )
+            })
+            .collect();
+        let n = lanes.len();
+        lanes.push(String::from("{\"label\":\"clap\",\"tokens\":[\"-\",\"-\",\"-\",\"-\",\"X\",\"-\",\"-\",\"-\"]}"));
+        let put = Value::parse(
+            &live.command(&format!("{{\"op\":\"pattern_put\",\"track\":\"drums\",\"lanes\":[{}]}}", lanes.join(","))),
+        )
+        .unwrap();
+        assert_eq!(put.get("ok").and_then(Value::bool), Some(true), "{:?}", put);
+        assert_eq!(pattern(&put).get("lanes").unwrap().arr().unwrap().len(), n + 1);
+
+        let bad = live.command(
+            "{\"op\":\"pattern_put\",\"track\":\"drums\",\"lanes\":[{\"label\":\"cowbell\",\"tokens\":[\"x\"]}]}",
+        );
+        assert!(bad.contains("\"ok\":false"), "{bad}");
     }
 
     #[test]

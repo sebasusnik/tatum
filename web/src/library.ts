@@ -36,6 +36,32 @@ export function store(path: string, text: string): void {
 
 export function forgetStored(): void {
   localStorage.removeItem(STORE);
+  localStorage.removeItem(GONE);
+}
+
+// A file deleted from the screen: out of what was saved, and named here so
+// one the app ships (a set's loop) stays out too.
+const GONE = "tatum.compose.deleted";
+
+export function deleted(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(GONE) ?? "[]") as string[];
+  } catch {
+    return [];
+  }
+}
+
+export function remove(path: string): void {
+  const files = stored();
+  delete files[path];
+  localStorage.setItem(STORE, JSON.stringify(files));
+  localStorage.setItem(GONE, JSON.stringify([...new Set([...deleted(), path])]));
+}
+
+/** A file written again after it was deleted is back. */
+export function undelete(path: string): void {
+  const gone = deleted();
+  if (gone.includes(path)) localStorage.setItem(GONE, JSON.stringify(gone.filter((p) => p !== path)));
 }
 
 /** A file offered to the disk, as the terminal would have written it. */

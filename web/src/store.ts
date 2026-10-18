@@ -3,9 +3,9 @@
 // the engine and comes back as a view; nothing here knows what a voice is.
 
 import { createSignal } from "solid-js";
-import type { Chain, ComposeAction, FxNodeEdit, FxSpec, Pattern, PatternEdit, Position, Tatum, View } from "@tatum/engine";
+import type { Chain, ComposeAction, FxNodeEdit, FxSpec, LaneTokens, Pattern, PatternEdit, Position, Tatum, View } from "@tatum/engine";
 import { Tatum as Engine } from "@tatum/engine";
-import { download, shipped, store, stored } from "./library";
+import { deleted, download, remove, shipped, store, stored, undelete } from "./library";
 
 /** The scratch loop, beside the library. */
 export const SESSION = "session.synth";
@@ -36,10 +36,13 @@ let engine: Tatum | null = null;
 
 /** Every file there is: what the app ships, and over it what this browser saved. */
 function allFiles(): Record<string, string> {
-  return { ...shipped(), ...stored() };
+  const all: Record<string, string> = { ...shipped(), ...stored() };
+  for (const path of deleted()) delete all[path];
+  return all;
 }
 
 function keep(path: string, text: string): void {
+  undelete(path);
   store(path, text);
   setFilesVersion((v) => v + 1);
 }
@@ -81,20 +84,61 @@ export async function openLoop(path: string): Promise<void> {
  * The loop open copied as the next one of its set (the scratch's go to a
  * set called `mine`), and opened: a part built from the one before.
  */
-export async function dupLoop(name: string): Promise<void> {
+export async function dupLoop(name: string, set?: string): Promise<void> {
   const from = root();
   const text = allFiles()[from];
+  const part = cleanName(name);
   if (!text) return;
-  const dir = from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : "sets/mine";
+  if (!part) return say(`"${name}": a loop's name needs a letter or a digit`, true);
+  // A loop of a set goes on in its set; the scratch starts a set of its own.
+  let dir = from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : "";
+  if (!dir) {
+    const s = cleanName(set ?? "");
+    if (!s) return say(`"${set ?? ""}": a set's name needs a letter or a digit`, true);
+    dir = `sets/${s}`;
+  }
   const loops = sets().find((s) => `sets/${s.name}` === dir)?.loops ?? [];
   const number = (p: string) => parseInt((p.split("/").pop() ?? "").split("-")[0], 10) || 0;
   const n = loops.reduce((top, p) => Math.max(top, number(p)), 0) + 1;
-  const path = `${dir}/${String(n).padStart(2, "0")}-${name}.synth`;
+  const path = `${dir}/${String(n).padStart(2, "0")}-${part}.synth`;
   // The scratch's `use` lines point beside it; a set's are two directories down.
   const moved = from.includes("/") ? text : text.replace(/^use "(?!\.\.\/)/gm, 'use "../../');
   await engine?.files({ [path]: moved });
+  undelete(path);
   keep(path, moved);
   await openLoop(path);
+}
+
+/** A name as a file can have it: lowercase, `_` for spaces, no accents, letters, digits, `_`. */
+export function cleanName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[\s-]+/g, "_")
+    .replace(/[^a-z0-9_]/g, "")
+    .replace(/^_+|_+$/g, "");
+}
+
+/** The next name for a copy of `part`: `drop1` to `drop1_2`, `drop1_2` to `drop1_3`. */
+export function nextName(part: string): string {
+  const m = /^(.*)_(\d+)$/.exec(part);
+  return m ? `${m[1]}_${Number(m[2]) + 1}` : `${part}_2`;
+}
+
+/** A loop out of its set, for good; the loop before it opens if it was the one playing. */
+export async function deleteLoop(path: string): Promise<void> {
+  const set = sets().find((s) => s.loops.includes(path));
+  if (!set) return;
+  const at = set.loops.indexOf(path);
+  remove(path);
+  await engine?.forget(path);
+  setFilesVersion((v) => v + 1);
+  say(`${loopName(path)} deleted`);
+  if (root() !== path) return;
+  const left = set.loops.filter((p) => p !== path);
+  await openLoop(left[Math.max(0, at - 1)] ?? SESSION);
 }
 
 function say(text: string, bad = false): void {
@@ -164,33 +208,92 @@ export async function setFx(nodes: FxNodeEdit[], what: string): Promise<boolean>
   return true;
 }
 
+/** A pattern as lanes of tokens: what a whole put writes, and what undo keeps. */
+export function lanesOf(p: Pattern): LaneTokens[] {
+  return p.lanes.map((l) => ({ ...(l.label ? { label: l.label } : {}), tokens: l.steps.map((s) => s.token) }));
+}
+
+// Undo and redo, per pattern: the lanes as they were before each change.
+const undone = new Map<string, { back: LaneTokens[][]; ahead: LaneTokens[][] }>();
+const [history, setHistory] = createSignal(0);
+const keyOf = (p: Pattern) => `${p.track}/${p.name}`;
+function stacks(p: Pattern) {
+  let s = undone.get(keyOf(p));
+  if (!s) undone.set(keyOf(p), (s = { back: [], ahead: [] }));
+  return s;
+}
+
+/** Whether the chosen row's pattern has a change to undo, and one to redo. */
+export function canUndo(): { back: boolean; ahead: boolean } {
+  history();
+  const p = pattern();
+  const s = p ? undone.get(keyOf(p)) : undefined;
+  return { back: !!s?.back.length, ahead: !!s?.ahead.length };
+}
+
+function took(p: Pattern, a: { writes: { path: string; text: string }[]; pattern: Pattern }, before: LaneTokens[], what: string) {
+  for (const w of a.writes) keep(w.path, w.text);
+  const s = stacks(p);
+  s.back.push(before);
+  if (s.back.length > 100) s.back.shift();
+  s.ahead = [];
+  setHistory((h) => h + 1);
+  setPattern(a.pattern);
+  say(`${p.track}: ${what} · on the next bar`);
+}
+
 /** One step of the chosen row's pattern, as a token. */
 export async function setStep(lane: number, step: number, token: string): Promise<void> {
-  const p = pattern();
-  if (!engine || !p) return;
-  const a = await engine.patternSet(p.track, lane, step, token);
-  if (!a.ok) {
-    say(a.error ?? "refused", true);
-    return;
-  }
-  for (const w of a.writes) store(w.path, w.text);
-  setPattern(a.pattern);
-  say(`${p.track}: step ${step + 1} is ${token} · on the next bar`);
+  await editSteps([{ lane, step, token }], `step ${step + 1} is ${token}`);
 }
 
 /** Several steps of the chosen row's pattern in one rewrite: a note drawn longer, moved. */
 export async function editSteps(edits: PatternEdit[], what: string): Promise<boolean> {
   const p = pattern();
   if (!engine || !p || edits.length === 0) return false;
+  const before = lanesOf(p);
   const a = await engine.patternEdit(p.track, edits);
   if (!a.ok) {
     say(a.error ?? "refused", true);
     return false;
   }
-  for (const w of a.writes) store(w.path, w.text);
-  setPattern(a.pattern);
-  say(`${p.track}: ${what} · on the next bar`);
+  took(p, a, before, what);
   return true;
+}
+
+/** The chosen row's pattern put whole: another length, a lane more or less. */
+export async function putPattern(lanes: LaneTokens[], what: string): Promise<boolean> {
+  const p = pattern();
+  if (!engine || !p) return false;
+  const before = lanesOf(p);
+  const a = await engine.patternPut(p.track, lanes);
+  if (!a.ok) {
+    say(a.error ?? "refused", true);
+    return false;
+  }
+  took(p, a, before, what);
+  return true;
+}
+
+/** The last change to the chosen row's pattern taken back (-1), or done again (1). */
+export async function undo(by: -1 | 1 = -1): Promise<void> {
+  const p = pattern();
+  if (!engine || !p) return;
+  const s = stacks(p);
+  const from = by < 0 ? s.back : s.ahead;
+  const lanes = from.pop();
+  if (!lanes) return say(by < 0 ? "nothing to undo" : "nothing to redo");
+  const now = lanesOf(p);
+  const a = await engine.patternPut(p.track, lanes);
+  if (!a.ok) {
+    from.push(lanes);
+    return say(a.error ?? "refused", true);
+  }
+  (by < 0 ? s.ahead : s.back).push(now);
+  for (const w of a.writes) keep(w.path, w.text);
+  setHistory((h) => h + 1);
+  setPattern(a.pattern);
+  say(`${p.track}: ${by < 0 ? "undone" : "redone"} · on the next bar`);
 }
 
 export async function play(): Promise<void> {
@@ -226,7 +329,7 @@ export async function act(action: ComposeAction): Promise<void> {
   }
   setView(a.view);
   say(a.said);
-  if (action.action !== "turn" && action.action !== "mix") await refreshRow();
+  if (action.action !== "turn" && action.action !== "mix" && action.action !== "set") await refreshRow();
 }
 
 export async function focus(row: number): Promise<void> {

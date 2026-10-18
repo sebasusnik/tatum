@@ -55,7 +55,7 @@ test("a song loaded over files plays, and the loop answers", () => {
   assert.equal(send(tatum, { op: "files", files: library() }).ok, true);
   const opened = send(tatum, { op: "compose_open", root: "session.synth" });
   assert.equal(opened.ok, true, JSON.stringify(opened));
-  assert.equal(opened.view.rows.length, 5);
+  assert.equal(opened.view.rows.length, 2); // the groove and the first bass
   assert.equal(opened.view.rows[1].name, "acid");
   assert.equal(send(tatum, { op: "start" }).ok, true);
   assert.ok(render(tatum, 200) > 1, "silence");

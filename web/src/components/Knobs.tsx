@@ -2,15 +2,17 @@
 // controller's are, with their readings in units, and the keys beside
 // them: reset, A/B against the text, save, and play.
 
-import { Index, Show } from "solid-js";
+import { Index, Show, createSignal } from "solid-js";
 import type { View } from "@tatum/engine";
 import { act, play, running, stop } from "../store";
 import { Knob, type Tone } from "./Knob";
+import { Params } from "./Params";
 
 const TONES: Tone[] = ["white", "black", "orange", "black", "white", "black", "blue", "black"];
 
 export function Knobs(props: { view: View }) {
   const row = () => props.view.rows[props.view.focus];
+  const [all, setAll] = createSignal(false);
   const save = () => {
     const r = row();
     if (!r?.name) return;
@@ -22,9 +24,20 @@ export function Knobs(props: { view: View }) {
       <header class="panel-head">
         <span class="label">SOUND</span>
         <span class="heading">{row()?.name ? `${row().role} · ${row().name}` : "nothing chosen"}</span>
+        <button
+          class={`key small ${all() ? "lit" : ""}`}
+          disabled={!props.view.params.length}
+          onClick={() => setAll(!all())}
+          title="every control the instrument has, not just these eight"
+        >
+          TODO
+        </button>
         <span class="spacer" />
         <span class="ccs">CC {props.view.knob_ccs.join(" ")}</span>
       </header>
+      <Show when={all() && props.view.params.length}>
+        <Params row={props.view.focus} params={props.view.params} />
+      </Show>
       <div class="sound">
         <Show when={props.view.macros.length} fallback={<p class="hint">choose a voice first</p>}>
           {/* By index, not by object: every answer is a new view, and a knob
