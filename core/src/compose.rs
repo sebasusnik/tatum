@@ -388,15 +388,14 @@ impl Session {
         }
     }
 
-    /// An empty row for every role that has none, so each can be chosen.
+    /// An empty row for every role that has none, so each can be chosen,
+    /// after the rows that play: the loop keeps the order it was built in.
     fn fill_roles(&mut self) {
         for role in self.library.roles.clone() {
             if !self.slots.iter().any(|s| s.role == role) {
                 self.slots.push(Slot::empty(&role));
             }
         }
-        let order = self.library.roles.clone();
-        self.slots.sort_by_key(|s| order.iter().position(|r| *r == s.role).unwrap_or(order.len()));
     }
 
     pub fn from_text(library: Library, path: &str, knob_ccs: Vec<u8>, text: &str) -> Self {
@@ -707,7 +706,10 @@ impl Session {
                     .map(|v| v.name.clone())
                     .find(|n| self.slots.iter().all(|s| s.voice.as_ref() != Some(n)))
                     .ok_or_else(|| format!("every {} voice is in the loop", role))?;
-                let at = self.slots.iter().rposition(|s| s.role == role).map_or(self.slots.len(), |i| i + 1);
+                // Last of the rows that play, before the empty ones; the
+                // role's empty row, if it had one, is this row now.
+                self.slots.retain(|s| s.voice.is_some() || s.role != role);
+                let at = self.slots.iter().position(|s| s.voice.is_none()).unwrap_or(self.slots.len());
                 self.slots.insert(at, Slot { voice: Some(free.clone()), ..Slot::empty(&role) });
                 let said = format!("{}: {} joins · on the next bar", role, free);
                 Ok(Outcome { plans: Vec::new(), said, writes: vec![(self.path.clone(), self.text())] })
@@ -1270,8 +1272,13 @@ mod tests {
     fn a_hand_written_session_keeps_its_other_lines() {
         let text = "use \"grooves/dub.synth\"\nuse \"voices/lead/bell.synth\"\ntempo 118\ntrack pad { level 0.1 }\n";
         let session = Session::from_text(library(), "s.synth", vec![1, 2], text);
-        assert_eq!(session.slots[0].voice, None, "the bass line is not in the file");
-        assert_eq!(session.slots[1].voice.as_deref(), Some("bell"));
+        // The rows the file plays first, in its order; an empty one for each
+        // role it leaves out, after them.
+        assert_eq!(session.slots[0].voice.as_deref(), Some("bell"));
+        assert!(
+            session.slots.iter().any(|s| s.role == "bass" && s.voice.is_none()),
+            "the bass line is not in the file"
+        );
         assert!(session.text().ends_with("tempo 118\ntrack pad { level 0.1 }\n"), "{}", session.text());
     }
 

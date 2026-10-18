@@ -3,7 +3,7 @@
 // the engine and comes back as a view; nothing here knows what a voice is.
 
 import { createSignal } from "solid-js";
-import type { Chain, ComposeAction, FxNodeEdit, FxSpec, Pattern, PatternEdit, Position, Tatum, View } from "@tatum/engine";
+import type { Chain, ComposeAction, FxNodeEdit, FxSpec, LaneTokens, Pattern, PatternEdit, Position, Tatum, View } from "@tatum/engine";
 import { Tatum as Engine } from "@tatum/engine";
 import { download, shipped, store, stored } from "./library";
 
@@ -164,33 +164,92 @@ export async function setFx(nodes: FxNodeEdit[], what: string): Promise<boolean>
   return true;
 }
 
+/** A pattern as lanes of tokens: what a whole put writes, and what undo keeps. */
+export function lanesOf(p: Pattern): LaneTokens[] {
+  return p.lanes.map((l) => ({ ...(l.label ? { label: l.label } : {}), tokens: l.steps.map((s) => s.token) }));
+}
+
+// Undo and redo, per pattern: the lanes as they were before each change.
+const undone = new Map<string, { back: LaneTokens[][]; ahead: LaneTokens[][] }>();
+const [history, setHistory] = createSignal(0);
+const keyOf = (p: Pattern) => `${p.track}/${p.name}`;
+function stacks(p: Pattern) {
+  let s = undone.get(keyOf(p));
+  if (!s) undone.set(keyOf(p), (s = { back: [], ahead: [] }));
+  return s;
+}
+
+/** Whether the chosen row's pattern has a change to undo, and one to redo. */
+export function canUndo(): { back: boolean; ahead: boolean } {
+  history();
+  const p = pattern();
+  const s = p ? undone.get(keyOf(p)) : undefined;
+  return { back: !!s?.back.length, ahead: !!s?.ahead.length };
+}
+
+function took(p: Pattern, a: { writes: { path: string; text: string }[]; pattern: Pattern }, before: LaneTokens[], what: string) {
+  for (const w of a.writes) keep(w.path, w.text);
+  const s = stacks(p);
+  s.back.push(before);
+  if (s.back.length > 100) s.back.shift();
+  s.ahead = [];
+  setHistory((h) => h + 1);
+  setPattern(a.pattern);
+  say(`${p.track}: ${what} · on the next bar`);
+}
+
 /** One step of the chosen row's pattern, as a token. */
 export async function setStep(lane: number, step: number, token: string): Promise<void> {
-  const p = pattern();
-  if (!engine || !p) return;
-  const a = await engine.patternSet(p.track, lane, step, token);
-  if (!a.ok) {
-    say(a.error ?? "refused", true);
-    return;
-  }
-  for (const w of a.writes) store(w.path, w.text);
-  setPattern(a.pattern);
-  say(`${p.track}: step ${step + 1} is ${token} · on the next bar`);
+  await editSteps([{ lane, step, token }], `step ${step + 1} is ${token}`);
 }
 
 /** Several steps of the chosen row's pattern in one rewrite: a note drawn longer, moved. */
 export async function editSteps(edits: PatternEdit[], what: string): Promise<boolean> {
   const p = pattern();
   if (!engine || !p || edits.length === 0) return false;
+  const before = lanesOf(p);
   const a = await engine.patternEdit(p.track, edits);
   if (!a.ok) {
     say(a.error ?? "refused", true);
     return false;
   }
-  for (const w of a.writes) store(w.path, w.text);
-  setPattern(a.pattern);
-  say(`${p.track}: ${what} · on the next bar`);
+  took(p, a, before, what);
   return true;
+}
+
+/** The chosen row's pattern put whole: another length, a lane more or less. */
+export async function putPattern(lanes: LaneTokens[], what: string): Promise<boolean> {
+  const p = pattern();
+  if (!engine || !p) return false;
+  const before = lanesOf(p);
+  const a = await engine.patternPut(p.track, lanes);
+  if (!a.ok) {
+    say(a.error ?? "refused", true);
+    return false;
+  }
+  took(p, a, before, what);
+  return true;
+}
+
+/** The last change to the chosen row's pattern taken back (-1), or done again (1). */
+export async function undo(by: -1 | 1 = -1): Promise<void> {
+  const p = pattern();
+  if (!engine || !p) return;
+  const s = stacks(p);
+  const from = by < 0 ? s.back : s.ahead;
+  const lanes = from.pop();
+  if (!lanes) return say(by < 0 ? "nothing to undo" : "nothing to redo");
+  const now = lanesOf(p);
+  const a = await engine.patternPut(p.track, lanes);
+  if (!a.ok) {
+    from.push(lanes);
+    return say(a.error ?? "refused", true);
+  }
+  (by < 0 ? s.ahead : s.back).push(now);
+  for (const w of a.writes) keep(w.path, w.text);
+  setHistory((h) => h + 1);
+  setPattern(a.pattern);
+  say(`${p.track}: ${by < 0 ? "undone" : "redone"} · on the next bar`);
 }
 
 export async function play(): Promise<void> {

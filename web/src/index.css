@@ -710,13 +710,26 @@ button {
   padding-right: 4px;
 }
 
+/* Every cell the same width: the gaps between beats and bars are their own
+   elements, not a margin taken out of the cell after them. */
 .steps {
-  display: grid;
+  display: flex;
   gap: 2px;
   overflow-x: auto;
 }
 
+.steps .sep {
+  flex: none;
+  width: 2px;
+}
+
+.steps .sep.bar {
+  width: 8px;
+}
+
 .cell {
+  flex: 1 1 0;
+  min-width: 12px;
   height: 26px;
   border-radius: 3px;
   background: #dfdcd5;
@@ -732,12 +745,46 @@ button {
   touch-action: none;
 }
 
-.cell.beat {
-  margin-left: 3px;
+.lane .label .row-out {
+  margin-right: 4px;
 }
 
-.cell.bar {
-  margin-left: 8px;
+.add-lane {
+  margin-top: 6px;
+}
+
+.lane-pick {
+  grid-column: 2;
+  justify-self: start;
+  background: var(--paper);
+  border: 1px dashed var(--grey);
+  border-radius: 4px;
+  font: 700 10px/1 var(--sans);
+  letter-spacing: 0.1em;
+  padding: 5px 6px;
+  cursor: pointer;
+}
+
+.pattern-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.pattern-tools .tool-label {
+  font: 700 10px/1 var(--sans);
+  letter-spacing: 0.12em;
+  margin-right: 2px;
+}
+
+.pattern-tools .tool-gap {
+  flex: 1;
+}
+
+.key:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .cell.hit,
@@ -807,12 +854,29 @@ button {
   font-weight: 700;
 }
 
-.rowkey.vel-key {
+/* What the lane under the roll paints, beside it. */
+.lane-tabs {
   height: 44px;
   margin-top: 6px;
-  align-items: flex-end;
-  font: 700 9px/1 var(--sans);
-  letter-spacing: 0.1em;
+  display: grid;
+  grid-template-rows: repeat(4, 1fr);
+  gap: 1px;
+}
+
+.lane-tab {
+  background: none;
+  border: none;
+  font: 700 8px/1 var(--sans);
+  letter-spacing: 0.08em;
+  color: var(--grey);
+  text-align: right;
+  padding: 0 4px 0 0;
+  cursor: pointer;
+}
+
+.lane-tab.on {
+  color: var(--ink);
+  background: var(--yellow);
 }
 
 .roll-scroll {
@@ -915,6 +979,78 @@ button {
   background-clip: content-box;
   background-color: var(--ink);
   pointer-events: none;
+}
+
+.vel.unset {
+  background-color: #b9b5ad;
+}
+
+.bar-note.selected {
+  outline: 2px solid var(--orange);
+  outline-offset: -1px;
+  z-index: 2;
+}
+
+/* The right edge of a note: a drag sets its length. */
+.bar-note .edge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: ew-resize;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.bar-note .edge:hover {
+  background: var(--orange);
+}
+
+.band {
+  position: absolute;
+  border: 1px solid var(--orange);
+  background: rgba(255, 90, 31, 0.12);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.roll {
+  position: relative;
+}
+
+.roll-head .selection {
+  font: 10px var(--mono);
+  color: var(--grey);
+  margin-left: 8px;
+}
+
+/* The step's menu, from a right click. */
+.menu {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink);
+  border-radius: 4px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 190px;
+}
+
+.menu button {
+  background: none;
+  border: none;
+  color: #eee;
+  font: 12px var(--sans);
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.menu button:hover {
+  background: var(--orange);
+  color: #fff;
 }
 
 /* ── sound: knobs and keys ─────────────────────────── */

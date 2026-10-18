@@ -143,6 +143,31 @@ export interface PatternStep {
   roll?: number;
   /** The MIDI notes it sounds: one for a note, several for a chord or a run. */
   midi?: number[];
+  /** Each note as written, for a note, a chord or a run inside the step. */
+  notes?: PatternNote[];
+  /** Locked on the step, `null` where the text leaves it: the chance it
+   * sounds (0-1), the gate, the cutoff, the resonance, the envelope depth. */
+  prob?: number | null;
+  gate?: number | null;
+  cutoff?: number | null;
+  res?: number | null;
+  edepth?: number | null;
+  /** A drum step split inside itself: each hit's velocity, 0 a rest. */
+  hits?: number[];
+}
+
+export interface PatternNote {
+  midi: number;
+  /** As the pattern writes it: `1.2`, `C#3`. */
+  text: string;
+  slide: boolean;
+  velocity: number | null;
+}
+
+/** A lane of a whole pattern to put: its drum, and a token a step. */
+export interface LaneTokens {
+  label?: string;
+  tokens: string[];
 }
 
 /** The song's scale: the root's pitch class (0 for C) and its seven intervals. */
@@ -228,6 +253,8 @@ export interface Pattern {
   name: string;
   drums: boolean;
   steps_per_bar: number;
+  /** The lane names a drum pattern can take. */
+  drum_names: string[];
   length: number;
   scale: PatternScale;
   lanes: PatternLane[];
@@ -456,6 +483,11 @@ export class Tatum {
    */
   patternEdit(track: string, edits: PatternEdit[]): Promise<PatternAnswer> {
     return this.command<PatternAnswer>({ op: "pattern_set", track, edits });
+  }
+
+  /** The whole pattern as `lanes`: another length, a drum lane more, a step undone. */
+  patternPut(track: string, lanes: LaneTokens[]): Promise<PatternAnswer> {
+    return this.command<PatternAnswer>({ op: "pattern_put", track, lanes });
   }
 
   /** The rows and the knobs of the row chosen; `focus` chooses it. */
