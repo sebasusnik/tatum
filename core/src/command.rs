@@ -321,6 +321,17 @@ impl Live {
                     "add" => Action::Add(msg.get("role").and_then(Value::str).ok_or("add takes a role")?.to_string()),
                     "remove" => Action::Remove(int(&msg, "row")? as usize),
                     "vary" => Action::Vary { row: int(&msg, "row")? as usize, by: int(&msg, "by")? as i32 },
+                    "set" => Action::Set {
+                        row: int(&msg, "row")? as usize,
+                        param: msg.get("param").and_then(Value::str).ok_or("set takes a param")?.to_string(),
+                        value: int(&msg, "value")?.clamp(0, 127) as u8,
+                    },
+                    "new" => {
+                        let word = |k: &str| {
+                            msg.get(k).and_then(Value::str).map(String::from).ok_or(format!("new takes a {}", k))
+                        };
+                        Action::New { role: word("role")?, kind: word("kind")?, name: word("name")? }
+                    }
                     "compare" => Action::Compare,
                     "save" => Action::Save {
                         row: int(&msg, "row")? as usize,
@@ -887,6 +898,7 @@ impl Live {
             .raw("rows", &json::array(&rows))
             .raw("macros", &json::array(&macros))
             .raw("mix", &json::array(&mix))
+            .raw("params", &json::array(&view.params.iter().map(knob).collect::<Vec<_>>()))
             .bool("comparing", view.comparing)
             .raw("knob_ccs", &json::array(&ccs))
             .raw("key", &key)
@@ -1614,6 +1626,53 @@ mod tests {
         assert_eq!(rows(&opened)[1].get("name").and_then(Value::str), Some("sub_dub"));
         let session = opened.get("session").and_then(Value::str).unwrap();
         assert!(session.contains("use \"../../voices/bass/sub_dub.synth\""), "{session}");
+    }
+
+    #[test]
+    fn a_voice_from_nothing_plays_and_any_of_its_parameters_turns() {
+        let mut live = Live::new();
+        live.command(&files_message());
+        live.command("{\"op\":\"compose_open\",\"root\":\"session.synth\"}");
+        for (role, kind, name) in [
+            ("bass", "bass", "fresh_bass"),
+            ("lead", "fm", "fresh_fm"),
+            ("pad", "keys", "fresh_keys"),
+            ("perc", "beats", "fresh_kit"),
+        ] {
+            let new = Value::parse(&live.command(&format!(
+                "{{\"op\":\"compose\",\"action\":\"new\",\"role\":\"{role}\",\"kind\":\"{kind}\",\"name\":\"{name}\"}}"
+            )))
+            .unwrap();
+            assert_eq!(new.get("ok").and_then(Value::bool), Some(true), "{:?}", new);
+            assert_eq!(
+                new.get("loaded").unwrap().get("ok").and_then(Value::bool),
+                Some(true),
+                "{:?}",
+                new.get("loaded")
+            );
+            let writes = new.get("writes").unwrap().arr().unwrap();
+            assert_eq!(
+                writes[0].get("path").and_then(Value::str),
+                Some(format!("voices/{role}/{name}.synth").as_str())
+            );
+        }
+        let twice = live.command(
+            "{\"op\":\"compose\",\"action\":\"new\",\"role\":\"bass\",\"kind\":\"bass\",\"name\":\"fresh_bass\"}",
+        );
+        assert!(twice.contains("\"ok\":false"), "{twice}");
+
+        // Row 1 is the bass: a parameter no macro has, turned.
+        let view = Value::parse(&live.command("{\"op\":\"compose_view\",\"focus\":1}")).unwrap();
+        let params = view.get("view").unwrap().get("params").unwrap().arr().unwrap().len();
+        assert!(params > 15, "{params} parameters");
+        let set = Value::parse(
+            &live.command("{\"op\":\"compose\",\"action\":\"set\",\"row\":1,\"param\":\"osc2_pitch\",\"value\":100}"),
+        )
+        .unwrap();
+        assert_eq!(set.get("ok").and_then(Value::bool), Some(true), "{:?}", set);
+        let bad =
+            live.command("{\"op\":\"compose\",\"action\":\"set\",\"row\":1,\"param\":\"mod_index\",\"value\":10}");
+        assert!(bad.contains("\"ok\":false"), "{bad}");
     }
 
     #[test]

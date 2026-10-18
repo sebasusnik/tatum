@@ -7,10 +7,11 @@
 // Every change is sent to the engine, which rewrites the pattern in the
 // file that defines it.
 
-import { For, Index, Show, onCleanup, onMount } from "solid-js";
+import { For, Index, Show, createSignal, onCleanup, onMount } from "solid-js";
 import type { LaneTokens, PatternStep } from "@tatum/engine";
-import { canUndo, lanesOf, pattern, position, putPattern, setStep, undo } from "../store";
+import { canUndo, lanesOf, pattern, position, putPattern, setStep, undo, view } from "../store";
 import { hitStep, locksOf } from "../steps";
+import { Params, pieceOf } from "./Params";
 import { PianoRoll } from "./PianoRoll";
 
 function nextHit(s: PatternStep): string {
@@ -29,6 +30,7 @@ function resized(tokens: string[], n: number): string[] {
 }
 
 export function Pattern() {
+  const [piece, setPiece] = createSignal<string | null>(null);
   const playhead = () => {
     const p = pattern();
     const pos = position();
@@ -127,7 +129,13 @@ export function Pattern() {
                           ×
                         </button>
                       </Show>
-                      {lane().label}
+                      <button
+                        class={`piece ${piece() === lane().label ? "on" : ""}`}
+                        onClick={() => setPiece(piece() === lane().label ? null : lane().label)}
+                        title="this piece's sound: tuning, length, level, side"
+                      >
+                        {lane().label}
+                      </button>
                     </span>
                     <div class="steps">
                       <Index each={lane().steps}>
@@ -169,6 +177,17 @@ export function Pattern() {
                   </For>
                 </select>
               </div>
+              <Show when={piece() && view()}>
+                <div class="piece-sound">
+                  <span class="tool-label">{piece()!.toUpperCase()}</span>
+                  <Show
+                    when={view()!.params.some((m) => m.label.startsWith(`${pieceOf(piece()!) === "hat" ? "hihat" : pieceOf(piece()!)}_`))}
+                    fallback={<span class="hint">this kit has no knobs for the {piece()}</span>}
+                  >
+                    <Params row={view()!.focus} params={view()!.params} only={pieceOf(piece()!)} />
+                  </Show>
+                </div>
+              </Show>
             </div>
           </Show>
         </section>

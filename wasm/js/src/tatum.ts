@@ -99,6 +99,8 @@ export interface View {
   knob_ccs: number[];
   /** The song's key as the text has it; `own` when the session sets it over the groove's. */
   key: { root?: string | null; kind?: string | null; own: boolean };
+  /** Every parameter of the chosen row's module, by name: the whole instrument. */
+  params: Macro[];
   /** Every scale the language knows, by name. */
   scales: string[];
   /** The song's tempo as the text has it; `own` when the session sets it over the groove's. */
@@ -124,7 +126,11 @@ export type ComposeAction =
   /** The row out of the loop; not the groove's. */
   | { action: "remove"; row: number }
   /** The next (or previous) pattern of the row's voice. */
-  | { action: "vary"; row: number; by: number };
+  | { action: "vary"; row: number; by: number }
+  /** Any parameter of the row's module, held like a knob and written by the row's save. */
+  | { action: "set"; row: number; param: string; value: number }
+  /** A voice from nothing: `kind` is bass, keys, fm or beats; a row for it. */
+  | { action: "new"; role: string; kind: string; name: string };
 
 export interface ComposeAnswer extends Answer {
   said: string;

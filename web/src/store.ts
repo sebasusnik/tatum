@@ -285,7 +285,7 @@ export async function act(action: ComposeAction): Promise<void> {
   }
   setView(a.view);
   say(a.said);
-  if (action.action !== "turn" && action.action !== "mix") await refreshRow();
+  if (action.action !== "turn" && action.action !== "mix" && action.action !== "set") await refreshRow();
 }
 
 export async function focus(row: number): Promise<void> {

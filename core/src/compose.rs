@@ -255,6 +255,8 @@ pub struct View {
     pub macros: Vec<MacroRow>,
     /// Every row's channel, [`MIX`] in order; empty for a row with nothing.
     pub mix: Vec<Vec<MacroRow>>,
+    /// Every parameter of the chosen row's module, by name.
+    pub params: Vec<MacroRow>,
     pub comparing: bool,
     pub knob_ccs: Vec<u8>,
 }
@@ -310,6 +312,21 @@ pub enum Action {
     Vary {
         row: usize,
         by: i32,
+    },
+    /// Any parameter of the row's module put at `value`, held like a knob
+    /// and written by the row's save.
+    Set {
+        row: usize,
+        param: String,
+        value: u8,
+    },
+    /// A voice from nothing: a module of `kind` at its defaults, a pattern
+    /// to start from, a track, written as `voices/<role>/<name>.synth`,
+    /// and a row for it.
+    New {
+        role: String,
+        kind: String,
+        name: String,
     },
 }
 
@@ -569,7 +586,16 @@ impl Session {
                 None => Vec::new(),
             })
             .collect();
-        View { rows, macros, mix, comparing: self.comparing, knob_ccs: self.knob_ccs.clone() }
+        // Every parameter of the chosen row's module, in the order the
+        // language lists them: the whole instrument, not just its macros.
+        let params = match self.voice_at(focus) {
+            Some(voice) => params::specs(voice.kind)
+                .iter()
+                .map(|s| self.knob_row(planner, focus, s.name.to_string(), &format!("{} {}", voice.track, s.name)))
+                .collect(),
+            None => Vec::new(),
+        };
+        View { rows, macros, mix, params, comparing: self.comparing, knob_ccs: self.knob_ccs.clone() }
     }
 
     /// `words` (`bass cutoff`) held at `value` on the engine and kept as the
@@ -722,6 +748,46 @@ impl Session {
                 self.fill_roles();
                 let said = format!("{} out · on the next bar", slot.voice.as_deref().unwrap_or(&slot.role));
                 Ok(Outcome { plans: Vec::new(), said, writes: vec![(self.path.clone(), self.text())] })
+            }
+            Action::Set { row, param, value } => {
+                let voice = self.voice_at(row).ok_or("nothing to set")?;
+                if params::lookup(voice.kind, &param).is_none() {
+                    return Err(format!("{} has no parameter {}", kind_name(voice.kind), param));
+                }
+                let words = format!("{} {}", voice.track, param);
+                self.hold(row, &words, value, planner, generation)
+            }
+            Action::New { role, kind, name } => {
+                let kind = ModuleKind::from_str(&kind).ok_or_else(|| format!("no module kind {}", kind))?;
+                if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                    return Err("a voice's name is letters, digits and _".into());
+                }
+                if role.is_empty() || role == GROOVE_ROLE || !role.chars().all(|c| c.is_ascii_lowercase()) {
+                    return Err(format!("{} is not a role for a voice", role));
+                }
+                if self.library.voices.iter().any(|v| v.name == name)
+                    || self.library.grooves.iter().any(|g| g.name == name)
+                {
+                    return Err(format!("{} exists already", name));
+                }
+                let dir = dir_of(&self.library.grooves[0].path);
+                let lib = dir.strip_suffix("grooves").unwrap_or(dir).trim_end_matches('/');
+                let path = if lib.is_empty() {
+                    format!("voices/{}/{}.synth", role, name)
+                } else {
+                    format!("{}/voices/{}/{}.synth", lib, role, name)
+                };
+                let text = new_voice_text(kind, &name);
+                let voice = Voice::parse(&role, &path, &text)?;
+                self.library.put(voice);
+                if !self.library.roles.contains(&role) {
+                    self.library.roles.push(role.clone());
+                }
+                self.slots.retain(|s| s.voice.is_some() || s.role != role);
+                let at = self.slots.iter().position(|s| s.voice.is_none()).unwrap_or(self.slots.len());
+                self.slots.insert(at, Slot { voice: Some(name.clone()), ..Slot::empty(&role) });
+                let said = format!("{}: {}, a new {} · on the next bar", role, name, kind_name(kind));
+                Ok(Outcome { plans: Vec::new(), said, writes: vec![(path, text), (self.path.clone(), self.text())] })
             }
             Action::Vary { row, by } => {
                 let voice = self.voice_at(row).ok_or("nothing to vary")?;
@@ -904,6 +970,27 @@ impl Session {
 fn is_scale_line(line: &str) -> bool {
     let mut words = line.split_whitespace();
     words.next() == Some("scale") && words.count() == 2
+}
+
+/// A voice from nothing: the module at its defaults, a pattern to start
+/// from -- a root a beat, or a kick and a hat for drums -- and its track.
+fn new_voice_text(kind: ModuleKind, name: &str) -> String {
+    let kind_word = kind_name(kind);
+    let pattern = match kind {
+        ModuleKind::Beats => {
+            String::from("    kick: X - - -  - - - -  X - - -  - - - -\n    hat:  - - x -  - - x -  - - x -  - - x -\n")
+        }
+        ModuleKind::Keys => String::from("    [1.3 3.3 5.3]:0.7 ..*15\n"),
+        _ => String::from("    1.2:0.9 - - -  1.2:0.7 - - -  1.2:0.9 - - -  1.2:0.7 - - -\n"),
+    };
+    format!(
+        "# A new {kind_word} voice, from its defaults\n\
+         # A voice: one module, its patterns in degrees of whatever scale the groove\n\
+         # sets, and a track named as the voice. `use` it from any song.\n\
+         module {kind_word} {name} {{\n}}\n\n\
+         pattern {name}_line {{\n{pattern}}}\n\n\
+         track {name} {{\n    play {name}_line\n    using {name}\n    level 0.6\n    out > lowpass(18khz, 0.05) as lp > master\n}}\n"
+    )
 }
 
 /// A session line that gives a track another pattern, as the session
