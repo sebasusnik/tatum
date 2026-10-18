@@ -35,7 +35,7 @@ function short(row: Row, name: string): string {
 }
 
 export function Rows(props: { view: View }) {
-  const roles = () => [...new Set(props.view.rows.slice(1).map((r) => r.role))];
+  const roles = () => props.view.roles;
   return (
     <section class="rows">
       <Index each={props.view.rows}>
@@ -94,6 +94,14 @@ export function Rows(props: { view: View }) {
                 title="mute the row's track, or bring it back"
               >
                 M
+              </button>
+              <button
+                class={`key small solo ${row().soloed ? "lit" : ""}`}
+                disabled={!row().name}
+                onClick={(e) => (e.stopPropagation(), act({ action: "solo", row: i }))}
+                title="the row alone, or back with the rest"
+              >
+                S
               </button>
             </div>
           </div>

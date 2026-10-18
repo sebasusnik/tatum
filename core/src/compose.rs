@@ -372,17 +372,21 @@ pub struct Session {
 impl Session {
     /// A session that does not exist yet: the first groove and the first
     /// bass. Its file is [`Session::text`], to write.
+    /// With an empty row for every other role, for a screen that has no key
+    /// to add one ([`Session::fill_roles`]).
     pub fn new(library: Library, path: &str, knob_ccs: Vec<u8>) -> Self {
-        Self::new_in(library, path, dir_of(path), knob_ccs)
+        let mut session = Self::new_in(library, path, dir_of(path), knob_ccs);
+        session.fill_roles();
+        session
     }
 
     /// A new session at `path` over the library in `library_dir`, an
-    /// ancestor of `path`'s directory.
+    /// ancestor of `path`'s directory: the first groove and a row with the
+    /// first bass. Rows are added with [`Action::Add`] and [`Action::New`].
     pub fn new_in(library: Library, path: &str, library_dir: &str, knob_ccs: Vec<u8>) -> Self {
         let mut session = Self::empty_in(library, path, library_dir, knob_ccs);
-        session.fill_roles();
-        if let Some(slot) = session.slots.iter_mut().find(|s| s.role == "bass") {
-            slot.voice = session.library.of("bass").first().map(|v| v.name.clone());
+        if let Some(bass) = session.library.of("bass").first().map(|v| v.name.clone()) {
+            session.slots.push(Slot { voice: Some(bass), ..Slot::empty("bass") });
         }
         session
     }
@@ -405,9 +409,10 @@ impl Session {
         }
     }
 
-    /// An empty row for every role that has none, so each can be chosen,
-    /// after the rows that play: the loop keeps the order it was built in.
-    fn fill_roles(&mut self) {
+    /// An empty row for every role that has none, so each can be chosen
+    /// with the arrows, after the rows that play: for the terminal's
+    /// screen, which has no key to add a row. The browser adds rows instead.
+    pub fn fill_roles(&mut self) {
         for role in self.library.roles.clone() {
             if !self.slots.iter().any(|s| s.role == role) {
                 self.slots.push(Slot::empty(&role));
@@ -471,7 +476,6 @@ impl Session {
                 None => session.extra.push(line),
             }
         }
-        session.fill_roles();
         session
     }
 
@@ -744,10 +748,16 @@ impl Session {
                 if row == 0 || row > self.slots.len() {
                     return Err("the groove stays: choose another".into());
                 }
+                // Alone when it goes, the rest would stay silent: its solo goes with it.
+                let mut plans = Vec::new();
+                if let Some(v) = self.voice_at(row) {
+                    if planner.soloed().contains(&v.track) {
+                        plans = planner.toggle_solo_group(&v.tracks.clone(), generation);
+                    }
+                }
                 let slot = self.slots.remove(row - 1);
-                self.fill_roles();
                 let said = format!("{} out · on the next bar", slot.voice.as_deref().unwrap_or(&slot.role));
-                Ok(Outcome { plans: Vec::new(), said, writes: vec![(self.path.clone(), self.text())] })
+                Ok(Outcome { plans, said, writes: vec![(self.path.clone(), self.text())] })
             }
             Action::Set { row, param, value } => {
                 let voice = self.voice_at(row).ok_or("nothing to set")?;
@@ -1359,13 +1369,10 @@ mod tests {
     fn a_hand_written_session_keeps_its_other_lines() {
         let text = "use \"grooves/dub.synth\"\nuse \"voices/lead/bell.synth\"\ntempo 118\ntrack pad { level 0.1 }\n";
         let session = Session::from_text(library(), "s.synth", vec![1, 2], text);
-        // The rows the file plays first, in its order; an empty one for each
-        // role it leaves out, after them.
+        // A row for each voice the file plays, in its order, and no other:
+        // the bass line is not in the file.
+        assert_eq!(session.slots.len(), 1);
         assert_eq!(session.slots[0].voice.as_deref(), Some("bell"));
-        assert!(
-            session.slots.iter().any(|s| s.role == "bass" && s.voice.is_none()),
-            "the bass line is not in the file"
-        );
         assert!(session.text().ends_with("tempo 118\ntrack pad { level 0.1 }\n"), "{}", session.text());
     }
 

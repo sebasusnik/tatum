@@ -71,7 +71,9 @@ pub fn open(path: &Path, knob_ccs: Vec<u8>) -> Result<Session, String> {
     let name = path.to_string_lossy().into_owned();
     if path.exists() {
         let text = fs::read_to_string(&path).map_err(|e| format!("cannot read {}: {}", path.display(), e))?;
-        Ok(Session::from_text(library, &name, knob_ccs, &text))
+        let mut session = Session::from_text(library, &name, knob_ccs, &text);
+        session.fill_roles();
+        Ok(session)
     } else {
         let session = Session::new(library, &name, knob_ccs);
         fs::write(&path, session.text()).map_err(|e| format!("cannot write {}: {}", path.display(), e))?;

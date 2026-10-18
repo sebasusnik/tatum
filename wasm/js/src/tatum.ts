@@ -101,6 +101,8 @@ export interface View {
   key: { root?: string | null; kind?: string | null; own: boolean };
   /** Every parameter of the chosen row's module, by name: the whole instrument. */
   params: Macro[];
+  /** Every role the library has voices for, in the order it lists them. */
+  roles: string[];
   /** Every scale the language knows, by name. */
   scales: string[];
   /** The song's tempo as the text has it; `own` when the session sets it over the groove's. */

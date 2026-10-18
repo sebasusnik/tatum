@@ -899,6 +899,7 @@ impl Live {
             .raw("macros", &json::array(&macros))
             .raw("mix", &json::array(&mix))
             .raw("params", &json::array(&view.params.iter().map(knob).collect::<Vec<_>>()))
+            .strs("roles", &session.library.roles)
             .bool("comparing", view.comparing)
             .raw("knob_ccs", &json::array(&ccs))
             .raw("key", &key)
@@ -1303,15 +1304,15 @@ mod tests {
         assert_eq!(opened.get("ok").and_then(Value::bool), Some(true), "{:?}", opened);
         let view = opened.get("view").unwrap();
         let rows = view.get("rows").unwrap().arr().unwrap();
-        assert_eq!(rows.len(), 5);
+        // A new loop: the groove and the first bass, rows added by hand.
+        assert_eq!(rows.len(), 2);
         assert_eq!(rows[1].get("name").and_then(Value::str), Some("acid"));
         assert!(live.files.iter().any(|(p, _)| p == "session.synth"), "a new session file was written");
         live.command("{\"op\":\"start\"}");
 
-        // The lead's next voice: the session file changes and reloads.
-        let chosen =
-            Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"choose\",\"row\":2,\"by\":1}")).unwrap();
-        assert!(chosen.get("said").unwrap().str().unwrap().starts_with("lead: bell"));
+        // A lead row: the session file changes and reloads.
+        let chosen = Value::parse(&live.command("{\"op\":\"compose\",\"action\":\"add\",\"role\":\"lead\"}")).unwrap();
+        assert!(chosen.get("said").unwrap().str().unwrap().starts_with("lead: bell"), "{:?}", chosen);
         assert_eq!(chosen.get("loaded").unwrap().get("plan").and_then(Value::str), Some("swap"));
         let session_text = live.files.iter().find(|(p, _)| p == "session.synth").map(|(_, t)| t.clone()).unwrap();
         assert!(session_text.contains("use \"voices/lead/bell.synth\""), "{session_text}");

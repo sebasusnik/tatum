@@ -121,6 +121,8 @@ type Gesture =
   | { kind: "box"; x0: number; y0: number; x1: number; y1: number; add: boolean; moved: boolean; col: number; row: number }
   | { kind: "move"; col: number; row: number; base: PatternStep[]; lifted: Lifted[]; moved: boolean }
   | { kind: "resize"; start: number; base: PatternStep[] }
+  /** A note of a run: up and down is its own pitch, sideways the whole step. */
+  | { kind: "sub"; start: number; sub: number; col: number; row: number; base: PatternStep[]; moved: boolean }
   | { kind: "paint"; base: PatternStep[] };
 
 export function PianoRoll() {
@@ -313,6 +315,11 @@ export function PianoRoll() {
       setDraft([...base()]);
       return;
     }
+    if (hit && hit.of && !e.shiftKey) {
+      setSelected(new Set([hit.id]));
+      gesture = { kind: "sub", start: hit.start, sub: hit.sub!, col, row, base: base(), moved: false };
+      return;
+    }
     if (hit) {
       const sel = new Set(selected());
       if (e.shiftKey) {
@@ -343,6 +350,17 @@ export function PianoRoll() {
     } else if (g.kind === "resize") {
       const now = [...g.base];
       put(now, g.start, now[g.start], Math.max(1, col - g.start + 1));
+      setDraft(now);
+    } else if (g.kind === "sub") {
+      const dc = col - g.col;
+      const by = row - g.row;
+      if (!g.moved && dc === 0 && by === 0) return;
+      g.moved = true;
+      const notes = notesOf(g.base[g.start]).map((n, k) => (k === g.sub ? { ...n, midi: shift(n.midi, by) } : n));
+      const now = [...g.base];
+      const to = Math.max(0, Math.min(length() - 1, g.start + dc));
+      if (to !== g.start) clear(now, g.start);
+      put(now, to, runStep(notes, scale()), 1);
       setDraft(now);
     } else if (g.kind === "move") {
       const cols = col - g.col;
@@ -395,6 +413,16 @@ export function PianoRoll() {
       }
       return;
     }
+    if (g.kind === "sub") {
+      const now = draft();
+      if (!g.moved || !now) return setDraft(null);
+      const { col, row } = point(e);
+      const to = Math.max(0, Math.min(length() - 1, g.start + col - g.col));
+      const midi = shift(notesOf(g.base[g.start])[g.sub].midi, row - g.row);
+      setSelected(new Set([`${to}:${g.sub}:${midi}`]));
+      void commit(now, to === g.start ? "a note of the run, another pitch" : "the run moved");
+      return;
+    }
     const now = draft();
     if (now) void commit(now, g.kind === "resize" ? "a note's length" : "painted");
   };
@@ -444,9 +472,16 @@ export function PianoRoll() {
     void commit(now, "joined");
   };
 
+  const slides = (bar: Bar) => !!notesOf(bar.step)[bar.sub ?? 0]?.slide;
   const slide = (bar: Bar) => {
     const now = [...base()];
     const s = now[bar.start];
+    if (bar.of) {
+      const on = slides(bar);
+      now[bar.start] = runStep(notesOf(s).map((n, k) => (k === bar.sub ? { ...n, slide: !on } : n)), scale());
+      void commit(now, on ? "no slide" : "slides in from the note before");
+      return;
+    }
     if (s.kind !== "note") return;
     now[bar.start] = chordStep(s.midi ?? [], s, scale(), !s.slide);
     void commit(now, s.slide ? "no slide" : "slides in from the note before");
@@ -497,10 +532,19 @@ export function PianoRoll() {
     const g = gesture;
     if (!g || g.kind !== "paint") return;
     const r = lane.getBoundingClientRect();
-    const col = Math.max(0, Math.min(length() - 1, Math.floor(((e.clientX - r.left) / r.width) * length())));
+    const x = ((e.clientX - r.left) / r.width) * length();
+    const col = Math.max(0, Math.min(length() - 1, Math.floor(x)));
     const v = Math.max(0.05, Math.min(1, Math.round((1 - (e.clientY - r.top) / r.height) * 20) / 20));
     const now = [...(draft() ?? g.base)];
     const s = now[col];
+    // A run's notes each have their own velocity; nothing else is locked on them.
+    if (s.kind === "sub" && laneKind() === "vel") {
+      const notes = notesOf(s);
+      const k = Math.max(0, Math.min(notes.length - 1, Math.floor((x - col) * notes.length)));
+      now[col] = runStep(notes.map((n, i) => (i === k ? { ...n, velocity: clearIt ? null : v } : n)), scale());
+      setDraft(now);
+      return;
+    }
     if (s.kind !== "note" && s.kind !== "chord") return;
     now[col] = valued(s, clearIt ? null : v);
     setDraft(now);
@@ -645,7 +689,25 @@ export function PianoRoll() {
             >
               <Index each={steps()}>
                 {(s, i) => (
-                  <Show when={s().kind === "note" || s().kind === "chord"}>
+                  <Show
+                    when={s().kind === "note" || s().kind === "chord"}
+                    fallback={
+                      <Show when={s().kind === "sub" && laneKind() === "vel"}>
+                        <For each={notesOf(s())}>
+                          {(n, k) => (
+                            <div
+                              class={`vel ${n.velocity == null ? "unset" : ""}`}
+                              style={{
+                                left: `${((i + k() / notesOf(s()).length) / length()) * 100}%`,
+                                width: `${100 / length() / notesOf(s()).length}%`,
+                                height: `${(n.velocity ?? 0.8) * 100}%`,
+                              }}
+                            />
+                          )}
+                        </For>
+                      </Show>
+                    }
+                  >
                     <div
                       class={`vel ${laneValue(s()) == null ? "unset" : ""}`}
                       style={{
@@ -667,9 +729,9 @@ export function PianoRoll() {
           <div class="menu" style={{ left: `${m().x}px`, top: `${m().y}px` }} onPointerDown={(e) => e.stopPropagation()}>
             <Show when={m().bar}>
               <button onClick={() => (removeOne(m().bar!), setMenu(null))}>Borrar la nota</button>
-              <Show when={m().bar!.step.kind === "note"}>
+              <Show when={m().bar!.step.kind === "note" || m().bar!.of}>
                 <button onClick={() => (slide(m().bar!), setMenu(null))}>
-                  {m().bar!.step.slide ? "Sin ligado" : "Ligar desde la anterior (~)"}
+                  {slides(m().bar!) ? "Sin ligado" : "Ligar desde la anterior (~)"}
                 </button>
               </Show>
             </Show>
