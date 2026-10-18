@@ -66,10 +66,21 @@ function startOf(steps: PatternStep[], at: number): number | null {
   return null;
 }
 
-/** `step` at `at`, held for `length`; what was held past it before stops. */
+/** Where a note put at `at` can be held to: the next note's start, or the end. */
+function roomAfter(steps: PatternStep[], at: number): number {
+  let i = at + 1;
+  while (i < steps.length && (steps[i].kind === "tie" || steps[i].kind === "rest")) i++;
+  return i;
+}
+
+/**
+ * `step` at `at`, held for `length` but never over the next note: a step
+ * plays one thing, so a hold stops where another note starts instead of
+ * writing over it. What was held past it before stops.
+ */
 function put(steps: PatternStep[], at: number, step: PatternStep, length: number): void {
   // A note cut short where `at` was held from an earlier one.
-  const end = Math.min(steps.length, at + length);
+  const end = Math.min(roomAfter(steps, at), at + length);
   steps[at] = step;
   for (let i = at + 1; i < end; i++) steps[i] = tie();
   for (let i = end; i < steps.length && steps[i].kind === "tie"; i++) steps[i] = rest();
@@ -236,7 +247,8 @@ export function PianoRoll() {
     }
     const midis = l.midis.map((m) => shift(m, by));
     const there = into[at];
-    if ((there.kind === "note" || there.kind === "chord") && !l.whole) {
+    // Onto a note that starts there: both sound, as a chord, at its length.
+    if (there.kind === "note" || there.kind === "chord") {
       into[at] = chordStep([...(there.midi ?? []), ...midis], there, scale());
       return;
     }
