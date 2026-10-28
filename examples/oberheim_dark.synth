@@ -1,0 +1,135 @@
+# oberheim_dark.synth — what an Oberheim does in the dark
+# 100 BPM, D minor. Every sound below is built on the modulation ports and the
+# SEM-style `svf`: cross-mod into an oscillator and into the filter, hard sync,
+# PWM, and the filter's mode knob sweeping from lowpass through the notch.
+
+tempo 100
+scale D minor
+sidechain 0.25
+reverb size=0.95 damp=0.45 predelay=35
+
+# The bass: a saw the pulse an octave below cross-mods (X-mod), the pulse's
+# width breathing on a slow LFO, into an SEM lowpass an envelope opens two and
+# a half octaves on every note while another LFO leans its mode knob toward the
+# notch.
+instrument abyss {
+  osc saw(55) as a
+  osc pulse(55, width=0.4, pitch=-12) as b
+  lfo(0.25, 0.2) as pwm
+  lfo(0.13, 0.25) as lean
+  adsr(0.001, 0.6, 0.0, 0.3) as fenv
+  b > gain(0.35) > a.fm
+  pwm > b.width
+  a > gain(0.6) as la
+  b > gain(0.5) as lb
+  la > mix
+  lb > mix
+  mix > svf(220, 0.45, morph=0.15) as filt
+  fenv > gain(2.5) > filt.cutoff
+  lean > filt.morph
+  filt > adsr(0.005, 0.8, 0.7, 0.8) as amp
+  amp > saturate(1.6) as sat
+  sat > out
+}
+
+# The lead: a saw hard-synced to another a fifth below it, its pitch moving
+# under the master, which holds the note: the sync sweep. The pitch stays put
+# and the timbre tears.
+instrument tear {
+  osc saw(110) as master_osc
+  osc saw(110, pitch=7) as slave
+  lfo(0.5, 0.5) as sweep
+  master_osc > slave.sync
+  sweep > slave.pitch
+  slave > lowpass(1800, 0.1) as f
+  f > adsr(0.01, 0.3, 0.6, 0.4) as amp
+  amp > out
+}
+
+# The pad: two pulses in slow PWM against each other, through an SEM filter
+# whose mode drifts between lowpass and the notch over many seconds, the
+# brass-without-brass of an OB pad.
+instrument vault {
+  osc pulse(110, width=0.5) as p1
+  osc pulse(110, width=0.5, pitch=0.08) as p2
+  lfo(0.17, 0.3) as w1
+  lfo(0.23, 0.3) as w2
+  lfo(0.05, 0.4) as mode
+  w1 > p1.width
+  w2 > p2.width
+  p1 > mix
+  p2 > mix
+  mix > gain(0.5) as lvl
+  lvl > svf(900, 0.25, morph=0.25) as filt
+  mode > filt.morph
+  filt > adsr(1.5, 1.0, 0.8, 2.5) as amp
+  amp > out
+}
+
+module beats kit {
+  kick_level 1.0
+  kick_click 0.3
+  hihat_level 0.5
+  hihat_decay 0.25
+}
+
+pattern beat {
+  kick:  X - - -  - - - -  x - X -  - - - -
+  hat:   - - x -  - - x:0.5 -  - - x -  - x:0.4 x -
+  clap:  - - - -  X - - -  - - - -  X - - -
+}
+
+pattern low {
+  1.1:0.9 ..*5  -  -  1.1:0.8 ..*3  6.0:0.8 ..*3
+}
+
+pattern low_var {
+  1.1:0.9 ..*3  -  1.1:0.7 -  -  3.1:0.8 ..*3  7.0:0.8 ..  6.0:0.7 ..
+}
+
+pattern cry {
+  - - - -  5.3:0.7 ..*3  - - - -  4.3:0.6 ..*3
+}
+
+pattern vault_chords {
+  [1.3 3.3 5.3]:0.5 ..*31
+  [6.2 1.3 3.3]:0.5 ..*31
+}
+
+track drums { play beat using kit level 0.75 out > master }
+track bass  { play low using abyss level 0.5 reverb_send 0.15 sidechain 0.4
+              out > highpass(30, 0.01) > master }
+track lead  { play cry using tear level 0.22 pan 0.3 delay_send 0.25 reverb_send 0.3
+              out > svf(3000, 0.2, morph=0.5) > master }
+track pad   { play vault_chords using vault level 0.2 pan -0.25 reverb_send 0.45 sidechain 0.5
+              out > highpass(250, 0.05) > autopan(0.3, bars=8) > master }
+
+master {
+  in > eq(low=1.0, mid=-1.0, high=0.5) > compressor(-10, ratio=3, attack=10, release=80, makeup=6db) > out
+}
+
+# No kick to duck under yet: the ducking is off and the levels sit where the
+# ducked ones average out, so the drums arriving is not the room getting quieter.
+scene vault {
+  track pad { play vault_chords using vault pan -0.25 level 0.16 sidechain 0 }
+}
+
+scene descent {
+  track pad { play vault_chords using vault pan -0.25 level 0.16 sidechain 0 }
+  track bass { play low using abyss level 0.42 sidechain 0 }
+}
+
+scene deep {
+  track drums { play beat using kit }
+  track bass { play low using abyss }
+  track pad { play vault_chords using vault pan -0.25 }
+}
+
+scene tear {
+  track drums { play beat using kit }
+  track bass { play low_var using abyss }
+  track lead { play cry using tear pan 0.3 }
+  track pad { play vault_chords using vault pan -0.25 }
+}
+
+arrange { vault x4  descent x4  deep x8  tear x8  deep x4 }

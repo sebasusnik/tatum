@@ -442,6 +442,8 @@ pub struct NodeDef {
 pub struct ConnectionDef {
     pub from: String, // node alias or "in"
     pub to: String,   // node alias or "out" / "mix" / "master"
+    /// The modulation port it lands on (`a.fm`), or `None` for audio.
+    pub port: Option<String>,
     pub line: Line,
 }
 

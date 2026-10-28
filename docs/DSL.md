@@ -328,6 +328,7 @@ master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2
 | `gain(amount)` | linear multiplier | |
 | `lowpass(cutoff_hz, resonance)` / `highpass` / `bandpass` | Hz, 0..1 (Q 0.5..20: 0.05 is gentle, 0.3 is already a +15 dB peak) | options: envelope `ea= ed= es= er= edepth=` (seconds, level, Hz); LFO `lfo_bars=` or `lfo_hz=` with `lfo_depth=` in Hz, e.g. `lowpass(800, 0.6, lfo_bars=2, lfo_depth=600)` |
 | `ladder(cutoff_hz, resonance)` | Hz, 0..1 | Moog-style 4-pole, same envelope and LFO options |
+| `svf(cutoff_hz, resonance, morph=)` | Hz, 0..1, 0..1 | Oberheim SEM-style 12 dB state-variable: `morph` 0 lowpass, 0.5 notch, 1 highpass; the word `bandpass` makes it the bandpass. Same envelope and LFO options |
 | `autopan(depth, bars=)` | 0..1, bars | slow stereo movement, `autopan(0.6, bars=4)`; `hz=` for a free rate |
 | `phaser(mix, bars=, stages=, feedback=, depth=)` | 0..1, bars, 2..12, 0..0.9, 0..1 | swept allpass phaser, the liquid pad effect: `phaser(0.5, bars=4)` |
 | `autowah(sens, base=, range=, peak=, attack=, release=, down=, wobble=, wobble_hz=)` | 0..1, Hz, Hz, 0..1, ms, ms, 0/1, Hz, Hz | envelope filter: the signal sweeps a resonant filter with its own loudness, no LFO. Add `lowpass`, `bandpass` or `highpass` as a word for the mode: `autowah(0.8, base=250, range=2500, peak=0.8, bandpass)`. `wobble` makes each hit ring the cutoff back and forth |
@@ -379,7 +380,7 @@ scene drop {
     auto reverb_mix 0.1 > 0.5
     auto reverb_freeze 0 > 1             # freezes once the lane crosses 0.5
     auto master tilt 0.4 > -0.2          # master chain sweeps: tilt, eq_low, eq_mid, eq_high, drive,
-    auto master cutoff 20000 > 400       #   gain, cutoff, comp_threshold (the node must be in the chain)
+    auto master cutoff 20000 > 400       #   gain, cutoff, morph, comp_threshold (the node must be in the chain)
     auto master dj cutoff 20000 > 400    # the master node named `as dj`, when the chain has two filters
     track drums { play beat using kit }
     track acid  { play riff using acid }
@@ -515,8 +516,8 @@ midi {
 ```
 
 A chain node answers to the parameters `auto master` sweeps: `cutoff` on a filter,
-`tilt`, `eq_low`/`eq_mid`/`eq_high`, `drive` on `saturate` or `clip`, `gain`, and
-`comp_threshold`. With no range a cutoff knob runs 20 Hz to 20 kHz, evenly to the ear
+`tilt`, `eq_low`/`eq_mid`/`eq_high`, `drive` on `saturate` or `clip`, `gain`,
+`morph` on an `svf` (0 lowpass, 0.5 notch, 1 highpass), and `comp_threshold`. With no range a cutoff knob runs 20 Hz to 20 kHz, evenly to the ear
 (each stretch of the knob is the same interval, not the same number of Hz), an EQ band
 ±12 dB, `drive` 0..2 on `saturate` and 1..10 on `clip` (under 1 a clip only turns the
 track down), and a tempo 60..180 BPM. The master chain is counted without its
@@ -1003,6 +1004,67 @@ instrument pluck {
   sat > out
 }
 ```
+
+**A dark Oberheim bass: cross-mod, sync, PWM and the SEM filter.** Inside an
+`instrument` a connection can land on a node's *port* instead of its input:
+`lfo(0.25, 0.2) > b.width` does not feed `b` a signal to play, it moves `b`'s pulse
+width every sample by what comes in. The port goes after the node's name, with a dot
+or a space, and ends the chain; a `gain` on the way says how far, and several
+connections into one port add up.
+
+| port | on | what it does |
+|------|----|--------------|
+| `fm` | `osc`, `fixosc` | linear FM, the Oberheim's X-mod: 1.0 swings the frequency a whole carrier either way |
+| `pitch` | `osc`, `fixosc` | exponential pitch in octaves: 1.0 an octave up, 1/12 a semitone |
+| `sync` | `osc`, `fixosc` | hard sync: the cycle starts again each time what comes in crosses zero going up |
+| `width` | `osc pulse`, `fixosc pulse` | added to `width=`: PWM |
+| `cutoff` | `lowpass`, `highpass`, `bandpass`, `ladder`, `svf` | octaves on top of the cutoff, retuned every sample: an oscillator here is the cross-mod into the filter |
+| `morph` | `svf` | added to `morph=`: sweeps the SEM's mode knob |
+
+An envelope that nothing flows into is a control source rather than a VCA, so
+`fenv > gain(2.5) > filt.cutoff` sweeps the filter two and a half octaves on every note,
+the poly-mod of the hardware. The `svf` is the SEM's filter: one pair of integrators, a
+`morph` that crossfades the lowpass into the highpass through a notch, and a cutoff
+that an oscillator can push around at audio rate without it ringing or blowing up.
+Synced and modulated oscillators are AC-coupled, as the hardware's output is, so a
+cycle cut short by the sync does not leave DC behind. A slave runs one sample late,
+which is what lets it smooth each reset on both sides.
+
+```
+instrument abyss {
+  osc saw(55) as a
+  osc pulse(55, width=0.4, pitch=-12) as b
+  lfo(0.25, 0.2) as pwm
+  lfo(0.4, 0.3) as drift
+  adsr(0.001, 0.6, 0.0, 0.3) as fenv
+  b > gain(0.35) > a.fm
+  pwm > b.width
+  a > gain(0.6) as la
+  b > gain(0.5) as lb
+  la > mix
+  lb > mix
+  mix > svf(220, 0.45, morph=0.15) as filt
+  fenv > gain(2.5) > filt.cutoff
+  drift > filt.morph
+  filt > adsr(0.005, 0.8, 0.7, 0.8) as amp
+  amp > saturate(1.6) as sat
+  sat > out
+}
+
+instrument sync_lead {
+  osc saw(110) as master_osc
+  osc saw(110, pitch=7) as slave
+  lfo(0.5, 0.5) as sweep
+  master_osc > slave.sync
+  sweep > slave.pitch
+  slave > lowpass(1800, 0.1) as f
+  f > adsr(0.01, 0.3, 0.6, 0.4) as amp
+  amp > out
+}
+```
+
+The slave's `pitch` moves under a master that holds the note, which is the sync sweep:
+the pitch stays put and the timbre tears. `examples/oberheim_dark.synth` plays both.
 
 **An FM stab.** Two operators, short envelopes, a bit of feedback, off-beat pattern with
 rests, saturation in the chain and a delay send:

@@ -1,6 +1,6 @@
 use crate::primitives::oscillator::{Oscillator, Waveform};
 use crate::primitives::envelope::Envelope;
-use crate::primitives::filter::{BiquadFilter, FilterType, LadderFilter};
+use crate::primitives::filter::{BiquadFilter, FilterType, LadderFilter, SvfFilter};
 use crate::primitives::lfo::Lfo;
 use crate::primitives::noise::NoiseGen;
 use crate::effects::saturator::Saturator;
@@ -22,6 +22,44 @@ use alloc::boxed::Box;
 
 /// Maximum number of inputs a single node can accept.
 pub const MAX_NODE_INPUTS: usize = 8;
+
+/// Where a connection lands on the node it goes into. Most carry audio, and a
+/// node reads those as its inputs in the order they were wired. The rest are
+/// modulation: `lfo(0.3, 0.2) > a.width` does not feed `a` a signal to
+/// process, it moves one of its knobs, sample by sample, by the value coming
+/// in. Several connections into the same port add up.
+pub mod port {
+    pub const AUDIO: u8 = 0;
+    /// Linear FM on an oscillator: 1.0 swings it a whole carrier frequency
+    /// either way, the Oberheim's X-mod. It stops at 0 Hz rather than running
+    /// backwards through it.
+    pub const FM: u8 = 1;
+    /// Exponential pitch on an oscillator, in octaves: 1.0 is an octave up,
+    /// 1/12 a semitone. Vibrato, or an envelope bending the note.
+    pub const PITCH: u8 = 2;
+    /// Hard sync: each time the signal coming in crosses zero going up, the
+    /// oscillator starts its cycle again.
+    pub const SYNC: u8 = 3;
+    /// Pulse width, added to the pulse's own `width=`: PWM.
+    pub const WIDTH: u8 = 4;
+    /// A filter's cutoff, in octaves on top of wherever it is: 1.0 is an
+    /// octave up. An oscillator in here is the cross-mod into the filter.
+    pub const CUTOFF: u8 = 5;
+    /// The `svf` mode knob, added to its `morph=`.
+    pub const MORPH: u8 = 6;
+    pub const COUNT: usize = 7;
+
+    pub const NAMES: [(&str, u8); 6] =
+        [("fm", FM), ("pitch", PITCH), ("sync", SYNC), ("width", WIDTH), ("cutoff", CUTOFF), ("morph", MORPH)];
+
+    pub fn from_name(name: &str) -> Option<u8> {
+        NAMES.iter().find(|(n, _)| *n == name).map(|&(_, p)| p)
+    }
+
+    pub const fn bit(port: u8) -> u8 {
+        1 << port
+    }
+}
 
 /// One step of an FX chain: what to build, and how much of it to hear.
 ///
@@ -101,6 +139,20 @@ pub enum NodeSpec {
     Ladder {
         cutoff: f32,
         resonance: f32,
+        env_attack: f32,
+        env_decay: f32,
+        env_sustain: f32,
+        env_release: f32,
+        env_depth: f32,
+        lfo: FilterLfo,
+    },
+    /// SEM-style state-variable filter: `morph` 0 lowpass, 0.5 notch, 1
+    /// highpass, or the bandpass when `bandpass` is set.
+    Svf {
+        cutoff: f32,
+        resonance: f32,
+        morph: f32,
+        bandpass: bool,
         env_attack: f32,
         env_decay: f32,
         env_sustain: f32,
@@ -295,6 +347,8 @@ impl NodeSpec {
                     base: freq,
                     env: pitch_env,
                     env_coeff: crate::primitives::envelope::stage_coeff(pitch_decay.max(1e-4), SAMPLE_RATE),
+                    duty: if let Waveform::Pulse(d) = waveform { d } else { 0.5 },
+                    mods: OscMods::default(),
                 };
                 note_osc.set_frequency(freq);
                 NodeKind::Osc(note_osc)
@@ -355,6 +409,7 @@ impl NodeSpec {
                     lfo_bars: lfo.bars,
                     lfo_tick: 0,
                     glide_to: 0.0,
+                    cut_mod: None,
                 })
             }
             NodeSpec::AutoPan { hz, bars, depth } => NodeKind::AutoPan { lfo: make_lfo(hz), bars, depth },
@@ -416,6 +471,43 @@ impl NodeSpec {
                     lfo_bars: lfo.bars,
                     lfo_tick: 0,
                     glide_to: 0.0,
+                    cut_mod: None,
+                })
+            }
+            NodeSpec::Svf {
+                cutoff,
+                resonance,
+                morph,
+                bandpass,
+                env_attack,
+                env_decay,
+                env_sustain,
+                env_release,
+                env_depth,
+                lfo,
+            } => {
+                let mut f = SvfFilter::new(SAMPLE_RATE);
+                f.set_params(cutoff, resonance);
+                let mut fr = SvfFilter::new(SAMPLE_RATE);
+                fr.set_params(cutoff, resonance);
+                let mut env = Envelope::new(SAMPLE_RATE);
+                env.set_adsr(env_attack, env_decay, env_sustain, env_release);
+                NodeKind::Svf(ModSvf {
+                    filter: f,
+                    filter_r: fr,
+                    env,
+                    base_cutoff: cutoff,
+                    env_depth,
+                    velocity: 1.0,
+                    lfo: make_lfo(lfo.hz),
+                    lfo_depth: lfo.depth,
+                    lfo_bars: lfo.bars,
+                    lfo_tick: 0,
+                    glide_to: 0.0,
+                    cut_mod: None,
+                    morph,
+                    morph_mod: 0.0,
+                    bandpass,
                 })
             }
             NodeSpec::Mix => NodeKind::Mix,
@@ -513,12 +605,14 @@ impl NodeSpec {
     }
 
     pub fn is_filter(&self) -> bool {
-        matches!(self, NodeSpec::Ladder { .. } | NodeSpec::Biquad { .. })
+        matches!(self, NodeSpec::Ladder { .. } | NodeSpec::Biquad { .. } | NodeSpec::Svf { .. })
     }
 
     pub fn has_filter_env(&self) -> bool {
         match self {
-            NodeSpec::Ladder { env_depth, .. } | NodeSpec::Biquad { env_depth, .. } => *env_depth > 0.0,
+            NodeSpec::Ladder { env_depth, .. }
+            | NodeSpec::Biquad { env_depth, .. }
+            | NodeSpec::Svf { env_depth, .. } => *env_depth > 0.0,
             _ => false,
         }
     }
@@ -545,6 +639,9 @@ pub struct ModLadder {
     /// Where a knob is taking the cutoff, while it gets there; 0 when still.
     /// See [`glide_cutoff`].
     pub glide_to: f32,
+    /// Octaves the `cutoff` port moves it by this sample, when something is
+    /// wired there.
+    pub cut_mod: Option<f32>,
 }
 
 impl ModLadder {
@@ -569,36 +666,19 @@ impl ModLadder {
     /// either way.
     #[inline]
     fn tick_cutoff(&mut self) {
-        let has_env = self.env_depth > 0.0;
-        let has_lfo = self.lfo_depth > 0.0;
-        let gliding = self.glide_to > 0.0;
-        if !(has_env || has_lfo || gliding) {
-            return;
+        if let Some(cutoff) = next_cutoff(
+            &mut self.base_cutoff,
+            &mut self.glide_to,
+            &mut self.lfo_tick,
+            &mut self.env,
+            self.env_depth,
+            &mut self.lfo,
+            self.lfo_depth,
+            self.cut_mod,
+        ) {
+            self.filter.set_cutoff(cutoff);
+            self.filter_r.set_cutoff(cutoff);
         }
-        if gliding {
-            self.lfo_tick = self.lfo_tick.wrapping_add(if has_lfo { 0 } else { 1 });
-            if !has_lfo && !has_env && !self.lfo_tick.is_multiple_of(8) {
-                return;
-            }
-            if self.lfo_tick.is_multiple_of(8) {
-                glide_cutoff(&mut self.base_cutoff, &mut self.glide_to);
-            }
-        }
-        let mut cutoff = self.base_cutoff;
-        if has_env {
-            cutoff += self.env.next_sample() * self.env_depth;
-        }
-        if has_lfo {
-            // Cheap: advance the LFO every sample, retune the filter every 8.
-            let v = self.lfo.next_sample();
-            self.lfo_tick = self.lfo_tick.wrapping_add(1);
-            if !self.lfo_tick.is_multiple_of(8) && !has_env {
-                return;
-            }
-            cutoff += v * self.lfo_depth;
-        }
-        self.filter.set_cutoff(cutoff);
-        self.filter_r.set_cutoff(cutoff);
     }
 
     #[inline]
@@ -626,6 +706,73 @@ impl ModLadder {
         self.filter_r.reset();
         self.env.reset();
     }
+}
+
+/// One frame of a filter's cutoff modulation: the envelope, the LFO and a
+/// knob gliding, shared by every filter node. Returns the cutoff to retune to,
+/// or `None` when it stays where it is.
+///
+/// With nothing wired into its `cutoff` port a filter retunes every 8 samples
+/// for an LFO alone, which is plenty for a sweep. With something wired there
+/// it retunes every sample, because what comes in may be an oscillator: the
+/// cross-mod into the filter is a sound at audio rate, not a sweep.
+#[allow(clippy::too_many_arguments)]
+#[inline]
+fn next_cutoff(
+    base: &mut f32,
+    glide_to: &mut f32,
+    tick: &mut u32,
+    env: &mut Envelope,
+    env_depth: f32,
+    lfo: &mut Lfo,
+    lfo_depth: f32,
+    cut_mod: Option<f32>,
+) -> Option<f32> {
+    let has_env = env_depth > 0.0;
+    let has_lfo = lfo_depth > 0.0;
+    let gliding = *glide_to > 0.0;
+    if let Some(octaves) = cut_mod {
+        if gliding {
+            *tick = tick.wrapping_add(1);
+            if tick.is_multiple_of(8) {
+                glide_cutoff(base, glide_to);
+            }
+        }
+        let mut cutoff = *base;
+        if has_env {
+            cutoff += env.next_sample() * env_depth;
+        }
+        if has_lfo {
+            cutoff += lfo.next_sample() * lfo_depth;
+        }
+        return Some(cutoff * crate::math::pow2(octaves));
+    }
+    if !(has_env || has_lfo || gliding) {
+        return None;
+    }
+    if gliding {
+        *tick = tick.wrapping_add(if has_lfo { 0 } else { 1 });
+        if !has_lfo && !has_env && !tick.is_multiple_of(8) {
+            return None;
+        }
+        if tick.is_multiple_of(8) {
+            glide_cutoff(base, glide_to);
+        }
+    }
+    let mut cutoff = *base;
+    if has_env {
+        cutoff += env.next_sample() * env_depth;
+    }
+    if has_lfo {
+        // Cheap: advance the LFO every sample, retune the filter every 8.
+        let v = lfo.next_sample();
+        *tick = tick.wrapping_add(1);
+        if !tick.is_multiple_of(8) && !has_env {
+            return None;
+        }
+        cutoff += v * lfo_depth;
+    }
+    Some(cutoff)
 }
 
 /// How far a gliding cutoff moves every 8 samples: a 10 ms time constant.
@@ -660,6 +807,9 @@ pub struct ModBiquad {
     /// Where a knob is taking the cutoff, while it gets there; 0 when still.
     /// See [`glide_cutoff`].
     pub glide_to: f32,
+    /// Octaves the `cutoff` port moves it by this sample, when something is
+    /// wired there.
+    pub cut_mod: Option<f32>,
 }
 
 impl ModBiquad {
@@ -684,36 +834,19 @@ impl ModBiquad {
     /// either way.
     #[inline]
     fn tick_cutoff(&mut self) {
-        let has_env = self.env_depth > 0.0;
-        let has_lfo = self.lfo_depth > 0.0;
-        let gliding = self.glide_to > 0.0;
-        if !(has_env || has_lfo || gliding) {
-            return;
+        if let Some(cutoff) = next_cutoff(
+            &mut self.base_cutoff,
+            &mut self.glide_to,
+            &mut self.lfo_tick,
+            &mut self.env,
+            self.env_depth,
+            &mut self.lfo,
+            self.lfo_depth,
+            self.cut_mod,
+        ) {
+            self.filter.set_cutoff(cutoff);
+            self.filter_r.set_cutoff(cutoff);
         }
-        if gliding {
-            self.lfo_tick = self.lfo_tick.wrapping_add(if has_lfo { 0 } else { 1 });
-            if !has_lfo && !has_env && !self.lfo_tick.is_multiple_of(8) {
-                return;
-            }
-            if self.lfo_tick.is_multiple_of(8) {
-                glide_cutoff(&mut self.base_cutoff, &mut self.glide_to);
-            }
-        }
-        let mut cutoff = self.base_cutoff;
-        if has_env {
-            cutoff += self.env.next_sample() * self.env_depth;
-        }
-        if has_lfo {
-            // Cheap: advance the LFO every sample, retune the filter every 8.
-            let v = self.lfo.next_sample();
-            self.lfo_tick = self.lfo_tick.wrapping_add(1);
-            if !self.lfo_tick.is_multiple_of(8) && !has_env {
-                return;
-            }
-            cutoff += v * self.lfo_depth;
-        }
-        self.filter.set_cutoff(cutoff);
-        self.filter_r.set_cutoff(cutoff);
     }
 
     #[inline]
@@ -743,6 +876,95 @@ impl ModBiquad {
     }
 }
 
+/// The SEM-style state-variable filter with the same envelope, LFO and knob
+/// glide as the other filters, plus its mode knob.
+pub struct ModSvf {
+    pub filter: SvfFilter,
+    pub filter_r: SvfFilter,
+    pub env: Envelope,
+    pub base_cutoff: f32,
+    pub env_depth: f32,
+    pub velocity: f32,
+    pub lfo: Lfo,
+    pub lfo_depth: f32,
+    pub lfo_bars: f32,
+    pub lfo_tick: u32,
+    pub glide_to: f32,
+    pub cut_mod: Option<f32>,
+    /// 0 lowpass, 0.5 notch, 1 highpass.
+    pub morph: f32,
+    /// What the `morph` port adds this sample.
+    pub morph_mod: f32,
+    pub bandpass: bool,
+}
+
+impl ModSvf {
+    pub fn gate_on(&mut self) {
+        if self.env_depth > 0.0 {
+            self.env.gate_on();
+        }
+    }
+
+    pub fn gate_off(&mut self) {
+        if self.env_depth > 0.0 {
+            self.env.gate_off();
+        }
+    }
+
+    #[inline]
+    fn tick_cutoff(&mut self) {
+        if let Some(cutoff) = next_cutoff(
+            &mut self.base_cutoff,
+            &mut self.glide_to,
+            &mut self.lfo_tick,
+            &mut self.env,
+            self.env_depth,
+            &mut self.lfo,
+            self.lfo_depth,
+            self.cut_mod,
+        ) {
+            self.filter.set_cutoff(cutoff);
+            self.filter_r.set_cutoff(cutoff);
+        }
+    }
+
+    #[inline]
+    fn output(&self, filter: &SvfFilter, out: crate::primitives::filter::SvfOut) -> f32 {
+        if self.bandpass {
+            filter.band(out)
+        } else {
+            SvfFilter::morph(out, self.morph + self.morph_mod)
+        }
+    }
+
+    #[inline]
+    pub fn process(&mut self, input: f32) -> f32 {
+        self.tick_cutoff();
+        let out = self.filter.process(input);
+        self.output(&self.filter, out)
+    }
+
+    #[inline]
+    pub fn process_stereo(&mut self, l: f32, r: f32) -> (f32, f32) {
+        self.tick_cutoff();
+        let ol = self.filter.process(l);
+        let or = self.filter_r.process(r);
+        (self.output(&self.filter, ol), self.output(&self.filter_r, or))
+    }
+
+    pub fn set_bpm(&mut self, bpm: f32) {
+        if self.lfo_bars > 0.0 {
+            self.lfo.set_rate(bpm / 60.0 / 4.0 / self.lfo_bars);
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.filter.reset();
+        self.filter_r.reset();
+        self.env.reset();
+    }
+}
+
 // ── Note oscillator state ──
 
 /// An oscillator that follows the played note, with an optional pitch
@@ -753,6 +975,32 @@ pub struct NoteOsc {
     base: f32,
     env: f32,
     env_coeff: f32,
+    /// The pulse's own `width=`, which the `width` port moves around.
+    duty: f32,
+    mods: OscMods,
+}
+
+/// What is wired into an oscillator's ports, as of this sample. Left at its
+/// default the oscillator plays exactly as it did before there were ports.
+#[derive(Default)]
+struct OscMods {
+    /// Something is wired into a port: take the modulated path.
+    on: bool,
+    fm: f32,
+    pitch: f32,
+    width: Option<f32>,
+    sync: Option<f32>,
+    /// The sync input one sample ago, to see it cross zero.
+    sync_prev: f32,
+    /// A DC blocker on the way out. A synced cycle cut short, or a carrier
+    /// sped up and slowed down in step with its own phase, no longer averages
+    /// to zero; an analog synth's output is AC-coupled, and this is that.
+    dc_x1: f32,
+    dc_y1: f32,
+    /// A synced oscillator runs one sample late: the sample it returns is the
+    /// one before, so that when a reset lands between the two it can smooth
+    /// the jump on both sides of it.
+    pending: f32,
 }
 
 /// Below this many Hz the envelope is left out, and the oscillator plays the
@@ -760,8 +1008,26 @@ pub struct NoteOsc {
 const PITCH_ENV_FLOOR: f32 = 0.01;
 
 impl NoteOsc {
+    /// Take this sample's values from the ports. `mask` says which are wired.
+    #[inline]
+    pub fn modulate(&mut self, mods: &[f32; port::COUNT], mask: u8) {
+        let m = &mut self.mods;
+        m.on = true;
+        m.fm = mods[port::FM as usize];
+        m.pitch = mods[port::PITCH as usize];
+        if mask & port::bit(port::WIDTH) != 0 {
+            m.width = Some(mods[port::WIDTH as usize]);
+        }
+        if mask & port::bit(port::SYNC) != 0 {
+            m.sync = Some(mods[port::SYNC as usize]);
+        }
+    }
+
     #[inline]
     pub fn next_sample(&mut self) -> f32 {
+        if self.mods.on {
+            return self.next_modulated();
+        }
         if self.env != 0.0 {
             self.env *= self.env_coeff;
             if self.env.abs() < PITCH_ENV_FLOOR {
@@ -775,6 +1041,74 @@ impl NoteOsc {
     pub fn set_frequency(&mut self, freq: f32) {
         self.base = freq;
         self.osc.set_frequency((freq + self.env).max(1.0));
+    }
+
+    fn next_modulated(&mut self) -> f32 {
+        if self.env != 0.0 {
+            self.env *= self.env_coeff;
+            if self.env.abs() < PITCH_ENV_FLOOR {
+                self.env = 0.0;
+            }
+        }
+        let m = &self.mods;
+        let mut freq = (self.base + self.env).max(1.0);
+        if m.pitch != 0.0 {
+            freq *= crate::math::pow2(m.pitch);
+        }
+        // Linear FM, as the analog cross-mod is: the modulator adds and takes
+        // away Hz in proportion to the carrier. Through-zero would run the
+        // phase backwards, which the band-limiting here does not follow, so
+        // it stops at standing still.
+        freq *= (1.0 + m.fm).max(0.0);
+        self.osc.set_frequency(freq);
+        if let Some(w) = m.width {
+            self.osc.set_waveform(Waveform::Pulse(crate::math::clamp(self.duty + w, 0.05, 0.95)));
+        }
+        let out = match m.sync {
+            Some(sync) => self.next_synced(sync),
+            None => self.osc.next_sample(),
+        };
+        // One pole at about 5 Hz, as the ladder's.
+        const R: f32 = crate::per_sample(0.99929);
+        let y = out - self.mods.dc_x1 + R * self.mods.dc_y1;
+        self.mods.dc_x1 = out;
+        self.mods.dc_y1 = y;
+        y
+    }
+
+    /// Hard sync, band-limited. When the master crosses zero going up between
+    /// the last sample and this one, the phase restarts at the moment it
+    /// crossed, which falls between two samples. The waveform jumps there by
+    /// however far it was from the start of its cycle, and a jump left as it
+    /// is aliases into a whine under every note; it is smoothed the way the
+    /// oscillator smooths its own edges, a polyBLEP spread over the sample
+    /// before and the sample after, which is why this runs one sample late.
+    fn next_synced(&mut self, sync: f32) -> f32 {
+        let prev = self.mods.sync_prev;
+        self.mods.sync_prev = sync;
+        let mut before = self.mods.pending;
+        let now = if prev < 0.0 && sync >= 0.0 {
+            // Samples since the crossing, 0..1.
+            let after = sync / (sync - prev);
+            let inc = self.osc.phase_inc();
+            let at = self.osc.phase() - after * inc;
+            let value = self.osc.naive_at(at - crate::math::floor(at));
+            // The sample before never saw a wrap coming, so it takes the
+            // whole jump. The sample after starts a cycle, and the oscillator
+            // already smooths that as the jump of its own wrap, from the end
+            // of a cycle; what is left there is the difference between that
+            // jump and this one.
+            let jump = self.osc.naive_at(0.0) - value;
+            let rest = self.osc.naive_at(0.999_999) - value;
+            self.osc.set_phase(after * inc);
+            before += 0.5 * jump * after * after;
+            let left = 1.0 - after;
+            self.osc.next_sample() - 0.5 * rest * left * left
+        } else {
+            self.osc.next_sample()
+        };
+        self.mods.pending = now;
+        before
     }
 
     pub fn reset(&mut self) {
@@ -835,6 +1169,7 @@ pub enum NodeKind {
     // ── Filters (with optional modulation envelope) ──
     Biquad(ModBiquad),
     Ladder(ModLadder),
+    Svf(ModSvf),
 
     // ── Mixing / routing ──
     Mix,
@@ -902,6 +1237,12 @@ pub enum NodeKind {
     Output,
 }
 
+impl AsMut<NodeKind> for NodeKind {
+    fn as_mut(&mut self) -> &mut NodeKind {
+        self
+    }
+}
+
 impl NodeKind {
     /// Process one sample. Reads from `inputs` (gathered from connected nodes).
     #[inline]
@@ -915,6 +1256,7 @@ impl NodeKind {
             NodeKind::Env(env) => env.next_sample(),
             NodeKind::Biquad(m) => m.process(inputs[0]),
             NodeKind::Ladder(m) => m.process(inputs[0]),
+            NodeKind::Svf(m) => m.process(inputs[0]),
             NodeKind::AutoPan { lfo, .. } => {
                 let _ = lfo.next_sample();
                 inputs[0]
@@ -962,6 +1304,24 @@ impl NodeKind {
         }
     }
 
+    /// Take this sample's modulation, from the ports `mask` says are wired.
+    /// Called before [`process`](Self::process), and only on a node that has
+    /// something wired into a port.
+    #[inline]
+    pub fn modulate(&mut self, mods: &[f32; port::COUNT], mask: u8) {
+        let cut = (mask & port::bit(port::CUTOFF) != 0).then(|| mods[port::CUTOFF as usize]);
+        match self {
+            NodeKind::Osc(osc) => osc.modulate(mods, mask),
+            NodeKind::Biquad(m) => m.cut_mod = cut,
+            NodeKind::Ladder(m) => m.cut_mod = cut,
+            NodeKind::Svf(m) => {
+                m.cut_mod = cut;
+                m.morph_mod = mods[port::MORPH as usize];
+            }
+            _ => {}
+        }
+    }
+
     /// Process a stereo pair through this node.
     /// Effects with native stereo support use it; others fall back to dual-mono.
     #[inline]
@@ -985,6 +1345,7 @@ impl NodeKind {
             // and runs both channels through one copy of that state.
             NodeKind::Biquad(m) => m.process_stereo(l, r),
             NodeKind::Ladder(m) => m.process_stereo(l, r),
+            NodeKind::Svf(m) => m.process_stereo(l, r),
             NodeKind::Chorus(c) => c.process_stereo(l, r),
             // Explicit, because the dual-mono fallback would step the capture's
             // read position twice per stereo sample.
@@ -1161,6 +1522,16 @@ impl NodeKind {
                 m.filter_r.set_cutoff(value);
                 true
             }
+            (NodeKind::Svf(m), "cutoff") => {
+                m.base_cutoff = value;
+                m.filter.set_cutoff(value);
+                m.filter_r.set_cutoff(value);
+                true
+            }
+            (NodeKind::Svf(m), "morph") => {
+                m.morph = crate::math::clamp(value, 0.0, 1.0);
+                true
+            }
             _ => false,
         }
     }
@@ -1179,6 +1550,10 @@ impl NodeKind {
                 m.glide_to = value.max(1.0);
                 true
             }
+            (NodeKind::Svf(m), "cutoff") => {
+                m.glide_to = value.max(1.0);
+                true
+            }
             (node, _) => node.set_named(name, value),
         }
     }
@@ -1188,6 +1563,7 @@ impl NodeKind {
         match self {
             NodeKind::Biquad(m) => m.set_bpm(bpm),
             NodeKind::Ladder(m) => m.set_bpm(bpm),
+            NodeKind::Svf(m) => m.set_bpm(bpm),
             NodeKind::AutoPan { lfo, bars, .. } => {
                 if *bars > 0.0 {
                     lfo.set_rate(bpm / 60.0 / 4.0 / *bars);
@@ -1204,6 +1580,7 @@ impl NodeKind {
             NodeKind::Env(env) => env.gate_on(),
             NodeKind::Ladder(m) => m.gate_on(),
             NodeKind::Biquad(m) => m.gate_on(),
+            NodeKind::Svf(m) => m.gate_on(),
             _ => {}
         }
     }
@@ -1213,6 +1590,7 @@ impl NodeKind {
             NodeKind::Env(env) => env.gate_off(),
             NodeKind::Ladder(m) => m.gate_off(),
             NodeKind::Biquad(m) => m.gate_off(),
+            NodeKind::Svf(m) => m.gate_off(),
             _ => {}
         }
     }
@@ -1227,6 +1605,7 @@ impl NodeKind {
         match self {
             NodeKind::Ladder(m) => m.set_velocity(vel),
             NodeKind::Biquad(m) => m.set_velocity(vel),
+            NodeKind::Svf(m) => m.velocity = vel,
             _ => {}
         }
     }
@@ -1286,6 +1665,7 @@ impl NodeKind {
             }
             NodeKind::Biquad(m) => m.reset(),
             NodeKind::Ladder(m) => m.reset(),
+            NodeKind::Svf(m) => m.reset(),
             NodeKind::Mix | NodeKind::Gain(_) | NodeKind::Vca | NodeKind::Output => {}
             NodeKind::Saturator(_) => {}
             NodeKind::Chorus(c) => c.reset(),

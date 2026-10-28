@@ -14,7 +14,7 @@ use super::notes::drum_note;
 
 /// Master-chain parameters that `auto master <param>` can move.
 pub const MASTER_AUTO_PARAMS: &[&str] =
-    &["tilt", "eq_low", "eq_mid", "eq_high", "drive", "gain", "cutoff", "comp_threshold", "position"];
+    &["tilt", "eq_low", "eq_mid", "eq_high", "drive", "gain", "cutoff", "morph", "comp_threshold", "position"];
 
 /// Node kinds that carry a given master automation parameter.
 pub fn master_auto_node_kinds(param: &str) -> &'static [&'static str] {
@@ -23,7 +23,8 @@ pub fn master_auto_node_kinds(param: &str) -> &'static [&'static str] {
         "eq_low" | "eq_mid" | "eq_high" => &["eq"],
         "drive" => &["saturate", "drive", "clip"],
         "gain" => &["gain"],
-        "cutoff" => &["lowpass", "highpass", "bandpass", "ladder"],
+        "cutoff" => &["lowpass", "highpass", "bandpass", "ladder", "svf"],
+        "morph" => &["svf"],
         "comp_threshold" => &["compressor"],
         "position" => &["vowel"],
         _ => &[],
