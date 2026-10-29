@@ -1,135 +1,157 @@
-# oberheim_dark.synth — what an Oberheim does in the dark
-# 100 BPM, D minor. Every sound below is built on the modulation ports and the
-# SEM-style `svf`: cross-mod into an oscillator and into the filter, hard sync,
-# PWM, and the filter's mode knob sweeping from lowpass through the notch.
+# oberheim_dark.synth — dark and aggressive, built on the modulation ports
+# 132 BPM, F phrygian (the flat second is the menace). A reese bass whose
+# filter an oscillator tears at audio rate, a hard-synced lead that screams
+# down two octaves on every hit, and noise ringing in a resonant SEM bandpass
+# that the bass note itself drags around.
 
-tempo 100
-scale D minor
-sidechain 0.25
-reverb size=0.95 damp=0.45 predelay=35
+tempo 132
+scale F phrygian
+sidechain 0.45
+reverb size=0.8 damp=0.6 predelay=20
+delay sync=dotted_eighth feedback=0.35 filter=0.4
 
-# The bass: a saw the pulse an octave below cross-mods (X-mod), the pulse's
-# width breathing on a slow LFO, into an SEM lowpass an envelope opens two and
-# a half octaves on every note while another LFO leans its mode knob toward the
-# notch.
-instrument abyss {
+# The bass: two saws a few cents apart (the reese) into a resonant SEM
+# lowpass. A sine a fifth above sweeps its cutoff at audio rate -- the
+# cross-mod into the filter, which is what turns a bass into a snarl -- and an
+# envelope slams it open on every hit. Then it is driven and clipped.
+instrument maw {
   osc saw(55) as a
-  osc pulse(55, width=0.4, pitch=-12) as b
-  lfo(0.25, 0.2) as pwm
-  lfo(0.13, 0.25) as lean
-  adsr(0.001, 0.6, 0.0, 0.3) as fenv
-  b > gain(0.35) > a.fm
-  pwm > b.width
-  a > gain(0.6) as la
-  b > gain(0.5) as lb
-  la > mix
-  lb > mix
-  mix > svf(220, 0.45, morph=0.15) as filt
-  fenv > gain(2.5) > filt.cutoff
-  lean > filt.morph
-  filt > adsr(0.005, 0.8, 0.7, 0.8) as amp
-  amp > saturate(1.6) as sat
-  sat > out
-}
-
-# The lead: a saw hard-synced to another a fifth below it, its pitch moving
-# under the master, which holds the note: the sync sweep. The pitch stays put
-# and the timbre tears.
-instrument tear {
-  osc saw(110) as master_osc
-  osc saw(110, pitch=7) as slave
-  lfo(0.5, 0.5) as sweep
-  master_osc > slave.sync
-  sweep > slave.pitch
-  slave > lowpass(1800, 0.1) as f
-  f > adsr(0.01, 0.3, 0.6, 0.4) as amp
+  osc saw(55, pitch=0.18) as b
+  osc sine(55, pitch=7) as growl
+  adsr(0.001, 0.22, 0.0, 0.1) as fenv
+  a > mix
+  b > mix
+  mix > gain(0.5) as body
+  body > svf(160, 0.6) as filt
+  growl > gain(1.3) > filt.cutoff
+  fenv > gain(3.2) > filt.cutoff
+  filt > saturate(4.0) as dirt
+  dirt > clip(2.5) as edge
+  edge > adsr(0.002, 0.3, 0.85, 0.08) as amp
   amp > out
 }
 
-# The pad: two pulses in slow PWM against each other, through an SEM filter
-# whose mode drifts between lowpass and the notch over many seconds, the
-# brass-without-brass of an OB pad.
-instrument vault {
-  osc pulse(110, width=0.5) as p1
-  osc pulse(110, width=0.5, pitch=0.08) as p2
-  lfo(0.17, 0.3) as w1
-  lfo(0.23, 0.3) as w2
-  lfo(0.05, 0.4) as mode
-  w1 > p1.width
-  w2 > p2.width
-  p1 > mix
-  p2 > mix
-  mix > gain(0.5) as lvl
-  lvl > svf(900, 0.25, morph=0.25) as filt
-  mode > filt.morph
-  filt > adsr(1.5, 1.0, 0.8, 2.5) as amp
+# The sub under it, clean, so the distortion above never smears the low end.
+instrument floor {
+  osc sine(55) as s
+  s > adsr(0.002, 0.3, 0.9, 0.08) as amp
+  amp > out
+}
+
+# The lead: a saw hard-synced to another at the note. An envelope throws the
+# slave two octaves up and lets it fall back, so each hit tears downward while
+# the pitch you hear stays put. Through a resonant SEM bandpass and hot.
+instrument scream {
+  osc saw(110) as m
+  osc saw(110) as s
+  adsr(0.001, 0.35, 0.1, 0.2) as penv
+  m > s.sync
+  penv > gain(2.0) > s.pitch
+  s > svf(1800, 0.3, bandpass) as f
+  f > gain(4.0) as push
+  push > saturate(3.0) as hot
+  hot > adsr(0.001, 0.25, 0.5, 0.15) as amp
+  amp > out
+}
+
+# The dread: noise and a saw in a near-ringing SEM bandpass whose cutoff the
+# saw itself drags around at audio rate, crawling on a slow LFO underneath.
+instrument dread {
+  noise as n
+  osc saw(55) as tone
+  lfo(0.07, 0.8) as crawl
+  n > mix
+  tone > gain(0.25) as lt
+  lt > mix
+  mix > svf(320, 0.85, bandpass) as f
+  tone > gain(0.9) > f.cutoff
+  crawl > f.cutoff
+  f > gain(8.0) as push
+  push > saturate(2.5) as s
+  s > adsr(2.0, 1.0, 0.9, 3.0) as amp
   amp > out
 }
 
 module beats kit {
   kick_level 1.0
-  kick_click 0.3
-  hihat_level 0.5
-  hihat_decay 0.25
+  kick_pitch 0.7x
+  kick_decay 0.45
+  kick_click 0.85
+  kick_drive 0.9
+  clap_level 0.9
+  hihat_level 0.6
+  hihat_decay 0.15
+  hihat_pitch 1.3x
 }
 
 pattern beat {
-  kick:  X - - -  - - - -  x - X -  - - - -
-  hat:   - - x -  - - x:0.5 -  - - x -  - x:0.4 x -
+  kick:  X - - -  X - - -  X - - -  X - - -
+  hat:   - x:0.4 x - - x:0.4 x - - x:0.4 x - - x:0.4 X x:0.4
   clap:  - - - -  X - - -  - - - -  X - - -
 }
 
-pattern low {
-  1.1:0.9 ..*5  -  -  1.1:0.8 ..*3  6.0:0.8 ..*3
+pattern beat_bare {
+  kick:  X - - -  X - - -  X - - -  X - - x:0.6
 }
 
-pattern low_var {
-  1.1:0.9 ..*3  -  1.1:0.7 -  -  3.1:0.8 ..*3  7.0:0.8 ..  6.0:0.7 ..
+pattern ticks {
+  hat:   - - x:0.5 -  - - x:0.4 -  - - x:0.5 -  - x:0.3 x:0.5 -
 }
 
-pattern cry {
-  - - - -  5.3:0.7 ..*3  - - - -  4.3:0.6 ..*3
+pattern maw_line {
+  - 1.1:0.9 1.1:0.6 1.1:0.8  - 1.1:0.9 2.1:0.9 1.1:0.6
+  - 1.1:0.9 1.1:0.6 1.1:0.8  - 4.1:0.9 2.1:1.0 1.1:0.7
 }
 
-pattern vault_chords {
-  [1.3 3.3 5.3]:0.5 ..*31
-  [6.2 1.3 3.3]:0.5 ..*31
+pattern scream_hits {
+  - - - -  1.4:1.0 - - -  - - 2.4:0.9 -  - - - -
+  - - - -  1.4:1.0 - - -  - - 7.3:0.9 -  2.4:0.8 - - -
 }
 
-track drums { play beat using kit level 0.75 out > master }
-track bass  { play low using abyss level 0.5 reverb_send 0.15 sidechain 0.4
-              out > highpass(30, 0.01) > master }
-track lead  { play cry using tear level 0.22 pan 0.3 delay_send 0.25 reverb_send 0.3
-              out > svf(3000, 0.2, morph=0.5) > master }
-track pad   { play vault_chords using vault level 0.2 pan -0.25 reverb_send 0.45 sidechain 0.5
-              out > highpass(250, 0.05) > autopan(0.3, bars=8) > master }
+pattern dread_hold {
+  1.2:0.8 ..*31
+  2.2:0.8 ..*31
+}
+
+track drums  { play beat using kit level 0.8 reverb_send 0.05 out > clip(1.6) > master }
+track maw    { play maw_line using maw level 0.42 gate 0.8 pan 0.0
+               out > highpass(70, 0.01) > master }
+track floor  { play maw_line using floor level 0.5 gate 0.8 sidechain 0.6
+               out > lowpass(110, 0.01) > master }
+track scream { play scream_hits using scream level 0.3 pan 0.2 delay_send 0.3 reverb_send 0.25
+               out > highpass(200, 0.05) > master }
+track dread  { play dread_hold using dread level 0.3 pan -0.2 reverb_send 0.35 sidechain 0.7
+               out > highpass(90, 0.05) > autopan(0.4, bars=4) > master }
 
 master {
-  in > eq(low=1.0, mid=-1.0, high=0.5) > compressor(-10, ratio=3, attack=10, release=80, makeup=6db) > out
+  in > eq(low=1.5, mid=-0.5, high=1.0) > compressor(-12, ratio=4, attack=5, release=60, makeup=7db) > out
 }
 
-# No kick to duck under yet: the ducking is off and the levels sit where the
-# ducked ones average out, so the drums arriving is not the room getting quieter.
-scene vault {
-  track pad { play vault_chords using vault pan -0.25 level 0.16 sidechain 0 }
+# No kick yet: nothing to duck under.
+scene dread {
+  track dread { play dread_hold using dread pan -0.2 sidechain 0 level 0.24 }
+  track drums { play ticks using kit }
 }
 
-scene descent {
-  track pad { play vault_chords using vault pan -0.25 level 0.16 sidechain 0 }
-  track bass { play low using abyss level 0.42 sidechain 0 }
+scene stalk {
+  track drums { play beat_bare using kit }
+  track dread { play dread_hold using dread pan -0.2 }
+  track floor { play maw_line using floor }
 }
 
-scene deep {
+scene hunt {
   track drums { play beat using kit }
-  track bass { play low using abyss }
-  track pad { play vault_chords using vault pan -0.25 }
+  track maw   { play maw_line using maw }
+  track floor { play maw_line using floor }
+  track dread { play dread_hold using dread pan -0.2 }
 }
 
-scene tear {
-  track drums { play beat using kit }
-  track bass { play low_var using abyss }
-  track lead { play cry using tear pan 0.3 }
-  track pad { play vault_chords using vault pan -0.25 }
+scene kill {
+  track drums  { play beat using kit }
+  track maw    { play maw_line using maw }
+  track floor  { play maw_line using floor }
+  track scream { play scream_hits using scream pan 0.2 }
+  track dread  { play dread_hold using dread pan -0.2 }
 }
 
-arrange { vault x4  descent x4  deep x8  tear x8  deep x4 }
+arrange { dread x4  stalk x4  hunt x8  kill x8  stalk x2  kill x8 }

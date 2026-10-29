@@ -1064,7 +1064,7 @@ instrument sync_lead {
 ```
 
 The slave's `pitch` moves under a master that holds the note, which is the sync sweep:
-the pitch stays put and the timbre tears. `examples/oberheim_dark.synth` plays both.
+the pitch stays put and the timbre tears. `examples/oberheim_dark.synth` takes the same ports somewhere darker: a reese bass with an oscillator tearing at its filter, a sync lead an envelope throws two octaves up on every hit, and noise ringing in a resonant `svf` bandpass the bass note drags around.
 
 **An FM stab.** Two operators, short envelopes, a bit of feedback, off-beat pattern with
 rests, saturation in the chain and a delay send:
