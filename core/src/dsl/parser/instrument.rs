@@ -50,6 +50,7 @@ impl Parser {
             // Each line inside instrument is either:
             // 1. A node declaration + chain: "osc saw(55) as osc1"
             // 2. A connection chain: "osc1 > mix > lowpass(900) > out"
+            // Either can end on a node's port: "lfo(0.3, 0.2) > osc1.width"
             self.parse_instrument_line(&mut inst);
         }
 
@@ -73,7 +74,22 @@ impl Parser {
             }
 
             let elem = self.parse_chain_element();
+            let is_port = matches!(elem, ChainElement::Port(..));
             chain.push(elem);
+
+            // A port is where a modulation lands: nothing comes out of it.
+            if is_port && matches!(self.peek(), Token::Arrow) {
+                let s = self.span().clone();
+                self.errors.push(ParseError {
+                    line: s.line,
+                    col: s.col,
+                    message: String::from(
+                        "a port ends the chain: what goes into `a.fm` moves a knob on `a`, it is not a signal that comes out the other side",
+                    ),
+                });
+                self.recover_to_line_end();
+                break;
+            }
 
             // Check for > (chain continues)
             self.skip_newlines();
@@ -96,13 +112,32 @@ impl Parser {
                     let name = node_def.alias.clone().unwrap();
                     inst.nodes.push(node_def);
                     if let Some(ref prev) = prev_name {
-                        inst.connections.push(ConnectionDef { from: prev.clone(), to: name.clone(), line });
+                        inst.connections.push(ConnectionDef { from: prev.clone(), to: name.clone(), port: None, line });
                     }
                     prev_name = Some(name);
                 }
                 ChainElement::Ref(name) => {
                     if let Some(ref prev) = prev_name {
-                        inst.connections.push(ConnectionDef { from: prev.clone(), to: name.clone(), line });
+                        inst.connections.push(ConnectionDef { from: prev.clone(), to: name.clone(), port: None, line });
+                    }
+                    prev_name = Some(name);
+                }
+                ChainElement::Port(name, port) => {
+                    match prev_name {
+                        Some(ref prev) => inst.connections.push(ConnectionDef {
+                            from: prev.clone(),
+                            to: name.clone(),
+                            port: Some(port),
+                            line,
+                        }),
+                        None => self.errors.push(ParseError {
+                            line: line.0,
+                            col: 1,
+                            message: format!(
+                                "`{}.{}` is a port, where a modulation lands; wire something into it: `lfo(0.3, 0.2) > {}.{}`",
+                                name, port, name, port
+                            ),
+                        }),
                     }
                     prev_name = Some(name);
                 }
@@ -140,8 +175,16 @@ impl Parser {
                 if is_dsp_keyword {
                     self.parse_inline_node_def(word)
                 } else {
-                    // Just a reference
+                    // Just a reference, or a port on one: `osc1.fm` (the
+                    // dot is optional, as everywhere a name has parts).
                     self.advance();
+                    if let Token::Ident(ref next) = self.peek().clone() {
+                        if crate::graph::node::port::from_name(next).is_some() {
+                            let port = next.clone();
+                            self.advance();
+                            return ChainElement::Port(word, port);
+                        }
+                    }
                     ChainElement::Ref(word)
                 }
             }
@@ -332,6 +375,8 @@ impl Parser {
 enum ChainElement {
     NodeDef(NodeDef),
     Ref(String),
+    /// A node and one of its modulation ports: `osc1.fm`.
+    Port(String, String),
 }
 
 /// Check if a word is a DSP keyword (node type that can be instantiated).
@@ -349,6 +394,7 @@ fn is_dsp_keyword(word: &str) -> bool {
             | "highpass"
             | "bandpass"
             | "ladder"
+            | "svf"
             | "gain"
             | "saturate"
             | "drive"

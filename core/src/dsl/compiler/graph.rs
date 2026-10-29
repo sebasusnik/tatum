@@ -10,7 +10,7 @@ use crate::dsl::ast::*;
 use crate::dsl::error::CompileError;
 use crate::graph::{GraphBuilder, GraphError, GraphTemplate};
 use crate::effects::eq::Band;
-use crate::graph::node::NodeSpec;
+use crate::graph::node::{port, NodeSpec};
 use crate::primitives::oscillator::Waveform;
 use crate::primitives::filter::FilterType;
 
@@ -60,6 +60,12 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
         name_to_idx.push((String::from("mix"), idx));
     }
 
+    // An envelope nothing flows into is a control source, not a VCA: its
+    // connections leave from the envelope itself, so `fenv > filt.cutoff`
+    // sweeps the filter instead of multiplying silence.
+    let fed = |alias: &str| inst.connections.iter().any(|c| c.to == alias && c.port.is_none());
+    let mut env_sources: Vec<(String, u8)> = Vec::new();
+
     // Create explicit nodes
     for node_def in &inst.nodes {
         let spec = node_def_to_spec(node_def, &mut noise_seed, &mut osc_drift_seed, samples_per_bar).map_err(|e| {
@@ -84,6 +90,9 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
             builder.connect(env_idx, vca_idx); // env → VCA input 0, its first
             if let Some(ref alias) = node_def.alias {
                 name_to_idx.push((alias.clone(), vca_idx));
+                if !fed(alias) {
+                    env_sources.push((alias.clone(), env_idx));
+                }
             }
         } else {
             let idx = builder.try_add_node(spec).map_err(|_| full(node_def.line))?;
@@ -99,13 +108,18 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
 
     // Second pass: create connections
     for conn in &inst.connections {
-        let from_idx = find_node(&name_to_idx, &conn.from).ok_or_else(|| {
-            CompileError::at(conn.line.0, format!("instrument '{}': unknown node '{}'", inst.name, conn.from))
-        })?;
+        let from_idx =
+            find_node(&env_sources, &conn.from).or_else(|| find_node(&name_to_idx, &conn.from)).ok_or_else(|| {
+                CompileError::at(conn.line.0, format!("instrument '{}': unknown node '{}'", inst.name, conn.from))
+            })?;
         let to_idx = find_node(&name_to_idx, &conn.to).ok_or_else(|| {
             CompileError::at(conn.line.0, format!("instrument '{}': unknown node '{}'", inst.name, conn.to))
         })?;
-        builder.try_connect(from_idx, to_idx).map_err(|_| {
+        let port = match conn.port {
+            None => port::AUDIO,
+            Some(ref p) => connection_port(inst, conn, p)?,
+        };
+        builder.try_connect_port(from_idx, to_idx, port).map_err(|_| {
             CompileError::at(
                 conn.line.0,
                 format!(
@@ -334,6 +348,43 @@ pub(super) fn node_def_to_spec(
                 lfo: filter_lfo_params(&node.params),
             })
         }
+        "svf" => {
+            let cutoff = float_param_at(&node.params, 0).unwrap_or(1000.0);
+            let res = float_param_at(&node.params, 1).unwrap_or(0.01);
+            let (ea, ed, es, er, edepth) = filter_env_params(&node.params);
+            let mut bandpass = false;
+            for p in node.params.iter() {
+                if let Param::Waveform(w) = p {
+                    match w.as_str() {
+                        "bandpass" | "bp" => bandpass = true,
+                        other => {
+                            return Err(CompileError::new(format!(
+                                "svf: '{}' is not a mode; `morph=` turns it from lowpass to highpass, and the word is `bandpass`",
+                                other
+                            )))
+                        }
+                    }
+                }
+            }
+            let morph = named_param(&node.params, "morph");
+            if bandpass && morph.is_some() {
+                return Err(CompileError::new(String::from(
+                    "svf: `morph=` turns the lowpass into the highpass, and this one is the bandpass; write one or the other",
+                )));
+            }
+            Ok(NodeSpec::Svf {
+                cutoff,
+                resonance: res,
+                morph: morph.unwrap_or(0.0),
+                bandpass,
+                env_attack: ea,
+                env_decay: ed,
+                env_sustain: es,
+                env_release: er,
+                env_depth: edepth,
+                lfo: filter_lfo_params(&node.params),
+            })
+        }
         "mix" => Ok(NodeSpec::Mix),
         "gain" => {
             let amount = float_param_at(&node.params, 0).unwrap_or(1.0);
@@ -495,6 +546,42 @@ pub(super) fn node_def_to_spec(
         }
         other => Err(CompileError { line: 0, message: format!("unknown node type '{}'", other) }),
     }
+}
+
+/// The port a connection lands on, once it is checked against the node it
+/// goes into: an oscillator's `width` only on a pulse, the `svf`'s `morph`
+/// only when it is not the bandpass.
+fn connection_port(inst: &InstrumentDef, conn: &ConnectionDef, name: &str) -> Result<u8, CompileError> {
+    let err = |message: String| CompileError::at(conn.line.0, format!("instrument '{}': {}", inst.name, message));
+    let Some(node) = inst.nodes.iter().find(|n| n.alias.as_deref() == Some(conn.to.as_str())) else {
+        return Err(err(format!(
+            "'{}' has no ports; a port is on an oscillator or a filter: `osc1.{}`",
+            conn.to, name
+        )));
+    };
+    let ports = crate::nodes::ports(&node.kind);
+    if !ports.iter().any(|p| p.name == name) {
+        let known: Vec<&str> = ports.iter().map(|p| p.name).collect();
+        return Err(err(if known.is_empty() {
+            format!("'{}' is a {}, which has no ports to modulate", conn.to, node.kind)
+        } else {
+            format!("'{}' is a {}, which has no `{}` port (it has {})", conn.to, node.kind, name, known.join(", "))
+        }));
+    }
+    let word = |w: &str| node.params.iter().any(|p| matches!(p, Param::Waveform(x) if x == w));
+    if name == "width" && !word("pulse") {
+        return Err(err(format!(
+            "`{}.width` moves a pulse's duty cycle, and '{}' is not a pulse; write `{} pulse(...)`",
+            conn.to, conn.to, node.kind
+        )));
+    }
+    if name == "morph" && (word("bandpass") || word("bp")) {
+        return Err(err(format!(
+            "`{}.morph` turns the lowpass into the highpass, and '{}' is the bandpass, which has no mode to turn",
+            conn.to, conn.to
+        )));
+    }
+    Ok(port::from_name(name).expect("every documented port has a number"))
 }
 
 fn find_node(names: &[(String, u8)], name: &str) -> Option<u8> {

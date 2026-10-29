@@ -59,8 +59,10 @@ for the next bar line, a multiple of them, to swap in what you saved.
   the way it reads, such as a breakdown louder than its drop.
 - **A synthesizer in Rust, `no_std` and with no dependencies.** Four Volca-style
   instruments (acid bass, 4-op FM, poly keys, drum machine) plus instruments built from
-  nodes, a 16-step sequencer with swing, ties, slides, an arpeggiator and parameter
-  locks, insert and send effects, and every song leaving at the same loudness.
+  nodes -- with modulation ports for cross-mod, hard sync, PWM and filter FM, and an
+  Oberheim SEM-style multimode filter -- a 16-step sequencer with swing, ties, slides,
+  an arpeggiator and parameter locks, insert and send effects, and every song leaving
+  at the same loudness.
 - **Live coding.** `watch` hot-swaps each save on the next bar; patterns transform
   TidalCycles-style (`rev`, `fast 2`, `every 4 rev`, `degrade 30%`) from the text or
   from a key.

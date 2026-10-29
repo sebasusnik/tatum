@@ -187,6 +187,7 @@ listed below:
 | `highpass` | chain, graph | `cutoff` 20..20000 (default 1000); `resonance` 0..1 (default 0.01) | `ea=` 0..10 (default 0.005), envelope attack, seconds; `ed=` 0..10 (default 0.2), envelope decay, seconds; `es=` 0..1 (default 0), envelope sustain level; `er=` 0..10 (default 0.1), envelope release, seconds; `edepth=` -20000..20000 (default 0), envelope depth in Hz added to the cutoff; `lfo_bars=` 0..64 (default 0), LFO cycle length in bars (tempo-synced); 0 = use lfo_hz; `lfo_hz=` 0..20 (default 0), free LFO rate in Hz; `lfo_depth=` 0..20000 (default 0), LFO sweep in Hz around the cutoff; 0 = off | 12 dB biquad highpass; use it to keep pads out of the sub. |
 | `bandpass` | chain, graph | `cutoff` 20..20000 (default 1000); `resonance` 0..1 (default 0.01) | `ea=` 0..10 (default 0.005), envelope attack, seconds; `ed=` 0..10 (default 0.2), envelope decay, seconds; `es=` 0..1 (default 0), envelope sustain level; `er=` 0..10 (default 0.1), envelope release, seconds; `edepth=` -20000..20000 (default 0), envelope depth in Hz added to the cutoff; `lfo_bars=` 0..64 (default 0), LFO cycle length in bars (tempo-synced); 0 = use lfo_hz; `lfo_hz=` 0..20 (default 0), free LFO rate in Hz; `lfo_depth=` 0..20000 (default 0), LFO sweep in Hz around the cutoff; 0 = off | Biquad bandpass. |
 | `ladder` | chain, graph | `cutoff` 20..20000 (default 1000); `resonance` 0..1 (default 0.01) | `ea=` 0..10 (default 0.005), envelope attack, seconds; `ed=` 0..10 (default 0.2), envelope decay, seconds; `es=` 0..1 (default 0), envelope sustain level; `er=` 0..10 (default 0.1), envelope release, seconds; `edepth=` -20000..20000 (default 0), envelope depth in Hz added to the cutoff; `lfo_bars=` 0..64 (default 0), LFO cycle length in bars (tempo-synced); 0 = use lfo_hz; `lfo_hz=` 0..20 (default 0), free LFO rate in Hz; `lfo_depth=` 0..20000 (default 0), LFO sweep in Hz around the cutoff; 0 = off | Moog-style 4-pole ladder lowpass with drive. |
+| `svf` | chain, graph | `cutoff` 20..20000 (default 1000); `resonance` 0..1 (default 0.01); waveform word | `morph=` 0..1 (default 0), mode: 0 lowpass, 0.5 notch, 1 highpass, crossfaded in between; `ea=` 0..10 (default 0.005), envelope attack, seconds; `ed=` 0..10 (default 0.2), envelope decay, seconds; `es=` 0..1 (default 0), envelope sustain level; `er=` 0..10 (default 0.1), envelope release, seconds; `edepth=` -20000..20000 (default 0), envelope depth in Hz added to the cutoff; `lfo_bars=` 0..64 (default 0), LFO cycle length in bars (tempo-synced); 0 = use lfo_hz; `lfo_hz=` 0..20 (default 0), free LFO rate in Hz; `lfo_depth=` 0..20000 (default 0), LFO sweep in Hz around the cutoff; 0 = off | Oberheim SEM-style 12 dB state-variable filter: `morph=` turns it from lowpass (0) through a notch (0.5) to highpass (1), and the word `bandpass` makes it the bandpass instead. Its cutoff can move at audio rate without ringing or blowing up, which is what the `cutoff` port needs from an oscillator: `svf(400, 0.4, morph=0.2)`. |
 | `mix` | graph | none | none | Sums every node routed into it. |
 | `gain` | chain, graph | `amount` 0..10 (default 1) | none | Linear gain. |
 | `saturate` / `drive` | chain, graph | `drive` 0..10 (default 1) | none | tanh soft clipping. |
@@ -209,4 +210,31 @@ listed below:
 | `phaser` | chain, graph | `mix` 0..1 (default 0.5) | `bars=` 0..64 (default 0), sweep cycle in bars (tempo-synced); `hz=` 0..10 (default 0.3), free sweep rate when bars is 0; `stages=` 2..12 (default 6), allpass stages; more = deeper notches; `feedback=` 0..0.9 (default 0.4), resonance of the notches; `depth=` 0..1 (default 1), sweep range | Swept allpass phaser, the liquid pad effect: `phaser(0.5, bars=4)`. Right channel runs a quarter cycle behind. |
 | `vowel` | chain, graph | waveform word | `bars=` 0..64 (default 0), morph cycle in bars (tempo-synced); `hz=` 0..10 (default 0.25), free morph rate when bars is 0; `mix=` 0..1 (default 1), wet amount | Formant filter: `vowel(a)` holds a vowel, `vowel(a, o, bars=2)` morphs between two. Words: a e i o u. |
 | `reverb` | chain, graph | `size` 0..1 (default 0.5) | none | Plate reverb, wet only; use it on a bus. |
+
+### modulation ports
+
+Inside an `instrument` graph a connection can land on a node's port instead of its
+input: `lfo(0.3, 0.2) > a.width` does not feed `a` a signal, it moves one of its knobs
+every sample by the value coming in. Write the port after the node's name, with a dot
+or a space; it ends the chain. Several connections into one port add up, and a `gain`
+on the way sets how far: `b > gain(0.5) > a.fm`. An envelope nothing flows into is a
+control source: `adsr(0.001, 0.4, 0, 0.2) as fenv` then `fenv > gain(2) > filt.cutoff`
+sweeps two octaves per note.
+
+| node | port | what it does |
+|------|------|--------------|
+| `osc` | `fm` | linear FM, the cross-mod: 1.0 swings the frequency a whole carrier either way; stops at 0 Hz |
+| `osc` | `pitch` | exponential pitch in octaves: 1.0 is an octave up, 1/12 a semitone |
+| `osc` | `sync` | hard sync: restarts the cycle each time what comes in crosses zero going up |
+| `osc` | `width` | added to `width=`, kept within 0.05..0.95: PWM; pulse only |
+| `fixosc` | `fm` | linear FM, the cross-mod: 1.0 swings the frequency a whole carrier either way; stops at 0 Hz |
+| `fixosc` | `pitch` | exponential pitch in octaves: 1.0 is an octave up, 1/12 a semitone |
+| `fixosc` | `sync` | hard sync: restarts the cycle each time what comes in crosses zero going up |
+| `fixosc` | `width` | added to `width=`, kept within 0.05..0.95: PWM; pulse only |
+| `lowpass` | `cutoff` | octaves on top of the cutoff, retuned every sample: 1.0 is an octave up |
+| `highpass` | `cutoff` | octaves on top of the cutoff, retuned every sample: 1.0 is an octave up |
+| `bandpass` | `cutoff` | octaves on top of the cutoff, retuned every sample: 1.0 is an octave up |
+| `ladder` | `cutoff` | octaves on top of the cutoff, retuned every sample: 1.0 is an octave up |
+| `svf` | `cutoff` | octaves on top of the cutoff, retuned every sample: 1.0 is an octave up |
+| `svf` | `morph` | added to `morph=`, kept within 0..1; not with `bandpass` |
 

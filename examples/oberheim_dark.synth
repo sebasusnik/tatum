@@ -1,0 +1,157 @@
+# oberheim_dark.synth — dark and aggressive, built on the modulation ports
+# 132 BPM, F phrygian (the flat second is the menace). A reese bass whose
+# filter an oscillator tears at audio rate, a hard-synced lead that screams
+# down two octaves on every hit, and noise ringing in a resonant SEM bandpass
+# that the bass note itself drags around.
+
+tempo 132
+scale F phrygian
+sidechain 0.45
+reverb size=0.8 damp=0.6 predelay=20
+delay sync=dotted_eighth feedback=0.35 filter=0.4
+
+# The bass: two saws a few cents apart (the reese) into a resonant SEM
+# lowpass. A sine a fifth above sweeps its cutoff at audio rate -- the
+# cross-mod into the filter, which is what turns a bass into a snarl -- and an
+# envelope slams it open on every hit. Then it is driven and clipped.
+instrument maw {
+  osc saw(55) as a
+  osc saw(55, pitch=0.18) as b
+  osc sine(55, pitch=7) as growl
+  adsr(0.001, 0.22, 0.0, 0.1) as fenv
+  a > mix
+  b > mix
+  mix > gain(0.5) as body
+  body > svf(160, 0.6) as filt
+  growl > gain(1.3) > filt.cutoff
+  fenv > gain(3.2) > filt.cutoff
+  filt > saturate(4.0) as dirt
+  dirt > clip(2.5) as edge
+  edge > adsr(0.002, 0.3, 0.85, 0.08) as amp
+  amp > out
+}
+
+# The sub under it, clean, so the distortion above never smears the low end.
+instrument floor {
+  osc sine(55) as s
+  s > adsr(0.002, 0.3, 0.9, 0.08) as amp
+  amp > out
+}
+
+# The lead: a saw hard-synced to another at the note. An envelope throws the
+# slave two octaves up and lets it fall back, so each hit tears downward while
+# the pitch you hear stays put. Through a resonant SEM bandpass and hot.
+instrument scream {
+  osc saw(110) as m
+  osc saw(110) as s
+  adsr(0.001, 0.35, 0.1, 0.2) as penv
+  m > s.sync
+  penv > gain(2.0) > s.pitch
+  s > svf(1800, 0.3, bandpass) as f
+  f > gain(4.0) as push
+  push > saturate(3.0) as hot
+  hot > adsr(0.001, 0.25, 0.5, 0.15) as amp
+  amp > out
+}
+
+# The dread: noise and a saw in a near-ringing SEM bandpass whose cutoff the
+# saw itself drags around at audio rate, crawling on a slow LFO underneath.
+instrument dread {
+  noise as n
+  osc saw(55) as tone
+  lfo(0.07, 0.8) as crawl
+  n > mix
+  tone > gain(0.25) as lt
+  lt > mix
+  mix > svf(320, 0.85, bandpass) as f
+  tone > gain(0.9) > f.cutoff
+  crawl > f.cutoff
+  f > gain(8.0) as push
+  push > saturate(2.5) as s
+  s > adsr(2.0, 1.0, 0.9, 3.0) as amp
+  amp > out
+}
+
+module beats kit {
+  kick_level 1.0
+  kick_pitch 0.7x
+  kick_decay 0.45
+  kick_click 0.85
+  kick_drive 0.9
+  clap_level 0.9
+  hihat_level 0.6
+  hihat_decay 0.15
+  hihat_pitch 1.3x
+}
+
+pattern beat {
+  kick:  X - - -  X - - -  X - - -  X - - -
+  hat:   - x:0.4 x - - x:0.4 x - - x:0.4 x - - x:0.4 X x:0.4
+  clap:  - - - -  X - - -  - - - -  X - - -
+}
+
+pattern beat_bare {
+  kick:  X - - -  X - - -  X - - -  X - - x:0.6
+}
+
+pattern ticks {
+  hat:   - - x:0.5 -  - - x:0.4 -  - - x:0.5 -  - x:0.3 x:0.5 -
+}
+
+pattern maw_line {
+  - 1.1:0.9 1.1:0.6 1.1:0.8  - 1.1:0.9 2.1:0.9 1.1:0.6
+  - 1.1:0.9 1.1:0.6 1.1:0.8  - 4.1:0.9 2.1:1.0 1.1:0.7
+}
+
+pattern scream_hits {
+  - - - -  1.4:1.0 - - -  - - 2.4:0.9 -  - - - -
+  - - - -  1.4:1.0 - - -  - - 7.3:0.9 -  2.4:0.8 - - -
+}
+
+pattern dread_hold {
+  1.2:0.8 ..*31
+  2.2:0.8 ..*31
+}
+
+track drums  { play beat using kit level 0.8 reverb_send 0.05 out > clip(1.6) > master }
+track maw    { play maw_line using maw level 0.42 gate 0.8 pan 0.0
+               out > highpass(70, 0.01) > master }
+track floor  { play maw_line using floor level 0.5 gate 0.8 sidechain 0.6
+               out > lowpass(110, 0.01) > master }
+track scream { play scream_hits using scream level 0.3 pan 0.2 delay_send 0.3 reverb_send 0.25
+               out > highpass(200, 0.05) > master }
+track dread  { play dread_hold using dread level 0.3 pan -0.2 reverb_send 0.35 sidechain 0.7
+               out > highpass(90, 0.05) > autopan(0.4, bars=4) > master }
+
+master {
+  in > eq(low=1.5, mid=-0.5, high=1.0) > compressor(-12, ratio=4, attack=5, release=60, makeup=7db) > out
+}
+
+# No kick yet: nothing to duck under.
+scene dread {
+  track dread { play dread_hold using dread pan -0.2 sidechain 0 level 0.24 }
+  track drums { play ticks using kit }
+}
+
+scene stalk {
+  track drums { play beat_bare using kit }
+  track dread { play dread_hold using dread pan -0.2 }
+  track floor { play maw_line using floor }
+}
+
+scene hunt {
+  track drums { play beat using kit }
+  track maw   { play maw_line using maw }
+  track floor { play maw_line using floor }
+  track dread { play dread_hold using dread pan -0.2 }
+}
+
+scene kill {
+  track drums  { play beat using kit }
+  track maw    { play maw_line using maw }
+  track floor  { play maw_line using floor }
+  track scream { play scream_hits using scream pan 0.2 }
+  track dread  { play dread_hold using dread pan -0.2 }
+}
+
+arrange { dread x4  stalk x4  hunt x8  kill x8  stalk x2  kill x8 }

@@ -2,7 +2,7 @@ extern crate alloc;
 use alloc::boxed::Box;
 
 use crate::graph::{GraphTemplate, MAX_GRAPH_NODES};
-use crate::graph::node::{NodeKind, MAX_NODE_INPUTS};
+use crate::graph::node::NodeKind;
 use crate::math;
 use crate::{BLOCK_SIZE, MAX_VOICES};
 
@@ -211,6 +211,18 @@ impl Instrument {
                                 m.filter.set_resonance(cutoff, res);
                             }
                         }
+                        NodeKind::Svf(m) => {
+                            if let Some(cutoff) = self.staged_cutoff {
+                                m.base_cutoff = cutoff;
+                            }
+                            if let Some(depth) = self.staged_env_depth {
+                                m.env_depth = depth;
+                            }
+                            if let Some(res) = self.staged_resonance {
+                                let cutoff = self.staged_cutoff.unwrap_or(m.base_cutoff);
+                                m.filter.set_params(cutoff, res);
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -249,22 +261,7 @@ impl Instrument {
 
             // Process voice sample by sample using shared node buffers
             for s in 0..len {
-                for ei in 0..template.exec_len as usize {
-                    let node_idx = template.execution_order[ei] as usize;
-                    let input_count = template.input_counts[node_idx];
-
-                    let mut input_vals = [0.0f32; MAX_NODE_INPUTS];
-                    let ic = input_count as usize;
-                    for (val, edge) in input_vals[..ic].iter_mut().zip(template.edges[node_idx][..ic].iter()) {
-                        if edge.is_connected() {
-                            *val = self.node_bufs[edge.src_node as usize][s];
-                        }
-                    }
-
-                    if let Some(ref mut node) = voice.nodes[node_idx] {
-                        self.node_bufs[node_idx][s] = node.process(&input_vals, input_count);
-                    }
-                }
+                template.run_frame(&mut self.node_bufs, s, &mut voice.nodes);
             }
 
             // Mix output into buffer
