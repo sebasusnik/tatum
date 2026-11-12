@@ -1,0 +1,11 @@
+# set: bars=48 phase=07-acido energy=6
+# set-note: Otra línea del 303, con Db, G y C contra la F y más deslizamientos; todavía sin clap. El shaker y el tick marcan la grilla arriba.
+use "_rig.synth"
+tempo 130
+
+module beats kit { kick_decay 32% kick_pitch 0.84x kick_click 38% kick_drive 42% hihat_level 72% }
+
+track beat   { play kick_acid8 level 1.05 }
+track hats   { play hat_acid8 level 1.2 }
+track sub    { play sub_f8 level 0.6 }
+track acid   { play acid_line2_16 level 0.52 }

@@ -1,0 +1,11 @@
+# set: bars=64 phase=10-tunel energy=8 blend=16
+# set-note: Túnel, en Si bemol menor: el 303 en una sola nota con el acento cada tres semicorcheas, que se corre contra el compás; un bombo corto y clickeado; la estática debajo.
+use "_rig.synth"
+tempo 133
+
+module beats kit { kick_decay 20% kick_pitch 1.0x kick_click 60% kick_drive 55% hihat_level 72% hihat_decay 12% hihat_pitch 1.7x }
+
+track beat   { play kick_tunel8 level 1.1 }
+track roll   { play roll_f_bb level 0.66 }
+track acid   { play acid_tunnel32_bb level 0.52 }
+track static { play static_bed level 0.05 }

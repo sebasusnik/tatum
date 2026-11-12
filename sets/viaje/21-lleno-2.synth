@@ -1,0 +1,19 @@
+# set: bars=64 phase=06-noche energy=8
+# set-note: El pleno final de Detroit: el pluck en semicorcheas, brillante, el metal contestando, la segunda línea de bajo, el crash y los remates, el detalle entero arriba.
+use "_rig.synth"
+tempo 128
+
+module fm pluck { mod_index 55% }
+
+module beats kit { kick_decay 34% kick_pitch 0.76x kick_click 30% kick_drive 40% hihat_level 70% }
+
+track beat    { play kick_full16 level 1.11 }
+track hats    { play hat_open8 level 1.42 }
+track perc    { play perc_detroit8 level 0.44 delay_send 0.15 reverb_send 0.12 }
+track bass    { play bs_c16 level 0.9 }
+track chords { play ch_a level 0.17 }
+track stabs   { play st_ab16 level 0.33 }
+track pluck  { play pluck_c level 0.11 }
+track mstab  { play mstab_b level 0.13 }
+track ride   { play ride_off level 0.045 }
+track tick   { play tick_5 level 0.08 }
