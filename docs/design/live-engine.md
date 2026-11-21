@@ -301,10 +301,13 @@ All five steps are done. Two things changed from the design above, both
 because of measurements:
 
 - **The swap does not split the block at the exact sample: it comes in at the
-  start of the block the bar falls in.** The engine fires a step at the start
-  of the block it falls in (the sequencer loop runs before the instruments
-  render), so splitting the block gave a result *more* precise than the
-  direct render, and therefore not identical. The new engine takes the whole
+  start of the block the bar falls in.** When this was built the engine fired
+  a step at the start of the block it fell in (the sequencer loop ran before
+  the instruments rendered), so splitting the block gave a result *more*
+  precise than the direct render, and therefore not identical. The engine now
+  renders up to each note so it starts on its own sample, and the handover
+  still gives the block whole to one engine, which is what keeps a swap equal
+  to the direct render. The new engine takes the whole
   block with its step clock phase-aligned to the old one, and starts
   positioned *before* the bar line (`start_before_bar`) so it crosses it
   itself: scene change, end of the arrangement and automation progress land

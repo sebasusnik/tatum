@@ -18,6 +18,71 @@ const QUIET_BLOCKS: u16 = 32;
 const QUIET_LEVEL: f32 = 1e-6;
 
 impl SongEngine {
+    /// Whether anything that reaches an instrument happens on the coming
+    /// sample: the step clock, a nudged hit, a gate closing, an arp step.
+    /// The same comparisons the loop makes, on the counters it is about to
+    /// have, so the two never disagree.
+    fn event_due(&self) -> bool {
+        if self.sample_counter + 1.0 >= self.current_step_duration {
+            return true;
+        }
+        if self.pending_triggers.iter().any(|t| t.samples - 1.0 <= 0.0) {
+            return true;
+        }
+        self.tracks.iter().any(|t| {
+            t.active
+                && ((t.gate_samples_remaining > 0.0 && t.gate_samples_remaining - 1.0 <= 0.0)
+                    || t.arp.as_ref().is_some_and(|a| a.fires_next()))
+        })
+    }
+
+    /// Render every track's instrument (stereo-aware) over `range` of the
+    /// block. Inside the block (`last` false) a track is skipped when the
+    /// block before skipped it and it is still idle, and its part is zeroed,
+    /// since a note can still arrive later in the block and the rest of its
+    /// buffer will be used. The last part skips exactly what the block skips.
+    fn render_tracks(
+        &mut self,
+        track_bufs_l: &mut [[f32; BLOCK_SIZE]],
+        track_bufs_r: &mut [[f32; BLOCK_SIZE]],
+        range: core::ops::Range<usize>,
+        mut taps: Option<&mut super::meters::Taps>,
+        last: bool,
+    ) {
+        let (a, b) = (range.start, range.end);
+        if a >= b {
+            return;
+        }
+        for ti in 0..self.tracks.len() {
+            let inst_idx = self.tracks[ti].instrument_idx;
+            let idle = self.instruments.get(inst_idx).is_none_or(|i| i.is_idle());
+            let skip = !self.tracks[ti].sounding() || (self.track_silent[ti] && (last || idle));
+            if skip {
+                if !last {
+                    track_bufs_l[ti][a..b].fill(0.0);
+                    track_bufs_r[ti][a..b].fill(0.0);
+                }
+                continue;
+            }
+            if inst_idx < self.instruments.len() {
+                let is_stereo = self.instruments[inst_idx].process_block_stereo_at(
+                    &mut track_bufs_l[ti][a..b],
+                    &mut track_bufs_r[ti][a..b],
+                    a,
+                );
+                if !is_stereo {
+                    // Mono instrument rendered into L; copy to R
+                    let (l, r) = (&track_bufs_l[ti], &mut track_bufs_r[ti]);
+                    r[a..b].copy_from_slice(&l[a..b]);
+                }
+                if let Some(t) = taps.as_deref_mut() {
+                    t.dry[ti].l[a..b].copy_from_slice(&track_bufs_l[ti][a..b]);
+                    t.dry[ti].r[a..b].copy_from_slice(&track_bufs_r[ti][a..b]);
+                }
+            }
+        }
+    }
+
     /// Process one stereo block.
     pub fn process_block_stereo(&mut self, output_l: &mut [f32], output_r: &mut [f32]) {
         let len = output_l.len().min(BLOCK_SIZE);
@@ -48,8 +113,19 @@ impl SongEngine {
         let mut track_bufs_l = core::mem::take(&mut self.track_bufs_l);
         let mut track_bufs_r = core::mem::take(&mut self.track_bufs_r);
 
-        // Step sequencer: process sample-by-sample for accurate timing
-        for _s in 0..len {
+        // Step sequencer, sample by sample. The instruments are rendered up
+        // to each sample where something is about to change -- a step, a
+        // nudged hit, a gate closing, an arp step -- and then it changes, so
+        // a note starts on its own sample. Rendering the whole block after
+        // the clock started every note of the block on its first sample: up
+        // to 2.9 ms early, so hits a beat apart came 22016 and 22144 samples
+        // apart instead of 22050.
+        let mut rendered = 0;
+        for s in 0..len {
+            if s > rendered && self.event_due() {
+                self.render_tracks(&mut track_bufs_l, &mut track_bufs_r, rendered..s, taps.as_deref_mut(), false);
+                rendered = s;
+            }
             self.sample_counter += 1.0;
 
             // Step advance FIRST — so Tie can extend gate before gate-off check
@@ -176,25 +252,9 @@ impl SongEngine {
             self.track_silent[ti] = silent;
         }
 
-        // Render each track's instrument (stereo-aware)
-        for ti in 0..track_count {
-            if !self.tracks[ti].sounding() || self.track_silent[ti] {
-                continue;
-            }
-            let inst_idx = self.tracks[ti].instrument_idx;
-            if inst_idx < self.instruments.len() {
-                let is_stereo = self.instruments[inst_idx]
-                    .process_block_stereo(&mut track_bufs_l[ti][..len], &mut track_bufs_r[ti][..len]);
-                if !is_stereo {
-                    // Mono instrument rendered into L; copy to R
-                    track_bufs_r[ti][..len].copy_from_slice(&track_bufs_l[ti][..len]);
-                }
-                if let Some(t) = taps.as_deref_mut() {
-                    t.dry[ti].l[..len].copy_from_slice(&track_bufs_l[ti][..len]);
-                    t.dry[ti].r[..len].copy_from_slice(&track_bufs_r[ti][..len]);
-                }
-            }
-        }
+        // Render what is left of the block, now that it is known which
+        // tracks are skipped whole.
+        self.render_tracks(&mut track_bufs_l, &mut track_bufs_r, rendered..len, taps.as_deref_mut(), true);
 
         // Apply insert FX per track (mono processing applied to both channels)
         for ti in 0..track_count {

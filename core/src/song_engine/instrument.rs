@@ -86,11 +86,14 @@ impl SongInstrument {
         }
     }
 
-    /// Process a block with stereo output. Returns true if the instrument produced native stereo.
-    pub(super) fn process_block_stereo(&mut self, out_l: &mut [f32], out_r: &mut [f32]) -> bool {
+    /// Render into `out_l`/`out_r`, the part of a block that starts `offset`
+    /// samples in; true when the instrument wrote both channels. Only the
+    /// drum machine cares where the part is: its kick envelope feeds the
+    /// sidechain by position in the block.
+    pub(super) fn process_block_stereo_at(&mut self, out_l: &mut [f32], out_r: &mut [f32], offset: usize) -> bool {
         match self {
             Self::Beats(m) => {
-                m.process_block_stereo(out_l, out_r);
+                m.process_block_stereo_at(out_l, out_r, offset);
                 true
             }
             // Keys pans its voices (unison spreads eight of them across the
