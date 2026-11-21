@@ -99,12 +99,10 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
 
     // Second pass: create connections
     for conn in &inst.connections {
-        let from_idx = find_node(&name_to_idx, &conn.from).ok_or_else(|| {
-            CompileError::at(conn.line.0, format!("instrument '{}': unknown node '{}'", inst.name, conn.from))
-        })?;
-        let to_idx = find_node(&name_to_idx, &conn.to).ok_or_else(|| {
-            CompileError::at(conn.line.0, format!("instrument '{}': unknown node '{}'", inst.name, conn.to))
-        })?;
+        let from_idx = find_node(&name_to_idx, &conn.from)
+            .ok_or_else(|| CompileError::at(conn.line.0, unknown_node(&inst.name, &conn.from)))?;
+        let to_idx = find_node(&name_to_idx, &conn.to)
+            .ok_or_else(|| CompileError::at(conn.line.0, unknown_node(&inst.name, &conn.to)))?;
         builder.try_connect(from_idx, to_idx).map_err(|_| {
             CompileError::at(
                 conn.line.0,
@@ -177,6 +175,16 @@ fn node_waveform(node: &NodeDef) -> Result<Waveform, CompileError> {
         "triangle" => Ok(Waveform::Triangle),
         "pulse" => Ok(Waveform::Pulse(width.unwrap_or(0.5))),
         other => Err(CompileError::new(format!("{}: unknown waveform '{}'", node.kind, other))),
+    }
+}
+
+/// A connection names a node that is not there. `kick` without its
+/// parentheses is a name, so say how to make it the node.
+fn unknown_node(instrument: &str, name: &str) -> String {
+    if name == "kick" {
+        format!("instrument '{instrument}': unknown node 'kick'; the kick node is written with its parentheses, `kick()` or `kick(A1)`")
+    } else {
+        format!("instrument '{instrument}': unknown node '{name}'")
     }
 }
 

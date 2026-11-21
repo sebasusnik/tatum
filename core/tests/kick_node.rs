@@ -227,3 +227,17 @@ track t { play four using boom }
 "#;
     assert_eq!(errors(src), "");
 }
+
+#[test]
+fn a_bare_kick_says_how_to_write_the_node() {
+    let src = r#"
+tempo 120
+instrument boom {
+  kick > out
+}
+pattern four { C3 - - -  C3 - - -  C3 - - -  C3 - - - }
+track t { play four using boom }
+"#;
+    let e = errors(src);
+    assert!(e.contains("`kick()`"), "{e}");
+}
