@@ -102,8 +102,8 @@ impl SongEngine {
         if count > 0 {
             let inst_idx = track.instrument_idx;
             if inst_idx < instruments.len() {
-                for ni in 0..count {
-                    instruments[inst_idx].note_off(track.current_notes[ni]);
+                for &n in &track.current_notes[..count] {
+                    instruments[inst_idx].note_off(n);
                 }
             }
             track.current_notes_count = 0;
