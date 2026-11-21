@@ -135,7 +135,10 @@ impl Parser {
             Token::Ident(ref word) => {
                 let word = word.clone();
                 // Check if this is a DSP keyword (followed by parentheses = node creation)
-                let is_dsp_keyword = is_dsp_keyword(&word);
+                // `kick` is a node only with its parentheses: a node named
+                // `kick` (`pitch_osc ... as kick`) stays a name.
+                let is_dsp_keyword =
+                    is_dsp_keyword(&word) || (word == "kick" && matches!(self.peek_ahead(1), Token::LParen));
 
                 if is_dsp_keyword {
                     self.parse_inline_node_def(word)
@@ -268,6 +271,12 @@ impl Parser {
                     ),
                 });
                 self.advance();
+            } else if let Token::Note(note) = self.peek().clone() {
+                // `kick(A1)`, `bell(A1, 2db)`: a note where the argument is in Hz.
+                if let Some(hz) = self.note_as_hz(kind, None, positional, &note) {
+                    params.push(Param::Float(hz));
+                }
+                positional += 1;
             } else if let Token::Quantity(raw, suffix) = self.peek().clone() {
                 let sp = self.span();
                 let (l, c) = (sp.line, sp.col);

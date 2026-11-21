@@ -180,6 +180,58 @@ fn node_waveform(node: &NodeDef) -> Result<Waveform, CompileError> {
     }
 }
 
+/// `kick(note, ...)`: the times come in ms and the levels in dB, as written;
+/// the spec takes cycles for the phase and a linear level for the click.
+fn kick_spec(params: &[Param]) -> Result<NodeSpec, CompileError> {
+    let opt = |name: &str, default: f32| named_param(params, name).unwrap_or(default);
+    let note = float_param_at(params, 0).unwrap_or(50.0);
+    let start = opt("start", 800.0);
+    if start <= 1.1 * note {
+        return Err(CompileError::new(format!(
+            "kick: start={} is within 10% of the note {} or under it; a kick falls from its start onto its note, so the start sits over {:.0} Hz",
+            start,
+            note,
+            1.1 * note
+        )));
+    }
+    // Unset (or 0), the knee is three times the note: an octave and a fifth
+    // over it, where a body starts to read as a pitch falling rather than a
+    // click. Held under the start, so a low start is one stage.
+    let knee = match opt("knee", 0.0) {
+        k if k > 0.0 => k,
+        _ => (3.0 * note).min(start),
+    };
+    if knee <= 1.1 * note {
+        return Err(CompileError::new(format!(
+            "kick: knee={} is within 10% of the note {}; the body falls from the knee onto the note, so it sits over {:.0} Hz (or leave knee= out)",
+            knee,
+            note,
+            1.1 * note
+        )));
+    }
+    if knee > start {
+        return Err(CompileError::new(format!(
+            "kick: knee={} is over start={}; the snap falls from the start to the knee, so the knee sits at or under the start (equal to it, there is no snap)",
+            knee, start
+        )));
+    }
+    let click_db = opt("click", -80.0);
+    Ok(NodeSpec::Kick {
+        note,
+        start,
+        knee,
+        snap_ms: opt("snap", 6.0),
+        body_ms: opt("body", 60.0),
+        attack_ms: opt("attack", 0.0),
+        hold_ms: opt("hold", 60.0),
+        release_ms: opt("release", 180.0),
+        phase: opt("phase", 0.0) / 360.0,
+        click: if click_db <= -80.0 { 0.0 } else { crate::math::pow(10.0, click_db / 20.0) },
+        tone: opt("tone", 3000.0),
+        drive: opt("drive", 0.0),
+    })
+}
+
 pub(super) fn node_def_to_spec(
     node: &NodeDef,
     noise_seed: &mut u32,
@@ -250,6 +302,7 @@ pub(super) fn node_def_to_spec(
             };
             Ok(NodeSpec::PitchOsc { waveform: wf, start_freq, end_freq, decay, mid_freq, fast })
         }
+        "kick" => kick_spec(&node.params),
         "noise" => {
             *noise_seed += 1;
             Ok(NodeSpec::Noise { seed: *noise_seed })
