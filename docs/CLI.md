@@ -13,6 +13,7 @@
 | [`audit`](#audit) | measure every note of every tonal track for what is not its harmonics |
 | [`analyze`](#analyze-and-compare) | measure a reference track: tempo, key, the kick, the spectrum, density |
 | [`compare`](#analyze-and-compare) | a reference and your song side by side, and what in the file moves each difference |
+| [`design`](#design) | design a sound in the browser, against a record's kick, and save it into `sounds/` |
 | [`set`](#set) | render, check, gate and play a live set |
 | [`tui-shot`](#tui-shot) | a picture of the live screen at any second |
 | [`params`](#params) | every module parameter, its range and units |
@@ -184,6 +185,34 @@ compares the kit alone against the record's kick; `--bars` picks the stretch of 
 counted as `debug` counts it, each scene at its own tempo, and a first bar past the end is
 an error. `--bars`, `--solo` and `--mute` pick parts of a song, so with a second WAV they
 are an error rather than ignored; that WAV is measured whole.
+
+## design
+
+```
+tatum design sounds/kicks/deep.synth [--port 7350] [--no-open]
+```
+
+A sound designer in the browser, served from this machine (127.0.0.1 only). A sound
+is a file with one `instrument` in it and a comment on top that says what it is; a
+file that does not exist yet starts as a deep kick, and Save creates it.
+
+The page has a knob for every argument of every node of the instrument, from the same
+table `params` prints and the compiler checks against, so whatever the sound is built
+from gets its knobs; a knob's × takes the argument out of the file, back to its
+default. Each turn is rendered at once -- one hit, the instrument alone, with no
+master chain and no loudness -- and played in a loop at the tempo given. Beside the
+knobs, the hit's pitch over time on a log scale and its level in dB, and the figures
+`analyze` reports for a kick: the tail and its note, the sweep, the hold, the falls.
+
+A record can be laid next to it. Load a WAV, give the stretch (an intro or an outro
+where the kick plays alone or nearly) and how many milliseconds of each hit to keep
+(as many as come before an offbeat bass); its hits are averaged on the beat grid, so
+what comes with every hit stays and the rest thins out. The two are drawn on the same
+axes, and the loop can play the record's hit, yours, or the two in turn.
+
+The file's text is on the page too: edit it to add a node or rewire, apply, and the
+knobs follow. The text is the sound: a song plays it with
+`use "../sounds/kicks/deep.synth"` and `play ... using deep_kick`.
 
 ## set
 

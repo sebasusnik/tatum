@@ -158,7 +158,12 @@ pub fn analyze(audio: &Audio, from: Option<f32>, to: Option<f32>) -> Result<Prof
 
 /// The stretch `from`..`to` of `audio`, checked, no longer than `longest`
 /// seconds, and at the engine's rate.
-fn stretch(audio: &Audio, from: Option<f32>, to: Option<f32>, longest: f32) -> Result<(Vec<f32>, Vec<f32>), String> {
+pub fn stretch(
+    audio: &Audio,
+    from: Option<f32>,
+    to: Option<f32>,
+    longest: f32,
+) -> Result<(Vec<f32>, Vec<f32>), String> {
     let rate = audio.rate;
     if !(MIN_RATE..=MAX_RATE).contains(&rate) {
         return Err(format!("a sample rate of {rate} Hz; a reference has to be between {MIN_RATE} and {MAX_RATE} Hz"));
@@ -326,13 +331,13 @@ fn to_engine_rate(x: &[f32], from: u32) -> Vec<f32> {
 /// RBJ biquad, in f64: the analysis runs over minutes of audio and a sub
 /// filter at 44.1 kHz has its poles very near the unit circle.
 #[derive(Clone, Copy)]
-struct Biquad {
+pub(crate) struct Biquad {
     b: [f64; 3],
     a: [f64; 2],
 }
 
 impl Biquad {
-    fn lowpass(hz: f64) -> Self {
+    pub(crate) fn lowpass(hz: f64) -> Self {
         let w = 2.0 * std::f64::consts::PI * hz / SR;
         let alpha = w.sin() / (2.0 * std::f64::consts::FRAC_1_SQRT_2);
         let c = w.cos();
@@ -364,7 +369,7 @@ impl Biquad {
     }
 
     /// Two in series: 24 dB an octave.
-    fn run_twice(&self, x: &[f32]) -> Vec<f32> {
+    pub(crate) fn run_twice(&self, x: &[f32]) -> Vec<f32> {
         self.run(&self.run(x))
     }
 }

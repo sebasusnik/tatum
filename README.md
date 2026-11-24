@@ -71,6 +71,10 @@ for the next bar line, a multiple of them, to swap in what you saved.
   note for what is not its harmonics, and `analyze` and `compare` measure a record you
   want to sound like -- its kick's note, sweep and decay, its spectrum and density --
   and say what in your file to change to get there.
+- **A sound designer.** `tatum design` opens one instrument in the browser: a knob for
+  every argument, the sound in a loop as they turn, its pitch and level drawn over
+  time against a record's averaged kick, and Save into a `sounds/` library that songs
+  `use`.
 - **Everywhere.** A CLI, the browser through WASM, and an MCP server so an AI can write
   songs with the compiler in the loop.
 
