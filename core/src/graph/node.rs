@@ -86,10 +86,18 @@ pub enum NodeSpec {
         knee: f32,
         /// ms the snap takes to fall to 10% of its span.
         snap_ms: f32,
+        /// Hz of a third, fastest stage over the start: the tick of pitch a
+        /// hit has in its first milliseconds. Equal to `start`, none.
+        chirp: f32,
+        /// ms the chirp takes to fall to 10% of its span.
+        chirp_ms: f32,
         /// ms until the pitch is within 10% of `note`.
         body_ms: f32,
         attack_ms: f32,
         hold_ms: f32,
+        /// dB the level sinks across the hold (0 or negative): a top that
+        /// leans before the release takes it.
+        sag_db: f32,
         /// ms from the end of the hold to -60 dB.
         release_ms: f32,
         /// Where the sine starts, in cycles: 0 at the zero crossing, 0.25 at the top.
@@ -874,10 +882,15 @@ pub struct KickState {
     body_mul: f32,
     snap_part: f32,
     snap_mul: f32,
+    chirp_part: f32,
+    chirp_mul: f32,
     /// Samples of attack left, and how much each one adds.
     attack_left: u32,
     attack_step: f32,
     hold_left: u32,
+    /// Where the hold has sunk to, and how much more each sample of it.
+    held: f32,
+    sag_mul: f32,
     release_mul: f32,
     level: f32,
     drive_gain: f32,
@@ -897,9 +910,12 @@ impl KickState {
             start,
             knee,
             snap_ms,
+            chirp,
+            chirp_ms,
             body_ms,
             attack_ms,
             hold_ms,
+            sag_db,
             release_ms,
             phase,
             click,
@@ -919,6 +935,8 @@ impl KickState {
         let body_tau = ms(body_ms).max(1.0) / crate::math::ln(body_ratio);
         // The snap falls by 10x in `snap_ms`.
         let snap_tau = ms(snap_ms).max(1.0) / core::f32::consts::LN_10;
+        let chirp_tau = ms(chirp_ms).max(1.0) / core::f32::consts::LN_10;
+        let hold = ms(hold_ms) as u32;
         let attack_left = ms(attack_ms) as u32;
         let drive_gain = 1.0 + 5.0 * drive;
         let mut click_filter = BiquadFilter::new(SAMPLE_RATE);
@@ -930,9 +948,14 @@ impl KickState {
             body_mul: crate::math::exp(-1.0 / body_tau),
             snap_part: start - knee,
             snap_mul: crate::math::exp(-1.0 / snap_tau),
+            chirp_part: chirp - start,
+            chirp_mul: crate::math::exp(-1.0 / chirp_tau),
             attack_left,
             attack_step: 1.0 / (attack_left.max(1) as f32),
-            hold_left: ms(hold_ms) as u32,
+            hold_left: hold,
+            held: 1.0,
+            // 0 dB is exactly 1: an unsagged hold stays at full level.
+            sag_mul: if sag_db < 0.0 && hold > 0 { fall_per_sample(sag_db, hold_ms) } else { 1.0 },
             release_mul: fall_per_sample(-60.0, release_ms),
             level: if attack_left > 0 { 0.0 } else { 1.0 },
             drive_gain,
@@ -956,7 +979,8 @@ impl KickState {
             self.level = (self.level + self.attack_step).min(1.0);
         } else if self.hold_left > 0 {
             self.hold_left -= 1;
-            self.level = 1.0;
+            self.level = self.held;
+            self.held *= self.sag_mul;
         } else {
             self.level *= self.release_mul;
         }
@@ -975,13 +999,14 @@ impl KickState {
             0.0
         };
 
-        let freq = self.note + self.body_part + self.snap_part;
+        let freq = self.note + self.body_part + self.snap_part + self.chirp_part;
         self.phase += freq / SAMPLE_RATE;
         if self.phase >= 1.0 {
             self.phase -= 1.0;
         }
         self.body_part *= self.body_mul;
         self.snap_part *= self.snap_mul;
+        self.chirp_part *= self.chirp_mul;
 
         if self.level < KICK_FLOOR && self.attack_left == 0 && self.hold_left == 0 && self.click == 0.0 {
             self.done = true;
@@ -1525,9 +1550,12 @@ mod renew_tests {
             start: 900.0,
             knee: 165.0,
             snap_ms: 4.0,
+            chirp: 3000.0,
+            chirp_ms: 1.0,
             body_ms: 70.0,
             attack_ms: 1.0,
             hold_ms: 80.0,
+            sag_db: -2.0,
             release_ms: 160.0,
             phase: 0.25,
             click: 0.02,

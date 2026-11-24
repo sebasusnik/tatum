@@ -223,15 +223,29 @@ fn kick_spec(params: &[Param]) -> Result<NodeSpec, CompileError> {
             knee, start
         )));
     }
+    // Unset (or 0), no chirp: it starts where the snap does.
+    let chirp = match opt("chirp", 0.0) {
+        c if c > 0.0 => c,
+        _ => start,
+    };
+    if chirp < start {
+        return Err(CompileError::new(format!(
+            "kick: chirp={} is under start={}; the chirp falls from its own top onto the start, so it sits over it (or leave chirp= out)",
+            chirp, start
+        )));
+    }
     let click_db = opt("click", -80.0);
     Ok(NodeSpec::Kick {
         note,
         start,
         knee,
         snap_ms: opt("snap", 6.0),
+        chirp,
+        chirp_ms: opt("chirp_time", 1.0),
         body_ms: opt("body", 60.0),
         attack_ms: opt("attack", 0.0),
         hold_ms: opt("hold", 60.0),
+        sag_db: opt("sag", 0.0),
         release_ms: opt("release", 180.0),
         phase: opt("phase", 0.0) / 360.0,
         click: if click_db <= -80.0 { 0.0 } else { crate::math::pow(10.0, click_db / 20.0) },

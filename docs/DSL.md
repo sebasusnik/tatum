@@ -1023,7 +1023,10 @@ track bass { play line using sub sidechain 0.5 from=kick }   # the bass waits fo
 ```
 
 Tune it to the root or the fifth of the scale and keep the bass off its beat: the two
-are then one low end. `snap=` and `start=` are the attack, `knee=` where it hands over to
+are then one low end. A kick measured off a record is often three falls, not two: a tick
+of pitch in the first milliseconds, the fall onto the body, and a slow last settling.
+`chirp=4khz, chirp_time=0.7ms` adds the tick over the start, and `sag=-3db` lets the held
+top lean the way a long kick does before it is cut. `snap=` and `start=` are the attack, `knee=` where it hands over to
 the body (three times the note when left out); `click=-35db` adds a beater on top and
 `phase=90` starts the sine at its peak, for more punch and a click of its own. `drive=`
 saturates the hit more than the tail, at the same peak. Write it with its parentheses,
