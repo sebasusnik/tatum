@@ -500,7 +500,9 @@ pub(super) fn node_def_to_spec(
             let sync_div = rhythm_div_param(&node.params).unwrap_or(0.25);
             // feedback is the first float param (rhythm div is parsed separately)
             let feedback = float_param_at(&node.params, 0).unwrap_or(0.3);
-            Ok(NodeSpec::Delay { sync_div, feedback })
+            let wow = named_param(&node.params, "wow").unwrap_or(0.0);
+            let flutter = named_param(&node.params, "flutter").unwrap_or(0.0);
+            Ok(NodeSpec::Delay { sync_div, feedback, wow, flutter })
         }
         "reverb" => {
             let room_size = float_param_at(&node.params, 0).unwrap_or(0.5);

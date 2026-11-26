@@ -26,12 +26,30 @@ sidechain 0.4
 delay sync=dotted_eighth feedback=0.45 filter=0.5   # sync: free | quarter | dotted_eighth |
                                                     #       eighth | sixteenth (default) | triplet_eighth
                                                     # time=0.3 (seconds) applies when sync=free
+                                                    # wow=30% flutter=10%: bucket-brigade wobble, 0..1 each
 reverb size=0.7 damp=0.4 predelay=20 sidechain=0.5  # predelay in ms; size 1.0 is a ~15 s hall;
                                                     # sidechain= ducks the return against the kick (delay too)
 ```
 
 A value outside those spans is an error at its line (a scene's `tempo` too),
 not something the engine quietly plays as the nearest thing.
+
+`wow` and `flutter` give the delay an analog bucket-brigade character, as on a
+Memory Man: the delay time moves, so every repeat comes back slightly out of
+tune, and each pass through the feedback bends it again. Both are 0..1, or a
+percentage (`wow=30%`), and 0 by default, where the delay plays exactly as it
+did without them.
+
+- `wow` is a slow drift, about 0.5 Hz and wandering in rate: at 1 the delay time
+  swings ±3.5 ms and the repeats sag and rise by up to about ±25 cents. 0.2 is a
+  worn tape; past 0.5 it is seasick.
+- `flutter` is a fast tremble, about 7 Hz, made irregular by two faster partials
+  and a little noise: at 1 the time swings about ±0.15 ms, up to about ±18 cents.
+  A little (0.1) blurs the repeats; a lot makes them warble.
+
+Left and right drift at slightly different rates, so a ping-pong spreads as it
+bends. The drift is seeded: a song renders the same every time. The chain
+`delay(...)` takes the same two as named arguments: `delay(1/8, 0.5, wow=30%)`.
 
 `humanize` spreads velocity; `timing` nudges the step clock, which is one clock
 for the whole song, so the band rushes and drags together rather than each part
@@ -343,7 +361,7 @@ master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2
 | `clip(drive, ceiling=)` | 0.1..20, dB -24..0 | hard clipper, antialiased: under the ceiling nothing changes, over it is cut flat. The density of a club kick |
 | `transient(attack, sustain)` | dB -24..24 each | the hit and the tail turned up or down whatever the level; a steady tone passes |
 | `tilt(amount)` | -1..1, negative = darker | one-knob tilt EQ |
-| `delay(1/8, feedback)` | note division, 0..1 | tempo-synced delay inside a chain |
+| `delay(1/8, feedback, wow=, flutter=)` | note division, 0..1, 0..1, 0..1 | tempo-synced delay inside a chain; `wow` and `flutter` as below |
 | `reverb(size)` | 0..1 | plate reverb inside a chain |
 
 Exact ranges and defaults for every node are in [PARAMS.md](PARAMS.md) under "effects and

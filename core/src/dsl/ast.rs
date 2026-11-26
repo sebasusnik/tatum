@@ -362,6 +362,8 @@ pub struct SendDelayDef {
     pub feedback: Option<f32>,
     pub filter: Option<f32>,
     pub sidechain: Option<f32>, // duck the delay return against the kick
+    pub wow: Option<f32>,       // 0..1, slow drift of the delay time
+    pub flutter: Option<f32>,   // 0..1, fast irregular tremble of it
 }
 
 /// Global send reverb settings (top-level `reverb ...` line).

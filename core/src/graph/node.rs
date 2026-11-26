@@ -244,6 +244,10 @@ pub enum NodeSpec {
     Delay {
         sync_div: f32,
         feedback: f32,
+        /// Slow drift of the delay time, 0..1.
+        wow: f32,
+        /// Fast, irregular tremble of the delay time, 0..1.
+        flutter: f32,
     },
     /// Reverb (bus/master chain only, not per-voice).
     Reverb {
@@ -506,9 +510,11 @@ impl NodeSpec {
             NodeSpec::Transient { attack_db, sustain_db } => {
                 NodeKind::Transient(Transient::new(attack_db, sustain_db, SAMPLE_RATE))
             }
-            NodeSpec::Delay { feedback, .. } => {
+            NodeSpec::Delay { feedback, wow, flutter, .. } => {
                 let mut d = Delay::new(SAMPLE_RATE, 2.0);
                 d.set_feedback(feedback);
+                d.set_wow(wow);
+                d.set_flutter(flutter);
                 d.set_mix(1.0); // wet-only for sends
                 NodeKind::Delay(d)
             }
@@ -529,10 +535,12 @@ impl NodeSpec {
     /// line covers that too.
     pub fn instantiate_in_chain(&self, slowest_bpm: f32) -> NodeKind {
         match *self {
-            NodeSpec::Delay { sync_div, feedback } => {
+            NodeSpec::Delay { sync_div, feedback, wow, flutter } => {
                 let synced = 60.0 / slowest_bpm.max(20.0) * 4.0 * sync_div;
                 let mut d = Delay::new(SAMPLE_RATE, (synced.max(0.3) * 1.2).min(2.0));
                 d.set_feedback(feedback);
+                d.set_wow(wow);
+                d.set_flutter(flutter);
                 d.set_mix(1.0);
                 NodeKind::Delay(d)
             }
@@ -1609,9 +1617,11 @@ impl NodeKind {
     /// and it lives on buses and the master, never in a voice.
     pub fn renew(&mut self, spec: &NodeSpec) {
         match (&mut *self, spec) {
-            (NodeKind::Delay(d), NodeSpec::Delay { feedback, .. }) => {
+            (NodeKind::Delay(d), NodeSpec::Delay { feedback, wow, flutter, .. }) => {
                 d.reset();
                 d.set_feedback(*feedback);
+                d.set_wow(*wow);
+                d.set_flutter(*flutter);
                 d.set_mix(1.0);
             }
             (NodeKind::Capture(c), NodeSpec::Capture { .. }) => c.reset(),
@@ -1694,7 +1704,8 @@ mod renew_tests {
 
     #[test]
     fn a_renewed_node_plays_like_a_new_one() {
-        renews_like_new(NodeSpec::Delay { sync_div: 0.25, feedback: 0.6 });
+        renews_like_new(NodeSpec::Delay { sync_div: 0.25, feedback: 0.6, wow: 0.0, flutter: 0.0 });
+        renews_like_new(NodeSpec::Delay { sync_div: 0.25, feedback: 0.6, wow: 0.7, flutter: 0.5 });
         renews_like_new(NodeSpec::Capture { samples: 4_000, start_samples: 0, speed: 0.5, reverse: true, mix: 1.0 });
         renews_like_new(NodeSpec::Chorus { mix: 0.5 });
         renews_like_new(NodeSpec::Saturator { drive: 2.0 });
