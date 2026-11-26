@@ -210,6 +210,9 @@ where the kick plays alone or nearly) and how many milliseconds of each hit to k
 what comes with every hit stays and the rest thins out. The two are drawn on the same
 axes, and the loop can play the record's hit, yours, or the two in turn.
 
+Once a record is loaded, **Fit to reference** sets the kick node's knobs to what
+`tatum kick fit` finds for it (see below), and says what error is left.
+
 The file's text is on the page too: edit it to add a node or rewire, apply, and the
 knobs follow. The text is the sound: a song plays it with
 `use "../sounds/kicks/deep.synth"` and `play ... using deep_kick`.
@@ -219,6 +222,46 @@ It answers only its own page. Any site open in the same browser can send a reque
 the page's own header, is refused (403), and Save writes only the file it was started
 on. A WAV is taken up to 400 MB; a request that stops sending is let go after 30
 seconds.
+
+## kick fit
+
+```
+tatum kick fit <reference.wav> [--from S] [--to S] [--bpm N] [--ms 230] [--effort 1] [--hit hit.wav]
+```
+
+The `kick(...)` line whose hit matches a record's kick. The record's hits between
+`--from` and `--to` (seconds or `m:ss`) are averaged on its beat grid, the first `--ms`
+of each: pick a stretch where the kick plays alone or nearly, an intro or an outro, and
+only as many milliseconds as come before an offbeat bass. The tempo is measured unless
+`--bpm` gives it; a tempo measured a hundredth of a BPM off still averages cleanly,
+since every hit is aligned again on its own attack.
+
+The node's note, start, knee, snap, chirp, body, hold, sag, release, phase and click are
+then fitted to that average: its pitch in semitones on an even grid from 0.6 to 215 ms
+(the attack, to 10 ms, counted again on its own) and its level in dB. After the first
+10 ms both are read through an 800 Hz low-pass, so hats on the beat are not taken for
+the kick, and the pitch is only compared while the record's hit is within 30 dB of its
+peak. The search starts from what the curves say (the tail, where the sweep starts, the
+hold, the fall) and from four guesses around it; the click comes last, as the one whose
+whole score is best, so the highs a master adds are reported, not chased.
+
+The line is then rendered by the whole engine, measured against the record again, and
+refined while that render is further off than the node alone was. It prints the line,
+ready to paste, the error left, and the two hits side by side:
+
+```
+$ tatum kick fit outro.wav --from 5:40 --to 6:10
+outro.wav: hits averaged at 124.00 BPM, the first 200 ms of each
+5389 kicks tried in 2.9 s
+  round 1: the engine's render is off by 0.08 st in pitch (0.31 st over the attack), 0.03 dB in level, click +1.3 dB
+kick(F#1, start=1.66khz, knee=172.3hz, snap=2.12ms, chirp=3.24khz, chirp_time=0.61ms, body=79.4ms, hold=95ms, sag=-1.9db, release=209.9ms, phase=6, click=-32.5db)
+# left: pitch 0.08 st (attack 0.31 st), level 0.03 dB, click +1.3 dB (the record's has more)
+```
+
+`--hit` writes the averaged hit to a WAV, to hear what was fitted to. `drive=` and
+`attack=` are not fitted: a record's saturation comes back as phase and click. In
+`tatum design`, **Fit to reference** does the same to the sound's kick node once a record
+is loaded, and its knobs move to the result.
 
 ## set
 
