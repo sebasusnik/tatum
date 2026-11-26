@@ -642,12 +642,12 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
     // 130). Each window starts this much early, and the hit is found in it.
     let pre = samples(20.0);
     let starts: Vec<usize> = starts.iter().filter(|&&on| on >= pre).map(|&on| on - pre).collect();
-    let average = |starts: &[usize]| {
+    let average_of = |signal: &[f32], starts: &[usize]| {
         let mut sum = vec![0.0f64; len];
         let mut n = 0;
         for &on in starts {
-            if on + len <= body.len() {
-                for (s, v) in sum.iter_mut().zip(&body[on..on + len]) {
+            if on + len <= signal.len() {
+                for (s, v) in sum.iter_mut().zip(&signal[on..on + len]) {
                     *s += *v as f64;
                 }
                 n += 1;
@@ -655,6 +655,7 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
         }
         (n > 0).then(|| sum.iter().map(|v| (v / n as f64) as f32).collect::<Vec<f32>>())
     };
+    let average = |starts: &[usize]| average_of(&body, starts);
     let first = average(&starts)?;
     let (reach, span) = (samples(2.0), samples(30.0).min(len));
     let aligned: Vec<usize> = starts
@@ -758,12 +759,21 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
     };
     let sweep_ms = cycles.iter().find(|c| c.1 <= tail_hz * 1.1).map_or(cycles[cycles.len() - 1].0, |c| c.0);
 
+    let hit = average_of(mono, &aligned).and_then(|raw| crate::hit::hit_start(&raw)).unwrap_or(onset);
     // The click is not averaged: hats land on some hits and not others, and
     // the median of the hits leaves them out.
     let mut click: Vec<f32> = aligned
         .iter()
         .filter_map(|&on| {
-            let on = on + pre;
+            // From where the hit starts in the average of the unfiltered
+            // hits, which every aligned window shares, found as `tatum
+            // design` and `kick fit` find it. Not from where each hit was
+            // first found: a bass ringing up to the beat walked that back
+            // 30 ms, and the click was read in the silence before the hit
+            // (-121 dB on a kick with a -30 dB click). Nor from the onset
+            // read on the low-passed average: late by the filter and by its
+            // threshold, it missed the first milliseconds, where a click is.
+            let on = on + hit;
             let e_top: f32 = top.get(on..on + samples(10.0))?.iter().map(|v| v * v).sum();
             let e_body: f32 = body.get(on..on + samples(100.0))?.iter().map(|v| v * v).sum();
             (e_body > 0.0).then(|| 10.0 * (e_top.max(1e-12) / e_body).log10())

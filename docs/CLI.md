@@ -145,20 +145,20 @@ What it says about `dark_techno` rendered, the engine's own song:
 ```
 dark_techno.wav: 300.7 s
   tempo        137.0 BPM (137..150)
-  key          F minor / G# major
-  low notes    D# 22%, E 13%, G 10%   (under 250 Hz, the kick's tail included)
+  key          F minor / G# major, weakly: little in it is tonal
+  low notes    D# 19%, E 14%, G 10%   (under 250 Hz, the kick's tail included)
   loudness     -18.0 LUFS, peak -1.2 dBFS, peak to loudness 16.8 dB
   width        3% above 250 Hz, 0.1% under 150 Hz
-  kick         1028 hits, measured on the 42 with the least under them
-    hit        88 Hz (the first half cycle)
-    tail       39.2 Hz (D#1)
-    sweep      34 ms to within 10% of the tail
+  kick         1016 hits, measured on the 50 with the least under them
+    hit        89 Hz (the first half cycle)
+    tail       39.0 Hz (D#1)
+    sweep      33 ms to within 10% of the tail
     hold       none: it falls from the hit
     decay      -12 dB at 95 ms, -24 dB at 111 ms
-    click      -27.9 dB (first 10 ms over 2 kHz against the body)
-    under it   -46.7 dB (the band under 400 Hz late in the beat)
+    click      -32.1 dB (first 10 ms over 2 kHz against the body)
+    under it   -45.6 dB (the band under 400 Hz late in the beat)
   spectrum     31.5    63   125   250   500    1k    2k    4k    8k   16k
-  (dB)         -2.2  -7.0 -10.9 -12.6 -16.8 -19.9 -23.1 -21.1 -21.2 -22.6
+  (dB)         -2.2  -7.0 -10.9 -12.6 -16.7 -19.5 -22.9 -21.1 -21.3 -22.6
 ```
 
 The kick is measured on every hit averaged together, so the bass, the pads and the reverb

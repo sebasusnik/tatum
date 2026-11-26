@@ -369,11 +369,13 @@ fn hit_json(y: &[f32]) -> String {
     let norm: Vec<f32> = y.iter().map(|v| v / peak * 0.7).collect();
     let wav = tatum_core::wav::encode_stereo_16(&norm, &norm, SAMPLE_RATE as u32);
     format!(
-        "{{\"audio\":{},\"pitch\":{},\"level\":{},\"ms\":{}}}",
+        "{{\"audio\":{},\"pitch\":{},\"level\":{},\"ms\":{},\"click\":{}}}",
         json_str(&base64(&wav)),
         json_pairs(&c.pitch),
         json_pairs(&c.level),
-        json_num(y.len() as f32 * 1000.0 / SAMPLE_RATE)
+        json_num(y.len() as f32 * 1000.0 / SAMPLE_RATE),
+        // The click as `tatum analyze` reads it, so the two numbers compare.
+        json_num(tatum_debug::fit::click_db(y))
     )
 }
 
