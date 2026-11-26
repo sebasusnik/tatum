@@ -861,6 +861,8 @@ const KICK_FLOOR: f32 = 1.0e-3;
 const KICK_CLICK_MS: f32 = 4.0;
 /// The noise is seeded the same on every hit, so every click is the same.
 const KICK_CLICK_SEED: u32 = 0x4b49_434b;
+/// The highest the kick's pitch goes, as a share of the sample rate.
+const KICK_TOP: f32 = 0.45;
 
 /// Per-sample factor that takes a level down by `db` (a negative number) in
 /// `ms` milliseconds.
@@ -926,6 +928,14 @@ impl KickState {
             unreachable!("KickState::new takes a kick")
         };
         let ms = |t: f32| t * 0.001 * SAMPLE_RATE;
+        // A sine over half the rate folds back down: at 22.05 kHz a 12 kHz
+        // chirp would play as a 10 kHz one. The top of the sweep is held
+        // under 0.45 of the rate, which at 44.1 kHz is over anything the
+        // arguments allow, so only a smaller machine hears a difference.
+        let top = KICK_TOP * SAMPLE_RATE;
+        let chirp = chirp.min(top);
+        let start = start.min(chirp);
+        let knee = knee.min(start);
         // The body is within 10% of the note when its part is down to a tenth
         // of the note: from knee - note to 0.1 * note in `body_ms`, which is
         // how `tatum analyze` times a sweep. The compiler keeps the knee over
@@ -1596,5 +1606,38 @@ mod renew_tests {
     #[test]
     fn a_node_is_small_enough_to_keep_per_voice() {
         assert!(core::mem::size_of::<NodeKind>() <= 512, "NodeKind is {} bytes", core::mem::size_of::<NodeKind>());
+    }
+}
+
+#[cfg(test)]
+mod kick_tests {
+    use super::*;
+
+    /// The highest a kick can be asked to start, chirp and all, plays under
+    /// half the rate at whatever rate the engine is built for (the CI renders
+    /// at 22050 and 32000 Hz too).
+    #[test]
+    fn the_kick_never_starts_over_half_the_rate() {
+        let spec = NodeSpec::Kick {
+            note: 200.0,
+            start: 5000.0,
+            knee: 2000.0,
+            snap_ms: 4.0,
+            chirp: 12000.0,
+            chirp_ms: 1.0,
+            body_ms: 70.0,
+            attack_ms: 0.0,
+            hold_ms: 80.0,
+            sag_db: 0.0,
+            release_ms: 160.0,
+            phase: 0.0,
+            click: 0.0,
+            tone: 3000.0,
+            drive: 0.0,
+        };
+        let NodeKind::Kick(k) = spec.instantiate() else { panic!("a kick") };
+        let top = k.note + k.body_part + k.snap_part + k.chirp_part;
+        assert!(top <= 0.45 * SAMPLE_RATE + 0.5, "starts at {top} Hz at {SAMPLE_RATE} Hz");
+        assert!(k.snap_part >= 0.0 && k.chirp_part >= 0.0 && k.body_part > 0.0);
     }
 }
