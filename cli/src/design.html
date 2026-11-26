@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tatum design</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1c1a; --muted: #6b6862; --line: #dedad3;
+  --ours: #c2410c; --ref: #2563eb; --accent: #1d1c1a; --error: #b91c1c;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #151413; --panel: #1f1e1c; --ink: #ece9e3; --muted: #9a958c; --line: #34322e;
+          --ours: #fb923c; --ref: #60a5fa; --accent: #ece9e3; --error: #f87171; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+header .path { color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; }
+header .spacer { flex: 1; }
+button, input, select { font: inherit; color: inherit; }
+button { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+button.on { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+button.primary { background: var(--ours); color: #fff; border-color: var(--ours); }
+input[type=number], input[type=text] { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+main { display: grid; grid-template-columns: minmax(300px, 420px) 1fr; gap: 16px; padding: 16px; }
+@media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+section h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
+.node { margin-bottom: 14px; }
+.node h3 { font-size: 13px; margin: 0 0 6px; font-family: ui-monospace, monospace; }
+.node h3 small { color: var(--muted); font-weight: 400; font-family: system-ui, sans-serif; }
+.knob { display: grid; grid-template-columns: 86px 1fr 112px; gap: 8px; align-items: center; margin: 3px 0; }
+.knob label { font-family: ui-monospace, monospace; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.knob.unset label { color: var(--muted); }
+.knob input[type=range] { width: 100%; accent-color: var(--ours); }
+.knob .val { display: flex; gap: 2px; align-items: center; }
+.knob .val input { width: 76px; padding: 2px 4px; font-size: 12px; }
+.knob .val span { color: var(--muted); font-size: 11px; width: 18px; }
+.knob button.reset { padding: 0 4px; font-size: 11px; border: none; background: none; color: var(--muted); }
+canvas { width: 100%; height: 220px; display: block; }
+.legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.legend b { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 4px; }
+.numbers { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 16px; font-size: 12px; }
+.numbers div span { color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+textarea { width: 100%; min-height: 170px; font: 12px/1.45 ui-monospace, monospace; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+#status { font-size: 12px; color: var(--muted); min-height: 1.4em; }
+#status.error { color: var(--error); white-space: pre-wrap; font-family: ui-monospace, monospace; }
+.right { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>tatum design</h1>
+  <span class="path" id="path"></span>
+  <span class="spacer"></span>
+  <button id="play">▶ Play</button>
+  <label>BPM <input id="bpm" type="number" value="125" min="40" max="220" step="1" style="width:64px"></label>
+  <select id="listen" title="What the loop plays">
+    <option value="ours">yours</option>
+    <option value="ref">reference</option>
+    <option value="ab">alternate: ref, yours</option>
+  </select>
+  <button class="primary" id="save">Save</button>
+</header>
+<main>
+  <div>
+    <section>
+      <h2>Description</h2>
+      <input id="desc" type="text" style="width:100%">
+    </section>
+    <div style="height:12px"></div>
+    <section id="knobs"><h2>Knobs</h2></section>
+  </div>
+  <div class="right">
+    <section>
+      <h2>Pitch (Hz, log) over the first <span id="span-ms"></span> ms</h2>
+      <canvas id="pitch"></canvas>
+      <div class="legend"><span><b style="background:var(--ours)"></b>yours</span><span id="lg-ref" hidden><b style="background:var(--ref)"></b>reference</span></div>
+    </section>
+    <section>
+      <h2>Level (dB against the peak)</h2>
+      <canvas id="level"></canvas>
+    </section>
+    <section>
+      <h2>Measured</h2>
+      <div class="numbers" id="numbers"></div>
+    </section>
+    <section>
+      <h2>Reference</h2>
+      <div class="row">
+        <input id="ref-file" type="file" accept=".wav,audio/wav">
+        <label>from <input id="ref-from" type="number" step="0.1" placeholder="s" style="width:70px"></label>
+        <label>to <input id="ref-to" type="number" step="0.1" placeholder="s" style="width:70px"></label>
+        <label>BPM <input id="ref-bpm" type="number" step="0.01" placeholder="auto" style="width:70px"></label>
+        <label>first <input id="ref-ms" type="number" value="230" style="width:60px"> ms</label>
+        <button id="ref-load">Average its hits</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted)">A WAV of a record: its hits are averaged on the beat grid, so what comes with every hit is kept and the rest thins out. Pick a stretch where the kick plays alone or nearly (an intro, an outro), and only as many ms as come before the bass. An MP3 has to be a WAV first: <code>ffmpeg -i song.mp3 song.wav</code>.</div>
+    </section>
+    <section>
+      <h2>The file</h2>
+      <textarea id="text" spellcheck="false"></textarea>
+      <div class="row"><button id="apply-text">Apply the text</button><span style="font-size:12px;color:var(--muted)">To add a node or change the wiring: edit, then apply. The knobs follow.</span></div>
+      <div id="status"></div>
+    </section>
+  </div>
+</main>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+let sound = null, ours = null, ref = null;
+let ctx = null, buffers = { ours: null, ref: null }, playing = false, timer = null, nextAt = 0, beatN = 0;
+let pending = new Map(), sending = false;
+
+function status(msg, error) { const s = $("status"); s.textContent = msg || ""; s.className = error ? "error" : ""; }
+
+async function post(path, body, type) {
+  const r = await fetch(path, { method: "POST", body, headers: { "Content-Type": type || "text/plain", "X-Tatum-Design": "1" } });
+  return r.json();
+}
+
+// ── Knobs ──
+// Hz and ms that span decades turn on a log scale; the rest is linear.
+function scale(a) {
+  const log = (a.unit === "hz" || a.unit === "ms") && a.min > 0 && a.max / a.min >= 20;
+  return {
+    toPos: (v) => log ? Math.log(v / a.min) / Math.log(a.max / a.min) : (v - a.min) / (a.max - a.min),
+    fromPos: (p) => log ? a.min * Math.pow(a.max / a.min, p) : a.min + p * (a.max - a.min),
+  };
+}
+function fmt(v) {
+  const x = Math.abs(v);
+  const s = x >= 100 ? v.toFixed(1) : x >= 10 ? v.toFixed(2) : x >= 1 ? v.toFixed(3) : v.toFixed(4);
+  return s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
+}
+
+function buildKnobs() {
+  const box = $("knobs");
+  box.innerHTML = "<h2>Knobs</h2>";
+  for (const n of sound.nodes) {
+    const div = document.createElement("div");
+    div.className = "node";
+    div.innerHTML = `<h3>${n.alias} <small>${n.kind}</small></h3>`;
+    div.title = n.doc;
+    for (const a of n.args) {
+      const sc = scale(a);
+      const row = document.createElement("div");
+      row.className = "knob" + (a.value === null ? " unset" : "");
+      row.title = a.doc;
+      const v0 = a.value === null ? a.default : a.value;
+      row.innerHTML = `<label>${a.name}</label><input type="range" min="0" max="1000" step="1"><div class="val"><input type="number" step="any"><span>${a.unit}</span><button class="reset" title="back to the default (removed from the file)">×</button></div>`;
+      const range = row.querySelector("input[type=range]"), num = row.querySelector("input[type=number]");
+      const set = (v, send) => {
+        range.value = Math.round(1000 * Math.min(1, Math.max(0, sc.toPos(v))));
+        num.value = fmt(v);
+        if (send) { row.classList.remove("unset"); queue(`${n.alias}.${a.name}=${v}`, `${n.alias}.${a.name}`); }
+      };
+      set(v0, false);
+      range.addEventListener("input", () => set(sc.fromPos(range.value / 1000), true));
+      num.addEventListener("change", () => { const v = parseFloat(num.value); if (isFinite(v)) set(Math.min(a.max, Math.max(a.min, v)), true); });
+      row.querySelector("button.reset").addEventListener("click", () => { set(a.default, false); row.classList.add("unset"); queue(`-${n.alias}.${a.name}`, `${n.alias}.${a.name}`); });
+      div.appendChild(row);
+    }
+    box.appendChild(div);
+  }
+}
+
+// Changes go one request at a time; while one is out the newest value of
+// each knob waits, so dragging never queues up stale renders.
+function queue(line, key) { pending.set(key, line); flush(); }
+async function flush() {
+  if (sending || pending.size === 0) return;
+  sending = true;
+  const body = [...pending.values()].join("\n");
+  pending.clear();
+  try { show(await post("/api/set", body)); } catch (e) { status(String(e), true); }
+  sending = false;
+  flush();
+}
+
+function show(r) {
+  if (r.text !== undefined) $("text").value = r.text;
+  if (!r.ok) { status(r.error, true); return; }
+  status("");
+  ours = r.hit;
+  decode(r.hit.audio).then((b) => { buffers.ours = b; });
+  draw();
+}
+
+// ── Audio ──
+function ensureCtx() { if (!ctx) ctx = new AudioContext({ sampleRate: 44100 }); return ctx; }
+async function decode(b64) {
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return ensureCtx().decodeAudioData(bytes.buffer);
+}
+function tick() {
+  const beat = 60 / Math.max(40, Math.min(220, parseFloat($("bpm").value) || 125));
+  while (nextAt < ctx.currentTime + 0.15) {
+    const mode = $("listen").value;
+    const which = mode === "ab" ? (Math.floor(beatN / 4) % 2 === 0 ? "ref" : "ours") : mode;
+    const buf = buffers[which] || buffers.ours;
+    if (buf) { const s = ctx.createBufferSource(); s.buffer = buf; s.connect(ctx.destination); s.start(nextAt); }
+    nextAt += beat; beatN++;
+  }
+}
+$("play").addEventListener("click", () => {
+  ensureCtx().resume();
+  playing = !playing;
+  $("play").classList.toggle("on", playing);
+  $("play").textContent = playing ? "■ Stop" : "▶ Play";
+  if (playing) { nextAt = ctx.currentTime + 0.05; beatN = 0; timer = setInterval(tick, 25); tick(); }
+  else clearInterval(timer);
+});
+
+// ── Drawing ──
+function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function plot(canvas, series, opts) {
+  const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const g = canvas.getContext("2d"); g.scale(dpr, dpr);
+  const pad = { l: 44, r: 8, t: 8, b: 22 };
+  const X = (t) => pad.l + (t / opts.tmax) * (w - pad.l - pad.r);
+  const Y = (v) => { const p = (opts.f(v) - opts.f(opts.ymin)) / (opts.f(opts.ymax) - opts.f(opts.ymin)); return h - pad.b - Math.min(1, Math.max(0, p)) * (h - pad.t - pad.b); };
+  g.strokeStyle = css("--line"); g.fillStyle = css("--muted"); g.font = "11px system-ui"; g.lineWidth = 1;
+  for (const v of opts.yticks) { const y = Y(v); g.beginPath(); g.moveTo(pad.l, y); g.lineTo(w - pad.r, y); g.stroke(); g.fillText(opts.ylabel(v), 4, y + 4); }
+  const step = opts.tmax > 400 ? 100 : opts.tmax > 150 ? 50 : 20;
+  for (let t = 0; t <= opts.tmax; t += step) { const x = X(t); g.fillText(t + "", x - 6, h - 6); }
+  for (const s of series) {
+    if (!s.data || !s.data.length) continue;
+    g.strokeStyle = s.color; g.lineWidth = 2; g.beginPath();
+    let started = false;
+    for (const [t, v] of s.data) { if (t > opts.tmax) break; const x = X(t), y = Y(v); started ? g.lineTo(x, y) : g.moveTo(x, y); started = true; }
+    g.stroke();
+  }
+}
+function draw() {
+  if (!ours) return;
+  const tmax = Math.max(60, Math.min(1000, Math.ceil(Math.max(ours.ms, ref ? ref.ms : 0) / 10) * 10));
+  $("span-ms").textContent = tmax;
+  const series = (k) => [{ data: ref && ref[k], color: css("--ref") }, { data: ours[k], color: css("--ours") }];
+  plot($("pitch"), series("pitch"), {
+    tmax, ymin: 25, ymax: 4000, f: Math.log, yticks: [30, 50, 100, 200, 500, 1000, 2000],
+    ylabel: (v) => v >= 1000 ? v / 1000 + "k" : v,
+  });
+  plot($("level"), series("level"), { tmax, ymin: -48, ymax: 1, f: (v) => v, yticks: [0, -6, -12, -24, -36, -48], ylabel: (v) => v });
+  $("lg-ref").hidden = !ref;
+  numbers();
+}
+
+// The figures `tatum analyze` reports, read off the curves.
+function measure(h) {
+  if (!h) return null;
+  const lvl = h.level, p = h.pitch;
+  const reach = lvl.find((l) => l[1] < -18); const until = reach ? reach[0] : h.ms;
+  const late = p.filter((x) => x[0] > until * 0.6 && x[0] <= until).map((x) => x[1]).sort((a, b) => a - b);
+  const tail = late.length ? late[Math.floor(late.length / 2)] : null;
+  const sweep = tail ? (p.find((x) => x[1] <= tail * 1.1) || [null])[0] : null;
+  // Falls are counted once it has reached its top: the first ms of a hit
+  // is still rising.
+  const top = Math.max(0, lvl.findIndex((l) => l[1] >= -1));
+  const fall = (db) => { const f = lvl.slice(top).find((l) => l[1] < db); return f ? f[0] : null; };
+  return { tail, sweep, hold: fall(-1), d12: fall(-12), d24: fall(-24), length: fall(-60) };
+}
+function noteName(hz) {
+  const names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const m = 69 + 12 * Math.log2(hz / 440), r = Math.round(m), c = Math.round(100 * (m - r));
+  return names[((r % 12) + 12) % 12] + (Math.floor(r / 12) - 1) + (c ? (c > 0 ? " +" : " ") + c + "c" : "");
+}
+function numbers() {
+  const a = measure(ours), b = measure(ref);
+  const row = (label, f, unit) => {
+    const one = (m) => m && m[f] != null ? (f === "tail" ? `${m[f].toFixed(1)} Hz (${noteName(m[f])})` : `${Math.round(m[f])} ${unit}`) : "—";
+    return `<div><span>${label}</span><br>${one(a)}${ref ? ` <span>· ref ${one(b)}</span>` : ""}</div>`;
+  };
+  $("numbers").innerHTML = row("tail", "tail", "") + row("sweep to 10%", "sweep", "ms") + row("hold (−1 dB)", "hold", "ms") +
+    row("−12 dB at", "d12", "ms") + row("−24 dB at", "d24", "ms") + row("over (−60 dB)", "length", "ms");
+}
+window.addEventListener("resize", draw);
+
+// ── Reference ──
+$("ref-load").addEventListener("click", async () => {
+  const f = $("ref-file").files[0];
+  if (!f) { status("choose a WAV first", true); return; }
+  status("averaging the hits…");
+  const q = new URLSearchParams();
+  for (const [k, id] of [["from", "ref-from"], ["to", "ref-to"], ["bpm", "ref-bpm"], ["ms", "ref-ms"]]) if ($(id).value) q.set(k, $(id).value);
+  const r = await post("/api/reference?" + q, await f.arrayBuffer(), "audio/wav");
+  if (!r.ok) { status(r.error, true); return; }
+  ref = r.hit; buffers.ref = await decode(r.hit.audio);
+  if (!$("ref-bpm").value) $("ref-bpm").placeholder = r.bpm.toFixed(2);
+  status(`reference: hits averaged at ${r.bpm.toFixed(2)} BPM`);
+  draw();
+});
+
+// ── File ──
+$("desc").addEventListener("change", () => queue("description=" + $("desc").value.replace(/\n/g, " "), "description"));
+$("save").addEventListener("click", async () => {
+  const r = await post("/api/save", "");
+  status(r.ok ? "saved " + r.path : r.error, !r.ok);
+});
+$("apply-text").addEventListener("click", async () => {
+  const r = await post("/api/text", $("text").value);
+  if (r.ok === false) { status(r.error, true); return; }
+  sound = r.sound; buildKnobs(); $("desc").value = sound.description; show(r.render);
+});
+async function start() {
+  sound = await (await fetch("/api/sound")).json();
+  $("path").textContent = sound.path; $("desc").value = sound.description;
+  buildKnobs();
+  show(await post("/api/set", ""));
+}
+start();
+</script>
+</body>
+</html>

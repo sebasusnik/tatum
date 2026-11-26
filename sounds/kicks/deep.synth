@@ -1,0 +1,7 @@
+# A deep held kick: a sine settling on 44.5 Hz, between F1 and F#1, with a
+# 3 ms snap from 1.5 kHz, held 120 ms and released over 300 ms. Fitted to the
+# outro of a minimal record, then given back its attack by ear.
+instrument deep_kick {
+  kick(44.5hz, start=1500hz, knee=150hz, snap=3ms, body=95ms, hold=120ms, release=300ms, phase=30, click=-32db, tone=3khz) as k
+  k > out
+}

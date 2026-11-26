@@ -3,6 +3,7 @@ mod audit;
 mod controls;
 mod fmt;
 mod debug;
+mod design;
 mod include;
 mod live;
 mod midi;
@@ -30,6 +31,7 @@ fn main() {
         "analyze" => analyze::cmd_analyze(&args[2..]),
         "compare" => analyze::cmd_compare(&args[2..]),
         "debug" => debug::cmd(&args[2..]),
+        "design" => design::cmd(&args[2..]),
         "params" => cmd_params(&args[2..]),
         "fmt" => fmt::cmd(&args[2..]),
         "set" => set::cmd(&args[2..]),
@@ -68,6 +70,7 @@ USAGE:
     tatum debug <song.synth> [--bars N | A-B] [--dry] [-o dir] [--solo a,b] [--mute c]
     tatum analyze <reference.wav> [--from 1:04] [--to 1:36]
     tatum compare <reference.wav> <song.synth | other.wav> [--from S] [--to S] [--bars N | A-B] [--solo a,b]
+    tatum design <sound.synth> [--port N] [--no-open]
     tatum watch <song.synth> [--tui] [--device <name>] [--rate <hz>] [--midi <name>] [--buffer <frames>]
     tatum midi monitor [<song.synth> | <set dir> [--step N]] [--midi <name>] | midi list
     tatum tui-shot <song.synth | set dir> [--at <seconds>] [--size 160x48] [--font f.ttf] [--frames N] [-o shot.png]
@@ -133,6 +136,12 @@ COMMANDS:
               bands to take down or bring up, the density, the low end's
               width. --solo kick compares one part against the reference;
               --bars picks the stretch of the song.
+    design    A sound designer in the browser, served from this machine: a
+              knob for every argument of every node of the sound's one
+              instrument, the sound in a loop as they turn, its pitch and
+              level over time, and a record's averaged hit laid next to it.
+              Save writes the file, which a song plays with `use`. A file that
+              does not exist yet starts as a deep kick. See sounds/README.md.
     set       A live set: a directory of numbered .synth files, each the whole
               rig at a moment. `render` walks them with real hot swaps into one
               continuous WAV; `check` validates every step and reports the arc;
