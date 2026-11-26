@@ -112,6 +112,9 @@ impl Audition {
     /// `lane`. Nothing is changed unless every line is good.
     pub fn apply(&mut self, body: &str, sound: &Sound) -> Result<(), String> {
         let mut next = self.clone();
+        // A chord left over from a keys sound is a hit on a drum kit: a lane
+        // or a note set alone must not be refused for it.
+        next.pattern = self.pattern_for(sound);
         for line in body.lines().map(str::trim).filter(|l| !l.is_empty()) {
             let (k, v) = line.split_once('=').ok_or_else(|| format!("'{line}': expected key=value"))?;
             let v = v.trim();
@@ -309,6 +312,13 @@ mod tests {
             assert!(rms(at) > 0.01, "beat {i}");
         }
         assert!(a.apply("pattern=chord", &s).is_err(), "no chord on drums");
+        // A chord chosen on a keys sound, then a drum kit opened: its lane
+        // can still be picked, and it plays a hit.
+        let keys = Sound::parse("module keys k { }\n").expect("parses");
+        let mut b = Audition::default();
+        b.apply("pattern=chord", &keys).expect("a chord");
+        b.apply("lane=snare", &s).expect("a lane after a chord");
+        assert_eq!(b.pattern, Pattern::Hit);
         assert!(a.apply("lane=cowbell", &s).is_err());
         a.apply("pattern=hit\nlane=hat", &s).expect("a hat");
         let hat = a.hit(&s).expect("renders");

@@ -529,6 +529,24 @@ type Refused = Option<(&'static str, String)>;
 /// Connections read at once; past it, a new one is dropped.
 const MAX_CONNECTIONS: usize = 16;
 
+/// One of the connections being read: counted while it lives, and given
+/// back when it is dropped, so a thread that panics does not keep its place
+/// and, after enough of them, stop the server from taking any.
+struct Slot(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+
+impl Slot {
+    fn take(open: &std::sync::Arc<std::sync::atomic::AtomicUsize>) -> Slot {
+        open.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Slot(open.clone())
+    }
+}
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 /// The longest body taken: a WAV of a long extended mix.
 const MAX_BODY: usize = 400 << 20;
 
@@ -741,9 +759,11 @@ pub fn cmd(args: &[String]) {
         if open.load(Ordering::SeqCst) >= MAX_CONNECTIONS {
             continue;
         }
-        open.fetch_add(1, Ordering::SeqCst);
-        let (state, open) = (state.clone(), open.clone());
+        let slot = Slot::take(&open);
+        let state = state.clone();
         std::thread::spawn(move || {
+            // Given back however the thread ends, a panic included.
+            let _slot = slot;
             // A client that stops sending is let go.
             let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(30)));
             let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(30)));
@@ -764,7 +784,6 @@ pub fn cmd(args: &[String]) {
                 Err(Some((status, why))) => respond(&mut stream, status, "text/plain", why.as_bytes()),
                 Err(None) => {}
             }
-            open.fetch_sub(1, Ordering::SeqCst);
         });
     }
 }
@@ -971,6 +990,24 @@ mod tests {
         q.insert("from".to_string(), "NaN".to_string());
         assert!(reference_reply(&mut state, &q, b"RIFF").contains("not a WAV"));
         assert!(state.reference.is_none());
+    }
+
+    #[test]
+    fn a_connection_that_panics_gives_its_place_back() {
+        let open = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        for _ in 0..MAX_CONNECTIONS + 4 {
+            let slot = Slot::take(&open);
+            let t = std::thread::spawn(move || {
+                let _slot = slot;
+                panic!("a request that went wrong");
+            });
+            assert!(t.join().is_err());
+        }
+        assert_eq!(open.load(std::sync::atomic::Ordering::SeqCst), 0);
+        let held = Slot::take(&open);
+        assert_eq!(open.load(std::sync::atomic::Ordering::SeqCst), 1);
+        drop(held);
+        assert_eq!(open.load(std::sync::atomic::Ordering::SeqCst), 0);
     }
 
     #[test]
