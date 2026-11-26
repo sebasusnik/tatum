@@ -76,7 +76,11 @@ pub struct Kick {
     pub tail_hz: f32,
     /// From the hit until the pitch is within 10% of the tail.
     pub sweep_ms: f32,
-    /// From the peak until the body is 12 and 24 dB down. `None`: it was
+    /// From the hit while the body stays within 1 dB of its peak: the flat
+    /// top of a kick held round before it falls. A few ms on a kick that
+    /// starts falling at once.
+    pub hold_ms: f32,
+    /// From the hit until the body is 12 and 24 dB down. `None`: it was
     /// still above that when the next hit came.
     pub decay12_ms: Option<f32>,
     pub decay24_ms: Option<f32>,
@@ -627,6 +631,12 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
     };
     let total_hits = starts.len();
     let starts: Vec<usize> = if keep >= 2 { ranked[..keep].iter().map(|r| r.0).collect() } else { starts };
+    // A hit is found a hop or two late, so a window that starts there starts
+    // with the kick already sounding: its first cycles, its hit frequency and
+    // every time taken from the hit came out short (a 900 Hz start read as
+    // 130). Each window starts this much early, and the hit is found in it.
+    let pre = samples(20.0);
+    let starts: Vec<usize> = starts.iter().filter(|&&on| on >= pre).map(|&on| on - pre).collect();
     let average = |starts: &[usize]| {
         let mut sum = vec![0.0f64; len];
         let mut n = 0;
@@ -661,12 +671,21 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
     let env: Vec<f32> = (0..x.len())
         .map(|i| x[i.saturating_sub(half)..(i + half).min(x.len())].iter().fold(0.0f32, |m, v| m.max(v.abs())))
         .collect();
-    let (tp, pv) = env.iter().copied().enumerate().fold((0, 0.0f32), |m, e| if e.1 > m.1 { e } else { m });
+    let pv = env.iter().copied().fold(0.0f32, f32::max);
     if pv <= 0.0 {
         return None;
     }
-    let fall = |ratio: f32| env[tp..].iter().position(|&v| v < pv * ratio).map(|i| ms(i as f32));
-    let onset = x.iter().position(|v| v.abs() >= 0.1 * pv).unwrap_or(0);
+    // The hit is where the body first reaches 10% of its peak -- or twice
+    // what was already sounding before it, when the last hit's tail is still
+    // there at the start of the window.
+    let before = x[..pre / 2].iter().fold(0.0f32, |m, v| m.max(v.abs()));
+    let onset = x.iter().position(|v| v.abs() >= (0.1 * pv).max(2.0 * before)).unwrap_or(0);
+    // Timed from the hit, not from the peak: on a kick held flat the peak
+    // can be anywhere along the top, and a decay timed from it read short
+    // by however far in it fell. The envelope is the peak of a window, so it
+    // lets go half a window after the signal does; that half is taken off.
+    let fall =
+        |ratio: f32| env[onset..].iter().position(|&v| v < pv * ratio).map(|i| ms((i as f32 - half as f32).max(0.0)));
 
     // Pitch from the zero crossings, both ways, so a half cycle is a
     // reading: while the body is within 18 dB of its peak, which is where
@@ -739,6 +758,7 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
     let mut click: Vec<f32> = aligned
         .iter()
         .filter_map(|&on| {
+            let on = on + pre;
             let e_top: f32 = top.get(on..on + samples(10.0))?.iter().map(|v| v * v).sum();
             let e_body: f32 = body.get(on..on + samples(100.0))?.iter().map(|v| v * v).sum();
             (e_body > 0.0).then(|| 10.0 * (e_top.max(1e-12) / e_body).log10())
@@ -751,6 +771,7 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
         start_hz,
         tail_hz,
         sweep_ms: sweep_ms.max(0.0),
+        hold_ms: fall(0.891).unwrap_or(0.0),
         decay12_ms: fall(0.251),
         decay24_ms: fall(0.063),
         click_db: if click.is_empty() { -60.0 } else { median(&mut click) },
@@ -980,6 +1001,11 @@ pub fn describe(p: &Profile, name: &str) -> String {
             let _ = writeln!(o, "    hit        {:.0} Hz (the first half cycle)", k.start_hz);
             let _ = writeln!(o, "    tail       {:.1} Hz ({})", k.tail_hz, note_name(k.tail_hz));
             let _ = writeln!(o, "    sweep      {:.0} ms to within 10% of the tail", k.sweep_ms);
+            let _ = if k.hold_ms < 5.0 {
+                writeln!(o, "    hold       none: it falls from the hit")
+            } else {
+                writeln!(o, "    hold       {:.0} ms within 1 dB of the peak", k.hold_ms)
+            };
             let _ =
                 writeln!(o, "    decay      -12 dB at {}, -24 dB at {}", opt_ms(k.decay12_ms), opt_ms(k.decay24_ms));
             let _ = writeln!(o, "    click      {:.1} dB (first 10 ms over 2 kHz against the body)", k.click_db);
@@ -1080,6 +1106,7 @@ pub fn compare(reference: &Profile, yours: &Profile, ref_name: &str, your_name: 
                 format!("{:.1} Hz {}", b.tail_hz, note_name(b.tail_hz)),
             );
             row(&mut o, "  sweep", format!("{:.0} ms", a.sweep_ms), format!("{:.0} ms", b.sweep_ms));
+            row(&mut o, "  hold", format!("{:.0} ms", a.hold_ms), format!("{:.0} ms", b.hold_ms));
             row(&mut o, "  decay -12 dB", opt_ms(a.decay12_ms), opt_ms(b.decay12_ms));
             row(&mut o, "  decay -24 dB", opt_ms(a.decay24_ms), opt_ms(b.decay24_ms));
             row(&mut o, "  click", format!("{:.1} dB", a.click_db), format!("{:.1} dB", b.click_db));
@@ -1161,8 +1188,8 @@ fn trim(s: &str, w: usize) -> String {
     }
 }
 
-/// What to change on the kick, in the words of a `pitch_osc` + `perc` kick
-/// and of the `beats` kick.
+/// What to change on the kick, in the words of the `kick` node, of a
+/// `pitch_osc` + `perc` kick and of the `beats` kick.
 fn kick_advice(r: &Kick, y: &Kick, todo: &mut Vec<String>) {
     if r.masked() || y.masked() {
         click_advice(r, y, todo);
@@ -1171,18 +1198,19 @@ fn kick_advice(r: &Kick, y: &Kick, todo: &mut Vec<String>) {
     let st = 12.0 * (y.tail_hz / r.tail_hz).log2();
     if st.abs() >= 0.75 {
         todo.push(format!(
-            "kick tail: yours settles {:.1} semitones {} ({:.1} Hz against {:.1} Hz, {}): `pitch_osc`'s end frequency to {:.0}, or `kick_pitch` on `beats`",
+            "kick tail: yours settles {:.1} semitones {} ({:.1} Hz against {:.1} Hz, {}): `kick({:.1}hz)`, `pitch_osc`'s end frequency to {:.0}, or `kick_pitch` on `beats`",
             st.abs(),
             if st > 0.0 { "higher" } else { "lower" },
             y.tail_hz,
             r.tail_hz,
             note_name(r.tail_hz),
+            r.tail_hz,
             r.tail_hz
         ));
     }
     if (y.start_hz / r.start_hz - 1.0).abs() > 0.2 {
         todo.push(format!(
-            "kick hit: yours starts at {:.0} Hz against {:.0} Hz: `pitch_osc`'s start frequency",
+            "kick hit: yours starts at {:.0} Hz against {:.0} Hz: `kick`'s `start=`, or `pitch_osc`'s start frequency",
             y.start_hz, r.start_hz
         ));
     }
@@ -1193,19 +1221,28 @@ fn kick_advice(r: &Kick, y: &Kick, todo: &mut Vec<String>) {
     let ratio = y.sweep_ms / r.sweep_ms.max(0.1);
     if !(0.7..=1.4).contains(&ratio) && r.start_hz > r.tail_hz * 1.2 {
         todo.push(format!(
-            "kick sweep: yours takes {:.0} ms to land against {:.0} ms: a {} drop -- multiply how far `pitch_osc`'s decay is from 1 by {:.2} (0.995 becomes {:.4})",
+            "kick sweep: yours takes {:.0} ms to land against {:.0} ms: a {} drop -- `kick`'s `body={:.0}ms`, or multiply how far `pitch_osc`'s decay is from 1 by {:.2} (0.995 becomes {:.4})",
             y.sweep_ms,
             r.sweep_ms,
             if ratio > 1.0 { "faster" } else { "slower" },
+            r.sweep_ms,
             ratio,
             1.0 - 0.005 * ratio
+        ));
+    }
+    // A held top is only worth naming once it is longer than a decay's own
+    // first dB, a few ms.
+    if (r.hold_ms - y.hold_ms).abs() > 15.0 && (r.hold_ms / y.hold_ms.max(1.0) - 1.0).abs() > 0.3 {
+        todo.push(format!(
+            "kick hold: yours stays within 1 dB of its peak for {:.0} ms against {:.0} ms: `kick`'s `hold={:.0}ms`",
+            y.hold_ms, r.hold_ms, r.hold_ms
         ));
     }
     if let (Some(a), Some(b)) = (r.decay12_ms, y.decay12_ms) {
         let ratio = a / b.max(1.0);
         if !(0.75..=1.33).contains(&ratio) {
             todo.push(format!(
-                "kick length: yours is 12 dB down at {b:.0} ms against {a:.0} ms: {} -- multiply the body's `perc` decay by {ratio:.2}; on `beats`, {} `kick_decay`",
+                "kick length: yours is 12 dB down at {b:.0} ms against {a:.0} ms: {} -- multiply `kick`'s `release=` or the body's `perc` decay by {ratio:.2}; on `beats`, {} `kick_decay`",
                 if ratio < 1.0 { "shorter" } else { "longer" },
                 if ratio < 1.0 { "less" } else { "more" }
             ));
@@ -1262,6 +1299,50 @@ mod tests {
         let d = k.decay12_ms.expect("decay");
         assert!((d - 166.0).abs() < 25.0, "decay {d}");
         assert!(p.width_low < 0.001);
+    }
+
+    /// A kick held flat for `hold` seconds, then falling with time constant `tau`.
+    fn held_kicks(bpm: f32, seconds: f32, end: f32, hold: f32, tau: f32) -> Vec<f32> {
+        let n = (seconds * SAMPLE_RATE) as usize;
+        let beat = (60.0 / bpm * SAMPLE_RATE) as usize;
+        let held = (hold * SAMPLE_RATE) as usize;
+        let mut out = vec![0.0f32; n];
+        let mut at = 0;
+        while at < n {
+            let (mut f, mut phase) = (200.0f32, 0.0f32);
+            for i in 0..beat.min(n - at) {
+                let env = if i < held { 1.0 } else { (-((i - held) as f32) / (tau * SAMPLE_RATE)).exp() };
+                out[at + i] += 0.8 * env * (2.0 * std::f32::consts::PI * phase).sin();
+                phase = (phase + f / SAMPLE_RATE).fract();
+                f = end + (f - end) * 0.9993;
+            }
+            at += beat;
+        }
+        out
+    }
+
+    #[test]
+    fn a_held_kick_is_timed_from_the_hit() {
+        // 90 ms flat, then -12 dB 1.386 time constants later: at 90 + 83 ms.
+        let x = held_kicks(126.0, 12.0, 50.0, 0.09, 0.06);
+        let k = measure(&x, &x).kick.expect("kick");
+        assert!((k.hold_ms - 90.0).abs() < 10.0, "hold {}", k.hold_ms);
+        let d = k.decay12_ms.expect("decay");
+        assert!((d - 173.0).abs() < 15.0, "decay from the hit {d}");
+        // A kick that falls at once holds only its first dB: 0.115 time
+        // constants, 14 ms at 120, give or take the envelope's half cycle.
+        let y = kicks(126.0, 12.0, 200.0, 50.0, 0.9993, 0.12);
+        let k = measure(&y, &y).kick.expect("kick");
+        assert!(k.hold_ms < 25.0, "hold {}", k.hold_ms);
+    }
+
+    #[test]
+    fn a_shorter_hold_is_named_with_the_kick_node() {
+        let a = held_kicks(126.0, 12.0, 50.0, 0.12, 0.06);
+        let b = held_kicks(126.0, 12.0, 50.0, 0.03, 0.06);
+        let report = compare(&measure(&a, &a), &measure(&b, &b), "ref.wav", "mine.synth");
+        assert!(report.contains("kick hold"), "{report}");
+        assert!(report.contains("hold="), "{report}");
     }
 
     #[test]

@@ -17,7 +17,7 @@ mod chains;
 mod compiled;
 mod graph;
 mod module;
-mod notes;
+pub(crate) mod notes;
 mod params;
 mod pattern;
 mod track;

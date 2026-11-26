@@ -132,8 +132,8 @@ model, which cannot hear it or its own render. `analyze` turns it into numbers: 
 tempo (and its span when it moves), the key, the notes under 250 Hz, the loudness and
 how far the peaks sit over it, the width above 250 Hz and under 150 Hz, the spectrum per
 octave against the whole, and the kick -- the frequency it hits at, the note its sweep
-lands on, how long the sweep and the body take, how much click, and how much else fills
-its band. It reads a WAV from 8 to 384 kHz, PCM or float; an MP3 has to be converted
+lands on, how long the sweep takes, how long the body holds and then falls (all timed
+from the hit), how much click, and how much else fills its band. It reads a WAV from 8 to 384 kHz, PCM or float; an MP3 has to be converted
 first (`ffmpeg -i song.mp3 song.wav`). `--from`/`--to` take a stretch, in seconds or
 `m:ss`. At most 15 minutes are measured at once, enough for a long extended mix; a longer
 file, such as a DJ set, is refused with a pointer to `--from`/`--to`, and only the stretch
@@ -144,19 +144,20 @@ What it says about `dark_techno` rendered, the engine's own song:
 ```
 dark_techno.wav: 300.7 s
   tempo        137.0 BPM (137..150)
-  key          G# major / F minor, weakly: little in it is tonal
-  low notes    D# 32%, E 16%, G 9%   (under 250 Hz, the kick's tail included)
-  loudness     -18.0 LUFS, peak -1.3 dBFS, peak to loudness 16.7 dB
-  width        1% above 250 Hz, 0.0% under 150 Hz
-  kick         582 hits, measured on the 36 with the least under them
-    hit        89 Hz (the first half cycle)
-    tail       37.9 Hz (D#1 -44c)
-    sweep      44 ms to within 10% of the tail
-    decay      -12 dB at 82 ms, -24 dB at 146 ms
-    click      -62.3 dB (first 10 ms over 2 kHz against the body)
-    under it   -45.3 dB (the band under 400 Hz late in the beat)
+  key          F minor / G# major
+  low notes    D# 22%, E 13%, G 10%   (under 250 Hz, the kick's tail included)
+  loudness     -18.0 LUFS, peak -1.2 dBFS, peak to loudness 16.8 dB
+  width        3% above 250 Hz, 0.1% under 150 Hz
+  kick         1028 hits, measured on the 42 with the least under them
+    hit        88 Hz (the first half cycle)
+    tail       39.2 Hz (D#1)
+    sweep      34 ms to within 10% of the tail
+    hold       none: it falls from the hit
+    decay      -12 dB at 95 ms, -24 dB at 111 ms
+    click      -27.9 dB (first 10 ms over 2 kHz against the body)
+    under it   -46.7 dB (the band under 400 Hz late in the beat)
   spectrum     31.5    63   125   250   500    1k    2k    4k    8k   16k
-  (dB)         -1.1  -8.0 -15.1 -17.9 -21.2 -23.8 -26.8 -25.0 -25.1 -26.5
+  (dB)         -2.2  -7.0 -10.9 -12.6 -16.8 -19.9 -23.1 -21.1 -21.2 -22.6
 ```
 
 The kick is measured on every hit averaged together, so the bass, the pads and the reverb

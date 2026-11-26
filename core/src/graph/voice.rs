@@ -45,8 +45,8 @@ impl Voice {
                 None => self.nodes[i] = Some(Box::new(template.specs[i].instantiate())),
             }
         }
-        for i in template.node_count as usize..MAX_GRAPH_NODES {
-            self.nodes[i] = None;
+        for node in self.nodes[template.node_count as usize..].iter_mut() {
+            *node = None;
         }
         self.note = note;
         self.velocity = velocity;
@@ -63,16 +63,16 @@ impl Voice {
             }
         }
 
-        for i in 0..template.env_count as usize {
-            let idx = template.env_nodes[i] as usize;
+        for &n in &template.env_nodes[..template.env_count as usize] {
+            let idx = n as usize;
             if let Some(ref mut node) = self.nodes[idx] {
                 node.gate_on();
             }
         }
 
         // Gate on + set velocity for filter envelope nodes
-        for i in 0..template.filter_count as usize {
-            let idx = template.filter_nodes[i] as usize;
+        for &n in &template.filter_nodes[..template.filter_count as usize] {
+            let idx = n as usize;
             if let Some(ref mut node) = self.nodes[idx] {
                 node.set_velocity(velocity);
                 node.gate_on();
@@ -81,14 +81,14 @@ impl Voice {
     }
 
     pub fn release(&mut self, template: &GraphTemplate) {
-        for i in 0..template.env_count as usize {
-            let idx = template.env_nodes[i] as usize;
+        for &n in &template.env_nodes[..template.env_count as usize] {
+            let idx = n as usize;
             if let Some(ref mut node) = self.nodes[idx] {
                 node.gate_off();
             }
         }
-        for i in 0..template.filter_count as usize {
-            let idx = template.filter_nodes[i] as usize;
+        for &n in &template.filter_nodes[..template.filter_count as usize] {
+            let idx = n as usize;
             if let Some(ref mut node) = self.nodes[idx] {
                 node.gate_off();
             }
@@ -99,8 +99,8 @@ impl Voice {
         if template.env_count == 0 {
             return true;
         }
-        for i in 0..template.env_count as usize {
-            let idx = template.env_nodes[i] as usize;
+        for &n in &template.env_nodes[..template.env_count as usize] {
+            let idx = n as usize;
             if let Some(ref node) = self.nodes[idx] {
                 if !node.is_idle() {
                     return false;
@@ -155,27 +155,16 @@ impl Instrument {
     }
 
     pub fn note_on(&mut self, note: u8, velocity: f32) {
-        let mut slot = None;
-        for i in 0..MAX_VOICES {
-            if !self.voices[i].active {
-                slot = Some(i);
-                break;
-            }
-        }
-
-        if slot.is_none() {
-            let mut oldest_age = 0u32;
-            let mut oldest_idx = 0;
-            for i in 0..MAX_VOICES {
-                if self.voices[i].age > oldest_age {
-                    oldest_age = self.voices[i].age;
-                    oldest_idx = i;
+        // A free voice, else the oldest: the first of the oldest, as before.
+        let idx = self.voices.iter().position(|v| !v.active).unwrap_or_else(|| {
+            let mut oldest = (0usize, 0u32);
+            for (i, v) in self.voices.iter().enumerate() {
+                if v.age > oldest.1 {
+                    oldest = (i, v.age);
                 }
             }
-            slot = Some(oldest_idx);
-        }
-
-        let idx = slot.unwrap();
+            oldest.0
+        });
         self.voices[idx].init(&self.template, note, velocity);
 
         // Apply staged p-lock values to filter nodes on the newly initialized voice

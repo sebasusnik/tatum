@@ -1004,6 +1004,32 @@ instrument pluck {
 }
 ```
 
+**A deep minimal kick.** The late-90s minimal kick is a sine that lands on the key,
+held round and then cut: the `kick` node writes it in those terms. The first argument
+is the note it settles on, in Hz or as a note name; `body=` is how long the pitch takes
+to come within 10% of it, the same number `tatum analyze` reports as the sweep, so a
+record's kick can be copied by reading its report; `hold=` keeps it at full level and
+`release=` takes it to -60 dB, where the voice ends. Every hit plays the same samples,
+and the length of the step never cuts it:
+
+```
+instrument deep {
+  kick(A1, start=900hz, snap=4ms, body=70ms, hold=80ms, release=160ms, drive=0.25) as k
+  k > bell(320hz, -3db, 1.4) as unbox
+  unbox > out
+}
+track kick { play four using deep }
+track bass { play line using sub sidechain 0.5 from=kick }   # the bass waits for it
+```
+
+Tune it to the root or the fifth of the scale and keep the bass off its beat: the two
+are then one low end. `snap=` and `start=` are the attack, `knee=` where it hands over to
+the body (three times the note when left out); `click=-35db` adds a beater on top and
+`phase=90` starts the sine at its peak, for more punch and a click of its own. `drive=`
+saturates the hit more than the tail, at the same peak. Write it with its parentheses,
+`kick()`: a node named `kick` stays a name. A note name works wherever a node takes a
+frequency: `bell(A1, 2db, 1)` lifts the kick's fundamental.
+
 **An FM stab.** Two operators, short envelopes, a bit of feedback, off-beat pattern with
 rests, saturation in the chain and a delay send:
 
