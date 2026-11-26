@@ -74,7 +74,7 @@ USAGE:
     tatum debug <song.synth> [--bars N | A-B] [--dry] [-o dir] [--solo a,b] [--mute c]
     tatum analyze <reference.wav> [--from 1:04] [--to 1:36]
     tatum compare <reference.wav> <song.synth | other.wav> [--from S] [--to S] [--bars N | A-B] [--solo a,b]
-    tatum design <sound.synth> [--port N] [--no-open]
+    tatum design <sound.synth> [--library <dir>] [--port N] [--no-open]
     tatum kick fit <reference.wav> [--from S] [--to S] [--bpm N] [--ms 230] [--effort 1] [--hit hit.wav]
     tatum watch <song.synth> [--tui] [--device <name>] [--rate <hz>] [--midi <name>] [--buffer <frames>]
     tatum midi monitor [<song.synth> | <set dir> [--step N]] [--midi <name>] | midi list
@@ -141,12 +141,14 @@ COMMANDS:
               bands to take down or bring up, the density, the low end's
               width. --solo kick compares one part against the reference;
               --bars picks the stretch of the song.
-    design    A sound designer in the browser, served from this machine: a
-              knob for every argument of every node of the sound's one
-              instrument, the sound in a loop as they turn, its pitch and
-              level over time, and a record's averaged hit laid next to it.
-              Save writes the file, which a song plays with `use`. A file that
-              does not exist yet starts as a deep kick. See sounds/README.md.
+    design    A sound designer in the browser, served from this machine,
+              for one instrument graph or one module (beats, bass, fm, keys):
+              a knob for every argument and parameter, nodes added, removed
+              and wired with buttons, the sound looped as a hit, four on the
+              floor, a held note or a chord on any note, its pitch and level
+              over time, a record's averaged hit laid next to it, and the
+              sounds/ library to open and duplicate. Save writes only a sound
+              that compiles; a song plays it with `use`. See sounds/README.md.
     kick fit  The kick(...) line whose hit matches a record's kick: its hits
               are averaged on the beat grid, the node is fitted to their
               pitch and level over time, and the line is rendered by the

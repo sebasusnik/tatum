@@ -1,0 +1,20 @@
+# A dry machine kit for dark techno: a tight kick with little click, a short
+# hat tuned up, a clap and a snare kept low. Its lanes are kick, snare, clap,
+# hat, openhat, tom and crash.
+module beats machine {
+  kick_level 1.0
+  kick_decay 55%
+  kick_pitch 0.78x
+  kick_click 40%
+  kick_drive 35%
+  hihat_level 0.6
+  hihat_decay 12%
+  hihat_pitch 1.5x
+  hihat_pan 0.15
+  clap_level 0.6
+  snare_level 0.55
+  snare_decay 8%
+  snare_pitch 1.4x
+  snare_snap 50%
+  snare_pan -0.15
+}

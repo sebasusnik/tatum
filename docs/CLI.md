@@ -13,7 +13,7 @@
 | [`audit`](#audit) | measure every note of every tonal track for what is not its harmonics |
 | [`analyze`](#analyze-and-compare) | measure a reference track: tempo, key, the kick, the spectrum, density |
 | [`compare`](#analyze-and-compare) | a reference and your song side by side, and what in the file moves each difference |
-| [`design`](#design) | design a sound in the browser, against a record's kick, and save it into `sounds/` |
+| [`design`](#design) | design any sound -- a graph or a module -- in the browser, against a record's kick, and keep it in `sounds/` |
 | [`set`](#set) | render, check, gate and play a live set |
 | [`tui-shot`](#tui-shot) | a picture of the live screen at any second |
 | [`params`](#params) | every module parameter, its range and units |
@@ -190,39 +190,71 @@ are an error rather than ignored; that WAV is measured whole.
 ## design
 
 ```
-tatum design sounds/kicks/deep.synth [--port 7350] [--no-open]
+tatum design sounds/kicks/deep.synth [--library sounds] [--port 7350] [--no-open]
 ```
 
-A sound designer in the browser, served from this machine (127.0.0.1 only). A sound
-is a file with one `instrument` in it and a comment on top that says what it is; a
-file that does not exist yet starts as a deep kick, and Save creates it.
+A sound designer in the browser, served from this machine (127.0.0.1 only), for every
+sound tatum has. A sound is a file with one `instrument` graph or one `module` (`beats`,
+`bass`, `fm`, `keys`) in it and a comment on top that says what it is; a file that does
+not exist yet starts as a deep kick, and Save creates it.
 
-The page has a knob for every argument of every node of the instrument, from the same
-table `params` prints and the compiler checks against, so whatever the sound is built
-from gets its knobs; a knob's × takes the argument out of the file, back to its
-default. Each turn is rendered at once -- one hit, the instrument alone, with no
-master chain and no loudness -- and played in a loop at the tempo given. Beside the
-knobs, the hit's pitch over time on a log scale and its level in dB, and the figures
-`analyze` reports for a kick: the tail and its note, the sweep, the hold, the falls.
+**Knobs.** A graph gets a knob for every argument of every node, a module one for every
+parameter, from the same tables `params` prints and the compiler checks against. A
+module's knob shows its value in its unit (`hz`, `ms`, `st`, `x`, a gain in dB) and a
+choice is a menu; an fm module also has knobs for each operator's `opN_envelope`. A
+knob's × takes the parameter out of the file, back to its default. A value past its
+range is held to it; NaN is refused. The file is written back in the style it uses: a
+parameter written `80%` stays a percentage, one written as a plain number stays one,
+and one set for the first time is written in its unit (a gain in dB, a choice by name).
+Reading what it writes gives back the same sound.
 
-A record can be laid next to it. Load a WAV, give the stretch (an intro or an outro
-where the kick plays alone or nearly) and how many milliseconds of each hit to keep
-(as many as come before an offbeat bass); its hits are averaged on the beat grid, so
-what comes with every hit stays and the rest thins out. The two are drawn on the same
-axes, and the loop can play the record's hit, yours, or the two in turn.
+**Graph editing.** Add a node (any kind an instrument line can hold, every argument at
+its default), pick an oscillator's waveform, remove a node with its connections, and
+connect or disconnect `a > b`, all from buttons. The file's text is on the page too, for
+anything the buttons do not do: edit it and apply. Every change is compiled; an error is
+shown at the top of the page, and the knobs stay as they are.
 
-Once a record is loaded, **Fit to reference** sets the kick node's knobs to what
+**What the loop plays.** A single hit, four on the floor, a held note, or a chord (a
+minor triad on the note; on `keys` only `voice_mode poly` holds it), on a note from C1
+to C6, at the BPM given. A `beats` module plays a lane (kick, snare, clap, hat, ...)
+once or on every beat, or a groove of kick, hat and clap. It is rendered through the
+instrument alone, with no master chain and no loudness, and looped a bar at a time.
+Beside the knobs, one hit's pitch over time on a log scale and its level in dB, and the
+figures `analyze` reports for a kick: the tail and its note, the sweep, the hold, the
+falls.
+
+**Reference.** A record can be laid next to it. Load a WAV, give the stretch (an intro
+or an outro where the kick plays alone or nearly) and how many milliseconds of each hit
+to keep (as many as come before an offbeat bass); its hits are averaged on the beat
+grid, so what comes with every hit stays and the rest thins out. The two are drawn on
+the same axes, and the loop can play the record's hit, yours, or the two in turn. Once
+a record is loaded, **Fit to reference** sets the kick node's knobs to what
 `tatum kick fit` finds for it (see below), and says what error is left.
 
-The file's text is on the page too: edit it to add a node or rewire, apply, and the
-knobs follow. The text is the sound: a song plays it with
+**Library.** The `sounds/` directory the file sits in, or one beside a directory above
+it (or `--library <dir>`), is listed as `sounds/<type>/<name>.synth`. Open one, or
+duplicate the sound open to `<type>/<new-name>`: the new file takes its name as the
+sound's name (`pad-dark` plays as `pad_dark`), and Save writes it from then on. A
+duplicate never overwrites a file, and a type or name is lower-case letters, digits,
+`_` and `-` only: no `..`, no slashes, no absolute paths, and no link out of the library
+is followed.
+
+**Save** writes only a sound that compiles and makes a sound (a graph with nothing
+wired to `out` is refused). The text is the sound: a song plays it with
 `use "../sounds/kicks/deep.synth"` and `play ... using deep_kick`.
 
 It answers only its own page. Any site open in the same browser can send a request to
 127.0.0.1, so a request whose `Host` or `Origin` is not this server, or a POST without
-the page's own header, is refused (403), and Save writes only the file it was started
-on. A WAV is taken up to 400 MB; a request that stops sending is let go after 30
-seconds.
+the page's own header, is refused (403). It writes only the file it was started on and
+files inside the library. A WAV is taken up to 400 MB; a request that stops sending is
+let go after 30 seconds.
+
+The page talks to it over a small JSON API: `GET /api/sound`, `/api/kinds` (the node
+kinds a graph can add), `/api/library`; `POST /api/set` (knobs and graph edits, one a
+line: `alias.arg=v`, `-alias.arg`, `+node kind [alias]`, `-node alias`, `+wire a b`,
+`-wire a b`, `word alias=saw`, `param=v`, `envN.a=seconds`, `name=`, `description=`),
+`/api/text`, `/api/audition` (`pattern=`, `note=`, `bpm=`, `lane=`), `/api/save`,
+`/api/open` and `/api/duplicate` (`type/name`), `/api/reference`, `/api/fit`.
 
 ## kick fit
 
