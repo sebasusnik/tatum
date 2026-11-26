@@ -149,7 +149,8 @@ fn play(
         output.fill(&mut data);
         heard_l.extend(data.chunks(2).map(|f| f[0]));
     }
-    let (wav, txt, written) = session.finish().unwrap().unwrap();
+    let (wav, txt, written, played) = session.finish().unwrap().unwrap();
+    assert_eq!(played, l.len());
     assert_eq!(written, l.len(), "the WAV has every block rendered");
     Took { l, r, heard_l, short: output.short, wav, txt }
 }
@@ -429,16 +430,133 @@ fn the_ring_wraps_and_runs_dry_quietly() {
     assert!(output.short > 0 && data[2 * 511] == 0.0);
 }
 
-/// A take is not written over another, whichever of its names is given.
+/// A take is not written over another, whichever of its names is given; a
+/// file that is already there is left as it was, and no half take is left
+/// behind.
 #[test]
 fn a_take_does_not_write_over_another() {
     let dir = set_dir();
     let rec = Recorder::create(&dir.join("one"), &[]).unwrap();
     rec.finish().unwrap();
     for name in ["one", "one.wav", "one.txt"] {
+        assert!(check_free(&dir.join(name)).is_err(), "{name}");
         let err = Recorder::create(&dir.join(name), &[]).err().expect("refused");
         assert!(err.contains("exists"), "{err}");
     }
-    assert_eq!(take_files(&dir.join("two.wav")).unwrap(), (dir.join("two.wav"), dir.join("two.txt")));
+    // Made by someone else between the check and the take: not truncated.
+    std::fs::write(dir.join("three.wav"), b"keep me").unwrap();
+    assert!(Recorder::create(&dir.join("three"), &[]).err().unwrap().contains("exists"));
+    assert_eq!(std::fs::read(dir.join("three.wav")).unwrap(), b"keep me");
+    assert!(!dir.join("three.txt").exists());
+    // The script's name taken: the WAV it would go with is not left behind.
+    std::fs::write(dir.join("four.txt"), b"mine").unwrap();
+    assert!(Recorder::create(&dir.join("four"), &[]).is_err());
+    assert!(!dir.join("four.wav").exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Only `.wav` and `.txt` are the take's own extensions; any other dot is
+/// part of its name.
+#[test]
+fn a_take_name_keeps_its_dots() {
+    let p = Path::new("/x");
+    assert_eq!(take_files(&p.join("take.v1")), (p.join("take.v1.wav"), p.join("take.v1.txt")));
+    assert_eq!(take_files(&p.join("take.v1.wav")), (p.join("take.v1.wav"), p.join("take.v1.txt")));
+    assert_eq!(take_files(&p.join("two.txt")), (p.join("two.wav"), p.join("two.txt")));
+    assert_eq!(take_files(&p.join("two")), (p.join("two.wav"), p.join("two.txt")));
+}
+
+/// The `# take:` line counts only as a take's first line, and only when it
+/// says how the take was played; anywhere else it is a comment, as it was
+/// before takes, and changes nothing about how a script renders.
+#[test]
+fn only_a_takes_first_line_is_its_header() {
+    let old = "# take: second attempt\n1.0 cc 1 2\n";
+    assert_eq!(parse_script(old).unwrap().take, None);
+    let later = "# my script\n# take: phrase=4\n1.0 cc 1 2\n";
+    assert_eq!(parse_script(later).unwrap().take, None);
+    let after_a_line = "1.0 cc 1 2\n# take: phrase=4\n";
+    assert_eq!(parse_script(after_a_line).unwrap().take, None);
+    let take = parse_script("\n\n# take: phrase=4 auto=on\n1.0@0 cc 1 2\n").unwrap().take.unwrap();
+    assert_eq!((take.phrase, take.auto), (4, true));
+}
+
+/// Through the converter, at 24 and 48 kHz, a callback that comes steadily
+/// never finds the ring short when the session keeps it as full as
+/// `lookahead_for` says, counted in the engine's frames.
+#[test]
+fn a_resampled_device_is_never_short() {
+    for rate in [24_000u32, 48_000] {
+        for cb in [256usize, 441, 1024] {
+            let ring = Arc::new(Ring::new(8192 * 2 + LOOKAHEAD));
+            let resampler = crate::resample::Resampler::new(SAMPLE_RATE as u32, rate);
+            let mut output = Output::new(Arc::clone(&ring), Some(resampler));
+            let target = lookahead_for(cb, rate);
+            let block = [0.25f32; BLOCK_SIZE];
+            let mut data = vec![0.0f32; cb * 2];
+            for _ in 0..400 {
+                while ring.waiting() < target {
+                    ring.push(&block, &block);
+                }
+                output.fill(&mut data);
+            }
+            assert_eq!(output.short, 0, "{rate} Hz, callbacks of {cb}");
+        }
+    }
+    // Counted in the engine's frames, rounded up: 1024 at 24 kHz is 1882.
+    assert_eq!(lookahead_for(1024, 24_000), 1882 * 2 + BLOCK_SIZE);
+    assert_eq!(lookahead_for(64, 48_000), LOOKAHEAD);
+}
+
+/// A step edited while the take plays, before it lands: the take plays it
+/// as it was when the take started, so the script renders back to the WAV
+/// once the file is as it was.
+#[test]
+fn a_step_edited_during_a_take_plays_as_loaded() {
+    let dir = set_dir();
+    let third = dir.join("set/03.synth");
+    let was = std::fs::read_to_string(&third).unwrap();
+    let mut asked = false;
+    let mut edited = false;
+    let took = play(&dir, &header(0.0), 512, BAR * 6, false, |_, stage| {
+        let bar = stage.bar();
+        if !asked && bar == 1 {
+            asked = true;
+            return vec![In::Act(Act::Next)];
+        }
+        // Step two plays bars 2 and 3; three is built in bar 3.
+        if !edited && bar == 2 {
+            edited = true;
+            let louder = was.replace("tempo 130", "tempo 140").replace("level 0.2", "level 1.0");
+            std::fs::write(&third, louder).unwrap();
+        }
+        Vec::new()
+    });
+    assert!(edited);
+    let edited_fingerprint = crate::set::fingerprint(&load(&dir.join("set"), 32).unwrap());
+    std::fs::write(&third, &was).unwrap();
+    let (_, rendered) = assert_same(&dir, &took);
+    assert_eq!(rendered.applied.len(), 3, "{:?}", rendered.applied);
+    // And a render with the edit in place is told the steps changed.
+    assert_ne!(edited_fingerprint, crate::set::fingerprint(&load(&dir.join("set"), 32).unwrap()));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Past the most a WAV can hold, the WAV stops, whole and readable, and the
+/// script goes on.
+#[test]
+fn the_wav_stops_at_its_limit_and_the_script_goes_on() {
+    let dir = set_dir();
+    let mut rec = Recorder::create_limited(&dir.join("long"), &[String::from("# take: phrase=1")], 1000).unwrap();
+    let block = [0.5f32; BLOCK_SIZE];
+    for i in 0..24 {
+        rec.audio(&block, &block);
+        rec.line(&format!("{}@{} cc 1 1", i, i * BLOCK_SIZE));
+    }
+    assert_eq!(rec.finish().unwrap(), 1000);
+    let (l, r) = read_wav(&dir.join("long.wav"));
+    assert_eq!((l.len(), r.len()), (1000, 1000));
+    let script = parse_script(&std::fs::read_to_string(dir.join("long.txt")).unwrap()).unwrap();
+    assert_eq!(script.cues.len(), 24);
     let _ = std::fs::remove_dir_all(&dir);
 }

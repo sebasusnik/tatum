@@ -27,7 +27,7 @@ use std::fs::File;
 use std::io::{BufWriter, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
-use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -46,6 +46,14 @@ use crate::stage::Stage;
 /// Frames the session keeps rendered ahead of the device, at the least. A
 /// callback bigger than half of it raises it to two callbacks and a block.
 pub const LOOKAHEAD: usize = 1024;
+
+/// Frames to keep in the ring for a device that asks for `widest` frames a
+/// callback at `rate` Hz: two callbacks' worth of the engine's frames,
+/// rounded up, and a block, or [`LOOKAHEAD`] if that is more.
+pub fn lookahead_for(widest: usize, rate: u32) -> usize {
+    let engine = (widest as u64 * SAMPLE_RATE as u64).div_ceil(rate.max(1) as u64) as usize;
+    LOOKAHEAD.max(engine * 2 + BLOCK_SIZE)
+}
 
 // ── The ring the callback reads ─────────────────────────────────────────────
 
@@ -214,54 +222,99 @@ impl Inbox {
 
 // ── The two files ───────────────────────────────────────────────────────────
 
-enum ToDisk {
-    Audio(Vec<f32>),
-    Line(String),
+/// What goes to the writer: interleaved frames, and the script's lines
+/// written since the last batch.
+struct Batch {
+    audio: Vec<f32>,
+    lines: String,
 }
 
 /// Writes the take on a thread of its own: the WAV as it plays (its header
 /// rewritten every few seconds, so a take cut short still opens), and the
-/// script a line at a time.
+/// script. What is written goes in batches of [`CHUNK`] frames, a write
+/// call or two each, and the buffers come back to be filled again.
 pub struct Recorder {
-    tx: Option<Sender<ToDisk>>,
+    tx: Option<Sender<Batch>>,
+    /// Buffers the writer is done with.
+    spare: Receiver<Batch>,
     writer: Option<JoinHandle<Result<usize, String>>>,
-    /// Interleaved frames not yet sent.
-    pending: Vec<f32>,
+    /// Frames and lines not yet sent.
+    pending: Batch,
     pub wav: PathBuf,
     pub txt: PathBuf,
 }
 
-/// `<name>.wav` and `<name>.txt` (a name given with either extension is the
-/// same take), or why they cannot be written.
-pub fn take_files(name: &Path) -> Result<(PathBuf, PathBuf), String> {
+/// Frames sent to the writer at a time, about 0.19 s.
+const CHUNK: usize = 8192;
+
+/// `<name>.wav` and `<name>.txt`. A name given with either extension is the
+/// same take; any other extension is part of the name (`take.v1` is
+/// `take.v1.wav`).
+pub fn take_files(name: &Path) -> (PathBuf, PathBuf) {
     let base = match name.extension() {
         Some(e) if e == "wav" || e == "txt" => name.with_extension(""),
         _ => name.to_path_buf(),
     };
-    let (wav, txt) = (base.with_extension("wav"), base.with_extension("txt"));
-    for p in [&wav, &txt] {
-        if p.exists() {
-            return Err(format!("{} exists; a take does not write over another, name this one otherwise", p.display()));
-        }
-    }
-    Ok((wav, txt))
+    let with = |ext: &str| {
+        let mut s = base.clone().into_os_string();
+        s.push(".");
+        s.push(ext);
+        PathBuf::from(s)
+    };
+    (with("wav"), with("txt"))
 }
 
-/// Frames sent to the writer at a time.
-const CHUNK: usize = 8192;
+fn taken(p: &Path) -> String {
+    format!("{} exists; a take does not write over another, name this one otherwise", p.display())
+}
+
+/// Whether the take's files are free, said before anything slow starts.
+/// Creating them is what decides (see [`Recorder::create`]).
+pub fn check_free(name: &Path) -> Result<(), String> {
+    let (wav, txt) = take_files(name);
+    let busy = [&wav, &txt].into_iter().find(|p| p.exists()).map(|p| taken(p));
+    busy.map_or(Ok(()), Err)
+}
+
+/// Create a file that must not exist yet.
+fn create_new(p: &Path) -> Result<File, String> {
+    std::fs::OpenOptions::new().write(true).create_new(true).open(p).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            taken(p)
+        } else {
+            format!("{}: {}", p.display(), e)
+        }
+    })
+}
 
 impl Recorder {
     /// `<name>.wav` and `<name>.txt`, neither of which may exist: a take is
     /// not written over another.
     pub fn create(name: &Path, header: &[String]) -> Result<Self, String> {
-        let (wav, txt) = take_files(name)?;
-        let open = |p: &PathBuf| File::create(p).map_err(|e| format!("{}: {}", p.display(), e));
-        let (mut audio, mut script) = (BufWriter::new(open(&wav)?), BufWriter::new(open(&txt)?));
+        Self::create_limited(name, header, tatum_core::wav::MAX_STEREO_16_FRAMES)
+    }
+
+    /// With the WAV stopped after `limit` frames: the format's own limit, or
+    /// a small one in a test.
+    fn create_limited(name: &Path, header: &[String], limit: usize) -> Result<Self, String> {
+        let (wav, txt) = take_files(name);
+        let audio_file = create_new(&wav)?;
+        let script_file = match create_new(&txt) {
+            Ok(f) => f,
+            Err(e) => {
+                // Not half a take: the WAV just made goes again.
+                drop(audio_file);
+                let _ = std::fs::remove_file(&wav);
+                return Err(e);
+            }
+        };
+        let (mut audio, mut script) = (BufWriter::new(audio_file), BufWriter::new(script_file));
         let sr = SAMPLE_RATE as u32;
         let wav_name = wav.display().to_string();
         let txt_name = txt.display().to_string();
         let lines = header.to_vec();
-        let (tx, rx) = channel::<ToDisk>();
+        let (tx, rx) = channel::<Batch>();
+        let (back, spare) = channel::<Batch>();
         let writer = std::thread::spawn(move || -> Result<usize, String> {
             let wav_err = |e: std::io::Error| format!("{}: {}", wav_name, e);
             let txt_err = |e: std::io::Error| format!("{}: {}", txt_name, e);
@@ -273,66 +326,80 @@ impl Recorder {
             let mut frames = 0usize;
             let mut since_header = 0usize;
             let mut bytes = Vec::with_capacity(CHUNK * 4);
-            for msg in rx {
-                match msg {
-                    ToDisk::Audio(samples) => {
-                        bytes.clear();
-                        for s in &samples {
-                            bytes.extend_from_slice(&tatum_core::wav::sample_16(*s).to_le_bytes());
-                        }
-                        audio.write_all(&bytes).map_err(wav_err)?;
-                        frames += samples.len() / 2;
-                        since_header += samples.len() / 2;
-                        if since_header >= 5 * SAMPLE_RATE as usize {
-                            since_header = 0;
-                            rewrite_header(&mut audio, frames, sr).map_err(wav_err)?;
-                        }
+            for mut batch in rx {
+                // Past the format's limit the WAV stops; the script goes on.
+                let n = (batch.audio.len() / 2).min(limit - frames);
+                if n > 0 {
+                    bytes.clear();
+                    for s in &batch.audio[..n * 2] {
+                        bytes.extend_from_slice(&tatum_core::wav::sample_16(*s).to_le_bytes());
                     }
-                    ToDisk::Line(line) => {
-                        writeln!(script, "{}", line).map_err(txt_err)?;
-                        script.flush().map_err(txt_err)?;
+                    audio.write_all(&bytes).map_err(wav_err)?;
+                    frames += n;
+                    since_header += n;
+                    if since_header >= 5 * SAMPLE_RATE as usize {
+                        since_header = 0;
+                        rewrite_header(&mut audio, frames, sr).map_err(wav_err)?;
                     }
                 }
+                if !batch.lines.is_empty() {
+                    script.write_all(batch.lines.as_bytes()).map_err(txt_err)?;
+                    script.flush().map_err(txt_err)?;
+                }
+                batch.audio.clear();
+                batch.lines.clear();
+                let _ = back.send(batch);
             }
             rewrite_header(&mut audio, frames, sr).map_err(wav_err)?;
             script.flush().map_err(txt_err)?;
             Ok(frames)
         });
-        Ok(Self { tx: Some(tx), writer: Some(writer), pending: Vec::with_capacity(CHUNK * 2), wav, txt })
+        Ok(Self {
+            tx: Some(tx),
+            spare,
+            writer: Some(writer),
+            pending: Batch { audio: Vec::with_capacity(CHUNK * 2), lines: String::new() },
+            wav,
+            txt,
+        })
     }
 
     pub fn audio(&mut self, l: &[f32], r: &[f32]) {
         for (a, b) in l.iter().zip(r) {
-            self.pending.push(*a);
-            self.pending.push(*b);
+            self.pending.audio.push(*a);
+            self.pending.audio.push(*b);
         }
-        if self.pending.len() >= CHUNK * 2 {
-            self.flush();
+        if self.pending.audio.len() >= CHUNK * 2 {
+            self.send();
         }
     }
 
-    fn flush(&mut self) {
-        if self.pending.is_empty() {
+    /// Hand what waits to the writer, and take a buffer it is done with
+    /// (or a new one, while none has come back yet).
+    fn send(&mut self) {
+        if self.pending.audio.is_empty() && self.pending.lines.is_empty() {
             return;
         }
-        let full = std::mem::replace(&mut self.pending, Vec::with_capacity(CHUNK * 2));
+        let next = self
+            .spare
+            .try_recv()
+            .unwrap_or_else(|_| Batch { audio: Vec::with_capacity(CHUNK * 2), lines: String::new() });
+        let full = std::mem::replace(&mut self.pending, next);
         if let Some(tx) = &self.tx {
-            let _ = tx.send(ToDisk::Audio(full));
+            let _ = tx.send(full);
         }
     }
 
-    pub fn line(&mut self, line: String) {
-        // In order with the audio around it, should anyone read both.
-        self.flush();
-        if let Some(tx) = &self.tx {
-            let _ = tx.send(ToDisk::Line(line));
-        }
+    /// A line of the script. It goes with the next batch of audio.
+    pub fn line(&mut self, line: &str) {
+        self.pending.lines.push_str(line);
+        self.pending.lines.push('\n');
     }
 
     /// Send what is left, close both files and wait for them. Returns the
-    /// frames written.
+    /// frames the WAV holds.
     pub fn finish(mut self) -> Result<usize, String> {
-        self.flush();
+        self.send();
         drop(self.tx.take());
         match self.writer.take().map(|w| w.join()) {
             Some(Ok(r)) => r,
@@ -409,7 +476,7 @@ impl Session {
         for act in &acts {
             let s = self.stage.act(act);
             if let Some(rec) = self.recorder.as_mut() {
-                rec.line(script_line(bar, sample, act, &s));
+                rec.line(&script_line(bar, sample, act, &s));
             }
             if !s.is_empty() {
                 said.push(match act {
@@ -433,13 +500,14 @@ impl Session {
     }
 
     /// The take is over: its `end` on the sample it stopped on, and both
-    /// files closed. Returns the files and the frames written.
-    pub fn finish(mut self) -> Result<Option<(PathBuf, PathBuf, usize)>, String> {
+    /// files closed. Returns the files, the frames the WAV holds and the
+    /// frames played, which are more only past the WAV format's limit.
+    pub fn finish(mut self) -> Result<Option<(PathBuf, PathBuf, usize, usize)>, String> {
         let Some(mut rec) = self.recorder.take() else { return Ok(None) };
-        rec.line(script_line(self.stage.position(), self.stage.frames, &Act::End, ""));
+        rec.line(&script_line(self.stage.position(), self.stage.frames, &Act::End, ""));
         let (wav, txt) = (rec.wav.clone(), rec.txt.clone());
         let frames = rec.finish()?;
-        Ok(Some((wav, txt, frames)))
+        Ok(Some((wav, txt, frames, self.stage.frames)))
     }
 }
 
@@ -472,7 +540,7 @@ pub fn run(
 ) -> Result<(), String> {
     let set_name = steps[0].path.parent().map(|p| p.display().to_string()).unwrap_or_default();
     // Said before the set is measured, which takes a while.
-    take_files(name)?;
+    check_free(name)?;
     let mut stage = Stage::new(steps, walk)?;
     // A performer counts bars from 1.
     stage.script_count = false;
@@ -515,10 +583,11 @@ pub fn run(
     let (midi_tx, midi_rx) = channel::<Midi>();
     let inputs = crate::midi::open(midi_name, &midi_tx)?;
     // The files last: nothing that can still fail leaves an empty take behind.
+    // The `# take:` line first: only there is it read as one.
     let lines = vec![
+        header.line(),
         format!("# a take of {}, from `tatum set play --record`", set_name),
         String::from("# set render <dir> --perform <this file> plays it back, sample for sample"),
-        header.line(),
     ];
     let recorder = Recorder::create(name, &lines)?;
     let (wav, txt) = (recorder.wav.clone(), recorder.txt.clone());
@@ -593,8 +662,7 @@ pub fn run(
             session.inbox.midi(event);
         }
         // Two callbacks and a block ahead of the widest the device asked for.
-        let widest = counters.widest.load(Ordering::Relaxed) as usize;
-        session.lookahead = LOOKAHEAD.max(widest * 2 + BLOCK_SIZE);
+        session.lookahead = lookahead_for(counters.widest.load(Ordering::Relaxed) as usize, rate);
         let said = match session.render_ahead(meter) {
             Ok(s) => s,
             Err(e) => break Err(e),
@@ -746,7 +814,16 @@ pub fn run(
     drop(ui);
     let closed = session.finish();
     result?;
-    let (wav, txt, frames) = closed?.expect("a live take records");
+    let (wav, txt, frames, played_frames) = closed?.expect("a live take records");
+    if frames < played_frames {
+        let secs = frames / SAMPLE_RATE as usize;
+        eprintln!(
+            "the WAV stops at {}:{:02}:{:02}, as long as a WAV file can be; the script goes on to the end",
+            secs / 3600,
+            secs / 60 % 60,
+            secs % 60
+        );
+    }
 
     let callbacks = counters.callbacks.load(Ordering::Relaxed);
     let played = counters.frames.load(Ordering::Relaxed);

@@ -382,12 +382,15 @@ under the step markers, in the script's bars, from 0: `bar 12.00: acid cutoff 1.
 files as it goes: `take1.wav`, what came out, and `take1.txt`, every knob, fader, pad,
 key, the strip and aftertouch, every step asked for, scene called, loop, page, reset,
 mute and solo, each on the bar and the sample it landed on. Neither file may exist
-already: a take is not written over another. `q` ends the take.
+already: a take is not written over another. `take1.wav` or `take1.txt` names the same
+take; any other dot is part of the name (`--record take.v1` writes `take.v1.wav`).
+`q` ends the take. A WAV cannot hold more than about 6 h 46 min; past that the WAV
+stops, readable, and the script goes on.
 
 ```
+# take: phrase=8 ramp=4 blend=0 auto=off bars=32 steps=8c3f0e5a1d2b4c67
 # a take of sets/mine, from `tatum set play --record`
 # set render <dir> --perform <this file> plays it back, sample for sample
-# take: phrase=8 ramp=4 blend=0 auto=off bars=32 steps=8c3f0e5a1d2b4c67
 0.000000@0  cc 30 5                 # bass level 0.04
 1.249524@110208  pad 41 110
 1.500590@132352  next               # next: 2/9 02.synth, on bar 9
@@ -405,14 +408,17 @@ already: a take is not written over another. `q` ends the take.
 the act landed on, which is where the render lands it again (a script's bar alone is
 only good to a block). A script whose every line has a sample acts in sample order,
 any other in bar order, as before; a hand-written script can mix both. What follows
-a `#` is what the act did, for the reader. The `# take:` line is how the set was
-played (`--phrase`, `--ramp`, `--blend`, `--auto`, the bars a step without `bars=`
+a `#` is what the act did, for the reader. The `# take:` line, read as such only as the
+script's first line and only with its `key=value` fields (elsewhere it is a comment),
+is how the set was played (`--phrase`, `--ramp`, `--blend`, `--auto`, the bars a step without `bars=`
 holds) and `set render` plays it back that way, the set walked as `set play` walks it:
 a step whose header says `auto` or `max=` moves on by itself and nothing but the take
 asks for one. A flag given to `render` wins over the line, and the render says it is
 then not the take; so it does when the steps' files have changed since (`steps=` is
 their fingerprint). A take plays the files as they were when it started: they are
-not watched while it records, and the screen's edit keys say no.
+not watched while it records, the screen's edit keys say no, and a step edited
+meanwhile still plays as it was loaded (as `set render` builds every step from the
+text it loaded, not from the file when the step comes up).
 
 To come back sample for sample the take is played the way `set render` plays: the
 main thread renders the set a block at a time, a little ahead of the device, and
@@ -420,7 +426,8 @@ what the controller sent acts between two blocks. The audio callback only copies
 those blocks out of a lock-free ring, and a thread of its own writes the WAV and the
 script, so nothing in the callback allocates, waits or touches a file. Two things
 follow. What the hands do is heard about 23 ms later than without `--record` (1024
-frames, or two of the device's callbacks when they are bigger). And a dropout heard
+frames, or two of the device's callbacks when they are bigger, counted at the
+engine's rate when the device runs at another). And a dropout heard
 live -- the machine late with a block -- is not in the take: the take is the set as
 it was rendered, and the summary says how much silence the device played instead.
 

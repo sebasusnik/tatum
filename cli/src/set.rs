@@ -406,6 +406,12 @@ impl TakeHeader {
         line
     }
 
+    /// Whether a `# take:` line says anything a take's header says.
+    fn has_fields(rest: &str) -> bool {
+        const KEYS: [&str; 6] = ["phrase", "ramp", "blend", "auto", "bars", "steps"];
+        rest.split_whitespace().filter_map(|f| f.split_once('=')).any(|(k, _)| KEYS.contains(&k))
+    }
+
     fn parse(rest: &str) -> Result<Self, String> {
         let mut take =
             TakeHeader { phrase: 8, ramp_bars: 4.0, blend_bars: 0.0, auto: false, bars: DEFAULT_BARS, steps: None };
@@ -484,10 +490,17 @@ pub struct Script {
 pub fn parse_script(text: &str) -> Result<Script, String> {
     let mut out = Vec::new();
     let mut take = None;
+    let mut first = true;
     for (n, raw) in text.lines().enumerate() {
-        if let Some(rest) = raw.trim().strip_prefix("# take:") {
-            take = Some(TakeHeader::parse(rest).map_err(|e| format!("script line {}: {}", n + 1, e))?);
-            continue;
+        // A take's header is its first line, and says how it was played in
+        // `key=value` fields; a `# take: second attempt` anywhere is a comment.
+        let opening = first && !raw.trim().is_empty();
+        if opening {
+            first = false;
+            if let Some(rest) = raw.trim().strip_prefix("# take:").filter(|r| TakeHeader::has_fields(r)) {
+                take = Some(TakeHeader::parse(rest).map_err(|e| format!("script line {}: {}", n + 1, e))?);
+                continue;
+            }
         }
         let line = raw.split('#').next().unwrap_or("").trim();
         if line.is_empty() {
@@ -1045,6 +1058,9 @@ fn cmd_render(args: &[String]) -> Result<(), String> {
         for (at, what) in &rendered.log {
             eprintln!("  {}  {}", clock(*at), what);
         }
+    }
+    if rendered.l.len() > tatum_core::wav::MAX_STEREO_16_FRAMES {
+        eprintln!("note: the WAV stops at the most a WAV file can hold, about 6 h 46 min");
     }
     let bytes = tatum_core::wav::encode_stereo_16(&rendered.l, &rendered.r, SAMPLE_RATE as u32);
     fs::write(&out, bytes).map_err(|e| format!("{}: {}", out, e))?;

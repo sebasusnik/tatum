@@ -60,6 +60,9 @@ impl Stage {
         // walks them as `set play` did.
         nav.headers = walk.live;
         nav.auto = walk.live && walk.auto;
+        // Every step as it was loaded: what the set's gain was measured on,
+        // and, for a take, what was played.
+        nav.frozen = true;
         let mut stage = Self { planner, player, nav, pending_scene: None, frames: 0, script_count: true };
         if let Some(scene) = stage.nav.steps[0].perform.clone() {
             let g = stage.player.generation();
