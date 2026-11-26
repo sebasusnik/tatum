@@ -24,6 +24,15 @@ What is here:
 | `fm/pluck.synth` | `pluck` | a dry two-operator FM pluck, a detail layer |
 | `keys/pad.synth` | `pad` | a dark poly pad whose filter breathes over four bars |
 | `drums/machine.synth` | `machine` | a dry machine kit; lanes kick, snare, clap, hat, ... |
+| `kicks/boom.synth` | `boom` | a long round boom in the spirit of an 808: a short drop onto A1, ringing most of a second |
+| `hats/metal_closed.synth` | `metal_closed` | a closed hat in the spirit of a 606: six square waves, a band at 8 kHz, 45 ms |
+| `hats/metal_open.synth` | `metal_open` | the same metal, open: 320 ms |
+| `keys/chorus_pad.synth` | `chorus_pad` | a warm poly pad in the spirit of a Juno-106: two saws, a breathing lowpass, a wide stereo chorus |
+| `bass/rubber.synth` | `rubber` | a rubbery bass in the spirit of an SH-101: saw and sub through a resonant ladder that snaps shut |
+
+The ones "in the spirit of" a machine are original sounds made with that machine's
+idea, not copies of it. `vintage_kit.synth`, here beside the folders, plays them
+together: `tatum play sounds/vintage_kit.synth`.
 
 Each file is made, and kept, with the designer:
 

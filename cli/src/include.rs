@@ -194,3 +194,25 @@ mod tests {
         assert!(err.contains("expected `use"), "{}", err);
     }
 }
+
+#[cfg(test)]
+mod sounds_tests {
+    use super::Source;
+    use std::path::Path;
+
+    /// `sounds/vintage_kit.synth` plays the sounds in the spirit of classic
+    /// machines together, through `use`: every one of them resolves,
+    /// compiles and makes sound, and none of them clips the mix.
+    #[test]
+    fn the_vintage_kit_plays_its_sounds_together() {
+        let src = Source::load(Path::new("../sounds/vintage_kit.synth")).expect("every use resolves");
+        let mut e = tatum_core::song_engine::SongEngine::from_source(&src.text).expect("compiles");
+        let (l, r) = e.render(2);
+        let peak = l.iter().chain(&r).fold(0.0f32, |m, v| m.max(v.abs()));
+        assert!(peak > 0.05, "it plays: peak {peak}");
+        assert!(l.iter().chain(&r).all(|v| v.is_finite()));
+        for name in ["boom", "metal_closed", "metal_open", "chorus_pad", "rubber"] {
+            assert!(src.text.contains(name), "{name} is in it");
+        }
+    }
+}

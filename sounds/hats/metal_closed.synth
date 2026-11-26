@@ -1,0 +1,27 @@
+# A closed hat in the spirit of a 606: six square waves at unrelated pitches
+# make a metallic buzz, a band around 8 kHz keeps its shimmer, and a 45 ms
+# decay shuts it. Not tuned to the note: any note plays it.
+instrument metal_closed {
+  gain 7
+  fixosc square(263) as m1
+  fixosc square(331) as m2
+  fixosc square(398) as m3
+  fixosc square(471) as m4
+  fixosc square(557) as m5
+  fixosc square(683) as m6
+  gain(0.167) as scaled
+  bandpass(8200hz, 0.35) as band
+  highpass(6500hz, 0.2) as air
+  perc(0.0005, 0.045) as env
+  m1 > mix
+  m2 > mix
+  m3 > mix
+  m4 > mix
+  m5 > mix
+  m6 > mix
+  mix > scaled
+  scaled > band
+  band > air
+  air > env
+  env > out
+}
