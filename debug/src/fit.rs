@@ -303,6 +303,34 @@ impl Target {
     }
 }
 
+/// The note a hit is heard as, in Hz: the mean of its pitch on a log scale,
+/// each moment weighted by its energy and how steady its pitch is, from 5 ms (before that the sweep is
+/// the click of the hit) until it is 30 dB under its peak. The same model as
+/// the engine's `kick_heard_hz`, read off a hit instead of computed from a
+/// kick's arguments. `None` when no pitch is read in that stretch.
+pub fn heard_hz(y: &[f32]) -> Option<f32> {
+    use tatum_core::graph::node::{heard_weight, HEARD_DOWN_DB, HEARD_FROM_MS};
+    let c = read(y);
+    let (mut sum, mut weight) = (0.0f64, 0.0f64);
+    for &(t, db) in c.level.iter().filter(|l| l.0 >= HEARD_FROM_MS) {
+        if db < HEARD_DOWN_DB {
+            break;
+        }
+        // How fast the pitch moves here, over a millisecond either side.
+        let (Some(hz), Some(a), Some(b)) = (at(&c.pitch, t), at(&c.pitch, t - 1.0), at(&c.pitch, t + 1.0)) else {
+            continue;
+        };
+        if hz <= 0.0 || a <= 0.0 || b <= 0.0 {
+            continue;
+        }
+        let st_per_ms = (12.0 * (a / b).log2() / 2.0).abs();
+        let w = heard_weight(10f32.powf(db / 20.0), st_per_ms) as f64;
+        sum += w * (hz as f64).ln();
+        weight += w;
+    }
+    (weight > 0.0).then(|| (sum / weight).exp() as f32)
+}
+
 /// The click as `tatum analyze` measures it on a hit: the energy over 2 kHz
 /// in the first 10 ms against the energy under 400 Hz in the first 100 ms.
 pub fn click_db(y: &[f32]) -> f32 {
@@ -882,6 +910,35 @@ mod tests {
         let analyzed = crate::reference::measure(&x, &x).kick.expect("a kick").click_db;
         let averaged = click_db(&crate::hit::average_hit(&x, 125.0, 230.0).expect("a hit"));
         assert!((analyzed - averaged).abs() < 1.0, "analyze {analyzed:.1} dB, the hit {averaged:.1} dB");
+    }
+
+    #[test]
+    fn analyze_hears_the_note_the_engine_says_it_is_heard_as() {
+        use tatum_core::graph::node::kick_heard_hz;
+        for body in [20.0f32, 60.0, 110.0] {
+            let mut k = truth();
+            k.body = body;
+            let predicted = kick_heard_hz(&kick_spec(&k.params()).expect("a kick"));
+            let x = alone(&k);
+            let read = crate::reference::measure(&x, &x).kick.expect("a kick").heard_hz.expect("heard");
+            let st = 12.0 * (read / predicted).log2();
+            assert!(st.abs() < 0.3, "body {body}: analyze {read:.1} Hz, the engine {predicted:.1} Hz");
+        }
+    }
+
+    #[test]
+    fn compare_says_to_tune_by_the_note_heard_when_the_tails_agree() {
+        // Same tail, one sweeping slowly: heard over the other.
+        let mut quick = truth();
+        quick.body = 25.0;
+        quick.chirp = 0.0;
+        let mut slow = quick.clone();
+        slow.body = 120.0;
+        let (a, b) = (alone(&quick), alone(&slow));
+        let (ra, rb) = (crate::reference::measure(&a, &a), crate::reference::measure(&b, &b));
+        let report = crate::reference::compare(&ra, &rb, "ref.wav", "mine.synth");
+        assert!(report.contains("kick heard"), "{report}");
+        assert!(report.contains("heard=1"), "{report}");
     }
 
     #[test]

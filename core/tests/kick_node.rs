@@ -277,3 +277,53 @@ fn sag_leans_the_held_top_by_what_it_says() {
     assert!((half + 3.0).abs() < 0.7, "half way down the hold: {half:.2} dB");
     assert!((end + 5.7).abs() < 0.8, "at the end of the hold: {end:.2} dB");
 }
+
+fn heard_of(args: &str) -> (f32, f32) {
+    let src = format!(
+        "instrument x {{\n  kick({args}) as k\n  k > out\n}}\npattern p {{ C3 - - - }}\ntrack t {{ play p using x }}\n"
+    );
+    let song = tatum_core::dsl::parse(&src).expect("parses");
+    let node = &song.instruments[0].nodes[0];
+    let spec = tatum_core::dsl::compiler::kick_spec(&node.params).expect("a kick");
+    let tatum_core::graph::node::NodeSpec::Kick { note, .. } = spec else { panic!("a kick") };
+    (tatum_core::graph::node::kick_heard_hz(&spec), note)
+}
+
+fn st(a: f32, b: f32) -> f32 {
+    12.0 * (a / b).log2()
+}
+
+#[test]
+fn a_kick_that_lands_at_once_is_heard_on_its_note() {
+    let (heard, note) = heard_of("A1, start=300hz, snap=1ms, body=8ms, hold=200ms, release=150ms");
+    assert!(st(heard, note).abs() < 0.3, "heard {heard} on {note}");
+}
+
+#[test]
+fn a_slow_sweep_is_heard_over_the_note_it_lands_on() {
+    let (fast, _) = heard_of("A1, start=900hz, snap=3ms, body=20ms, hold=100ms, release=200ms");
+    let (slow, note) = heard_of("A1, start=900hz, snap=3ms, body=90ms, hold=100ms, release=200ms");
+    assert!(st(slow, note) > 1.0, "a slow body is heard over its note: {slow} on {note}");
+    assert!(slow > fast, "slower is heard higher: {slow} against {fast}");
+}
+
+#[test]
+fn heard_one_tunes_the_note_the_ear_takes() {
+    let a1 = 55.0;
+    let args = "A1, start=900hz, snap=3ms, body=90ms, hold=100ms, release=200ms, heard=1";
+    let (heard, settles) = heard_of(args);
+    assert!(st(heard, a1).abs() < 0.1, "heard {heard}, wanted A1");
+    assert!(settles < a1 * 0.95, "it settles under what it is heard as: {settles}");
+    // And the sound follows: the rendered tail is the note it settles on.
+    let x = render(&song(args, FOUR), 1);
+    let tail = pitch(&x, 180.0, 260.0);
+    assert!(st(tail, settles).abs() < 0.3, "tail {tail} on {settles}");
+}
+
+#[test]
+fn heard_zero_is_the_kick_as_written() {
+    let (_, plain) = heard_of("A1, body=90ms");
+    let (_, zero) = heard_of("A1, body=90ms, heard=0");
+    assert_eq!(plain, zero);
+    assert_eq!(plain, 55.0);
+}

@@ -76,6 +76,10 @@ pub struct Kick {
     pub tail_hz: f32,
     /// From the hit until the pitch is within 10% of the tail.
     pub sweep_ms: f32,
+    /// The note the hit is heard as: its pitch weighted by its energy, the
+    /// sweep included (`tatum_debug::fit::heard_hz`). Over the tail on a kick
+    /// whose sweep is still falling while it is loud.
+    pub heard_hz: Option<f32>,
     /// From the hit while the body stays within 1 dB of its peak: the flat
     /// top of a kick held round before it falls. A few ms on a kick that
     /// starts falling at once.
@@ -759,7 +763,10 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
     };
     let sweep_ms = cycles.iter().find(|c| c.1 <= tail_hz * 1.1).map_or(cycles[cycles.len() - 1].0, |c| c.0);
 
-    let hit = average_of(mono, &aligned).and_then(|raw| crate::hit::hit_start(&raw)).unwrap_or(onset);
+    let raw = average_of(mono, &aligned);
+    let hit = raw.as_deref().and_then(crate::hit::hit_start).unwrap_or(onset);
+    // The note the hit is heard as, read off the unfiltered average.
+    let heard_hz = raw.as_deref().and_then(|r| crate::fit::heard_hz(&r[hit.min(r.len())..]));
     // The click is not averaged: hats land on some hits and not others, and
     // the median of the hits leaves them out.
     let mut click: Vec<f32> = aligned
@@ -786,6 +793,7 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
         start_hz,
         tail_hz,
         sweep_ms: sweep_ms.max(0.0),
+        heard_hz,
         hold_ms: fall(0.891).unwrap_or(0.0),
         decay12_ms: fall(0.251),
         decay24_ms: fall(0.063),
@@ -1016,6 +1024,16 @@ pub fn describe(p: &Profile, name: &str) -> String {
             let _ = writeln!(o, "    hit        {:.0} Hz (the first half cycle)", k.start_hz);
             let _ = writeln!(o, "    tail       {:.1} Hz ({})", k.tail_hz, note_name(k.tail_hz));
             let _ = writeln!(o, "    sweep      {:.0} ms to within 10% of the tail", k.sweep_ms);
+            if let Some(h) = k.heard_hz {
+                let st = 12.0 * (h / k.tail_hz).log2();
+                let _ = writeln!(
+                    o,
+                    "    heard      {:.1} Hz ({}), {:+.1} semitones from the tail: the sweep weighted by its loudness",
+                    h,
+                    note_name(h),
+                    st
+                );
+            }
             let _ = if k.hold_ms < 5.0 {
                 writeln!(o, "    hold       none: it falls from the hit")
             } else {
@@ -1121,6 +1139,8 @@ pub fn compare(reference: &Profile, yours: &Profile, ref_name: &str, your_name: 
                 format!("{:.1} Hz {}", b.tail_hz, note_name(b.tail_hz)),
             );
             row(&mut o, "  sweep", format!("{:.0} ms", a.sweep_ms), format!("{:.0} ms", b.sweep_ms));
+            let heard = |k: &Kick| k.heard_hz.map_or("-".to_string(), |h| format!("{:.1} Hz {}", h, note_name(h)));
+            row(&mut o, "  heard", heard(a), heard(b));
             row(&mut o, "  hold", format!("{:.0} ms", a.hold_ms), format!("{:.0} ms", b.hold_ms));
             row(&mut o, "  decay -12 dB", opt_ms(a.decay12_ms), opt_ms(b.decay12_ms));
             row(&mut o, "  decay -24 dB", opt_ms(a.decay24_ms), opt_ms(b.decay24_ms));
@@ -1222,6 +1242,23 @@ fn kick_advice(r: &Kick, y: &Kick, todo: &mut Vec<String>) {
             r.tail_hz,
             r.tail_hz
         ));
+    }
+    // Two kicks with the same tail can be heard a tone apart when one sweeps
+    // slower: the heard note is what to tune when the tails agree.
+    if let (Some(rh), Some(yh)) = (r.heard_hz, y.heard_hz) {
+        let heard_st = 12.0 * (yh / rh).log2();
+        if heard_st.abs() >= 0.75 && st.abs() < 0.75 {
+            todo.push(format!(
+                "kick heard: yours is heard {:.1} semitones {} ({:.1} Hz against {:.1} Hz, {}) though the tails agree: its sweep is {} while it is loud -- `kick({}, heard=1)` tunes the kick node by the note heard",
+                heard_st.abs(),
+                if heard_st > 0.0 { "higher" } else { "lower" },
+                yh,
+                rh,
+                note_name(rh),
+                if heard_st > 0.0 { "slower or louder" } else { "faster or quieter" },
+                note_name(rh)
+            ));
+        }
     }
     if (y.start_hz / r.start_hz - 1.0).abs() > 0.2 {
         todo.push(format!(

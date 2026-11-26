@@ -1029,7 +1029,16 @@ of pitch in the first milliseconds, the fall onto the body, and a slow last sett
 top lean the way a long kick does before it is cut. `snap=` and `start=` are the attack, `knee=` where it hands over to
 the body (three times the note when left out); `click=-35db` adds a beater on top and
 `phase=90` starts the sine at its peak, for more punch and a click of its own. `drive=`
-saturates the hit more than the tail, at the same peak. Write it with its parentheses,
+saturates the hit more than the tail, at the same peak.
+
+A sweep that is still falling while the kick is loud is heard over the note it lands on:
+`kick(A1, body=90ms)` is heard about two semitones up, as a B. `heard=1` makes the note
+written the note heard, and the kick settles under it as far as its sweep lifts it:
+`kick(A1, body=90ms, heard=1)` lands near F#1 and is heard as A1. The note heard is a
+model, not a law of the ear: the pitch on a log scale, each moment weighted by its
+energy and by how steady its pitch is (a fall faster than 0.1 semitones a millisecond
+counts for less), from 5 ms until it is 30 dB down. `tatum analyze` reports a record's
+kick the same way, as `heard`. Write it with its parentheses,
 `kick()`: a node named `kick` stays a name. A note name works wherever a node takes a
 frequency: `bell(A1, 2db, 1)` lifts the kick's fundamental.
 

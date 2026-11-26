@@ -191,9 +191,32 @@ fn unknown_node(instrument: &str, name: &str) -> String {
 /// `kick(note, ...)`: the times come in ms and the levels in dB, as written;
 /// the spec takes cycles for the phase and a linear level for the click.
 /// Public so that `tatum kick fit` builds every kick it tries by these rules.
+///
+/// With `heard=1` the note written is the note the kick is heard as
+/// ([`crate::graph::node::kick_heard_hz`]), and the note it settles on is
+/// found under it: a few steps of the settling note times written over
+/// heard, each a rendering of the shape, not of the sound.
 pub fn kick_spec(params: &[Param]) -> Result<NodeSpec, CompileError> {
+    let written = float_param_at(params, 0).unwrap_or(50.0);
+    if named_param(params, "heard").unwrap_or(0.0) < 0.5 {
+        return kick_spec_on(params, written);
+    }
+    let mut note = written;
+    for _ in 0..16 {
+        let heard = crate::graph::node::kick_heard_hz(&kick_spec_on(params, note)?);
+        let next = (note * written / heard).clamp(20.0, 200.0);
+        let done = crate::math::abs(crate::math::ln(next / note)) < 1.0e-4;
+        note = next;
+        if done {
+            break;
+        }
+    }
+    kick_spec_on(params, note)
+}
+
+/// The kick settling on `note`.
+fn kick_spec_on(params: &[Param], note: f32) -> Result<NodeSpec, CompileError> {
     let opt = |name: &str, default: f32| named_param(params, name).unwrap_or(default);
-    let note = float_param_at(params, 0).unwrap_or(50.0);
     let start = opt("start", 800.0);
     if start <= 1.1 * note {
         return Err(CompileError::new(format!(
