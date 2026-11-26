@@ -1,0 +1,17 @@
+# A dark rolling bass for the offbeats: two saws a hair apart under a low
+# lowpass that the envelope opens for a short pluck, no sustain, a tight
+# release. Play it on A1 sixteenths between the kicks.
+module bass roll {
+  osc1_wave saw
+  osc2_wave saw
+  osc2_pitch 0.083st
+  cutoff 90hz
+  cutoff_env 1400hz
+  resonance 28%
+  keytrack 30%
+  glide 0%
+  attack 1ms
+  decay 95ms
+  sustain 0%
+  release 25ms
+}
