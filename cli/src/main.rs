@@ -5,6 +5,7 @@ mod fmt;
 mod debug;
 mod design;
 mod include;
+mod kick;
 mod live;
 mod midi;
 mod set;
@@ -32,6 +33,7 @@ fn main() {
         "compare" => analyze::cmd_compare(&args[2..]),
         "debug" => debug::cmd(&args[2..]),
         "design" => design::cmd(&args[2..]),
+        "kick" => kick::cmd(&args[2..]),
         "params" => cmd_params(&args[2..]),
         "fmt" => fmt::cmd(&args[2..]),
         "set" => set::cmd(&args[2..]),
@@ -71,6 +73,7 @@ USAGE:
     tatum analyze <reference.wav> [--from 1:04] [--to 1:36]
     tatum compare <reference.wav> <song.synth | other.wav> [--from S] [--to S] [--bars N | A-B] [--solo a,b]
     tatum design <sound.synth> [--port N] [--no-open]
+    tatum kick fit <reference.wav> [--from S] [--to S] [--bpm N] [--ms 230] [--effort 1] [--hit hit.wav]
     tatum watch <song.synth> [--tui] [--device <name>] [--rate <hz>] [--midi <name>] [--buffer <frames>]
     tatum midi monitor [<song.synth> | <set dir> [--step N]] [--midi <name>] | midi list
     tatum tui-shot <song.synth | set dir> [--at <seconds>] [--size 160x48] [--font f.ttf] [--frames N] [-o shot.png]
@@ -142,6 +145,11 @@ COMMANDS:
               level over time, and a record's averaged hit laid next to it.
               Save writes the file, which a song plays with `use`. A file that
               does not exist yet starts as a deep kick. See sounds/README.md.
+    kick fit  The kick(...) line whose hit matches a record's kick: its hits
+              are averaged on the beat grid, the node is fitted to their
+              pitch and level over time, and the line is rendered by the
+              engine and measured again until it holds. Prints the line and
+              the error left.
     set       A live set: a directory of numbered .synth files, each the whole
               rig at a moment. `render` walks them with real hot swaps into one
               continuous WAV; `check` validates every step and reports the arc;
