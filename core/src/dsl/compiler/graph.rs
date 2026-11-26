@@ -275,6 +275,8 @@ fn kick_spec_on(params: &[Param], note: f32) -> Result<NodeSpec, CompileError> {
         click: if click_db <= -80.0 { 0.0 } else { crate::math::pow(10.0, click_db / 20.0) },
         tone: opt("tone", 3000.0),
         drive: opt("drive", 0.0),
+        vary: opt("vary", 0.0),
+        vary_pitch: opt("vary_pitch", 0.0),
     })
 }
 

@@ -140,6 +140,39 @@ fn rendering_blocks_never_allocates() {
     assert!(heard, "rendered silence, so the test proved nothing");
 }
 
+/// The `kick` node, swaying from hit to hit and tuned by the note heard: a
+/// kick is made again on every hit, in the box its voice already has.
+#[test]
+fn a_swaying_kick_never_allocates() {
+    let src = r#"
+tempo 128
+instrument deep {
+  kick(A1, start=900hz, snap=3ms, chirp=4khz, body=80ms, hold=90ms, sag=-2db, release=200ms, click=-30db, drive=0.3, vary=0.05, vary_pitch=0.02, heard=1) as k
+  k > out
+}
+pattern four { C3 - - -  C3 - - -  C3 - - -  C3 - - - }
+track kick { play four using deep }
+"#;
+    let mut engine = SongEngine::from_source(src).expect("compiles");
+    engine.start();
+    let mut l = [0.0f32; BLOCK_SIZE];
+    let mut r = [0.0f32; BLOCK_SIZE];
+    for _ in 0..64 {
+        engine.process_block_stereo(&mut l, &mut r);
+    }
+    reset();
+    counting(true);
+    let mut heard = false;
+    for _ in 0..4000 {
+        engine.process_block_stereo(&mut l, &mut r);
+        heard |= l.iter().any(|v| *v != 0.0);
+    }
+    counting(false);
+    let n = allocs();
+    assert_eq!(n, 0, "the kick allocated {} times over 4000 blocks", n);
+    assert!(heard, "rendered silence, so the test proved nothing");
+}
+
 /// The live swap is the other path that runs on the audio thread: the split
 /// block, the handover (`start_from_bar`, inheritance by `mem::swap`, the
 /// coasting old engine under its fade) and the retirement of the old engine.

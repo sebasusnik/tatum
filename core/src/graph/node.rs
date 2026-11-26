@@ -108,6 +108,10 @@ pub enum NodeSpec {
         tone: f32,
         /// 0 clean to 1 heavy.
         drive: f32,
+        /// Share the hold and the release sway by, hit to hit; 0, none.
+        vary: f32,
+        /// Share the pitch sways by, hit to hit; 0, none.
+        vary_pitch: f32,
     },
     Noise {
         seed: u32,
@@ -923,6 +927,7 @@ impl KickState {
             click,
             tone,
             drive,
+            ..
         } = *spec
         else {
             unreachable!("KickState::new takes a kick")
@@ -1014,6 +1019,35 @@ impl KickState {
 
     pub fn is_idle(&self) -> bool {
         self.done
+    }
+
+    /// The kick for hit number `hit` of its instrument: with `vary=` or
+    /// `vary_pitch=`, its hold and release, or its whole sweep, swayed by a
+    /// share that drifts slowly from hit to hit -- two slow sines of periods
+    /// that do not divide, 37 and 13.7 hits, so the pulse breathes over bars
+    /// and does not repeat soon. The same hit number is always the same kick.
+    pub fn new_hit(spec: &NodeSpec, hit: u32) -> Self {
+        let NodeSpec::Kick { vary, vary_pitch, .. } = *spec else { unreachable!("KickState::new_hit takes a kick") };
+        if vary <= 0.0 && vary_pitch <= 0.0 {
+            return Self::new(spec);
+        }
+        let mut s = *spec;
+        let n = hit as f32;
+        let sway = |a: f32, pa: f32, b: f32, pb: f32| {
+            0.6 * crate::math::sin(crate::math::TWO_PI * n / a + pa)
+                + 0.4 * crate::math::sin(crate::math::TWO_PI * n / b + pb)
+        };
+        if let NodeSpec::Kick { note, start, knee, chirp, hold_ms, release_ms, .. } = &mut s {
+            let decay = 1.0 + vary * sway(37.0, 0.3, 13.7, 1.1);
+            *hold_ms *= decay;
+            *release_ms *= decay;
+            let pitch = 1.0 + vary_pitch * sway(29.0, 2.0, 11.1, 0.5);
+            *note *= pitch;
+            *start *= pitch;
+            *knee *= pitch;
+            *chirp *= pitch;
+        }
+        Self::new(&s)
     }
 
     /// The level: attack, then hold, then release.
@@ -1683,6 +1717,8 @@ mod renew_tests {
             click: 0.02,
             tone: 3000.0,
             drive: 0.3,
+            vary: 0.0,
+            vary_pitch: 0.0,
         });
     }
 
@@ -1746,6 +1782,8 @@ mod kick_tests {
             click: 0.0,
             tone: 3000.0,
             drive: 0.0,
+            vary: 0.0,
+            vary_pitch: 0.0,
         };
         let NodeKind::Kick(k) = spec.instantiate() else { panic!("a kick") };
         let top = k.note + k.body_part + k.snap_part + k.chirp_part;

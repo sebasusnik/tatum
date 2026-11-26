@@ -1038,7 +1038,13 @@ written the note heard, and the kick settles under it as far as its sweep lifts 
 model, not a law of the ear: the pitch on a log scale, each moment weighted by its
 energy and by how steady its pitch is (a fall faster than 0.1 semitones a millisecond
 counts for less), from 5 ms until it is 30 dB down. `tatum analyze` reports a record's
-kick the same way, as `heard`. Write it with its parentheses,
+kick the same way, as `heard`.
+
+Every hit of a `kick` is the same samples. `vary=0.03` sways its hold and release by up
+to 3% from hit to hit, and `vary_pitch=0.01` its whole sweep by up to 1% in pitch, slowly
+(the sway drifts over a few bars and does not repeat soon) and the same on every play:
+the breath of a hypnotic pulse, which a loop of one sample does not have. Both are 0 by
+default. Write it with its parentheses,
 `kick()`: a node named `kick` stays a name. A note name works wherever a node takes a
 frequency: `bell(A1, 2db, 1)` lifts the kick's fundamental.
 

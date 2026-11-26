@@ -2,7 +2,7 @@ extern crate alloc;
 use alloc::boxed::Box;
 
 use crate::graph::{GraphTemplate, MAX_GRAPH_NODES};
-use crate::graph::node::{NodeKind, MAX_NODE_INPUTS};
+use crate::graph::node::{KickState, NodeKind, NodeSpec, MAX_NODE_INPUTS};
 use crate::math;
 use crate::{BLOCK_SIZE, MAX_VOICES};
 
@@ -121,6 +121,8 @@ pub struct Instrument {
     staged_cutoff: Option<f32>,
     staged_env_depth: Option<f32>,
     staged_resonance: Option<f32>,
+    /// Notes started so far: the hit number a kick with `vary=` sways by.
+    hits: u32,
 }
 
 impl Instrument {
@@ -144,6 +146,7 @@ impl Instrument {
             staged_cutoff: None,
             staged_env_depth: None,
             staged_resonance: None,
+            hits: 0,
         }
     }
 
@@ -166,6 +169,18 @@ impl Instrument {
             oldest.0
         });
         self.voices[idx].init(&self.template, note, velocity);
+        let hit = self.hits;
+        self.hits = self.hits.wrapping_add(1);
+        // A kick that sways is made again for its hit number, in its own box.
+        for i in 0..self.template.node_count as usize {
+            if let NodeSpec::Kick { vary, vary_pitch, .. } = self.template.specs[i] {
+                if vary > 0.0 || vary_pitch > 0.0 {
+                    if let Some(NodeKind::Kick(k)) = self.voices[idx].nodes[i].as_deref_mut() {
+                        *k = KickState::new_hit(&self.template.specs[i], hit);
+                    }
+                }
+            }
+        }
 
         // Apply staged p-lock values to filter nodes on the newly initialized voice
         let has_plocks =

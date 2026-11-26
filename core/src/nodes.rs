@@ -174,6 +174,8 @@ pub const NODES: &[NodeDefSpec] = &[
             arg!("click", -80.0, 0.0, -80.0, "dB of a short noise click against the body; -80 is none"),
             arg!("tone", 500.0, 12000.0, 3000.0, "Hz the click is centred on"),
             arg!("drive", 0.0, 1.0, 0.0, "tanh saturation of the body, clean to heavy, at the same peak level; the tail saturates less than the hit"),
+            arg!("vary", 0.0, 0.2, 0.0, "share the hold and the release sway by from hit to hit, slowly and the same on every play: 0.03 is 3%, the breath of a hypnotic pulse; 0, every hit the same"),
+            arg!("vary_pitch", 0.0, 0.1, 0.0, "share the whole sweep sways by in pitch from hit to hit, slowly and the same on every play: 0.01 is about a sixth of a semitone; 0, every hit the same"),
             arg!("heard", 0.0, 1.0, 0.0, "1: the note given is the note the kick is heard as, the sweep included, and the note it settles on is found under it; 0: the note it settles on"),
         ],
         waveform: false, rhythm: false, in_chains: false,
