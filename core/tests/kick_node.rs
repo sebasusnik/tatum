@@ -241,3 +241,39 @@ track t { play four using boom }
     let e = errors(src);
     assert!(e.contains("`kick()`"), "{e}");
 }
+
+#[test]
+fn a_chirp_is_a_faster_stage_over_the_start() {
+    // Over the first millisecond the chirp is far above where the snap alone
+    // starts; a few chirp times in, the two are the same sweep.
+    let plain = render(&song("50, start=300, hold=200ms", FOUR), 1);
+    let chirped = render(&song("50, start=300, chirp=3khz, chirp_time=0.5ms, hold=200ms", FOUR), 1);
+    // Too few cycles there to time, so count the zero crossings instead.
+    let crossings = |x: &[f32]| {
+        let t0 = onset(x);
+        x[t0..t0 + (3.0 * 44.1) as usize].windows(2).filter(|w| (w[0] < 0.0) != (w[1] < 0.0)).count()
+    };
+    let (p, c) = (crossings(&plain), crossings(&chirped));
+    assert!(c >= 2 * p, "the chirp is the tick on top: {c} crossings in 3 ms against {p}");
+    let (p, c) = (pitch(&plain, 60.0, 150.0), pitch(&chirped, 60.0, 150.0));
+    assert!((c - p).abs() < 0.5, "the body is untouched: {c:.2} against {p:.2}");
+}
+
+#[test]
+fn a_chirp_under_the_start_says_where_it_goes() {
+    let e = errors(&song("50, start=800, chirp=400", FOUR));
+    assert!(e.contains("chirp=400 is under start=800"), "{e}");
+}
+
+#[test]
+fn sag_leans_the_held_top_by_what_it_says() {
+    let flat = render(&song("50, hold=200ms, release=100ms", FOUR), 1);
+    let sagged = render(&song("50, hold=200ms, sag=-6db, release=100ms", FOUR), 1);
+    let top = peak(&sagged, 2.0);
+    assert!((db(peak(&flat, 180.0) / peak(&flat, 2.0))).abs() < 0.5, "unsagged, the top is flat");
+    // Evenly in dB: half way, half the sag; at the end, all of it.
+    let half = db(peak(&sagged, 100.0) / top);
+    let end = db(peak(&sagged, 190.0) / top);
+    assert!((half + 3.0).abs() < 0.7, "half way down the hold: {half:.2} dB");
+    assert!((end + 5.7).abs() < 0.8, "at the end of the hold: {end:.2} dB");
+}

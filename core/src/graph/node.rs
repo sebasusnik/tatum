@@ -86,10 +86,18 @@ pub enum NodeSpec {
         knee: f32,
         /// ms the snap takes to fall to 10% of its span.
         snap_ms: f32,
+        /// Hz of a third, fastest stage over the start: the tick of pitch a
+        /// hit has in its first milliseconds. Equal to `start`, none.
+        chirp: f32,
+        /// ms the chirp takes to fall to 10% of its span.
+        chirp_ms: f32,
         /// ms until the pitch is within 10% of `note`.
         body_ms: f32,
         attack_ms: f32,
         hold_ms: f32,
+        /// dB the level sinks across the hold (0 or negative): a top that
+        /// leans before the release takes it.
+        sag_db: f32,
         /// ms from the end of the hold to -60 dB.
         release_ms: f32,
         /// Where the sine starts, in cycles: 0 at the zero crossing, 0.25 at the top.
@@ -853,6 +861,8 @@ const KICK_FLOOR: f32 = 1.0e-3;
 const KICK_CLICK_MS: f32 = 4.0;
 /// The noise is seeded the same on every hit, so every click is the same.
 const KICK_CLICK_SEED: u32 = 0x4b49_434b;
+/// The highest the kick's pitch goes, as a share of the sample rate.
+const KICK_TOP: f32 = 0.45;
 
 /// Per-sample factor that takes a level down by `db` (a negative number) in
 /// `ms` milliseconds.
@@ -874,10 +884,15 @@ pub struct KickState {
     body_mul: f32,
     snap_part: f32,
     snap_mul: f32,
+    chirp_part: f32,
+    chirp_mul: f32,
     /// Samples of attack left, and how much each one adds.
     attack_left: u32,
     attack_step: f32,
     hold_left: u32,
+    /// Where the hold has sunk to, and how much more each sample of it.
+    held: f32,
+    sag_mul: f32,
     release_mul: f32,
     level: f32,
     drive_gain: f32,
@@ -897,9 +912,12 @@ impl KickState {
             start,
             knee,
             snap_ms,
+            chirp,
+            chirp_ms,
             body_ms,
             attack_ms,
             hold_ms,
+            sag_db,
             release_ms,
             phase,
             click,
@@ -910,6 +928,14 @@ impl KickState {
             unreachable!("KickState::new takes a kick")
         };
         let ms = |t: f32| t * 0.001 * SAMPLE_RATE;
+        // A sine over half the rate folds back down: at 22.05 kHz a 12 kHz
+        // chirp would play as a 10 kHz one. The top of the sweep is held
+        // under 0.45 of the rate, which at 44.1 kHz is over anything the
+        // arguments allow, so only a smaller machine hears a difference.
+        let top = KICK_TOP * SAMPLE_RATE;
+        let chirp = chirp.min(top);
+        let start = start.min(chirp);
+        let knee = knee.min(start);
         // The body is within 10% of the note when its part is down to a tenth
         // of the note: from knee - note to 0.1 * note in `body_ms`, which is
         // how `tatum analyze` times a sweep. The compiler keeps the knee over
@@ -919,6 +945,8 @@ impl KickState {
         let body_tau = ms(body_ms).max(1.0) / crate::math::ln(body_ratio);
         // The snap falls by 10x in `snap_ms`.
         let snap_tau = ms(snap_ms).max(1.0) / core::f32::consts::LN_10;
+        let chirp_tau = ms(chirp_ms).max(1.0) / core::f32::consts::LN_10;
+        let hold = ms(hold_ms) as u32;
         let attack_left = ms(attack_ms) as u32;
         let drive_gain = 1.0 + 5.0 * drive;
         let mut click_filter = BiquadFilter::new(SAMPLE_RATE);
@@ -930,9 +958,14 @@ impl KickState {
             body_mul: crate::math::exp(-1.0 / body_tau),
             snap_part: start - knee,
             snap_mul: crate::math::exp(-1.0 / snap_tau),
+            chirp_part: chirp - start,
+            chirp_mul: crate::math::exp(-1.0 / chirp_tau),
             attack_left,
             attack_step: 1.0 / (attack_left.max(1) as f32),
-            hold_left: ms(hold_ms) as u32,
+            hold_left: hold,
+            held: 1.0,
+            // 0 dB is exactly 1: an unsagged hold stays at full level.
+            sag_mul: if sag_db < 0.0 && hold > 0 { fall_per_sample(sag_db, hold_ms) } else { 1.0 },
             release_mul: fall_per_sample(-60.0, release_ms),
             level: if attack_left > 0 { 0.0 } else { 1.0 },
             drive_gain,
@@ -956,7 +989,8 @@ impl KickState {
             self.level = (self.level + self.attack_step).min(1.0);
         } else if self.hold_left > 0 {
             self.hold_left -= 1;
-            self.level = 1.0;
+            self.level = self.held;
+            self.held *= self.sag_mul;
         } else {
             self.level *= self.release_mul;
         }
@@ -975,13 +1009,14 @@ impl KickState {
             0.0
         };
 
-        let freq = self.note + self.body_part + self.snap_part;
+        let freq = self.note + self.body_part + self.snap_part + self.chirp_part;
         self.phase += freq / SAMPLE_RATE;
         if self.phase >= 1.0 {
             self.phase -= 1.0;
         }
         self.body_part *= self.body_mul;
         self.snap_part *= self.snap_mul;
+        self.chirp_part *= self.chirp_mul;
 
         if self.level < KICK_FLOOR && self.attack_left == 0 && self.hold_left == 0 && self.click == 0.0 {
             self.done = true;
@@ -1525,9 +1560,12 @@ mod renew_tests {
             start: 900.0,
             knee: 165.0,
             snap_ms: 4.0,
+            chirp: 3000.0,
+            chirp_ms: 1.0,
             body_ms: 70.0,
             attack_ms: 1.0,
             hold_ms: 80.0,
+            sag_db: -2.0,
             release_ms: 160.0,
             phase: 0.25,
             click: 0.02,
@@ -1568,5 +1606,38 @@ mod renew_tests {
     #[test]
     fn a_node_is_small_enough_to_keep_per_voice() {
         assert!(core::mem::size_of::<NodeKind>() <= 512, "NodeKind is {} bytes", core::mem::size_of::<NodeKind>());
+    }
+}
+
+#[cfg(test)]
+mod kick_tests {
+    use super::*;
+
+    /// The highest a kick can be asked to start, chirp and all, plays under
+    /// half the rate at whatever rate the engine is built for (the CI renders
+    /// at 22050 and 32000 Hz too).
+    #[test]
+    fn the_kick_never_starts_over_half_the_rate() {
+        let spec = NodeSpec::Kick {
+            note: 200.0,
+            start: 5000.0,
+            knee: 2000.0,
+            snap_ms: 4.0,
+            chirp: 12000.0,
+            chirp_ms: 1.0,
+            body_ms: 70.0,
+            attack_ms: 0.0,
+            hold_ms: 80.0,
+            sag_db: 0.0,
+            release_ms: 160.0,
+            phase: 0.0,
+            click: 0.0,
+            tone: 3000.0,
+            drive: 0.0,
+        };
+        let NodeKind::Kick(k) = spec.instantiate() else { panic!("a kick") };
+        let top = k.note + k.body_part + k.snap_part + k.chirp_part;
+        assert!(top <= 0.45 * SAMPLE_RATE + 0.5, "starts at {top} Hz at {SAMPLE_RATE} Hz");
+        assert!(k.snap_part >= 0.0 && k.chirp_part >= 0.0 && k.body_part > 0.0);
     }
 }
