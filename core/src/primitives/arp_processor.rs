@@ -60,6 +60,19 @@ impl ArpProcessor {
     }
 
     /// Tick once per sample. Returns an event if the arp triggers a note-on or note-off.
+    /// Whether the next [`Self::tick`] gives an event, without moving it:
+    /// the engine renders up to that sample first, so the note starts on it.
+    /// The same comparisons as `tick`, on the counter it is about to have.
+    pub fn fires_next(&self) -> bool {
+        if !self.active || self.num_notes == 0 {
+            return false;
+        }
+        let counter = self.sample_counter + 1.0;
+        let gate_off_point = self.samples_per_step * self.gate_length;
+        (self.gate_open && counter >= gate_off_point && counter < gate_off_point + 1.0)
+            || counter >= self.samples_per_step
+    }
+
     pub fn tick(&mut self) -> Option<ArpEvent> {
         if !self.active || self.num_notes == 0 {
             return None;
