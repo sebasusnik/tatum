@@ -57,7 +57,10 @@ impl Arg {
         let is_ms = doc.starts_with("ms");
         let is_db = doc.starts_with("dB");
         let is_linear_gain = doc.starts_with("linear gain");
+        // A share of something, written as a percentage of it.
+        let is_share = doc.starts_with("share");
         let resolved = match suffix {
+            "%" if is_share => Some(value / 100.0),
             "hz" if is_hz => Some(value),
             "khz" if is_hz => Some(value * 1000.0),
             "ms" if is_ms => Some(value),
@@ -75,6 +78,8 @@ impl Arg {
                     "ms or s"
                 } else if is_db || is_linear_gain {
                     "db"
+                } else if is_share {
+                    "% or a plain 0..1"
                 } else {
                     "no unit"
                 };
@@ -254,8 +259,11 @@ pub const NODES: &[NodeDefSpec] = &[
         waveform: false, rhythm: false, in_chains: true,
         doc: "Transient shaper: the hit and the tail turned up or down whatever the level. `transient(6db, -4db)` is a harder, shorter kick; a steady tone passes." },
     NodeDefSpec { name: "delay", aliases: &[], category: Category::Effect,
-        positional: &[arg!("feedback", 0.0, 0.95, 0.3, "repeat level")], named: &[],
-        waveform: false, rhythm: true, in_chains: true, doc: "Tempo-synced delay inside a chain: `delay(1/8, 0.4)`. Division defaults to 1/4." },
+        positional: &[arg!("feedback", 0.0, 0.95, 0.3, "repeat level")],
+        named: &[arg!("wow", 0.0, 1.0, 0.0, "share of a slow (~0.5 Hz), wandering drift of the delay time: the repeats sag and rise in pitch, up to about ±25 cents at 1; `wow=30%` reads the same as 0.3"),
+                 arg!("flutter", 0.0, 1.0, 0.0, "share of a fast (~7 Hz), irregular tremble of the delay time, up to about ±18 cents at 1; `flutter=20%` reads the same as 0.2")],
+        waveform: false, rhythm: true, in_chains: true,
+        doc: "Tempo-synced delay inside a chain: `delay(1/8, 0.4)`. Division defaults to 1/4. `wow` and `flutter` give it a bucket-brigade wobble, left and right drifting apart: `delay(1/8, 0.5, wow=30%, flutter=15%)`." },
     NodeDefSpec { name: "autopan", aliases: &[], category: Category::Effect,
         positional: &[arg!("depth", 0.0, 1.0, 0.5, "0 = still, 1 = full left/right")],
         named: &[arg!("bars", 0.0, 64.0, 0.0, "cycle length in bars (tempo-synced)"), arg!("hz", 0.0, 20.0, 0.25, "free rate in Hz when bars is 0")],

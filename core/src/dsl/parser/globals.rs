@@ -196,8 +196,8 @@ impl Parser {
         }
     }
 
-    /// Top-level `delay sync=dotted_eighth feedback=0.45 filter=0.5 time=0.3`
-    /// or `reverb size=0.7 damp=0.4 predelay=20`.
+    /// Top-level `delay sync=dotted_eighth feedback=0.45 filter=0.5 time=0.3
+    /// wow=30% flutter=0.1` or `reverb size=0.7 damp=0.4 predelay=20`.
     pub(super) fn parse_send_fx_globals(&mut self, which: &str, globals: &mut Globals) {
         loop {
             let key = match self.peek().clone() {
@@ -210,6 +210,34 @@ impl Parser {
             self.advance();
             if !self.expect(&Token::Eq) {
                 break;
+            }
+            // `wow` and `flutter` are shares, 0..1, and may be written as a
+            // percentage. Read here, so a stray unit elsewhere stays an error.
+            if which == "delay" && (key == "wow" || key == "flutter") {
+                let (vline, vcol) = (self.span().line, self.span().col);
+                let value = match self.peek().clone() {
+                    Token::Quantity(n, ref suffix) if suffix == "%" => {
+                        self.advance();
+                        Some(n / 100.0)
+                    }
+                    _ => self.expect_number(),
+                };
+                match value {
+                    Some(v) if (0.0..=1.0).contains(&v) => {
+                        if key == "wow" {
+                            globals.send_delay.wow = Some(v);
+                        } else {
+                            globals.send_delay.flutter = Some(v);
+                        }
+                    }
+                    Some(v) => self.errors.push(ParseError {
+                        line: vline,
+                        col: vcol,
+                        message: format!("delay {} {} is outside 0..1 (0..100%)", key, v),
+                    }),
+                    None => {}
+                }
+                continue;
             }
             // Value: number, or an identifier for `sync`
             let ident_value = match self.peek().clone() {
@@ -238,7 +266,7 @@ impl Parser {
                 ("reverb", "damp") => globals.send_reverb.damp = num_value,
                 ("reverb", "predelay") => globals.send_reverb.predelay = num_value,
                 _ => bad = Some(format!(
-                    "{}: unknown option '{}' (delay: sync, time, feedback, filter, sidechain; reverb: size, damp, predelay, sidechain)",
+                    "{}: unknown option '{}' (delay: sync, time, feedback, filter, sidechain, wow, flutter; reverb: size, damp, predelay, sidechain)",
                     which, key
                 )),
             }
