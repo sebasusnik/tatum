@@ -214,6 +214,12 @@ The file's text is on the page too: edit it to add a node or rewire, apply, and 
 knobs follow. The text is the sound: a song plays it with
 `use "../sounds/kicks/deep.synth"` and `play ... using deep_kick`.
 
+It answers only its own page. Any site open in the same browser can send a request to
+127.0.0.1, so a request whose `Host` or `Origin` is not this server, or a POST without
+the page's own header, is refused (403), and Save writes only the file it was started
+on. A WAV is taken up to 400 MB; a request that stops sending is let go after 30
+seconds.
+
 ## set
 
 A set is a directory of numbered `.synth` files, each the whole rig at a moment,

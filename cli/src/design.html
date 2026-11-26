@@ -118,7 +118,7 @@ let pending = new Map(), sending = false;
 function status(msg, error) { const s = $("status"); s.textContent = msg || ""; s.className = error ? "error" : ""; }
 
 async function post(path, body, type) {
-  const r = await fetch(path, { method: "POST", body, headers: { "Content-Type": type || "text/plain" } });
+  const r = await fetch(path, { method: "POST", body, headers: { "Content-Type": type || "text/plain", "X-Tatum-Design": "1" } });
   return r.json();
 }
 

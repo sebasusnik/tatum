@@ -402,14 +402,17 @@ fn apply(sound: &mut Sound, body: &str) -> Result<(), String> {
             continue;
         }
         if let Some(rest) = line.strip_prefix("gain=") {
-            sound.gain = rest.parse().ok();
+            sound.gain = match rest.trim() {
+                "" => None,
+                v => Some(finite(v).ok_or_else(|| format!("'{line}': '{v}' is not a number"))?),
+            };
             continue;
         }
         let (key, value) = match line.strip_prefix('-') {
             Some(k) => (k, None),
             None => {
                 let (k, v) = line.split_once('=').ok_or_else(|| format!("'{line}': expected alias.arg=value"))?;
-                let v: f32 = v.trim().parse().map_err(|_| format!("'{line}': '{v}' is not a number"))?;
+                let v = finite(v.trim()).ok_or_else(|| format!("'{line}': '{v}' is not a number"))?;
                 (k, Some(v))
             }
         };
@@ -436,6 +439,12 @@ fn apply(sound: &mut Sound, body: &str) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// A number as a knob takes it: `NaN` and `inf` parse as floats, and would
+/// be written into the file as `NaNms`.
+fn finite(v: &str) -> Option<f32> {
+    v.parse::<f32>().ok().filter(|v| v.is_finite())
 }
 
 fn render_reply(state: &State) -> String {
@@ -481,53 +490,94 @@ struct Request {
     method: String,
     path: String,
     query: BTreeMap<String, String>,
+    /// Header names in lower case.
+    headers: BTreeMap<String, String>,
     body: Vec<u8>,
 }
+
+/// Why a request was not read: the status to answer with, and why. `None`
+/// when the connection went away and there is no one to answer.
+type Refused = Option<(&'static str, String)>;
 
 /// The longest body taken: a WAV of a long extended mix.
 const MAX_BODY: usize = 400 << 20;
 
-fn read_request(stream: &mut TcpStream) -> Option<Request> {
+fn read_request(stream: &mut impl Read) -> Result<Request, Refused> {
     let mut buf = Vec::new();
     let mut chunk = [0u8; 8192];
     let head_end = loop {
-        let n = stream.read(&mut chunk).ok()?;
+        let n = stream.read(&mut chunk).map_err(|_| None)?;
         if n == 0 {
-            return None;
+            return Err(None);
         }
         buf.extend_from_slice(&chunk[..n]);
         if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
             break i + 4;
         }
         if buf.len() > 64 << 10 {
-            return None;
+            return Err(Some(("431 Request Header Fields Too Large", "the head is over 64 kB".into())));
         }
     };
     let head = String::from_utf8_lossy(&buf[..head_end]).to_string();
     let mut lines = head.lines();
-    let mut first = lines.next()?.split_whitespace();
-    let method = first.next()?.to_string();
-    let target = first.next()?.to_string();
-    let length = lines
+    let bad = || Some(("400 Bad Request", "not an HTTP request".to_string()));
+    let mut first = lines.next().ok_or_else(bad)?.split_whitespace();
+    let method = first.next().ok_or_else(bad)?.to_string();
+    let target = first.next().ok_or_else(bad)?.to_string();
+    let headers: BTreeMap<String, String> = lines
         .filter_map(|l| l.split_once(':'))
-        .find(|(k, _)| k.trim().eq_ignore_ascii_case("content-length"))
-        .and_then(|(_, v)| v.trim().parse::<usize>().ok())
-        .unwrap_or(0);
+        .map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().to_string()))
+        .collect();
+    let length = match headers.get("content-length") {
+        None => 0,
+        Some(v) => v.parse::<usize>().map_err(|_| Some(("400 Bad Request", format!("Content-Length '{v}'"))))?,
+    };
     if length > MAX_BODY {
-        return None;
+        return Err(Some(("413 Content Too Large", format!("{length} bytes; at most {MAX_BODY}"))));
     }
     let mut body = buf[head_end..].to_vec();
     while body.len() < length {
-        let n = stream.read(&mut chunk).ok()?;
+        let n = stream.read(&mut chunk).map_err(|_| None)?;
         if n == 0 {
             break;
         }
         body.extend_from_slice(&chunk[..n]);
     }
+    if body.len() < length {
+        return Err(Some(("400 Bad Request", format!("{} bytes of the {length} it said", body.len()))));
+    }
     body.truncate(length);
     let (path, q) = target.split_once('?').unwrap_or((&target, ""));
     let query = q.split('&').filter_map(|kv| kv.split_once('=')).map(|(k, v)| (k.to_string(), v.to_string())).collect();
-    Some(Request { method, path: path.to_string(), query, body })
+    Ok(Request { method, path: path.to_string(), query, headers, body })
+}
+
+/// Whether the request comes from the page this process served, and not from
+/// another site open in the same browser. The server only listens on
+/// 127.0.0.1, but any page can send a request there: a form or a `fetch`
+/// from a site on the web would otherwise rewrite and save the sound. So:
+/// - `Host` is this server, by address or as localhost (a DNS name pointed
+///   at 127.0.0.1 -- rebinding -- carries its own name);
+/// - an `Origin`, when there is one, is this server too;
+/// - every POST carries `X-Tatum-Design`, a header a cross-site request can
+///   only send after a preflight this server never answers.
+fn same_origin(req: &Request, port: u16) -> Result<(), String> {
+    let ours = |h: &str| h == format!("127.0.0.1:{port}") || h == format!("localhost:{port}");
+    match req.headers.get("host") {
+        Some(h) if ours(h) => {}
+        Some(h) => return Err(format!("Host '{h}' is not this server")),
+        None => return Err("no Host".into()),
+    }
+    if let Some(o) = req.headers.get("origin") {
+        let host = o.strip_prefix("http://").unwrap_or("");
+        if !ours(host) {
+            return Err(format!("Origin '{o}' is not this page"));
+        }
+    }
+    if req.method != "GET" && !req.headers.contains_key("x-tatum-design") {
+        return Err("a POST from somewhere other than the designer's page".into());
+    }
+    Ok(())
 }
 
 fn respond(stream: &mut TcpStream, status: &str, kind: &str, body: &[u8]) {
@@ -655,9 +705,23 @@ pub fn cmd(args: &[String]) {
     }
     for stream in listener.incoming() {
         let Ok(mut stream) = stream else { continue };
-        if let Some(req) = read_request(&mut stream) {
-            let (status, kind, body) = handle(&mut state, req);
-            respond(&mut stream, &status, kind, &body);
+        // One request at a time: a client that stops sending must not hold
+        // the page's next turn of a knob for ever.
+        let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(30)));
+        let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(30)));
+        match read_request(&mut stream) {
+            Ok(req) => match same_origin(&req, port) {
+                Ok(()) => {
+                    let (status, kind, body) = handle(&mut state, req);
+                    respond(&mut stream, &status, kind, &body);
+                }
+                Err(why) => {
+                    eprintln!("refused: {why}");
+                    respond(&mut stream, "403 Forbidden", "text/plain", why.as_bytes());
+                }
+            },
+            Err(Some((status, why))) => respond(&mut stream, status, "text/plain", why.as_bytes()),
+            Err(None) => {}
         }
     }
 }
@@ -713,6 +777,70 @@ mod tests {
         let tail = c.pitch.iter().filter(|p| (120.0..200.0).contains(&p.0)).map(|p| p.1).sum::<f32>()
             / c.pitch.iter().filter(|p| (120.0..200.0).contains(&p.0)).count() as f32;
         assert!((tail - 46.25).abs() < 0.5, "F#1, got {tail}");
+    }
+
+    fn request(raw: &str) -> Result<Request, Refused> {
+        read_request(&mut std::io::Cursor::new(raw.as_bytes().to_vec()))
+    }
+
+    fn status_of(raw: &str) -> &'static str {
+        match request(raw) {
+            Ok(_) => "ok",
+            Err(Some((s, _))) => s,
+            Err(None) => "dropped",
+        }
+    }
+
+    #[test]
+    fn a_body_too_long_short_or_unsaid_is_answered_not_dropped() {
+        let huge =
+            format!("POST /api/set HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nContent-Length: {}\r\n\r\n", MAX_BODY + 1);
+        assert!(status_of(&huge).starts_with("413"));
+        let short = "POST /api/set HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nContent-Length: 50\r\n\r\nk.body=80";
+        assert!(status_of(short).starts_with("400"));
+        let nonsense = "POST /api/set HTTP/1.1\r\nContent-Length: lots\r\n\r\n";
+        assert!(status_of(nonsense).starts_with("400"));
+        let head = format!("GET / HTTP/1.1\r\nX: {}\r\n", "a".repeat(70 << 10));
+        assert!(status_of(&head).starts_with("431"));
+        assert_eq!(status_of("\r\n\r\n"), "400 Bad Request");
+        assert_eq!(status_of(""), "dropped");
+        let fine = "POST /api/set?x=1 HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nContent-Length: 9\r\n\r\nk.body=80";
+        let r = request(fine).ok().expect("reads");
+        assert_eq!(r.body, b"k.body=80");
+        assert_eq!(r.headers.get("host").map(String::as_str), Some("127.0.0.1:7350"));
+    }
+
+    #[test]
+    fn only_the_designers_own_page_is_answered() {
+        let req = |head: &str| request(&format!("{head}\r\n\r\n")).ok().expect("reads");
+        let page =
+            "POST /api/save HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nOrigin: http://127.0.0.1:7350\r\nX-Tatum-Design: 1";
+        assert!(same_origin(&req(page), 7350).is_ok());
+        assert!(same_origin(&req("GET / HTTP/1.1\r\nHost: localhost:7350"), 7350).is_ok());
+        // A site on the web posting to the designer: its own Origin, and no header.
+        let csrf = "POST /api/save HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nOrigin: https://evil.example";
+        assert!(same_origin(&req(csrf), 7350).is_err());
+        // A form posted with no Origin at all still lacks the header.
+        assert!(same_origin(&req("POST /api/save HTTP/1.1\r\nHost: 127.0.0.1:7350"), 7350).is_err());
+        // DNS rebinding: the page's own name pointed at 127.0.0.1.
+        let rebound = "GET /api/sound HTTP/1.1\r\nHost: evil.example:7350";
+        assert!(same_origin(&req(rebound), 7350).is_err());
+        // Another port is another server.
+        assert!(same_origin(&req("GET / HTTP/1.1\r\nHost: 127.0.0.1:9999"), 7350).is_err());
+        assert!(same_origin(&req("GET / HTTP/1.1"), 7350).is_err());
+    }
+
+    #[test]
+    fn nan_and_infinity_are_not_numbers_here() {
+        let mut s = Sound::parse(NEW_SOUND).expect("parses");
+        for bad in ["k.body=NaN", "k.body=inf", "k.body=-infinity", "gain=nan", "gain=loud", "k.body=", "k.body"] {
+            assert!(apply(&mut s, bad).is_err(), "{bad} was taken");
+        }
+        assert!(!s.text().to_lowercase().contains("nan"), "{}", s.text());
+        apply(&mut s, "gain=0.8").expect("a gain");
+        assert_eq!(s.gain, Some(0.8));
+        apply(&mut s, "gain=").expect("no gain");
+        assert_eq!(s.gain, None);
     }
 
     #[test]
