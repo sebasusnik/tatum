@@ -249,11 +249,17 @@ pub struct Walk {
     /// Bars the outgoing step keeps playing under the new one; a step's own
     /// `# set: blend=` wins.
     pub blend_bars: f32,
+    /// Walk it as `set play` does, which is how a take plays back: a step
+    /// whose header says `auto` or `max=` moves on by itself, and nothing
+    /// but the script asks for a step.
+    pub live: bool,
+    /// With `live`, `set play --auto`: every step moves on by itself.
+    pub auto: bool,
 }
 
 impl Default for Walk {
     fn default() -> Self {
-        Self { phrase: 1, ramp_bars: 4.0, blend_bars: 0.0 }
+        Self { phrase: 1, ramp_bars: 4.0, blend_bars: 0.0, live: false, auto: false }
     }
 }
 
@@ -287,12 +293,21 @@ pub enum Act {
     /// A performance scene, called as its computer key would call it: it
     /// takes the keyboard on the bar the song's `keyboard` block says.
     Perform(String),
-    /// Aftertouch: a held pad (`true`) or key pressed this hard.
-    Pressure(bool, u8, u8),
+    /// Aftertouch: a held pad (`true`) or key pressed this hard; on one
+    /// note, or with no note the whole channel's.
+    Pressure(bool, Option<u8>, u8),
     /// The knobs' page: `voice next`, `voice prev`, `voice bass`.
     Voice(tatum_core::dsl::ast::VoiceMove),
     /// Every knob touched back to the text, as the reset key does.
     Reset,
+    /// `l` down (`true`) and up: a loop of the bars it is held over.
+    Loop(bool),
+    /// Shift+L: keep a step that would move on by itself, or let it go.
+    Keep,
+    /// A track muted or unmuted from the screen.
+    Mute(String),
+    /// Tracks soloed together from the screen, or the solo taken off.
+    Solo(Vec<String>),
     End,
 }
 
@@ -300,11 +315,158 @@ impl Act {
     fn navigates(&self) -> bool {
         matches!(self, Act::Next | Act::Prev | Act::Step(_))
     }
+
+    /// The act as a script line writes it, after the time: what
+    /// [`parse_script`] reads back as the same act.
+    pub fn script(&self) -> String {
+        use tatum_core::dsl::ast::VoiceMove;
+        match self {
+            Act::Cc(cc, v) => format!("cc {} {}", cc, v),
+            Act::Pad(n, v) => format!("pad {} {}", n, v),
+            Act::Key(n, v) => format!("key {} {}", n, v),
+            Act::Bend(v) => format!("bend {}", v),
+            Act::Next => String::from("next"),
+            Act::Prev => String::from("prev"),
+            Act::Step(n) => format!("step {}", n),
+            Act::Perform(scene) => format!("perform {}", scene),
+            Act::Pressure(pad, note, v) => {
+                let what = if *pad { "pad" } else { "key" };
+                match note {
+                    Some(n) => format!("press {} {} {}", what, n, v),
+                    None => format!("press {} {}", what, v),
+                }
+            }
+            Act::Voice(VoiceMove::Next) => String::from("voice next"),
+            Act::Voice(VoiceMove::Prev) => String::from("voice prev"),
+            Act::Voice(VoiceMove::To(page)) => format!("voice {}", page),
+            Act::Reset => String::from("reset"),
+            Act::Loop(true) => String::from("loop down"),
+            Act::Loop(false) => String::from("loop up"),
+            Act::Keep => String::from("keep"),
+            Act::Mute(track) => format!("mute {}", track),
+            Act::Solo(tracks) => format!("solo {}", tracks.join(" ")),
+            Act::End => String::from("end"),
+        }
+    }
+}
+
+/// One line of a script: when, and what.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Cue {
+    /// Bars from the set's first downbeat, fractional.
+    pub bar: f64,
+    /// The sample it lands on, when the line gives one (`12.5@1058400`): a
+    /// take writes it, so the act lands on the block it landed on live.
+    pub sample: Option<usize>,
+    pub act: Act,
+}
+
+impl Cue {
+    #[cfg(test)]
+    pub fn at(bar: f64, act: Act) -> Self {
+        Self { bar, sample: None, act }
+    }
+
+    /// The line a take writes: `12.503906@529152  cc 74 64`.
+    pub fn line(&self) -> String {
+        match self.sample {
+            Some(s) => format!("{:.6}@{}  {}", self.bar, s, self.act.script()),
+            None => format!("{:.6}  {}", self.bar, self.act.script()),
+        }
+    }
+}
+
+/// How a take was played, from its `# take:` line, so it renders the way it
+/// played without the flags written again.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TakeHeader {
+    pub phrase: usize,
+    pub ramp_bars: f32,
+    pub blend_bars: f32,
+    pub auto: bool,
+    /// The bars a step without `bars=` holds.
+    pub bars: u32,
+    /// The steps' text as they played, folded (see [`fingerprint`]).
+    pub steps: Option<u64>,
+}
+
+impl TakeHeader {
+    pub fn line(&self) -> String {
+        let mut line = format!(
+            "# take: phrase={} ramp={} blend={} auto={} bars={}",
+            self.phrase,
+            self.ramp_bars,
+            self.blend_bars,
+            if self.auto { "on" } else { "off" },
+            self.bars
+        );
+        if let Some(f) = self.steps {
+            line += &format!(" steps={:016x}", f);
+        }
+        line
+    }
+
+    fn parse(rest: &str) -> Result<Self, String> {
+        let mut take =
+            TakeHeader { phrase: 8, ramp_bars: 4.0, blend_bars: 0.0, auto: false, bars: DEFAULT_BARS, steps: None };
+        for field in rest.split_whitespace() {
+            let Some((k, v)) = field.split_once('=') else { continue };
+            let bad = || format!("`# take:` cannot read {}", field);
+            match k {
+                "phrase" => take.phrase = v.parse().ok().filter(|n| *n > 0).ok_or_else(bad)?,
+                "ramp" => take.ramp_bars = v.parse().ok().filter(|n: &f32| *n >= 0.0).ok_or_else(bad)?,
+                "blend" => take.blend_bars = v.parse().ok().filter(|n: &f32| *n >= 0.0).ok_or_else(bad)?,
+                "auto" => take.auto = v == "on",
+                "bars" => take.bars = v.parse().ok().filter(|n| *n > 0).ok_or_else(bad)?,
+                "steps" => take.steps = Some(u64::from_str_radix(v, 16).map_err(|_| bad())?),
+                _ => {}
+            }
+        }
+        Ok(take)
+    }
+
+    /// The walk the take was played with.
+    pub fn walk(&self) -> Walk {
+        Walk {
+            phrase: self.phrase,
+            ramp_bars: self.ramp_bars,
+            blend_bars: self.blend_bars,
+            live: true,
+            auto: self.auto,
+        }
+    }
+}
+
+/// The steps' text, folded to a number (FNV-1a): a take says which set it
+/// was played on, so a render of it can say when the files have changed.
+pub fn fingerprint(steps: &[Step]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for s in steps {
+        for b in s.name().bytes().chain([0]).chain(s.src.bytes()).chain([0]) {
+            h ^= b as u64;
+            h = h.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    h
+}
+
+/// A script read: its lines in the order they act, and the `# take:` line a
+/// recorded take starts with.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Script {
+    pub cues: Vec<Cue>,
+    pub take: Option<TakeHeader>,
 }
 
 /// A performance script: one event a line, `<bar> <what>`, the bar counted
 /// from 0 at the first downbeat of the set and fractional (`18.5` is the
 /// middle of bar 19). `#` starts a comment.
+///
+/// A take (`set play --record`) writes `<bar>@<sample>`: the bar to read and
+/// the sample of the set the act landed on, which is where it lands again. A
+/// script whose every line has one acts in sample order, any other in bar
+/// order. A take's first line, `# take: phrase=8 ramp=4 blend=0 auto=off
+/// bars=32`, says how it was played, and `set render` plays it back so.
 ///
 ///     12.0  cc 74 64        a knob or fader to 64
 ///     18.0  pad 44 110      a pad down, struck at 110
@@ -316,17 +478,31 @@ impl Act {
 ///     41.0  press pad 40 90 aftertouch on a held pad (or `press key 45 90`)
 ///     42.0  voice bass      the knobs' page (also `voice next`, `voice prev`)
 ///     64.0  end             stop here
-pub fn parse_script(text: &str) -> Result<Vec<(f64, Act)>, String> {
+///     70.0  loop down       `l`, a loop of bars (`loop up` closes it)
+///     80.0  keep            Shift+L
+///     81.0  mute bass       a track muted from the screen (`solo bass lead`)
+pub fn parse_script(text: &str) -> Result<Script, String> {
     let mut out = Vec::new();
+    let mut take = None;
     for (n, raw) in text.lines().enumerate() {
+        if let Some(rest) = raw.trim().strip_prefix("# take:") {
+            take = Some(TakeHeader::parse(rest).map_err(|e| format!("script line {}: {}", n + 1, e))?);
+            continue;
+        }
         let line = raw.split('#').next().unwrap_or("").trim();
         if line.is_empty() {
             continue;
         }
         let bad = |why: &str| format!("script line {}: {} (`{}`)", n + 1, why, line);
         let w: Vec<&str> = line.split_whitespace().collect();
+        let (bar, sample) = match w[0].split_once('@') {
+            Some((bar, at)) => {
+                (bar, Some(at.parse::<usize>().map_err(|_| bad("a sample after the @, like 12.5@1058400"))?))
+            }
+            None => (w[0], None),
+        };
         let bar: f64 =
-            w[0].parse().ok().filter(|b: &f64| *b >= 0.0).ok_or_else(|| bad("starts with a bar, like 12.5"))?;
+            bar.parse().ok().filter(|b: &f64| *b >= 0.0).ok_or_else(|| bad("starts with a bar, like 12.5"))?;
         let byte = |i: usize| w.get(i).and_then(|v| v.parse::<u8>().ok()).filter(|v| *v <= 127);
         let act = match w.get(1).copied() {
             Some("cc") => Act::Cc(
@@ -358,44 +534,57 @@ pub fn parse_script(text: &str) -> Result<Vec<(f64, Act)>, String> {
             Some("end") => Act::End,
             Some("perform") => Act::Perform(w.get(2).ok_or_else(|| bad("perform <scene>"))?.to_string()),
             Some("reset") => Act::Reset,
-            Some("press") => Act::Pressure(
-                match w.get(2) {
+            // `press pad 40 90` on a note, `press pad 90` the channel's.
+            Some("press") => {
+                let usage = "press pad|key [<note>] <0-127>";
+                let pad = match w.get(2) {
                     Some(&"pad") => true,
                     Some(&"key") => false,
-                    _ => return Err(bad("press pad|key <note> <0-127>")),
-                },
-                byte(3).ok_or_else(|| bad("press pad|key <note> <0-127>"))?,
-                byte(4).ok_or_else(|| bad("press pad|key <note> <0-127>"))?,
-            ),
+                    _ => return Err(bad(usage)),
+                };
+                if w.len() == 4 {
+                    Act::Pressure(pad, None, byte(3).ok_or_else(|| bad(usage))?)
+                } else {
+                    Act::Pressure(pad, Some(byte(3).ok_or_else(|| bad(usage))?), byte(4).ok_or_else(|| bad(usage))?)
+                }
+            }
+            Some("loop") => match w.get(2).copied() {
+                Some("down") => Act::Loop(true),
+                Some("up") => Act::Loop(false),
+                _ => return Err(bad("loop down|up")),
+            },
+            Some("keep") => Act::Keep,
+            Some("mute") => Act::Mute(w.get(2).ok_or_else(|| bad("mute <track>"))?.to_string()),
+            Some("solo") if w.len() > 2 => Act::Solo(w[2..].iter().map(|t| t.to_string()).collect()),
+            Some("solo") => return Err(bad("solo <track> [<track> ...]")),
             Some("voice") => Act::Voice(match w.get(2).copied() {
                 Some("next") => tatum_core::dsl::ast::VoiceMove::Next,
                 Some("prev") => tatum_core::dsl::ast::VoiceMove::Prev,
                 Some(p) => tatum_core::dsl::ast::VoiceMove::To(p.to_string()),
                 None => return Err(bad("voice next|prev|<page>")),
             }),
-            _ => return Err(bad("expected cc, pad, key, press, bend, voice, reset, next, prev, step, perform or end")),
+            _ => {
+                return Err(bad(
+                    "expected cc, pad, key, press, bend, voice, reset, next, prev, step, perform, loop, keep, mute, solo or end",
+                ))
+            }
         };
-        out.push((bar, act));
+        out.push(Cue { bar, sample, act });
     }
-    // Stable: two events on one bar happen in the order written.
-    out.sort_by(|a, b| a.0.total_cmp(&b.0));
-    Ok(out)
-}
-
-/// Ask for a move, and say where it lands in the script's own count of bars,
-/// from 0. `SetNav::ask` speaks to a performer, counting from 1, which read
-/// a bar late next to a script's timings.
-fn ask(nav: &mut crate::setnav::SetNav, m: crate::setnav::Move, bar: usize) -> String {
-    let said = nav.ask(m, bar);
-    match nav.waiting(bar) {
-        Some((step, wait)) => format!("asked for {}, lands on bar {}", nav.describe(step), bar + wait),
-        None => said,
+    // Stable: two events on one bar happen in the order written. A take's
+    // samples order it, and keep it in order where a loop of bars sends the
+    // bar count back.
+    if out.iter().all(|c| c.sample.is_some()) {
+        out.sort_by_key(|c| c.sample);
+    } else {
+        out.sort_by(|a, b| a.bar.total_cmp(&b.bar));
     }
+    Ok(Script { cues: out, take })
 }
 
 /// Whether a script moves through the set itself: a `next`, `prev` or
 /// `step` line, or a pad that some step maps to one.
-pub fn script_navigates(steps: &[Step], script: &[(f64, Act)]) -> bool {
+pub fn script_navigates(steps: &[Step], script: &[Cue]) -> bool {
     let nav_pads: Vec<u8> = steps
         .iter()
         .filter_map(|s| tatum_core::dsl::parse(&s.src).ok())
@@ -409,7 +598,7 @@ pub fn script_navigates(steps: &[Step], script: &[(f64, Act)]) -> bool {
             _ => None,
         })
         .collect();
-    script.iter().any(|(_, a)| a.navigates() || matches!(a, Act::Pad(n, v) if *v > 0 && nav_pads.contains(n)))
+    script.iter().any(|c| c.act.navigates() || matches!(c.act, Act::Pad(n, v) if v > 0 && nav_pads.contains(&n)))
 }
 
 /// Walk the set the way `set play` walks it, with a performer who asks for
@@ -425,38 +614,16 @@ pub fn script_navigates(steps: &[Step], script: &[(f64, Act)]) -> bool {
 /// held pads carry from step to step as they do in `set play`. A script that
 /// moves through the set itself (`next`, `prev`, `step`) is the only thing
 /// that does; one that does not leaves that to the headers.
-pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Result<Rendered, String> {
+///
+/// `walk.live` plays a take back: the walk `set play` made, through the same
+/// [`Stage`](crate::stage::Stage) the take was recorded on, each act on the
+/// sample it was written with, ending on its `end`.
+pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[Cue]) -> Result<Rendered, String> {
     let (lands, header_end) = landings(&steps, walk.phrase);
-    let scripted = script_navigates(&steps, script);
-    let explicit_end = script.iter().find(|(_, a)| *a == Act::End).map(|(b, _)| *b);
-    let last_event = script.iter().map(|(b, _)| *b).fold(0.0f64, f64::max);
-    let mut planner = LivePlanner::new();
-    planner.set_output_gain(set_gain(&steps)?);
-    // Each step's `auto ... over N` starts on the step's first bar.
-    planner.restart_lanes();
-    let mut player = LivePlayer::new();
-    let first = planner
-        .plan(&steps[0].src, player.generation())
-        .map_err(|e| format!("{}: {}", steps[0].name(), describe(&e)))?;
-    player.apply(first);
-    player.start();
-
-    let mut nav = crate::setnav::SetNav::new(steps, walk.phrase, walk.ramp_bars);
-    nav.blend_bars = walk.blend_bars;
-    // The render walks the steps itself, `auto=` passes included.
-    nav.headers = false;
-    if let Some(scene) = nav.steps[0].perform.clone() {
-        let g = player.generation();
-        let plans: Vec<_> = planner
-            .enter_scene(&scene, g)
-            .into_iter()
-            .flatten()
-            .chain(planner.scene_values(&scene, None, g).into_iter().flatten())
-            .collect();
-        for p in plans {
-            player.apply(p);
-        }
-    }
+    let scripted = walk.live || script_navigates(&steps, script);
+    let explicit_end = script.iter().find(|c| c.act == Act::End);
+    let last_event = script.iter().map(|c| c.bar).fold(0.0f64, f64::max);
+    let mut stage = crate::stage::Stage::new(steps, walk)?;
     let (mut l, mut r) = (Vec::new(), Vec::new());
     let mut applied = Vec::new();
     let mut log = Vec::new();
@@ -465,20 +632,18 @@ pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Resul
     let mut next_event = 0;
     // Where the step playing landed, in bars, for a scripted walk's end.
     let mut landed_at = 0usize;
-    // A scene the script called, and the bar it takes the keyboard on.
-    let mut pending_scene: Option<(String, usize)> = None;
     loop {
-        let e = player.engine().ok_or("the set did not load")?;
-        let (bar, tempo, g) = (e.current_bar(), e.tempo(), player.generation());
+        let e = stage.player.engine().ok_or("the set did not load")?;
+        let bar = e.current_bar();
         let at = e.position_bars();
         // The bar line coming up, and how far into this block it falls.
         let upcoming = e.global_step().div_ceil(e.steps_per_bar().max(1));
         let until = e.samples_until_bar();
         let end = match explicit_end {
-            Some(b) => b.ceil() as usize,
+            Some(c) => c.bar.ceil() as usize,
             None if scripted => {
-                let played_out = landed_at + nav.steps[nav.current].length();
-                if next_event < script.len() || nav.waiting(bar).is_some() {
+                let played_out = landed_at + stage.nav.steps[stage.nav.current].length();
+                if next_event < script.len() || stage.nav.waiting(bar).is_some() {
                     usize::MAX
                 } else {
                     played_out.max(last_event.ceil() as usize)
@@ -486,150 +651,72 @@ pub fn render_set(steps: Vec<Step>, walk: &Walk, script: &[(f64, Act)]) -> Resul
             }
             None => header_end,
         };
-        if explicit_end.is_some_and(|b| at >= b) || (upcoming >= end && until == 0) {
-            break;
+        let mut len = if upcoming >= end { until.min(BLOCK_SIZE) } else { BLOCK_SIZE };
+        match explicit_end.and_then(|c| c.sample) {
+            // A take ends on the sample it was stopped on.
+            Some(s) => {
+                if l.len() >= s {
+                    break;
+                }
+                len = (s - l.len()).min(BLOCK_SIZE);
+            }
+            None => {
+                if explicit_end.is_some_and(|c| at >= c.bar) || (upcoming >= end && until == 0) {
+                    break;
+                }
+            }
         }
-        let len = if upcoming >= end { until.min(BLOCK_SIZE) } else { BLOCK_SIZE };
         if !scripted && applied.len() < lands.len() && upcoming == lands[applied.len()] && until < len.max(1) {
-            applied.push((nav.steps[applied.len()].name(), l.len() + until));
+            applied.push((stage.nav.steps[applied.len()].name(), l.len() + until));
         }
         if scripted && applied.is_empty() {
-            applied.push((nav.steps[0].name(), 0));
+            applied.push((stage.nav.steps[0].name(), 0));
         }
         if !scripted && asked < lands.len() && bar + 1 >= lands[asked] {
-            nav.ask(crate::setnav::Move::Next, bar);
+            stage.nav.ask(crate::setnav::Move::Next, bar);
             asked += 1;
         }
-        while next_event < script.len() && script[next_event].0 <= at {
-            let (when, act) = &script[next_event];
+        while next_event < script.len() {
+            let cue = &script[next_event];
+            let due = match cue.sample {
+                Some(s) => s <= l.len(),
+                None => cue.bar <= at,
+            };
+            if !due {
+                break;
+            }
             next_event += 1;
-            let mut plans = Vec::new();
-            let mut said = String::new();
-            match act.clone() {
-                Act::Cc(cc, v) => {
-                    let turn = planner.knob(cc, v, g);
-                    said = turn.readings.join(", ");
-                    if said.is_empty() {
-                        said = format!("cc {} (not mapped)", cc);
-                    }
-                    plans = turn.plans;
-                }
-                Act::Pad(note, v) => {
-                    // A `loop` pad: the bars it is held over loop.
-                    if planner.pad_navigation(note) == Some(tatum_core::midi::PadAction::Loop) {
-                        let done = if v > 0 { Some(nav.loop_press(bar)) } else { nav.loop_release(bar) };
-                        if let Some((op, s)) = done {
-                            plans.push(tatum_core::live::Plan::Control { base: g, op });
-                            said = s;
-                        }
-                    } else if v > 0 {
-                        if let Some(action) = planner.pad_navigation(note) {
-                            let m = match action {
-                                tatum_core::midi::PadAction::Prev => crate::setnav::Move::Prev,
-                                tatum_core::midi::PadAction::Step(n) => crate::setnav::Move::To(n),
-                                _ => crate::setnav::Move::Next,
-                            };
-                            if said.is_empty() {
-                                said = ask(&mut nav, m, bar);
-                            }
-                        }
-                    }
-                    // A set move is only that, as in `set play`.
-                    if said.is_empty() && plans.is_empty() && planner.pad_navigation(note).is_none() {
-                        match planner.pad(note, v, g) {
-                            Some(p) => plans = p,
-                            None if v > 0 => said = format!("pad {} (not mapped)", note),
-                            None => {}
-                        }
-                    }
-                }
-                Act::Key(note, v) => plans = planner.key(note, v, g).unwrap_or_default(),
-                Act::Bend(v) => plans = planner.bend(v, g),
-                Act::Next => said = ask(&mut nav, crate::setnav::Move::Next, bar),
-                Act::Prev => said = ask(&mut nav, crate::setnav::Move::Prev, bar),
-                Act::Step(n) => said = ask(&mut nav, crate::setnav::Move::To(n), bar),
-                Act::Perform(scene) => {
-                    let q = planner.keyboard().1 as usize;
-                    let origin = bar + 1 - nav.bar_in_step(bar);
-                    let target = origin + ((bar - origin) / q + 1) * q;
-                    match planner.scene_values(&scene, Some(target), g) {
-                        Some(p) => {
-                            plans = p;
-                            said = format!("scene {}, on bar {}", scene, target);
-                            pending_scene = Some((scene, target));
-                        }
-                        None => said = format!("no scene named {}", scene),
-                    }
-                }
-                Act::Pressure(pad, note, v) => plans = planner.pressure(pad, Some(note), v),
-                Act::Reset => {
-                    plans = planner.reset_knobs(g);
-                    said = String::from("reset: every knob back to the text");
-                }
-                Act::Voice(mv) => {
-                    said = planner.voice(&mv, g).unwrap_or_else(|| String::from("no knob pages"));
-                }
-                Act::End => {}
-            }
+            let said = stage.act(&cue.act);
             if !said.is_empty() {
-                log.push((l.len(), format!("bar {:.2}: {}", when, said)));
-            }
-            for p in plans {
-                player.apply(p);
+                log.push((l.len(), format!("bar {:.2}: {}", cue.bar, said)));
             }
         }
-        if let Some((scene, target)) = pending_scene.clone() {
-            if bar >= target {
-                pending_scene = None;
-                for p in planner.enter_scene(&scene, g).unwrap_or_default() {
-                    player.apply(p);
-                }
-                log.push((l.len(), format!("bar {}: scene {}", bar, planner.describe_scene(&scene))));
-            }
-        }
-        let now = l.len() as f32 / SAMPLE_RATE;
-        let before = nav.current;
-        let (plans, said) = nav.tick(bar, tempo, g, now, &mut planner);
-        for p in plans {
-            player.apply(p);
-        }
+        let turn = stage.block(&mut bl[..len], &mut br[..len])?;
         // Every step compiled when the gain was measured; a failure here is
         // a file that changed under the render.
-        if let Some(bad) = said.iter().find(|s| !s.starts_with("now ")) {
+        if let Some(bad) = turn.tick.iter().find(|s| !s.starts_with("now ") && !s.starts_with("auto ")) {
             return Err(bad.clone());
         }
-        if player.process(&mut bl[..len], &mut br[..len]).is_some() {
-            nav.landed(player.generation(), now);
-        }
-        if nav.current != before {
-            landed_at = player.engine().map_or(bar, |e| e.current_bar());
-            if let Some(scene) = nav.steps[nav.current].perform.clone().filter(|s| planner.scene() != Some(s)) {
-                let g = player.generation();
-                let plans: Vec<_> = planner
-                    .enter_scene(&scene, g)
-                    .into_iter()
-                    .flatten()
-                    .chain(planner.scene_values(&scene, None, g).into_iter().flatten())
-                    .collect();
-                for p in plans {
-                    player.apply(p);
-                }
-                pending_scene = None;
-                log.push((l.len(), format!("bar {}: scene {}", landed_at, planner.describe_scene(&scene))));
+        for line in turn.log {
+            let now = line.contains(": now ");
+            if !now || scripted {
+                log.push((l.len(), line));
             }
+        }
+        if let Some(bar) = turn.landed {
+            landed_at = bar;
             if scripted {
-                applied.push((nav.steps[nav.current].name(), l.len()));
-                log.push((l.len(), format!("bar {}: now {}", landed_at, nav.describe(nav.current))));
+                applied.push((stage.nav.steps[stage.nav.current].name(), l.len()));
             }
         }
         l.extend_from_slice(&bl[..len]);
         r.extend_from_slice(&br[..len]);
-        while player.take_retired().is_some() {}
+        while stage.player.take_retired().is_some() {}
     }
-    Ok(Rendered { l, r, applied, steps: nav.steps, log })
+    Ok(Rendered { l, r, applied, steps: stage.nav.steps, log })
 }
 
-fn describe(e: &tatum_core::song_engine::DslError) -> String {
+pub(crate) fn describe(e: &tatum_core::song_engine::DslError) -> String {
     use tatum_core::song_engine::DslError;
     match e {
         DslError::Parse(errs) => {
@@ -756,7 +843,7 @@ pub fn cmd(args: &[String]) {
             eprintln!("    tatum set check  <dir> [--bars N] [--json]");
             eprintln!("    tatum set next   <dir> <candidate.synth> [--json]");
             eprintln!(
-                "    tatum set play   <dir> [--tui] [--auto] [--phrase 8] [--ramp 4] [--blend 0] [--device <name>] [--midi <name>]"
+                "    tatum set play   <dir> [--tui] [--auto] [--phrase 8] [--ramp 4] [--blend 0] [--device <name>] [--midi <name>] [--record <name>]"
             );
             eprintln!();
             eprintln!("A set is a directory of numbered .synth files, each the whole rig at a");
@@ -764,7 +851,9 @@ pub fn cmd(args: &[String]) {
             eprintln!("included, each step for the bars its header gives. `check` validates the");
             eprintln!("whole set. `next` validates one proposed step against the last one, which");
             eprintln!("is the gate an agent writing a set has to pass. `play` plays it live: the");
-            eprintln!("space bar or a pad moves to the next step on the next phrase line.");
+            eprintln!("space bar or a pad moves to the next step on the next phrase line;");
+            eprintln!("`--record take1` writes take1.wav and take1.txt, a script of everything");
+            eprintln!("played that `render --perform take1.txt` renders again sample for sample.");
             std::process::exit(2);
         }
     }
@@ -788,10 +877,15 @@ fn cmd_play(args: &[String]) -> Result<(), String> {
     let (mut dir, mut phrase, mut ramp, mut blend) = (None, None, 4.0f32, 0.0f32);
     let (mut device, mut rate, mut midi, mut tui, mut glass) = (None, None, None, false, false);
     let mut auto = false;
+    let mut record = None;
     let mut i = 0;
     while i < args.len() {
         let value = |i: usize| args.get(i + 1).map(|s| s.as_str());
         match args[i].as_str() {
+            "--record" => {
+                record = Some(value(i).ok_or("--record needs a name for the take, like take1")?);
+                i += 1;
+            }
             "--phrase" => {
                 phrase = Some(
                     value(i)
@@ -846,12 +940,23 @@ fn cmd_play(args: &[String]) -> Result<(), String> {
         }
         i += 1;
     }
-    let dir = dir.ok_or("usage: tatum set play <dir> [--tui] [--auto] [--phrase 8] [--ramp 4]")?;
+    let dir = dir.ok_or("usage: tatum set play <dir> [--tui] [--auto] [--phrase 8] [--ramp 4] [--record <name>]")?;
     let steps = load(Path::new(dir), DEFAULT_BARS)?;
     let first = steps[0].path.to_string_lossy().into_owned();
     // Walking on its own, a set keeps its headers' bars, which need not be a
     // multiple of 8: a step lands on the bar its predecessor ends.
     let phrase = phrase.unwrap_or(if auto { 1 } else { 8 });
+    if let Some(name) = record {
+        let header = TakeHeader {
+            phrase,
+            ramp_bars: ramp,
+            blend_bars: blend,
+            auto,
+            bars: DEFAULT_BARS,
+            steps: Some(fingerprint(&steps)),
+        };
+        return crate::take::run(steps, &header.walk(), &header, Path::new(name), device, rate, midi, tui, glass);
+    }
     let mut nav = crate::setnav::SetNav::new(steps, phrase, ramp);
     nav.blend_bars = blend;
     nav.auto = auto;
@@ -862,28 +967,49 @@ fn cmd_render(args: &[String]) -> Result<(), String> {
     let usage =
         "usage: tatum set render <dir> [-o out.wav] [--bars N] [--phrase 1] [--ramp 4] [--blend 0] [--perform script.txt]";
     let dir = args.first().filter(|a| !a.starts_with('-')).ok_or(usage)?;
-    let bars = flag(args, "--bars").and_then(|v| v.parse().ok()).unwrap_or(DEFAULT_BARS);
     let out = flag(args, "-o").unwrap_or("set.wav").to_string();
+    let script = match flag(args, "--perform") {
+        Some(path) => parse_script(&fs::read_to_string(path).map_err(|e| format!("{}: {}", path, e))?)
+            .map_err(|e| format!("{}: {}", path, e))?,
+        None => Script::default(),
+    };
+    // A take plays back the way it was played; a flag written anyway wins,
+    // and the render is then not the take.
+    let take = script.take.clone();
+    let default = take.as_ref().map_or(Walk::default(), TakeHeader::walk);
     let number = |name: &str, default: f32| -> Result<f32, String> {
         match flag(args, name) {
             None => Ok(default),
             Some(v) => v.parse::<f32>().ok().filter(|n| *n >= 0.0).ok_or(format!("{} needs a number of bars", name)),
         }
     };
+    let bars =
+        flag(args, "--bars").and_then(|v| v.parse().ok()).unwrap_or(take.as_ref().map_or(DEFAULT_BARS, |t| t.bars));
     let walk = Walk {
-        phrase: number("--phrase", 1.0)?.max(1.0) as usize,
-        ramp_bars: number("--ramp", 4.0)?,
-        blend_bars: number("--blend", 0.0)?,
-    };
-    let script = match flag(args, "--perform") {
-        Some(path) => parse_script(&fs::read_to_string(path).map_err(|e| format!("{}: {}", path, e))?)
-            .map_err(|e| format!("{}: {}", path, e))?,
-        None => Vec::new(),
+        phrase: number("--phrase", default.phrase as f32)?.max(1.0) as usize,
+        ramp_bars: number("--ramp", default.ramp_bars)?,
+        blend_bars: number("--blend", default.blend_bars)?,
+        ..default
     };
     let steps = load(Path::new(dir), bars)?;
+    if let Some(take) = &take {
+        let changed: Vec<&str> =
+            ["--phrase", "--ramp", "--blend", "--bars"].into_iter().filter(|f| flag(args, f).is_some()).collect();
+        if !changed.is_empty() {
+            eprintln!("note: {} changes how the take was played: the render will not be the take", changed.join(", "));
+        }
+        if take.steps.is_some_and(|f| f != fingerprint(&steps)) {
+            eprintln!("note: the steps have changed since the take was played: the render will not be the take");
+        }
+    }
+    let script = script.cues;
 
     let (lands, end) = landings(&steps, walk.phrase);
-    if script_navigates(&steps, &script) {
+    // Walked by the headers alone: each step where `landings` puts it.
+    let by_headers = !walk.live && !script_navigates(&steps, &script);
+    if take.is_some() {
+        eprintln!("{}: {} steps, a take", dir, steps.len());
+    } else if !by_headers {
         eprintln!("{}: {} steps, moved through by the script", dir, steps.len());
     } else {
         eprintln!("{}: {} steps, {} bars", dir, steps.len(), end);
@@ -899,7 +1025,7 @@ fn cmd_render(args: &[String]) -> Result<(), String> {
     for (k, (name, at)) in rendered.applied.iter().enumerate() {
         let Some(i) = rendered.steps.iter().position(|s| s.name() == *name) else { continue };
         let step = &rendered.steps[i];
-        let moved = (rendered.applied.len() == rendered.steps.len() && k == i)
+        let moved = (by_headers && rendered.applied.len() == rendered.steps.len() && k == i)
             .then(|| lands.get(i + 1).map(|n| n - lands[i]))
             .flatten()
             .filter(|b| *b != step.length());
@@ -1155,8 +1281,8 @@ mod tests {
     fn a_header_names_its_scene_and_a_script_calls_one() {
         assert_eq!(parse_perform("# set: bars=16 perform=drop phase=x\n"), Some(String::from("drop")));
         assert_eq!(parse_perform("# set: bars=16\n"), None);
-        let script = parse_script("4.0 perform break\n").unwrap();
-        assert_eq!(script[0], (4.0, Act::Perform(String::from("break"))));
+        let script = parse_script("4.0 perform break\n").unwrap().cues;
+        assert_eq!(script[0], Cue::at(4.0, Act::Perform(String::from("break"))));
         assert!(parse_script("4.0 perform\n").is_err());
     }
 
@@ -1342,13 +1468,15 @@ master { in > out }
             "# a comment\n12.0 cc 74 64\n18 pad 44 110   # down\n19.0 pad 44 0\n\n20.5 key 48 100\n21 bend 12000\n35 next\n36 step 3\n37 prev\n64 end\n",
         )
         .expect("parses");
+        assert_eq!(script.take, None);
+        let script = script.cues;
         assert_eq!(script.len(), 9);
-        assert_eq!(script[0], (12.0, Act::Cc(74, 64)));
-        assert_eq!(script[1], (18.0, Act::Pad(44, 110)));
-        assert_eq!(script[3], (20.5, Act::Key(48, 100)));
-        assert_eq!(script[5], (35.0, Act::Next));
-        assert_eq!(script[6], (36.0, Act::Step(3)));
-        assert_eq!(script[8], (64.0, Act::End));
+        assert_eq!(script[0], Cue::at(12.0, Act::Cc(74, 64)));
+        assert_eq!(script[1], Cue::at(18.0, Act::Pad(44, 110)));
+        assert_eq!(script[3], Cue::at(20.5, Act::Key(48, 100)));
+        assert_eq!(script[5], Cue::at(35.0, Act::Next));
+        assert_eq!(script[6], Cue::at(36.0, Act::Step(3)));
+        assert_eq!(script[8], Cue::at(64.0, Act::End));
         for bad in ["x cc 1 2", "1 cc 200 1", "1 pad 3", "1 jump", "1 step 0"] {
             assert!(parse_script(bad).is_err(), "{bad}");
         }
@@ -1365,7 +1493,8 @@ master { in > out }
             format!("# set: bars=2\n{rig}"),
             format!("# set: bars=2\n{}", rig.replace("C2:0.9 - - -  C2", "C2:0.9 - C2 -  C2")),
         ];
-        let script = parse_script("1.0 pad 41 100\n2.0 pad 41 0\n2.5 cc 30 20\n3.0 next\n3.0 pad 41 100\n").unwrap();
+        let script =
+            parse_script("1.0 pad 41 100\n2.0 pad 41 0\n2.5 cc 30 20\n3.0 next\n3.0 pad 41 100\n").unwrap().cues;
         let (dir, loaded) = set_of(&steps);
         let played = render_set(loaded, &Walk::default(), &script).expect("renders");
         let _ = fs::remove_dir_all(&dir);

@@ -11,11 +11,12 @@ fn push_u16(out: &mut Vec<u8>, v: u16) {
     out.extend_from_slice(&v.to_le_bytes());
 }
 
-/// Encode interleaved stereo 16-bit PCM. Samples are clamped to -1.0..1.0.
-pub fn encode_stereo_16(left: &[f32], right: &[f32], sample_rate: u32) -> Vec<u8> {
-    let frames = left.len().min(right.len());
+/// The 44-byte header of a stereo 16-bit PCM file of `frames` frames. A file
+/// written as it plays (`set play --record`) writes it first with the length
+/// unknown and again over the top once the length is known.
+pub fn header_stereo_16(frames: usize, sample_rate: u32) -> [u8; 44] {
     let data_len = (frames * 2 * 2) as u32;
-    let mut out = Vec::with_capacity(44 + data_len as usize);
+    let mut out = Vec::with_capacity(44);
     out.extend_from_slice(b"RIFF");
     push_u32(&mut out, 36 + data_len);
     out.extend_from_slice(b"WAVE");
@@ -29,10 +30,24 @@ pub fn encode_stereo_16(left: &[f32], right: &[f32], sample_rate: u32) -> Vec<u8
     push_u16(&mut out, 16); // bits per sample
     out.extend_from_slice(b"data");
     push_u32(&mut out, data_len);
+    let mut header = [0u8; 44];
+    header.copy_from_slice(&out);
+    header
+}
+
+/// One sample as the file stores it: clamped to -1.0..1.0, then 16 bits.
+pub fn sample_16(s: f32) -> i16 {
+    (s.clamp(-1.0, 1.0) * 32767.0) as i16
+}
+
+/// Encode interleaved stereo 16-bit PCM. Samples are clamped to -1.0..1.0.
+pub fn encode_stereo_16(left: &[f32], right: &[f32], sample_rate: u32) -> Vec<u8> {
+    let frames = left.len().min(right.len());
+    let mut out = Vec::with_capacity(44 + frames * 4);
+    out.extend_from_slice(&header_stereo_16(frames, sample_rate));
     for i in 0..frames {
         for s in [left[i], right[i]] {
-            let v = (s.clamp(-1.0, 1.0) * 32767.0) as i16;
-            out.extend_from_slice(&v.to_le_bytes());
+            out.extend_from_slice(&sample_16(s).to_le_bytes());
         }
     }
     out

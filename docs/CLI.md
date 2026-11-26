@@ -231,7 +231,7 @@ walked in filename order. A step's header says how long it holds and what it is:
 tatum set check  <dir> [--bars N] [--json]
 tatum set render <dir> [-o set.wav] [--bars N] [--phrase 1] [--ramp 4] [--blend 0] [--perform script.txt]
 tatum set next   <dir> <candidate.synth> [--json] [--max-voices N]
-tatum set play   <dir> [--tui] [--auto] [--phrase 8] [--ramp 4] [--blend 0] [--device <name>] [--midi <name>] [--buffer <frames>]
+tatum set play   <dir> [--tui] [--auto] [--phrase 8] [--ramp 4] [--blend 0] [--device <name>] [--midi <name>] [--buffer <frames>] [--record <name>]
 tatum set controls <dir> [--step N] [--bars 2]
 ```
 
@@ -250,7 +250,9 @@ tatum set controls <dir> [--step N] [--bars 2]
   lands on the next phrase line (`--phrase`, 8 bars by default). `--auto` lets the set
   walk itself by its headers, `--ramp` is how many bars a tempo change takes, `--blend`
   mixes two steps the way a DJ does. `--tui` runs full screen, with the steps and their
-  cues ([TUI.md](TUI.md)).
+  cues ([TUI.md](TUI.md)). `--record take1` records the take: `take1.wav`, and
+  `take1.txt`, a script of everything played that `render --perform` renders again
+  sample for sample (see "Recording a take" below).
 
 ### Playing a set live
 
@@ -352,8 +354,13 @@ set's first downbeat and fractional:
 21.0   bend 12000      # the pitch strip, 0..16383, 8192 at rest
 35.0   next            # ask for the next step; also `prev`, `step 3`
 40.0   perform drop    # a scene, as its computer key would call it
-41.0   press pad 40 90 # aftertouch on a held pad (or `press key 45 90`)
+41.0   press pad 40 90 # aftertouch on a held pad (or `press key 45 90`; `press key 90`
+                       # with no note is the whole channel's)
 42.0   voice bass      # the knobs' page (also `voice next`, `voice prev`)
+43.0   reset           # every knob back to the text, as the reset key does
+50.0   loop down       # `l` down: a loop of bars; `loop up` is `l` let go
+60.0   keep            # Shift+L: keep a step that would move on by itself
+61.0   mute lead       # a track muted from the screen; `solo bass lead` solos
 96.0   end             # stop here
 ```
 
@@ -368,6 +375,54 @@ header's bars and every event has happened. The render prints what the script di
 under the step markers, in the script's bars, from 0: `bar 12.00: acid cutoff 1.2khz`,
 `bar 35.00: asked for 4/12 04.synth, lands on bar 36`, `bar 36: now 4/12 04.synth`.
 (`set play`'s status line counts bars from 1, as a performer does.)
+
+### Recording a take
+
+`tatum set play <dir> --record take1` plays the set as `set play` does and writes two
+files as it goes: `take1.wav`, what came out, and `take1.txt`, every knob, fader, pad,
+key, the strip and aftertouch, every step asked for, scene called, loop, page, reset,
+mute and solo, each on the bar and the sample it landed on. Neither file may exist
+already: a take is not written over another. `q` ends the take.
+
+```
+# a take of sets/mine, from `tatum set play --record`
+# set render <dir> --perform <this file> plays it back, sample for sample
+# take: phrase=8 ramp=4 blend=0 auto=off bars=32 steps=8c3f0e5a1d2b4c67
+0.000000@0  cc 30 5                 # bass level 0.04
+1.249524@110208  pad 41 110
+1.500590@132352  next               # next: 2/9 02.synth, on bar 9
+2.007075@177024  perform drop       # scene drop, on bar 4
+6.218594@548480  cc 74 98           # acid cutoff 2.1khz
+6.999365@617344  end
+```
+
+(At 120 BPM a bar is 88200 samples; an act lands on the first sample of the
+128-sample block it was handed in on, which is why the samples are multiples of 128.)
+
+`tatum set render <dir> --perform take1.txt -o again.wav` renders it again, and
+`again.wav` is `take1.wav` byte for byte. A take's line gives its time as
+`<bar>@<sample>`: the bar to read, from 0 as in any script, and the sample of the set
+the act landed on, which is where the render lands it again (a script's bar alone is
+only good to a block). A script whose every line has a sample acts in sample order,
+any other in bar order, as before; a hand-written script can mix both. What follows
+a `#` is what the act did, for the reader. The `# take:` line is how the set was
+played (`--phrase`, `--ramp`, `--blend`, `--auto`, the bars a step without `bars=`
+holds) and `set render` plays it back that way, the set walked as `set play` walks it:
+a step whose header says `auto` or `max=` moves on by itself and nothing but the take
+asks for one. A flag given to `render` wins over the line, and the render says it is
+then not the take; so it does when the steps' files have changed since (`steps=` is
+their fingerprint). A take plays the files as they were when it started: they are
+not watched while it records, and the screen's edit keys say no.
+
+To come back sample for sample the take is played the way `set render` plays: the
+main thread renders the set a block at a time, a little ahead of the device, and
+what the controller sent acts between two blocks. The audio callback only copies
+those blocks out of a lock-free ring, and a thread of its own writes the WAV and the
+script, so nothing in the callback allocates, waits or touches a file. Two things
+follow. What the hands do is heard about 23 ms later than without `--record` (1024
+frames, or two of the device's callbacks when they are bigger). And a dropout heard
+live -- the machine late with a block -- is not in the take: the take is the set as
+it was rendered, and the summary says how much silence the device played instead.
 
 ## tui-shot
 
