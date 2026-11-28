@@ -1573,8 +1573,13 @@ pub(crate) fn delay(c: &Ctx, events: &[Event], band: (f32, f32)) -> Option<Delay
             let Some((own, own_at, own_curve)) = echo(c, e, 0.0, peak_n, look, cutoff) else { continue };
             let floor = own * 10f32.powf(-e.inside.over_bed_db / 20.0);
             let Some((one, at, one_curve)) = echo(c, e, lag, peak_n + lag as usize, look, cutoff) else { continue };
-            // A quieter copy: at least 1 dB down, shaped like the event.
+            // A quieter copy: at least 1 dB down, shaped like the event, and
+            // a rise of its own -- the level dips 3 dB under it on the way
+            // there. A decay is shaped like itself later on, and is no echo.
             if one < 2.0 * floor || one > 0.89 * own || shape_match(&own_curve, &one_curve) < 0.8 {
+                continue;
+            }
+            if !dips_before(c, e, lag, own_at, at, one, cutoff) {
                 continue;
             }
             let second = echo(c, e, 2.0 * lag, peak_n + 2 * lag as usize, look, cutoff);
@@ -1645,6 +1650,21 @@ fn shape_match(a: &[f32], b: &[f32]) -> f32 {
         return 0.0;
     }
     sab / (saa * sbb).sqrt()
+}
+
+/// Whether the level along `e`'s partial, moved `shift` samples later,
+/// falls under `one` / 1.41 somewhere between the event's peak at `a` and
+/// the repeat's at `b`.
+pub(crate) fn dips_before(c: &Ctx, e: &Event, shift: f64, a: usize, b: usize, one: f32, cutoff: f32) -> bool {
+    let pad = (2.0 * SR / cutoff) as usize;
+    let (from, to) = (a.saturating_sub(pad), (b + pad).min(c.mono.len()));
+    if b <= a + 2 || to <= from + 2 {
+        return false;
+    }
+    let tr = track(c, &e.ridge, c.stft.hop, shift, from, to, cutoff);
+    let edge = (SR / cutoff) as usize;
+    let (i, j) = ((a - from + edge).min(tr.l.len() - 1), (b - from).saturating_sub(edge).min(tr.l.len() - 1));
+    i < j && (i..j).any(|k| tr.level(k) < one / 1.41)
 }
 
 /// The level along `e`'s partial moved `shift` samples later, at its

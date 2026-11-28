@@ -235,63 +235,68 @@ a modulation that moves in stairs, a tone left in the quiet -- each in dB under 
 signal, with where.
 
 The tom of `sounds/node_kit.synth` rendered alone (`tatum render sounds/node_kit.synth
---solo tom -o tom.wav`):
+--solo tom -o tom.wav`). Its patch says what to expect: a sine that drops from 157 Hz onto
+98 Hz within 45 ms, 20 dB down at 131 ms and 40 at 238 (0.19 dB/ms between). The tool reads
+the decay at 0.18 dB/ms, the end at 98.8 Hz, and of the start only that it is above 127 Hz
+(one event 153): the drop is faster than it reads a start from. What it cannot read here it
+says, and why:
 
 ```
 tom.wav: 7.7 s, 4 events in 38-532 Hz (where the onsets are), 0.52 a second
-                                 median   25%..75%                n
-  over its floor                77.4 dB   77.4..77.5              4
-  length                         347 ms   321..347                4
-  attack 10-90%                 5.18 ms   5.17..5.18              4
-  burst over the resonance     -4.91 dB   -5.05..-4.73            4
-  fall to -20 dB                88.0 ms   86.9..88.7              4
-  fall to -40 dB                 323 ms   323..323                3
-  decay                      0.08 dB/ms   0.07..0.08              4
-  decay straightness               0.63   0.55..0.63              4
-  start pitch                    120 Hz   120..121                4
-  end pitch                     98.8 Hz   98.7..98.9              4
-  bend                         -3.39 st   -3.43..-3.38            4
-  bend, either way              3.39 st   3.38..3.43              4
-  -3 dB width                   3.37 Hz   3.29..3.48              4
-  Q (f / width)                    34.9   33.5..36.4              4
-  Q (from the decay)               40.6   40.3..47.2              4
-  partial over the rest         5.17 dB   4.87..5.21              4
-  2nd harmonic                 -24.1 dB   -24.1..-23.7            4
-  3rd harmonic                 -35.2 dB   -35.2..-35.0            4
-  over the bed in its band      64.2 dB   62.2..65.7              4
-  against the whole mix         11.7 dB   11.4..11.7              4
-  left over right               2.78 dB   2.78..2.78              4
-  off centre, either side       2.78 dB   2.78..2.78              4
-  left/right correlation           1.00   1.00..1.00              4
-  tail, 50-400 ms after        -7.11 dB   -7.20..-6.87            3
-  centroid at the peak           124 Hz   124..125                4
-  centroid by -12 dB           -3.50 st   -3.60..-3.30            4
-  pitch shape                slow then fast 100%; 100% fall and 0% rise by more than a semitone
-  repeats                    none found
-  tail read on               the 4 events nothing near their pitch follows within 400 ms
+                                   median   25%..75%                n
+  over its floor                  77.4 dB   77.4..77.5              4
+  length                     not measurable here: its level falls and rises again after its peak (a second strike, or partials beating)
+  attack 10-90%                 < 5.18 ms   under its floor         4
+  burst over the resonance   not measurable here: its level falls and rises again after its peak (a second strike, or partials beating)
+  fall to -20 dB             not measurable here: its level falls and rises again after its peak (a second strike, or partials beating)
+  fall to -40 dB             not measurable here: it does not fall that far before it ends
+  decay                        0.18 dB/ms   0.18..0.18              3
+  decay straightness                 0.63   0.63..0.63              3
+  start pitch                    > 127 Hz   past what is read       3
+  end pitch                       98.8 Hz   98.7..98.9              4
+  bend                         < -4.32 st   under its floor         3
+  bend, either way              > 4.32 st   past what is read       3
+  -3 dB width                not measurable here: its level falls and rises again after its peak (a second strike, or partials beating)
+  Q (f / width)              not measurable here: its level falls and rises again after its peak (a second strike, or partials beating)
+  Q (from the decay)                 18.4   18.2..18.4              3
+  partial over the rest      not measurable here: its pitch moves more within one spectrum frame than its partial is wide
+  2nd harmonic               not measurable here: its pitch moves more within one spectrum frame than its partial is wide
+  3rd harmonic               not measurable here: its pitch moves more within one spectrum frame than its partial is wide
+  over the bed in its band        64.2 dB   62.2..65.7              4
+  against the whole mix      not measurable here: alone: nothing sounds under it (a solo render), so the mix around it is itself
+  left over right                 2.78 dB   2.78..2.78              4
+  off centre, either side         2.78 dB   2.78..2.78              4
+  side over mid in its band      -16.0 dB   -16.0..-16.0            4
+  L/R correlation in its band         1.00   1.00..1.00              4
+  tail beyond its decay      not measurable here: its level falls and rises again after its peak (a second strike, or partials beating)
+  centroid at the peak       not measurable here: its pitch moves more within one spectrum frame than its partial is wide
+  centroid by -12 dB         not measurable here: its pitch moves more within one spectrum frame than its partial is wide
+  pitch shape                straight 100%; 100% fall and 0% rise by more than a semitone (of the 1 whose pitch is read)
+  repeats                    none found (looked for up to 1.6 s after each event)
+  overlap                    4 of 4 events overlap another: purity, harmonics, centroid, tail and width are not read on those
 first 4 events
     #     at s      Hz bend st  len ms  att ms  burst   dB/ms      Q  tonal    bed    mix    L-R   tail
-    1    1.692     120    -3.4     347    5.18  -5.03    0.08     37    5.2   65.7   11.7   +2.8  -7.29
-    2    3.628     120    -3.4     347    5.13  -4.58    0.08     34    4.0   60.4   11.7   +2.8  -6.63
-    3    5.563     120    -3.4     347    5.19  -4.78    0.08     36    5.3   62.7   11.7   +2.8  -7.11
-    4    7.499     122    -3.5     243    5.18  -5.09    0.05     34    5.2   65.8   10.4   +2.8      -
+    1    1.692    >127  <-4.34       -   <5.18      -    0.18      -      -   65.7      -   +2.8      -
+    2    3.628    >127  <-4.32       -   <5.13      -    0.18      -      -   60.4      -   +2.8      -
+    3    5.563     153   -7.57       -   <5.19      -    0.18      -      -   62.7      -   +2.8      -
+    4    7.499    >127  <-4.26       -   <5.18      -       -      -      -   65.8      -   +2.8      -
 clean
-  nothing found: DC -44 dB under the signal, no steps, no zipper, nothing in the quiet, nothing folded back
+  nothing found: DC 120 dB under the signal, no steps, no zipper, nothing in the quiet
+  aliasing not examined: no note steady and alone long enough
 ```
 
 `--against` measures a second file the same way. A is the reference: a row is starred
-when B's median is outside the middle half of A's own events and off by enough to
-matter, and the starred rows come back as sentences, the furthest off first, each with
-what to try. The same kit's snare held against that tom ends:
+when B's median is outside the middle half of A's own events and off by enough to matter
+(with fewer than 4 events on either side: off by more than the measure's own error on one
+event), and the starred rows come back as sentences, the furthest off first. A bound or a
+figure not measurable on either side is never starred. The same kit's snare held against
+that tom ends:
 
 ```
 what differs most, B against A:
-  - brightness: the events' centroid is 4212 Hz against 124 Hz: B is brighter: a lower cutoff after the source, or less in the exciter
-  - little tail after B's events (0% of an event's energy, -60.0 dB): A keeps 19% in the 400 ms after (-7.11 dB): more of the part in the reverb or delay
-  - decay 0.53 dB/ms against 0.08: B rings shorter: more `resonance`, or a longer decay
-  - resonance Q 11 against 41 (from the decay): raise the `resonance`
-  - the partial stands -4.23 dB over the rest of the event against 5.17 dB: B carries more beside its partial: less noise or drive in the exciter, fewer harmonics in the source
-  - the first 5 ms carry 5.07 dB above the resonance against -4.91 dB: there is a click or noise at the start that A does not have; soften the exciter (low-pass it, less noise in it, a few ms of attack)
+  - 1.03 events a second against 0.52
+  - B's events sit 0.00 dB off centre, A's 2.78 dB: pan the events apart, or a ping-pong delay on them
+  - B repeats its events every 50.0 ms; A has no repeats found
 ```
 
 `--png` writes a sheet to open and look at: `--show` events of each file (six unless

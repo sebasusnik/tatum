@@ -589,8 +589,51 @@ fn a_delay_gives_back_its_time_and_its_loss() {
     let d = r.delay.as_ref().expect("a delay");
     assert!((d.interval_ms - 233.0).abs() < 1.5, "interval {}", d.interval_ms);
     assert!((d.first_db + 3.0).abs() < 1.0, "first {}", d.first_db);
-    // And pings with no echo have none.
+    // And pings with no echo have none, however long they ring: a decay is
+    // shaped like itself later on, and is no repeat.
     assert!(run(pings(18.0, 0.002, 0.0)).delay.is_none());
+    for tau in [40.0, 120.0] {
+        let r = run(pings(tau, 0.002, 0.0));
+        assert!(r.delay.is_none(), "tau {tau}: {:?}", r.delay.as_ref().map(|d| (d.interval_ms, d.first_db)));
+    }
+    // What tells a repeat from the event's own decay: a dip before it. A
+    // ping 50 ms on is 17 dB down and shaped like itself, and no repeat; the
+    // same ping with an echo at 170 ms dips before the echo.
+    for (echo, expect) in [(false, false), (true, true)] {
+        let mut x = vec![0.0f32; at(2.0)];
+        ping(&mut x, 0.5, 1000.0, 25.0, 0.4, 0.5, 0.0);
+        if echo {
+            ping(&mut x, 0.67, 1000.0, 25.0, 0.2, 0.5, 0.0);
+        }
+        let r = run(x.clone());
+        let e = &r.events[0];
+        let found = inside::Ctx {
+            left: &x,
+            right: &x,
+            sign: 1.0,
+            mono: &x,
+            stft: &Stft::new(&x, 2048, 256),
+            floor: &Floor::new(&Stft::new(&x, 2048, 256)),
+        };
+        let lag = if echo { 0.17 } else { 0.05 } * SR;
+        let (a, b) = (at(0.5), at(0.5) + lag as usize);
+        let level = |t: f32| 0.4 * (-t / 0.025).exp();
+        let one = if echo { 0.2 } else { level(0.05) };
+        let dips = inside::dips_before(&found, e, lag as f64, a, b, one, inside::cutoff_for(1000.0));
+        assert_eq!(dips, expect, "echo {echo}");
+    }
+    // A dry snare: a 200 Hz body and a burst of wires, every 0.968 s.
+    let mut x = vec![0.0f32; at(8.0)];
+    let mut n = Noise(13);
+    for k in 0..8 {
+        let t0 = 0.48 + 0.968 * k as f32;
+        ping(&mut x, t0, 200.0, 25.0, 0.4, 0.0, 0.0);
+        for i in 0..at(0.3) {
+            x[at(t0) + i] += 0.5 * (-(i as f32) / SR / 0.02).exp() * n.next();
+        }
+    }
+    let r = run(x);
+    assert!(r.delay.is_none(), "a dry snare: {:?}", r.delay.as_ref().map(|d| (d.interval_ms, d.first_db)));
 }
 
 #[test]
