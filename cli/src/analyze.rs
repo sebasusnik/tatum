@@ -56,7 +56,7 @@ pub fn cmd_compare(args: &[String]) {
             eprintln!("error: the render is under two seconds; give --bars more of the song");
             process::exit(1);
         }
-        reference::measure(&l, &r)
+        reference::measure(&l, &r).rendered_from(&source.text)
     };
     print!("{}", reference::compare(&reference, &mine, reference_path, yours));
 }

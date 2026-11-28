@@ -38,7 +38,9 @@ not something the engine quietly plays as the nearest thing.
 Memory Man: the delay time moves, so every repeat comes back slightly out of
 tune, and each pass through the feedback bends it again. Both are 0..1, or a
 percentage (`wow=30%`), and 0 by default, where the delay plays exactly as it
-did without them.
+did without them. (A node argument that is a share of something takes a
+percentage the same way: these two on the chain `delay(...)`, and the kick's
+`vary` and `vary_pitch`.)
 
 - `wow` is a slow drift, about 0.5 Hz and wandering in rate: at 1 the delay time
   swings ±3.5 ms and the repeats sag and rise by up to about ±25 cents. 0.2 is a
@@ -50,6 +52,10 @@ did without them.
 Left and right drift at slightly different rates, so a ping-pong spreads as it
 bends. The drift is seeded: a song renders the same every time. The chain
 `delay(...)` takes the same two as named arguments: `delay(1/8, 0.5, wow=30%)`.
+
+The swing needs a delay time longer than itself. A free time under about 4 ms
+with a full wow has no room: the time rests at its shortest for part of each
+cycle and the bend flattens there (no click). Lower the wow or lengthen the time.
 
 `humanize` spreads velocity; `timing` nudges the step clock, which is one clock
 for the whole song, so the band rushes and drags together rather than each part
@@ -1050,16 +1056,31 @@ the body (three times the note when left out); `click=-35db` adds a beater on to
 saturates the hit more than the tail, at the same peak.
 
 A sweep that is still falling while the kick is loud is heard over the note it lands on:
-`kick(A1, body=90ms)` is heard about two semitones up, as a B. `heard=1` makes the note
-written the note heard, and the kick settles under it as far as its sweep lifts it:
-`kick(A1, body=90ms, heard=1)` lands near F#1 and is heard as A1. The note heard is a
-model, not a law of the ear: the pitch on a log scale, each moment weighted by its
-energy and by how steady its pitch is (a fall faster than 0.1 semitones a millisecond
-counts for less), from 5 ms until it is 30 dB down. `tatum analyze` reports a record's
-kick the same way, as `heard`.
+`kick(A1, body=90ms)` settles on 55 Hz and is heard five semitones up, on 74 Hz, a D2.
+`heard=1` makes the note written the note heard, and the kick settles under it as far as
+its sweep lifts it: `kick(A1, body=90ms, heard=1)` settles on 40.8 Hz, just under E1, and
+is heard as A1. That is a fourth of difference in the tail, on a kick of the default
+shape: a 41 Hz tail and a 55 Hz one are not the same kick on a system, so `heard=1` is
+for a kick whose sweep is part of its note, and a shorter `body=` keeps the two close
+(`body=20ms` is heard within a semitone of where it lands). A kick whose sweep lifts it
+further than there is room under the note, down to 20 Hz, is an error that says so:
+`kick(A0, body=120ms, heard=1)` would still be heard two semitones over A0.
 
-Every hit of a `kick` is the same samples. `vary=0.03` sways its hold and release by up
-to 3% from hit to hit, and `vary_pitch=0.01` its whole sweep by up to 1% in pitch, slowly
+The note heard is a model, not a law of the ear: the pitch on a log scale, each moment
+weighted by its energy and by how steady its pitch is (a fall faster than 0.1 semitones a
+millisecond counts for less), from 5 ms until it is 30 dB down. The energy is the body's
+after `drive=`, which flattens the top and so brings the note heard down towards the
+tail: `kick(A1, body=90ms, drive=1)` is heard on 64.7 Hz. It is computed from the kick's
+arguments alone, so it knows nothing of the click, of the harmonics drive adds, or of
+what comes after the node: a filter, an EQ, a compressor, the rest of the mix.
+`tatum analyze` reports a record's kick the same way, as `heard`, read off the sound.
+Read off one rendered hit of each of the kicks above it is 74.0, 54.6 and 65.0 Hz, and
+over fifteen shapes, clean and driven, the two were never more than 0.15 semitones
+apart. `analyze` averages a record's hits first, and where that average reads the tail
+wrong it reads the note heard wrong with it, so look at `tail` before trusting `heard`.
+
+Every hit of a `kick` is the same samples. `vary=0.03` (or `vary=3%`) sways its hold and release by up
+to 3% from hit to hit, and `vary_pitch=0.01` (or `1%`) its whole sweep by up to 1% in pitch, slowly
 (the sway drifts over a few bars and does not repeat soon) and the same on every play:
 the breath of a hypnotic pulse, which a loop of one sample does not have. Both are 0 by
 default. Write it with its parentheses,

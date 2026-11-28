@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
-use tatum_core::dsl::ast::{InstrumentDef, ModuleDef, OpEnvelopeDef, Param};
+use tatum_core::dsl::ast::{InstrumentDef, ModuleDef, OpEnvelopeDef, Param, Song};
 use tatum_core::nodes;
 use tatum_core::params::{self, ModuleKind, ParamSpec, Range};
 
@@ -83,7 +83,11 @@ pub const ENV_TIME: (f32, f32) = (0.0005, 8.0);
 pub const ENV_DEFAULT: [f32; 4] = [0.01, 0.1, 0.7, 0.3];
 
 impl Sound {
-    /// The sound in `text`: its comment and its one instrument or module.
+    /// The sound in `text`: its comment and its one instrument or module,
+    /// and nothing else. `text()` writes those two back and no more, so a
+    /// file with anything besides -- a song's tempo, patterns and tracks, a
+    /// comment inside the definition or after it -- is refused here rather
+    /// than opened and then saved without them.
     pub fn parse(text: &str) -> Result<Sound, String> {
         let description = text
             .lines()
@@ -95,6 +99,18 @@ impl Sound {
         let song = tatum_core::dsl::parse(text).map_err(|errs| {
             errs.iter().map(|e| format!("line {}: {}", e.line, e.message)).collect::<Vec<_>>().join("\n")
         })?;
+        if let ([_], []) | ([], [_]) = (song.instruments.as_slice(), song.module_defs.as_slice()) {
+            if let Some(more) = besides(&song) {
+                return Err(format!(
+                    "there is more in it than a sound ({more}): the designer opens a file that is one `instrument` or one `module` and nothing else, and Save would not keep the rest"
+                ));
+            }
+            if let Some(line) = comment_inside(text) {
+                return Err(format!(
+                    "line {line}: a comment after the ones on top; the designer keeps the comment above the sound and no other, and Save would drop this one. Move it to the top"
+                ));
+            }
+        }
         match (song.instruments.as_slice(), song.module_defs.as_slice()) {
             ([inst], []) => Ok(Sound { description, name: inst.name.clone(), body: Body::Graph(parse_graph(inst)?) }),
             ([], [m]) => Ok(Sound { description, name: m.name.clone(), body: Body::Module(parse_module(m, text)?) }),
@@ -188,19 +204,68 @@ impl Sound {
     }
 }
 
+/// What a file with one sound in it has besides the sound, when it has
+/// anything: the first few things, by name.
+fn besides(song: &Song) -> Option<String> {
+    let mut rest = song.clone();
+    rest.instruments.clear();
+    rest.module_defs.clear();
+    // What a file with nothing in it reads as: the settings nobody wrote.
+    let empty = tatum_core::dsl::parse("").ok()?;
+    if rest == empty {
+        return None;
+    }
+    let mut found: Vec<&str> = Vec::new();
+    for (there, what) in [
+        (rest.globals != empty.globals, "settings such as `tempo`"),
+        (!rest.patterns.is_empty(), "patterns"),
+        (!rest.tracks.is_empty(), "tracks"),
+        (!rest.scenes.is_empty() || !rest.arrangement.is_empty(), "scenes"),
+        (!rest.buses.is_empty() || !rest.bus_chains.is_empty() || rest.master.is_some(), "buses or a master"),
+    ] {
+        if there {
+            found.push(what);
+        }
+    }
+    Some(if found.is_empty() { "other blocks of a song".into() } else { found.join(", ") })
+}
+
+/// The line of the first comment after the ones on top of the file, when
+/// there is one. A `#` right after a letter is a sharp (`F#1`), as the
+/// reader takes it; any other starts a comment.
+fn comment_inside(text: &str) -> Option<usize> {
+    let top = text.lines().take_while(|l| l.trim_start().starts_with('#') || l.trim().is_empty()).count();
+    text.lines().enumerate().skip(top).find_map(|(i, l)| {
+        let b = l.as_bytes();
+        (0..b.len()).any(|k| b[k] == b'#' && (k == 0 || !b[k - 1].is_ascii_alphabetic())).then_some(i + 1)
+    })
+}
+
 fn parse_graph(inst: &InstrumentDef) -> Result<Graph, String> {
-    // Nodes with no name get one the page can show and the text can keep.
+    // Nodes with no name get one the page can show and the text can keep:
+    // their kind and their place, or the next number no node has, so it is
+    // never a name the file gave another node.
+    let written: Vec<&str> = inst.nodes.iter().filter_map(|n| n.alias.as_deref()).collect();
+    let mut given: Vec<String> = Vec::new();
+    let mut fresh = |kind: &str, i: usize| {
+        let name = (i..)
+            .map(|k| format!("{}{k}", kind.replace('_', "")))
+            .find(|a| !written.contains(&a.as_str()) && !given.contains(a))
+            .unwrap_or_default();
+        given.push(name.clone());
+        name
+    };
     let mut renames: Vec<(String, String)> = Vec::new();
     let mut nodes_out = Vec::new();
     for (i, n) in inst.nodes.iter().enumerate() {
         let alias = match n.alias.as_deref() {
             Some(a) if !a.starts_with("_anon_") => a.to_string(),
             Some(a) => {
-                let fresh = format!("{}{}", n.kind.replace('_', ""), i);
+                let fresh = fresh(&n.kind, i);
                 renames.push((a.to_string(), fresh.clone()));
                 fresh
             }
-            None => format!("{}{}", n.kind.replace('_', ""), i),
+            None => fresh(&n.kind, i),
         };
         let def = nodes::lookup(&n.kind).ok_or_else(|| format!("unknown node '{}'", n.kind))?;
         let mut args = BTreeMap::new();
@@ -923,6 +988,135 @@ mod tests {
         assert!(t.contains("osc saw(110) as src"), "{t}");
         assert!(t.contains("lowpass(800hz, 0.2, wet=0.5) as f"), "{t}");
         assert!(t.contains("delay(1/8, 0.4) as d"), "{t}");
+    }
+
+    #[test]
+    fn a_file_with_more_than_the_sound_is_not_a_sound() {
+        // A song with one instrument in it: opened, Save would write the
+        // instrument alone and the rest would be gone.
+        let song = "# A song.\ntempo 130\ninstrument k {\n  kick(A1) as k\n  k > out\n}\npattern demo { C3 - - - }\ntrack main { play demo using k }\n";
+        let e = Sound::parse(song).expect_err("a song is not a sound");
+        assert!(e.contains("more in it than a sound"), "{e}");
+        assert!(e.contains("tempo") && e.contains("patterns") && e.contains("tracks"), "{e}");
+        for (more, what) in [
+            ("tempo 130\n", "tempo"),
+            ("swing 0.6\n", "settings"),
+            ("pattern p { C3 - - - }\n", "patterns"),
+            ("groove g { 0 10 0 10 }\n", "other blocks"),
+        ] {
+            for text in [format!("{more}module bass b {{ }}\n"), format!("module bass b {{ }}\n{more}")] {
+                match Sound::parse(&text) {
+                    Err(e) => assert!(e.contains("more in it than a sound") && e.contains(what), "{text}: {e}"),
+                    // Not every one of these is a line the reader takes; one that is has to be refused.
+                    Ok(_) => panic!("{text} was opened as a sound"),
+                }
+            }
+        }
+        // A comment anywhere but on top is not kept either.
+        for text in [
+            "# Top.\ninstrument k {\n  # the body\n  kick(A1) as k\n  k > out\n}\n",
+            "instrument k {\n  kick(F#1) as k  # tuned by ear\n  k > out\n}\n",
+            "module bass b {\n  cutoff 800hz #dark\n}\n",
+            "module bass b { }\n# and a note after\n",
+        ] {
+            let e = Sound::parse(text).expect_err("a comment that would be lost");
+            assert!(e.contains("a comment after the ones on top"), "{text}: {e}");
+        }
+        let e = Sound::parse("# Top.\ninstrument k {\n  # the body\n  kick(A1) as k\n  k > out\n}\n").unwrap_err();
+        assert!(e.starts_with("line 3:"), "{e}");
+        // A sharp is not a comment, and the comment on top may hold anything.
+        let s = round_trips("# A kick on F#1 # twice.\n\n# More.\ninstrument k {\n  kick(F#1) as k\n  k > out\n}\n");
+        assert_eq!(s.description, "A kick on F#1 # twice. More.");
+    }
+
+    #[test]
+    fn a_node_with_no_name_never_takes_one_the_file_gave_another() {
+        // The unnamed highpass is node 1; `highpass1` is the noise.
+        let text = "instrument an {\n  noise() as highpass1\n  highpass1 > highpass(3000hz, 0.5) > perc(0.001, 0.3) as amp\n  amp > out\n}\n";
+        let s = round_trips(text);
+        let Body::Graph(g) = &s.body else { panic!("a graph") };
+        let mut names: Vec<&str> = g.nodes.iter().map(|n| n.alias.as_str()).collect();
+        assert_eq!(names.len(), 3, "{}", s.text());
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), 3, "two nodes by one name: {}", s.text());
+        assert!(g.connections.iter().all(|(a, b)| a != b), "{}", s.text());
+        // And it plays: the same wires as the file, under the new name.
+        let src = format!("{}pattern p {{ C3 - - - }}\ntrack t {{ play p using an }}\n", s.text());
+        tatum_core::song_engine::SongEngine::from_source(&src).expect("compiles");
+        // Two unnamed nodes of a kind, and a name already one ahead of them.
+        round_trips("instrument an {\n  noise() as lowpass2\n  lowpass2 > lowpass(900hz) > lowpass(400hz) as lowpass3\n  lowpass3 > out\n}\n");
+    }
+
+    fn library_sounds() -> Vec<(std::path::PathBuf, String)> {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../sounds");
+        let mut found = Vec::new();
+        for dir in std::fs::read_dir(&root).expect("sounds/").flatten() {
+            let Ok(files) = std::fs::read_dir(dir.path()) else { continue };
+            for f in files.flatten().map(|f| f.path()).filter(|f| f.extension().is_some_and(|e| e == "synth")) {
+                let text = std::fs::read_to_string(&f).expect("reads");
+                found.push((f, text));
+            }
+        }
+        assert!(found.len() >= 5, "the sounds/ library was not found at {}", root.display());
+        found
+    }
+
+    #[test]
+    fn saving_a_library_sound_changes_how_it_is_written_and_nothing_else() {
+        for (path, text) in library_sounds() {
+            let at = path.display();
+            let s = Sound::parse(&text).unwrap_or_else(|e| panic!("{at}: {e}"));
+            let saved = s.text();
+            let again = Sound::parse(&saved).unwrap_or_else(|e| panic!("{at}: {e}"));
+            // Every value exactly, not to a tolerance; and a second Save is the first.
+            assert_eq!(again, s, "{at}: Save changed the sound");
+            assert_eq!(again.text(), saved, "{at}: a second Save changed the text");
+            // Line for line the file's own, but for the comment's wrapping
+            // and a number written another way.
+            let body = |t: &str| t.lines().filter(|l| !l.starts_with('#')).map(String::from).collect::<Vec<_>>();
+            let (before, after) = (body(&text), body(&saved));
+            assert_eq!(before.len(), after.len(), "{at}: lines added or lost\n{saved}");
+            for (b, a) in before.iter().zip(&after) {
+                let name = |l: &str| {
+                    l.split(|c: char| c.is_whitespace() || c == '(').find(|w| !w.is_empty()).map(String::from)
+                };
+                assert_eq!(name(b), name(a), "{at}: '{b}' became '{a}'");
+            }
+            let words = |t: &str| {
+                t.lines()
+                    .filter_map(|l| l.strip_prefix('#'))
+                    .flat_map(str::split_whitespace)
+                    .map(String::from)
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(words(&text), words(&saved), "{at}: the comment's words");
+        }
+    }
+
+    #[test]
+    fn what_save_normalises_is_what_the_docs_say() {
+        // A number is written the shortest way, a time in ms, a frequency in
+        // hz or as its note; what is written in %, dB or by name stays so.
+        let m = Sound::parse(
+            "module keys pad {\n  level 1.0\n  release 1.2s\n  cutoff 2khz\n  resonance 25%\n  voice_mode poly\n}\n",
+        )
+        .expect("parses");
+        assert_eq!(
+            m.text(),
+            "module keys pad {\n  level 1\n  release 1200ms\n  cutoff 2000hz\n  resonance 25%\n  voice_mode poly\n}\n"
+        );
+        let g = Sound::parse(
+            "instrument k {\n  kick(46.2493hz, tone=3khz, body=0.07s) as k\n  lowpass(440) as f\n  k > f > out\n}\n",
+        )
+        .expect("parses");
+        let t = g.text();
+        assert!(t.contains("tone=3000hz") && t.contains("body=70ms"), "{t}");
+        assert!(t.contains("lowpass(A4) as f"), "a frequency that is a note is written as the note: {t}");
+        assert!(t.contains("  k > f\n  f > out\n"), "a chain is written a wire a line: {t}");
+        // The comment is one paragraph, wrapped again.
+        let c = Sound::parse("# One.\n#\n# Two.\nmodule bass b { cutoff 800hz }\n").expect("parses");
+        assert_eq!(c.text(), "# One. Two.\nmodule bass b {\n  cutoff 800hz\n}\n");
     }
 
     #[test]

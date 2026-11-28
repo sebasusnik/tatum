@@ -11,8 +11,9 @@
 //! floor, a held note or a chord, on a note the page picks; a lane or a
 //! groove on a drum kit -- is rendered with nothing after it (no master
 //! chain, no loudness) and sent back, with one hit's pitch and level over
-//! time. Save writes the file, and only a sound that compiles. The text stays
-//! the sound: a song plays it with `use "sounds/kicks/deep.synth"`, and
+//! time. Save writes the file, and only a sound that compiles; a file with
+//! more in it than the one sound and its comment is not opened, because Save
+//! would not keep the rest. The text stays the sound: a song plays it with `use "sounds/kicks/deep.synth"`, and
 //! anyone can read and diff it.
 //!
 //! The `sounds/` library around the file (or `--library <dir>`) is listed on
@@ -35,6 +36,7 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process;
+use std::time::{Duration, Instant};
 
 use tatum_core::nodes;
 use tatum_core::params::{self, Curve, Range};
@@ -272,7 +274,10 @@ fn hit_json(y: &[f32]) -> String {
         json_pairs(&c.pitch),
         json_pairs(&c.level),
         json_num(y.len() as f32 * 1000.0 / SAMPLE_RATE),
-        // The click as `tatum analyze` reads it, so the two numbers compare.
+        // The click by the measure `tatum analyze` uses, read on this one
+        // hit: yours and a record's averaged hit compare. What `analyze`
+        // prints for the record need not be this: it reads every hit apart
+        // and takes the median, which keeps what the average thins out.
         json_num(tatum_debug::fit::click_db(y))
     )
 }
@@ -305,8 +310,23 @@ struct State {
 }
 
 /// What a sound that compiles and plays nothing is told: a graph with
-/// nothing wired to `out`, mostly.
-const SILENT: &str = "it makes no sound: is anything wired to out?";
+/// nothing wired to `out`, mostly; a module with its level at nothing.
+fn silent(sound: &Sound) -> &'static str {
+    match &sound.body {
+        Body::Graph(_) => "it makes no sound: is anything wired to out?",
+        Body::Module(_) if audition::is_drums(sound) => "it makes no sound on any lane: is its level at 0?",
+        Body::Module(_) => "it makes no sound: is its level at 0?",
+    }
+}
+
+/// The same for what the loop plays: on a drum kit, the one lane.
+fn silent_hit(state: &State) -> String {
+    if audition::is_drums(&state.sound) {
+        format!("it makes no sound on the {} lane: is its level at 0?", state.audition.lane)
+    } else {
+        silent(&state.sound).to_string()
+    }
+}
 
 fn fail(e: &str) -> String {
     format!("{{\"ok\":false,\"error\":{}}}", json_str(e))
@@ -318,7 +338,7 @@ fn render_reply(state: &State) -> String {
     let rendered = state
         .audition
         .hit(&state.sound)
-        .and_then(|h| if h.iter().any(|v| *v != 0.0) { Ok(h) } else { Err(SILENT.to_string()) })
+        .and_then(|h| if h.iter().any(|v| *v != 0.0) { Ok(h) } else { Err(silent_hit(state)) })
         .and_then(|h| Ok((h, state.audition.bar(&state.sound)?)));
     let text = json_str(&state.sound.text());
     let sound = sound_json(state);
@@ -333,7 +353,8 @@ fn render_reply(state: &State) -> String {
 }
 
 /// The sound's text, when it compiles, reads back as itself and makes a
-/// sound: what a file has to do before it is written.
+/// sound: what a file has to do before it is written. A drum kit makes one
+/// when any of its lanes does, whichever the loop is playing.
 fn compiles(state: &State) -> Result<String, String> {
     let text = state.sound.text();
     let again = Sound::parse(&text)?;
@@ -342,8 +363,8 @@ fn compiles(state: &State) -> Result<String, String> {
     }
     let pattern = state.audition.pattern_for(&state.sound);
     SongEngine::from_source(&state.audition.source(&state.sound, pattern, state.audition.bpm))?;
-    if state.audition.hit(&state.sound)?.iter().all(|v| *v == 0.0) {
-        return Err(SILENT.into());
+    if !state.audition.sounds(&state.sound)? {
+        return Err(silent(&state.sound).into());
     }
     Ok(text)
 }
@@ -526,7 +547,7 @@ struct Request {
 /// when the connection went away and there is no one to answer.
 type Refused = Option<(&'static str, String)>;
 
-/// Connections read at once; past it, a new one is dropped.
+/// Connections read at once; past it, a new one is told to come back.
 const MAX_CONNECTIONS: usize = 16;
 
 /// One of the connections being read: counted while it lives, and given
@@ -547,10 +568,62 @@ impl Drop for Slot {
     }
 }
 
-/// The longest body taken: a WAV of a long extended mix.
-const MAX_BODY: usize = 400 << 20;
+/// The longest body taken on `/api/reference`: a WAV of a long extended mix.
+const MAX_REFERENCE: usize = 400 << 20;
+/// The longest body taken anywhere else: a sound's text, a line of knobs.
+const MAX_BODY: usize = 1 << 20;
 
-fn read_request(stream: &mut impl Read) -> Result<Request, Refused> {
+/// How long a body may be, by what is asked: only a record is big, and a
+/// GET has none.
+fn body_cap(method: &str, path: &str) -> usize {
+    match (method, path) {
+        ("POST", "/api/reference") => MAX_REFERENCE,
+        ("POST", _) => MAX_BODY,
+        _ => 0,
+    }
+}
+
+/// How long a request has to send its head, from the moment it is taken.
+const HEAD_TIME: Duration = Duration::from_secs(10);
+/// How long it then has for its body: a record, and anything else.
+const REFERENCE_TIME: Duration = Duration::from_secs(120);
+const BODY_TIME: Duration = Duration::from_secs(30);
+
+/// A stream a request is read from against a clock: `allow` says how long
+/// what is left of it may take, all told.
+trait Hurried: Read {
+    fn allow(&mut self, _time: Duration) {}
+}
+
+/// A connection with a deadline for the whole request, not for each read: a
+/// client that drips a byte now and then is let go like one that stops.
+struct Timed<'a> {
+    stream: &'a TcpStream,
+    until: Instant,
+}
+
+impl Read for Timed<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let left = self.until.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(std::io::ErrorKind::TimedOut.into());
+        }
+        self.stream.set_read_timeout(Some(left))?;
+        self.stream.read(buf)
+    }
+}
+
+impl Hurried for Timed<'_> {
+    fn allow(&mut self, time: Duration) {
+        self.until = Instant::now() + time;
+    }
+}
+
+/// A request, read in two steps: its head, which says who sends it and how
+/// much; and its body, only when the head is the designer's own page asking
+/// for something that takes one that long. A request from anywhere else is
+/// refused before a byte of its body is taken.
+fn read_request(stream: &mut impl Hurried, port: u16) -> Result<Request, Refused> {
     let mut buf = Vec::new();
     let mut chunk = [0u8; 8192];
     let head_end = loop {
@@ -580,9 +653,15 @@ fn read_request(stream: &mut impl Read) -> Result<Request, Refused> {
         None => 0,
         Some(v) => v.parse::<usize>().map_err(|_| Some(("400 Bad Request", format!("Content-Length '{v}'"))))?,
     };
-    if length > MAX_BODY {
-        return Err(Some(("413 Content Too Large", format!("{length} bytes; at most {MAX_BODY}"))));
+    let (path, q) = target.split_once('?').unwrap_or((&target, ""));
+    let query = q.split('&').filter_map(|kv| kv.split_once('=')).map(|(k, v)| (k.to_string(), v.to_string())).collect();
+    let mut req = Request { method, path: path.to_string(), query, headers, body: Vec::new() };
+    same_origin(&req, port).map_err(|why| Some(("403 Forbidden", why)))?;
+    let cap = body_cap(&req.method, &req.path);
+    if length > cap {
+        return Err(Some(("413 Content Too Large", format!("{length} bytes; at most {cap} here"))));
     }
+    stream.allow(if cap > MAX_BODY { REFERENCE_TIME } else { BODY_TIME });
     let mut body = buf[head_end..].to_vec();
     while body.len() < length {
         let n = stream.read(&mut chunk).map_err(|_| None)?;
@@ -595,9 +674,8 @@ fn read_request(stream: &mut impl Read) -> Result<Request, Refused> {
         return Err(Some(("400 Bad Request", format!("{} bytes of the {length} it said", body.len()))));
     }
     body.truncate(length);
-    let (path, q) = target.split_once('?').unwrap_or((&target, ""));
-    let query = q.split('&').filter_map(|kv| kv.split_once('=')).map(|(k, v)| (k.to_string(), v.to_string())).collect();
-    Ok(Request { method, path: path.to_string(), query, headers, body })
+    req.body = body;
+    Ok(req)
 }
 
 /// Whether the request comes from the page this process served, and not from
@@ -609,6 +687,8 @@ fn read_request(stream: &mut impl Read) -> Result<Request, Refused> {
 /// - an `Origin`, when there is one, is this server too;
 /// - every POST carries `X-Tatum-Design`, a header a cross-site request can
 ///   only send after a preflight this server never answers.
+///
+/// Asked of the head alone, before the body is read.
 fn same_origin(req: &Request, port: u16) -> Result<(), String> {
     let ours = |h: &str| h == format!("127.0.0.1:{port}") || h == format!("localhost:{port}");
     match req.headers.get("host") {
@@ -685,8 +765,9 @@ fn handle(state: &mut State, req: Request) -> (String, &'static str, Vec<u8>) {
 fn usage() -> ! {
     eprintln!("Usage: tatum design <sound.synth> [--library <dir>] [--port N] [--no-open]");
     eprintln!("  Opens a designer for the sound in the browser. The file is one `instrument`");
-    eprintln!("  or one `module`; if it does not exist it starts as a deep kick, and Save");
-    eprintln!("  creates it. The sounds/ library around it (or --library) is listed beside it.");
+    eprintln!("  or one `module` and nothing else; if it does not exist it starts as a deep");
+    eprintln!("  kick, and Save creates it. The sounds/ library around it (or --library) is");
+    eprintln!("  listed beside it.");
     process::exit(1);
 }
 
@@ -757,6 +838,8 @@ pub fn cmd(args: &[String]) {
         let Ok(mut stream) = stream else { continue };
         use std::sync::atomic::Ordering;
         if open.load(Ordering::SeqCst) >= MAX_CONNECTIONS {
+            let _ = stream.set_write_timeout(Some(Duration::from_secs(1)));
+            respond(&mut stream, "503 Service Unavailable", "text/plain", b"too many connections at once");
             continue;
         }
         let slot = Slot::take(&open);
@@ -764,24 +847,24 @@ pub fn cmd(args: &[String]) {
         std::thread::spawn(move || {
             // Given back however the thread ends, a panic included.
             let _slot = slot;
-            // A client that stops sending is let go.
-            let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(30)));
-            let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(30)));
-            match read_request(&mut stream) {
-                Ok(req) => match same_origin(&req, port) {
-                    Ok(()) => {
-                        let (status, kind, body) = {
-                            let mut state = state.lock().unwrap_or_else(|p| p.into_inner());
-                            handle(&mut state, req)
-                        };
-                        respond(&mut stream, &status, kind, &body);
-                    }
-                    Err(why) => {
+            // A client that stops sending, or sends a byte now and then, is
+            // let go: the whole request has a deadline.
+            let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
+            let read = read_request(&mut Timed { stream: &stream, until: Instant::now() + HEAD_TIME }, port);
+            match read {
+                Ok(req) => {
+                    let (status, kind, body) = {
+                        let mut state = state.lock().unwrap_or_else(|p| p.into_inner());
+                        handle(&mut state, req)
+                    };
+                    respond(&mut stream, &status, kind, &body);
+                }
+                Err(Some((status, why))) => {
+                    if status.starts_with("403") {
                         eprintln!("refused: {why}");
-                        respond(&mut stream, "403 Forbidden", "text/plain", why.as_bytes());
                     }
-                },
-                Err(Some((status, why))) => respond(&mut stream, status, "text/plain", why.as_bytes()),
+                    respond(&mut stream, status, "text/plain", why.as_bytes());
+                }
                 Err(None) => {}
             }
         });
@@ -876,8 +959,10 @@ mod tests {
         assert!((tail - 46.25).abs() < 0.5, "F#1, got {tail}");
     }
 
+    impl Hurried for std::io::Cursor<Vec<u8>> {}
+
     fn request(raw: &str) -> Result<Request, Refused> {
-        read_request(&mut std::io::Cursor::new(raw.as_bytes().to_vec()))
+        read_request(&mut std::io::Cursor::new(raw.as_bytes().to_vec()), 7350)
     }
 
     fn status_of(raw: &str) -> &'static str {
@@ -888,48 +973,145 @@ mod tests {
         }
     }
 
+    /// A POST's head as the page sends it, up to the blank line.
+    fn page_post(path: &str, length: usize) -> String {
+        format!("POST {path} HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nX-Tatum-Design: 1\r\nContent-Length: {length}\r\n\r\n")
+    }
+
     #[test]
     fn a_body_too_long_short_or_unsaid_is_answered_not_dropped() {
-        let huge =
-            format!("POST /api/set HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nContent-Length: {}\r\n\r\n", MAX_BODY + 1);
-        assert!(status_of(&huge).starts_with("413"));
-        let short = "POST /api/set HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nContent-Length: 50\r\n\r\nk.body=80";
-        assert!(status_of(short).starts_with("400"));
+        assert!(status_of(&page_post("/api/set", MAX_BODY + 1)).starts_with("413"));
+        let short = format!("{}k.body=80", page_post("/api/set", 50));
+        assert!(status_of(&short).starts_with("400"));
         let nonsense = "POST /api/set HTTP/1.1\r\nContent-Length: lots\r\n\r\n";
         assert!(status_of(nonsense).starts_with("400"));
         let head = format!("GET / HTTP/1.1\r\nX: {}\r\n", "a".repeat(70 << 10));
         assert!(status_of(&head).starts_with("431"));
         assert_eq!(status_of("\r\n\r\n"), "400 Bad Request");
         assert_eq!(status_of(""), "dropped");
-        let fine = "POST /api/set?x=1 HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nContent-Length: 9\r\n\r\nk.body=80";
+        let fine = "POST /api/set?x=1 HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nX-Tatum-Design: 1\r\nContent-Length: 9\r\n\r\nk.body=80";
         let r = request(fine).ok().expect("reads");
         assert_eq!(r.body, b"k.body=80");
         assert_eq!(r.headers.get("host").map(String::as_str), Some("127.0.0.1:7350"));
     }
 
     #[test]
+    fn a_body_is_only_as_long_as_its_path_needs() {
+        // A record is big; nothing else is, and a GET has no body at all.
+        assert_eq!(body_cap("POST", "/api/reference"), MAX_REFERENCE);
+        for path in ["/api/set", "/api/text", "/api/save", "/api/open", "/api/duplicate", "/api/audition", "/nowhere"] {
+            assert_eq!(body_cap("POST", path), MAX_BODY, "{path}");
+            assert!(status_of(&page_post(path, MAX_BODY + 1)).starts_with("413"), "{path}");
+        }
+        assert!(status_of(&page_post("/api/reference", MAX_REFERENCE + 1)).starts_with("413"));
+        // Said to be within the cap and then not sent: 400, having read what there was.
+        assert!(status_of(&page_post("/api/reference", MAX_BODY + 1)).starts_with("400"));
+        let get = "GET /api/sound HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nContent-Length: 10\r\n\r\n0123456789";
+        assert!(status_of(get).starts_with("413"));
+    }
+
+    /// A sender that counts what is taken from it: a head, then as much
+    /// body as anyone will read.
+    struct Endless {
+        head: std::io::Cursor<Vec<u8>>,
+        taken: usize,
+    }
+
+    impl Read for Endless {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            let n = match self.head.read(buf)? {
+                0 => {
+                    buf.fill(b'x');
+                    buf.len()
+                }
+                n => n,
+            };
+            self.taken += n;
+            Ok(n)
+        }
+    }
+
+    impl Hurried for Endless {}
+
+    #[test]
+    fn a_request_from_elsewhere_is_refused_before_its_body_is_read() {
+        let refused = |head: String| {
+            let mut from = Endless { head: std::io::Cursor::new(head.clone().into_bytes()), taken: 0 };
+            let status = match read_request(&mut from, 7350) {
+                Err(Some((s, _))) => s,
+                _ => "taken",
+            };
+            assert!(status.starts_with("403"), "{status}: {head}");
+            assert!(from.taken <= head.len() + 8192, "{} bytes read of a request refused: {head}", from.taken);
+        };
+        let length = 300 << 20;
+        // Another site's page: its Origin, no header; the body never read.
+        refused(format!(
+            "POST /api/save HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nOrigin: https://evil.example\r\nContent-Length: {length}\r\n\r\n"
+        ));
+        // The one path that takes a long body takes it from the page only.
+        refused(format!("POST /api/reference HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nContent-Length: {length}\r\n\r\n"));
+        refused(format!(
+            "POST /api/reference HTTP/1.1\r\nHost: evil.example:7350\r\nX-Tatum-Design: 1\r\nContent-Length: {length}\r\n\r\n"
+        ));
+        refused(format!("POST /api/reference HTTP/1.1\r\nX-Tatum-Design: 1\r\nContent-Length: {length}\r\n\r\n"));
+    }
+
+    #[test]
+    fn a_request_that_drips_is_let_go_at_its_deadline() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("listens");
+        let port = listener.local_addr().expect("an address").port();
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let done = stop.clone();
+        // A byte every 50 ms: each read comes back long before any timeout
+        // of its own, and the head never ends.
+        let sender = std::thread::spawn(move || {
+            let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connects");
+            for b in b"GET / HTTP/1.1\r\nX-Slow: ".iter().chain(std::iter::repeat(&b'a')) {
+                if done.load(std::sync::atomic::Ordering::SeqCst) || s.write_all(&[*b]).is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        });
+        let (stream, _) = listener.accept().expect("accepts");
+        let start = Instant::now();
+        let mut timed = Timed { stream: &stream, until: start + Duration::from_millis(400) };
+        assert!(matches!(read_request(&mut timed, port), Err(None)), "let go, with no one to answer");
+        let took = start.elapsed();
+        stop.store(true, std::sync::atomic::Ordering::SeqCst);
+        assert!(took >= Duration::from_millis(350), "before its time: {took:?}");
+        assert!(took < Duration::from_secs(5), "held for {took:?}");
+        // The body gets its own time once the head is the page's.
+        timed.allow(Duration::from_secs(60));
+        assert!(timed.until > Instant::now() + Duration::from_secs(50));
+        drop(stream);
+        sender.join().expect("the sender ends");
+    }
+
+    #[test]
     fn only_the_designers_own_page_is_answered() {
-        let req = |head: &str| request(&format!("{head}\r\n\r\n")).ok().expect("reads");
+        let status = |head: &str| status_of(&format!("{head}\r\n\r\n"));
+        let refused = |head: &str| status(head).starts_with("403");
         let page =
             "POST /api/save HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nOrigin: http://127.0.0.1:7350\r\nX-Tatum-Design: 1";
-        assert!(same_origin(&req(page), 7350).is_ok());
-        assert!(same_origin(&req("GET / HTTP/1.1\r\nHost: localhost:7350"), 7350).is_ok());
+        assert_eq!(status(page), "ok");
+        assert_eq!(status("GET / HTTP/1.1\r\nHost: localhost:7350"), "ok");
         // A site on the web posting to the designer: its own Origin, and no header.
         let csrf = "POST /api/save HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nOrigin: https://evil.example";
-        assert!(same_origin(&req(csrf), 7350).is_err());
+        assert!(refused(csrf));
         // A form posted with no Origin at all still lacks the header.
-        assert!(same_origin(&req("POST /api/save HTTP/1.1\r\nHost: 127.0.0.1:7350"), 7350).is_err());
+        assert!(refused("POST /api/save HTTP/1.1\r\nHost: 127.0.0.1:7350"));
         // The library's writes are POSTs like Save, and refused the same way.
         for path in ["/api/duplicate", "/api/open", "/api/audition"] {
             let csrf = format!("POST {path} HTTP/1.1\r\nHost: 127.0.0.1:7350\r\nOrigin: https://evil.example");
-            assert!(same_origin(&req(&csrf), 7350).is_err(), "{path}");
+            assert!(refused(&csrf), "{path}");
         }
         // DNS rebinding: the page's own name pointed at 127.0.0.1.
-        let rebound = "GET /api/library HTTP/1.1\r\nHost: evil.example:7350";
-        assert!(same_origin(&req(rebound), 7350).is_err());
+        assert!(refused("GET /api/library HTTP/1.1\r\nHost: evil.example:7350"));
         // Another port is another server.
-        assert!(same_origin(&req("GET / HTTP/1.1\r\nHost: 127.0.0.1:9999"), 7350).is_err());
-        assert!(same_origin(&req("GET / HTTP/1.1"), 7350).is_err());
+        assert!(refused("GET / HTTP/1.1\r\nHost: 127.0.0.1:9999"));
+        assert!(refused("GET / HTTP/1.1"));
     }
 
     #[test]
@@ -949,9 +1131,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn fit_sets_the_kick_knobs_to_the_record() {
-        // A record made of a known kick, as the page would send it.
+    /// A record made of a known kick at 125 BPM, as the page would send it.
+    fn record_wav() -> Vec<u8> {
         let known = "kick(A1, start=900hz, knee=170hz, snap=3ms, body=75ms, hold=90ms, release=200ms, phase=20)";
         let one = crate::kick::engine_hit(known, 600.0).expect("renders");
         let beat = (60.0 / 125.0 * SAMPLE_RATE) as usize;
@@ -963,7 +1144,12 @@ mod tests {
             }
             at += beat;
         }
-        let wav = tatum_core::wav::encode_stereo_16(&x, &x, SAMPLE_RATE as u32);
+        tatum_core::wav::encode_stereo_16(&x, &x, SAMPLE_RATE as u32)
+    }
+
+    #[test]
+    fn fit_sets_the_kick_knobs_to_the_record() {
+        let wav = record_wav();
         let mut state = state_of(NEW_SOUND, Path::new("/nonexistent/k.synth"), None);
         assert!(fit_reply(&mut state).contains("load a record first"));
         let mut q = BTreeMap::new();
@@ -986,10 +1172,28 @@ mod tests {
     #[test]
     fn a_bad_reference_query_is_not_taken_for_a_number() {
         let mut state = state_of(NEW_SOUND, Path::new("/nonexistent/k.synth"), None);
+        // A WAV it can read, so the query is what is looked at: what is not
+        // a number from 0 up is left out, and the reply is the one without it.
+        let wav = record_wav();
         let mut q = BTreeMap::new();
-        q.insert("from".to_string(), "NaN".to_string());
-        assert!(reference_reply(&mut state, &q, b"RIFF").contains("not a WAV"));
-        assert!(state.reference.is_none());
+        q.insert("bpm".to_string(), "125".to_string());
+        let plain = reference_reply(&mut state, &q, &wav);
+        assert!(plain.starts_with("{\"ok\":true"), "{}", &plain[..plain.len().min(200)]);
+        for (k, bad) in [("from", "NaN"), ("from", "-5"), ("to", "inf"), ("to", "-1"), ("ms", "NaN"), ("ms", "-inf")] {
+            let mut q = q.clone();
+            q.insert(k.to_string(), bad.to_string());
+            state.reference = None;
+            let r = reference_reply(&mut state, &q, &wav);
+            assert!(r == plain, "{k}={bad}: {}", &r[..r.len().min(200)]);
+            assert!(state.reference.is_some(), "{k}={bad}");
+        }
+        // A tempo that is not one is measured instead, not taken.
+        for bad in ["NaN", "inf", "-125", "0"] {
+            q.insert("bpm".to_string(), bad.to_string());
+            let r = reference_reply(&mut state, &q, &wav);
+            let bpm = r.strip_prefix("{\"ok\":true,\"bpm\":").and_then(|r| r.split(',').next()?.parse::<f32>().ok());
+            assert!(bpm.is_some_and(|b| (b - 125.0).abs() < 0.1), "bpm={bad}: {}", &r[..r.len().min(200)]);
+        }
     }
 
     #[test]
@@ -1107,6 +1311,56 @@ mod tests {
         let mut alone = state_of(NEW_SOUND, Path::new("/nonexistent/k.synth"), None);
         assert!(get(&mut alone, "/api/library").starts_with("{\"ok\":false"));
         assert!(post(&mut alone, "/api/duplicate", "kicks/x").starts_with("{\"ok\":false"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_song_in_the_library_is_not_opened_and_saved_as_its_one_instrument() {
+        let d = temp("song");
+        let song = "# A song.\ntempo 130\ninstrument song {\n  # the body\n  kick(A1) as k\n  k > out\n}\npattern demo { C3 - - -  C3 - - -  C3 - - -  C3 - - - }\ntrack main { play demo using song }\n";
+        let noted = "# A kick.\ninstrument noted {\n  kick(A1) as k  # tuned by ear\n  k > out\n}\n";
+        std::fs::create_dir_all(d.join("sounds/kicks")).unwrap();
+        std::fs::write(d.join("sounds/kicks/song.synth"), song).unwrap();
+        std::fs::write(d.join("sounds/kicks/noted.synth"), noted).unwrap();
+        let path = d.join("sounds/kicks/deep.synth");
+        let mut state = state_of(NEW_SOUND, &path, Library::find(&path, None));
+        for (spec, why) in
+            [("kicks/song", "more in it than a sound"), ("kicks/noted", "a comment after the ones on top")]
+        {
+            let r = post(&mut state, "/api/open", spec);
+            assert!(r.starts_with("{\"ok\":false") && r.contains(why), "{spec}: {r}");
+            assert!(state.path.ends_with("sounds/kicks/deep.synth"), "{spec} moved the designer");
+            // Save goes to the sound that is open, never over the file refused.
+            assert!(post(&mut state, "/api/save", "").starts_with("{\"ok\":true"));
+        }
+        assert_eq!(std::fs::read_to_string(d.join("sounds/kicks/song.synth")).unwrap(), song);
+        assert_eq!(std::fs::read_to_string(d.join("sounds/kicks/noted.synth")).unwrap(), noted);
+        // Typed into the page, the same: refused, the sound open kept.
+        let r = post(&mut state, "/api/text", song);
+        assert!(r.starts_with("{\"ok\":false") && r.contains("more in it than a sound"), "{r}");
+        assert_eq!(state.sound.name, "kick");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_kit_is_saved_when_any_lane_sounds_whichever_one_is_playing() {
+        let d = temp("kit");
+        let path = d.join("sounds/drums/hats.synth");
+        // A kit of hats and claps: the kick, the lane the loop starts on, is off.
+        let mut state = state_of("module beats hats {\n  kick_level 0\n}\n", &path, None);
+        assert_eq!(state.audition.lane, "kick");
+        let r = post(&mut state, "/api/audition", "lane=kick");
+        assert!(r.contains("no sound on the kick lane"), "{}", &r[..r.len().min(200)]);
+        assert!(post(&mut state, "/api/save", "").starts_with("{\"ok\":true"), "the hats still play");
+        assert!(std::fs::read_to_string(&path).unwrap().contains("kick_level 0"));
+        // The whole kit off: nothing to save, and said of the kit, not of a wire.
+        let mut state = state_of("module beats hats { }\n", &d.join("sounds/drums/off.synth"), None);
+        let r = post(&mut state, "/api/set", "level=0");
+        assert!(r.contains("\"sound\":"), "{}", &r[..r.len().min(300)]);
+        post(&mut state, "/api/audition", "lane=crash");
+        let r = post(&mut state, "/api/save", "");
+        assert!(r.contains("not saved: it makes no sound on any lane"), "{r}");
+        assert!(!d.join("sounds/drums/off.synth").exists());
         let _ = std::fs::remove_dir_all(&d);
     }
 

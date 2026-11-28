@@ -560,3 +560,280 @@ fn the_wav_stops_at_its_limit_and_the_script_goes_on() {
     assert_eq!(script.cues.len(), 24);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A file on a disk that fills: writing stops at `room` bytes, in the
+/// middle of a write if that is where it falls, and what is already there
+/// can still be written over. `Err` on every write when `room` is 0.
+struct Full {
+    file: File,
+    at: u64,
+    room: u64,
+}
+
+impl Full {
+    fn new(path: &Path, room: u64) -> Self {
+        Self { file: create_new(path).unwrap(), at: 0, room }
+    }
+}
+
+impl Write for Full {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if self.at >= self.room {
+            return Err(std::io::Error::other("No space left on device"));
+        }
+        let n = buf.len().min((self.room - self.at) as usize);
+        self.file.write_all(&buf[..n])?;
+        self.at += n as u64;
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.file.flush()
+    }
+}
+
+impl Seek for Full {
+    fn seek(&mut self, to: SeekFrom) -> std::io::Result<u64> {
+        self.at = self.file.seek(to)?;
+        Ok(self.at)
+    }
+}
+
+/// The disk fills while the take plays. The performer is told then, once,
+/// not when the take is closed; the script goes on to its `end` and still
+/// renders the whole take; and the WAV is what reached the disk, under a
+/// header that says so.
+#[test]
+fn a_wav_that_stops_being_written_is_said_and_the_script_goes_on() {
+    const KEPT: usize = 20_000;
+    let dir = set_dir();
+    let head = header(0.0);
+    let steps = load(&dir.join("set"), head.bars).unwrap();
+    let mut stage = Stage::new(steps, &head.walk()).unwrap();
+    stage.script_count = false;
+    let (wav, txt) = take_files(&dir.join("full"));
+    let rec = Recorder::start(
+        Full::new(&wav, 44 + KEPT as u64 * 4),
+        create_new(&txt).unwrap(),
+        wav.clone(),
+        txt.clone(),
+        &[head.line()],
+        tatum_core::wav::MAX_STEREO_16_FRAMES,
+    );
+    let ring = Arc::new(Ring::new(ring_frames(SAMPLE_RATE as u32)));
+    let mut session = Session::new(stage, Arc::clone(&ring), Some(rec));
+    let mut output = Output::new(ring, None);
+    let (mut l, mut r) = (Vec::new(), Vec::new());
+    let mut data = vec![0.0f32; 512 * 2];
+    // (frames rendered when it was said, what was said)
+    let mut told: Vec<(usize, String)> = Vec::new();
+    let (mut round, mut knobs) = (0usize, 0usize);
+    let started = Instant::now();
+    // Three bars at the least, and on until the writer, which is a thread
+    // of its own, has got to the write that fails.
+    while l.len() < BAR * 3 || told.is_empty() {
+        assert!(started.elapsed() < Duration::from_secs(60), "never told that the WAV stopped");
+        if round % 40 == 0 {
+            session.inbox.midi(Midi::Cc(1, (knobs % 128) as u8));
+            knobs += 1;
+        }
+        round += 1;
+        let said = session
+            .render_ahead(|bl, br, _| {
+                l.extend_from_slice(bl);
+                r.extend_from_slice(br);
+            })
+            .unwrap();
+        told.extend(said.into_iter().filter_map(|s| match s {
+            Said::Bad(line) => Some((l.len(), line)),
+            _ => None,
+        }));
+        output.fill(&mut data);
+    }
+    // More of the take after it was said: the script has to hold it too.
+    let said_at = told[0].0;
+    while l.len() < said_at + BAR {
+        session.inbox.midi(Midi::Cc(2, (knobs % 128) as u8));
+        knobs += 1;
+        let said = session
+            .render_ahead(|bl, br, _| {
+                l.extend_from_slice(bl);
+                r.extend_from_slice(br);
+            })
+            .unwrap();
+        assert!(!said.iter().any(|s| matches!(s, Said::Bad(_))), "said once");
+        output.fill(&mut data);
+    }
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert!(told[0].1.contains("full.wav") && told[0].1.contains("No space left"), "{}", told[0].1);
+    assert_eq!(output.short, 0, "the device went on playing");
+
+    let err = session.finish().expect_err("closing the take says it too");
+    assert!(err.contains("full.wav") && err.contains("full.txt"), "{err}");
+
+    // The script: every knob and the end, and it renders the whole take.
+    let (script, rendered) = render_take(&dir, &txt);
+    assert_eq!(script.cues.len(), knobs + 1);
+    assert_eq!(script.cues.last().unwrap().act, Act::End);
+    assert_eq!(rendered.l.len(), l.len());
+    assert!(rendered.l.iter().zip(&l).all(|(a, b)| a.to_bits() == b.to_bits()), "the script renders the take");
+    assert!(rendered.r.iter().zip(&r).all(|(a, b)| a.to_bits() == b.to_bits()));
+
+    // The WAV: the frames that fit, and a header that says how many.
+    let (wl, wr) = read_wav(&wav);
+    let pcm = |x: &[f32]| x.iter().map(|s| tatum_core::wav::sample_16(*s)).collect::<Vec<_>>();
+    assert_eq!(wl.len(), KEPT);
+    assert!(wl == pcm(&l[..KEPT]) && wr == pcm(&r[..KEPT]), "the WAV is the take as far as it was written");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The other way round: a script that cannot be written is said, and the
+/// WAV goes on to the end, whole.
+#[test]
+fn a_script_that_stops_being_written_is_said_and_the_wav_goes_on() {
+    let dir = set_dir();
+    let (wav, txt) = take_files(&dir.join("mute"));
+    let mut rec = Recorder::start(
+        create_new(&wav).unwrap(),
+        Full::new(&txt, 0),
+        wav.clone(),
+        txt.clone(),
+        &[String::from("# take: phrase=1")],
+        tatum_core::wav::MAX_STEREO_16_FRAMES,
+    );
+    let block = [0.5f32; BLOCK_SIZE];
+    let mut told = Vec::new();
+    let started = Instant::now();
+    let mut blocks = 0;
+    while blocks < 200 || told.is_empty() {
+        assert!(started.elapsed() < Duration::from_secs(60), "never told that the script stopped");
+        rec.audio(&block, &block);
+        blocks += 1;
+        told.extend(rec.trouble());
+        std::thread::yield_now();
+    }
+    for _ in 0..200 {
+        rec.audio(&block, &block);
+        rec.line("1@0 cc 1 1");
+        blocks += 1;
+    }
+    let err = rec.finish().expect_err("closing the take says it too");
+    assert!(err.contains("mute.txt") && err.contains("mute.wav"), "{err}");
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert!(told[0].contains("mute.txt"), "{}", told[0]);
+    let (l, _) = read_wav(&wav);
+    assert_eq!(l.len(), blocks * BLOCK_SIZE);
+    assert!(l.iter().all(|s| *s == tatum_core::wav::sample_16(0.5)));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A take that could not start leaves no files behind, so the same name
+/// can be asked for again.
+#[test]
+fn a_take_that_never_started_leaves_no_files() {
+    let dir = set_dir();
+    let head = header(0.0);
+    let name = dir.join("stub");
+    let start = || {
+        let stage = Stage::new(load(&dir.join("set"), head.bars).unwrap(), &head.walk()).unwrap();
+        let rec = Recorder::create(&name, &[head.line()]).unwrap();
+        Session::new(stage, Arc::new(Ring::new(1024)), Some(rec))
+    };
+    let (wav, txt) = take_files(&name);
+    let session = start();
+    assert!(wav.exists() && txt.exists());
+    session.discard();
+    assert!(!wav.exists() && !txt.exists());
+    assert_eq!(check_free(&name), Ok(()));
+    start().discard();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A name in a directory that is not there is refused before anything slow
+/// starts, not when the files are made.
+#[test]
+fn a_take_needs_its_directory() {
+    let dir = set_dir();
+    let err = check_free(&dir.join("nowhere/take1")).unwrap_err();
+    assert!(err.contains("nowhere"), "{err}");
+    assert_eq!(check_free(&dir.join("take1")), Ok(()));
+    assert_eq!(check_free(Path::new("tatum-take-in-the-working-directory")), Ok(()));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// One thread pushes and another pulls, as the main thread and the device's
+/// callback do, through a ring small enough to be full or empty most of the
+/// time: every frame arrives once, in order, with its two sides together.
+#[test]
+fn the_ring_between_two_threads_loses_and_repeats_nothing() {
+    const FRAMES: usize = 3_000_000;
+    let ring = Arc::new(Ring::new(256));
+    let pusher = {
+        let ring = Arc::clone(&ring);
+        std::thread::spawn(move || {
+            let (mut l, mut r) = ([0.0f32; 97], [0.0f32; 97]);
+            let mut next = 0usize;
+            let mut size = 1;
+            while next < FRAMES {
+                let n = size.min(FRAMES - next);
+                if ring.room() < n {
+                    std::hint::spin_loop();
+                    continue;
+                }
+                for i in 0..n {
+                    l[i] = (next + i) as f32;
+                    r[i] = -((next + i) as f32);
+                }
+                ring.push(&l[..n], &r[..n]);
+                next += n;
+                size = size % 97 + 1;
+            }
+        })
+    };
+    let (mut l, mut r) = ([0.0f32; 61], [0.0f32; 61]);
+    let mut expect = 0usize;
+    let mut size = 1;
+    let started = Instant::now();
+    while expect < FRAMES {
+        let got = ring.pull(&mut l[..size], &mut r[..size]);
+        for i in 0..got {
+            assert_eq!(l[i], expect as f32, "left, frame {expect}");
+            assert_eq!(r[i], -(expect as f32), "right, frame {expect}");
+            expect += 1;
+        }
+        if got == 0 {
+            assert!(started.elapsed() < Duration::from_secs(120), "stuck at frame {expect}");
+            std::hint::spin_loop();
+        }
+        size = size % 61 + 1;
+    }
+    pusher.join().unwrap();
+    assert_eq!(ring.waiting(), 0);
+}
+
+/// The ring holds what `lookahead_for` asks for the biggest `--buffer`, at
+/// a device slower than the engine too, where that is more of the engine's
+/// frames; and the silence the summary counts is in those frames.
+#[test]
+fn the_ring_and_the_silence_count_in_the_engines_frames() {
+    for rate in [8_000u32, 22_050, 44_100, 48_000, 96_000] {
+        let ring = Ring::new(ring_frames(rate));
+        let target = lookahead_for(8192, rate);
+        let block = [0.0f32; BLOCK_SIZE];
+        while ring.waiting() < target && ring.room() >= BLOCK_SIZE {
+            ring.push(&block, &block);
+        }
+        assert!(ring.waiting() >= target, "{rate} Hz: {} of {target}", ring.waiting());
+    }
+    // A second of a 24 kHz device with nothing rendered is a second of
+    // silence, not the 1.84 s its 44100 missing frames are at 24 kHz.
+    let rate = 24_000u32;
+    let ring = Arc::new(Ring::new(1024));
+    let mut output = Output::new(ring, Some(crate::resample::Resampler::new(SAMPLE_RATE as u32, rate)));
+    let mut data = vec![0.0f32; 480 * 2];
+    for _ in 0..50 {
+        output.fill(&mut data);
+    }
+    let secs = silence_secs(output.short);
+    assert!((secs - 1.0).abs() < 0.05, "{secs}");
+}

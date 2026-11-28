@@ -153,10 +153,10 @@ dark_techno.wav: 300.7 s
     hit        89 Hz (the first half cycle)
     tail       39.0 Hz (D#1)
     sweep      33 ms to within 10% of the tail
-    heard      41.8 Hz (E1 +26c), +1.2 semitones from the tail: the sweep weighted by its loudness
+    heard      43.8 Hz (F1), +2.0 semitones from the tail: the sweep weighted by its loudness
     hold       none: it falls from the hit
     decay      -12 dB at 95 ms, -24 dB at 111 ms
-    click      -32.1 dB (first 10 ms over 2 kHz against the body)
+    click      -26.5 dB (first 10 ms over 2 kHz against the body)
     under it   -45.6 dB (the band under 400 Hz late in the beat)
   spectrum     31.5    63   125   250   500    1k    2k    4k    8k   16k
   (dB)         -2.2  -7.0 -10.9 -12.6 -16.7 -19.5 -22.9 -21.1 -21.3 -22.6
@@ -196,17 +196,30 @@ tatum design sounds/kicks/deep.synth [--library sounds] [--port 7350] [--no-open
 A sound designer in the browser, served from this machine (127.0.0.1 only), for every
 sound tatum has. A sound is a file with one `instrument` graph or one `module` (`beats`,
 `bass`, `fm`, `keys`) in it and a comment on top that says what it is; a file that does
-not exist yet starts as a deep kick, and Save creates it.
+not exist yet starts as a deep kick, and Save creates it. A file with anything else in
+it is not opened, since Save writes the comment on top and the one definition and
+nothing more: a song (a `tempo`, patterns, tracks) with one instrument in it, or a sound
+with a comment inside the definition or after it, is refused with the line to move.
 
 **Knobs.** A graph gets a knob for every argument of every node, a module one for every
 parameter, from the same tables `params` prints and the compiler checks against. A
 module's knob shows its value in its unit (`hz`, `ms`, `st`, `x`, a gain in dB) and a
 choice is a menu; an fm module also has knobs for each operator's `opN_envelope`. A
 knob's × takes the parameter out of the file, back to its default. A value past its
-range is held to it; NaN is refused. The file is written back in the style it uses: a
-parameter written `80%` stays a percentage, one written as a plain number stays one,
-and one set for the first time is written in its unit (a gain in dB, a choice by name).
-Reading what it writes gives back the same sound.
+range is held to it; NaN is refused. A module's parameter is written back in the style
+its file uses: one written `80%` stays a percentage, one in dB stays in dB, one written
+as a plain number stays one, and one set for the first time is written in its unit (a
+gain in dB, a choice by name). Reading what it writes gives back the same sound, but
+Save does not keep the text byte for byte. It normalises how things are written, on
+the first Save of a file made by hand: a number is written the shortest way (`1.0`
+becomes `1`), a time in `ms` (`1.2s` becomes `1200ms`) and a frequency in `hz`
+(`3khz` becomes `3000hz`) or as its note when it is one (`440` becomes `A4`); a graph
+is one node or one wire a line, every node named (the `lowpass(800hz)` of a chain
+`a > lowpass(800hz) > out` gets a name such as `lowpass1`, and the chain becomes two
+wires), an expression its value (`55 * 2` becomes `110`); a
+parameter written twice is written once; the comment on top becomes one paragraph
+wrapped at 78 columns; blank lines and spacing go. A file Save wrote is not changed
+by saving it again.
 
 **Graph editing.** Add a node (any kind an instrument line can hold, every argument at
 its default), pick an oscillator's waveform, remove a node with its connections, and
@@ -221,14 +234,22 @@ once or on every beat, or a groove of kick, hat and clap. It is rendered through
 instrument alone, with no master chain and no loudness, and looped a bar at a time.
 Beside the knobs, one hit's pitch over time on a log scale and its level in dB, and the
 figures `analyze` reports for a kick: the tail and its note, the sweep, the hold, the
-falls.
+falls, and the click: the first 10 ms over 2 kHz against the first 100 ms under 400 Hz.
+That figure counts everything up there in those milliseconds -- the top of the sweep, a
+chirp, a phase's step, drive -- so a quiet `click=` barely moves it: on a plain kick,
+`click=-30db` reads within half a dB of no click at all.
 
 **Reference.** A record can be laid next to it. Load a WAV, give the stretch (an intro
 or an outro where the kick plays alone or nearly) and how many milliseconds of each hit
 to keep (as many as come before an offbeat bass); its hits are averaged on the beat
 grid, so what comes with every hit stays and the rest thins out. The two are drawn on
-the same axes, and the loop can play the record's hit, yours, or the two in turn. Once
-a record is loaded, **Fit to reference** sets the kick node's knobs to what
+the same axes, and the loop can play the record's hit, yours, or the two in turn. The
+record's click is read on that averaged hit, as yours is on its one hit, so the two
+compare. `tatum analyze` reads the record's hits one by one instead and takes the median,
+which keeps a hat or a hiss that comes with every hit: on a full mix it can print a click
+10 dB over the one shown here, and is not the number to tune yours to.
+
+Once a record is loaded, **Fit to reference** sets the kick node's knobs to what
 `tatum kick fit` finds for it (see below), and says what error is left.
 
 **Library.** The `sounds/` directory the file sits in, or one beside a directory above
@@ -240,14 +261,19 @@ duplicate never overwrites a file, and a type or name is lower-case letters, dig
 is followed.
 
 **Save** writes only a sound that compiles and makes a sound (a graph with nothing
-wired to `out` is refused). The text is the sound: a song plays it with
+wired to `out` is refused; a drum kit is saved when any of its lanes sounds, whichever
+one the loop is playing). The text is the sound: a song plays it with
 `use "../sounds/kicks/deep.synth"` and `play ... using deep_kick`.
 
 It answers only its own page. Any site open in the same browser can send a request to
 127.0.0.1, so a request whose `Host` or `Origin` is not this server, or a POST without
 the page's own header, is refused (403). It writes only the file it was started on and
-files inside the library. A WAV is taken up to 400 MB; a request that stops sending is
-let go after 30 seconds.
+files inside the library. A request is refused on its head, before any of its body is
+read; a WAV is taken up to 400 MB, and only on `/api/reference`, anything else up to
+1 MB. A request has a deadline as a whole, not for each read: 10 seconds for its head,
+then 30 for its body (two minutes for a WAV), so one that stops sending, or sends a
+byte now and then, is let go. Sixteen connections are read at once; one more is
+answered 503.
 
 The page talks to it over a small JSON API: `GET /api/sound`, `/api/kinds` (the node
 kinds a graph can add), `/api/library`; `POST /api/set` (knobs and graph edits, one a
@@ -283,7 +309,7 @@ refined while that render is further off than the node alone was. It prints the 
 ready to paste, the error left, and the two hits side by side:
 
 ```
-$ tatum kick fit outro.wav --from 5:40 --to 6:10
+$ tatum kick fit outro.wav --from 5:40 --to 6:10 --ms 200
 outro.wav: hits averaged at 124.00 BPM, the first 200 ms of each
 5389 kicks tried in 2.9 s
   round 1: the engine's render is off by 0.08 st in pitch (0.31 st over the attack), 0.03 dB in level, click +1.3 dB
@@ -462,6 +488,9 @@ already: a take is not written over another. `take1.wav` or `take1.txt` names th
 take; any other dot is part of the name (`--record take.v1` writes `take.v1.wav`).
 `q` ends the take. A WAV cannot hold more than about 6 h 46 min; past that the WAV
 stops, readable, and the script goes on.
+If the WAV can no longer be written while the take plays (the disk full, the drive gone),
+the status line says so then, in red on the screen, and the script goes on to the end: it
+renders the whole take again. The WAV left behind opens, as far as it was written.
 
 ```
 # take: phrase=8 ramp=4 blend=0 auto=off bars=32 steps=8c3f0e5a1d2b4c67

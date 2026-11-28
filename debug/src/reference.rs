@@ -80,6 +80,10 @@ pub struct Kick {
     /// sweep included (`tatum_debug::fit::heard_hz`). Over the tail on a kick
     /// whose sweep is still falling while it is loud.
     pub heard_hz: Option<f32>,
+    /// The song this was rendered from already tunes a `kick` node by the
+    /// note heard (`heard=1`). The sound does not say so: whoever rendered
+    /// it does, with [`Profile::rendered_from`]. False for a WAV.
+    pub heard_tuned: bool,
     /// From the hit while the body stays within 1 dB of its peak: the flat
     /// top of a kick held round before it falls. A few ms on a kick that
     /// starts falling at once.
@@ -100,6 +104,26 @@ pub struct Kick {
 impl Kick {
     pub fn masked(&self) -> bool {
         self.under_db > -10.0
+    }
+}
+
+impl Profile {
+    /// What the source a profile was rendered from says and the sound does
+    /// not: whether a `kick` node in it has `heard=1`, so that `compare`
+    /// does not tell a kick tuned by the note heard to be tuned by it.
+    pub fn rendered_from(mut self, source: &str) -> Profile {
+        let tuned = tatum_core::dsl::parse(source).is_ok_and(|song| {
+            song.instruments.iter().flat_map(|i| &i.nodes).any(|n| {
+                n.kind == "kick"
+                    && n.params
+                        .iter()
+                        .any(|p| matches!(p, tatum_core::dsl::ast::Param::Named(k, v) if k == "heard" && *v >= 0.5))
+            })
+        });
+        if let Some(k) = self.kick.as_mut() {
+            k.heard_tuned = tuned;
+        }
+        self
     }
 }
 
@@ -763,12 +787,25 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
     };
     let sweep_ms = cycles.iter().find(|c| c.1 <= tail_hz * 1.1).map_or(cycles[cycles.len() - 1].0, |c| c.0);
 
+    // Where the hit starts in the average of the unfiltered hits, looked for
+    // up to 10 ms past the onset read on the body, not over the whole beat:
+    // an offbeat sample louder than the kick is locked to the grid too, so
+    // it survives the average, and was taken for the hit, the click read on
+    // it half a beat on (70 dB over the kick's, under an open hat on a
+    // limited master).
     let raw = average_of(mono, &aligned);
-    let hit = raw.as_deref().and_then(crate::hit::hit_start).unwrap_or(onset);
+    let hit = raw
+        .as_deref()
+        .and_then(|raw| crate::hit::hit_start(&raw[..(onset + samples(10.0)).min(raw.len())]))
+        .unwrap_or(onset);
     // The note the hit is heard as, read off the unfiltered average.
     let heard_hz = raw.as_deref().and_then(|r| crate::fit::heard_hz(&r[hit.min(r.len())..]));
-    // The click is not averaged: hats land on some hits and not others, and
-    // the median of the hits leaves them out.
+    // The click is not averaged but read hit by hit, and the median taken:
+    // a hat that lands on fewer than half the hits is left out. One on every
+    // hit is not, played or sampled: its highs count as click, where the
+    // averaged hit of `tatum design` and `kick fit` thins out whatever is
+    // not the same from hit to hit, so on a full mix this reads higher than
+    // they do (13 dB under a played hat a seventh of the kick's level).
     let mut click: Vec<f32> = aligned
         .iter()
         .filter_map(|&on| {
@@ -794,6 +831,7 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
         tail_hz,
         sweep_ms: sweep_ms.max(0.0),
         heard_hz,
+        heard_tuned: false,
         hold_ms: fall(0.891).unwrap_or(0.0),
         decay12_ms: fall(0.251),
         decay24_ms: fall(0.063),
@@ -1248,16 +1286,29 @@ fn kick_advice(r: &Kick, y: &Kick, todo: &mut Vec<String>) {
     if let (Some(rh), Some(yh)) = (r.heard_hz, y.heard_hz) {
         let heard_st = 12.0 * (yh / rh).log2();
         if heard_st.abs() >= 0.75 && st.abs() < 0.75 {
-            todo.push(format!(
-                "kick heard: yours is heard {:.1} semitones {} ({:.1} Hz against {:.1} Hz, {}) though the tails agree: its sweep is {} while it is loud -- `kick({}, heard=1)` tunes the kick node by the note heard",
+            let differs = format!(
+                "kick heard: yours is heard {:.1} semitones {} ({:.1} Hz against {:.1} Hz, {}) though the tails agree",
                 heard_st.abs(),
                 if heard_st > 0.0 { "higher" } else { "lower" },
                 yh,
                 rh,
                 note_name(rh),
-                if heard_st > 0.0 { "slower or louder" } else { "faster or quieter" },
-                note_name(rh)
-            ));
+            );
+            todo.push(if y.heard_tuned {
+                // It is tuned by the note heard already: the note written is
+                // not the reference's, or the model and this reading differ.
+                format!(
+                    "{differs}, and your kick already has `heard=1`: write the note the reference is heard as, `kick({rh:.1}hz, heard=1)`; if that is what it says, the engine's model and this reading differ on this kick, and the note written moves {:.1} semitones {} by hand",
+                    heard_st.abs(),
+                    if heard_st > 0.0 { "down" } else { "up" },
+                )
+            } else {
+                format!(
+                    "{differs}: its sweep is {} while it is loud -- `kick({}, heard=1)` tunes the kick node by the note heard",
+                    if heard_st > 0.0 { "slower or louder" } else { "faster or quieter" },
+                    note_name(rh)
+                )
+            });
         }
     }
     if (y.start_hz / r.start_hz - 1.0).abs() > 0.2 {
@@ -1452,6 +1503,63 @@ mod tests {
         // The click is a second into the stretch.
         let at = (0..l.len()).max_by(|&a, &b| l[a].abs().total_cmp(&l[b].abs())).unwrap();
         assert!((at as i64 - 44_100).abs() <= 2, "{at}");
+    }
+
+    /// A `kick(...)` with a click and no chirp, four to the bar at 125 BPM
+    /// for 24 seconds, peaking at 0.7; `extra` adds what else plays on each
+    /// beat, given the beat's number, its first sample and its length.
+    fn clicked_kicks(mut extra: impl FnMut(usize, usize, usize, &mut [f32])) -> Vec<f32> {
+        let k = crate::fit::KickArgs { note: 46.25, start: 400.0, click: -30.0, ..Default::default() };
+        let one = k.render(400.0).expect("a kick");
+        let peak = one.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+        let beat = (60.0 / 125.0 * SAMPLE_RATE) as usize;
+        let mut out = vec![0.0f32; 24 * SAMPLE_RATE as usize];
+        let (mut at, mut b) = (1000, 0);
+        while at + beat < out.len() {
+            for (o, v) in out[at..].iter_mut().zip(&one) {
+                *o += 0.7 / peak * v;
+            }
+            extra(b, at, beat, &mut out);
+            at += beat;
+            b += 1;
+        }
+        out
+    }
+
+    /// Noise that falls away over `ms`, peaking at `peak`: a hat. The same
+    /// `seed` is the same sample.
+    fn hat(seed: u32, peak: f32, ms: f32) -> Vec<f32> {
+        let n = (ms * 0.001 * SAMPLE_RATE) as usize;
+        let mut s = seed;
+        let x: Vec<f32> = (0..n)
+            .map(|i| {
+                s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                ((s >> 8) as f32 / 8_388_608.0 - 1.0) * (-5.0 * i as f32 / n as f32).exp()
+            })
+            .collect();
+        let top = x.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+        x.iter().map(|v| v * peak / top).collect()
+    }
+
+    #[test]
+    fn a_louder_offbeat_sample_is_not_taken_for_the_hit() {
+        // The same open hat on every offbeat, louder than the kick, as on a
+        // master limited hard: locked to the grid, it survives the average,
+        // and the start of the hit was looked for over the whole beat, so
+        // the click was read on the hat, half a beat on (+20.0 dB).
+        let alone = measure_kick(&clicked_kicks(|_, _, _, _| {})).click_db;
+        let sample = hat(7, 0.9, 60.0);
+        let with_hat = clicked_kicks(|_, at, beat, out| {
+            for (o, v) in out[at + beat / 2..].iter_mut().zip(&sample) {
+                *o += v;
+            }
+        });
+        let k = measure_kick(&with_hat);
+        assert!((k.click_db - alone).abs() < 1.0, "with the hat {:.1} dB, alone {alone:.1} dB", k.click_db);
+    }
+
+    fn measure_kick(x: &[f32]) -> Kick {
+        measure(x, x).kick.expect("a kick")
     }
 
     #[test]
