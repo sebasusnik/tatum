@@ -159,7 +159,11 @@ fn low_notes_refuse_what_their_band_cannot_resolve() {
     };
     let (instant, five) = (make(0.0), make(5.0));
     for r in [&instant, &five] {
-        assert!(r.events.iter().all(|e| matches!(e.inside.attack_ms, Fig::AtMost(_))), "{:?}", r.events[0].inside.attack_ms);
+        assert!(
+            r.events.iter().all(|e| matches!(e.inside.attack_ms, Fig::AtMost(_))),
+            "{:?}",
+            r.events[0].inside.attack_ms
+        );
     }
     assert!(advice_of(&instant, &five).iter().all(|l| !l.starts_with("attack")), "{:?}", advice_of(&instant, &five));
     // A slow one is read: 15 ms of rise is 12 ms from 10 to 90%.
@@ -401,7 +405,11 @@ fn purity_and_harmonics_hold_as_the_bed_rises_until_they_are_withheld() {
         hiss(&mut x, 0.212 * 10f32.powf(bed_db / 20.0) * 3f32.sqrt(), 5);
         let r = run(x);
         for e in &r.events {
-            assert!(e.inside.h2_db.value().is_none() && e.inside.h3_db.value().is_none(), "bed {bed_db}: {:?}", e.inside.h2_db);
+            assert!(
+                e.inside.h2_db.value().is_none() && e.inside.h3_db.value().is_none(),
+                "bed {bed_db}: {:?}",
+                e.inside.h2_db
+            );
             assert!(e.inside.burst_db.value().is_none(), "bed {bed_db}: burst {:?}", e.inside.burst_db);
         }
     }
@@ -504,7 +512,11 @@ fn where_an_event_sits_between_the_speakers() {
     assert_eq!(rep.events.len(), 3, "antiphase");
     assert!(rep.note.is_some_and(|n| n.contains("antiphase")));
     // All side and no mid: the width is past what a ratio can say.
-    assert!(matches!(rep.events[0].inside.side_mid_db, Fig::AtLeast(v) if v >= 60.0), "{:?}", rep.events[0].inside.side_mid_db);
+    assert!(
+        matches!(rep.events[0].inside.side_mid_db, Fig::AtLeast(v) if v >= 60.0),
+        "{:?}",
+        rep.events[0].inside.side_mid_db
+    );
     // And the correlation of the two channels is -1, not "nothing to read".
     assert!(val(rep.events[0].inside.corr, "corr") < -0.99, "{:?}", rep.events[0].inside.corr);
 }
@@ -554,10 +566,7 @@ fn a_delay_on_one_pitch_on_a_grid_is_not_read_as_the_note_spacing() {
     }
     let r = run(x);
     if let Some(d) = &r.delay {
-        assert!(
-            d.ambiguous.is_some() || (d.interval_ms - 353.7).abs() < 2.0,
-            "a wrong time given as a delay: {d:?}"
-        );
+        assert!(d.ambiguous.is_some() || (d.interval_ms - 353.7).abs() < 2.0, "a wrong time given as a delay: {d:?}");
     }
     // Two equal pings are not a note and its echo.
     let mut x = bed(3.0, 0.03, 0.0);
@@ -606,7 +615,12 @@ fn a_tail_is_what_is_left_beyond_the_decay_and_a_dry_event_has_none() {
             }
         }
         let r = run(x);
-        assert_eq!(r.events.len(), 3, "{:?}", r.events.iter().map(|e| (e.start_s, e.end_s, e.inside.overlap)).collect::<Vec<_>>());
+        assert_eq!(
+            r.events.len(),
+            3,
+            "{:?}",
+            r.events.iter().map(|e| (e.start_s, e.end_s, e.inside.overlap)).collect::<Vec<_>>()
+        );
         // The truth: the tail's energy from 50 to 400 ms after the ping's own
         // decay is 20 dB down, against the ping's energy up to there. Energy
         // of a e^(-t / tau): a^2 tau / 2 over all of it.
@@ -664,7 +678,11 @@ fn events_in_the_first_milliseconds_are_read_without_falling_over() {
             ping(&mut x, t, hz, 40.0, 0.3, 0.0, 0.0);
         }
         let r = run(x);
-        assert!(r.events.first().is_some_and(|e| e.start_s < t0 + 0.02), "{t0} s at {hz} Hz: {:?}", r.events.iter().map(|e| e.start_s).collect::<Vec<_>>());
+        assert!(
+            r.events.first().is_some_and(|e| e.start_s < t0 + 0.02),
+            "{t0} s at {hz} Hz: {:?}",
+            r.events.iter().map(|e| e.start_s).collect::<Vec<_>>()
+        );
     }
 }
 
@@ -696,7 +714,8 @@ fn saw(f0: f32, seconds: f32, naive: bool) -> Vec<f32> {
                 2.0 * (f0 as f64 * i as f64 / SR as f64).fract() as f32 - 1.0
             } else {
                 let ph = (f0 as f64 * i as f64 / SR as f64).fract() as f32;
-                (1..=top).map(|k| (TAU * (ph * k as f32).fract()).sin() / k as f32).sum::<f32>() * -2.0 / std::f32::consts::PI
+                (1..=top).map(|k| (TAU * (ph * k as f32).fract()).sin() / k as f32).sum::<f32>() * -2.0
+                    / std::f32::consts::PI
             };
             0.2 * fade * v
         })
@@ -731,10 +750,38 @@ fn a_naive_saw_folds_and_a_band_limited_one_does_not() {
     let x = saw(440.0, 2.0, true);
     let audio = crate::wav::Audio { rate: 48_000, left: x.clone(), right: x };
     let r = analyze(&audio, None, None, &Options::default()).unwrap();
-    assert!(r.clean.alias.is_none() && r.clean.alias_unread.is_some_and(|w| w.contains("converted")), "{:?}", r.clean.lines());
+    assert!(
+        r.clean.alias.is_none() && r.clean.alias_unread.is_some_and(|w| w.contains("converted")),
+        "{:?}",
+        r.clean.lines()
+    );
+    // Five lines planted where folds land: too few to call aliasing, and
+    // not "nothing folded back" either.
+    let (sr, f0) = (SR as f64, SR as f64 / 42.3);
+    let x: Vec<f32> = (0..at(3.0))
+        .map(|i| {
+            let t = i as f64 / sr;
+            let fade = (t * 20.0).min(1.0) * ((3.0 - t) * 20.0).min(1.0);
+            let tone = |hz: f64| (std::f64::consts::TAU * (hz * t).fract()).sin();
+            let notes: f64 = (1..13).map(|k| tone(k as f64 * f0) / k as f64).sum();
+            let folds: f64 = (24..29).map(|k| 0.0045 * tone(sr - k as f64 * f0)).sum();
+            (0.15 * fade * (notes + folds)) as f32
+        })
+        .collect();
+    let r = run(x);
+    assert!(r.clean.alias.is_none(), "{:?}", r.clean.alias);
+    assert!(
+        r.clean.lines().iter().any(|l| l.contains("5 lines stand where folds would land")),
+        "{:?}",
+        r.clean.lines()
+    );
     // Where a fold lands on the note's own harmonics nothing can be seen, and it is said.
     let r = run(saw(SR / 400.0, 2.0, true));
-    assert!(r.clean.alias.is_some() || r.clean.alias_unread.is_some_and(|w| w.starts_with("not examined")), "{:?}", r.clean.lines());
+    assert!(
+        r.clean.alias.is_some() || r.clean.alias_unread.is_some_and(|w| w.starts_with("not examined")),
+        "{:?}",
+        r.clean.lines()
+    );
     // A pure sine has nothing to fold, even with lines planted where folds would land.
     let f0 = 1000.0f32;
     let x: Vec<f32> = (0..at(2.0))
@@ -883,7 +930,8 @@ fn sustained_material_gives_back_its_partials_and_how_they_move() {
     let held: Vec<f32> = (0..at(4.0))
         .map(|i| {
             let t = i as f32 / SR;
-            0.2 * (t * 2.0).min(1.0) * (1..=8).map(|k| (TAU * (110.0 * k as f32 * t).fract()).sin() / k as f32).sum::<f32>()
+            0.2 * (t * 2.0).min(1.0)
+                * (1..=8).map(|k| (TAU * (110.0 * k as f32 * t).fract()).sin() / k as f32).sum::<f32>()
         })
         .collect();
     let r = run(held);
@@ -912,7 +960,18 @@ fn against_flags_what_was_changed_and_nothing_in_a_file_against_itself() {
     assert!(decay.flagged && (decay.difference.unwrap() - 3.0).abs() < 0.3, "{:?}", decay.difference);
     assert!(rows.iter().find(|r| r.key == "ring_q").unwrap().flagged);
     // What was not changed is not flagged, and no line says it was.
-    for key in ["start_hz", "pan_db", "per_second", "attack_ms", "tonal_db", "h2_db", "h3_db", "tail_db", "in_mix_db", "burst_db"] {
+    for key in [
+        "start_hz",
+        "pan_db",
+        "per_second",
+        "attack_ms",
+        "tonal_db",
+        "h2_db",
+        "h3_db",
+        "tail_db",
+        "in_mix_db",
+        "burst_db",
+    ] {
         assert!(!rows.iter().find(|r| r.key == key).unwrap().flagged, "{key}");
     }
     let lines = report::advice(&a, &b, &rows, "b.wav");
@@ -1083,4 +1142,3 @@ fn a_band_under_15_hz_is_refused() {
     let opts = Options { band: Some((10.0, 11.0)), ..Options::default() };
     assert!(analyze(&audio, None, None, &opts).is_err());
 }
-

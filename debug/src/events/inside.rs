@@ -290,15 +290,7 @@ pub(crate) fn track_path(c: &Ctx, path: &[f32], from: usize, cutoff: f32) -> Tra
 
 /// `shift` moves the ridge later by that many samples: where an echo would be.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn track(
-    c: &Ctx,
-    ridge: &Ridge,
-    hop: usize,
-    shift: f64,
-    from: usize,
-    to: usize,
-    cutoff: f32,
-) -> Tracked {
+pub(crate) fn track(c: &Ctx, ridge: &Ridge, hop: usize, shift: f64, from: usize, to: usize, cutoff: f32) -> Tracked {
     let path: Vec<f32> = (from..to).map(|n| ridge.hz_at(n as f64 - shift, hop)).collect();
     track_path(c, &path, from, cutoff)
 }
@@ -631,7 +623,8 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     // the fall away from the line and is left to the tail.
     let all_fit = line(&points);
     let points: Vec<(f32, f32)> = {
-        let mut used = points.iter().position(|p| p.1 < -10.0).unwrap_or(points.len()).clamp(6.min(points.len()), points.len());
+        let mut used =
+            points.iter().position(|p| p.1 < -10.0).unwrap_or(points.len()).clamp(6.min(points.len()), points.len());
         if let Some(l) = line(&points[..used]) {
             while used < points.len() && (points[used].1 - (l.intercept + l.slope * points[used].0)).abs() <= 2.0 {
                 used += 1;
@@ -756,7 +749,8 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
                 // A second reading that errs another way: the first whole
                 // cycle of the wide band, crossing to crossing. A start the
                 // line puts more than 8% off it is not trusted.
-                let agrees = first_cycle_hz(c.mono, start, lo_hz, hi_hz).is_some_and(|zc| (back / zc - 1.0).abs() < 0.08);
+                let agrees =
+                    first_cycle_hz(c.mono, start, lo_hz, hi_hz).is_some_and(|zc| (back / zc - 1.0).abs() < 0.08);
                 if gap_cycles <= 1.0 && fits && agrees && sweep_rate <= FASTEST_SWEEP {
                     start_hz = back;
                 } else {
@@ -842,7 +836,8 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     };
     let q = bandwidth_hz.map_down(|w| f_peak / w.max(1e-3));
     let ring_q = decay_db_ms.map_down(|r| std::f32::consts::PI * f_peak * 8.686 / (r * 1000.0));
-    let decay_db_ms = if lost { decay_db_ms.withhold("the partial moves faster than its band follows it") } else { decay_db_ms };
+    let decay_db_ms =
+        if lost { decay_db_ms.withhold("the partial moves faster than its band follows it") } else { decay_db_ms };
 
     // What the event adds to the spectrum: the bed just before it taken off
     // bin by bin, over every frame that touches it.
@@ -883,7 +878,8 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
         let (a, b) = (w_rel(start), w_rel(start + five));
         let (pa, pb) = (w_rel(early.saturating_sub(samples(70.0))), w_rel(early.saturating_sub(samples(8.0))));
         // The bed in 5 ms pieces before it: its mean, and how far a piece strays.
-        let pieces: Vec<f64> = (pa..pb).step_by(five.max(1)).filter(|&p| p + five <= pb).map(|p| power(&above, p, p + five)).collect();
+        let pieces: Vec<f64> =
+            (pa..pb).step_by(five.max(1)).filter(|&p| p + five <= pb).map(|p| power(&above, p, p + five)).collect();
         let (mean, stray) = if pieces.len() >= 4 {
             let m = pieces.iter().sum::<f64>() / pieces.len() as f64;
             let sd = (pieces.iter().map(|p| (p - m).powi(2)).sum::<f64>() / pieces.len() as f64).sqrt();
@@ -909,10 +905,8 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     let over_bed_db = (20.0 * (pk / bed.max(pk * 1e-5)).log10()).min(99.0);
     let around = (start.saturating_sub(samples(500.0)), (start + samples(500.0)).min(total));
     let own_span = (from + begin, from + end + 1);
-    let rest: Vec<f32> = (around.0..around.1)
-        .filter(|&n| n < own_span.0 || n >= own_span.1)
-        .map(|n| c.mono[n])
-        .collect();
+    let rest: Vec<f32> =
+        (around.0..around.1).filter(|&n| n < own_span.0 || n >= own_span.1).map(|n| c.mono[n]).collect();
     let under = rms(&c.mono[start.saturating_sub(samples(120.0))..start]);
     let in_mix_db = if under < pk * 0.01 || rest.len() < samples(100.0) {
         Fig::No("alone: nothing sounds under it (a solo render), so the mix around it is itself")
@@ -1146,8 +1140,8 @@ fn spectral(
         }
         // A pitch that moves more than the partial's reach within one
         // window smears it over the rest.
-        let moved = (path_at((u * s.hop + s.size / 2).max(from)) - path_at((u * s.hop).saturating_sub(s.size / 2)))
-            .abs();
+        let moved =
+            (path_at((u * s.hop + s.size / 2).max(from)) - path_at((u * s.hop).saturating_sub(s.size / 2))).abs();
         if moved > reach as f32 * bin_hz {
             fast += got.max(0.0);
         }
@@ -1185,7 +1179,10 @@ fn spectral(
             return Fig::No("its harmonics are closer to it than the spectrum resolves at this pitch");
         }
         let f = f_mid as f64;
-        let own = whole * (skirt(tau, ramp, (k - 1.0) * f - r, (k - 1.0) * f + r) + skirt(tau, ramp, (k + 1.0) * f - r, (k + 1.0) * f + r)) * 0.5;
+        let own = whole
+            * (skirt(tau, ramp, (k - 1.0) * f - r, (k - 1.0) * f + r)
+                + skirt(tau, ramp, (k + 1.0) * f - r, (k + 1.0) * f + r))
+            * 0.5;
         share_db(e.sum - own, e.floor(n, m) + 0.5 * own + numeric, t.sum)
     };
     let (h2_db, h3_db) = (harmonic(&h2, 2.0), harmonic(&h3, 3.0));
@@ -1216,7 +1213,8 @@ fn spectral(
         let off = 12.0 * ((cen + 3.0 * sd) / cen).log2() as f32;
         Some((hz, off))
     };
-    let loudest = fa + frames_t.iter().enumerate().fold((0, f64::MIN), |m, (i, v)| if *v > m.1 { (i, *v) } else { m }).0;
+    let loudest =
+        fa + frames_t.iter().enumerate().fold((0, f64::MIN), |m, (i, v)| if *v > m.1 { (i, *v) } else { m }).0;
     let at_peak = centroid(loudest);
     let centroid_hz = match at_peak {
         None => Fig::No("nothing over the bed at its peak"),
@@ -1295,18 +1293,17 @@ fn tail(
     // How unsure the decay is: its slope three standard errors slower.
     let n = points.len() as f64;
     let se = if n > 2.0 {
-        let res: f64 = points
-            .iter()
-            .map(|p| (p.1 as f64 - (fit.intercept + fit.slope * p.0) as f64).powi(2))
-            .sum::<f64>()
-            / (n - 2.0);
+        let res: f64 =
+            points.iter().map(|p| (p.1 as f64 - (fit.intercept + fit.slope * p.0) as f64).powi(2)).sum::<f64>()
+                / (n - 2.0);
         // The readings are a smooth curve, a few independent ones in all.
         (res / fit.sxx as f64).sqrt() * (n / 6.0).max(1.0).sqrt()
     } else {
         0.0
     };
     let slower = model((fit.slope + 3.0 * se as f32).min(-1e-6));
-    let unsure_direct: f64 = (ta..tb).map(|i| (slower[i] - direct[i]).abs()).sum::<f64>() + 0.05 * (ta..tb).map(|i| direct[i]).sum::<f64>();
+    let unsure_direct: f64 =
+        (ta..tb).map(|i| (slower[i] - direct[i]).abs()).sum::<f64>() + 0.05 * (ta..tb).map(|i| direct[i]).sum::<f64>();
     let width = (tb - ta) as f64;
     let span = (SR / (2.0 * cutoff)) as f64;
     let unsure_bed =
@@ -1427,8 +1424,10 @@ fn wobble(pitch: &[(f32, f32)]) -> Option<(f32, f32)> {
 /// alone is withheld on those.
 pub(crate) fn tails(events: &mut [Event]) {
     let starts: Vec<(f32, f32, f32)> = events.iter().map(|e| (e.start_s, e.end_s, e.inside.start_hz)).collect();
-    let cut: Vec<bool> =
-        events.iter().map(|e| e.inside.overlap.is_some_and(|o| o.starts_with("the next event near its pitch"))).collect();
+    let cut: Vec<bool> = events
+        .iter()
+        .map(|e| e.inside.overlap.is_some_and(|o| o.starts_with("the next event near its pitch")))
+        .collect();
     for (i, e) in events.iter_mut().enumerate() {
         // The band's own low-pass rings ahead of the next onset by about two
         // of its periods: that is inside the window too.
@@ -1459,7 +1458,15 @@ pub(crate) fn tails(events: &mut [Event]) {
             x.tail_db = x.tail_db.withhold("another event within an octave of it starts in the 400 ms after it");
         }
         if let Some(why) = x.overlap {
-            for f in [&mut x.tonal_db, &mut x.h2_db, &mut x.h3_db, &mut x.centroid_hz, &mut x.centroid_move_st, &mut x.tail_db, &mut x.burst_db] {
+            for f in [
+                &mut x.tonal_db,
+                &mut x.h2_db,
+                &mut x.h3_db,
+                &mut x.centroid_hz,
+                &mut x.centroid_move_st,
+                &mut x.tail_db,
+                &mut x.burst_db,
+            ] {
                 *f = f.withhold(why);
             }
             // The width is the window's when the next strike cuts the event;
@@ -1590,7 +1597,8 @@ pub(crate) fn delay(c: &Ctx, events: &[Event], band: (f32, f32)) -> Option<Delay
     let tol = to_ms(look);
     let half_steps = found.interval_ms / (0.5 * ioi);
     if one_pitch && on_grid && ioi > 0.0 && (half_steps - half_steps.round()).abs() * 0.5 * ioi < tol {
-        found.ambiguous = Some("its interval is a multiple of half the note spacing, on one pitch: it cannot be told from the notes");
+        found.ambiguous =
+            Some("its interval is a multiple of half the note spacing, on one pitch: it cannot be told from the notes");
     }
     Some(found)
 }
@@ -1630,9 +1638,7 @@ fn echo(c: &Ctx, e: &Event, shift: f64, around: usize, look: usize, cutoff: f32)
     let tr = track(c, &e.ridge, c.stft.hop, shift, from, to, cutoff);
     let (a, b) = (around.saturating_sub(look).saturating_sub(from), (around + look - from).min(tr.l.len() - 1));
     let (i, v) = (a..=b).fold((a, 0.0f32), |m, i| if tr.level(i) > m.1 { (i, tr.level(i)) } else { m });
-    let curve: Vec<f32> = (i..(i + samples(30.0)).min(tr.l.len()))
-        .step_by(samples(1.0).max(1))
-        .map(|k| tr.level(k))
-        .collect();
+    let curve: Vec<f32> =
+        (i..(i + samples(30.0)).min(tr.l.len())).step_by(samples(1.0).max(1)).map(|k| tr.level(k)).collect();
     Some((v, from + i, curve))
 }

@@ -51,7 +51,9 @@ fn length(e: &Event) -> Fig {
         Fig::No("the partial moves faster than its band follows it")
     } else if e.inside.overlap.is_some_and(|o| o.starts_with("the next event")) {
         Fig::AtLeast(ms)
-    } else if let Some(why) = e.inside.overlap.filter(|o| o.starts_with("it starts while") || o.starts_with("its level falls and rises")) {
+    } else if let Some(why) =
+        e.inside.overlap.filter(|o| o.starts_with("it starts while") || o.starts_with("its level falls and rises"))
+    {
         Fig::No(why)
     } else {
         Fig::Value(ms)
@@ -454,16 +456,7 @@ pub struct Row {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn row(
-    key: &str,
-    label: &str,
-    unit: &'static str,
-    a: Summary,
-    b: Summary,
-    least: f32,
-    ratio: bool,
-    error: f32,
-) -> Row {
+fn row(key: &str, label: &str, unit: &'static str, a: Summary, b: Summary, least: f32, ratio: bool, error: f32) -> Row {
     let (av, bv) = (a.spread(), b.spread());
     let (difference, weight, flagged) = match (av, bv) {
         (Some(x), Some(y)) => {
@@ -508,7 +501,16 @@ pub fn rows(a: &Report, b: &Report) -> Vec<Row> {
         let per = |r: &Report| one(Some(r.events.len() as f32 / r.seconds.max(1e-3)), "no events");
         out.push(row("per_second", "events a second", "", per(a), per(b), 1.3, true, 1.3));
         for me in MEASURES {
-            out.push(row(me.key, me.label, me.unit, population(a, me), population(b, me), me.least, me.ratio, me.error));
+            out.push(row(
+                me.key,
+                me.label,
+                me.unit,
+                population(a, me),
+                population(b, me),
+                me.least,
+                me.ratio,
+                me.error,
+            ));
         }
         let (da, db) = (delay_trusted(a), delay_trusted(b));
         let why = "no repeats, or repeats that are a pattern or cannot be told from the notes";
@@ -734,9 +736,8 @@ pub fn advice(a: &Report, b: &Report, rows: &[Row], _name_b: &str) -> Vec<String
         if r.key.starts_with("side_") && sides.len() >= 3 {
             if !said_width {
                 said_width = true;
-                let mid = |f: fn(&Row) -> Option<f32>| {
-                    spread(sides.iter().filter_map(|r| f(r))).map_or(0.0, |s| s.median)
-                };
+                let mid =
+                    |f: fn(&Row) -> Option<f32>| spread(sides.iter().filter_map(|r| f(r))).map_or(0.0, |s| s.median);
                 let (wa, wb) = (mid(|r| r.a.median()), mid(|r| r.b.median()));
                 out.push(format!(
                     "width: over {} octaves B's side sits {} dB against its mid, A's {} dB: {}",
@@ -1184,8 +1185,12 @@ fn json_report(r: &Report, name: &str) -> String {
         None => o.push_str(",\"aliasing\":null"),
     }
     match &c.alias_floor {
-        Some((examined, floor)) => {
-            let _ = write!(o, ",\"aliasing_examined\":{{\"folds\":{examined},\"floor_db\":{}}}", js(*floor));
+        Some((examined, floor, stray)) => {
+            let _ = write!(
+                o,
+                ",\"aliasing_examined\":{{\"folds\":{examined},\"floor_db\":{},\"lines_under_six\":{stray}}}",
+                js(*floor)
+            );
         }
         None => o.push_str(",\"aliasing_examined\":null"),
     }

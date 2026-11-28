@@ -284,13 +284,8 @@ pub fn measure(left: Vec<f32>, right: Vec<f32>, opts: &Options, native: bool) ->
     // onsets that turned out to be events, so a rise that is no event (two
     // stages of one decay beating) does not cut the event it sits in short.
     let read_all = |keep: &[bool]| -> Vec<Event> {
-        let onsets: Vec<(usize, f32)> = found
-            .ridges
-            .iter()
-            .zip(keep)
-            .filter(|(_, k)| **k)
-            .map(|((r, _), _)| (r.frame * hop, r.hz[0]))
-            .collect();
+        let onsets: Vec<(usize, f32)> =
+            found.ridges.iter().zip(keep).filter(|(_, k)| **k).map(|((r, _), _)| (r.frame * hop, r.hz[0])).collect();
         let mut events: Vec<Event> =
             found.ridges.iter().filter_map(|(ridge, over)| inside::read(&ctx, ridge, *over, &onsets)).collect();
         events.sort_by(|a, b| a.start_s.total_cmp(&b.start_s));

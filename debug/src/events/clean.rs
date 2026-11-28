@@ -54,8 +54,9 @@ pub struct Clean {
     pub alias_unread: Option<&'static str>,
     /// When they were and none were found: how many fold positions were
     /// examined, and the level a fold would have had to reach to be seen, dB
-    /// under the partial it comes from.
-    pub alias_floor: Option<(usize, f32)>,
+    /// under the partial it comes from, and the most lines one note had
+    /// standing where folds land, too few (under six) to call it aliasing.
+    pub alias_floor: Option<(usize, f32, usize)>,
     pub steps: Vec<Step>,
     pub zipper: Option<Zipper>,
     pub buzz: Option<Buzz>,
@@ -119,9 +120,13 @@ impl Clean {
         if self.alias.is_none() {
             match (self.alias_unread, self.alias_floor) {
                 (Some(why), _) => out.push(format!("aliasing {why}")),
-                (None, Some((n, floor))) => out.push(format!(
+                (None, Some((n, floor, 0))) => out.push(format!(
                     "aliasing: nothing folded back over {:.0} dB under its partial, at the {n} fold positions examined",
                     -floor
+                )),
+                (None, Some((n, _, lines))) => out.push(format!(
+                    "aliasing: {lines} lines stand where folds would land, of the {n} fold positions examined: \
+                     fewer than the six an oscillator that folds puts there, so not called aliasing; they may be partials of their own"
                 )),
                 (None, None) => out.push("aliasing not examined".into()),
             }
@@ -489,7 +494,12 @@ fn buzz(x: &[f32], level: f32) -> Option<Buzz> {
 /// a few bins between the two, and has harmonics of its own to fold; each
 /// fold position counts as a line when it stands 10 dB over the bins around
 /// it. An oscillator that folds puts lines on most of them; six are needed.
-fn alias(c: &Ctx, events: &[Event], sustained: Option<&Sustained>) -> (Option<Alias>, Result<(usize, f32), &'static str>) {
+#[allow(clippy::type_complexity)]
+fn alias(
+    c: &Ctx,
+    events: &[Event],
+    sustained: Option<&Sustained>,
+) -> (Option<Alias>, Result<(usize, f32, usize), &'static str>) {
     let mut notes: Vec<(usize, usize, f32, f32)> = Vec::new();
     for e in events {
         let (Some(_), true) = (e.inside.start.value(), e.inside.overlap.is_none()) else { continue };
@@ -512,12 +522,16 @@ fn alias(c: &Ctx, events: &[Event], sustained: Option<&Sustained>) -> (Option<Al
     let (mut examined, mut floors, mut signal, mut folded, mut lines) = (0usize, Vec::new(), 0.0f64, 0.0f64, 0usize);
     let mut worst = (0usize, 0.0f32, 0.0f64);
     let mut loudest = (0.0f64, 0.0f32, 0.0f32);
+    let mut stray = 0usize;
     for (a, b, hint, at_s) in notes {
         match fold_lines(&c.mono[a..b], hint) {
             Err(w) => why = w,
             Ok(n) => {
                 examined += n.examined;
                 floors.push(n.floor_db);
+                if n.lines < 6 {
+                    stray = stray.max(n.lines);
+                }
                 if n.lines >= 6 && n.has_harmonics {
                     signal += n.fundamental;
                     folded += n.folded;
@@ -539,11 +553,11 @@ fn alias(c: &Ctx, events: &[Event], sustained: Option<&Sustained>) -> (Option<Al
     floors.sort_by(f32::total_cmp);
     let floor = floors[floors.len() / 2];
     if signal <= 0.0 || folded <= 0.0 {
-        return (None, Ok((examined, floor)));
+        return (None, Ok((examined, floor, stray)));
     }
     let total = db((folded / signal) as f32);
     if total <= ALIAS_DB {
-        return (None, Ok((examined, floor)));
+        return (None, Ok((examined, floor, stray)));
     }
     (
         Some(Alias {
@@ -553,7 +567,7 @@ fn alias(c: &Ctx, events: &[Event], sustained: Option<&Sustained>) -> (Option<Al
             at_s: loudest.2,
             lines,
         }),
-        Ok((examined, floor)),
+        Ok((examined, floor, stray)),
     )
 }
 
@@ -578,7 +592,8 @@ const BH: [f64; 4] = [0.35875, 0.48829, 0.14128, 0.01168];
 
 /// The window's response `d` bins off a line, against its response on it.
 fn bh_kernel(d: f64) -> f64 {
-    let sinc = |x: f64| if x.abs() < 1e-9 { 1.0 } else { (std::f64::consts::PI * x).sin() / (std::f64::consts::PI * x) };
+    let sinc =
+        |x: f64| if x.abs() < 1e-9 { 1.0 } else { (std::f64::consts::PI * x).sin() / (std::f64::consts::PI * x) };
     let k = BH[0] * sinc(d) + (1..4).map(|m| 0.5 * BH[m] * (sinc(d - m as f64) + sinc(d + m as f64))).sum::<f64>();
     k / BH[0]
 }
@@ -659,7 +674,8 @@ fn fold_lines(x: &[f32], hint: f32) -> Result<NoteFolds, &'static str> {
         hz < 0.45 * SR && three(at(hz).clamp(1, p.len() - 2)) > 1e-5 * fundamental
     });
     let local = |k: usize| -> f64 {
-        let mut v: Vec<f64> = (k.saturating_sub(24)..(k + 25).min(p.len())).filter(|&j| j.abs_diff(k) > 2).map(|j| p[j]).collect();
+        let mut v: Vec<f64> =
+            (k.saturating_sub(24)..(k + 25).min(p.len())).filter(|&j| j.abs_diff(k) > 2).map(|j| p[j]).collect();
         let mid = v.len() / 2;
         *v.select_nth_unstable_by(mid, f64::total_cmp).1
     };
