@@ -133,13 +133,13 @@ fn within(what: &str, got: f32, want: f32, by: f32) {
     assert!((got - want).abs() <= by, "{what}: {got}, and the sound was made to {want} (give or take {by})");
 }
 
-/// 24 bars of one held note at 108 BPM, as the kit plays it: 51 seconds of
+/// 24 bars of one held D#3 at 108 BPM, as the kit plays it: 51 seconds of
 /// it from the first. Beside each number, what the same measure reads on
 /// the record the sound was made after (Spacetime Continuum, Sea Biscuit).
 #[test]
 fn the_bubbles_are_as_many_as_uneven_as_long_and_as_wide_as_measured() {
     let src = format!(
-        "tempo 108\n{}\npattern stream {{ C3 ..*15 }}\ntrack t {{ play stream using bubbles out > master }}\n",
+        "tempo 108\n{}\npattern stream {{ D#3 ..*15 }}\ntrack t {{ play stream using bubbles out > master }}\n",
         include_str!("../../sounds/liquid/bubbles.synth")
     );
     // As the file `tatum render` writes, which is what the script read:
@@ -209,15 +209,20 @@ fn the_bubbles_are_as_many_as_uneven_as_long_and_as_wide_as_measured() {
     within("the deviation of the levels, dB", levels, LEVELS, 0.5 * loose);
 }
 
-// What the measure reads on the bubbles, and the "ours" column of the table
-// in the pull request that brought them.
-const RATE: f32 = 5.55;
-const GAP: [f32; 3] = [0.06, 0.13, 0.35];
-const CV: f32 = 0.81;
-const LENGTH: [f32; 3] = [46.0, 73.0, 130.0];
-const START: [f32; 3] = [560.0, 1023.0, 1561.0];
-const WIDTH: f32 = 7.3;
-const BEND: [f32; 3] = [-3.5, 0.0, 3.0];
-const FALLING: f32 = 0.31;
-const RISING: f32 = 0.30;
-const LEVELS: f32 = 5.1;
+// What the measure reads on the bubbles, and the "now" column of the table
+// in the pull request that brought them. The first bubbles were a filter
+// struck by impulses and read 5.55 a second, gaps of 0.06 / 0.13 / 0.35 s
+// spread 0.81, 46 / 73 / 130 ms, 560 / 1023 / 1561 Hz over 7.3 st, bends of
+// -3.5 / 0 / +3.0 st with 31% falling and 30% rising, levels 5.1 dB apart.
+// These are swells of a resonance over a saw, so a ping starts on one of the
+// saw's harmonics: that is the narrower spread of starts.
+const RATE: f32 = 5.37;
+const GAP: [f32; 3] = [0.056, 0.131, 0.348];
+const CV: f32 = 0.92;
+const LENGTH: [f32; 3] = [46.0, 67.0, 118.0];
+const START: [f32; 3] = [538.0, 1012.0, 1475.0];
+const WIDTH: f32 = 6.6;
+const BEND: [f32; 3] = [-3.8, 0.0, 3.4];
+const FALLING: f32 = 0.33;
+const RISING: f32 = 0.31;
+const LEVELS: f32 = 5.7;

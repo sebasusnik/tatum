@@ -11,12 +11,12 @@ use "liquid/shoal.synth"
 use "liquid/tide.synth"
 use "liquid/drop.synth"
 use "liquid/glass.synth"
-pattern stream { C3 ..*127 }
+pattern stream { D#3 ..*127 }
 pattern chords { [G#2 D#3 B3] ..*63 [F#2 C#3 A#3] ..*63 }
 pattern slides { G#1 ..*7 ~D#2 ..*7 ~F#2 ..*8 ~C#2 ..*6 ~G#1 ..*7 ~D#2 ..*8 ~A#1 ..*6 ~D#2 ..*7 }
 pattern falls  { -*24 G#4 ..*39 -*34 D#4 ..*29 }
 pattern bells  { -*8 C#5 ..*15 -*40 G#4 ..*15 -*48 }
-track bubbles { play stream using bubbles level 0.6 delay_send 0.12 reverb_send 0.3 out > autopan(0.7, hz=1.2) > master }
+track bubbles { play stream using bubbles level 0.6 delay_send 0.12 reverb_send 0.3 out > chorus(0.3) > autopan(0.3, hz=1.2) > master }
 track pad     { play chords using shoal level 0.4 reverb_send 0.4 }
 track bass    { play slides using tide level 0.5 }
 track drop    { play falls using drop level 0.3 delay_send 0.11 reverb_send 0.3 out > autopan(0.5, bars=1) > master }

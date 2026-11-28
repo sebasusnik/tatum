@@ -1,27 +1,61 @@
-# Bubbles: one held note is a stream of resonant pings off the grid. A dust
-# fires about eight a second, swelling and thinning; each impulse draws the
-# pitch its ping rings at, anywhere within an octave either side of 950 Hz
-# and reached in a millisecond so the ping before it does not click, and a
-# small bend that takes 60 ms to arrive. Not tuned to the note: any note
-# plays it, and every note plays a different stream.
+# Bubbles: one held note is a stream of swells off the grid, with no click in
+# it. A saw on the note, thinned from below, runs through a wide resonance; a
+# dust fires eleven times a second, in swells of its own, and each impulse
+# moves the resonance somewhere within an octave either side of 950 Hz and,
+# smoothed by four slow filters into a rise and fall 45 to 120 ms long, lifts
+# its level 20 dB and lets it back. So a bubble is two or three of the saw's
+# harmonics lighting up and going out, on harmonics that never stop, and it
+# is pitched on the note: play it low, D#3 or thereabouts. Every note plays a
+# different stream. Measured on D#3: 5.4 swells a second found, 46 / 67 /
+# 118 ms long, starting at 540 to 1480 Hz; a swell's second harmonic 19 dB
+# under it and its third 30; the floor between the harmonics 72 dB down.
 instrument bubbles {
-  gain 2.5
-  dust(8hz, spread=11db, level=32db) as d
-  rand(1.1, glide=1ms) as where
-  rand(0.15, glide=60ms) as bend
-  wander(0.3hz, 1.5) as tide
-  lowpass(1600hz, 0.01) as soft
-  svf(bandpass, 950hz, 0.89) as ping
-  lowpass(4000hz, 0.01) as round
-  adsr(0.005, 0.1, 1, 0.4) as amp
-  d > where.draw
-  d > bend.draw
-  d > soft
-  soft > ping
-  where > ping.cutoff
-  bend > ping.cutoff
+  gain 7
+  osc saw(110) as src
+  highpass(1300hz, 0.01) as thin
+  dust(11hz, spread=4db, level=40db) as d
+  rand(1.1, glide=4ms) as where
+  wander(0.3hz, 1.7) as tide
+  rand(1.2, bias=-1, glide=5ms) as long
+  svf(45hz, 0) as rise
+  svf(45hz, 0) as crest
+  svf(45hz, 0) as ebb
+  svf(45hz, 0) as fall
+  gain(10) as lift
+  gain(10) as more
+  svf(bandpass, 950hz, 0.55) as ping
+  gain(0.06) as swell
+  svf(bandpass, 1000hz, 0) as held
+  gain(0.01) as bed
+  noise as hiss
+  gain(0.0005) as air
+  lowpass(2500hz, 0.01) as round
+  adsr(0.05, 0.1, 1, 0.4) as amp
   tide > d.rate
-  ping > round
+  d > where.draw
+  d > long.draw
+  d > rise
+  rise > crest
+  crest > ebb
+  ebb > fall
+  long > rise.cutoff
+  long > crest.cutoff
+  long > ebb.cutoff
+  long > fall.cutoff
+  fall > lift
+  lift > more
+  more > swell.amount
+  src > thin
+  thin > ping
+  where > ping.cutoff
+  ping > swell
+  thin > held
+  held > bed
+  hiss > air
+  swell > mix
+  bed > mix
+  air > mix
+  mix > round
   round > amp
   amp > out
 }
