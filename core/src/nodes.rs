@@ -57,7 +57,8 @@ impl Arg {
         let is_ms = doc.starts_with("ms");
         let is_db = doc.starts_with("dB");
         let is_linear_gain = doc.starts_with("linear gain");
-        // A share of something, written as a percentage of it.
+        // A share of something, written as a percentage of it: the delay's
+        // `wow` and `flutter`, and the kick's `vary` and `vary_pitch`.
         let is_share = doc.starts_with("share");
         let resolved = match suffix {
             "%" if is_share => Some(value / 100.0),
@@ -71,6 +72,10 @@ impl Arg {
         };
         match resolved {
             Some(v) => Ok(v),
+            None if is_share => Err(format!(
+                "'{}' takes % or a plain {}..{} ({}), not '{}'",
+                self.name, self.min, self.max, self.doc, suffix
+            )),
             None => {
                 let accepts = if is_hz {
                     "hz or khz"
@@ -78,8 +83,6 @@ impl Arg {
                     "ms or s"
                 } else if is_db || is_linear_gain {
                     "db"
-                } else if is_share {
-                    "% or a plain 0..1"
                 } else {
                     "no unit"
                 };
@@ -181,10 +184,10 @@ pub const NODES: &[NodeDefSpec] = &[
             arg!("drive", 0.0, 1.0, 0.0, "tanh saturation of the body, clean to heavy, at the same peak level; the tail saturates less than the hit"),
             arg!("vary", 0.0, 0.2, 0.0, "share the hold and the release sway by from hit to hit, slowly and the same on every play: 0.03 is 3%, the breath of a hypnotic pulse; 0, every hit the same"),
             arg!("vary_pitch", 0.0, 0.1, 0.0, "share the whole sweep sways by in pitch from hit to hit, slowly and the same on every play: 0.01 is about a sixth of a semitone; 0, every hit the same"),
-            arg!("heard", 0.0, 1.0, 0.0, "1: the note given is the note the kick is heard as, the sweep included, and the note it settles on is found under it; 0: the note it settles on"),
+            arg!("heard", 0.0, 1.0, 0.0, "1: the note given is the note the kick is heard as, the sweep included, and the note it settles on is found under it, a fourth under on the default shape; an error when 20 Hz is not low enough. A model from the arguments, drive included, that knows nothing of the click or of what comes after the node. 0: the note it settles on"),
         ],
         waveform: false, rhythm: false, in_chains: false,
-        doc: "A whole kick in one node, written in the units a kick is thought in: the note it lands on, how long the snap and the body take in ms, and its level held then released. It plays every hit the same, sample for sample, whatever the note's length, and the voice ends when it does. `kick(A1, body=70ms, hold=90ms, release=150ms)`. `chirp=` adds a third, faster stage on top for the tick of the attack, and `sag=` lets the held top lean. Write it with its parentheses, `kick()`, so a node named `kick` stays a name." },
+        doc: "A whole kick in one node, written in the units a kick is thought in: the note it lands on, how long the snap and the body take in ms, and its level held then released. It plays every hit the same, sample for sample, whatever the note's length, unless `vary=` or `vary_pitch=` sway it, and the voice ends when it does. `kick(A1, body=70ms, hold=90ms, release=150ms)`. `chirp=` adds a third, faster stage on top for the tick of the attack, and `sag=` lets the held top lean. Write it with its parentheses, `kick()`, so a node named `kick` stays a name." },
     NodeDefSpec { name: "noise", aliases: &[], category: Category::Source, positional: &[], named: &[],
         waveform: false, rhythm: false, in_chains: false, doc: "White noise." },
     NodeDefSpec { name: "lfo", aliases: &[], category: Category::Source,

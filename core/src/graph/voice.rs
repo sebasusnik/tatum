@@ -298,5 +298,7 @@ impl Instrument {
         for voice in self.voices.iter_mut() {
             voice.active = false;
         }
+        // The next play counts its hits from the top, as a render does.
+        self.hits = 0;
     }
 }

@@ -574,7 +574,7 @@ fn tool_compare(ctx: &Ctx, args: &Value) -> Result<String, String> {
     if l.len() < SAMPLE_RATE as usize * 2 {
         return Err("the render is under two seconds; give `bars` more of the song".into());
     }
-    let mine = tatum_debug::reference::measure(&l, &r);
+    let mine = tatum_debug::reference::measure(&l, &r).rendered_from(source);
     let ref_name = args.get("reference").and_then(Value::as_str).unwrap_or_default();
     Ok(tatum_debug::reference::compare(&reference, &mine, ref_name, &slug_from_source(source)))
 }

@@ -34,8 +34,10 @@ const NOISE_SEEDS: [u32; 2] = [0x5EED_D1A7, 0x0B0E_0B0E];
 const MOD_HEADROOM_SECONDS: f32 = WOW_SECONDS + FLUTTER_SECONDS * 3.0 + 0.0005;
 /// The shortest delay a modulated read may reach, in samples: the cubic read
 /// takes a tap one sample newer than its own, and the newest sample in the
-/// line is the one written a step ago.
-const MIN_MOD_DELAY: f32 = 2.0;
+/// line is the one written a step ago. A time shorter than the swing (under
+/// some 3.7 ms at full wow) is held here for the part of each cycle that
+/// would take it lower: the bend rests there, without a click.
+const MIN_MOD_DELAY: usize = 2;
 const TWO_PI: f32 = core::f32::consts::TAU;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -257,11 +259,10 @@ impl Delay {
 
     /// Cubic Hermite (Catmull-Rom) read at a fractional delay, the points
     /// running towards the older sample as the delay grows, as the chorus
-    /// reads. `delay` is within `MIN_MOD_DELAY..=len - 3`.
+    /// reads. The delay is `d` whole samples and `t` (0..=1) of one more, `d`
+    /// within `MIN_MOD_DELAY..=len - 3`.
     #[inline]
-    fn read_cubic(buf: &[f32], write_pos: usize, delay: f32) -> f32 {
-        let d = delay as usize;
-        let t = delay - d as f32;
+    fn read_cubic(buf: &[f32], write_pos: usize, (d, t): (usize, f32)) -> f32 {
         let s0 = Self::tap(buf, write_pos, d - 1);
         let s1 = Self::tap(buf, write_pos, d);
         let s2 = Self::tap(buf, write_pos, d + 1);
@@ -274,18 +275,30 @@ impl Delay {
     }
 
     /// Both channels' delays this step, in samples: the set time moved by the
-    /// wow and flutter, kept where the cubic read can reach.
+    /// wow and flutter, kept where the cubic read can reach. Each is whole
+    /// samples and the fraction of one more, kept apart: the swing is a few
+    /// hundred samples at most, and added to a long time as one f32 it would
+    /// move in steps of 1/128 of a sample rather than glide.
     #[inline]
-    fn modulated_delays(&mut self) -> [f32; 2] {
+    fn modulated_delays(&mut self) -> [(usize, f32); 2] {
         let wow_samples = self.wow * WOW_SECONDS * self.sample_rate;
         let flutter_samples = self.flutter * FLUTTER_SECONDS * self.sample_rate;
         let flutter_on = self.flutter > 0.0;
-        let top = (self.buffer_l.len() - 3) as f32;
-        let base = self.delay_samples as f32;
-        let mut out = [0.0; 2];
+        let top = (self.buffer_l.len() - 3) as isize;
+        let base = self.delay_samples as isize;
+        let mut out = [(0, 0.0); 2];
         for (d, drift) in out.iter_mut().zip(self.drift.iter_mut()) {
             let (wow, flutter) = drift.next(self.sample_rate, flutter_on);
-            *d = math::clamp(base + wow * wow_samples + flutter * flutter_samples, MIN_MOD_DELAY, top);
+            let swing = wow * wow_samples + flutter * flutter_samples;
+            let whole = math::floor(swing);
+            let at = base + whole as isize;
+            *d = if at < MIN_MOD_DELAY as isize {
+                (MIN_MOD_DELAY, 0.0)
+            } else if at >= top {
+                (top as usize, 0.0)
+            } else {
+                (at as usize, swing - whole)
+            };
         }
         out
     }

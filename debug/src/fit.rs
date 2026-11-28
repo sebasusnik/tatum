@@ -3,9 +3,10 @@
 //!
 //! The target is a hit as [`crate::hit::average_hit`] gives it. A candidate
 //! is built from `kick(...)`'s own arguments by the compiler's own rules
-//! ([`tatum_core::dsl::compiler::kick_spec`]), rendered alone, cut where it
-//! first reaches 5% of its peak the way the average is, and read with
-//! [`crate::hit::curves`]. What is minimised is the pitch error in semitones
+//! ([`tatum_core::dsl::compiler::kick_spec`]) within the ranges the node
+//! declares ([`tatum_core::nodes::validate`]), rendered alone, cut where the
+//! hit starts ([`crate::hit::hit_start`]) the way the average is, and read
+//! with [`crate::hit::curves`]. What is minimised is the pitch error in semitones
 //! on an even grid from 0.6 to 215 ms, the same over the attack (to 10 ms)
 //! on its own, since the attack is a few points of that grid and the ear
 //! hears it first, and the level error in dB.
@@ -13,11 +14,12 @@
 //! The search is Nelder-Mead over the arguments mapped to 0..1 (Hz and ms on
 //! a log scale), in three stages: the pitch alone, the level alone, then all
 //! of it, each from the best so far with a few restarts. The click is set
-//! last, on its own, to the record's click as `tatum analyze` measures it.
+//! last, to the level whose whole score is best ([`fit_click`]): a record
+//! has more over 2 kHz in a hit's first milliseconds than its kick's click.
 
 use tatum_core::dsl::ast::Param;
 use tatum_core::dsl::compiler::kick_spec;
-use tatum_core::graph::node::MAX_NODE_INPUTS;
+use tatum_core::graph::node::{NodeSpec, MAX_NODE_INPUTS};
 use tatum_core::SAMPLE_RATE;
 
 use crate::hit::{curves, Curves};
@@ -173,11 +175,24 @@ impl KickArgs {
         }
     }
 
+    /// The node the engine builds from these arguments, by the two checks it
+    /// applies to a written `kick(...)`: every argument within the range the
+    /// node declares ([`tatum_core::nodes::validate`]), then the compiler's
+    /// rules between them ([`kick_spec`]).
+    pub fn spec(&self) -> Result<NodeSpec, String> {
+        let params = self.params();
+        let problems = tatum_core::nodes::validate("kick", &params);
+        if !problems.is_empty() {
+            return Err(problems.join("; "));
+        }
+        kick_spec(&params).map_err(|e| e.to_string())
+    }
+
     /// One hit, alone, `ms` long from where it starts, as the average of a
-    /// record's hits is cut. `None` when the
-    /// compiler refuses the arguments.
+    /// record's hits is cut. `None` when the engine would refuse the
+    /// arguments.
     pub fn render(&self, ms: f32) -> Option<Vec<f32>> {
-        let spec = kick_spec(&self.params()).ok()?;
+        let spec = self.spec().ok()?;
         let mut node = spec.instantiate();
         let n = (((ms + 30.0) * 0.001) * SAMPLE_RATE) as usize;
         let inputs = [0.0f32; MAX_NODE_INPUTS];
@@ -307,26 +322,48 @@ impl Target {
 /// each moment weighted by its energy and how steady its pitch is, from 5 ms (before that the sweep is
 /// the click of the hit) until it is 30 dB under its peak. The same model as
 /// the engine's `kick_heard_hz`, read off a hit instead of computed from a
-/// kick's arguments. `None` when no pitch is read in that stretch.
+/// kick's arguments, and summed the way the engine sums it: a term every
+/// millisecond, not one per half cycle, which would count a 40 Hz tail a
+/// quarter as often as the 160 Hz above it. The level is the peak of the
+/// half cycle around each moment, not [`Curves::level`], which holds the
+/// loudest of five half cycles and so keeps a 50 Hz tail at its top for 20 ms
+/// into its release. `None` when no pitch is read in that stretch.
 pub fn heard_hz(y: &[f32]) -> Option<f32> {
     use tatum_core::graph::node::{heard_weight, HEARD_DOWN_DB, HEARD_FROM_MS};
-    let c = read(y);
+    let peak = y.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+    if peak <= 0.0 {
+        return None;
+    }
+    let pitch = read(y).pitch;
+    // The body through the fit's low-pass, as its pitch is read.
+    let body = Biquad::lowpass(BODY_LOWPASS_HZ).run_twice(y);
+    let floor = peak * 10f32.powf(HEARD_DOWN_DB / 20.0);
+    let last = y.len() as f32 * 1000.0 / SAMPLE_RATE;
     let (mut sum, mut weight) = (0.0f64, 0.0f64);
-    for &(t, db) in c.level.iter().filter(|l| l.0 >= HEARD_FROM_MS) {
-        if db < HEARD_DOWN_DB {
-            break;
-        }
+    let mut t = HEARD_FROM_MS;
+    while t < last {
         // How fast the pitch moves here, over a millisecond either side.
-        let (Some(hz), Some(a), Some(b)) = (at(&c.pitch, t), at(&c.pitch, t - 1.0), at(&c.pitch, t + 1.0)) else {
-            continue;
+        let (Some(hz), Some(a), Some(b)) = (at(&pitch, t), at(&pitch, t - 1.0), at(&pitch, t + 1.0)) else {
+            break;
         };
         if hz <= 0.0 || a <= 0.0 || b <= 0.0 {
+            t += 1.0;
             continue;
         }
+        // Half a cycle of a sine, wherever it is cut, has its peak in it.
+        let quarter = 0.25 * SAMPLE_RATE / hz;
+        let mid = t * 0.001 * SAMPLE_RATE;
+        let (lo, hi) = ((mid - quarter).max(0.0) as usize, ((mid + quarter).ceil() as usize + 1).min(y.len()));
+        let from = if t <= BODY_FROM_MS { y } else { &body[..] };
+        let level = from[lo.min(hi)..hi].iter().fold(0.0f32, |m, v| m.max(v.abs()));
+        if level < floor {
+            break;
+        }
         let st_per_ms = (12.0 * (a / b).log2() / 2.0).abs();
-        let w = heard_weight(10f32.powf(db / 20.0), st_per_ms) as f64;
+        let w = heard_weight(level / peak, st_per_ms) as f64;
         sum += w * (hz as f64).ln();
         weight += w;
+        t += 1.0;
     }
     (weight > 0.0).then(|| (sum / weight).exp() as f32)
 }
@@ -456,7 +493,9 @@ const ALL_DIMS: [Dim; 11] = [
 ];
 
 fn log_to(lo: f32, hi: f32, u: f32) -> f32 {
-    lo * (hi / lo).powf(u.clamp(0.0, 1.0))
+    // Held between the ends: the power's rounding must not put the top of a
+    // range a hair over it.
+    (lo * (hi / lo).powf(u.clamp(0.0, 1.0))).clamp(lo, hi)
 }
 fn log_from(lo: f32, hi: f32, v: f32) -> f32 {
     ((v.max(lo) / lo).ln() / (hi / lo).ln()).clamp(0.0, 1.0)
@@ -468,45 +507,73 @@ fn over_note(note: f32) -> f32 {
     1.12 * note
 }
 
-/// Set `d` of `k` from `u`. Start, knee and chirp are placed between what
-/// the arguments before them allow, so every point of the cube is a kick
-/// the compiler takes.
+/// The range the `kick` node declares for `arg`: what `nodes::validate`
+/// holds a written line to, so the search never leaves it.
+fn range(arg: &str) -> (f32, f32) {
+    let kick = tatum_core::nodes::lookup("kick").expect("the kick node");
+    let a = kick.positional.iter().chain(kick.named).find(|a| a.name == arg).expect("an argument of kick");
+    (a.min, a.max)
+}
+
+/// Where a start may be for `note`: over the note by `margin` times the
+/// least, and within the node's own range.
+fn start_range(note: f32, margin: f32) -> (f32, f32) {
+    let (lo, hi) = range("start");
+    ((over_note(note) * margin).max(lo), hi)
+}
+
+/// The knee at `u` between the least over the note and the start, held
+/// under the node's own ceiling: over it, every `u` is that ceiling.
+fn knee_at(note: f32, start: f32, u: f32) -> f32 {
+    let lo = over_note(note);
+    log_to(lo, start.max(lo), u).min(range("knee").1.max(lo))
+}
+
+/// Set `d` of `k` from `u`. Every argument stays in the range the node
+/// declares for it, and start, knee and chirp are placed between what the
+/// arguments before them allow, so every point of the cube is a kick the
+/// compiler takes.
 fn set(k: &mut KickArgs, d: Dim, u: f32) {
     let u = u.clamp(0.0, 1.0);
+    let log = |(lo, hi): (f32, f32), u: f32| log_to(lo, hi, u);
     match d {
-        Dim::Note => k.note = log_to(20.0, 200.0, u),
-        Dim::Start => k.start = log_to(over_note(k.note) * 1.02, 5000.0, u),
-        Dim::Knee => k.knee = log_to(over_note(k.note), k.start, u),
-        Dim::Snap => k.snap = log_to(0.1, 100.0, u),
-        Dim::Body => k.body = log_to(1.0, 1000.0, u),
-        Dim::Chirp => k.chirp = if u < 0.02 { 0.0 } else { log_to(k.start * NO_CHIRP, 12000.0, (u - 0.02) / 0.98) },
-        Dim::ChirpTime => k.chirp_time = log_to(0.1, 20.0, u),
-        Dim::Hold => k.hold = log_to(1.0, 2001.0, u) - 1.0,
-        Dim::Sag => k.sag = -24.0 * u,
-        Dim::Release => k.release = log_to(5.0, 5000.0, u),
-        Dim::Phase => k.phase = 90.0 * u,
+        Dim::Note => k.note = log(range("note"), u),
+        Dim::Start => k.start = log(start_range(k.note, 1.02), u),
+        Dim::Knee => k.knee = knee_at(k.note, k.start, u),
+        Dim::Snap => k.snap = log(range("snap"), u),
+        Dim::Body => k.body = log(range("body"), u),
+        Dim::Chirp => {
+            k.chirp = if u < 0.02 { 0.0 } else { log_to(k.start * NO_CHIRP, range("chirp").1, (u - 0.02) / 0.98) }
+        }
+        Dim::ChirpTime => k.chirp_time = log(range("chirp_time"), u),
+        // From 0 ms, which a log scale has no place for: a millisecond up.
+        Dim::Hold => k.hold = log_to(1.0, range("hold").1 + 1.0, u) - 1.0,
+        Dim::Sag => k.sag = range("sag").0 * u,
+        Dim::Release => k.release = log(range("release"), u),
+        Dim::Phase => k.phase = range("phase").1 * u,
     }
 }
 
 fn get(k: &KickArgs, d: Dim) -> f32 {
+    let log = |(lo, hi): (f32, f32), v: f32| log_from(lo, hi, v);
     match d {
-        Dim::Note => log_from(20.0, 200.0, k.note),
-        Dim::Start => log_from(over_note(k.note) * 1.02, 5000.0, k.start),
+        Dim::Note => log(range("note"), k.note),
+        Dim::Start => log(start_range(k.note, 1.02), k.start),
         Dim::Knee => log_from(over_note(k.note), k.start.max(over_note(k.note) * 1.0001), k.knee),
-        Dim::Snap => log_from(0.1, 100.0, k.snap),
-        Dim::Body => log_from(1.0, 1000.0, k.body),
+        Dim::Snap => log(range("snap"), k.snap),
+        Dim::Body => log(range("body"), k.body),
         Dim::Chirp => {
             if k.has_chirp() {
-                0.02 + 0.98 * log_from(k.start * NO_CHIRP, 12000.0, k.chirp)
+                0.02 + 0.98 * log_from(k.start * NO_CHIRP, range("chirp").1, k.chirp)
             } else {
                 0.0
             }
         }
-        Dim::ChirpTime => log_from(0.1, 20.0, k.chirp_time),
-        Dim::Hold => log_from(1.0, 2001.0, k.hold + 1.0),
-        Dim::Sag => (-k.sag / 24.0).clamp(0.0, 1.0),
-        Dim::Release => log_from(5.0, 5000.0, k.release),
-        Dim::Phase => (k.phase / 90.0).clamp(0.0, 1.0),
+        Dim::ChirpTime => log(range("chirp_time"), k.chirp_time),
+        Dim::Hold => log_from(1.0, range("hold").1 + 1.0, k.hold + 1.0),
+        Dim::Sag => (k.sag / range("sag").0).clamp(0.0, 1.0),
+        Dim::Release => log(range("release"), k.release),
+        Dim::Phase => (k.phase / range("phase").1).clamp(0.0, 1.0),
     }
 }
 
@@ -640,7 +707,8 @@ pub fn first_guess(target: &Target) -> KickArgs {
     let c = &target.curves;
     let late: Vec<f32> = target.pitch.iter().filter(|p| p.0 > target.ms * 0.4).map(|p| p.1).collect();
     let note = if late.is_empty() { 50.0 } else { median(late) }.clamp(20.0, 200.0);
-    let start = c.pitch.first().map_or(800.0, |p| p.1).clamp(over_note(note) * 1.05, 5000.0);
+    let (lo, hi) = start_range(note, 1.05);
+    let start = c.pitch.first().map_or(800.0, |p| p.1).clamp(lo, hi);
     let body = c.pitch.iter().find(|p| p.1 <= note * 1.1).map_or(60.0, |p| p.0).clamp(1.0, 1000.0);
     let top = c.level.iter().position(|l| l.1 >= -1.0).unwrap_or(0);
     let fall = |db: f32| c.level[top..].iter().find(|l| l.1 < db).map(|l| l.0);
@@ -652,7 +720,7 @@ pub fn first_guess(target: &Target) -> KickArgs {
     KickArgs {
         note,
         start,
-        knee: (3.0 * note).clamp(over_note(note), start),
+        knee: (3.0 * note).clamp(over_note(note), start.min(range("knee").1)),
         snap: 4.0,
         body,
         hold,
@@ -747,7 +815,8 @@ pub fn fit(target: &Target, from: Option<&KickArgs>, effort: f32) -> Fit {
         };
         let pitch_seeds = seeds(&k, &|c, a, b| {
             c.body = (c.body * a).clamp(1.0, 1000.0);
-            c.start = (c.start * b).clamp(over_note(c.note) * 1.05, 5000.0);
+            let (lo, hi) = start_range(c.note, 1.05);
+            c.start = (c.start * b).clamp(lo, hi);
             c.knee = c.knee.min(c.start);
         });
         k = best_of(&mut judge, pitch_seeds, &PITCH_DIMS, Part::Pitch, budget(500.0)).unwrap_or(k);
@@ -880,20 +949,7 @@ mod tests {
 
     /// The kick on its own, four to the bar: nothing before a hit.
     fn alone(k: &KickArgs) -> Vec<f32> {
-        let spec = kick_spec(&k.params()).expect("a kick");
-        let mut node = spec.instantiate();
-        let inputs = [0.0f32; MAX_NODE_INPUTS];
-        let one: Vec<f32> = (0..(SAMPLE_RATE as usize)).map(|_| node.process(&inputs, 0)).collect();
-        let beat = (60.0 / 125.0 * SAMPLE_RATE) as usize;
-        let mut out = vec![0.0f32; 24 * SAMPLE_RATE as usize];
-        let mut at = 1000;
-        while at + beat < out.len() {
-            for (i, v) in one.iter().enumerate().take(beat) {
-                out[at + i] += 0.7 * v;
-            }
-            at += beat;
-        }
-        out
+        alone_of(&k.params()).1
     }
 
     #[test]
@@ -912,18 +968,89 @@ mod tests {
         assert!((analyzed - averaged).abs() < 1.0, "analyze {analyzed:.1} dB, the hit {averaged:.1} dB");
     }
 
+    /// Kicks of more than one shape, for the note heard: by name, the
+    /// arguments, and whether `tatum analyze`'s average of the hits reads the
+    /// kick right. On the last three it does not, heard or tail: the hit is
+    /// found a few ms early and the average is of hits out of line (the tail
+    /// of `kick(G2, body=60ms)` reads 106.6 Hz for 98, and it is heard 4.3
+    /// semitones over the engine's 112.5 Hz). That is the average's, not the
+    /// note heard's, which on one hit of each is within 0.1 semitones.
+    fn shapes() -> Vec<(&'static str, Vec<Param>, bool)> {
+        let n = |s: &str, v: f32| Param::Named(s.into(), v);
+        let body = |ms: f32| {
+            let mut k = truth();
+            k.body = ms;
+            k.params()
+        };
+        let (a1, e1) = (Param::Float(55.0), Param::Float(41.2));
+        vec![
+            ("the fixture, body=20ms", body(20.0), true),
+            ("the fixture, body=60ms", body(60.0), true),
+            ("the fixture, body=110ms", body(110.0), true),
+            ("kick(A1)", vec![a1.clone()], true),
+            ("kick(A1, body=90ms, heard=1)", vec![a1.clone(), n("body", 90.0), n("heard", 1.0)], true),
+            ("kick(E1, body=120ms)", vec![e1, n("body", 120.0)], true),
+            ("kick(A1, body=150ms, knee=400hz)", vec![a1.clone(), n("body", 150.0), n("knee", 400.0)], true),
+            ("kick(A1, body=90ms, phase=90)", vec![a1.clone(), n("body", 90.0), n("phase", 90.0)], true),
+            ("kick(A1, body=90ms, drive=0.5)", vec![a1.clone(), n("body", 90.0), n("drive", 0.5)], true),
+            ("kick(A1, body=90ms, drive=1)", vec![a1.clone(), n("body", 90.0), n("drive", 1.0)], true),
+            ("kick(A1, body=150ms, drive=1)", vec![a1.clone(), n("body", 150.0), n("drive", 1.0)], true),
+            (
+                "kick(A1, body=90ms, drive=1, heard=1)",
+                vec![a1.clone(), n("body", 90.0), n("drive", 1.0), n("heard", 1.0)],
+                true,
+            ),
+            ("kick(A1, body=90ms)", vec![a1.clone(), n("body", 90.0)], false),
+            ("kick(A1, body=150ms)", vec![a1, n("body", 150.0)], false),
+            ("kick(G2, body=60ms)", vec![Param::Float(98.0), n("body", 60.0)], false),
+        ]
+    }
+
     #[test]
     fn analyze_hears_the_note_the_engine_says_it_is_heard_as() {
         use tatum_core::graph::node::kick_heard_hz;
-        for body in [20.0f32, 60.0, 110.0] {
-            let mut k = truth();
-            k.body = body;
-            let predicted = kick_heard_hz(&kick_spec(&k.params()).expect("a kick"));
-            let x = alone(&k);
+        // Measured, the two are within 0.17 semitones on every one of these;
+        // before the analyzer summed over time and the engine counted the
+        // drive, the default-shaped ones were 0.5 to 1 apart and the driven
+        // ones 2 to 3.
+        for (name, params, _) in shapes().into_iter().filter(|s| s.2) {
+            let predicted = kick_heard_hz(&kick_spec(&params).expect("a kick"));
+            let x = alone_of(&params).1;
             let read = crate::reference::measure(&x, &x).kick.expect("a kick").heard_hz.expect("heard");
             let st = 12.0 * (read / predicted).log2();
-            assert!(st.abs() < 0.3, "body {body}: analyze {read:.1} Hz, the engine {predicted:.1} Hz");
+            assert!(st.abs() < 0.3, "{name}: analyze {read:.1} Hz, the engine {predicted:.1} Hz, {st:+.2} st");
         }
+    }
+
+    #[test]
+    fn one_hit_is_heard_as_the_engine_says_whatever_its_shape() {
+        use tatum_core::graph::node::kick_heard_hz;
+        // Measured: within 0.15 semitones on all of them.
+        for (name, params, _) in shapes() {
+            let predicted = kick_heard_hz(&kick_spec(&params).expect("a kick"));
+            let read = heard_hz(&alone_of(&params).0).expect("heard");
+            let st = 12.0 * (read / predicted).log2();
+            assert!(st.abs() < 0.2, "{name}: the hit {read:.1} Hz, the engine {predicted:.1} Hz, {st:+.2} st");
+        }
+    }
+
+    /// One hit of the kick these arguments make, a second long, and it four
+    /// to the bar at 125 BPM for 24 seconds.
+    fn alone_of(params: &[Param]) -> (Vec<f32>, Vec<f32>) {
+        let spec = kick_spec(params).expect("a kick");
+        let mut node = spec.instantiate();
+        let inputs = [0.0f32; MAX_NODE_INPUTS];
+        let one: Vec<f32> = (0..(SAMPLE_RATE as usize)).map(|_| node.process(&inputs, 0)).collect();
+        let beat = (60.0 / 125.0 * SAMPLE_RATE) as usize;
+        let mut out = vec![0.0f32; 24 * SAMPLE_RATE as usize];
+        let mut at = 1000;
+        while at + beat < out.len() {
+            for (i, v) in one.iter().enumerate().take(beat) {
+                out[at + i] += 0.7 * v;
+            }
+            at += beat;
+        }
+        (one, out)
     }
 
     #[test]
@@ -939,6 +1066,29 @@ mod tests {
         let report = crate::reference::compare(&ra, &rb, "ref.wav", "mine.synth");
         assert!(report.contains("kick heard"), "{report}");
         assert!(report.contains("heard=1"), "{report}");
+    }
+
+    #[test]
+    fn compare_does_not_say_heard_one_to_a_kick_that_has_it() {
+        let mut quick = truth();
+        quick.body = 25.0;
+        quick.chirp = 0.0;
+        let mut slow = quick.clone();
+        slow.body = 120.0;
+        let (a, b) = (alone(&quick), alone(&slow));
+        let song = |args: &str| {
+            format!("instrument x {{\n  kick({args}) as k\n  k > out\n}}\npattern p {{ C3 - - - }}\ntrack t {{ play p using x }}\n")
+        };
+        let ra = crate::reference::measure(&a, &a);
+        // Only the source says a kick is tuned by the note heard.
+        let plain = crate::reference::measure(&b, &b).rendered_from(&song("F#1, body=120ms"));
+        assert!(!plain.kick.as_ref().expect("a kick").heard_tuned);
+        let tuned = crate::reference::measure(&b, &b).rendered_from(&song("F#1, body=120ms, heard=1"));
+        assert!(tuned.kick.as_ref().expect("a kick").heard_tuned);
+        let report = crate::reference::compare(&ra, &tuned, "ref.wav", "mine.synth");
+        assert!(report.contains("kick heard"), "{report}");
+        assert!(report.contains("already has `heard=1`"), "{report}");
+        assert!(!report.contains("tunes the kick node by the note heard"), "{report}");
     }
 
     #[test]
@@ -958,10 +1108,67 @@ mod tests {
     #[test]
     fn every_point_of_the_cube_is_a_kick() {
         let k = KickArgs::default();
-        for i in 0..200 {
-            let u: Vec<f32> = (0..ALL_DIMS.len()).map(|j| ((i * 7 + j * 13) % 17) as f32 / 16.0).collect();
+        let n = ALL_DIMS.len();
+        // Points inside, then every corner: the ranges are left at the
+        // edges (a low note's start, a high start's knee), not in the middle.
+        let inside = (0..200).map(|i| (0..n).map(|j| ((i * 7 + j * 13) % 17) as f32 / 16.0).collect::<Vec<f32>>());
+        let corners = (0..1usize << n).map(|i| (0..n).map(|j| ((i >> j) & 1) as f32).collect::<Vec<f32>>());
+        for u in inside.chain(corners) {
             let c = with(&k, &ALL_DIMS, &u);
-            assert!(kick_spec(&c.params()).is_ok(), "{c:?}");
+            // As searched, and rounded as the line is written: by the
+            // ranges and the rules the engine holds a written kick to.
+            for c in [c.rounded(), c] {
+                if let Err(e) = c.spec() {
+                    panic!("{e}: {c:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_kick_out_of_the_node_s_ranges_is_not_rendered() {
+        // The relations hold (start over the note, knee under the start),
+        // the ranges do not: the engine refuses these, so the search must.
+        let low = KickArgs { note: 25.0, start: 32.7, knee: 32.5, ..KickArgs::default() };
+        assert!(kick_spec(&low.params()).is_ok());
+        assert!(low.render(100.0).is_none(), "start=32.7hz is under the node's 40");
+        let high = KickArgs { start: 4000.0, knee: 3000.0, ..KickArgs::default() };
+        assert!(kick_spec(&high.params()).is_ok());
+        assert!(high.render(100.0).is_none(), "knee=3khz is over the node's 2 kHz");
+        assert!(KickArgs::default().render(100.0).is_some());
+    }
+
+    #[test]
+    fn the_first_guess_of_a_low_boom_is_a_kick_the_language_takes() {
+        // A plain decaying sine at 25 Hz, four to the bar: its pitch starts
+        // where it ends, so the guess's start sits at its floor.
+        let beat = 0.5 * SAMPLE_RATE;
+        let mut x = vec![0.0f32; (16.0 * SAMPLE_RATE) as usize];
+        let mut b = 0;
+        loop {
+            let at = (b as f32 * beat) as usize + 1000;
+            if at + beat as usize >= x.len() {
+                break;
+            }
+            for i in 0..beat as usize {
+                let t = i as f32 / SAMPLE_RATE;
+                x[at + i] += 0.8 * (-t / 0.12).exp() * (std::f32::consts::TAU * 25.0 * t).sin();
+            }
+            b += 1;
+        }
+        let t = Target::new(crate::hit::average_hit(&x, 120.0, 230.0).expect("a hit"));
+        let guess = first_guess(&t);
+        assert!(guess.note < 35.0, "{guess:?}");
+        if let Err(e) = guess.spec() {
+            panic!("{e}: {guess:?}");
+        }
+        // And the line the fit ends with compiles.
+        let line = fit(&t, None, 0.1).args.line();
+        let src = format!(
+            "instrument x {{\n  {line} as k\n  k > out\n}}\npattern p {{ C3 - - - }}\ntrack t {{ play p using x }}\n"
+        );
+        if let Err(e) = tatum_core::song_engine::SongEngine::from_source(&src) {
+            panic!("{line}: {e}");
         }
     }
 }
