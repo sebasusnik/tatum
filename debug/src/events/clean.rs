@@ -175,14 +175,16 @@ pub(crate) fn measure(c: &Ctx, events: &[Event], sustained: Option<&Sustained>, 
     }
 }
 
-/// The wave's mean against its level, dB: the median of the means of its
-/// sounding tenths of a second, so a low note that starts on one side of
-/// zero in a short file is not read as an offset, and a real one is.
+/// The wave's mean against its level, dB: the median of the means of every
+/// tenth of a second, quiet ones included. An offset in the render is in
+/// all of them; a low note that starts on one side of zero leaves a mean
+/// only where it sounds, and in a file with any quiet in it that is not the
+/// median.
 fn dc(x: &[f32], level: f32) -> f32 {
     let win = ms(100.0).max(1);
     let mut means: Vec<f32> = x
         .chunks(win)
-        .filter(|c| c.len() == win && rms(c) > 0.01 * level)
+        .filter(|c| c.len() == win)
         .map(|c| (c.iter().map(|v| *v as f64).sum::<f64>() / c.len() as f64) as f32)
         .collect();
     let mean = if means.is_empty() {
@@ -319,6 +321,12 @@ fn steps(x: &[f32], rest: &[f32], onsets: &[(usize, usize)]) -> Vec<Step> {
             n += 1;
             continue;
         }
+        // The interpolator's own taps spread a step over the samples around
+        // it: the step is where the miss is largest.
+        if rest[n - guard.min(n)..(n + guard + 1).min(rest.len())].iter().any(|r| r.abs() > v) {
+            n += 1;
+            continue;
+        }
         let around = rest[n - near..n - guard.min(near)]
             .iter()
             .chain(&rest[n + guard.min(near)..n + near])
@@ -418,8 +426,9 @@ fn zipper(rest: &[f32], x: &[f32], level: f32) -> Option<Zipper> {
             })
             .collect();
         let top = mid.iter().fold(0.0f32, |m, v| m.max(*v));
-        // A wave whose own period is the block's repeats its miss there.
-        if periodic_at(x, &sounding, win, p) {
+        // A wave whose own period is the block's, or a few blocks', repeats
+        // its miss on the same places in the block.
+        if (1..=8).any(|m| periodic_at(x, &sounding, win, m * p)) {
             continue;
         }
         let k = p / 2;

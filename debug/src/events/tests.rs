@@ -748,8 +748,9 @@ fn a_step_dc_and_a_stepped_modulation_are_flagged_and_a_clean_signal_is_not() {
     // 0.03 against a tone of 0.3 (0.212 rms), and the interpolation misses
     // half the jump: -23 dB.
     assert!((r.clean.steps[0].db + 23.0).abs() < 3.0, "{:?}", r.clean.steps);
-    // An offset of 0.03 for the last 1.3 s of 3: the median second holds it.
-    assert!(r.clean.dc_db > -40.0 && r.clean.findings().iter().any(|f| f.starts_with("DC")));
+    // An offset that comes with the step for under half the file is the
+    // step, not an offset of the render.
+    assert!(!r.clean.findings().iter().any(|f| f.starts_with("DC")), "{:?}", r.clean.findings());
 
     // A tremolo worked out every 64 samples and held, against the same one smooth.
     let swell = |n: usize| 0.6 + 0.4 * (TAU * 3.0 * n as f32 / SR).sin();
@@ -761,8 +762,12 @@ fn a_step_dc_and_a_stepped_modulation_are_flagged_and_a_clean_signal_is_not() {
     // The gain moves up to 0.4 * 2 pi * 3 * 64 / rate (0.011) a step, on a
     // tone of 0.3: about -40 dB under the signal's level.
     assert!(z.db < -34.0 && z.db > -48.0, "{} dB", z.db);
-    // A wave whose period is exactly 64 samples is not a zipper.
-    assert!(run(saw(SR / 64.0, 2.0, true)).clean.zipper.is_none());
+    // A wave whose period is exactly 64 or 128 samples is not a zipper at
+    // that period, nor at half or a quarter of it.
+    for period in [64.0, 128.0] {
+        let z = run(saw(SR / period, 2.0, true)).clean.zipper;
+        assert!(z.is_none(), "a period of {period} samples: {z:?}");
+    }
 }
 
 #[test]
@@ -775,6 +780,14 @@ fn a_short_low_note_is_not_dc_and_a_real_offset_is() {
     let x: Vec<f32> = (0..at(2.0)).map(|i| 0.3 * (TAU * 220.0 * i as f32 / SR).sin() + 0.01).collect();
     let dc = run(x).clean.dc_db;
     assert!((dc + 26.5).abs() < 1.0, "{dc}");
+    // Kicks with quiet between them on an offset of 0.003: found, at its level.
+    let mut x = vec![0.003f32; at(3.0)];
+    for t in [0.2, 1.2, 2.2] {
+        ping(&mut x, t, 50.0, 60.0, 0.6, 0.0, 0.0);
+    }
+    let level = (x.iter().map(|v| v * v).sum::<f32>() / x.len() as f32).sqrt();
+    let dc = run(x).clean.dc_db;
+    assert!((dc - 20.0 * (0.003 / level).log10()).abs() < 1.0, "{dc}");
 }
 
 #[test]
