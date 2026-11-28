@@ -274,7 +274,7 @@ function buildGraphKnobs() {
       const sel = document.createElement("select");
       sel.className = "word"; sel.title = "waveform / mode word";
       sel.innerHTML = n.word_choices.map((w) => `<option>${esc(w)}</option>`).join("");
-      if (!n.words.length) sel.insertAdjacentHTML("afterbegin", `<option value="">(none)</option>`);
+      if (!n.words.length || !n.word_needed) sel.insertAdjacentHTML("afterbegin", `<option value="">(none)</option>`);
       sel.value = n.words[0] || "";
       sel.addEventListener("change", () => structural(`word ${n.alias}=${[sel.value, ...n.words.slice(1)].join(" ")}`));
       h3.insertBefore(sel, h3.querySelector(".grow"));
@@ -301,12 +301,16 @@ function buildGraphEdit() {
   }
   const names = sound.nodes.map((n) => n.alias);
   $("wire-from").innerHTML = [...names, "mix"].map((n) => `<option>${esc(n)}</option>`).join("");
-  $("wire-to").innerHTML = ["out", "mix", ...names].map((n) => `<option>${esc(n)}</option>`).join("");
+  // A node's ports after it: `filt.cutoff` moves the knob, `filt` feeds it.
+  const targets = sound.nodes.flatMap((n) => [n.alias, ...n.ports.map((p) => `${n.alias}.${p}`)]);
+  $("wire-to").innerHTML = ["out", "mix", ...targets].map((n) => `<option>${esc(n)}</option>`).join("");
   const w = $("wires");
   w.innerHTML = "";
-  for (const [a, b] of sound.connections) {
+  for (const [a, to, port] of sound.connections) {
+    const b = port ? `${to}.${port}` : to;
     const row = document.createElement("div");
-    row.className = "wire"; row.dataset.wire = `${a}>${b}`;
+    row.className = "wire" + (port ? " port" : ""); row.dataset.wire = `${a}>${b}`;
+    if (port) row.title = `moves ${to}'s ${port}; it is not a signal into ${to}`;
     row.innerHTML = `<span>${esc(a)} &gt; ${esc(b)}</span><button class="small unwire" title="disconnect">×</button>`;
     row.querySelector("button").addEventListener("click", () => structural(`-wire ${a} ${b}`));
     w.appendChild(row);
