@@ -81,6 +81,12 @@ impl SongEngine {
                 }
             }
         }
+        // Every instrument is now `b` samples into the block, rendered or
+        // skipped: a note that starts here reads the song's clock.
+        let now = self.song_clock.wrapping_add(b as u32);
+        for inst in self.instruments.iter_mut() {
+            inst.set_clock(now);
+        }
     }
 
     /// Process one stereo block.
@@ -149,7 +155,7 @@ impl SongEngine {
                 if self.pending_triggers[i].samples <= 0.0 {
                     let t = self.pending_triggers.swap_remove(i);
                     if t.inst_idx < self.instruments.len() {
-                        if t.slide && self.instruments[t.inst_idx].slide_to(t.midi_note, t.velocity) {
+                        if t.slide && self.instruments[t.inst_idx].slide_to(&[t.from], t.midi_note, t.velocity) {
                             // glided, nothing to release
                         } else if t.velocity <= 0.0 {
                             // A gap in a run: the note before it stops, nothing starts.
@@ -255,6 +261,7 @@ impl SongEngine {
         // Render what is left of the block, now that it is known which
         // tracks are skipped whole.
         self.render_tracks(&mut track_bufs_l, &mut track_bufs_r, rendered..len, taps.as_deref_mut(), true);
+        self.song_clock = self.song_clock.wrapping_add(len as u32);
 
         // Apply insert FX per track (mono processing applied to both channels)
         for ti in 0..track_count {

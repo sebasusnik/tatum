@@ -78,3 +78,96 @@ fn only_a_tilde_slides_and_the_note_still_ends() {
     assert!(level_at(&out, 0.8) > 0.9 * level_at(&out, 0.45));
     assert!(level_at(&out, 1.5) < 1e-3 * level_at(&out, 0.45), "the note it slid to never ended");
 }
+
+const D3: f32 = 146.83;
+
+/// A chord, then a slide. `rest` is what follows the slid note.
+fn chord_then_slide(rest: &str) -> String {
+    format!(
+        "tempo 120\n\
+         instrument i {{\n  osc sine(55, glide=100ms) as src\n  src > adsr(0.01, 0.1, 0.8, 0.05) as amp\n  amp > out\n}}\n\
+         pattern p {{ [C3 E3 G3] ~D3 {rest} }}\n\
+         track t {{ play p using i out > master }}\n"
+    )
+}
+
+fn peak_of_step(buf: &[f32], step: usize) -> f32 {
+    let len = (SAMPLE_RATE * 60.0 / 120.0 / 4.0) as usize;
+    buf[step * len..(step + 1) * len].iter().fold(0.0f32, |m, v| m.max(v.abs()))
+}
+
+/// A slide is one line. After a chord the track used to slide one voice and
+/// forget the other two, which nobody then released: they rang through the
+/// rests and a new pair joined them on every loop.
+#[test]
+fn a_slide_from_a_chord_leaves_nothing_ringing() {
+    let src = chord_then_slide("- - - - - - - - - - - - - -");
+    let out = SongEngine::from_source(&src).unwrap_or_else(|e| panic!("{e}")).render(3).0;
+    let loud = peak_of_step(&out, 0);
+    assert!(loud > 0.01, "the chord sounds: {loud}");
+    for bar in 0..3 {
+        for step in 3..16 {
+            let p = peak_of_step(&out, bar * 16 + step);
+            assert!(p < 1e-3 * loud, "bar {bar} step {step} rings at {p} with the chord at {loud}");
+        }
+    }
+    // And every loop is the first again: nothing piles up.
+    let again = peak_of_step(&out, 32);
+    assert!((again / loud - 1.0).abs() < 0.01, "the third chord peaks at {again}, the first at {loud}");
+}
+
+/// The note that slides is the last one written in the chord, and it is the
+/// only one left: one clean pitch arriving on the note slid to, at the
+/// level of one voice.
+#[test]
+fn the_last_note_of_a_chord_is_the_one_that_slides() {
+    let src = chord_then_slide(".. .. .. .. .. .. .. - - - - - - -");
+    let out = render(&src);
+    // The slide starts at 0.125 s and takes 100 ms. Half way it is half
+    // way from G3, the chord's last note, and not from C3 or E3.
+    let cents = |hz: f32, of: f32| 1200.0 * (hz / of).log2();
+    let half = pitch_at(&out, 0.175);
+    assert!(cents(half, (G3 * D3).sqrt()).abs() < 40.0, "half way: {half} Hz");
+    let landed = pitch_at(&out, 0.5);
+    assert!(cents(landed, D3).abs() < 10.0, "it lands on D3: {landed} Hz");
+    // One voice is left of three. A single note through the same patch,
+    // held as long, is as loud.
+    let single = render(&chord_then_slide(".. .. .. .. .. .. .. - - - - - - -").replace("[C3 E3 G3] ~D3", "D3 .."));
+    assert!(
+        (level_at(&out, 0.5) / level_at(&single, 0.5) - 1.0).abs() < 0.02,
+        "after the slide {} sounds, one note alone {}",
+        level_at(&out, 0.5),
+        level_at(&single, 0.5)
+    );
+    assert!(level_at(&out, 1.6) < 1e-3 * level_at(&out, 0.5), "and it ends with its note");
+}
+
+/// One note, a slide, then rests: the slid note ends and stays ended on
+/// every loop.
+#[test]
+fn a_slide_from_one_note_ends_with_its_note() {
+    let src = chord_then_slide("- - - - - - - - - - - - - -").replace("[C3 E3 G3]", "G3");
+    let out = SongEngine::from_source(&src).unwrap_or_else(|e| panic!("{e}")).render(2).0;
+    let loud = peak_of_step(&out, 0);
+    // It slid: the envelope carried on, so the step of the slide is at the
+    // sustain and does not dip to an attack.
+    assert!(peak_of_step(&out, 1) > 0.7 * loud, "the slid note sounds");
+    for step in (3..16).chain(19..32) {
+        let p = peak_of_step(&out, step);
+        assert!(p < 1e-3 * loud, "step {step} rings at {p}");
+    }
+}
+
+/// A slide inside a run takes the note before it in the run, and the run
+/// ends with its last note.
+#[test]
+fn a_slide_inside_a_run_leaves_nothing_ringing() {
+    let src = chord_then_slide("- - - - - - - - - - - - - -").replace("[C3 E3 G3] ~D3", "<C3 ~G3> -");
+    let out = SongEngine::from_source(&src).unwrap_or_else(|e| panic!("{e}")).render(2).0;
+    let loud = peak_of_step(&out, 0);
+    assert!(loud > 0.01);
+    for step in (3..16).chain(19..32) {
+        let p = peak_of_step(&out, step);
+        assert!(p < 1e-3 * loud, "step {step} rings at {p}");
+    }
+}

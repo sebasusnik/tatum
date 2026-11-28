@@ -217,16 +217,16 @@ pub const NODES: &[NodeDefSpec] = &[
         positional: &[arg!("rate", 0.01, 50.0, 1.0, "Hz: new destinations a second, on average; the curve turns about two thirds as often"), arg!("depth", 0.0, 8.0, 0.5, "how far from zero it goes, in what the port it goes into counts in")],
         named: &[arg!("jitter", 0.0, 1.0, 0.5, "share of unevenness in when it picks a new destination: 0 a steady clock, 1 as uneven as it gets; `jitter=50%` reads the same as 0.5")],
         waveform: false, rhythm: false, in_chains: false,
-        doc: "A smooth random curve between -depth and depth that never repeats, as a control signal: a sweep that is not an LFO's. It runs free from the moment the instrument starts and every voice reads the same curve, so a new note finds it where the last one left it and a chord moves as one; the same song renders the same curve every time. `wander(0.2hz, 1) > filt.cutoff` drifts the filter an octave either way over tens of seconds. Write it with its parentheses." },
+        doc: "A smooth random curve between -depth and depth that never repeats, as a control signal: a sweep that is not an LFO's. It runs free from the moment the song starts, whether or not its track is playing, and every voice reads the same curve, so a new note finds it where the song is and a chord moves as one; the same song renders the same curve every time. `wander(0.2hz, 1) > filt.cutoff` drifts the filter an octave either way over tens of seconds. Write it with its parentheses." },
     NodeDefSpec { name: "dust", aliases: &[], category: Category::Source,
-        positional: &[arg!("density", 0.01, 2000.0, 5.0, "Hz: impulses a second, on average")],
+        positional: &[arg!("density", DUST_DENSITY.0, DUST_DENSITY.1, 5.0, "Hz: impulses a second, on average")],
         named: &[
             arg!("jitter", 0.0, 1.0, 1.0, "share of randomness in the gaps: 1 as a Geiger counter (the gaps spread as wide as their mean), 0 a steady clock; `jitter=80%` reads the same as 0.8"),
             arg!("spread", 0.0, 60.0, 0.0, "dB between the loudest impulse and the quietest, each one drawn anywhere between; 0, all alike"),
             arg!("level", -40.0, 40.0, 0.0, "dB of the loudest impulse against one sample at full scale. A filter rings far quieter than the one sample that struck it, the more so the lower it is tuned and the higher its resonance, so a ping wants 20 to 35"),
         ],
         waveform: false, rhythm: false, in_chains: false,
-        doc: "Impulses at random moments, off the grid, inside one held note: into a resonant `svf` or `ladder` each is a ping, and into a `rand`'s `draw` port each gives the ping a pitch of its own -- bubbles. Each note plays a different stream, and the same song renders the same streams every time. `dust(6hz, spread=12db, level=30db) > svf(900, 0.9, bandpass) as ping`. Write it with its parentheses." },
+        doc: "Impulses at random moments, off the grid, inside one held note: into a resonant `svf` or `ladder` each is a ping, and into a `rand`'s `draw` port each gives the ping a pitch of its own -- bubbles. Each note plays a different stream, and the same song renders the same streams every time. `dust(6hz, spread=12db, level=30db) > svf(900, 0.9, bandpass) as ping`, and an envelope after the filter: a voice lasts as long as its envelopes, so a dust with none plays nothing (`ping > adsr(0.005, 0.1, 1, 0.4) as amp`, `amp > out`). Its `rate` port moves the density inside the range one can be written in, 0.01 to 2000 Hz. Write it with its parentheses." },
     NodeDefSpec { name: "adsr", aliases: &[], category: Category::Envelope,
         positional: &[arg!("attack", 0.0, 10.0, 0.01, "seconds"), arg!("decay", 0.0, 30.0, 0.1, "seconds to fall within 60 dB of the sustain; up to 30, for a control envelope that takes its time: a pitch falling for ten seconds"), arg!("sustain", 0.0, 1.0, 0.7, "level"), arg!("release", 0.0, 30.0, 0.3, "seconds")],
         named: &[], waveform: false, rhythm: false, in_chains: false, doc: "Amplitude envelope; the last envelope before `out` gates the voice." },
@@ -359,6 +359,9 @@ const OSC_PORTS: &[Port] = &[
 ];
 const CUTOFF_PORT: Port =
     Port { name: "cutoff", doc: "octaves on top of the cutoff, retuned every sample: 1.0 is an octave up" };
+
+/// The densities a `dust` takes, which its `rate` port stays inside.
+const DUST_DENSITY: (f32, f32) = crate::graph::node::DustState::DENSITY;
 
 const RATE_PORT: Port = Port {
     name: "rate",

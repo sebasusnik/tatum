@@ -90,6 +90,10 @@ pub struct SongEngine {
     tempo: f32,
     samples_per_step: f32,
     sample_counter: f32,
+    /// Samples played since the start: the clock every graph instrument is
+    /// set to, so that a `wander` is where the song is and not where its
+    /// track's rendering got to.
+    song_clock: u32,
     current_step_duration: f32, // effective duration of current step (with swing)
     steps_per_bar: usize,
 

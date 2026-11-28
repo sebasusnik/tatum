@@ -168,7 +168,7 @@ pattern riff { 1.2:0.9  -  ~5.2:0.8  ..  [1.3 3.3 5.3]:0.6  ..  ..  .. }
 |-------|---------|
 | `-` | rest |
 | `..` | tie: hold the previous step; `..*15` writes fifteen ties, `-*8` eight rests |
-| `~note` | slide: glide into this note without retriggering the envelope (303 style). The previous note is held until the slide. Bass modules glide at their `glide` rate, and an `instrument` whose oscillator says `glide=220ms` slides there in that time, straight in pitch; other instruments fall back to a normal retrigger. |
+| `~note` | slide: glide into this note without retriggering the envelope (303 style). The previous note is held until the slide. Bass modules glide at their `glide` rate, and an `instrument` whose oscillator says `glide=220ms` slides there in that time, straight in pitch; other instruments fall back to a normal retrigger. A slide is one line: after a chord, on an `instrument` the last note written in the chord slides and the others end there, and on a `bass`, which has one voice, that note was the only one sounding. |
 | `[a b c]` | chord, any notes or degrees |
 | `<a b c>` | **subdivision**: those notes in sequence inside this ONE step, evenly spaced. Up to 8. Each one takes its own `:velocity` and its own `~`, and each releases the one before it, so a group is a run and not a chord. This is how a pattern gets finer than a sixteenth — steps are fixed at sixteen a bar, and the notes are spread across the step's *real* duration, so a subdivided step still swings. |
 | `a*3` | **ratchet**: the same note three times inside the step, the melodic spelling of the drum roll. Sugar for `<a a a>`. |
@@ -1135,26 +1135,30 @@ them with their parentheses (`rand()`), so a node or a track called `dust` stays
 - `rand(0.5)` is one random value per note, anywhere in -0.5..0.5, held while the note
   lasts. It is a control signal, so it goes into a port, and its spread is in what that
   port counts in: `rand(0.5) > filt.cutoff` opens or closes the filter by up to half an
-  octave, `rand(1/12) > a.pitch` detunes each note by up to a semitone, `rand(0.3) >
-  vol.amount` makes each one up to 30% louder or quieter. `bias=1` keeps it to 0..spread,
+  octave, `rand(0.083) > a.pitch` detunes each note by up to a semitone (a twelfth of an
+  octave), `rand(0.3) > vol.amount` makes each one up to 30% louder or quieter. `bias=1` keeps it to 0..spread,
   `bias=-1` to -spread..0. The value comes from the node and from the number of the
   note among those the instrument has played, so no two notes share one, and two
   instruments written alike do not share theirs.
 - `wander(0.2hz, 1)` is a smooth curve between -1 and 1 that heads for a new place 0.2
   times a second on average and never comes back the same way: a filter sweep with no
-  period. It does not start again with each note. It runs from the moment the
-  instrument starts and every voice reads the same curve, so a chord moves as one and
-  the next note finds the filter where the last one left it. `jitter=` (0..1, 0.5 if
-  unset) is how uneven its clock is. It has no `rate` port: it is a function of time.
+  period. It does not start again with each note. It runs from the moment the song
+  starts, whether or not its track is playing, and every voice reads the same curve:
+  a chord moves as one, the next note finds the filter where the song is, and a track
+  that sits out a scene comes back to the curve where it would have been. `jitter=`
+  (0..1, 0.5 if unset) is how uneven its clock is. It has no `rate` port: it is a
+  function of time, the same in a render and played live from the top.
 - `dust(6hz)` is impulses, one sample each, at random moments: six a second on average,
   with gaps as uneven as a Geiger counter's. `jitter=` (1 if unset) says how uneven: at 0
   it is a clock. `spread=12db` makes each impulse anywhere up to 12 dB quieter than the
   loudest, and `level=` is how tall the loudest is, in dB against full scale. It is
   sound, not control: it goes into a filter, and each note plays a different stream.
+  The stream lasts as long as the note, and the note as long as its envelope: a dust
+  with no `adsr` or `perc` after it plays nothing, and `tatum check` says so.
 
 Three ports go with them. `rate` on an `lfo` or a `dust` is octaves on top of its own
 rate, so `wander(0.3hz, 1) > d.rate` makes a dust come in swells, between half and twice
-its density. `draw` on a `rand` draws a new value each time what comes in rises through
+its density; a dust stays between 0.01 and 2000 impulses a second whatever comes in. `draw` on a `rand` draws a new value each time what comes in rises through
 zero, and `glide=` then takes it there in a straight line instead of a jump. `amount`
 on a `gain` adds a share to it.
 
@@ -1188,8 +1192,9 @@ pattern stream { C3 ..*127 }
 What each line is for, since each was put there by a measurement:
 
 - `where` is the pitch: 1.1 octaves either side of 950 Hz. Its `glide=1ms` is not a
-  slide anyone hears. A filter that is still ringing when its cutoff jumps steps its
-  output, which is a click; a millisecond to get there is not.
+  slide anyone hears. A filter that is still ringing when its cutoff jumps changes the
+  slope of its output at once, which a render reports as a click; a millisecond to
+  get there is not.
 - `bend` is a second, small value drawn by the same impulse, which takes 60 ms to
   arrive from the one before. The difference between two random values is small more
   often than large, so most pings stay level and some rise or fall by a semitone or
@@ -1417,6 +1422,7 @@ never moves" instead of only "this parses". Each one came from a real session.
 | `mono_mix` | fewer than a third of the tonal tracks are panned off centre | instruments in the same place cannot be told apart |
 | `chord_into_mono_voice` | a chord plays through a `keys` module whose `voice_mode` is not `poly`, or through a `bass`, which has one voice | only the last note of the chord sounds: unison, octave and fifth stack their voices on one note, and `bass` has one to begin with. Exempt when the track has an `arp`, where the chord is the note set the arpeggiator walks rather than something meant to sound at once. `fm` is eight-voice and is never flagged |
 | `plock_ignored` | a pattern with filter locks plays through a module that drops them: `cutoff=`, `edepth=` or `res=` on `fm` or `beats`, or `edepth=` on `keys` | the note plays and the lock is dropped without a sound, so a line written as if each note shaped the filter sounds as if nothing were written. `fm` has no filter, a kit none per drum, and `keys` no filter envelope. `gate=` works everywhere and is not counted. On `fm`, velocity already sets a note's brightness, and `auto <module> mod_index` sweeps it |
+| `dust_without_envelope` | an `instrument` has a `dust` and no `adsr`, `perc` or `kick` | a voice lasts as long as its envelopes, so with none the note ends in the block it started in: `dust(...) > svf(...) > out` compiles and renders silence. Put an envelope after the filter and hold the note for as long as the stream should run |
 | `no_sidechain` | drums and tonal tracks with no ducking anywhere | the kick has to fight through the mix |
 | `sidechain_without_kick` | a scene ducks tracks but has no beats track | those tracks play unducked, so a breakdown can end up louder than the drop |
 | `single_scene` | more than 8 bars in one scene | no arrangement shape |

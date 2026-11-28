@@ -476,7 +476,7 @@ impl NodeSpec {
             NodeSpec::Dust { .. } => NodeKind::Dust(DustState::new(self, 0)),
             NodeSpec::Env { a, d, s, r } => {
                 let mut env = Envelope::new(SAMPLE_RATE);
-                env.set_adsr(a, d, s, r);
+                env.set_adsr_long(a, d, s, r);
                 NodeKind::Env(env)
             }
             NodeSpec::Biquad {
@@ -1320,9 +1320,10 @@ impl RandState {
 /// sweep that is not an LFO's.
 ///
 /// It runs free: the curve is a function of the node's seed and of the time
-/// since the instrument started, not of the note, so every voice reads the
-/// same curve and a new note finds it where the last one left it -- one
-/// filter sweep over a whole chord, as one hand on one knob. Each stretch
+/// since the song started, not of the note and not of whether its track was
+/// playing, so every voice reads the same curve and a new note finds it
+/// where the song is -- one filter sweep over a whole chord, as one hand on
+/// one knob, that goes on moving while the track sits out a scene. Each stretch
 /// between two destinations is an S-curve, level at both ends; where each
 /// begins and where it heads come from stirring the seed with its number, so
 /// no state is kept between notes and none is shared between voices.
@@ -1334,7 +1335,7 @@ pub struct WanderState {
     jitter: f32,
     /// The stretch being played.
     k: u32,
-    /// Samples since the instrument started.
+    /// Samples since the song started: the instrument's clock.
     clock: u32,
     /// Samples into the stretch when it was entered, and those played since:
     /// counted, not added up, so a long curve does not creep.
@@ -1441,16 +1442,34 @@ pub struct DustState {
     spread_db: f32,
     /// How tall the loudest impulse is.
     height: f32,
-    /// Samples to the next impulse.
-    wait: f32,
-    /// How fast `wait` runs down: 1, or what the `rate` port says.
-    speed: f32,
+    /// Samples to the next impulse, in `ONE`ths of a sample. A whole number:
+    /// an `f32` stops changing when one is taken from it past 2^24, and a
+    /// gap that long -- six minutes at 44.1 kHz, which a hundredth of a Hz
+    /// draws one time in forty -- never ended.
+    wait: i64,
+    /// How fast `wait` runs down, in the same unit: one sample a sample, or
+    /// what the `rate` port says.
+    speed: i64,
+    /// How far the `rate` port may take the speed: to the ends of the range
+    /// a density can be written in, and no further.
+    slowest: f32,
+    fastest: f32,
+    /// An impulse went out one sample ago, so this one is silent whatever
+    /// the port has done to the speed since.
+    fired: bool,
 }
 
 impl DustState {
     /// An exponential gap is cut off at this many times the mean (one in
     /// three thousand would be longer), so a silence has an end.
     const LONGEST: f32 = 8.0;
+    /// The densities a `dust` can be written with, in Hz, and so the ones
+    /// its `rate` port can reach. Past the top the impulses run into each
+    /// other and the node puts out a level, not dust.
+    pub const DENSITY: (f32, f32) = (0.01, 2000.0);
+    /// One sample of `wait`: 32 bits under the point. The longest gap, eight
+    /// means at a hundredth of a Hz, is under 2^27 samples at 96 kHz.
+    const ONE: f64 = 4_294_967_296.0;
 
     pub fn new(spec: &NodeSpec, hit: u32) -> Self {
         let NodeSpec::Dust { density, jitter, spread_db, level_db, seed } = *spec else {
@@ -1462,13 +1481,32 @@ impl DustState {
             jitter,
             spread_db,
             height: crate::math::db_to_linear(level_db) * (SAMPLE_RATE / 44100.0),
-            wait: 0.0,
-            speed: 1.0,
+            wait: 0,
+            speed: Self::ONE as i64,
+            slowest: (Self::DENSITY.0 / density).min(1.0),
+            fastest: (Self::DENSITY.1 / density).max(1.0),
+            fired: false,
         };
         // The first one comes part of a gap in, not on the note's first
         // sample: a note is not an impulse.
-        s.wait = s.gap() * s.rng.next_f32();
+        s.wait = Self::samples(s.gap() * s.rng.next_f32());
         s
+    }
+
+    /// Samples as `wait` counts them.
+    #[inline]
+    fn samples(n: f32) -> i64 {
+        (n as f64 * Self::ONE) as i64
+    }
+
+    /// What is in the `rate` port, in octaves: the density times two to
+    /// that, kept inside the range a density has.
+    #[inline]
+    pub fn set_rate(&mut self, octaves: f32) {
+        let ratio = crate::math::pow2(octaves);
+        // Not a number: as if nothing were in the port.
+        let ratio = if ratio.is_nan() { 1.0 } else { crate::math::clamp(ratio, self.slowest, self.fastest) };
+        self.speed = Self::samples(ratio);
     }
 
     #[inline]
@@ -1480,12 +1518,16 @@ impl DustState {
     #[inline]
     pub fn next_sample(&mut self) -> f32 {
         self.wait -= self.speed;
-        if self.wait > 0.0 {
+        // Never two in one sample, whatever the density, and a silent
+        // sample between any two: the gap is two samples at the least at
+        // its own rate, and with the port speeding it up the sample after
+        // an impulse waits its turn.
+        if self.wait > 0 || self.fired {
+            self.fired = false;
             return 0.0;
         }
-        // Never two in one sample, whatever the density, and at its own
-        // rate a silent sample between any two.
-        self.wait = (self.wait + self.gap()).max(2.0);
+        self.fired = true;
+        self.wait = (self.wait + Self::samples(self.gap())).max(Self::samples(2.0));
         let level =
             if self.spread_db > 0.0 { crate::math::db_to_linear(-self.spread_db * self.rng.next_f32()) } else { 1.0 };
         level * self.height
@@ -2036,7 +2078,7 @@ impl NodeKind {
         match self {
             NodeKind::Osc(osc) => osc.modulate(mods, mask),
             NodeKind::Lfo(lfo) => lfo.bend_rate(crate::math::pow2(mods[port::RATE as usize])),
-            NodeKind::Dust(d) => d.speed = crate::math::pow2(mods[port::RATE as usize]),
+            NodeKind::Dust(d) => d.set_rate(mods[port::RATE as usize]),
             NodeKind::Rand(r) => r.trigger(mods[port::DRAW as usize]),
             NodeKind::Gain(g) => *self = NodeKind::SwungGain { amount: *g, by: mods[port::AMOUNT as usize] },
             NodeKind::SwungGain { by, .. } => *by = mods[port::AMOUNT as usize],
@@ -2362,6 +2404,18 @@ impl NodeKind {
             NodeKind::Dust(d) => *d = DustState::new(spec, hit),
             NodeKind::Wander(w) => *w = WanderState::new(spec, clock),
             _ => {}
+        }
+    }
+
+    /// Put a `wander` back on its curve at `clock` if it is anywhere else:
+    /// a voice that was not run while its track sat out a scene. A voice
+    /// that has run every sample is there already and nothing is done.
+    #[inline]
+    pub fn keep_time(&mut self, spec: &NodeSpec, clock: u32) {
+        if let NodeKind::Wander(w) = self {
+            if w.clock != clock {
+                *w = WanderState::new(spec, clock);
+            }
         }
     }
 

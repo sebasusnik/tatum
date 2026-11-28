@@ -13,6 +13,9 @@ pub struct Voice {
     pub velocity: f32,
     pub active: bool,
     pub age: u32,
+    /// Between its note-on and its note-off: a voice that is only ringing
+    /// out is nobody's to slide.
+    held: bool,
     /// The pitch the oscillators are at, in Hz, and the slide towards the
     /// next: the ratio it is multiplied by each sample, how many samples are
     /// left, and where it lands.
@@ -36,6 +39,7 @@ impl Voice {
             velocity: 0.0,
             active: false,
             age: 0,
+            held: false,
             freq: 0.0,
             glide_ratio: 1.0,
             glide_left: 0,
@@ -69,6 +73,7 @@ impl Voice {
         self.velocity = velocity;
         self.active = true;
         self.age = 0;
+        self.held = true;
 
         self.glide_left = 0;
         self.tune(template, math::midi_to_freq(note));
@@ -129,9 +134,11 @@ impl Voice {
             }
         }
         self.active = false;
+        self.held = false;
     }
 
     pub fn release(&mut self, template: &GraphTemplate) {
+        self.held = false;
         for &n in &template.env_nodes[..template.env_count as usize] {
             let idx = n as usize;
             if let Some(ref mut node) = self.nodes[idx] {
@@ -178,7 +185,9 @@ pub struct Instrument {
     /// Notes started so far: the hit number a kick with `vary=` sways by,
     /// and a `rand` or a `dust` draws from.
     hits: u32,
-    /// Samples played since the start: where a `wander` is on its curve.
+    /// Samples since the start: where a `wander` is on its curve. The song
+    /// engine sets it to the song's own count, so it runs on while the
+    /// track is not rendered; alone, an instrument counts what it plays.
     clock: u32,
 }
 
@@ -309,27 +318,38 @@ impl Instrument {
         }
     }
 
-    /// Slide the note that is sounding to `note` instead of starting one:
-    /// what `~note` asks for. The newest voice still held takes it. False
-    /// when the instrument has no `glide=` or nothing is sounding, and the
-    /// caller starts a note as it always did.
-    pub fn slide_to(&mut self, note: u8) -> bool {
+    /// Slide to `note` instead of starting one: what `~note` asks for.
+    /// `held` is what the track holds, in the order it started them. A slide
+    /// is one line, so the last of them slides -- the newest voice still held
+    /// on it -- and the others are released: after a chord, one note travels
+    /// and the rest end, as on a `bass`, which only ever had the last. False
+    /// when the instrument has no `glide=` or no voice holds that note, and
+    /// the caller starts a note as it always did.
+    pub fn slide_to(&mut self, held: &[u8], note: u8) -> bool {
         if self.template.glide_samples == 0 {
             return false;
         }
+        let Some((&from, others)) = held.split_last() else {
+            return false;
+        };
         let mut newest: Option<usize> = None;
         for (i, v) in self.voices.iter().enumerate() {
-            if v.active && newest.is_none_or(|n| v.age < self.voices[n].age) {
+            if v.active && v.held && v.note == from && newest.is_none_or(|n| v.age < self.voices[n].age) {
                 newest = Some(i);
             }
         }
-        match newest {
-            Some(i) => {
-                self.voices[i].slide(&self.template, note);
-                true
+        let Some(slides) = newest else {
+            return false;
+        };
+        for &n in others {
+            let other =
+                self.voices.iter().enumerate().position(|(i, v)| i != slides && v.active && v.held && v.note == n);
+            if let Some(i) = other {
+                self.voices[i].release(&self.template);
             }
-            None => false,
         }
+        self.voices[slides].slide(&self.template, note);
+        true
     }
 
     pub fn note_off(&mut self, note: u8) {
@@ -350,11 +370,23 @@ impl Instrument {
         }
 
         let template = &self.template;
+        let now = self.clock;
         self.clock = self.clock.wrapping_add(len as u32);
 
         for voice in self.voices.iter_mut() {
             if !voice.active {
                 continue;
+            }
+            // A voice that was not run for a while finds the curve where
+            // the clock is, not where it stopped.
+            if template.random_mask != 0 {
+                for i in 0..template.node_count as usize {
+                    if template.random_mask & (1 << i) != 0 {
+                        if let Some(node) = voice.nodes[i].as_deref_mut() {
+                            node.keep_time(&template.specs[i], now);
+                        }
+                    }
+                }
             }
 
             // Process voice sample by sample using shared node buffers
@@ -395,6 +427,13 @@ impl Instrument {
                 voice.active = false;
             }
         }
+    }
+
+    /// Where the clock is, from whoever keeps the time: the song engine,
+    /// for every sample of the song whether or not this instrument played
+    /// it, so a `wander` is a function of the song's position alone.
+    pub fn set_clock(&mut self, clock: u32) {
+        self.clock = clock;
     }
 
     pub fn all_notes_off(&mut self) {

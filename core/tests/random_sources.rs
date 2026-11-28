@@ -597,3 +597,328 @@ fn a_node_named_dust_stays_a_name() {
     );
     assert_eq!(t.random_mask, 0);
 }
+
+// ── the wander and the song's clock ──
+
+/// Frequency from the upward zero crossings, each placed between its two
+/// samples: fine enough to compare two pitches at any rate.
+fn pitch_between(buf: &[f32]) -> f32 {
+    let ups: Vec<f32> = (1..buf.len())
+        .filter(|&i| buf[i - 1] < 0.0 && buf[i] >= 0.0)
+        .map(|i| (i - 1) as f32 + buf[i - 1] / (buf[i - 1] - buf[i]))
+        .collect();
+    assert!(ups.len() >= 2, "no full cycle in the window");
+    (ups.len() - 1) as f32 * SAMPLE_RATE / (ups[ups.len() - 1] - ups[0])
+}
+
+/// A track `t` whose filter wanders, in a song of scenes: `a` has it and
+/// `b` does not. Its note is over well before the bar is, so a scene finds
+/// it silent, and it is quiet enough to stay under the limiter at the
+/// output, whose gain would remember the bars before. At 120 BPM a bar is
+/// two seconds.
+fn scenes(arrange: &str) -> String {
+    format!(
+        "tempo 120\n\
+         instrument i {{\n  osc saw(110) as a\n  svf(400hz, 0.5) as f\n  wander(2hz, 2) as w\n  adsr(0.01, 0.2, 1, 0.05) as amp\n  \
+         a > f\n  w > f.cutoff\n  f > amp\n  amp > out\n}}\n\
+         instrument j {{\n  osc sine(110) as a\n  adsr(0.01, 0.2, 0.6, 0.3) as amp\n  a > amp\n  amp > out\n}}\n\
+         pattern p {{ C3 ..*5 - - E3 ..*5 - - }}\n\
+         pattern q {{ C2 - - - }}\n\
+         track t {{ play p using i level 0.2 out > master }}\n\
+         track u {{ play q using j level 0.0 }}\n\
+         scene a {{ track t {{ play p using i level 0.2 }} track u {{ play q using j }} }}\n\
+         scene b {{ track u {{ play q using j }} }}\n\
+         arrange {{ {arrange} }}\n"
+    )
+}
+
+/// A song in blocks of `chunk` samples, as a sound card or a set asks for it.
+fn in_blocks(src: &str, bars: usize, chunk: usize) -> Vec<f32> {
+    let mut e = SongEngine::from_source(src).unwrap_or_else(|e| panic!("{e}"));
+    let total = bars * (16.0 * SAMPLE_RATE * 60.0 / 120.0 / 4.0) as usize;
+    e.start();
+    let mut out = Vec::with_capacity(total);
+    while out.len() < total {
+        let c = chunk.min(total - out.len());
+        let (mut l, mut r) = ([0.0f32; BLOCK_SIZE], [0.0f32; BLOCK_SIZE]);
+        e.process_block_stereo(&mut l[..c], &mut r[..c]);
+        out.extend_from_slice(&l[..c]);
+    }
+    out
+}
+
+fn first_difference(a: &[f32], b: &[f32]) -> Option<usize> {
+    a.iter().zip(b).position(|(x, y)| x.to_bits() != y.to_bits())
+}
+
+/// The curve is the song's, not the track's: a track that sits two bars out
+/// comes back to it where a track that never left has it. It used to stop
+/// with the track, and bar 3 after two bars out was bar 1 played again.
+#[test]
+fn a_wander_goes_on_while_its_track_sits_out_a_scene() {
+    let bar = (16.0 * SAMPLE_RATE * 60.0 / 120.0 / 4.0) as usize;
+    let always = in_blocks(&scenes("a x1 a x2 a x2"), 5, BLOCK_SIZE);
+    let away = in_blocks(&scenes("a x1 b x2 a x2"), 5, BLOCK_SIZE);
+    assert!(away[bar + bar / 8..3 * bar].iter().all(|v| *v == 0.0), "the track is out for bars 1 and 2");
+    let heard = always[3 * bar..].iter().fold(0.0f32, |m, v| m.max(v.abs()));
+    assert!(heard > 0.005, "the track is back from bar 3: {heard}");
+    if let Some(i) = first_difference(&always[3 * bar..], &away[3 * bar..]) {
+        let at = 3 * bar + i;
+        panic!(
+            "back in the scene it differs from the track that never left at sample {at}: {} against {}",
+            away[at], always[at]
+        );
+    }
+    // The curve does move in that time: bar 3 is not bar 1.
+    let moved =
+        always[bar..2 * bar].iter().zip(&always[3 * bar..4 * bar]).map(|(a, b)| (a - b).abs()).fold(0.0f32, f32::max);
+    assert!(moved > 0.05 * heard, "bar 1 and bar 3 are {moved} apart at the most");
+}
+
+/// A sound card asks for blocks of its own size and a set cuts them at its
+/// steps. The song is the same samples whatever the size, scenes and all:
+/// where the curve is does not depend on how many blocks a track faded over.
+#[test]
+fn a_wander_is_the_same_at_any_block_size() {
+    for arrange in ["a x1 b x1 a x2", "a x4"] {
+        let src = scenes(arrange);
+        let whole = in_blocks(&src, 4, BLOCK_SIZE);
+        for chunk in [100, 64, 37] {
+            let cut = in_blocks(&src, 4, chunk);
+            if let Some(i) = first_difference(&whole, &cut) {
+                panic!(
+                    "`{arrange}` in blocks of {chunk} differs from blocks of {BLOCK_SIZE} at sample {i}: {} against {}",
+                    cut[i], whole[i]
+                );
+            }
+        }
+    }
+}
+
+/// Started at a bar, the song finds the curve where it is at that bar when
+/// played from the top. The wander is on the pitch, which is what is
+/// compared: a song started at a bar has its own fades and level.
+#[test]
+fn a_song_started_at_a_bar_finds_the_wander_there() {
+    let bar = (16.0 * SAMPLE_RATE * 60.0 / 120.0 / 4.0) as usize;
+    let src = "tempo 120
+         instrument i {
+  osc sine(220) as src
+  wander(2hz, 1) as w
+  w > src.pitch
+  src > adsr(0.01, 0.2, 1, 0.05) as amp
+  amp > out
+}
+         pattern p { C4 ..*13 - - }
+         track t { play p using i out > master }
+";
+    let whole = in_blocks(src, 5, BLOCK_SIZE);
+    let mut e = SongEngine::from_source(src).unwrap_or_else(|e| panic!("{e}"));
+    e.start_from_bar(3);
+    let (late, _) = e.render_steps(32);
+    let window = (0.05 * SAMPLE_RATE) as usize;
+    let mut apart = 0.0f32;
+    for seconds in [0.1f32, 0.4, 0.75, 1.1, 1.5, 2.2, 2.9, 3.4] {
+        let at = (seconds * SAMPLE_RATE) as usize;
+        let (here, there) =
+            (pitch_between(&late[at..at + window]), pitch_between(&whole[3 * bar + at..3 * bar + at + window]));
+        assert!((here / there - 1.0).abs() < 0.003, "{seconds} s after bar 3: {here} Hz, and {there} Hz from the top");
+        apart = apart.max((here / pitch_between(&whole[at..at + window]) - 1.0).abs());
+    }
+    // And bar 3 is not bar 0: the curve is somewhere else by then.
+    assert!(apart > 0.05, "bars 0 and 3 are within {apart} of each other in pitch");
+}
+
+/// A voice that was not run for a while -- its track out of the scene with
+/// the note still ringing -- is put back on the curve when it runs again,
+/// and a voice that ran all along is left alone.
+#[test]
+fn a_voice_that_was_not_run_is_put_back_on_the_curve() {
+    let template = graph("  osc sine(220) as src\n  wander(3hz, 1) as w\n  w > src.pitch\n  src > adsr(0.001, 0.1, 1.0, 0.05) as amp\n  amp > out");
+    let block = |inst: &mut Instrument| {
+        let mut b = [0.0f32; BLOCK_SIZE];
+        inst.process_block(&mut b);
+        b
+    };
+    // One instrument plays every block. The other is given the time, as the
+    // song engine gives it, after sitting 5000 blocks out.
+    let mut ran = Instrument::new(template.clone());
+    let mut sat = Instrument::new(template.clone());
+    ran.note_on(57, 1.0);
+    sat.note_on(57, 1.0);
+    for _ in 0..10 {
+        assert_eq!(block(&mut ran), block(&mut sat));
+    }
+    for _ in 0..5000 {
+        block(&mut ran);
+    }
+    sat.set_clock(5010 * BLOCK_SIZE as u32);
+    // The oscillator's phase is wherever each left it, so the pitch is what
+    // is compared, cycle by cycle: where the curve has the oscillator over
+    // half a second.
+    let half_a_second = |inst: &mut Instrument| {
+        let mut out = Vec::new();
+        for _ in 0..(0.5 * SAMPLE_RATE) as usize / BLOCK_SIZE {
+            out.extend_from_slice(&block(inst));
+        }
+        out
+    };
+    // (when, Hz) of every cycle: its middle and one over its length.
+    let cycles = |buf: &[f32]| -> Vec<(f32, f32)> {
+        let ups: Vec<f32> = (1..buf.len())
+            .filter(|&i| buf[i - 1] < 0.0 && buf[i] >= 0.0)
+            .map(|i| (i - 1) as f32 + buf[i - 1] / (buf[i - 1] - buf[i]))
+            .collect();
+        ups.windows(2).map(|w| (0.5 * (w[0] + w[1]), SAMPLE_RATE / (w[1] - w[0]))).collect()
+    };
+    // How far `a` is from `b` at the worst, as a share: each cycle of `a`
+    // against `b` at the same moment, between its two nearest cycles.
+    let apart = |a: &[(f32, f32)], b: &[(f32, f32)]| {
+        let mut worst = 0.0f32;
+        for &(t, hz) in a {
+            let Some(i) = b.windows(2).position(|w| w[0].0 <= t && t < w[1].0) else { continue };
+            let there = b[i].1 + (b[i + 1].1 - b[i].1) * (t - b[i].0) / (b[i + 1].0 - b[i].0);
+            worst = worst.max((hz / there - 1.0).abs());
+        }
+        worst
+    };
+    let (a, b) = (cycles(&half_a_second(&mut ran)), cycles(&half_a_second(&mut sat)));
+    assert!(a.len() > 40 && b.len() > 40, "half a second of cycles: {} and {}", a.len(), b.len());
+    let off = apart(&a, &b);
+    assert!(off < 0.005, "the voice that sat out is {off} of its pitch away from the one that ran");
+    // Without the time it is told, it would still be where it stopped.
+    let mut stale = Instrument::new(template);
+    stale.note_on(57, 1.0);
+    for _ in 0..10 {
+        block(&mut stale);
+    }
+    let off = apart(&a, &cycles(&half_a_second(&mut stale)));
+    assert!(off > 0.05, "the curve had not moved in 5000 blocks: {off} apart");
+}
+
+// ── the dust at the ends of its range ──
+
+/// What a dust at `density` does over `seconds` with `octaves` in its
+/// `rate` port: impulses, and pairs of them on neighbouring samples.
+fn pushed(density: f32, octaves: f32, hit: u32, seconds: f32) -> (usize, usize) {
+    let spec = dust(density, 1.0, 0.0);
+    let mut node = spec.instantiate();
+    node.strike(&spec, hit, 0);
+    let mut mods = [0.0f32; port::COUNT];
+    mods[port::RATE as usize] = octaves;
+    let (mut n, mut pairs, mut last) = (0, 0, false);
+    for _ in 0..(seconds * SAMPLE_RATE) as usize {
+        node.modulate(&mods, port::bit(port::RATE));
+        let v = node.process(&NONE, 0);
+        assert!(v.is_finite());
+        let fired = v != 0.0;
+        n += fired as usize;
+        pairs += (fired && last) as usize;
+        last = fired;
+    }
+    (n, pairs)
+}
+
+/// The `rate` port moves the density inside the range one can be written
+/// in. Eight octaves over 60 Hz asked for 15360 a second and got 14912 with
+/// 126629 pairs of impulses on neighbouring samples; over 2000 Hz it was an
+/// impulse on every sample, a level and not dust.
+#[test]
+fn the_rate_port_keeps_the_dust_within_its_range() {
+    for (density, octaves) in [(60.0, 8.0), (2000.0, 8.0), (2000.0, 3.0), (5.0, 40.0), (60.0, f32::INFINITY)] {
+        let (n, pairs) = pushed(density, octaves, 0, 20.0);
+        let rate = n as f32 / 20.0;
+        assert_eq!(pairs, 0, "dust({density}) with {octaves} octaves in `rate` fired on neighbouring samples");
+        assert!(rate < 2000.0 * 1.03, "dust({density}) with {octaves} octaves in `rate`: {rate} a second");
+        assert!(rate > 2000.0 * 0.9, "dust({density}) with {octaves} octaves in `rate`: only {rate} a second");
+    }
+    // An octave inside the range is still an octave.
+    let (plain, _) = pushed(500.0, 0.0, 0, 20.0);
+    let (up, pairs) = pushed(500.0, 1.0, 0, 20.0);
+    assert!((up as f32 / plain as f32 - 2.0).abs() < 0.1, "{plain} to {up} an octave up");
+    assert_eq!(pairs, 0);
+    // The low end: twenty octaves under 5 Hz would be one impulse in two
+    // days. It is one in a hundred seconds, the slowest a dust is written.
+    let mut n = 0;
+    for hit in 0..12 {
+        n += pushed(5.0, -20.0, hit, 500.0).0;
+    }
+    let rate = n as f32 / (12.0 * 500.0);
+    assert!((rate / 0.01 - 1.0).abs() < 0.5, "{n} impulses in 6000 s, {rate} a second for 0.01");
+    // Not a number in the port is nothing in the port.
+    let (odd, _) = pushed(500.0, f32::NAN, 0, 20.0);
+    assert_eq!(odd, plain);
+}
+
+/// Notes of `dust(0.01hz)` (seed 7) whose first impulse comes more than
+/// 4.1 mean gaps in: over 2^24 samples at 44.1 kHz.
+const LONG_FIRST_GAPS: [u32; 2] = [7, 313];
+
+/// The countdown to the next impulse is counted in whole numbers. As an
+/// `f32` it stopped changing once the gap was over 2^24 samples (six minutes
+/// at 44.1 kHz): at a hundredth of a Hz one note in forty drew such a gap
+/// and its dust never fired again. These notes are ones whose first gap is
+/// that long; the longest a gap can be is eight times the mean.
+#[test]
+fn the_longest_gap_of_the_slowest_dust_ends() {
+    let spec = dust(0.01, 1.0, 0.0);
+    let mean = SAMPLE_RATE as f64 * 100.0;
+    let mut long = 0;
+    for hit in LONG_FIRST_GAPS {
+        let mut node = spec.instantiate();
+        node.strike(&spec, hit, 0);
+        let limit = (8.0 * mean) as usize + 2;
+        let at = (0..limit).position(|_| node.process(&NONE, 0) != 0.0);
+        let at = at.unwrap_or_else(|| panic!("note {hit} of dust(0.01hz) had not fired after {limit} samples"));
+        long += (at > 1 << 24) as usize;
+    }
+    if SAMPLE_RATE == 44100.0 {
+        assert_eq!(long, LONG_FIRST_GAPS.len(), "these notes wait over 2^24 samples for their first impulse");
+    }
+}
+
+// ── what the reference says ──
+
+/// The section of docs/DSL.md on the random sources.
+fn the_section() -> String {
+    let doc = include_str!("../../docs/DSL.md");
+    let from = doc.find("**Bubbles, drops and sweeps that never repeat").expect("the section on the random sources");
+    let to = from + doc[from..].find("**A deep minimal kick.**").expect("the section after it");
+    doc[from..to].to_string()
+}
+
+/// Every example the reference gives for these nodes compiles: the patch in
+/// its fence, and each wire written in a sentence (`rand(0.5) > filt.cutoff`),
+/// put into an instrument that has the nodes the sentences name. One of
+/// them said `rand(1/12)`, which is a rhythm division and an error.
+#[test]
+fn every_example_in_the_reference_compiles() {
+    let section = the_section();
+    // The fenced patch, as a song.
+    let fence = section.split("```").nth(1).expect("the bubbles in a fence");
+    let src = format!("tempo 108\n{fence}\ntrack t {{ play stream using bubbles out > master }}\n");
+    let (out, _) = SongEngine::from_source(&src).unwrap_or_else(|e| panic!("the fenced example: {e}")).render(2);
+    assert!(out.iter().any(|v| v.abs() > 1e-3), "the fenced example is silent");
+
+    // The wires in the prose: code spans that send a source into a port.
+    let prose: String = section.split("```").step_by(2).collect::<Vec<_>>().join(" ");
+    let prose = prose.split_whitespace().collect::<Vec<_>>().join(" ");
+    let wires: Vec<&str> = prose
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .filter(|span| span.contains(" > ") && ["rand(", "wander(", "dust("].iter().any(|n| span.starts_with(n)))
+        .collect();
+    assert!(wires.len() >= 4, "the wires the section writes out: {wires:?}");
+    for wire in wires {
+        let (source, to) = wire.split_once(" > ").expect("a wire");
+        let body = format!(
+            "  osc saw(110) as a\n  svf(800hz, 0.3) as filt\n  gain(1) as vol\n  dust(5hz, level=30db) as d\n  \
+             {source} as it\n  it > {to}\n  a > filt\n  d > filt\n  filt > vol\n  vol > adsr(0.01, 0.1, 1, 0.1) as amp\n  amp > out"
+        );
+        let src = song(&body);
+        if let Err(e) = SongEngine::from_source(&src) {
+            panic!("`{wire}` in docs/DSL.md does not compile: {e}");
+        }
+    }
+}

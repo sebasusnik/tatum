@@ -24,6 +24,7 @@ impl SongEngine {
         self.active_automations.clear();
         self.scene_step = 0;
         self.scene_total_steps = 0;
+        self.set_song_clock(0);
 
         // Set BPM on all module instruments
         for inst in self.instruments.iter_mut() {
@@ -130,6 +131,7 @@ impl SongEngine {
         for inst in self.instruments.iter_mut() {
             inst.reset();
         }
+        self.song_clock = 0;
         for bus in self.buses.iter_mut() {
             bus.reset();
         }
@@ -145,6 +147,26 @@ impl SongEngine {
             track.gate_samples_remaining = 0.0;
         }
         self.snap_mix();
+    }
+
+    /// Put the song's sample count at `samples`, and every instrument's
+    /// clock with it.
+    pub(super) fn set_song_clock(&mut self, samples: u32) {
+        self.song_clock = samples;
+        for inst in self.instruments.iter_mut() {
+            inst.set_clock(samples);
+        }
+    }
+
+    /// The sample the first step of `bar` fires on when the song is played
+    /// from the top at the tempo it has now. The first step of all fires on
+    /// the first sample, and the step clock counts that sample too, so every
+    /// later one fires a sample before the count of steps says.
+    pub(super) fn samples_at_bar(&self, bar: usize) -> u32 {
+        let at = bar as f64 * self.steps_per_bar as f64 * self.samples_per_step as f64;
+        let whole = at as u64;
+        let up = if (whole as f64) < at { whole + 1 } else { whole };
+        (up.max(1) - 1) as u32
     }
 
     /// Put every glide where it is going. Starting, or jumping to a bar, is
@@ -239,6 +261,7 @@ impl SongEngine {
 
         self.current_bar = bar;
         self.global_step = bar * self.steps_per_bar;
+        self.set_song_clock(self.samples_at_bar(bar));
         self.reassert_held();
         self.snap_mix();
 

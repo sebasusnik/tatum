@@ -2736,6 +2736,7 @@ impl LivePlayer {
         let mut old = self.engine.take().expect("engine present");
         let bar = old.bar_of_next_step();
         new.start_before_bar(bar);
+        new.keep_clock_of(&old);
         if let Some(b) = self.blending.take() {
             self.retire(b.old, b.maps);
         }
