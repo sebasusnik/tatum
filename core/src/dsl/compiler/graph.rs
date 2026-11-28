@@ -25,6 +25,9 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
     let mut name_to_idx: Vec<(String, u8)> = Vec::new();
     let mut noise_seed = 42u32;
     let mut osc_drift_seed = 1000u32; // unique drift seed per oscillator
+                                      // The instrument's name as a number, for its random nodes: two
+                                      // instruments written alike do not play the same bubbles.
+    let name_seed = inst.name.bytes().fold(0x811c_9dc5u32, |h, b| (h ^ b as u32).wrapping_mul(0x0100_0193));
     let full = |line: Line| {
         CompileError::at(line.0, format!(
         "instrument '{}': more than {} nodes (an envelope counts twice, it brings its own VCA); split it into two instruments, or share a filter through `mix`",
@@ -72,13 +75,17 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
 
     // Create explicit nodes
     for node_def in &inst.nodes {
-        let spec = node_def_to_spec(node_def, &mut noise_seed, &mut osc_drift_seed, samples_per_bar).map_err(|e| {
-            if e.line == 0 {
-                CompileError::at(node_def.line.0, e.message)
-            } else {
-                e
-            }
-        })?;
+        let mut spec =
+            node_def_to_spec(node_def, &mut noise_seed, &mut osc_drift_seed, samples_per_bar).map_err(|e| {
+                if e.line == 0 {
+                    CompileError::at(node_def.line.0, e.message)
+                } else {
+                    e
+                }
+            })?;
+        if let NodeSpec::Rand { seed, .. } | NodeSpec::Wander { seed, .. } | NodeSpec::Dust { seed, .. } = &mut spec {
+            *seed = crate::rng::stir(*seed, name_seed);
+        }
 
         if matches!(spec, NodeSpec::Env { .. }) {
             // Envelope+VCA pattern: an envelope in a signal chain means
@@ -176,6 +183,15 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
         _ => CompileError::at(inst.line.0, format!("instrument '{}': {:?}", inst.name, e)),
     })?;
     template.output_gain = inst.gain.unwrap_or(1.0);
+    // `glide=` on any oscillator slides the whole voice: the oscillators of
+    // a note move together. The longest written is the one.
+    let glide_ms = inst
+        .nodes
+        .iter()
+        .filter(|n| n.kind == "osc")
+        .filter_map(|n| named_param(&n.params, "glide"))
+        .fold(0.0f32, f32::max);
+    template.glide_samples = (glide_ms * 0.001 * crate::SAMPLE_RATE) as u32;
     Ok(template)
 }
 
@@ -407,6 +423,37 @@ pub(super) fn node_def_to_spec(
             let rate = float_param_at(&node.params, 0).unwrap_or(1.0);
             let depth = float_param_at(&node.params, 1).unwrap_or(0.5);
             Ok(NodeSpec::Lfo { rate, depth })
+        }
+        // The random sources take their seeds from the same count as the
+        // noise, so two in one instrument differ; `compile_instrument` then
+        // stirs the instrument's name in, so two instruments do as well.
+        "rand" => {
+            *noise_seed += 1;
+            Ok(NodeSpec::Rand {
+                spread: float_param_at(&node.params, 0).unwrap_or(1.0),
+                bias: named_param(&node.params, "bias").unwrap_or(0.0),
+                glide_ms: named_param(&node.params, "glide").unwrap_or(0.0),
+                seed: *noise_seed,
+            })
+        }
+        "wander" => {
+            *noise_seed += 1;
+            Ok(NodeSpec::Wander {
+                rate: float_param_at(&node.params, 0).unwrap_or(1.0),
+                depth: float_param_at(&node.params, 1).unwrap_or(0.5),
+                jitter: named_param(&node.params, "jitter").unwrap_or(0.5),
+                seed: *noise_seed,
+            })
+        }
+        "dust" => {
+            *noise_seed += 1;
+            Ok(NodeSpec::Dust {
+                density: float_param_at(&node.params, 0).unwrap_or(5.0),
+                jitter: named_param(&node.params, "jitter").unwrap_or(1.0),
+                spread_db: named_param(&node.params, "spread").unwrap_or(0.0),
+                level_db: named_param(&node.params, "level").unwrap_or(0.0),
+                seed: *noise_seed,
+            })
         }
         "adsr" => {
             let a = float_param_at(&node.params, 0).unwrap_or(0.01);
@@ -797,7 +844,9 @@ fn control_kept_out_of_the_sound(
             let mut any = false;
             let all = inputs.all(|(c, &t)| {
                 any = true;
-                kind(&c.from) == "lfo" || (t && envelope(&c.from)) || control.contains(&c.from.as_str())
+                crate::nodes::is_control(kind(&c.from))
+                    || (t && envelope(&c.from))
+                    || control.contains(&c.from.as_str())
             });
             if any && all {
                 control.push(alias);
@@ -808,7 +857,9 @@ fn control_kept_out_of_the_sound(
         }
     }
     for (conn, &t) in inst.connections.iter().zip(to_port.iter()) {
-        if t || conn.port.is_some() || !(kind(&conn.from) == "lfo" || control.contains(&conn.from.as_str())) {
+        if t || conn.port.is_some()
+            || !(crate::nodes::is_control(kind(&conn.from)) || control.contains(&conn.from.as_str()))
+        {
             continue;
         }
         let Some(port) = inst.connections.iter().zip(to_port.iter()).find(|(c, &t)| t && c.from == conn.from) else {

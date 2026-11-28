@@ -81,7 +81,7 @@ const AMP: &str = "  src > adsr(0.001, 0.1, 1.0, 0.1) as amp\n  amp > out";
 fn a_port_is_written_with_a_dot_or_a_space() {
     for wiring in ["one > gain(1) > src.pitch", "one > gain(1) > src pitch"] {
         let t = graph(&format!("  osc sine(55) as src\n{ONE}\n  {wiring}\n{AMP}"));
-        let masks: Vec<u8> = t.mod_masks[..t.node_count as usize].iter().copied().filter(|&m| m != 0).collect();
+        let masks: Vec<u16> = t.mod_masks[..t.node_count as usize].iter().copied().filter(|&m| m != 0).collect();
         assert_eq!(masks, vec![port::bit(port::PITCH)], "{wiring}");
     }
 }
@@ -394,8 +394,11 @@ fn svf_sits_in_a_chain_too() {
 fn ports_are_checked_against_the_node() {
     let e = error(&format!("  osc saw(55) as src\n{ONE}\n  one > src.width\n{AMP}"));
     assert!(e.contains("is not a pulse"), "{e}");
+    let e = error(&format!("  osc saw(55) as a\n  a > saturate(0.5) as src\n{ONE}\n  one > src.cutoff\n{AMP}"));
+    assert!(e.contains("is a saturate, which has no ports"), "{e}");
+    // A gain has one, since the random sources, and says which.
     let e = error(&format!("  osc saw(55) as a\n  a > gain(0.5) as src\n{ONE}\n  one > src.cutoff\n{AMP}"));
-    assert!(e.contains("is a gain, which has no ports"), "{e}");
+    assert!(e.contains("is a gain, which has no `cutoff` port (it has amount)"), "{e}");
     let e = error(&format!("  osc saw(55) as a\n  a > ladder(400) as src\n{ONE}\n  one > src.fm\n{AMP}"));
     assert!(e.contains("has no `fm` port (it has cutoff)"), "{e}");
     let e = error(&format!("  osc saw(55) as a\n  a > svf(400, bandpass) as src\n{ONE}\n  one > src.morph\n{AMP}"));
@@ -616,8 +619,8 @@ fn a_port_that_does_not_exist_is_an_error_at_its_line() {
     let e = osc("lfo(4, 0.5) > f.gain");
     assert!(e.contains("line: 4") && e.contains("no `gain` port"), "{e}");
     // A node with no ports at all says so.
-    let e = error("  osc saw(55) as a\n  a > gain(0.5) as ctl\n  ctl > out\n  lfo(4, 0.5) > ctl.level");
-    assert!(e.contains("line: 6") && e.contains("'ctl' is a gain, which has no ports"), "{e}");
+    let e = error("  osc saw(55) as a\n  a > saturate(0.5) as ctl\n  ctl > out\n  lfo(4, 0.5) > ctl.level");
+    assert!(e.contains("line: 6") && e.contains("'ctl' is a saturate, which has no ports"), "{e}");
     // On a node defined in the same breath, and at the head of a line.
     let e = error("  lfo(1, 1) > osc saw(55) as f.fm\n  f > out");
     assert!(e.contains("line: 3") && e.contains("`f.fm`"), "{e}");

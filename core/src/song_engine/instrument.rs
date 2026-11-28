@@ -51,6 +51,8 @@ impl SongInstrument {
                 m.slide_to(note, velocity);
                 true
             }
+            // Only one whose oscillators say `glide=`.
+            Self::Graph(inst) => inst.slide_to(note),
             _ => false,
         }
     }

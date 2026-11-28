@@ -161,7 +161,8 @@ pub const NODES: &[NodeDefSpec] = &[
         named: &[arg!("pitch", -48.0, 48.0, 0.0, "offset in semitones"),
                  PULSE_WIDTH,
                  arg!("pitch_env", -5000.0, 5000.0, 0.0, "Hz added to the note at its start, falling away with pitch_decay: the click on a pluck's attack"),
-                 arg!("pitch_decay", 0.1, 2000.0, 5.0, "ms pitch_env takes to fall away, timed like an envelope stage")],
+                 arg!("pitch_decay", 0.1, 2000.0, 5.0, "ms pitch_env takes to fall away, timed like an envelope stage"),
+                 arg!("glide", 0.0, 5000.0, 0.0, "ms a note written `~note` takes to slide to its pitch from the one sounding, in a straight line in pitch and without starting again; written on any oscillator it slides the whole voice. 0 or unset, `~note` starts a new note")],
         waveform: true, rhythm: false, in_chains: false,
         doc: "Oscillator that follows the played note. Waveform word: sine | saw | square | triangle | pulse. Has analog drift." },
     NodeDefSpec { name: "fixosc", aliases: &[], category: Category::Source, positional: OSC_POS, named: &[PULSE_WIDTH],
@@ -203,7 +204,29 @@ pub const NODES: &[NodeDefSpec] = &[
         waveform: false, rhythm: false, in_chains: false, doc: "White noise." },
     NodeDefSpec { name: "lfo", aliases: &[], category: Category::Source,
         positional: &[arg!("rate", 0.01, 50.0, 1.0, "Hz"), arg!("depth", 0.0, 1.0, 0.5, "amplitude")],
-        named: &[], waveform: false, rhythm: false, in_chains: false, doc: "Low-frequency oscillator as a control signal." },
+        named: &[], waveform: false, rhythm: false, in_chains: false, doc: "Low-frequency oscillator as a control signal. A sine, starting again with each note; its `rate` port lets another modulator speed it up and slow it down." },
+    NodeDefSpec { name: "rand", aliases: &[], category: Category::Source,
+        positional: &[arg!("spread", 0.0, 8.0, 1.0, "how far from zero a value can land, in what the port it goes into counts in: octaves on `cutoff` and `pitch`, a share on `amount`")],
+        named: &[
+            arg!("bias", -1.0, 1.0, 0.0, "which way the values go: 0 both ways (-spread..spread), 1 only up (0..spread), -1 only down"),
+            arg!("glide", 0.0, 10000.0, 0.0, "ms a newly drawn value takes to arrive from the one before, in a straight line; 0 jumps. Only a value drawn through the `draw` port glides: a note starts on its own"),
+        ],
+        waveform: false, rhythm: false, in_chains: false,
+        doc: "One random value per note, held for the note: wired to a port, every note gets its own pitch, cutoff or level. The same song renders the same values every time, and no two notes share one. With a `dust` in its `draw` port it draws again on every impulse. `rand(0.5) > filt.cutoff` opens or closes the filter by up to half an octave, differently on each note. Write it with its parentheses, `rand()`, so a node named `rand` stays a name." },
+    NodeDefSpec { name: "wander", aliases: &[], category: Category::Source,
+        positional: &[arg!("rate", 0.01, 50.0, 1.0, "Hz: new destinations a second, on average; the curve turns about two thirds as often"), arg!("depth", 0.0, 8.0, 0.5, "how far from zero it goes, in what the port it goes into counts in")],
+        named: &[arg!("jitter", 0.0, 1.0, 0.5, "share of unevenness in when it picks a new destination: 0 a steady clock, 1 as uneven as it gets; `jitter=50%` reads the same as 0.5")],
+        waveform: false, rhythm: false, in_chains: false,
+        doc: "A smooth random curve between -depth and depth that never repeats, as a control signal: a sweep that is not an LFO's. It runs free from the moment the instrument starts and every voice reads the same curve, so a new note finds it where the last one left it and a chord moves as one; the same song renders the same curve every time. `wander(0.2hz, 1) > filt.cutoff` drifts the filter an octave either way over tens of seconds. Write it with its parentheses." },
+    NodeDefSpec { name: "dust", aliases: &[], category: Category::Source,
+        positional: &[arg!("density", 0.01, 2000.0, 5.0, "Hz: impulses a second, on average")],
+        named: &[
+            arg!("jitter", 0.0, 1.0, 1.0, "share of randomness in the gaps: 1 as a Geiger counter (the gaps spread as wide as their mean), 0 a steady clock; `jitter=80%` reads the same as 0.8"),
+            arg!("spread", 0.0, 60.0, 0.0, "dB between the loudest impulse and the quietest, each one drawn anywhere between; 0, all alike"),
+            arg!("level", -40.0, 40.0, 0.0, "dB of the loudest impulse against one sample at full scale. A filter rings far quieter than the one sample that struck it, the more so the lower it is tuned and the higher its resonance, so a ping wants 20 to 35"),
+        ],
+        waveform: false, rhythm: false, in_chains: false,
+        doc: "Impulses at random moments, off the grid, inside one held note: into a resonant `svf` or `ladder` each is a ping, and into a `rand`'s `draw` port each gives the ping a pitch of its own -- bubbles. Each note plays a different stream, and the same song renders the same streams every time. `dust(6hz, spread=12db, level=30db) > svf(900, 0.9, bandpass) as ping`. Write it with its parentheses." },
     NodeDefSpec { name: "adsr", aliases: &[], category: Category::Envelope,
         positional: &[arg!("attack", 0.0, 10.0, 0.01, "seconds"), arg!("decay", 0.0, 10.0, 0.1, "seconds"), arg!("sustain", 0.0, 1.0, 0.7, "level"), arg!("release", 0.0, 10.0, 0.3, "seconds")],
         named: &[], waveform: false, rhythm: false, in_chains: false, doc: "Amplitude envelope; the last envelope before `out` gates the voice." },
@@ -225,7 +248,7 @@ pub const NODES: &[NodeDefSpec] = &[
         waveform: false, rhythm: false, in_chains: false, doc: "Sums every node routed into it." },
     NodeDefSpec { name: "gain", aliases: &[], category: Category::Util,
         positional: &[arg!("amount", 0.0, 10.0, 1.0, "linear multiplier")], named: &[],
-        waveform: false, rhythm: false, in_chains: true, doc: "Linear gain." },
+        waveform: false, rhythm: false, in_chains: true, doc: "Linear gain. Inside an instrument its `amount` port lets a control signal move it." },
     NodeDefSpec { name: "saturate", aliases: &["drive"], category: Category::Effect,
         positional: &[arg!("drive", 0.0, 10.0, 1.0, "input gain into the tanh; 0.3 warm, 2 heavy")], named: &[],
         waveform: false, rhythm: false, in_chains: true, doc: "tanh soft clipping." },
@@ -337,6 +360,11 @@ const OSC_PORTS: &[Port] = &[
 const CUTOFF_PORT: Port =
     Port { name: "cutoff", doc: "octaves on top of the cutoff, retuned every sample: 1.0 is an octave up" };
 
+const RATE_PORT: Port = Port {
+    name: "rate",
+    doc: "octaves on top of its rate: 1.0 is twice as fast, -1.0 half; one modulator moving another",
+};
+
 /// The ports each node has. A node not listed has none.
 pub const PORTS: &[(&str, &[Port])] = &[
     ("osc", OSC_PORTS),
@@ -345,7 +373,30 @@ pub const PORTS: &[(&str, &[Port])] = &[
     // sample is unstable, and runs off to infinity under an oscillator.
     ("ladder", &[CUTOFF_PORT]),
     ("svf", &[CUTOFF_PORT, Port { name: "morph", doc: "added to `morph=`, kept within 0..1; not with `bandpass`" }]),
+    ("lfo", &[RATE_PORT]),
+    ("dust", &[RATE_PORT]),
+    (
+        "rand",
+        &[Port {
+            name: "draw",
+            doc: "draws a new value each time what comes in rises through zero: `dust(5) as d`, `d > r.draw`",
+        }],
+    ),
+    (
+        "gain",
+        &[Port {
+            name: "amount",
+            doc: "a share on top of the amount: 0.1 is 10% more, -0.5 half, -1 and under silence; tremolo, or a level that differs per note",
+        }],
+    ),
 ];
+
+/// The nodes that put out a control signal rather than sound: wired into a
+/// port they move it, and wired into the sound as well they would sit in it
+/// as DC, which the compiler refuses.
+pub fn is_control(kind: &str) -> bool {
+    matches!(kind, "lfo" | "rand" | "wander")
+}
 
 /// The words that make an `svf` the bandpass.
 pub const SVF_BANDPASS: &[&str] = &["bandpass", "bp"];

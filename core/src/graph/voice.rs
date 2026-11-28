@@ -13,6 +13,13 @@ pub struct Voice {
     pub velocity: f32,
     pub active: bool,
     pub age: u32,
+    /// The pitch the oscillators are at, in Hz, and the slide towards the
+    /// next: the ratio it is multiplied by each sample, how many samples are
+    /// left, and where it lands.
+    freq: f32,
+    glide_ratio: f32,
+    glide_left: u32,
+    glide_to: f32,
 }
 
 impl Default for Voice {
@@ -23,7 +30,17 @@ impl Default for Voice {
 
 impl Voice {
     pub fn new() -> Self {
-        Self { nodes: core::array::from_fn(|_| None), note: 0, velocity: 0.0, active: false, age: 0 }
+        Self {
+            nodes: core::array::from_fn(|_| None),
+            note: 0,
+            velocity: 0.0,
+            active: false,
+            age: 0,
+            freq: 0.0,
+            glide_ratio: 1.0,
+            glide_left: 0,
+            glide_to: 0.0,
+        }
     }
 
     /// The voice's nodes, allocated once for `template`: a note renews them
@@ -53,15 +70,8 @@ impl Voice {
         self.active = true;
         self.age = 0;
 
-        let freq = math::midi_to_freq(note);
-        for i in 0..template.osc_count as usize {
-            let idx = template.osc_nodes[i] as usize;
-            if let Some(ref mut node) = self.nodes[idx] {
-                let offset = template.osc_pitch_offsets[i];
-                let f = if offset != 0.0 { freq * math::pow2(offset / 12.0) } else { freq };
-                node.set_frequency(f);
-            }
-        }
+        self.glide_left = 0;
+        self.tune(template, math::midi_to_freq(note));
 
         for &n in &template.env_nodes[..template.env_count as usize] {
             let idx = n as usize;
@@ -78,6 +88,36 @@ impl Voice {
                 node.gate_on();
             }
         }
+    }
+
+    /// Put every oscillator on `freq`, each at its own offset from it.
+    fn tune(&mut self, template: &GraphTemplate, freq: f32) {
+        self.freq = freq;
+        for i in 0..template.osc_count as usize {
+            let idx = template.osc_nodes[i] as usize;
+            if let Some(ref mut node) = self.nodes[idx] {
+                let offset = template.osc_pitch_offsets[i];
+                let f = if offset != 0.0 { freq * math::pow2(offset / 12.0) } else { freq };
+                node.set_frequency(f);
+            }
+        }
+    }
+
+    /// Slide to `note` over the template's glide, in a straight line in
+    /// pitch, with nothing started again: the envelopes carry on.
+    fn slide(&mut self, template: &GraphTemplate, note: u8) {
+        self.note = note;
+        self.glide_to = math::midi_to_freq(note);
+        self.glide_left = template.glide_samples.max(1);
+        self.glide_ratio = math::pow(self.glide_to / self.freq.max(1.0), 1.0 / self.glide_left as f32);
+    }
+
+    /// One sample of a slide.
+    #[inline]
+    fn glide(&mut self, template: &GraphTemplate) {
+        self.glide_left -= 1;
+        let freq = if self.glide_left == 0 { self.glide_to } else { self.freq * self.glide_ratio };
+        self.tune(template, freq);
     }
 
     /// Stop at once and forget everything: every node as it was built, with
@@ -135,8 +175,11 @@ pub struct Instrument {
     staged_cutoff: Option<f32>,
     staged_env_depth: Option<f32>,
     staged_resonance: Option<f32>,
-    /// Notes started so far: the hit number a kick with `vary=` sways by.
+    /// Notes started so far: the hit number a kick with `vary=` sways by,
+    /// and a `rand` or a `dust` draws from.
     hits: u32,
+    /// Samples played since the start: where a `wander` is on its curve.
+    clock: u32,
 }
 
 impl Instrument {
@@ -161,6 +204,7 @@ impl Instrument {
             staged_env_depth: None,
             staged_resonance: None,
             hits: 0,
+            clock: 0,
         }
     }
 
@@ -191,6 +235,18 @@ impl Instrument {
                 if vary > 0.0 || vary_pitch > 0.0 {
                     if let Some(NodeKind::Kick(k)) = self.voices[idx].nodes[i].as_deref_mut() {
                         *k = KickState::new_hit(&self.template.specs[i], hit);
+                    }
+                }
+            }
+        }
+
+        // A random node is made again for this note's number and moment.
+        let random = self.template.random_mask;
+        if random != 0 {
+            for i in 0..self.template.node_count as usize {
+                if random & (1 << i) != 0 {
+                    if let Some(node) = self.voices[idx].nodes[i].as_deref_mut() {
+                        node.strike(&self.template.specs[i], hit, self.clock);
                     }
                 }
             }
@@ -253,6 +309,29 @@ impl Instrument {
         }
     }
 
+    /// Slide the note that is sounding to `note` instead of starting one:
+    /// what `~note` asks for. The newest voice still held takes it. False
+    /// when the instrument has no `glide=` or nothing is sounding, and the
+    /// caller starts a note as it always did.
+    pub fn slide_to(&mut self, note: u8) -> bool {
+        if self.template.glide_samples == 0 {
+            return false;
+        }
+        let mut newest: Option<usize> = None;
+        for (i, v) in self.voices.iter().enumerate() {
+            if v.active && newest.is_none_or(|n| v.age < self.voices[n].age) {
+                newest = Some(i);
+            }
+        }
+        match newest {
+            Some(i) => {
+                self.voices[i].slide(&self.template, note);
+                true
+            }
+            None => false,
+        }
+    }
+
     pub fn note_off(&mut self, note: u8) {
         for voice in self.voices.iter_mut() {
             if voice.active && voice.note == note {
@@ -271,6 +350,7 @@ impl Instrument {
         }
 
         let template = &self.template;
+        self.clock = self.clock.wrapping_add(len as u32);
 
         for voice in self.voices.iter_mut() {
             if !voice.active {
@@ -279,6 +359,9 @@ impl Instrument {
 
             // Process voice sample by sample using shared node buffers
             for s in 0..len {
+                if voice.glide_left > 0 {
+                    voice.glide(template);
+                }
                 template.run_frame(&mut self.node_bufs, s, &mut voice.nodes);
             }
 
@@ -328,5 +411,6 @@ impl Instrument {
         }
         // The next play counts its hits from the top, as a render does.
         self.hits = 0;
+        self.clock = 0;
     }
 }

@@ -16,6 +16,7 @@ use crate::effects::transient::Transient;
 use crate::effects::delay::Delay;
 use crate::effects::reverb::DattorroReverb;
 use crate::effects::capture::Capture;
+use crate::rng::Rng;
 use crate::SAMPLE_RATE;
 extern crate alloc;
 use alloc::boxed::Box;
@@ -47,16 +48,34 @@ pub mod port {
     pub const CUTOFF: u8 = 5;
     /// The `svf` mode knob, added to its `morph=`.
     pub const MORPH: u8 = 6;
-    pub const COUNT: usize = 7;
+    /// How fast an `lfo` turns or a `dust` fires, in octaves on top of its
+    /// own rate: 1.0 is twice as fast. One modulator moving another.
+    pub const RATE: u8 = 7;
+    /// On a `rand`: each time what comes in rises through zero, it draws a
+    /// new value. A `dust` in here gives every impulse a value of its own.
+    pub const DRAW: u8 = 8;
+    /// A `gain`'s amount, as a share on top of it: 0.1 is 10% more, -1 is
+    /// silence. Tremolo, or a level that differs from note to note.
+    pub const AMOUNT: u8 = 9;
+    pub const COUNT: usize = 10;
 
-    pub const NAMES: [(&str, u8); 6] =
-        [("fm", FM), ("pitch", PITCH), ("sync", SYNC), ("width", WIDTH), ("cutoff", CUTOFF), ("morph", MORPH)];
+    pub const NAMES: [(&str, u8); 9] = [
+        ("fm", FM),
+        ("pitch", PITCH),
+        ("sync", SYNC),
+        ("width", WIDTH),
+        ("cutoff", CUTOFF),
+        ("morph", MORPH),
+        ("rate", RATE),
+        ("draw", DRAW),
+        ("amount", AMOUNT),
+    ];
 
     pub fn from_name(name: &str) -> Option<u8> {
         NAMES.iter().find(|(n, _)| *n == name).map(|&(_, p)| p)
     }
 
-    pub const fn bit(port: u8) -> u8 {
+    pub const fn bit(port: u8) -> u16 {
         1 << port
     }
 }
@@ -157,6 +176,39 @@ pub enum NodeSpec {
     Lfo {
         rate: f32,
         depth: f32,
+    },
+    /// One random value per note, held; drawn again on each impulse into its
+    /// `draw` port. See [`RandState`].
+    Rand {
+        /// How far from zero it can land, in whatever the port it goes into counts in.
+        spread: f32,
+        /// -1 only downwards, 0 both ways, 1 only upwards.
+        bias: f32,
+        /// ms a newly drawn value takes to arrive from the one before; 0, at once.
+        glide_ms: f32,
+        seed: u32,
+    },
+    /// A smooth random curve that never repeats, the same for every voice of
+    /// the instrument. See [`WanderState`].
+    Wander {
+        /// New destinations a second, on average.
+        rate: f32,
+        depth: f32,
+        /// 0 a steady clock, 1 as uneven as it gets.
+        jitter: f32,
+        seed: u32,
+    },
+    /// Impulses at random moments. See [`DustState`].
+    Dust {
+        /// Impulses a second, on average.
+        density: f32,
+        /// 0 a steady clock, 1 gaps as random as a Geiger counter's.
+        jitter: f32,
+        /// dB between the loudest impulse and the quietest.
+        spread_db: f32,
+        /// dB of the loudest against one sample at full scale.
+        level_db: f32,
+        seed: u32,
     },
     Env {
         a: f32,
@@ -419,6 +471,9 @@ impl NodeSpec {
                 lfo.set_depth(depth);
                 NodeKind::Lfo(lfo)
             }
+            NodeSpec::Rand { .. } => NodeKind::Rand(RandState::new(self, 0)),
+            NodeSpec::Wander { .. } => NodeKind::Wander(WanderState::new(self, 0)),
+            NodeSpec::Dust { .. } => NodeKind::Dust(DustState::new(self, 0)),
             NodeSpec::Env { a, d, s, r } => {
                 let mut env = Envelope::new(SAMPLE_RATE);
                 env.set_adsr(a, d, s, r);
@@ -649,6 +704,12 @@ impl NodeSpec {
 
     /// A node the voice waits on: it ends when every one of these is idle.
     /// A kick carries its own level, so it is one, though it brings no VCA.
+    /// The nodes a note has to be told its number and its moment: what they
+    /// play is drawn from those. See [`NodeKind::strike`].
+    pub fn is_random(&self) -> bool {
+        matches!(self, NodeSpec::Rand { .. } | NodeSpec::Wander { .. } | NodeSpec::Dust { .. })
+    }
+
     pub fn is_envelope(&self) -> bool {
         matches!(self, NodeSpec::Env { .. } | NodeSpec::Kick { .. })
     }
@@ -1065,7 +1126,7 @@ const MOD_FREQ_TOP: f32 = 0.45 * SAMPLE_RATE;
 impl NoteOsc {
     /// Take this sample's values from the ports. `mask` says which are wired.
     #[inline]
-    pub fn modulate(&mut self, mods: &[f32; port::COUNT], mask: u8) {
+    pub fn modulate(&mut self, mods: &[f32; port::COUNT], mask: u16) {
         let m = &mut self.mods;
         m.on = true;
         m.dc_block = mask & (port::bit(port::FM) | port::bit(port::SYNC)) != 0;
@@ -1175,6 +1236,259 @@ impl NoteOsc {
 
     pub fn reset(&mut self) {
         self.osc.reset();
+    }
+}
+
+// ── Random control sources ──
+
+/// `rand`: one random value for each note, held while it lasts, so that a
+/// pitch, a cutoff or a level wired from it differs from note to note. The
+/// value comes from the node's seed and the number of the note among those
+/// its instrument has played, so a song renders the same every time and two
+/// notes do not share one. With something in its `draw` port it draws again
+/// each time that rises through zero, and with `glide=` it travels to the new
+/// value in a straight line rather than jumping.
+pub struct RandState {
+    rng: Rng,
+    low: f32,
+    width: f32,
+    value: f32,
+    target: f32,
+    step: f32,
+    left: u32,
+    glide: u32,
+    /// What came into `draw` one sample ago, to see it rise.
+    prev: f32,
+}
+
+impl RandState {
+    pub fn new(spec: &NodeSpec, hit: u32) -> Self {
+        let NodeSpec::Rand { spread, bias, glide_ms, seed } = *spec else {
+            unreachable!("RandState::new takes a rand")
+        };
+        // bias 0: -spread..spread. bias 1: 0..spread. bias -1: -spread..0.
+        let half = spread * (1.0 - 0.5 * crate::math::abs(bias));
+        let centre = 0.5 * spread * bias;
+        let mut s = Self {
+            rng: Rng::new(crate::rng::stir(seed, hit)),
+            low: centre - half,
+            width: 2.0 * half,
+            value: 0.0,
+            target: 0.0,
+            step: 0.0,
+            left: 0,
+            glide: (glide_ms * 0.001 * SAMPLE_RATE) as u32,
+            prev: 0.0,
+        };
+        s.value = s.draw();
+        s.target = s.value;
+        s
+    }
+
+    #[inline]
+    fn draw(&mut self) -> f32 {
+        self.low + self.width * self.rng.next_f32()
+    }
+
+    /// What is in the `draw` port this sample.
+    #[inline]
+    pub fn trigger(&mut self, x: f32) {
+        if self.prev <= 0.0 && x > 0.0 {
+            self.target = self.draw();
+            if self.glide > 1 {
+                self.left = self.glide;
+                self.step = (self.target - self.value) / self.glide as f32;
+            } else {
+                self.value = self.target;
+            }
+        }
+        self.prev = x;
+    }
+
+    #[inline]
+    pub fn next_sample(&mut self) -> f32 {
+        if self.left > 0 {
+            self.left -= 1;
+            self.value = if self.left == 0 { self.target } else { self.value + self.step };
+        }
+        self.value
+    }
+}
+
+/// `wander`: a smooth random curve between -depth and depth that heads for a
+/// new destination `rate` times a second on average and never repeats. For a
+/// sweep that is not an LFO's.
+///
+/// It runs free: the curve is a function of the node's seed and of the time
+/// since the instrument started, not of the note, so every voice reads the
+/// same curve and a new note finds it where the last one left it -- one
+/// filter sweep over a whole chord, as one hand on one knob. Each stretch
+/// between two destinations is an S-curve, level at both ends; where each
+/// begins and where it heads come from stirring the seed with its number, so
+/// no state is kept between notes and none is shared between voices.
+pub struct WanderState {
+    seed: u32,
+    /// Stretches per sample, before the jitter.
+    per_sample: f64,
+    depth: f32,
+    jitter: f32,
+    /// The stretch being played.
+    k: u32,
+    /// Samples since the instrument started.
+    clock: u32,
+    /// Samples into the stretch when it was entered, and those played since:
+    /// counted, not added up, so a long curve does not creep.
+    base: f32,
+    n: u32,
+    /// One over the stretch's length in samples.
+    inc: f32,
+    from: f32,
+    to: f32,
+}
+
+impl WanderState {
+    /// How far a destination can sit from its place on a steady clock, in
+    /// stretches, at `jitter=1`: just under half, so that two never swap.
+    const SWAY: f32 = 0.45;
+
+    pub fn new(spec: &NodeSpec, clock: u32) -> Self {
+        let NodeSpec::Wander { rate, depth, jitter, seed } = *spec else {
+            unreachable!("WanderState::new takes a wander")
+        };
+        let mut s = Self {
+            seed,
+            per_sample: rate as f64 / SAMPLE_RATE as f64,
+            depth,
+            jitter,
+            k: 0,
+            clock,
+            base: 0.0,
+            n: 0,
+            inc: 0.0,
+            from: 0.0,
+            to: 0.0,
+        };
+        // The stretch `clock` falls in: the one a steady clock says, or a
+        // neighbour when the jitter has moved the border past it.
+        let u = clock as f64 * s.per_sample;
+        let mut k = u as u32;
+        if u < s.knot(k) {
+            k = k.wrapping_sub(1);
+        } else if u >= s.knot(k.wrapping_add(1)) {
+            k = k.wrapping_add(1);
+        }
+        s.enter(k);
+        s
+    }
+
+    /// When stretch `k` begins, in stretches.
+    #[inline]
+    fn knot(&self, k: u32) -> f64 {
+        // Signed, so that the stretch before the first is at -1 and not at
+        // four thousand million.
+        k as i32 as f64 + (Self::SWAY * self.jitter * (crate::rng::stir_unit(self.seed, k) * 2.0 - 1.0)) as f64
+    }
+
+    /// Where the curve is when stretch `k` begins, -1..1.
+    #[inline]
+    fn at(&self, k: u32) -> f32 {
+        crate::rng::stir_unit(self.seed ^ 0x5bd1_e995, k) * 2.0 - 1.0
+    }
+
+    /// Start on stretch `k`, at the sample the clock is on.
+    fn enter(&mut self, k: u32) {
+        let next = k.wrapping_add(1);
+        let begins = self.knot(k);
+        self.k = k;
+        self.inc = (self.per_sample / (self.knot(next) - begins)) as f32;
+        self.base = (self.clock as f64 - begins / self.per_sample) as f32;
+        self.n = 0;
+        self.from = self.at(k);
+        self.to = self.at(next);
+    }
+
+    #[inline]
+    pub fn next_sample(&mut self) -> f32 {
+        let p = crate::math::clamp((self.base + self.n as f32) * self.inc, 0.0, 1.0);
+        let out = self.from + (self.to - self.from) * p * p * (3.0 - 2.0 * p);
+        self.n += 1;
+        self.clock = self.clock.wrapping_add(1);
+        if (self.base + self.n as f32) * self.inc >= 1.0 {
+            self.enter(self.k.wrapping_add(1));
+        }
+        out * self.depth
+    }
+}
+
+/// `dust`: impulses one sample long at random moments, `density` a second on
+/// average. Into a resonant filter each is a ping, so one held note becomes a
+/// stream of them off the grid; into a `rand`'s `draw` port each gives that
+/// ping a pitch of its own.
+///
+/// The gap to the next impulse is drawn when one fires: at `jitter=1` from
+/// the exponential law of a Geiger counter (as many short as long, the
+/// spread of the gaps equal to their mean), at 0 always the mean, a clock.
+/// An impulse is `level=` dB against full scale times the engine's rate over
+/// 44100, the same area in time at any rate, so what it rings in a filter is
+/// as loud at any of them; `spread=` takes each down by a random share of
+/// that many dB. The stream
+/// is drawn from the node's seed and the note's number, as `rand` is.
+pub struct DustState {
+    rng: Rng,
+    /// Samples between impulses, on average.
+    mean: f32,
+    jitter: f32,
+    spread_db: f32,
+    /// How tall the loudest impulse is.
+    height: f32,
+    /// Samples to the next impulse.
+    wait: f32,
+    /// How fast `wait` runs down: 1, or what the `rate` port says.
+    speed: f32,
+}
+
+impl DustState {
+    /// An exponential gap is cut off at this many times the mean (one in
+    /// three thousand would be longer), so a silence has an end.
+    const LONGEST: f32 = 8.0;
+
+    pub fn new(spec: &NodeSpec, hit: u32) -> Self {
+        let NodeSpec::Dust { density, jitter, spread_db, level_db, seed } = *spec else {
+            unreachable!("DustState::new takes a dust")
+        };
+        let mut s = Self {
+            rng: Rng::new(crate::rng::stir(seed, hit)),
+            mean: SAMPLE_RATE / density,
+            jitter,
+            spread_db,
+            height: crate::math::db_to_linear(level_db) * (SAMPLE_RATE / 44100.0),
+            wait: 0.0,
+            speed: 1.0,
+        };
+        // The first one comes part of a gap in, not on the note's first
+        // sample: a note is not an impulse.
+        s.wait = s.gap() * s.rng.next_f32();
+        s
+    }
+
+    #[inline]
+    fn gap(&mut self) -> f32 {
+        let random = (-crate::math::ln(1.0 - self.rng.next_f32())).min(Self::LONGEST);
+        self.mean * (1.0 - self.jitter + self.jitter * random)
+    }
+
+    #[inline]
+    pub fn next_sample(&mut self) -> f32 {
+        self.wait -= self.speed;
+        if self.wait > 0.0 {
+            return 0.0;
+        }
+        // Never two in one sample, whatever the density, and at its own
+        // rate a silent sample between any two.
+        self.wait = (self.wait + self.gap()).max(2.0);
+        let level =
+            if self.spread_db > 0.0 { crate::math::db_to_linear(-self.spread_db * self.rng.next_f32()) } else { 1.0 };
+        level * self.height
     }
 }
 
@@ -1556,6 +1870,9 @@ pub enum NodeKind {
     Kick(KickState),
     Noise(NoiseGen),
     Lfo(Lfo),
+    Rand(RandState),
+    Wander(WanderState),
+    Dust(DustState),
 
     // ── Envelopes ──
     Env(Envelope),
@@ -1568,6 +1885,13 @@ pub enum NodeKind {
     // ── Mixing / routing ──
     Mix,
     Gain(f32),
+    /// A `gain` with something in its `amount` port: `amount`, and the share
+    /// the port adds to it this sample. A plain `Gain` becomes one the first
+    /// time it is modulated, so one that never is stays what it was.
+    SwungGain {
+        amount: f32,
+        by: f32,
+    },
     Vca,
 
     // ── Effects ──
@@ -1647,6 +1971,9 @@ impl NodeKind {
             NodeKind::Kick(k) => k.next_sample(),
             NodeKind::Noise(noise) => noise.next_sample(),
             NodeKind::Lfo(lfo) => lfo.next_sample(),
+            NodeKind::Rand(r) => r.next_sample(),
+            NodeKind::Wander(w) => w.next_sample(),
+            NodeKind::Dust(d) => d.next_sample(),
             NodeKind::Capture(c) => c.process(inputs[0]),
             NodeKind::Env(env) => env.next_sample(),
             NodeKind::Biquad(m) => m.process(inputs[0]),
@@ -1665,6 +1992,7 @@ impl NodeKind {
             NodeKind::Mix => inputs[..input_count as usize].iter().sum(),
 
             NodeKind::Gain(g) => inputs[0] * *g,
+            NodeKind::SwungGain { amount, by } => inputs[0] * *amount * (1.0 + *by).max(0.0),
             NodeKind::Vca => inputs[0] * inputs[1],
 
             NodeKind::Saturator(sat) => sat.process(inputs[0]),
@@ -1703,10 +2031,15 @@ impl NodeKind {
     /// Called before [`process`](Self::process), and only on a node that has
     /// something wired into a port.
     #[inline]
-    pub fn modulate(&mut self, mods: &[f32; port::COUNT], mask: u8) {
+    pub fn modulate(&mut self, mods: &[f32; port::COUNT], mask: u16) {
         let cut = (mask & port::bit(port::CUTOFF) != 0).then(|| mods[port::CUTOFF as usize]);
         match self {
             NodeKind::Osc(osc) => osc.modulate(mods, mask),
+            NodeKind::Lfo(lfo) => lfo.bend_rate(crate::math::pow2(mods[port::RATE as usize])),
+            NodeKind::Dust(d) => d.speed = crate::math::pow2(mods[port::RATE as usize]),
+            NodeKind::Rand(r) => r.trigger(mods[port::DRAW as usize]),
+            NodeKind::Gain(g) => *self = NodeKind::SwungGain { amount: *g, by: mods[port::AMOUNT as usize] },
+            NodeKind::SwungGain { by, .. } => *by = mods[port::AMOUNT as usize],
             NodeKind::Ladder(m) => m.cut_mod = cut,
             NodeKind::Svf(m) => {
                 m.cut_mod = cut;
@@ -1733,6 +2066,10 @@ impl NodeKind {
             NodeKind::Bitcrusher(bc) => bc.process_stereo(l, r),
             NodeKind::Saturator(sat) => (sat.process(l), sat.process(r)),
             NodeKind::Gain(g) => (l * *g, r * *g),
+            NodeKind::SwungGain { amount, by } => {
+                let g = *amount * (1.0 + *by).max(0.0);
+                (l * g, r * g)
+            }
             NodeKind::Phaser(p) => p.process_stereo(l, r),
             // Filters and the chorus each hold a delay line or state registers.
             // The dual-mono fallback below clocks them twice per stereo frame
@@ -2014,6 +2351,20 @@ impl NodeKind {
         }
     }
 
+    /// Tell a random node which note this is: `hit`, the number of the note
+    /// among those the instrument has played, and `clock`, the samples since
+    /// the instrument started. A `rand` and a `dust` draw from the first, so
+    /// each note gets its own; a `wander` goes to the second, so every note
+    /// finds the one curve where it is. Anything else has nothing to hear.
+    pub fn strike(&mut self, spec: &NodeSpec, hit: u32, clock: u32) {
+        match self {
+            NodeKind::Rand(r) => *r = RandState::new(spec, hit),
+            NodeKind::Dust(d) => *d = DustState::new(spec, hit),
+            NodeKind::Wander(w) => *w = WanderState::new(spec, clock),
+            _ => {}
+        }
+    }
+
     /// Become what `spec` instantiates, reusing this node's memory: a voice
     /// does this on every note. The kinds that own a buffer (a delay line, a
     /// capture window, the chorus) are cleared and set again in place, which
@@ -2045,6 +2396,8 @@ impl NodeKind {
             // A kick is made again on every hit (`renew`); reset only stops it.
             NodeKind::Kick(k) => k.done = true,
             NodeKind::Noise(_) => {}
+            // Made again for each note (`renew`, then `strike`).
+            NodeKind::Rand(_) | NodeKind::Wander(_) | NodeKind::Dust(_) => {}
             NodeKind::Lfo(lfo) => lfo.reset(),
             NodeKind::AutoPan { lfo, .. } => lfo.reset(),
             NodeKind::Capture(c) => c.reset(),
@@ -2067,7 +2420,7 @@ impl NodeKind {
             NodeKind::Biquad(m) => m.reset(),
             NodeKind::Ladder(m) => m.reset(),
             NodeKind::Svf(m) => m.reset(),
-            NodeKind::Mix | NodeKind::Gain(_) | NodeKind::Vca | NodeKind::Output => {}
+            NodeKind::Mix | NodeKind::Gain(_) | NodeKind::SwungGain { .. } | NodeKind::Vca | NodeKind::Output => {}
             NodeKind::Saturator(_) => {}
             NodeKind::Chorus(c) => c.reset(),
             NodeKind::Bitcrusher(bc) => bc.reset(),
