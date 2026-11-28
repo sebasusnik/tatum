@@ -9,6 +9,7 @@
 use tatum_core::graph::node::NodeSpec;
 use tatum_core::graph::voice::Instrument;
 use tatum_core::graph::GraphBuilder;
+use tatum_core::live::{LivePlanner, LivePlayer, Plan};
 use tatum_core::primitives::oscillator::Waveform;
 use tatum_core::song_engine::SongEngine;
 use tatum_core::{BLOCK_SIZE, MAX_VOICES, SAMPLE_RATE};
@@ -215,4 +216,92 @@ fn stealing_at_the_voice_limit_leaves_nothing_held() {
     }
     run(&mut inst, 0.5);
     assert!(inst.is_idle(), "a held note was left after the note-offs");
+}
+
+#[test]
+fn a_slide_inside_a_step_ends_the_note_it_slides_from() {
+    // A graph cannot glide, so the slid note of `<a ~b>` is struck anew: the
+    // note it slides from has to end there, as it does across steps.
+    for pattern in ["<C3 ~E3> -*15", "<C3 ~C3> -*15", "<C3 E3 ~G3 ~C3> -*15"] {
+        let x = song(GRAPH, pattern, 3);
+        let under = rest_under_notes(&x, 3);
+        assert!(under < -50.0, "{pattern}: the rests are {under:.1} dB under the notes");
+    }
+}
+
+/// A graph track playing `pattern`, with every key of the keyboard a lead
+/// zone into it: a key comes in as a live note, the way a performer's does.
+fn live_session(pattern: &str) -> (LivePlanner, LivePlayer) {
+    let src = format!(
+        "tempo {TEMPO}\nscale C major\n\
+         instrument v {{ osc saw > adsr(0.005, 0.01, 0.8, 0.05) as amp\n amp > out }}\n\
+         pattern p {{ {pattern} }}\n\
+         track t {{ play p using v out > master }}\n\
+         master {{ in > out }}\n\
+         midi {{\n    zone lead 0..127 > t\n}}\n"
+    );
+    let mut planner = LivePlanner::new();
+    planner.set_output_gain(1.0);
+    let mut player = LivePlayer::new();
+    player.apply(planner.plan(&src, player.generation()).unwrap_or_else(|e| panic!("{e:?}\n{src}")));
+    player.start();
+    (planner, player)
+}
+
+/// Play on to sample `to`, keeping the left channel in `out`.
+fn play_to(player: &mut LivePlayer, out: &mut Vec<f32>, to: usize) {
+    let (mut l, mut r) = ([0.0f32; BLOCK_SIZE], [0.0f32; BLOCK_SIZE]);
+    while out.len() < to {
+        let n = (to - out.len()).min(BLOCK_SIZE);
+        player.process(&mut l[..n], &mut r[..n]);
+        out.extend_from_slice(&l[..n]);
+    }
+}
+
+fn key(planner: &mut LivePlanner, player: &mut LivePlayer, note: u8, velocity: u8) {
+    let plans = planner.key(note, velocity, player.generation()).expect("the key is in a zone");
+    assert!(plans.iter().any(|p| matches!(p, Plan::Play { .. })), "the key played nothing");
+    for p in plans {
+        player.apply(p);
+    }
+}
+
+#[test]
+fn a_key_held_on_the_note_the_pattern_plays_is_its_own() {
+    // The pattern strikes C3 quietly at the top of bar 0, and again at the
+    // top of bar 2 held for half a bar. A key on the same C3 goes down just
+    // after the first strike and up in bar 1, then down again just before
+    // the second and up inside it. The pattern's note-off is not the key's,
+    // nor the key's the pattern's.
+    let (mut planner, mut player) = live_session("C3:0.25 -*15  -*16  C3:0.25 ..*7 -*8  -*16");
+    let c3 = tatum_core::dsl::compiler::note_name_to_midi("C3");
+    let s = step();
+    let at = |bar: usize, st: usize| (bar * 16 + st) * s;
+    let mut x = Vec::new();
+    play_to(&mut player, &mut x, 400);
+    key(&mut planner, &mut player, c3, 127);
+    play_to(&mut player, &mut x, at(1, 12));
+    key(&mut planner, &mut player, c3, 0);
+    play_to(&mut player, &mut x, at(1, 15));
+    key(&mut planner, &mut player, c3, 127);
+    play_to(&mut player, &mut x, at(2, 2));
+    key(&mut planner, &mut player, c3, 0);
+    play_to(&mut player, &mut x, at(4, 0));
+
+    // The key alone, at its sustain, in the second half of the step before
+    // the pattern's second strike.
+    let alone = rms(&x[at(1, 15) + s / 2..at(2, 0)]);
+    // Bar 1: the pattern's first note has ended, the key is still down.
+    let held = db(rms(steps(&x, 1, 2, 11)), alone);
+    assert!(held > -3.0, "the held key is {held:.1} dB under itself: the pattern's note-off ended it");
+    let up = db(rms(steps(&x, 1, 14, 15)), alone);
+    assert!(up < -50.0, "{up:.1} dB after the key came up: something was left held");
+    // Bar 2: the key came up, the pattern's quiet note still holds.
+    let pattern = db(rms(steps(&x, 2, 4, 7)), alone);
+    assert!(
+        pattern < -6.0 && pattern > -30.0,
+        "the pattern's note is {pattern:.1} dB to the key: the key's note-off ended the pattern's"
+    );
+    let under = db(rms(steps(&x, 3, 2, 16)), alone);
+    assert!(under < -50.0, "the rests are {under:.1} dB under the key");
 }
