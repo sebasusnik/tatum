@@ -128,6 +128,17 @@ impl BiquadFilter {
         self.z1 = 0.0;
         self.z2 = 0.0;
     }
+
+    /// The share of a sine's power that comes through, for a sine that turns
+    /// by the angle these are the cosine and the sine of on every sample: the
+    /// filter's response there, squared, read off its coefficients.
+    pub fn power_at(&self, cos: f32, sin: f32) -> f32 {
+        // One sample back is (cos, -sin); two is that squared.
+        let (c2, s2) = (cos * cos - sin * sin, 2.0 * sin * cos);
+        let (nr, ni) = (self.b0 + self.b1 * cos + self.b2 * c2, self.b1 * sin + self.b2 * s2);
+        let (dr, di) = (1.0 + self.a1 * cos + self.a2 * c2, self.a1 * sin + self.a2 * s2);
+        (nr * nr + ni * ni) / (dr * dr + di * di)
+    }
 }
 
 // ─── Ladder Filter (Moog-style 4-pole) ───
