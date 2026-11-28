@@ -1034,7 +1034,9 @@ instrument pluck {
 `lfo(0.25, 0.2) > b.width` does not feed `b` a signal to play, it moves `b`'s pulse
 width every sample by what comes in. The port goes after the node's name, with a dot
 or a space, and ends the chain; a `gain` on the way says how far, and several
-connections into one port add up.
+connections into one port add up. A word there that is not a port of that node
+(`f.resonance`, `out.fm`, `mix.cutoff`) is an error at its line that lists the ports
+the node has, never a plain connection.
 
 | port | on | what it does |
 |------|----|--------------|
@@ -1048,10 +1050,24 @@ connections into one port add up.
 An envelope that nothing flows into, wired towards a port, is a control source rather
 than a VCA, so `fenv > gain(2.5) > filt.cutoff` sweeps the filter two and a half octaves
 on every note, the poly-mod of the hardware. (Wired towards `out` instead it is still a
-VCA with nothing to shape, and adds nothing.) The `svf` is the SEM's filter: one pair of
+VCA with nothing to shape, and adds nothing.) What moves a port is a control signal, not
+sound: an LFO, such an envelope, or a `gain` fed only by them, wired into a port and
+into the sound as well (`fenv > gain(2) as g`, `g > filt.cutoff`, `g > mix`) is an
+error, where it would have put the envelope's curve in the output as DC. An envelope
+sound flows into is still a VCA when it goes into a port: `a > adsr(...) as amp`,
+`amp > b.pitch` sends the enveloped oscillator, not the curve; for the curve, declare a
+second envelope with nothing flowing in. A voice ends when its envelopes have: those
+the sound goes through. A control envelope does not hold it, so a filter sweep with a
+five-second release costs nothing after the amp envelope has closed; only when a graph
+has no other envelope does the control one decide, and the voice is cut when it ends.
+
+The `svf` is the SEM's filter: one pair of
 integrators, a `morph` that crossfades the lowpass into the highpass through a notch, and
-a cutoff that an oscillator can push around at audio rate without it ringing or blowing
-up. The `ladder` takes it too. The biquads (`lowpass`, `highpass`, `bandpass`) have no
+a cutoff that an oscillator can push around at audio rate and stay finite. Finite is not
+quiet: a fast modulator through several octaves of `gain` onto noise or another broadband
+source raises the level many times over (17 times the static filter's peak at
+`gain(10)`, resonance 1), and nothing in the filter limits it, so keep the depth to an
+octave or two there or turn the instrument down. The `ladder` takes it too. The biquads (`lowpass`, `highpass`, `bandpass`) have no
 `cutoff` port: retuned every sample they go unstable, so wiring into one is an error
 that says to use `svf` or `ladder`; their `ea=`/`edepth=` envelope and `lfo_hz=` sweep
 them as before.
@@ -1064,8 +1080,11 @@ depend on the one it moves.
 
 A modulated oscillator stops at 0.45 of the sample rate however far `pitch` and `fm`
 push it.
-Synced and modulated oscillators are AC-coupled, as the hardware's output is, so a
-cycle cut short by the sync does not leave DC behind. A slave runs one sample late,
+An oscillator with something in its `sync` or `fm` port is AC-coupled, as the
+hardware's output is, so a cycle cut short by the sync does not leave DC behind; the
+coupling tilts a low square and lifts its peak (1.8 dB at C1). `pitch` and `width` do
+not switch it on: vibrato or PWM leaves the wave as it was, and a wire that carries
+nothing changes no sample. A slave runs one sample late,
 which is what lets it smooth each reset on both sides.
 
 ```

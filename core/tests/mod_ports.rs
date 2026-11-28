@@ -579,3 +579,198 @@ fn a_kick_has_no_ports_and_can_feed_one() {
     );
     assert!(bent.iter().all(|x| x.is_finite()) && bent != plain);
 }
+
+/// A word after the node a connection goes into is a port of that node, or
+/// an error at that line which names the node, the word and the ports the
+/// node has. It used to be dropped, and the wire became an audio wire: an
+/// LFO into `f.resonance` replaced the saw in the filter, into `out.fm` or
+/// `mix.cutoff` it went straight into the sound.
+#[test]
+fn a_port_that_does_not_exist_is_an_error_at_its_line() {
+    // Line 1 is the tempo, 2 opens the instrument: the wire is on line 5.
+    let svf = |wire: &str| error(&format!("  osc saw(55) as a\n  a > svf(800, 0.5) as f\n  {wire}\n  f > out"));
+    for wire in ["lfo(4, 0.5) > f.resonance", "lfo(4, 0.5) > f resonance"] {
+        let e = svf(wire);
+        assert!(e.contains("line: 5"), "{wire}: {e}");
+        assert!(e.contains("'f' is a svf, which has no `resonance` port (it has cutoff, morph)"), "{wire}: {e}");
+    }
+    // The same line before anything flows into `f`: the order changes nothing.
+    let e = error("  osc saw(55) as a\n  svf(800, 0.5) as f\n  lfo(4, 0.5) > f.resonance\n  a > f\n  f > out");
+    assert!(e.contains("line: 5") && e.contains("no `resonance` port (it has cutoff, morph)"), "{e}");
+
+    for (wire, node) in [("lfo(4, 0.5) > out.fm", "out"), ("lfo(4, 0.5) > mix.cutoff", "mix")] {
+        let e = error(&format!("  osc saw(55) as a\n  a > mix\n  mix > out\n  {wire}"));
+        assert!(e.contains("line: 6"), "{wire}: {e}");
+        assert!(e.contains(&format!("'{node}' has no ports")), "{wire}: {e}");
+        let word = wire.rsplit('.').next().unwrap();
+        assert!(e.contains(&format!("`{node}.{word}`")), "{wire}: {e}");
+    }
+
+    // A guessed name on an oscillator, with what it has, and the near miss.
+    let osc = |wire: &str| error(&format!("  osc pulse(55) as f\n  {wire}\n  f > out"));
+    let e = osc("lfo(4, 0.5) > f.freq");
+    assert!(e.contains("line: 4") && e.contains("no `freq` port (it has fm, pitch, sync, width)"), "{e}");
+    let e = osc("lfo(4, 0.5) > f.pich");
+    assert!(e.contains("Did you mean `f.pitch`?"), "{e}");
+    // A word that is also a node's kind is a port when it follows a dot.
+    let e = osc("lfo(4, 0.5) > f.gain");
+    assert!(e.contains("line: 4") && e.contains("no `gain` port"), "{e}");
+    // A node with no ports at all says so.
+    let e = error("  osc saw(55) as a\n  a > gain(0.5) as ctl\n  ctl > out\n  lfo(4, 0.5) > ctl.level");
+    assert!(e.contains("line: 6") && e.contains("'ctl' is a gain, which has no ports"), "{e}");
+    // On a node defined in the same breath, and at the head of a line.
+    let e = error("  lfo(1, 1) > osc saw(55) as f.fm\n  f > out");
+    assert!(e.contains("line: 3") && e.contains("`f.fm`"), "{e}");
+    let e = error("  osc saw(55) as f\n  f.res > out");
+    assert!(e.contains("line: 4") && e.contains("`f.res` is a port"), "{e}");
+    let e = osc("lfo(4, 0.5) > f.");
+    assert!(e.contains("line: 4"), "{e}");
+}
+
+/// What a word after a node meant before there were ports, it still means:
+/// two chains on one line, a node that opens after a space, and the
+/// instrument's own `gain` after a chain.
+#[test]
+fn a_word_after_a_node_that_is_not_a_port_reads_as_it_did() {
+    let apart =
+        play(graph("  osc saw(55) as a\n  gain(0.5) as b\n  gain(0.5) as c\n  a > b\n  c > out\n  b > c"), 48, 4000);
+    let joined =
+        play(graph("  osc saw(55) as a\n  gain(0.5) as b\n  gain(0.5) as c\n  a > b  c > out\n  b > c"), 48, 4000);
+    assert!(apart.iter().any(|x| x.abs() > 0.1));
+    assert_eq!(apart, joined, "`a > b  c > out` is two chains");
+
+    let plain = play(graph("  osc saw(55) as a\n  a > out"), 48, 4000);
+    let node_after = play(graph("  osc saw(55) as a\n  a > out  gain(0.5) as spare"), 48, 4000);
+    assert_eq!(plain, node_after, "a node that opens after a chain is not a port");
+    let t = graph("  osc saw(55) as a\n  a > out  gain 0.5");
+    assert_eq!(t.output_gain, graph("  osc saw(55) as a\n  a > out\n  gain 0.5").output_gain);
+}
+
+/// What moves a port is not sound. An envelope's curve through a `gain`
+/// into a port and into `mix` as well was a full-scale DC offset on every
+/// note; it is refused where the second wire is written.
+#[test]
+fn a_control_signal_wired_into_the_sound_as_well_is_an_error() {
+    let body = |wires: &str| {
+        format!(
+            "  osc saw(55) as a\n  a > svf(800, 0.3) as f\n  adsr(0.001, 10, 1.0, 0.1) as e\n  f > mix\n{wires}\n  mix > adsr(0.001, 0.1, 1.0, 0.1) as amp\n  amp > out"
+        )
+    };
+    let e = error(&body("  e > gain(1) as ctl\n  ctl > f.cutoff\n  ctl > mix"));
+    assert!(e.contains("line: 9"), "{e}");
+    assert!(e.contains("'ctl' carries a control signal") && e.contains("`f.cutoff`") && e.contains("'mix'"), "{e}");
+    // Through two gains, and whichever wire comes first.
+    let e = error(&body("  e > gain(1) as ctl\n  ctl > gain(2) as two\n  two > mix\n  two > f.cutoff"));
+    assert!(e.contains("line: 9") && e.contains("'two' carries a control signal"), "{e}");
+    // An LFO is one too, with or without a name.
+    let e = error(&body("  lfo(4, 0.5) as wob\n  wob > f.cutoff\n  wob > mix"));
+    assert!(e.contains("line: 9") && e.contains("'wob' carries a control signal"), "{e}");
+    let e = error(&body("  lfo(4, 0.5) as wob\n  wob > gain(2) as wide\n  wide > f.cutoff\n  wob > gain(0.5) > mix"));
+    assert!(e.contains("line: 10") && e.contains("'wob' carries a control signal"), "{e}");
+
+    // Each to its own is fine: the port's gain, and sound into the mix.
+    graph(&body("  e > gain(1) as ctl\n  ctl > f.cutoff"));
+    // A gain that sound goes through as well is sound.
+    graph(&body("  a > gain(0.2) as ctl\n  e > ctl\n  ctl > f.cutoff\n  ctl > mix"));
+    // With no port in the file nothing is refused that compiled before.
+    graph("  osc saw(55) as a\n  lfo(4, 0.5) as wob\n  wob > gain(0.1) as ctl\n  ctl > mix\n  a > mix\n  mix > out");
+}
+
+/// An envelope that only moves a port does not keep a voice alive once the
+/// envelope the sound goes through has closed: a five-second release on a
+/// filter sweep would hold every voice of a fast line for five seconds of
+/// silence. With no other envelope it is all there is, and it holds.
+#[test]
+fn a_control_envelope_does_not_hold_the_voice() {
+    let ended_after = |body: &str| {
+        let mut inst = Instrument::new(graph(body));
+        inst.note_on(48, 1.0);
+        let mut block = [0.0f32; BLOCK_SIZE];
+        for _ in 0..(0.05 * SAMPLE_RATE) as usize / BLOCK_SIZE {
+            inst.process_block(&mut block);
+        }
+        inst.note_off(48);
+        let mut blocks = 0usize;
+        while !inst.is_idle() && blocks < 10 * SAMPLE_RATE as usize / BLOCK_SIZE {
+            inst.process_block(&mut block);
+            blocks += 1;
+        }
+        (blocks * BLOCK_SIZE) as f32 / SAMPLE_RATE
+    };
+    const VOICE: &str =
+        "  osc saw(55) as a\n  a > svf(800, 0.3) as f\n  f > adsr(0.001, 0.1, 1.0, 0.1) as amp\n  amp > out";
+    let alone = ended_after(VOICE);
+    let swept = ended_after(&format!("{VOICE}\n  adsr(0.001, 0.2, 0.5, 5.0) as fenv\n  fenv > gain(2) > f.cutoff"));
+    assert!(alone < 1.0, "the plain voice ends {alone} s after its note");
+    assert_eq!(swept, alone, "the sweep's release holds the voice");
+    // A stray envelope with no port to move holds the voice as it always did.
+    let stray = ended_after(&format!("{VOICE}\n  adsr(0.001, 0.2, 0.5, 5.0) as fenv\n  fenv > mix\n  mix > out"));
+    assert!(stray > alone + 0.2, "{stray} s against {alone} s");
+    // The only envelope of its graph, a control one, still ends the voice.
+    let only =
+        ended_after("  osc saw(55) as a\n  a > out\n  adsr(0.001, 0.2, 0.5, 0.3) as fenv\n  fenv > gain(1) > a.pitch");
+    assert!(only > 0.01 && only < 5.0, "{only} s");
+}
+
+/// A wire into `pitch` or `width` that carries nothing leaves the oscillator
+/// as it was, sample for sample: the DC blocker that `fm` and `sync` need
+/// lifted a low square's peak by 1.8 dB as soon as anything was wired in.
+#[test]
+fn a_pitch_or_width_wire_at_zero_depth_changes_nothing() {
+    for wave in ["sine(55)", "saw(55)", "square(55)", "triangle(55)", "pulse(55)", "pulse(55, width=0.2)"] {
+        let plain = play(graph(&format!("  osc {wave} as src\n{AMP}")), 24, 22050);
+        let mut ports = vec!["pitch"];
+        if wave.starts_with("pulse") {
+            ports.push("width");
+        }
+        for port in ports {
+            let wired = play(graph(&format!("  osc {wave} as src\n  lfo(1, 0.0) > src.{port}\n{AMP}")), 24, 22050);
+            assert!(plain[20000..].iter().any(|x| x.abs() > 0.5), "{wave} is silent");
+            assert!(plain == wired, "{wave} with a silent wire into {port} is not the same wave");
+        }
+    }
+    // And a moving one leaves a low square its level: C1 was 1.24.
+    let peak = |b: &[f32]| b[4000..].iter().fold(0.0f32, |m, x| m.max(x.abs()));
+    let plain = peak(&play(graph(&format!("  osc square(55) as src\n{AMP}")), 24, 44100));
+    let vibrato = peak(&play(graph(&format!("  osc square(55) as src\n  lfo(5, 0.01) > src.pitch\n{AMP}")), 24, 44100));
+    assert!((vibrato / plain - 1.0).abs() < 0.03, "{plain} to {vibrato}");
+    // `fm` and `sync` keep the blocker: a synced saw cut short has no DC.
+    let synced =
+        play(graph(&format!("  osc saw(55) as src\n  fixosc sine(100) as m\n  m > src.sync\n{AMP}")), 36, 44100);
+    let mean = synced[22050..].iter().sum::<f32>() / 22050.0;
+    assert!(mean.abs() < 0.02, "a synced saw has DC of {mean}");
+}
+
+/// Noise through an `svf` whose cutoff a fast oscillator throws about stays
+/// finite and does not grow, at any depth, but it is not level-safe: the
+/// peak rises with the depth, many times over the static filter's. The
+/// filter does not limit it (that would colour every ordinary sweep); the
+/// node's doc says so, and this is the number it quotes.
+#[test]
+fn noise_through_a_cross_modulated_svf_is_finite_but_loud() {
+    let run = |res: f32, depth: f32, seconds: usize| {
+        play(
+            graph(&format!(
+                "  noise as a\n  osc square(55, pitch=24) as m\n  a > svf(800, {res}) as f\n  m > gain({depth}) > f.cutoff\n  f > adsr(0.001, 0.1, 1.0, 0.1) as amp\n  amp > out"
+            )),
+            36,
+            seconds * SAMPLE_RATE as usize,
+        )
+    };
+    let peak = |b: &[f32]| b.iter().fold(0.0f32, |m, x| m.max(x.abs()));
+    for res in [0.3, 0.6, 1.0] {
+        let still = peak(&run(res, 0.0, 1));
+        for depth in [2.0, 4.0, 8.0, 10.0] {
+            let out = run(res, depth, 3);
+            assert!(out.iter().all(|x| x.is_finite()), "res {res}, depth {depth} left the numbers");
+            let third = out.len() / 3;
+            let (first, last) = (peak(&out[..third]), peak(&out[2 * third..]));
+            assert!(last < first * 2.0, "res {res}, depth {depth}: growing, {first} then {last}");
+            assert!(peak(&out) < 100.0, "res {res}, depth {depth}: peak {}", peak(&out));
+            println!("res {res} depth {depth}: peak {} (static {still})", peak(&out));
+        }
+    }
+    // Not level-safe, and said so: ten octaves at full resonance is far over
+    // the static filter.
+    assert!(peak(&run(1.0, 10.0, 1)) > 4.0 * peak(&run(1.0, 0.0, 1)));
+}

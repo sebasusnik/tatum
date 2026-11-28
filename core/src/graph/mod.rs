@@ -57,6 +57,11 @@ pub struct GraphTemplate {
     pub osc_count: u8,
     pub env_nodes: [u8; MAX_GRAPH_NODES],
     pub env_count: u8,
+    /// One bit per node, set on the envelopes a voice waits for before it
+    /// ends: all of them, except those that only move a port (a filter's
+    /// sweep with a five-second release shapes nothing once the envelope the
+    /// sound goes through has closed). With no other envelope, those too.
+    pub hold_mask: u32,
     pub filter_nodes: [u8; MAX_GRAPH_NODES],
     pub filter_count: u8,
     pub output_gain: f32,
@@ -217,6 +222,9 @@ impl Graph {
         }
         for &n in &template.env_nodes[..template.env_count as usize] {
             let idx = n as usize;
+            if template.hold_mask & (1 << n) == 0 {
+                continue;
+            }
             if let Some(ref node) = self.nodes[idx] {
                 if !node.is_idle() {
                     return false;
@@ -241,6 +249,7 @@ pub struct GraphBuilder {
     input_counts: [u8; MAX_GRAPH_NODES],
     node_count: u8,
     output_node: Option<u8>,
+    control_envs: u32,
 }
 
 impl Default for GraphBuilder {
@@ -257,6 +266,7 @@ impl GraphBuilder {
             input_counts: [0; MAX_GRAPH_NODES],
             node_count: 0,
             output_node: None,
+            control_envs: 0,
         }
     }
 
@@ -299,6 +309,12 @@ impl GraphBuilder {
         self.edges[d][inp] = Edge { src_node: src, port };
         self.input_counts[d] += 1;
         Ok(())
+    }
+
+    /// Say that the envelope `idx` only moves ports: no sound goes through
+    /// it, so a voice does not wait for it to end (see `hold_mask`).
+    pub fn mark_control(&mut self, idx: u8) {
+        self.control_envs |= 1 << idx;
     }
 
     /// Build the GraphTemplate with topological sort.
@@ -404,6 +420,9 @@ impl GraphBuilder {
             return Err(GraphError::Cycle { stuck });
         }
 
+        let envs = env_nodes[..env_count as usize].iter().fold(0u32, |m, &n| m | 1 << n);
+        let hold_mask = if envs & !self.control_envs != 0 { envs & !self.control_envs } else { envs };
+
         let mut mod_masks = [0u8; MAX_GRAPH_NODES];
         for (mask, (edges, &count)) in mod_masks.iter_mut().zip(self.edges.iter().zip(self.input_counts.iter())) {
             for e in &edges[..count as usize] {
@@ -426,6 +445,7 @@ impl GraphBuilder {
             osc_count,
             env_nodes,
             env_count,
+            hold_mask,
             filter_nodes,
             filter_count,
             output_gain: 1.0,

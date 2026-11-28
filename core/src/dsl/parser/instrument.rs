@@ -74,6 +74,11 @@ impl Parser {
             }
 
             let elem = self.parse_chain_element();
+            // Once something flows in, a word after the node is the port it
+            // lands on, whether or not such a port exists. At the head of a
+            // line only a dot makes it one (`f.res > out`), which the port
+            // arm below then refuses: nothing comes out of a port.
+            let elem = if chain.is_empty() && !self.after_a_dot() { elem } else { self.port_after(elem) };
             let is_port = matches!(elem, ChainElement::Port(..));
             chain.push(elem);
 
@@ -142,6 +147,70 @@ impl Parser {
                     prev_name = Some(name);
                 }
             }
+        }
+    }
+
+    /// What `elem` becomes when a word follows it on its line: `x > f.word`,
+    /// or `x > f word`. That word names a port of `f`, and one `f` does not
+    /// have is for the compiler to refuse with the ports `f` does have. It
+    /// used to end the chain and be dropped, so `lfo > f.resonance` wired the
+    /// LFO into `f` as audio without a word.
+    ///
+    /// Written with a space, a word that opens a node (`a > b  osc saw(55)`,
+    /// or the instrument's own `gain 0.8` after a chain) or that something
+    /// flows out of (`a > b  c > d`, two chains on one line) is still the
+    /// next thing on the line, as it always was; with a dot it is a port.
+    fn port_after(&mut self, elem: ChainElement) -> ChainElement {
+        if matches!(elem, ChainElement::Port(..)) {
+            return elem;
+        }
+        let dotted = self.after_a_dot();
+        let word = match self.peek().clone() {
+            Token::Ident(w) => {
+                let opens_a_node = is_dsp_keyword(&w) || (w == "kick" && matches!(self.peek_ahead(1), Token::LParen));
+                let known = crate::graph::node::port::from_name(&w).is_some();
+                let starts_a_chain = !known && matches!(self.peek_ahead(1), Token::Arrow);
+                if !dotted && (opens_a_node || starts_a_chain) {
+                    return elem;
+                }
+                w
+            }
+            Token::Newline | Token::Arrow | Token::RBrace | Token::Eof if !dotted => return elem,
+            other if dotted => match word_of(&other) {
+                Some(w) => w,
+                None => {
+                    let s = self.span().clone();
+                    self.errors.push(ParseError {
+                        line: s.line,
+                        col: s.col,
+                        message: String::from("after the dot comes the name of a port: `osc1.fm`, `filt.cutoff`"),
+                    });
+                    self.recover_to_line_end();
+                    return elem;
+                }
+            },
+            _ => return elem,
+        };
+        match elem {
+            ChainElement::Ref(name) => {
+                self.advance();
+                ChainElement::Port(name, word)
+            }
+            ChainElement::NodeDef(def) => {
+                let s = self.span().clone();
+                let name = def.alias.clone().unwrap_or_else(|| def.kind.clone());
+                self.errors.push(ParseError {
+                    line: s.line,
+                    col: s.col,
+                    message: format!(
+                        "`{}.{}`: a port goes on a node that already has its name; put `{} ... as {}` on a line of its own, then wire into `{}.{}`",
+                        name, word, def.kind, name, name, word
+                    ),
+                });
+                self.recover_to_line_end();
+                ChainElement::NodeDef(def)
+            }
+            port => port,
         }
     }
 
@@ -386,6 +455,26 @@ enum ChainElement {
     Ref(String),
     /// A node and one of its modulation ports: `osc1.fm`.
     Port(String, String),
+}
+
+/// The word a token was written as, for the ones a port could be mistaken
+/// for: `f.mix`, `f.level`, `f.out`.
+fn word_of(token: &Token) -> Option<String> {
+    let word = match token {
+        Token::Ident(w) | Token::Note(w) => return Some(w.clone()),
+        Token::Out => "out",
+        Token::In => "in",
+        Token::Mix => "mix",
+        Token::Master => "master",
+        Token::Level => "level",
+        Token::Pan => "pan",
+        Token::Velocity => "velocity",
+        Token::Scale => "scale",
+        Token::Swing => "swing",
+        Token::Sidechain => "sidechain",
+        _ => return None,
+    };
+    Some(String::from(word))
 }
 
 /// Check if a word is a DSP keyword (node type that can be instantiated).

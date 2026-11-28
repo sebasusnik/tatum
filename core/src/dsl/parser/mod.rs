@@ -27,11 +27,26 @@ pub struct Parser {
     tokens: Vec<Span>,
     pos: usize,
     errors: Vec<ParseError>,
+    /// Where each lone `.` stood in the source: see `tokenize_with_dots`.
+    dots: Vec<(usize, usize)>,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Span>) -> Self {
-        Self { tokens, pos: 0, errors: Vec::new() }
+        Self { tokens, pos: 0, errors: Vec::new(), dots: Vec::new() }
+    }
+
+    /// The same parser, told where the dots were.
+    pub fn with_dots(mut self, dots: Vec<(usize, usize)>) -> Self {
+        self.dots = dots;
+        self
+    }
+
+    /// Whether the token about to be read was written against a dot: the
+    /// `b` of `a.b`.
+    fn after_a_dot(&self) -> bool {
+        let s = self.span();
+        s.col > 1 && self.dots.contains(&(s.line, s.col - 1))
     }
 
     // ── Helpers ──

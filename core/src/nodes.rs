@@ -220,7 +220,7 @@ pub const NODES: &[NodeDefSpec] = &[
         waveform: false, rhythm: false, in_chains: true, doc: "Moog-style 4-pole ladder lowpass with drive." },
     NodeDefSpec { name: "svf", aliases: &[], category: Category::Filter, positional: FILTER_POS, named: SVF_NAMED,
         waveform: true, rhythm: false, in_chains: true,
-        doc: "Oberheim SEM-style 12 dB state-variable filter: `morph=` turns it from lowpass (0) through a notch (0.5) to highpass (1), and the word `bandpass` makes it the bandpass instead. Its cutoff can move at audio rate without ringing or blowing up, which is what the `cutoff` port needs from an oscillator: `svf(400, 0.4, morph=0.2)`." },
+        doc: "Oberheim SEM-style 12 dB state-variable filter: `morph=` turns it from lowpass (0) through a notch (0.5) to highpass (1), and the word `bandpass` makes it the bandpass instead. Its cutoff can move at audio rate and stay finite, which is what the `cutoff` port needs from an oscillator; it is not level-safe there: a fast modulator through a `gain` of several octaves onto noise or other broadband sound can raise the output many times over (17 times the static filter's peak, measured with noise and a square two octaves up at `gain(10)`, resonance 1), so keep the depth to an octave or two or turn the voice down: `svf(400, 0.4, morph=0.2)`." },
     NodeDefSpec { name: "mix", aliases: &[], category: Category::Util, positional: &[], named: &[],
         waveform: false, rhythm: false, in_chains: false, doc: "Sums every node routed into it." },
     NodeDefSpec { name: "gain", aliases: &[], category: Category::Util,
@@ -346,6 +346,20 @@ pub const PORTS: &[(&str, &[Port])] = &[
     ("ladder", &[CUTOFF_PORT]),
     ("svf", &[CUTOFF_PORT, Port { name: "morph", doc: "added to `morph=`, kept within 0..1; not with `bandpass`" }]),
 ];
+
+/// The words that make an `svf` the bandpass.
+pub const SVF_BANDPASS: &[&str] = &["bandpass", "bp"];
+
+/// Whether a node written with these words has `port`, of the ports its kind
+/// lists: `width` is a pulse's, and the bandpass `svf` has no `morph`. The
+/// compiler and the sound designer both ask here, so they cannot disagree.
+pub fn port_fits(port: &str, has_word: impl Fn(&str) -> bool) -> bool {
+    match port {
+        "width" => has_word("pulse"),
+        "morph" => !SVF_BANDPASS.iter().any(|w| has_word(w)),
+        _ => true,
+    }
+}
 
 pub fn ports(kind: &str) -> &'static [Port] {
     let name = lookup(kind).map_or(kind, |d| d.name);

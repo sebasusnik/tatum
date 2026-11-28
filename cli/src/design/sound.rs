@@ -537,7 +537,7 @@ pub fn word_choices(kind: &str) -> &'static [&'static str] {
         Some("vowel") => &["a", "e", "i", "o", "u"],
         Some("autowah") => &["lowpass", "bandpass", "highpass"],
         // With no word it is the lowpass-to-highpass `morph=` turns.
-        Some("svf") => &["bandpass"],
+        Some("svf") => nodes::SVF_BANDPASS,
         _ => &[],
     }
 }
@@ -840,15 +840,7 @@ fn wires_by(alias: &str) -> bool {
 pub fn node_ports(g: &Graph, alias: &str) -> Vec<&'static str> {
     let Some(n) = g.nodes.iter().find(|n| n.alias == alias) else { return Vec::new() };
     let word = |w: &str| n.words.iter().any(|x| x == w);
-    nodes::ports(&n.kind)
-        .iter()
-        .map(|p| p.name)
-        .filter(|p| match *p {
-            "width" => word("pulse"),
-            "morph" => !word("bandpass"),
-            _ => true,
-        })
-        .collect()
+    nodes::ports(&n.kind).iter().map(|p| p.name).filter(|p| nodes::port_fits(p, word)).collect()
 }
 
 fn taken(g: &Graph, alias: &str) -> bool {
@@ -1196,7 +1188,7 @@ mod tests {
         assert!(s.text().contains("svf(900hz, 0.6) as f"), "{}", s.text());
         assert_ne!(rendered(&s.text(), "v"), high, "morph is heard");
         // The bandpass is a word, and comes off again.
-        assert_eq!(word_choices("svf"), ["bandpass"]);
+        assert_eq!(word_choices("svf"), ["bandpass", "bp"], "the two spellings the compiler takes");
         apply(&mut s, "word f=bandpass").expect("a word");
         let band = s.text();
         assert!(band.contains("svf(bandpass, 900hz, 0.6) as f"), "{band}");
@@ -1215,6 +1207,20 @@ mod tests {
             s.text()
         );
         rendered(&s.text(), "v");
+    }
+
+    /// The compiler takes `bp` for `bandpass` on an `svf`, so the designer
+    /// does: the file opens, saves as written, and has no `morph` port to
+    /// offer, which the compiler would refuse.
+    #[test]
+    fn an_svf_written_bp_is_the_bandpass_here_too() {
+        let mut s = round_trips("instrument v {\n  osc saw(110) as a\n  a > svf(bp, 900, 0.6) as f\n  f > out\n}\n");
+        let Body::Graph(g) = &s.body else { panic!("a graph") };
+        assert_eq!(node_ports(g, "f"), ["cutoff"], "no morph on a bandpass, however it is spelt");
+        assert!(apply(&mut s.clone(), "+wire a f.morph").is_err());
+        apply(&mut s, "+wire a f.cutoff").expect("the port it has");
+        rendered(&s.text(), "v");
+        apply(&mut s, "word f=bp").expect("the short word is a choice");
     }
 
     fn library_sounds() -> Vec<(std::path::PathBuf, String)> {

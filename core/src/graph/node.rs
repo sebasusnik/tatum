@@ -1043,6 +1043,9 @@ struct OscMods {
     /// A DC blocker on the way out. A synced cycle cut short, or a carrier
     /// sped up and slowed down in step with its own phase, no longer averages
     /// to zero; an analog synth's output is AC-coupled, and this is that.
+    /// Only `fm` and `sync` switch it on: it tilts a low square and lifts
+    /// its peak, which vibrato or PWM on a bass has no reason to pay for.
+    dc_block: bool,
     dc_x1: f32,
     dc_y1: f32,
     /// A synced oscillator runs one sample late: the sample it returns is the
@@ -1065,6 +1068,7 @@ impl NoteOsc {
     pub fn modulate(&mut self, mods: &[f32; port::COUNT], mask: u8) {
         let m = &mut self.mods;
         m.on = true;
+        m.dc_block = mask & (port::bit(port::FM) | port::bit(port::SYNC)) != 0;
         m.fm = mods[port::FM as usize];
         m.pitch = mods[port::PITCH as usize];
         if mask & port::bit(port::WIDTH) != 0 {
@@ -1123,6 +1127,9 @@ impl NoteOsc {
             Some(sync) => self.next_synced(sync),
             None => self.osc.next_sample(),
         };
+        if !self.mods.dc_block {
+            return out;
+        }
         // One pole at about 5 Hz, as the ladder's.
         const R: f32 = crate::per_sample(0.99929);
         let y = out - self.mods.dc_x1 + R * self.mods.dc_y1;
@@ -2199,5 +2206,48 @@ mod kick_tests {
         let top = k.note + k.body_part + k.snap_part + k.chirp_part;
         assert!(top <= 0.45 * SAMPLE_RATE + 0.5, "starts at {top} Hz at {SAMPLE_RATE} Hz");
         assert!(k.snap_part >= 0.0 && k.chirp_part >= 0.0 && k.body_part > 0.0);
+    }
+
+    /// The nodes of one voice of the first instrument, after a second of it.
+    fn played(body: &str) -> (crate::graph::GraphTemplate, [Option<NodeKind>; crate::graph::MAX_GRAPH_NODES]) {
+        let src = alloc::format!(
+            "tempo 120\ninstrument i {{\n{body}\n}}\npattern p {{ C3 }}\ntrack t {{ play p using i out > master }}\n"
+        );
+        let ast = crate::dsl::parse(&src).unwrap_or_else(|e| panic!("{e:?}"));
+        let song = crate::dsl::compiler::compile(&ast).unwrap_or_else(|e| panic!("{e:?}"));
+        let template = song.instruments[0].as_graph().expect("an instrument graph").clone();
+        let mut nodes = template.create_nodes();
+        let mut bufs = alloc::boxed::Box::new([[0.0f32; crate::BLOCK_SIZE]; crate::graph::MAX_GRAPH_NODES]);
+        for i in 0..SAMPLE_RATE as usize {
+            template.run_frame(&mut bufs, i % crate::BLOCK_SIZE, &mut nodes);
+        }
+        (template, nodes)
+    }
+
+    /// Whether any node has left the path it took before there were ports.
+    fn modulated(nodes: &[Option<NodeKind>]) -> bool {
+        nodes.iter().flatten().any(|n| match n {
+            NodeKind::Osc(o) => o.mods.on,
+            NodeKind::Ladder(m) => m.cut_mod.is_some(),
+            NodeKind::Svf(m) => m.cut_mod.is_some() || m.morph_mod != 0.0,
+            _ => false,
+        })
+    }
+
+    /// A graph with no port in it never reaches the modulate step: every
+    /// mask is zero, and after a second no oscillator has switched to its
+    /// modulated path and no filter has been handed a cutoff to add. This
+    /// pins the switch, not the samples: that the path behind it is the one
+    /// main plays is checked by comparing renders, not here.
+    #[test]
+    fn a_graph_without_ports_never_reaches_the_modulate_step() {
+        const VOICE: &str = "  osc saw(55) as a\n  osc pulse(55, pitch=7) as b\n  lfo(3, 0.5) as wob\n  a > mix\n  b > mix\n  wob > mix\n  mix > svf(800, 0.5) as f\n  f > ladder(2000, 0.3) as two\n  two > adsr(0.001, 0.1, 1.0, 0.1) as amp\n  amp > out";
+        let (template, nodes) = played(VOICE);
+        assert!(template.mod_masks.iter().all(|&m| m == 0));
+        assert!(!modulated(&nodes));
+        // The same graph with one port wired does, so the check can fail.
+        let (template, nodes) = played(&alloc::format!("{VOICE}\n  lfo(2, 0.1) > a.pitch"));
+        assert!(template.mod_masks.iter().any(|&m| m != 0));
+        assert!(modulated(&nodes));
     }
 }

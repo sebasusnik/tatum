@@ -443,7 +443,8 @@ pub fn chain_node_takes(kind: &str, params: &[Param], param: &str) -> bool {
 }
 
 fn is_bandpass_svf(kind: &str, params: &[Param]) -> bool {
-    kind == "svf" && params.iter().any(|p| matches!(p, Param::Waveform(w) if w == "bandpass" || w == "bp"))
+    kind == "svf"
+        && params.iter().any(|p| matches!(p, Param::Waveform(w) if crate::nodes::SVF_BANDPASS.contains(&w.as_str())))
 }
 
 /// What to add to "no node takes `morph`" when an `svf` is there, as the

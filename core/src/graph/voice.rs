@@ -112,6 +112,9 @@ impl Voice {
         }
         for &n in &template.env_nodes[..template.env_count as usize] {
             let idx = n as usize;
+            if template.hold_mask & (1 << n) == 0 {
+                continue;
+            }
             if let Some(ref node) = self.nodes[idx] {
                 if !node.is_idle() {
                     return false;
