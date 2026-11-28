@@ -94,9 +94,11 @@ impl Envelope {
 
     pub fn set_adsr(&mut self, a: f32, d: f32, s: f32, r: f32) {
         self.attack = math::clamp(a, 0.001, 10.0);
-        self.decay = math::clamp(d, 0.001, 10.0);
+        // Half a minute, for an envelope that moves a port and takes its
+        // time: a pitch that falls for ten seconds. An `adsr` asks for it.
+        self.decay = math::clamp(d, 0.001, 30.0);
         self.sustain = math::clamp(s, 0.0, 1.0);
-        self.release = math::clamp(r, 0.001, 10.0);
+        self.release = math::clamp(r, 0.001, 30.0);
         self.recalc_rates();
     }
 

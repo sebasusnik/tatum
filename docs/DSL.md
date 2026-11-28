@@ -168,7 +168,7 @@ pattern riff { 1.2:0.9  -  ~5.2:0.8  ..  [1.3 3.3 5.3]:0.6  ..  ..  .. }
 |-------|---------|
 | `-` | rest |
 | `..` | tie: hold the previous step; `..*15` writes fifteen ties, `-*8` eight rests |
-| `~note` | slide: glide into this note without retriggering the envelope (303 style). The previous note is held until the slide. Bass modules glide at their `glide` rate; other instruments fall back to a normal retrigger. |
+| `~note` | slide: glide into this note without retriggering the envelope (303 style). The previous note is held until the slide. Bass modules glide at their `glide` rate, and an `instrument` whose oscillator says `glide=220ms` slides there in that time, straight in pitch; other instruments fall back to a normal retrigger. |
 | `[a b c]` | chord, any notes or degrees |
 | `<a b c>` | **subdivision**: those notes in sequence inside this ONE step, evenly spaced. Up to 8. Each one takes its own `:velocity` and its own `~`, and each releases the one before it, so a group is a run and not a chord. This is how a pattern gets finer than a sixteenth — steps are fixed at sixteen a bar, and the notes are spread across the step's *real* duration, so a subdivided step still swings. |
 | `a*3` | **ratchet**: the same note three times inside the step, the melodic spelling of the drum roll. Sugar for `<a a a>`. |
@@ -1046,6 +1046,9 @@ the node has, never a plain connection.
 | `width` | `osc pulse`, `fixosc pulse` | added to `width=`: PWM |
 | `cutoff` | `svf`, `ladder` | octaves on top of the cutoff, retuned every sample: an oscillator here is the cross-mod into the filter |
 | `morph` | `svf` | added to `morph=`: sweeps the SEM's mode knob |
+| `rate` | `lfo`, `dust` | octaves on top of its rate: 1.0 twice as fast. One modulator moving another |
+| `draw` | `rand` | a new value each time what comes in rises through zero: a `dust` here gives every impulse its own |
+| `amount` | `gain` | a share on top of the amount: 0.1 is 10% more, -1 silence. Tremolo, or a level that differs per note |
 
 An envelope that nothing flows into, wired towards a port, is a control source rather
 than a VCA, so `fenv > gain(2.5) > filt.cutoff` sweeps the filter two and a half octaves
@@ -1122,6 +1125,90 @@ instrument sync_lead {
 
 The slave's `pitch` moves under a master that holds the note, which is the sync sweep:
 the pitch stays put and the timbre tears. `examples/oberheim_dark.synth` takes the same ports somewhere darker: a reese bass with an oscillator tearing at its filter, a sync lead an envelope throws two octaves up on every hit, and noise ringing in a resonant `svf` bandpass the bass note drags around.
+
+**Bubbles, drops and sweeps that never repeat: the random sources.** A patch whose
+every note is the same, on the grid, moved by sines, sounds like a machine however
+good its filter. Three nodes put chance in an `instrument`, and all three are drawn
+from seeds: the same song renders the same samples every time, on any machine. Write
+them with their parentheses (`rand()`), so a node or a track called `dust` stays a name.
+
+- `rand(0.5)` is one random value per note, anywhere in -0.5..0.5, held while the note
+  lasts. It is a control signal, so it goes into a port, and its spread is in what that
+  port counts in: `rand(0.5) > filt.cutoff` opens or closes the filter by up to half an
+  octave, `rand(1/12) > a.pitch` detunes each note by up to a semitone, `rand(0.3) >
+  vol.amount` makes each one up to 30% louder or quieter. `bias=1` keeps it to 0..spread,
+  `bias=-1` to -spread..0. The value comes from the node and from the number of the
+  note among those the instrument has played, so no two notes share one, and two
+  instruments written alike do not share theirs.
+- `wander(0.2hz, 1)` is a smooth curve between -1 and 1 that heads for a new place 0.2
+  times a second on average and never comes back the same way: a filter sweep with no
+  period. It does not start again with each note. It runs from the moment the
+  instrument starts and every voice reads the same curve, so a chord moves as one and
+  the next note finds the filter where the last one left it. `jitter=` (0..1, 0.5 if
+  unset) is how uneven its clock is. It has no `rate` port: it is a function of time.
+- `dust(6hz)` is impulses, one sample each, at random moments: six a second on average,
+  with gaps as uneven as a Geiger counter's. `jitter=` (1 if unset) says how uneven: at 0
+  it is a clock. `spread=12db` makes each impulse anywhere up to 12 dB quieter than the
+  loudest, and `level=` is how tall the loudest is, in dB against full scale. It is
+  sound, not control: it goes into a filter, and each note plays a different stream.
+
+Three ports go with them. `rate` on an `lfo` or a `dust` is octaves on top of its own
+rate, so `wander(0.3hz, 1) > d.rate` makes a dust come in swells, between half and twice
+its density. `draw` on a `rand` draws a new value each time what comes in rises through
+zero, and `glide=` then takes it there in a straight line instead of a jump. `amount`
+on a `gain` adds a share to it.
+
+Bubbles are those three together. One long note; inside it a dust pings a resonant
+bandpass, and each impulse also draws where that bandpass sits, so every ping has its
+own pitch, and none of them is on the grid:
+
+```
+instrument bubbles {
+  gain 2.5
+  dust(8hz, spread=11db, level=32db) as d
+  rand(1.1, glide=1ms) as where
+  rand(0.15, glide=60ms) as bend
+  wander(0.3hz, 1.5) as tide
+  lowpass(1600hz, 0.01) as soft
+  svf(bandpass, 950hz, 0.89) as ping
+  d > where.draw
+  d > bend.draw
+  d > soft
+  soft > ping
+  where > ping.cutoff
+  bend > ping.cutoff
+  tide > d.rate
+  ping > lowpass(4000hz, 0.01) as round
+  round > adsr(0.005, 0.1, 1, 0.4) as amp
+  amp > out
+}
+pattern stream { C3 ..*127 }
+```
+
+What each line is for, since each was put there by a measurement:
+
+- `where` is the pitch: 1.1 octaves either side of 950 Hz. Its `glide=1ms` is not a
+  slide anyone hears. A filter that is still ringing when its cutoff jumps steps its
+  output, which is a click; a millisecond to get there is not.
+- `bend` is a second, small value drawn by the same impulse, which takes 60 ms to
+  arrive from the one before. The difference between two random values is small more
+  often than large, so most pings stay level and some rise or fall by a semitone or
+  two.
+- `soft` rounds the impulse before it reaches the filter. A bare impulse into a
+  bandpass starts with a bright edge, and a ping reads as falling; darker than this and
+  it reads as rising.
+- `tide` swells the density, so the gaps are more uneven than chance alone makes them.
+- `level=32db`: a filter rings far quieter than the one sample that struck it, the more
+  so the higher its resonance.
+- The resonance is the length of a ping: 0.89 at 950 Hz rings about 70 ms.
+
+`sounds/liquid/` has this one and four more made the same way, and
+`sounds/liquid_kit.synth` plays them together: a `drop` whose pitch falls for seconds
+from a control envelope (`adsr` takes a decay of up to 30 s for that) by a depth that a
+`rand` changes on every note, under a 21 Hz vibrato whose LFO a second `rand` speeds up
+or slows down; a pad, `shoal`, that is five saws at 0, ±9 and ±20 cents with one
+`wander` on the filter of every voice; a bass, `tide`, with `glide=140ms` on its
+oscillator and a cutoff that wanders; and an FM bell, `glass`.
 
 **A deep minimal kick.** The late-90s minimal kick is a sine that lands on the key,
 held round and then cut: the `kick` node writes it in those terms. The first argument

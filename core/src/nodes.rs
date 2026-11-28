@@ -228,7 +228,7 @@ pub const NODES: &[NodeDefSpec] = &[
         waveform: false, rhythm: false, in_chains: false,
         doc: "Impulses at random moments, off the grid, inside one held note: into a resonant `svf` or `ladder` each is a ping, and into a `rand`'s `draw` port each gives the ping a pitch of its own -- bubbles. Each note plays a different stream, and the same song renders the same streams every time. `dust(6hz, spread=12db, level=30db) > svf(900, 0.9, bandpass) as ping`. Write it with its parentheses." },
     NodeDefSpec { name: "adsr", aliases: &[], category: Category::Envelope,
-        positional: &[arg!("attack", 0.0, 10.0, 0.01, "seconds"), arg!("decay", 0.0, 10.0, 0.1, "seconds"), arg!("sustain", 0.0, 1.0, 0.7, "level"), arg!("release", 0.0, 10.0, 0.3, "seconds")],
+        positional: &[arg!("attack", 0.0, 10.0, 0.01, "seconds"), arg!("decay", 0.0, 30.0, 0.1, "seconds to fall within 60 dB of the sustain; up to 30, for a control envelope that takes its time: a pitch falling for ten seconds"), arg!("sustain", 0.0, 1.0, 0.7, "level"), arg!("release", 0.0, 30.0, 0.3, "seconds")],
         named: &[], waveform: false, rhythm: false, in_chains: false, doc: "Amplitude envelope; the last envelope before `out` gates the voice." },
     NodeDefSpec { name: "perc", aliases: &[], category: Category::Envelope,
         positional: &[arg!("attack", 0.0, 10.0, 0.001, "seconds"), arg!("decay", 0.0, 10.0, 0.3, "seconds")],
