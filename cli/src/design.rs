@@ -374,7 +374,10 @@ fn hit_json(y: &[f32]) -> String {
         json_pairs(&c.pitch),
         json_pairs(&c.level),
         json_num(y.len() as f32 * 1000.0 / SAMPLE_RATE),
-        // The click as `tatum analyze` reads it, so the two numbers compare.
+        // The click by the measure `tatum analyze` uses, read on this one
+        // hit: yours and a record's averaged hit compare. What `analyze`
+        // prints for the record need not be this: it reads every hit apart
+        // and takes the median, which keeps what the average thins out.
         json_num(tatum_debug::fit::click_db(y))
     )
 }
