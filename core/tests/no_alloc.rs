@@ -173,6 +173,101 @@ track kick { play four using deep }
     assert!(heard, "rendered silence, so the test proved nothing");
 }
 
+/// Modulation ports and the `svf`: a note-on renews every node in its box,
+/// and gathering what flows into the ports is arrays on the stack.
+const PORTS: &str = r#"
+tempo 128
+instrument abyss {
+  osc saw(55) as a
+  osc pulse(55, width=0.4, pitch=-12) as b
+  osc saw(55, pitch=7) as slave
+  lfo(0.25, 0.2) as pwm
+  adsr(0.001, 0.2, 0.0, 0.1) as fenv
+  b > gain(0.35) > a.fm
+  pwm > b.width
+  pwm > slave.pitch
+  a > slave.sync
+  a > mix
+  b > mix
+  slave > mix
+  mix > svf(220, 0.45, morph=0.15) as filt
+  fenv > gain(2.5) > filt.cutoff
+  pwm > filt.morph
+  filt > ladder(3000, 0.2) as lad
+  b > gain(0.3) > lad.cutoff
+  lad > gain(0.9) as trim
+  trim > adsr(0.005, 0.1, 0.6, 0.1) as amp
+  amp > out
+}
+pattern line { C2 - D#2 C2  - G2 - C3  C2 - - D#2  [C2 G2 C3] - A#1 - }
+track bass { play line using abyss out > master }
+master { in > svf(9000, 0.2, morph=0.0) > out }
+"#;
+
+#[test]
+fn a_graph_with_ports_and_an_svf_never_allocates() {
+    let mut engine = SongEngine::from_source(PORTS).expect("compiles");
+    engine.start();
+    let mut l = [0.0f32; BLOCK_SIZE];
+    let mut r = [0.0f32; BLOCK_SIZE];
+    for _ in 0..64 {
+        engine.process_block_stereo(&mut l, &mut r);
+    }
+    reset();
+    counting(true);
+    let mut heard = false;
+    for _ in 0..4000 {
+        engine.process_block_stereo(&mut l, &mut r);
+        heard |= l.iter().any(|v| *v != 0.0);
+    }
+    counting(false);
+    let n = allocs();
+    assert_eq!(n, 0, "a graph with ports allocated {} times over 4000 blocks", n);
+    assert!(heard, "rendered silence, so the test proved nothing");
+}
+
+/// A voice dropped for a NaN is renewed where it is, and so is the note
+/// after it: neither the guard nor what follows touches the allocator.
+#[test]
+fn dropping_a_voice_never_allocates() {
+    use tatum_core::graph::node::NodeSpec;
+    use tatum_core::graph::voice::Instrument;
+
+    let ast = tatum_core::dsl::parse(PORTS).expect("parses");
+    let song = tatum_core::dsl::compiler::compile(&ast).expect("compiles");
+    let mut template = song.instruments[0].as_graph().expect("a graph").clone();
+    let gain = (0..template.node_count as usize)
+        .find(|&i| matches!(template.specs[i], NodeSpec::Gain { amount } if amount == 0.9))
+        .expect("the gain on the way out");
+    let good = template.specs[gain];
+    template.specs[gain] = NodeSpec::Gain { amount: f32::NAN };
+    let mut inst = Instrument::new(template);
+    let mut block = [0.0f32; BLOCK_SIZE];
+
+    reset();
+    counting(true);
+    let mut silent = true;
+    for n in 0..8 {
+        inst.note_on(36 + n, 1.0);
+        inst.process_block(&mut block);
+        silent &= block.iter().all(|v| *v == 0.0) && inst.is_idle();
+    }
+    inst.template.specs[gain] = good;
+    let mut heard = false;
+    for n in 0..200 {
+        if n % 20 == 0 {
+            inst.note_on(36 + n / 20, 1.0);
+        }
+        inst.process_block(&mut block[..if n % 3 == 0 { 50 } else { BLOCK_SIZE }]);
+        heard |= block.iter().any(|v| *v != 0.0);
+    }
+    counting(false);
+    let n = allocs();
+    assert_eq!(n, 0, "dropping a voice and playing on allocated {} times", n);
+    assert!(silent, "the NaN voices were not dropped");
+    assert!(heard && block.iter().all(|v| v.is_finite()), "nothing played after");
+}
+
 /// The live swap is the other path that runs on the audio thread: the split
 /// block, the handover (`start_from_bar`, inheritance by `mem::swap`, the
 /// coasting old engine under its fade) and the retirement of the old engine.

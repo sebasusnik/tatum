@@ -467,3 +467,115 @@ fn a_morph_lane_turns_the_master_svf() {
     assert!(open > 4.0 * shut, "the bass went from {open} to only {shut}");
     assert!((shut / there - 1.0).abs() < 0.2, "{shut} where the lane ends against {there} written");
 }
+
+// ── With what main added to a voice: the kick node and notes on their sample ──
+
+/// Every port there is, an `svf`, a `ladder` and a swaying kick in one graph.
+const EVERYTHING: &str = "  osc saw(55) as a\n  osc pulse(55, width=0.4, pitch=-12) as b\n  osc saw(55, pitch=7) as slave\n  lfo(3, 0.3) as wob\n  adsr(0.001, 0.2, 0.0, 0.1) as fenv\n  kick(A1, body=40ms, hold=30ms, release=80ms, vary=0.2, vary_pitch=0.05) as k\n  b > gain(0.4) > a.fm\n  wob > b.width\n  wob > slave.pitch\n  a > slave.sync\n  a > mix\n  b > mix\n  slave > mix\n  mix > svf(300, 0.5, morph=0.2) as filt\n  fenv > gain(2.5) > filt.cutoff\n  wob > filt.morph\n  filt > ladder(2000, 0.3) as lad\n  b > gain(0.5) > lad.cutoff\n  lad > adsr(0.002, 0.15, 0.5, 0.1) as amp\n  amp > out\n  k > gain(0.5) as kg\n  kg > out";
+
+/// The engine starts a note on its own sample by rendering a block in parts,
+/// up to each sample where something changes. However a block is cut, a graph
+/// with ports plays the same samples: nothing in the port machinery counts
+/// on a part being a whole block, the one-sample delay of a synced slave
+/// included.
+#[test]
+fn a_block_rendered_in_parts_plays_the_same_samples() {
+    let template = graph(EVERYTHING);
+    assert!(template.mod_masks.iter().filter(|&&m| m != 0).count() >= 5);
+    // A second and a third note land mid-block, 1000 and 5003 samples in.
+    let notes = [(0usize, 45u8), (1000, 52), (5003, 40)];
+    let total = 12_000;
+    let run = |cuts: &[usize]| {
+        let mut inst = Instrument::new(template.clone());
+        let mut out = vec![0.0f32; total];
+        let (mut at, mut c) = (0usize, 0usize);
+        while at < total {
+            for &(when, note) in &notes {
+                if when == at {
+                    inst.note_on(note, 0.9);
+                }
+            }
+            let next_note = notes.iter().map(|n| n.0).find(|&w| w > at).unwrap_or(total);
+            let len = cuts[c % cuts.len()].min(total - at).min(next_note - at);
+            c += 1;
+            inst.process_block(&mut out[at..at + len]);
+            at += len;
+        }
+        out
+    };
+    let whole = run(&[BLOCK_SIZE]);
+    let peak = whole.iter().fold(0.0f32, |m, x| m.max(x.abs()));
+    assert!(whole.iter().all(|x| x.is_finite()) && peak > 0.05, "peak {peak}");
+    for cuts in [&[1usize][..], &[37, 128, 5, 90, 1, 127], &[64], &[3, 125]] {
+        let parts = run(cuts);
+        let differs = whole.iter().zip(parts.iter()).position(|(a, b)| a.to_bits() != b.to_bits());
+        assert_eq!(differs, None, "cut at {cuts:?}: {:?}", differs.map(|i| (whole[i], parts[i])));
+    }
+}
+
+/// A voice dropped for leaving the numbers is renewed from its specs, and a
+/// swaying kick is made again for its hit number on the next note: the hit
+/// after a dropped one is the hit it would have been, not hit 0 again and
+/// not the dropped one's.
+#[test]
+fn a_dropped_voice_leaves_the_kicks_hit_count_alone() {
+    use tatum_core::graph::node::NodeSpec;
+    let template = graph("  kick(A1, body=40ms, hold=30ms, release=80ms, vary=0.2, vary_pitch=0.05) as k\n  k > gain(1) as trim\n  trim > out");
+    let gain = (0..template.node_count as usize)
+        .find(|&i| matches!(template.specs[i], NodeSpec::Gain { .. }))
+        .expect("the gain");
+    // One hit, to its end: the kick is what the voice waits on.
+    let hit = |inst: &mut Instrument| {
+        inst.note_on(45, 1.0);
+        let mut out = Vec::new();
+        let mut block = [0.0f32; BLOCK_SIZE];
+        for _ in 0..400 {
+            inst.process_block(&mut block);
+            out.extend_from_slice(&block);
+            if inst.is_idle() {
+                break;
+            }
+        }
+        assert!(inst.is_idle(), "the kick never ended");
+        out
+    };
+    let mut clean = Instrument::new(template.clone());
+    let hits: Vec<Vec<f32>> = (0..4).map(|_| hit(&mut clean)).collect();
+    assert!(hits[2] != hits[3] && hits[0] != hits[3], "the kick does not sway, so the test proves nothing");
+
+    let mut inst = Instrument::new(template.clone());
+    assert_eq!(hit(&mut inst), hits[0]);
+    assert_eq!(hit(&mut inst), hits[1]);
+    for poison in [f32::NAN, f32::NEG_INFINITY] {
+        let mut inst = Instrument::new(template.clone());
+        hit(&mut inst);
+        hit(&mut inst);
+        // Hit 2 goes wrong and is dropped whole.
+        inst.template.specs[gain] = NodeSpec::Gain { amount: poison };
+        let dropped = hit(&mut inst);
+        assert!(dropped.iter().all(|&x| x == 0.0), "{poison} got out");
+        assert_eq!(dropped.len(), BLOCK_SIZE, "dropped on its first block");
+        inst.template.specs[gain] = NodeSpec::Gain { amount: 1.0 };
+        let after = hit(&mut inst);
+        assert!(after.iter().zip(hits[3].iter()).all(|(a, b)| a.to_bits() == b.to_bits()), "not hit 3");
+        assert_eq!(after.len(), hits[3].len());
+    }
+}
+
+/// The kick has no ports, and says so; it can still drive one.
+#[test]
+fn a_kick_has_no_ports_and_can_feed_one() {
+    let e = error("  kick(A1) as k\n  osc sine(55) as a\n  a > k.pitch\n  k > out");
+    assert!(e.contains("'k' is a kick, which has no ports to modulate"), "{e}");
+    let plain = play(
+        graph("  kick(A1) as k\n  osc sine(220) as a\n  a > mix\n  mix > perc(0.001, 0.2) as amp\n  amp > out"),
+        57,
+        4000,
+    );
+    let bent = play(
+        graph("  kick(A1) as k\n  osc sine(220) as a\n  k > gain(0.5) > a.fm\n  a > mix\n  mix > perc(0.001, 0.2) as amp\n  amp > out"),
+        57,
+        4000,
+    );
+    assert!(bent.iter().all(|x| x.is_finite()) && bent != plain);
+}
