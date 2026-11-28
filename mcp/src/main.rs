@@ -659,13 +659,18 @@ fn tool_events(ctx: &Ctx, args: &Value) -> Result<String, String> {
     if a.events.is_empty() && b.as_ref().is_none_or(|b| b.1.events.is_empty()) {
         return Ok(out);
     }
-    if let Some(dir) = sheet.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    // A sheet that cannot be written does not lose the report: it is said instead.
+    let saved = match sheet.parent() {
+        Some(dir) => std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display())),
+        None => Ok(()),
     }
-    events::draw::sheet(&a, &name_a, b.as_ref().map(|(n, r)| (r, n.as_str())), 6).save(&sheet)?;
+    .and_then(|()| events::draw::sheet(&a, &name_a, b.as_ref().map(|(n, r)| (r, n.as_str())), 6).save(&sheet));
     // JSON stays one document: the sheet's path is not added to it.
     if !json {
-        out.push_str(&format!("sheet: {}\n", sheet.display()));
+        match saved {
+            Ok(()) => out.push_str(&format!("sheet: {}\n", sheet.display())),
+            Err(e) => out.push_str(&format!("sheet: not written ({e})\n")),
+        }
     }
     Ok(out)
 }

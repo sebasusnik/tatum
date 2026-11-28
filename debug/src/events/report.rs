@@ -686,6 +686,23 @@ fn moves(v: f32) -> &'static str {
     }
 }
 
+/// What to change in B, from how A's (`x`) and B's (`y`) centroids move as
+/// their events fall: by what each one does, not only by which is lower.
+fn centroid_move_advice(x: f32, y: f32) -> &'static str {
+    match (moves(x), moves(y)) {
+        ("darken", "darken") if y < x => "both darken, B more: less filter envelope on B, or a slower one",
+        ("darken", "darken") => "both darken, A more: more filter envelope on B, falling faster",
+        ("darken", _) => "A darkens and B does not: a filter envelope on B, its cutoff falling with the level",
+        (_, "darken") => "B darkens and A does not: less filter envelope on B, or none",
+        ("brighten", "brighten") if y > x => {
+            "both brighten, B more: B's low end dies faster than A's (less body, or a shorter low partial)"
+        }
+        ("brighten", "brighten") => "both brighten, A more: A's low end dies faster than its top",
+        ("brighten", _) => "A brightens as it falls (its low end dies first) and B does not",
+        (_, _) => "B brightens as it falls (its low end dies first) and A does not",
+    }
+}
+
 /// The flagged rows as sentences, the furthest off first.
 pub fn advice(a: &Report, b: &Report, rows: &[Row], _name_b: &str) -> Vec<String> {
     let mut flagged: Vec<&Row> = rows.iter().filter(|r| r.flagged).collect();
@@ -849,11 +866,7 @@ pub fn advice(a: &Report, b: &Report, rows: &[Row], _name_b: &str) -> Vec<String
                 n(x),
                 moves(y),
                 moves(x),
-                if y < x {
-                    "B goes darker than A: less filter envelope on B, or a slower one"
-                } else {
-                    "B goes darker less than A (or brighter): more filter envelope on B, falling faster"
-                }
+                centroid_move_advice(x, y)
             ),
             "abs_bend_st" => format!("bend {} st against {} st, either way", n(y), n(x)),
             "start_hz" => format!("start pitch {:.0} Hz against {:.0} Hz", y, x),

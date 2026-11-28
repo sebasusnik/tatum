@@ -874,11 +874,19 @@ fn the_centroid_advice_names_the_file_that_moves() {
     // A holds, B brightens: nothing of A darkening.
     let l = line(0.25, 13.2);
     assert!(l.contains("B's events brighten") && l.contains("A's keep their brightness"), "{l}");
-    // Both brighten, B less: B does not "darken more".
+    assert!(l.contains("B brightens as it falls") && !l.contains("filter envelope"), "{l}");
+    // Both brighten, B less: B does not "darken more", and no filter envelope is asked for.
     let l = line(6.0, 3.0);
     assert!(l.contains("B's events brighten") && l.contains("A's brighten"), "{l}");
+    assert!(l.contains("both brighten, A more") && !l.contains("darker"), "{l}");
     let l = line(-3.5, 4.5);
     assert!(l.contains("B's events brighten") && l.contains("A's darken"), "{l}");
+    assert!(l.contains("A darkens and B does not: a filter envelope on B"), "{l}");
+    // Both darken, B more: less envelope on B, never more.
+    let l = line(-2.0, -8.0);
+    assert!(l.contains("both darken, B more: less filter envelope on B"), "{l}");
+    let l = line(0.0, -6.0);
+    assert!(l.contains("B darkens and A does not"), "{l}");
 }
 
 #[test]
