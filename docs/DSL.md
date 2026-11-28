@@ -1216,15 +1216,23 @@ instrument room  { clap(bursts=4, spacing=11ms, tail=260ms, band=1300hz) as c
   as `hat()` runs (1392 samples at the most, 32 ms at 44.1 kHz) and the rest of a longer
   one is worked out from what its filters let through, so a hat that rings five seconds
   costs no more to compile than `hat()` does, a few hundredths of a millisecond. The
-  level held is the hit's rms: within 0.4 dB of `hat()` for any hat in what was measured
-  (1,250 hats at each of 44.1, 32 and 22.05 kHz, 5 ms to 5 s, and as many with `vary=`,
-  where the mean of the hits is within 1.4 dB). Its peak moves with the colour and the
+  level held is the hit's rms: within 0.4 dB of `hat()` where no peak holds it lower,
+  and up to 1.5 dB under where one that was played does (bare metal ringing for
+  seconds: 1.0 dB is the most found). With `vary=` it is the mean of the hits that is
+  held, from 3.5 dB under `hat()` where a peak holds it (3.0 found) to 1.4 dB over on
+  noise in a low band (1.1 found). Those bounds are what the tests hold at 44.1, 32 and
+  22.05 kHz, on 380 hats drawn across every range and on the furthest out of 19,000
+  more at each rate. Its peak moves with the colour and the
   decay, from an eighth of full scale up, and none goes over 0.95 of it: the level gives
   way to the peaks that were played, and a higher one later in a long hit, or from
-  another start of one that sways, is held at 0.95 by the hit itself. That hold touched
-  3 hats in 100 at 44.1 kHz and fewer under it (bare metal ringing for seconds, most of
-  them) and took at the most 3 dB off the top of a peak; on the worst of them it is six
-  samples in 100,000, and 0.06 dB of the hit's level.
+  another start of one that sways, is held at 0.95 by the hit itself. How many hats
+  reach that hold depends on the hats: at 44.1 kHz, 2 in 100 of those drawn across
+  every range and 6 in 100 with `vary=`; of bare metal ringing 0.3 to 5 s, 7 in 100,
+  and 18 in 100 with `vary=`, then on as many as 54 hits of 58; fewer at a lower rate.
+  What it takes is the top of a peak, a few samples of a hit at the most: 5 samples of
+  one hit and 2 in a row, off a peak up to 3.9 dB over (bare metal of 228 ms that
+  sways), and up to 0.43 dB of the level of one hit (of 100 ms; 0.1 dB on hits of
+  0.3 s and up). The tests hold every hat they play to 4.5 dB, 8 samples and 0.5 dB.
 - `snare(note, ...)` is a body and its wires. The body is two sines a struck head's
   interval apart, dropping onto the note from 1.7 times over it in `snap=` ms and 60 dB
   down in `body=` ms; the wires are noise in a wide band centred on `band=`, 60 dB down in

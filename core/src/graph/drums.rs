@@ -321,7 +321,13 @@ impl HatState {
     /// The next sample, held within `HAT_PEAK`. The level a hat is compiled
     /// with keeps every peak that was played for it under that (`hat_gain`);
     /// one that was not, late in a long hit or from another of a swaying
-    /// hat's starts, stops here, so no hit of any hat goes over.
+    /// hat's starts, stops here, so no hit of any hat goes over. It is the
+    /// top of a peak that stops: in 19,000 hats at each of 44.1, 32 and
+    /// 22.05 kHz the highest was 3.9 dB over before the hold (bare metal of
+    /// 228 ms that sways), with at the most 5 samples of one hit held, 2 in
+    /// a row, and 0.43 dB of one hit's level taken (a hit of 100 ms; 0.1 dB
+    /// on those of 0.3 s and up). The tests hold every hat they play to
+    /// 4.5 dB, 8 samples, 3 in a row and 0.5 dB.
     #[inline]
     pub fn next_sample(&mut self) -> f32 {
         self.sound().clamp(-HAT_PEAK, HAT_PEAK)
@@ -668,24 +674,88 @@ mod tests {
         assert_eq!(hat_phases(0, 205.0), HAT_PHASES, "the first place is where a plain hit starts");
     }
 
-    /// The peak of hit `hit` and its mean square over the length it is
-    /// written with, at the node, before velocity and the track's level.
-    fn measure(spec: &NodeSpec, hit: Option<u32>) -> (f32, f32) {
+    /// One hit of a hat, as it is before the hold and as it comes out.
+    struct Hit {
+        /// The highest sample before the hold: what the compiled gain left.
+        top: f32,
+        /// The root mean square of what comes out, over the length written.
+        level: f32,
+        /// How many samples the hold touched, and how many the hit has.
+        held: usize,
+        of: usize,
+        /// The most samples held in a row.
+        run: usize,
+        /// dB of the hit's level the hold took.
+        lost: f32,
+    }
+
+    /// Hit `hit` at the node, before velocity and the track's level, read
+    /// before the hold (`sound`) so that a gain set too high shows as what
+    /// it is and not as a hit that sits on the hold. What comes out is that
+    /// held within `HAT_PEAK`, which `next_sample` is tested to be below.
+    fn play(spec: &NodeSpec, hit: Option<u32>) -> Hit {
         let NodeSpec::Hat { decay_ms, .. } = *spec else { unreachable!() };
         let mut hat = match hit {
             Some(hit) => HatState::new_hit(spec, hit),
             None => HatState::new(spec),
         };
-        let (mut peak, mut power, mut n) = (0.0f32, 0.0f64, 0usize);
+        let (mut top, mut held, mut of, mut run, mut row) = (0.0f32, 0usize, 0usize, 0usize, 0usize);
+        let (mut power, mut power_free) = (0.0f64, 0.0f64);
         while !hat.is_idle() {
-            let s = hat.next_sample();
-            assert!(s.is_finite());
-            peak = peak.max(s.abs());
-            power += (s * s) as f64;
-            n += 1;
+            let free = hat.sound();
+            assert!(free.is_finite());
+            let out = free.clamp(-HAT_PEAK, HAT_PEAK);
+            row = if out != free { row + 1 } else { 0 };
+            held += (out != free) as usize;
+            run = run.max(row);
+            top = top.max(free.abs());
+            power += (out * out) as f64;
+            power_free += (free * free) as f64;
+            of += 1;
         }
-        assert!(n > 0);
-        (peak, math::sqrt((power / samples(decay_ms) as f64) as f32))
+        assert!(of > 0);
+        let level = math::sqrt((power / samples(decay_ms) as f64) as f32);
+        let lost = if held > 0 { 10.0 * math::log10((power_free / power) as f32) } else { 0.0 };
+        Hit { top, level, held, of, run, lost }
+    }
+
+    /// How far over `HAT_PEAK` a peak may be before the hold: 4.5 dB. The
+    /// most found is 3.9 dB, in 19,000 hats at each of three rates (the hat is
+    /// in `the_hold_takes_the_top_of_a_few_peaks_of_any_hat`).
+    const OVER_MOST: f32 = 1.68;
+
+    /// The hold is the top of a few peaks: before it no peak is 4.5 dB over
+    /// `HAT_PEAK`, and it touches at the most eight samples of a hit, three
+    /// in a row, one in a thousand, and half a dB of that hit's level. A
+    /// gain that read a hat's level low would leave it sitting on the hold,
+    /// and fail every one of these.
+    fn held_little(h: &Hit, line: &dyn core::fmt::Debug) {
+        assert!(h.top < OVER_MOST * HAT_PEAK, "{line:?}: {} before the hold", h.top);
+        assert!(h.held <= 8 && h.run <= 3, "{line:?}: {} samples held, {} in a row", h.held, h.run);
+        assert!(h.held * 1000 < h.of, "{line:?}: {} samples of {} held", h.held, h.of);
+        assert!(h.lost < 0.5, "{line:?}: the hold takes {} dB", h.lost);
+    }
+
+    /// Whether a hat that does not sway is played whole when its line is
+    /// compiled: then its gain alone keeps every peak under `HAT_PEAK`.
+    fn played_whole(decay_ms: f32) -> bool {
+        ((samples(decay_ms) * 0.5) as usize) < HAT_PLAYED
+    }
+
+    /// A number from `low` to `high`, evenly by ratio (by difference from
+    /// zero), and one of the two ends four times in ten.
+    fn drawn(rng: &mut Rng, low: f32, high: f32) -> f32 {
+        let end = rng.next_bipolar();
+        let at = 0.5 * (rng.next_bipolar() + 1.0);
+        if end < -0.6 {
+            low
+        } else if end > 0.6 {
+            high
+        } else if low > 0.0 {
+            low * math::exp(at * math::ln(high / low))
+        } else {
+            low + at * (high - low)
+        }
     }
 
     /// The level (root mean square over the length written) and the peak of
@@ -714,21 +784,26 @@ mod tests {
     /// full scale.
     #[test]
     fn a_hat_is_as_loud_whatever_its_band_floor_noise_and_pitch() {
-        let (_, level) = measure(&hat(60.0, 8000.0, 6000.0, 0.3, 205.0, 0.0), None);
+        let level = play(&hat(60.0, 8000.0, 6000.0, 0.3, 205.0, 0.0), None).level;
         assert!(db(level / HAT_LEVEL).abs() < 0.1, "hat() is at {level}");
-        let (mut low, mut high, mut top) = (0.0f32, 0.0f32, 0.0f32);
+        let (mut low, mut high) = (0.0f32, 0.0f32);
         let (mut long_low, mut long_high) = (0.0f32, 0.0f32);
         for decay in [5.0, 60.0, 400.0, 2000.0] {
             for band in [1000.0, 2000.0, 4000.0, 8000.0, 16000.0] {
                 for floor in [200.0, 1000.0, 6000.0, 12000.0] {
                     for noise in [0.0, 0.3, 1.0] {
                         for pitch in [100.0, 205.0, 1000.0] {
-                            let (peak, level) = measure(&hat(decay, band, floor, noise, pitch, 0.0), None);
-                            let off = db(level / HAT_LEVEL);
+                            let h = play(&hat(decay, band, floor, noise, pitch, 0.0), None);
+                            let off = db(h.level / HAT_LEVEL);
                             let line = (decay, band, floor, noise, pitch);
                             assert!(off.abs() < 2.0, "{line:?}: {off:+.1} dB from hat()");
-                            assert!(peak <= HAT_PEAK + 1e-4, "{line:?}: peaks at {peak}");
-                            top = top.max(peak);
+                            // The peak before the hold: under `HAT_PEAK` by
+                            // the gain alone where the whole hit was played
+                            // for it, and held only by its top where not.
+                            if played_whole(decay) {
+                                assert!(h.top <= HAT_PEAK + 1e-4, "{line:?}: peaks at {}", h.top);
+                            }
+                            held_little(&h, &line);
                             if decay <= 400.0 {
                                 (low, high) = (low.min(off), high.max(off));
                             } else {
@@ -743,7 +818,6 @@ mod tests {
         // let move, a hat of clicks being more peak for its level than one
         // of noise.
         assert!(low > -0.5 && high < 0.5, "{low:+.2}..{high:+.2} dB");
-        assert!(top < 1.0, "{top}");
         // One that rings two seconds, most of it worked out and not played,
         // holds as close where its peak does not hold it lower.
         assert!(long_low > -1.0 && long_high < 0.5, "decay=2s: {long_low:+.2}..{long_high:+.2} dB");
@@ -755,10 +829,10 @@ mod tests {
         for (band, floor, noise, pitch) in
             [(8000.0, 200.0, 0.0, 100.0), (16000.0, 200.0, 0.05, 100.0), (1000.0, 12000.0, 0.0, 150.0)]
         {
-            let (peak, level) = measure(&hat(5000.0, band, floor, noise, pitch, 0.0), None);
-            let off = db(level / HAT_LEVEL);
+            let h = play(&hat(5000.0, band, floor, noise, pitch, 0.0), None);
+            let off = db(h.level / HAT_LEVEL);
             assert!(off > -1.0 && off < 0.5, "decay=5s, {band} {floor} {noise} {pitch}: {off:+.1} dB from hat()");
-            assert!(peak <= HAT_PEAK + 1e-4, "decay=5s, {band} {floor} {noise} {pitch}: peaks at {peak}");
+            held_little(&h, &(5000.0, band, floor, noise, pitch));
         }
     }
 
@@ -782,9 +856,15 @@ mod tests {
     /// sways took 3 ms, thirty times the rest of the song. The work is now
     /// bounded whatever the arguments: the samples played and the pitches the
     /// filters are asked about are counted here, 1324 for `hat()` at 44.1 kHz
-    /// and never over 2100.
+    /// and never over 2059 there. The bound is worked out for the rate the
+    /// engine is built at: `HAT_PLAYED` samples, the pitches the noise is
+    /// asked at, and the odd harmonics of the six partials, at the lowest
+    /// pitch a hat takes, up to three quarters of the rate.
     #[test]
     fn compiling_a_hat_costs_no_more_however_long_it_rings() {
+        let harmonics: usize =
+            HAT_RATIOS.iter().map(|ratio| (0.375 * SAMPLE_RATE / (100.0 * ratio)) as usize + 1).sum();
+        let bound = HAT_PLAYED + HAT_NOISE_STEPS + harmonics;
         let mut most = 0;
         for decay in [5.0, 45.0, 60.0, 61.0, 320.0, 1000.0, 5000.0] {
             for vary in [0.0, 0.001, 0.1, 0.3] {
@@ -795,7 +875,7 @@ mod tests {
                                 let (gain, work) = hat_measure(decay, band, floor, noise, pitch, vary);
                                 let line = (decay, band, floor, noise, pitch, vary);
                                 assert!(gain.is_finite() && gain > 0.0, "{line:?}: gain {gain}");
-                                assert!(work <= 2100, "{line:?}: {work} samples and pitches");
+                                assert!(work <= bound, "{line:?}: {work} samples and pitches, over {bound}");
                                 most = most.max(work);
                             }
                         }
@@ -803,10 +883,17 @@ mod tests {
                 }
             }
         }
-        // And the bound is what the work is, not far over it.
-        assert!(most > HAT_PLAYED, "{most}");
+        // And the bound is what the work is, to a harmonic a partial.
+        assert!(most + 6 >= bound, "{most} of {bound}");
+        if SAMPLE_RATE == 44100.0 {
+            assert_eq!(most, 2059);
+        }
+        // `hat()` is played whole, and nothing of it worked out, at any rate
+        // where it is 30 dB down within what is played: up to 46.4 kHz.
         let (_, plain) = hat_measure(60.0, 8000.0, 6000.0, 0.3, 205.0, 0.0);
-        assert!(plain <= HAT_PLAYED, "hat() is played whole within the bound: {plain}");
+        if played_whole(60.0) {
+            assert!(plain <= HAT_PLAYED, "hat() is played whole within the bound: {plain}");
+        }
     }
 
     /// A hat that is 30 dB down within what is played, and does not sway, is
@@ -890,11 +977,12 @@ mod tests {
 
     /// The level of a hat that sways or rings long is set by the peaks played
     /// for it; a higher one further in is held at `HAT_PEAK` by the hit. It
-    /// is the top of a few peaks that goes. These are the hats found to need
-    /// it most among 7,500, bare metal ringing for seconds: no sample of any
-    /// hit comes out over `HAT_PEAK`, the highest was under 3 dB over before
-    /// the hold, six samples in 100,000 are touched at the most, and the
-    /// hit's level moves by 0.06 dB for it.
+    /// is the top of a few peaks that goes. These are hats found to need it
+    /// most, bare metal that rings, the last three the highest before the
+    /// hold in what was measured (1.27, 1.46 and 1.49 at 44.1 kHz, the last
+    /// 3.9 dB over): what the node gives is the hit held within `HAT_PEAK`,
+    /// sample for sample and nothing else, and how little that is, is
+    /// `held_little`.
     #[test]
     fn a_peak_that_was_not_played_is_held_and_little_else() {
         let mut over = 0.0f32;
@@ -906,49 +994,178 @@ mod tests {
             (636.8, 1332.0, 12000.0, 0.0, 199.0, 0.3),
             (810.1, 1000.0, 12000.0, 0.0, 102.0, 0.001),
             (2000.0, 1000.0, 12000.0, 0.0, 150.0, 0.1),
+            (5000.0, 16000.0, 200.0, 0.02, 157.5, 0.1575),
+            (3486.3213, 1054.6442, 12000.0, 0.05, 111.364_494, 0.002_112_755_6),
+            (227.979_03, 16000.0, 200.0, 0.029_376_943, 108.810_03, 0.001_652_524_6),
         ] {
             let spec = hat(decay, band, floor, noise, pitch, vary);
             let line = (decay, band, floor, noise, pitch, vary);
-            for hit in 0..HAT_STARTS {
-                let build = || if vary > 0.0 { HatState::new_hit(&spec, hit) } else { HatState::new(&spec) };
+            for hit in 0..2 * HAT_STARTS {
+                let hit = (vary > 0.0).then_some(hit);
+                let build = || match hit {
+                    Some(hit) => HatState::new_hit(&spec, hit),
+                    None => HatState::new(&spec),
+                };
                 let (mut held, mut free) = (build(), build());
-                let (mut n, mut touched, mut top) = (0usize, 0usize, 0.0f32);
-                let (mut power, mut power_free) = (0.0f64, 0.0f64);
                 while !held.is_idle() {
                     let (s, f) = (held.next_sample(), free.sound());
-                    assert!(s.abs() <= HAT_PEAK, "{line:?}, hit {hit}: a sample at {s}");
-                    if s != f {
-                        touched += 1;
-                    }
-                    top = top.max(f.abs());
-                    power += (s * s) as f64;
-                    power_free += (f * f) as f64;
-                    n += 1;
+                    assert!(s.abs() <= HAT_PEAK, "{line:?}, hit {hit:?}: a sample at {s}");
+                    assert_eq!(s, f.clamp(-HAT_PEAK, HAT_PEAK), "{line:?}, hit {hit:?}: the hold and nothing else");
                 }
-                over = over.max(top);
-                assert!(top < 1.42 * HAT_PEAK, "{line:?}, hit {hit}: {top} before the hold");
-                assert!(touched * 5000 < n, "{line:?}, hit {hit}: {touched} samples of {n} held");
-                let lost = 10.0 * math::log10((power_free / power) as f32);
-                assert!(lost < 0.1, "{line:?}, hit {hit}: the hold takes {lost} dB");
+                assert!(free.is_idle());
+                let h = play(&spec, hit);
+                held_little(&h, &(line, hit));
+                over = over.max(h.top);
                 if vary == 0.0 {
                     break;
                 }
             }
         }
-        // At 44.1 kHz these do go over, so the hold is what this tests; a
-        // slower engine has less metal up there and may not need it.
+        // At 44.1 kHz these go further over than the 3 dB this was once
+        // taken to be, so the hold at its hardest is what this tests; a
+        // slower engine has less metal up there and needs it less.
         if SAMPLE_RATE == 44100.0 {
-            assert!(over > HAT_PEAK, "none of these needed the hold: {over}");
+            assert!(over > 1.42 * HAT_PEAK, "none of these needed the hold as much: {over}");
+        }
+    }
+
+    /// What a sweep of hats found, over all of them.
+    #[derive(Default)]
+    struct Found {
+        /// The highest peak before the hold.
+        top: f32,
+        /// The most samples held in one hit, in a row, and as a share of it.
+        held: usize,
+        run: usize,
+        share: f32,
+        /// The most dB the hold took of one hit's level.
+        lost: f32,
+        /// The most hits of one hat that reached the hold, and how many
+        /// hats did.
+        hits: usize,
+        hats: usize,
+        /// dB from `hat()`, lowest and highest: hats that do not sway and
+        /// whose level no peak held, those a played peak did hold, and the
+        /// mean of the hits of those that sway.
+        free: (f32, f32),
+        gave: f32,
+        swaying: (f32, f32),
+    }
+
+    impl Found {
+        /// One hat, compiled and played: every hit within `held_little`, and
+        /// its level where the docs say it is.
+        fn hat(&mut self, line: (f32, f32, f32, f32, f32, f32), hits: u32) {
+            let (decay, band, floor, noise, pitch, vary) = line;
+            let spec = hat(decay, band, floor, noise, pitch, vary);
+            let hits = if vary > 0.0 { hits } else { 1 };
+            let (mut power, mut reached) = (0.0f32, 0usize);
+            for hit in 0..hits {
+                let h = play(&spec, (vary > 0.0).then_some(hit));
+                held_little(&h, &(line, hit));
+                if vary == 0.0 && played_whole(decay) {
+                    assert!(h.top <= HAT_PEAK + 1e-4, "{line:?}: peaks at {}", h.top);
+                }
+                self.top = self.top.max(h.top);
+                (self.held, self.run, self.lost) = (self.held.max(h.held), self.run.max(h.run), self.lost.max(h.lost));
+                self.share = self.share.max(h.held as f32 / h.of as f32);
+                reached += (h.held > 0) as usize;
+                power += h.level * h.level / hits as f32;
+            }
+            self.hits = self.hits.max(reached);
+            self.hats += (reached > 0) as usize;
+            let off = db(math::sqrt(power) / HAT_LEVEL);
+            if vary > 0.0 {
+                // The mean of its hits, around the level of `hat()`: under
+                // it where a peak that was played holds it lower.
+                assert!(off > -3.5 && off < 1.4, "{line:?}: {off:+.2} dB from hat()");
+                self.swaying = (self.swaying.0.min(off), self.swaying.1.max(off));
+                return;
+            }
+            let unit = NodeSpec::Hat { decay_ms: decay, band, floor, noise, pitch, gain: 1.0, vary: 0.0 };
+            let (_, played) = hat_level_and_peak(&unit, HAT_PLAYED);
+            let NodeSpec::Hat { gain, .. } = spec else { unreachable!() };
+            if gain * played > 0.999 * HAT_PEAK {
+                // Its level gave way to a peak that was played.
+                assert!(off > -1.5 && off < 0.4, "{line:?}: {off:+.2} dB from hat()");
+                self.gave = self.gave.min(off);
+            } else {
+                assert!(off.abs() < 0.4, "{line:?}: {off:+.2} dB from hat()");
+                self.free = (self.free.0.min(off), self.free.1.max(off));
+            }
+        }
+    }
+
+    /// How hard the hold works on any hat, and how well the level holds, at
+    /// whatever rate the engine is built for: 380 hats drawn the same way on
+    /// every run, the ends of every range four times in ten. 160 from the
+    /// whole of every range, 120 of bare metal ringing 0.3 to 5 s, 100 of
+    /// noise in a low band (where the level of a hat that sways is furthest
+    /// over); a share of each sways, and those are played from all 29
+    /// starts. Then the hats found furthest out in 19,000 drawn like these
+    /// and aimed at each corner, at each of 44.1, 32 and 22.05 kHz: the highest
+    /// peaks before the hold (1.27, 1.46 and 1.49, the last 3.9 dB over
+    /// `HAT_PEAK`), the most of one hit's level the hold took (0.43 dB, of
+    /// a hit of 100 ms), the largest share of a hit held (one sample of a
+    /// hit of 32 ms, 7 in 10,000), and the levels furthest from `hat()`.
+    ///
+    /// What these numbers are at 44.1 kHz is asserted at the end, so that
+    /// the docs that quote them fail here when they stop being true.
+    #[test]
+    fn the_hold_takes_the_top_of_a_few_peaks_of_any_hat() {
+        let mut rng = Rng::new(77);
+        let mut found = Found::default();
+        for (kind, count, sways) in [(0, 160, 4), (1, 120, 3), (2, 100, 2)] {
+            for i in 0..count {
+                let (decay, band, noise) = match kind {
+                    0 => (drawn(&mut rng, 5.0, 5000.0), drawn(&mut rng, 1000.0, 16000.0), drawn(&mut rng, 0.0, 1.0)),
+                    1 => (drawn(&mut rng, 300.0, 5000.0), drawn(&mut rng, 1000.0, 16000.0), drawn(&mut rng, 0.0, 0.05)),
+                    _ => (drawn(&mut rng, 8.0, 250.0), drawn(&mut rng, 1000.0, 3000.0), drawn(&mut rng, 0.6, 1.0)),
+                };
+                let (floor, pitch) = (drawn(&mut rng, 200.0, 12000.0), drawn(&mut rng, 100.0, 1000.0));
+                let vary = drawn(&mut rng, 0.001, 0.3);
+                let vary = if i % sways == 0 { vary } else { 0.0 };
+                found.hat((decay, band, floor, noise, pitch, vary), HAT_STARTS);
+            }
+        }
+        let drawn_hats = found.hats;
+        for line in [
+            (5000.0, 16000.0, 200.0, 0.02, 157.5, 0.1575),
+            (3486.3213, 1054.6442, 12000.0, 0.05, 111.364_494, 0.002_112_755_6),
+            (227.979_03, 16000.0, 200.0, 0.029_376_943, 108.810_03, 0.001_652_524_6),
+            (100.0, 1000.0, 12000.0, 0.068_740_22, 111.116_516, 0.3),
+            (31.978_407, 7154.8076, 7361.8354, 0.031_408_64, 111.159_58, 0.3),
+            (647.063_84, 16000.0, 200.0, 0.068_675_51, 113.029_526, 0.162_032_78),
+            (3747.0, 16000.0, 371.0, 0.02, 100.0, 0.0),
+            (5000.0, 16000.0, 203.861_79, 0.009_069_609, 100.0, 0.0),
+            (12.5, 1241.0, 1034.0, 0.714, 192.5, 0.001),
+            (52.817_528, 1000.0, 917.522_46, 0.999_698_8, 119.459_06, 0.267_285_5),
+        ] {
+            found.hat(line, 2 * HAT_STARTS);
+        }
+        if SAMPLE_RATE == 44100.0 {
+            let over = db(found.top / HAT_PEAK);
+            assert!(over > 3.8 && over < 4.0, "the highest peak is {over:+.2} dB over before the hold");
+            assert!(found.held == 2 && found.run == 2, "{} samples of a hit held, {} in a row", found.held, found.run);
+            assert!(found.lost > 0.4, "the hold takes {} dB at the most", found.lost);
+            assert!(found.gave < -0.9, "a played peak holds the level {:+.2} dB under", found.gave);
+            assert!(found.swaying.0 < -2.9, "and {:+.2} dB under on one that sways", found.swaying.0);
+            assert_eq!(drawn_hats, 18, "of the 380 drawn, the hats that reach the hold");
         }
     }
 
     /// With `vary` every hit is another: the level the sweep holds is the
     /// mean of the hits, and no hit goes over full scale, whatever place the
-    /// metal starts from and however long its decay has swayed.
+    /// metal starts from and however long its decay has swayed: before the
+    /// hold a peak is no further over than `held_little` lets it be. The
+    /// last three colours are noise in a low band, where the mean of the
+    /// hits is furthest over the level: every start plays the same noise
+    /// when the line is compiled, and the rest is worked out for noise at
+    /// large. These are played at the least share too.
     #[test]
     fn no_hit_of_a_swaying_hat_goes_over_full_scale() {
-        for decay in [5.0, 60.0, 400.0, 2000.0] {
-            for (band, floor, noise, pitch) in [
+        for decay in [5.0, 12.5, 60.0, 400.0, 2000.0] {
+            for (i, (band, floor, noise, pitch)) in [
                 (8000.0, 6000.0, 0.3, 205.0),
                 (9000.0, 7000.0, 0.2, 205.0),
                 (16000.0, 200.0, 0.0, 100.0),
@@ -957,23 +1174,33 @@ mod tests {
                 (1000.0, 12000.0, 0.0, 100.0),
                 (1500.0, 12000.0, 0.1, 205.0),
                 (16000.0, 12000.0, 1.0, 1000.0),
-            ] {
-                let spec = hat(decay, band, floor, noise, pitch, 0.3);
-                let (mut top, mut power) = (0.0f32, 0.0f32);
-                let hits = 4 * HAT_STARTS;
-                for hit in (0..hits).chain([40_000, 55_434, 71_272, 87_110, u32::MAX]) {
-                    let (peak, level) = measure(&spec, Some(hit));
-                    top = top.max(peak);
-                    if hit < hits {
-                        power += level * level / hits as f32;
+                (1241.0, 1034.0, 0.714, 192.5),
+                (1000.0, 917.5, 1.0, 119.5),
+                (1508.0, 1723.0, 1.0, 856.0),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                for vary in [0.3, 0.001] {
+                    if (vary < 0.3 && i < 8) || (decay == 12.5 && i < 8) || (decay == 2000.0 && i >= 8) {
+                        continue;
                     }
+                    let spec = hat(decay, band, floor, noise, pitch, vary);
+                    let line = (decay, band, floor, noise, pitch, vary);
+                    let mut power = 0.0f32;
+                    let hits = 4 * HAT_STARTS;
+                    for hit in (0..hits).chain([40_000, 55_434, 71_272, 87_110, u32::MAX]) {
+                        let h = play(&spec, Some(hit));
+                        held_little(&h, &(line, hit));
+                        if hit < hits {
+                            power += h.level * h.level / hits as f32;
+                        }
+                    }
+                    // Its hits are around the level of `hat()`, under it
+                    // where the peak is what holds them.
+                    let off = db(math::sqrt(power) / HAT_LEVEL);
+                    assert!(off < 1.4 && off > -3.0, "{line:?}: {off:+.1} dB from hat()");
                 }
-                let line = (decay, band, floor, noise, pitch);
-                assert!(top <= HAT_PEAK + 1e-4, "{line:?}: a hit peaks at {top}");
-                // Its hits are around the level of `hat()`, under it where
-                // the peak is what holds them.
-                let off = db(math::sqrt(power) / HAT_LEVEL);
-                assert!(off < 1.0 && off > -3.0, "{line:?}: {off:+.1} dB from hat()");
             }
         }
     }
