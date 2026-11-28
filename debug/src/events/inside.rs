@@ -622,24 +622,30 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     // to the first 30 dB). A reverb or a slow second stage under it bends
     // the fall away from the line and is left to the tail.
     let all_fit = line(&points);
+    // The rounded top of the peak (the band's own smear, over its first
+    // 1.5 dB) is left out of the line.
     let points: Vec<(f32, f32)> = {
         let mut used =
             points.iter().position(|p| p.1 < -10.0).unwrap_or(points.len()).clamp(6.min(points.len()), points.len());
-        if let Some(l) = line(&points[..used]) {
+        let top = points.iter().position(|p| p.1 < -1.5).filter(|&t| t + 6 <= used).unwrap_or(0);
+        if let Some(l) = line(&points[top..used]) {
             while used < points.len() && (points[used].1 - (l.intercept + l.slope * points[used].0)).abs() <= 2.0 {
                 used += 1;
             }
         }
-        points[..used].to_vec()
+        points[top..used].to_vec()
     };
     let fit = line(&points).filter(|f| points.len() >= 6 && f.slope < 0.0);
     let fastest = fastest_decay(f_mid);
+    let too_fast = fit.is_some_and(|f| -f.slope > 0.8 * fastest);
     // Under 10 dB of fall the line is mostly the rounded top of the peak.
     let fell = points.last().map_or(0.0, |p| -p.1);
     let decay_db_ms = match fit {
         None => Fig::No("no fall of 6 readings before the bed or the next event"),
         Some(_) if fell < 10.0 => Fig::No("it falls under 10 dB before the bed or the next event"),
-        Some(f) if -f.slope > 0.8 * fastest => Fig::AtLeast(-f.slope),
+        // Near what the band follows, the reading errs either way (a third
+        // fast at 1 kHz, half slow at 110 Hz): no bound holds.
+        Some(f) if -f.slope > 0.8 * fastest => Fig::No("its decay is faster than its band follows"),
         Some(f) => Fig::Value(-f.slope),
     };
     let decay_r2 = match (decay_db_ms, fit) {
@@ -650,13 +656,15 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
         if pk * ratio <= bed * 1.4 {
             return Fig::No("the bed is reached first");
         }
-        match (pk_i..=end).find(|&i| level[i] < pk * ratio) {
+        // From the decay's own line at the peak: the band's low-pass puts a
+        // ripple of a dB or so on the peak itself.
+        let top =
+            fit.filter(|_| decay_db_ms.value().is_some()).map_or(pk, |f| (pk * 10f32.powf(f.intercept / 20.0)).min(pk));
+        match (pk_i..=end).find(|&i| level[i] < top * ratio) {
             None if cut_short => Fig::No("the next event near its pitch comes first"),
             None => Fig::No("it does not fall that far before it ends"),
-            Some(i) => match decay_db_ms {
-                Fig::AtLeast(_) => Fig::AtMost(to_ms(i - pk_i)),
-                _ => Fig::Value(to_ms(i - pk_i)),
-            },
+            Some(_) if too_fast => Fig::No("its decay is faster than its band follows"),
+            Some(i) => Fig::Value(to_ms(i - pk_i)),
         }
     };
     let (t20_ms, t40_ms) = (fall_to(0.1), fall_to(0.01));
@@ -698,8 +706,10 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     let pitch = if pitch.is_empty() { vec![(to_ms(peak_n) - to_ms(start), f_on)] } else { pitch };
     let ends = (pitch.len() / 20).max((3.0 / to_ms(stride)).ceil() as usize).clamp(1, pitch.len());
     // The start over its first 3 ms of readings (a glide later on is not in it).
+    let mut start_hz = median(&mut pitch[..ends].iter().map(|p| p.1).collect::<Vec<_>>());
+    // Over its first 3 ms of readings: what a glide's start is held to.
     let first_ends = pitch.iter().take_while(|p| p.0 <= pitch[0].0 + 3.0).count().clamp(1, ends);
-    let mut start_hz = median(&mut pitch[..first_ends].iter().map(|p| p.1).collect::<Vec<_>>());
+    let early_hz = median(&mut pitch[..first_ends].iter().map(|p| p.1).collect::<Vec<_>>());
     let end_hz = median(&mut pitch[pitch.len() - ends..].iter().map(|p| p.1).collect::<Vec<_>>());
     // The first reading is some way after the start. On a steady note that
     // does not matter; on a glide the start is taken back over that gap
@@ -707,6 +717,7 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     // the gap is under a cycle and the line fits; otherwise all that is
     // known of a fall is that it started at least as high as first read.
     let mut start_bound: Option<Fig> = None;
+    let mut glided = false;
     // Read near the start: the demodulated readings of a sweep, or else the
     // phase of the wide band itself from three quarters of a cycle in (the
     // narrow band's low-pass keeps its own readings a few cycles off the
@@ -728,7 +739,10 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
         }
         _ => pitch.clone(),
     };
-    if near_start.len() >= 3 {
+    // Only a note that bends at all is looked at as a glide: a steady one's
+    // first readings carry its onset's splatter.
+    let bends = (12.0 * (end_hz / start_hz).log2()).abs() > 1.0;
+    if bends && near_start.len() >= 3 {
         let span_ms = (2000.0 / near_start[0].1.max(1.0)).max(3.0);
         let first: Vec<(f32, f32)> =
             near_start.iter().take_while(|p| p.0 <= near_start[0].0 + span_ms).map(|p| (p.0, p.1.log2())).collect();
@@ -746,8 +760,9 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
                 // A second reading that errs another way: the first whole
                 // cycle of the wide band, crossing to crossing. A start the
                 // line puts more than 8% off it is not trusted.
-                let agrees =
-                    first_cycle_hz(c.mono, start, lo_hz, hi_hz).is_some_and(|zc| (back / zc - 1.0).abs() < 0.08);
+                let agrees = f_on >= SR / 8.0
+                    || first_cycle_hz(c.mono, start, lo_hz, hi_hz).is_some_and(|zc| (back / zc - 1.0).abs() < 0.08);
+                glided = true;
                 if gap_cycles <= 1.0 && fits && agrees && sweep_rate <= FASTEST_SWEEP {
                     start_hz = back;
                 } else {
@@ -764,21 +779,24 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     // A note that glides but whose first readings did not show it moving
     // (a sweep faster than the readings' own window): the start read is
     // held against the first whole cycle, and is a bound when they part.
-    if start_bound.is_none() && (12.0 * (end_hz / start_hz).log2()).abs() > 1.0 {
-        if let Some(zc) = first_cycle_hz(c.mono, start, lo_hz, hi_hz) {
-            if (start_hz / zc - 1.0).abs() >= 0.08 {
-                start_bound = Some(if end_hz < start_hz {
-                    Fig::AtLeast(start_hz.max(zc))
-                } else {
-                    Fig::AtMost(start_hz.min(zc))
-                });
-            }
+    // Crossings are read to a fraction of a sample: at eight samples a cycle
+    // and fewer they are not a check.
+    let zc = (f_on < SR / 8.0).then(|| first_cycle_hz(c.mono, start, lo_hz, hi_hz)).flatten();
+    if bends && start_bound.is_none() && !glided {
+        start_hz = early_hz;
+        if zc.is_some_and(|zc| (early_hz / zc - 1.0).abs() >= 0.08) {
+            // A fall started at least as high as it was first read, a rise
+            // at most as low.
+            start_bound = Some(if end_hz < early_hz { Fig::AtLeast(early_hz) } else { Fig::AtMost(early_hz) });
         }
     }
     let bend_st = 12.0 * (end_hz / start_hz).log2();
     let read_cycles = (pitch[pitch.len() - 1].0 - pitch[0].0 + to_ms(2 * half)) * 0.001 * f_mid;
     let (start_fig, end_fig, bend) = if lost {
         let no = Fig::No("the partial moves faster than its band follows it");
+        (no, no, no)
+    } else if too_fast {
+        let no = Fig::No("its decay is faster than its band follows: the pitch would be the band's own ringing");
         (no, no, no)
     } else if read_cycles < 4.0 {
         let no = Fig::No("under four cycles above -20 dB: too few to read a pitch");
@@ -823,7 +841,7 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     let window_floor = 0.886 * SR / (w_end - begin).max(1) as f32;
     let bandwidth_hz = if lost {
         Fig::No("the partial moves faster than its band follows it")
-    } else if matches!(decay_db_ms, Fig::AtLeast(_)) {
+    } else if too_fast {
         // The band clips a decay faster than it follows: wider than read.
         Fig::AtLeast(width_hz)
     } else if width_hz < 1.5 * window_floor {
@@ -831,8 +849,10 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     } else {
         Fig::Value(width_hz)
     };
-    let q = bandwidth_hz.map_down(|w| f_peak / w.max(1e-3));
-    let ring_q = decay_db_ms.map_down(|r| std::f32::consts::PI * f_peak * 8.686 / (r * 1000.0));
+    // Both Qs are its frequency over something: with no pitch read, no Q.
+    let no_pitch = |f: Fig| if let Fig::No(why) = start_fig { f.withhold(why) } else { f };
+    let q = no_pitch(bandwidth_hz.map_down(|w| f_peak / w.max(1e-3)));
+    let ring_q = no_pitch(decay_db_ms.map_down(|r| std::f32::consts::PI * f_peak * 8.686 / (r * 1000.0)));
     let decay_db_ms =
         if lost { decay_db_ms.withhold("the partial moves faster than its band follows it") } else { decay_db_ms };
 

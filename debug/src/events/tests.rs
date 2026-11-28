@@ -147,6 +147,42 @@ fn a_damped_sine_gives_back_its_attack_decay_and_width() {
 }
 
 #[test]
+fn on_damped_sines_every_value_is_near_the_truth_and_every_bound_holds_it() {
+    // Pitches 50 Hz to 12 kHz, time constants 2 to 150 ms: inside a measure's
+    // domain the value, outside it a bound on the right side or nothing.
+    let holds = |f: Fig, truth: f32, tol: f32, what: &str| match f {
+        Fig::Value(v) => assert!((v / truth - 1.0).abs() < tol, "{what}: {v} for {truth}"),
+        Fig::AtMost(v) => assert!(truth <= v * 1.01, "{what}: at most {v} for {truth}"),
+        Fig::AtLeast(v) => assert!(truth >= v * 0.99, "{what}: at least {v} for {truth}"),
+        Fig::No(_) => {}
+    };
+    for hz in [50.0f32, 110.0, 400.0, 1000.0, 5000.0, 12000.0] {
+        for tau in [2.0f32, 6.0, 25.0, 150.0] {
+            let gap = (tau * 0.014).max(0.5);
+            let mut x = vec![0.0f32; at(0.3 + 4.0 * gap + 0.9)];
+            for k in 0..4 {
+                ping(&mut x, 0.3 + gap * k as f32, hz, tau, 0.4, 0.0, 0.0);
+            }
+            let r = run(x);
+            assert_eq!(r.events.len(), 4, "{hz} Hz, tau {tau}");
+            let what = |m: &str| format!("{hz} Hz, tau {tau}: {m}");
+            for e in &r.events {
+                let i = &e.inside;
+                holds(i.decay_db_ms, 8.686 / tau, 0.03, &what("decay"));
+                holds(i.t20_ms, tau * 10f32.ln(), 0.05, &what("fall to -20"));
+                holds(i.bandwidth_hz, 1000.0 / (std::f32::consts::PI * tau), 0.05, &what("width"));
+                holds(i.q, std::f32::consts::PI * hz * tau / 1000.0, 0.05, &what("Q"));
+                holds(i.ring_q, std::f32::consts::PI * hz * tau / 1000.0, 0.03, &what("ring Q"));
+                holds(i.start, hz, 0.015, &what("start pitch"));
+                // Struck with no rise: 0 ms is under every attack bound.
+                assert!(!matches!(i.attack_ms, Fig::Value(v) if v > 0.3), "{}: {:?}", what("attack"), i.attack_ms);
+                assert!(!matches!(i.tail_db, Fig::Value(_)), "{}: {:?}", what("tail"), i.tail_db);
+            }
+        }
+    }
+}
+
+#[test]
 fn low_notes_refuse_what_their_band_cannot_resolve() {
     // At 110 Hz the attack band rises no faster than 7 ms: an instant onset
     // and a 4 ms one both read as "at most", and nothing is advised.
@@ -268,6 +304,12 @@ fn a_kick_sweep_and_a_zap_are_followed_from_their_start() {
             // The share of its frequency the sweep moves in its first cycle.
             let share = (f0 - f1) / tau_f * (1000.0 / f0) / f0;
             let handled = share <= inside::FASTEST_SWEEP;
+            // A sweep over before one cycle of where it lands is no glide to
+            // read: it is the landing note, and what came before is the burst.
+            let landed = tau_f * 3.0 < 1000.0 / f1;
+            if landed && i.start.value().is_some_and(|v| (v / f1 - 1.0).abs() < 0.08) {
+                continue;
+            }
             start_holds(i.start, f0, handled, what);
             bend_holds(i.bend, bend, handled, what);
             let decay = val(i.decay_db_ms, what);
