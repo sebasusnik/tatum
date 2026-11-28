@@ -1013,11 +1013,11 @@ fn a_drum_node_drives_a_port_at_audio_rate() {
         assert_eq!(t.env_count, 2, "{wire}");
         assert_eq!(t.hold_mask.count_ones(), 2, "{wire}: the drum and the envelope both hold");
         let bent = note(&mut Instrument::new(t.clone()), 40);
-        assert!(
-            bent.iter().all(|v| v.is_finite() && v.abs() < 4.0),
-            "{wire}: {:?}",
-            bent.iter().fold(0.0f32, |m, v| m.max(v.abs()))
-        );
+        // Measured at 44.1, 32 and 22.05 kHz: at most 1.31 times the peak of
+        // the voice with nothing in its ports (the clap on the width, 32 kHz).
+        let peak = |x: &[f32]| x.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+        assert!(bent.iter().all(|v| v.is_finite()), "{wire}");
+        assert!(peak(&bent) < 2.0 * peak(&plain), "{wire}: {} against {}", peak(&bent), peak(&plain));
         let n = plain.len().min(bent.len());
         assert!(bent[..n] != plain[..n], "{wire}: nothing moved");
         // The same on every note with no `vary`: the drum starts with it.
