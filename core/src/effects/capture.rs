@@ -113,13 +113,13 @@ impl Capture {
         self.process_stereo(x, x).0
     }
 
+    /// Start the window over: wait for `start` again, then record. The old
+    /// recording is left in the buffer, not zeroed: nothing reads the window
+    /// until it is full again, and by then every sample of it has been
+    /// written anew. So a reset costs the same for a window of eight bars as
+    /// for one of a beat. Zeroing four `capture(8)` windows at tempo 60, when a
+    /// scene dropped their tracks together, took 38% of a 64-frame block.
     pub fn reset(&mut self) {
-        for v in self.left.iter_mut() {
-            *v = 0.0;
-        }
-        for v in self.right.iter_mut() {
-            *v = 0.0;
-        }
         self.elapsed = 0;
         self.write_pos = 0;
         self.read_pos = 0.0;
@@ -201,5 +201,27 @@ mod tests {
         c.process_stereo(1.0, 1.0);
         let out = c.process_stereo(3.0, 3.0).0;
         assert!((out - 2.0).abs() < 1e-6, "half of 3 live plus half of 1 captured, got {}", out);
+    }
+
+    /// A reset does not walk the window: the old recording stays in the
+    /// buffer, so the reset is the same handful of stores at any length. It
+    /// is never heard: the window is recorded over in full before it plays.
+    #[test]
+    fn a_reset_leaves_the_old_window_unheard_and_untouched() {
+        let mut c = Capture::new(4, 2, 1.0, false, 1.0);
+        let old = [5.0f32, 6.0, 7.0, 8.0];
+        for x in [0.0, 0.0].into_iter().chain(old) {
+            c.process_stereo(x, x);
+        }
+        c.reset();
+        assert_eq!(c.left, old, "the reset zeroed the window, which is work for nothing");
+        assert_eq!(c.right, old, "the reset zeroed the window, which is work for nothing");
+        // Waiting for `start`, then recording, the signal passes through.
+        for x in [9.0f32, 9.0, 1.0, 2.0, 3.0, 4.0] {
+            assert_eq!(c.process_stereo(x, x), (x, x));
+        }
+        // What plays back is the new window, none of the old one.
+        let out: Vec<f32> = (0..8).map(|_| c.process_stereo(0.0, 0.0).0).collect();
+        assert_eq!(out, [1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0]);
     }
 }

@@ -242,6 +242,9 @@ impl SongEngine {
                 && self.tracks[ti].leaving == 0;
             if !idle {
                 self.track_quiet[ti] = 0;
+                if self.tracks[ti].sounding() {
+                    self.tracks[ti].rang = true;
+                }
             }
             let silent = (muted && idle) || quiet;
             // Clear the chain on the way in, so a delay or reverb sitting in it
@@ -384,6 +387,11 @@ impl SongEngine {
                     let g = (fade_from - s as f32 * fade_step).max(0.0);
                     track_bufs_l[ti][s] *= g;
                     track_bufs_r[ti][s] *= g;
+                }
+                // The fade ends in this block, which is the last one the
+                // track is rendered for: nothing of it is kept for its return.
+                if self.tracks[ti].leaving == 0 && !self.tracks[ti].active {
+                    self.clear_dropped_track(ti);
                 }
             }
             let target = self.tracks[ti].target();

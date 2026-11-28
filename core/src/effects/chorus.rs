@@ -129,6 +129,12 @@ impl Chorus {
         input * (1.0 - self.mix) + delayed * self.mix
     }
 
+    /// Forget what is in the delay line and keep the sweep where it is.
+    pub fn clear(&mut self) {
+        self.buffer = [0.0; 4096];
+        self.buffer_r = [0.0; 4096];
+    }
+
     pub fn reset(&mut self) {
         self.buffer = [0.0; 4096];
         self.buffer_r = [0.0; 4096];

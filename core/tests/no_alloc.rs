@@ -489,3 +489,62 @@ fn a_blend_never_allocates() {
     let n = allocs();
     assert_eq!(n, 0, "the blend path allocated {} times", n);
 }
+
+/// Tracks of every kind leaving a scene while their notes release, and coming
+/// back: when the fade of a dropped track ends, its voices, the hits queued
+/// for it (the roll on the last step of the drums) and its insert chain (a
+/// delay, a chorus, a reverb) are cleared on the audio thread, and so is the instrument a kept track stops playing.
+/// None of it may touch the allocator.
+#[test]
+fn a_scene_exit_and_return_never_allocates() {
+    const EXITS: &str = r#"
+tempo 140
+scale C minor
+module beats kit { kick_level 1.0 }
+module bass low { release 1.5s }
+module keys pad { voice_mode poly release 1.5s chorus_mix 0.5 }
+module fm bell { op0_envelope 0.005 0.1 0.8 1.5 chorus_mix 0.5 }
+instrument lead { osc saw > lowpass(900, 0.2) as f
+  f > adsr(0.005, 0.1, 0.8, 1.5) as a
+  a > out }
+instrument other { osc sine > adsr(0.005, 0.1, 0.8, 0.02) as a
+  a > out }
+pattern beat { kick: X - x - X - x - X - x - X - x x*4 }
+pattern held { - - - - - - - - C3 .. .. .. .. .. .. .. }
+pattern chord { - - - - - - - - [C3 Eb3 G3] .. .. .. .. .. .. .. }
+track d    { play beat using kit out > master }
+track b    { play held using low out > delay(1/8, 0.6) > master }
+track p    { play chord using pad out > chorus(0.5) > master }
+track f    { play held using bell out > reverb(0.8) > master }
+track l    { play held using lead out > master }
+master { in > out }
+scene full {
+  track d { play beat using kit }
+  track b { play held using low }
+  track p { play chord using pad }
+  track f { play held using bell }
+  track l { play held using lead }
+}
+scene bare { track l { play held using other } }
+arrange { full x1 bare x1 full x1 bare x1 }
+"#;
+    let mut engine = SongEngine::from_source(EXITS).expect("compiles");
+    engine.start();
+    let mut l = [0.0f32; BLOCK_SIZE];
+    let mut r = [0.0f32; BLOCK_SIZE];
+    for _ in 0..16 {
+        engine.process_block_stereo(&mut l, &mut r);
+    }
+    reset();
+    counting(true);
+    // Four bars at 140: every exit and every return, twice over.
+    let mut heard = false;
+    for _ in 0..4000 {
+        engine.process_block_stereo(&mut l, &mut r);
+        heard |= l.iter().any(|v| *v != 0.0);
+    }
+    counting(false);
+    let (a, f) = (allocs(), frees());
+    assert_eq!((a, f), (0, 0), "a scene exit and return allocated {} and freed {} times", a, f);
+    assert!(heard, "rendered silence, so the test proved nothing");
+}

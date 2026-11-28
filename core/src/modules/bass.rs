@@ -94,6 +94,15 @@ impl BassModule {
     pub fn is_idle(&self) -> bool {
         self.amp_env.is_idle()
     }
+
+    /// Stop the note where it is and empty the filter, leaving the LFO, the
+    /// vibrato and the bend as they are: see [`crate::graph::voice::Instrument::cut`].
+    /// The oscillators start again from silence on the next note.
+    pub fn cut(&mut self) {
+        self.amp_env.reset();
+        self.filter_env.reset();
+        self.filter.reset();
+    }
     pub fn new() -> Self {
         let mut osc0 = Oscillator::new(Waveform::Saw, SAMPLE_RATE);
         osc0.set_drift_seed(1337);

@@ -233,6 +233,17 @@ impl FmModule {
     pub fn is_idle(&self) -> bool {
         !self.voices.iter().any(|v| v.active)
     }
+
+    /// Stop every voice where it is and empty the chorus, leaving the LFO,
+    /// the vibrato and the bend as they are: see [`crate::graph::voice::Instrument::cut`].
+    pub fn cut(&mut self) {
+        for voice in &mut self.voices {
+            voice.reset();
+        }
+        self.chorus.clear();
+        self.dc_x1 = 0.0;
+        self.dc_y1 = 0.0;
+    }
     pub fn new() -> Self {
         Self {
             voices: core::array::from_fn(|_| FmVoice::new()),

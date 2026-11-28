@@ -88,6 +88,14 @@ impl FxChain {
         }
     }
 
+    /// Forget what the chain is ringing and keep its sweeps where they are
+    /// ([`NodeKind::clear`]).
+    pub(super) fn clear(&mut self) {
+        for node in self.nodes.iter_mut() {
+            node.clear();
+        }
+    }
+
     pub(super) fn set_bpm(&mut self, bpm: f32) {
         for node in self.nodes.iter_mut() {
             node.set_bpm(bpm);

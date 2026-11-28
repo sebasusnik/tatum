@@ -8,6 +8,7 @@
 //! the only click left in `detroit`.
 
 use tatum_core::song_engine::SongEngine;
+use tatum_core::SAMPLE_RATE;
 
 const SONG: &str = r#"
 tempo 120
@@ -41,9 +42,11 @@ fn a_dropped_track_fades_instead_of_stopping_dead() {
     let end = l.iter().rposition(|v| v.abs() > 1e-6).expect("some sound");
     // Stopping dead leaves the wave at full height on its last sample.
     assert!(l[end].abs() < playing * 0.02, "the pad was cut at {:.3} of its level", l[end].abs() / playing);
-    // Over about ten milliseconds, starting on the bar line.
+    // Over about ten milliseconds, starting on the bar line, at any rate:
+    // the fade is a time, not a count of samples.
     let bar = l.len() / 2;
-    assert!(end > bar + 300 && end < bar + 600, "faded from {bar} to {end}");
+    let ms = |n: f32| bar + (n * SAMPLE_RATE / 1000.0) as usize;
+    assert!(end > ms(6.0) && end < ms(14.0), "faded from {bar} to {end} at {SAMPLE_RATE} Hz");
 }
 
 const REBALANCED: &str = r#"

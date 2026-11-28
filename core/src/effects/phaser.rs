@@ -123,6 +123,12 @@ impl Phaser {
         self.process_stereo(x, x).0
     }
 
+    /// Forget the sound in the stages and keep the sweep where it is.
+    pub fn clear(&mut self) {
+        self.left = Channel { stages: [Allpass::default(); MAX_STAGES], fb: 0.0 };
+        self.right = Channel { stages: [Allpass::default(); MAX_STAGES], fb: 0.0 };
+    }
+
     pub fn reset(&mut self) {
         self.left = Channel { stages: [Allpass::default(); MAX_STAGES], fb: 0.0 };
         self.right = Channel { stages: [Allpass::default(); MAX_STAGES], fb: 0.0 };

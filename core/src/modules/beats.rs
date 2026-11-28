@@ -681,6 +681,40 @@ impl Default for BeatsModule {
 }
 
 impl BeatsModule {
+    /// Stop every drum where it is and empty its filters: see
+    /// [`crate::graph::voice::Instrument::cut`]. A drum's trigger does not
+    /// clear its filters, so what they held at the cut would ring under the
+    /// first hit after the track returns.
+    pub fn cut(&mut self) {
+        self.kick.active = false;
+        self.snare.active = false;
+        self.hihat.active = false;
+        self.clap.active = false;
+        self.tom.active = false;
+        self.crash.active = false;
+        self.stutter_remaining = 0;
+        let filters = [
+            &mut self.kick.click_filter,
+            &mut self.kick.click_tone,
+            &mut self.snare.noise_hp,
+            &mut self.snare.noise_bp,
+            &mut self.snare.transient_filter,
+            &mut self.snare.crack_filter,
+            &mut self.snare.tail_bp,
+            &mut self.hihat.filter,
+            &mut self.hihat.bp_filter,
+            &mut self.hihat.tone,
+            &mut self.clap.filter,
+            &mut self.clap.tail_hp,
+            &mut self.crash.hp_filter,
+            &mut self.crash.bp_filter,
+            &mut self.crash.lp_filter,
+        ];
+        for f in filters {
+            f.reset();
+        }
+    }
+
     /// True when nothing is sounding and nothing is still releasing. A track
     /// whose level is 0 and whose instrument is idle is skipped whole by the
     /// song engine: no voices, no insert chain, no mix. That is what makes a
@@ -1068,5 +1102,23 @@ mod tests {
         let low_peak = low.iter().fold(0.0f32, |a, &b| a.max(math::abs(b)));
         assert!(high_peak > 0.2, "High pitch kick should produce output");
         assert!(low_peak > 0.2, "Low pitch kick should produce output");
+    }
+
+    /// A drum's trigger does not clear its filters, so a cut has to: a drum
+    /// cut mid-ring and struck again later must start from silent filters,
+    /// not ring under its new hit with what they held at the cut. Struck
+    /// again at velocity 0, all that can come out is that ring. (A kick or a
+    /// snare struck at velocity 0 stops at once, so this cannot hear theirs.)
+    #[test]
+    fn a_cut_drum_starts_its_next_hit_from_silent_filters() {
+        for (note, name) in [(39, "clap"), (42, "hihat"), (49, "crash")] {
+            let mut beats = BeatsModule::new();
+            let hit = render_beats(&mut beats, note, 1.0, 600);
+            let peak = hit.iter().fold(0.0f32, |a, &b| a.max(math::abs(b)));
+            beats.cut();
+            let ring = render_beats(&mut beats, note, 0.0, 400);
+            let left = ring.iter().fold(0.0f32, |a, &b| a.max(math::abs(b)));
+            assert!(left < peak * 1e-4, "{name}: {left} of the old ring under a hit that peaked at {peak}");
+        }
     }
 }

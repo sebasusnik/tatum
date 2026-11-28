@@ -166,6 +166,9 @@ impl SongEngine {
             core::mem::swap(&mut n.gate_samples_remaining, &mut o.gate_samples_remaining);
             core::mem::swap(&mut n.arp, &mut o.arp);
             core::mem::swap(&mut n.insert_fx, &mut o.insert_fx);
+            // What the chain and the instrument may still hold comes along,
+            // and so does whether there is anything to clear on a drop.
+            core::mem::swap(&mut n.rang, &mut o.rang);
             n.insert_fx.set_bpm(self.tempo);
             if let (Some(arp), Some(cfg)) = (n.arp.as_mut(), n.arp_cfg) {
                 arp.set_bpm(self.tempo * cfg.rate_mult);
