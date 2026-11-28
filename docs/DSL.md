@@ -424,17 +424,26 @@ mention are silent for its duration. `auto` runs over the scene's whole length i
 arrangement and its targets are validated: the module and parameter must exist.
 
 On a scene change, a track the new scene drops fades out over 10 ms, and what it was
-sounding ends there: its notes, and whatever its own `out > ...` chain was still ringing
-(a delay, a reverb). When a later scene brings it back it starts from silence, on the
-first step of its pattern, with nothing left over from the last time. What it had sent
-to the shared reverb and delay is not its own any more and rings on over the change, so
-a tail that should outlive the scene goes through `reverb_send` or `delay_send`, not
-through the track's chain. The same holds for an instrument a track stops playing
-because the scene gives it another (`play p using other`). A track the scene keeps
-glides to its new level, pan, sends and sidechain amount, and so do `reverb_mix` and
-`delay_mix`, arriving within about 15 ms. The same glide smooths `auto ... level` and a
-fader moved live. A rebalance between sections is heard as a change of balance, not a
-click on the bar line.
+sounding ends there. Once the fade is over, three things are cleared: its notes, stopped
+with no release; the hits queued for it (a nudged drum hit due after the bar line); and
+whatever its own `out > ...` chain was holding: the echoes of a delay, a reverb's tail,
+the lines of a chorus or a phaser, a filter still ringing. A `capture` in that chain
+starts its window over, so when the track returns it records again from there, and
+`start` counts from the return. When a later scene brings the track back it starts from
+silence, on the first step of its pattern. Its modulation is not cleared and carries on
+from where it was: the LFOs and the vibrato of its instrument, the sweeps of its chorus,
+phaser, vowel, autopan and autowah, the drift of a delay's `wow` and `flutter`, the hit
+counts a `vary=` sways by, and the random draws of its drums. What it had sent to the
+shared reverb and delay, or to a named bus, is not its own any more and rings on over
+the change, so a tail that should outlive the scene goes through `reverb_send`,
+`delay_send` or a bus, not through the track's own chain. An instrument a track stops
+playing because the scene gives it another (`play p using other`) has its notes and
+queued hits cleared too, but at once, on the bar line, with no fade.
+
+A track the scene keeps glides to its new level, pan, sends and sidechain amount, and so
+do `reverb_mix` and `delay_mix`, arriving within about 15 ms. The same glide smooths
+`auto ... level` and a fader moved live. A rebalance between sections is heard as a
+change of balance, not a click on the bar line.
 
 ## Livecoding semantics
 
@@ -1389,8 +1398,11 @@ plays and, at `mix 1`, replaces the input.
 
 Put it on a bus fed by the tracks you want to capture. On a track's own insert
 chain it captures that track alone, which is the freeze gesture rather than the
-resample one. The buffer is sized at compile time from the song's slowest tempo
-and allocated when the chain is built, so nothing is allocated while audio runs.
+resample one. A scene that drops the track clears that window: when the track
+returns the capture records again, and `start` counts from the return (see
+Scenes and arrangement). The buffer is sized at compile time from the song's
+slowest tempo and allocated when the chain is built, so nothing is allocated
+while audio runs.
 
 ## Sidechain
 

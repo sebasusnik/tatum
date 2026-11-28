@@ -162,7 +162,8 @@ fn a_dropped_track_still_fades_and_the_sends_still_ring() {
     let x = render(&dry);
     let b = bar();
     let end = x[..2 * b].iter().rposition(|v| v.abs() > 1e-6).expect("some sound");
-    assert!(end > b + 300 && end < b + 600, "faded from {b} to {end}");
+    let ms = |n: f32| b + (n * SAMPLE_RATE / 1000.0) as usize;
+    assert!(end > ms(6.0) && end < ms(14.0), "faded from {b} to {end} at {SAMPLE_RATE} Hz");
 
     let wet = song("module keys v { voice_mode poly attack 5ms release 1.5s }", HELD, "reverb_send 0.6 out > master")
         .replace("scale C major", "scale C major\nreverb size=0.85 damp=0.3");
@@ -314,4 +315,50 @@ fn a_track_that_never_sounded_is_left_as_it_was() {
     assert_eq!(at(&mut e, 3 * b + b / 4), 1, "the track that played was not cleared when dropped");
     // Back for a bar of rests, dropped again: nothing new to clear.
     assert_eq!(at(&mut e, 6 * b), 1, "a track that stayed silent was cleared again");
+}
+
+/// A hit the sequencer has queued for later (a nudged drum hit) and that
+/// falls due after the drop is dropped with the track. Struck then, on an
+/// instrument that is no longer rendered, it would sit there at its first
+/// sample and open the track's return bars later. That holds for a track that
+/// played before the hit, and for one whose queued hit is all it played.
+#[test]
+fn a_hit_queued_past_the_drop_is_not_kept_for_the_return() {
+    // At tempo 30 a step is half a second. The crash on the last step,
+    // nudged by a step and a quarter, falls due 0.125 s past the bar line,
+    // long after the 10 ms fade.
+    let tempo = 30.0;
+    let b = (SAMPLE_RATE * 60.0 / tempo * 4.0) as usize;
+    let step = b / 16;
+    for (case, lane) in [("after a hit", "-*7 X -*7 X"), ("with nothing else", "-*15 X")] {
+        let src = format!(
+            "tempo {tempo}\nscale C major\n\
+             module beats v {{ }}\n\
+             module beats kit {{ kick_level 1.0 }}\n\
+             groove late {{\n    crash nudge 1.25\n}}\n\
+             pattern p {{ crash: {lane} }}\n\
+             pattern none {{ kick: -*16 }}\n\
+             track t {{ play p using v out > master }}\n\
+             track d {{ play none using kit out > master }}\n\
+             master {{ in > out }}\n\
+             scene with {{ track t {{ play p using v }} track d {{ play none using kit }} }}\n\
+             scene without {{ track d {{ play none using kit }} }}\n\
+             arrange {{ with x1 without x2 with x1 }}\n"
+        );
+        let mut e = SongEngine::from_source(&src).unwrap_or_else(|e| panic!("{e}\n{src}"));
+        e.start();
+        let total = 4 * b;
+        let (mut l, mut r) = (vec![0.0f32; total], vec![0.0f32; total]);
+        let mut pos = 0;
+        while pos < total {
+            let n = BLOCK_SIZE.min(total - pos);
+            e.process_block_stereo(&mut l[pos..pos + n], &mut r[pos..pos + n]);
+            pos += n;
+        }
+        assert!(peak(&l[b + b / 50..3 * b]) == 0.0, "{case}: the track sounds while the scene does not name it");
+        // Back in the scene: rests up to its first hit, a step and a quarter
+        // into the bar at the earliest. A crash peaks around 0.1 to 1.
+        let back = peak(&l[3 * b..3 * b + step]);
+        assert!(back < 1e-6, "{case}: the track came back with the hit queued when it left, peak {back}");
+    }
 }

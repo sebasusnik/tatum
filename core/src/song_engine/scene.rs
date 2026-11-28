@@ -11,8 +11,9 @@ use super::sequencer::PendingTrigger;
 use super::track::{make_arp, pan_gains};
 use super::SongEngine;
 
-/// How long a track the new scene drops takes to fade out: 10 ms.
-pub(super) const SCENE_FADE: u32 = 441;
+/// How long a track the new scene drops takes to fade out: 10 ms, at any
+/// rate (441 samples at 44.1 kHz).
+pub(super) const SCENE_FADE: u32 = crate::at_rate(441) as u32;
 
 /// Stop what `inst_idx` is still sounding, and drop the hits still queued for
 /// it. A track out of the scene is not rendered, so anything left in its
@@ -34,12 +35,19 @@ impl SongEngine {
     /// brought it back opened with the end of a note from the last time.
     ///
     /// A track that has not sounded since it was last cleared is left as it
-    /// is: one the song's first scene does not name, for one.
+    /// is, but for the hits queued for it: one the song's first scene does
+    /// not name, for one.
     pub(super) fn clear_dropped_track(&mut self, ti: usize) {
+        // A hit nudged past the drop goes whether or not the track has
+        // sounded: it may be all the track played before it left.
+        let inst_idx = self.tracks[ti].instrument_idx;
+        self.pending_triggers.retain(|t| t.inst_idx != inst_idx);
         if !core::mem::take(&mut self.tracks[ti].rang) {
             return;
         }
-        cut_instrument(&mut self.instruments, &mut self.pending_triggers, self.tracks[ti].instrument_idx);
+        if let Some(inst) = self.instruments.get_mut(inst_idx) {
+            inst.cut();
+        }
         self.tracks[ti].insert_fx.clear();
         self.tracks_cleared = self.tracks_cleared.wrapping_add(1);
     }
