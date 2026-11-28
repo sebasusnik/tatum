@@ -468,3 +468,249 @@ fn a_hat_asked_higher_than_the_rate_goes_is_held_under_it() {
     let c = log_centre(first_hit(&x));
     assert!(c > 0.25 * SAMPLE_RATE && c < 0.5 * SAMPLE_RATE, "centred on {c:.0} Hz at {SAMPLE_RATE} Hz");
 }
+
+// ── snare ──
+
+#[test]
+fn a_snare_body_lands_on_the_note_it_is_given() {
+    // The wires off, so the body is all there is.
+    let x = render(&song("snare(F#3, balance=0, body=600ms)", ONE), 1);
+    let t0 = onset(&x);
+    let w = &x[t0 + ms(60.0)..t0 + ms(360.0)];
+    let top = loudest(w, 100.0, 260.0, 0.5);
+    assert!((top - 185.0).abs() < 2.0, "F#3 is 185 Hz, the loudest bin is {top}");
+    // The second mode is there, 1.593 times over the first, and quieter.
+    let (first, second, gap) = (bin(w, 185.0), bin(w, 185.0 * 1.593), bin(w, 185.0 * 1.3));
+    assert!(second > 10.0 * gap, "a second mode at {:.0} Hz: {second} against {gap} beside it", 185.0 * 1.593);
+    assert!(second < first, "under the first: {second} against {first}");
+    // A bare snare() is 185 Hz, F#3 to a hundredth of a cent.
+    let bare = render(&song("snare(balance=0, body=600ms)", ONE), 1);
+    let hz = render(&song("snare(185hz, balance=0, body=600ms)", ONE), 1);
+    assert!(hz == bare, "snare() is snare(185hz)");
+    // And the note moves it.
+    let high = render(&song("snare(250hz, balance=0, body=600ms)", ONE), 1);
+    let t0 = onset(&high);
+    let top = loudest(&high[t0 + ms(60.0)..t0 + ms(360.0)], 100.0, 350.0, 0.5);
+    assert!((top - 250.0).abs() < 2.5, "250 Hz, the loudest bin is {top}");
+}
+
+#[test]
+fn a_snare_snaps_onto_its_note_in_the_time_it_says() {
+    // One mode would be easier to time; the second is 1.593 times up and
+    // quieter, so the crossings still follow the first. From 1.7 times the
+    // note to within 10% of it in `snap`.
+    let x = render(&song("snare(100hz, snap=40ms, balance=0, body=1500ms)", ONE), 1);
+    let t0 = onset(&x);
+    let at = |from: f32, to: f32| loudest(&x[t0 + ms(from)..t0 + ms(to)], 80.0, 200.0, 1.0);
+    let (early, late) = (at(0.0, 25.0), at(60.0, 160.0));
+    assert!(early > 120.0, "inside the snap it is well over the note: {early} Hz");
+    assert!(late < 106.0 && late > 98.0, "after it, on 100 Hz: {late} Hz");
+    // A short snap is over at once.
+    let fast = render(&song("snare(100hz, snap=1ms, balance=0, body=1500ms)", ONE), 1);
+    let t0 = onset(&fast);
+    let early = loudest(&fast[t0 + ms(5.0)..t0 + ms(45.0)], 80.0, 200.0, 1.0);
+    assert!(early < 106.0, "snap=1ms is on the note from the start: {early} Hz");
+}
+
+#[test]
+fn a_snare_body_and_its_wires_each_fall_in_their_own_time() {
+    let body = sounding_ms(&render(&song("snare(balance=0, body=150ms, wires=900ms)", ONE), 1));
+    assert!((body - 150.0).abs() < 4.0, "the body alone is over in {body:.1} ms");
+    let wires = sounding_ms(&render(&song("snare(balance=100%, body=900ms, wires=250ms)", ONE), 1));
+    assert!((wires - 250.0).abs() < 6.0, "the wires alone are over in {wires:.1} ms");
+    // Together it ends when the longer of the two does.
+    let both = sounding_ms(&render(&song("snare(body=100ms, wires=300ms)", ONE), 1));
+    assert!((both - 300.0).abs() < 7.0, "together, {both:.1} ms");
+    // Evenly in dB: half way through, the wires are 30 dB down.
+    let x = render(&song("snare(balance=100%, wires=400ms)", ONE), 1);
+    let half = db(rms_in(&x, 200.0, 20.0) / rms_in(&x, 0.0, 20.0));
+    assert!((half + 30.0).abs() < 3.0, "-30 dB half way, got {half:.1}");
+}
+
+#[test]
+fn the_wires_sound_in_their_band_and_balance_sets_them_against_the_body() {
+    for band in [2000.0, 5000.0] {
+        let x = render(&song(&format!("snare(balance=100%, wires=400ms, band={band}hz)"), ONE), 1);
+        let c = log_centre(first_hit(&x));
+        assert!((c / band).ln().abs() < 0.25, "band={band}hz is centred on {c:.0} Hz");
+    }
+    // The share of the hit over 1 kHz is the wires'; it grows with balance.
+    let high = |balance: u32| {
+        let x = render(&song(&format!("snare(balance={balance}%, body=200ms, wires=200ms)"), ONE), 1);
+        share_over(first_hit(&x), 1000.0)
+    };
+    let (none, some, most, all) = (high(0), high(30), high(70), high(100));
+    assert!(none < 0.01, "balance=0 is the drum with its wires off: {none}");
+    assert!(some > none && most > some && all > most, "more wires: {none} {some} {most} {all}");
+    assert!(all > 0.9, "balance=100% is the wires alone: {all}");
+}
+
+#[test]
+fn a_snare_is_the_same_on_every_hit_and_every_run() {
+    same_on_every_run("snare()");
+    same_on_every_run("snare(drive=0.5, vary=20%)");
+    let x = render(&song("snare(drive=0.3)", FOUR), 2);
+    let all = hits(&x, ms(250.0));
+    assert_eq!(all.len(), 8);
+    assert!(all.iter().all(|h| *h == all[0]), "every hit is the same samples");
+    the_note_length_does_not_matter("snare(body=300ms, wires=400ms)");
+    velocity_scales_it("snare()");
+}
+
+#[test]
+fn a_snare_takes_a_drive_and_a_sway() {
+    let clean = render(&song("snare(balance=20%)", ONE), 1);
+    let driven = render(&song("snare(balance=20%, drive=1)", ONE), 1);
+    let (pc, pd) = (peak_in(&clean, 0.0, 50.0), peak_in(&driven, 0.0, 50.0));
+    assert!(pd <= 1.0 && pd > 0.9 * pc, "drive keeps it under full scale and no quieter: {pc} against {pd}");
+    assert!(rms_in(&driven, 0.0, 60.0) > 1.15 * rms_in(&clean, 0.0, 60.0), "and fills it");
+
+    let src = song("snare(body=80ms, wires=150ms, vary=20%)", FOUR);
+    let x = render(&src, 8);
+    let lens = lengths(&x, 400.0);
+    assert!(lens.len() >= 30, "{} hits", lens.len());
+    let (lo, hi) = (*lens.iter().min().unwrap() as f32, *lens.iter().max().unwrap() as f32);
+    assert!(hi / lo > 1.1 && hi / lo < 1.6, "the wires sway by about ±20%: {lo}..{hi} samples");
+    let step = lens.windows(2).map(|w| (w[1] as f32 - w[0] as f32).abs()).sum::<f32>() / (lens.len() - 1) as f32;
+    assert!(step < 0.4 * (hi - lo), "slowly: hit to hit {step:.1} samples against a sway of {:.1}", hi - lo);
+}
+
+#[test]
+fn a_snare_out_of_range_is_an_error_at_its_line() {
+    let e = errors(&song("snare(60hz)", FOUR));
+    assert!(e.contains("note = 60 is out of range (80..500)") && e.contains(NODE_LINE), "{e}");
+    let e = errors(&song("snare(F#3, wires=5s)", FOUR));
+    assert!(e.contains("wires = 5000 is out of range (10..3000)") && e.contains(NODE_LINE), "{e}");
+    let e = errors(&song("snare(F#3, balance=-6db)", FOUR));
+    assert!(e.contains("'balance' takes % or a plain 0..1") && e.contains(NODE_LINE), "{e}");
+    let e = errors(&song("snare(F#3, band=200hz)", FOUR));
+    assert!(e.contains("band = 200 is out of range (500..12000)") && e.contains(NODE_LINE), "{e}");
+    let e = errors(&song("snare(F#3, decay=100)", FOUR));
+    assert!(e.contains("unknown option 'decay'"), "{e}");
+}
+
+#[test]
+fn a_snare_asked_higher_than_the_rate_goes_is_held_under_it() {
+    let x = render(&song("snare(500hz, band=12khz, balance=100%, wires=300ms)", ONE), 1);
+    assert!(x.iter().all(|v| v.is_finite()));
+    let peak = peak_in(&x, 0.0, 300.0);
+    assert!(peak > 0.05 && peak < 1.5, "it plays, at {peak}");
+}
+
+// ── clap ──
+
+/// Where the bursts of a clap start, in ms from its onset, read off its level
+/// itself. A clap of one burst and a long tail in the same band is the same
+/// noise through the same filter under a level that only falls, so `hit`
+/// over it, sample by sample, is the clap's level over time, and a burst is
+/// where that jumps up (each starts 20 dB over where the last has fallen to).
+fn bursts(hit: &[f32], band: &str) -> Vec<f32> {
+    let plain = render(&song(&format!("clap(bursts=1, tail=3s, band={band})"), ONE), 1);
+    let plain = &plain[onset(&plain)..];
+    let mut found = vec![0.0f32];
+    let mut before = 0.0f32;
+    for (i, (v, p)) in hit.iter().zip(plain).enumerate() {
+        // Where the noise passes near zero the two say nothing.
+        if p.abs() < 1e-4 {
+            continue;
+        }
+        let level = v / p;
+        if before > 0.0 && level > 3.0 * before {
+            found.push(i as f32 * 1000.0 / SAMPLE_RATE);
+        }
+        before = level;
+    }
+    found
+}
+
+#[test]
+fn a_clap_is_as_many_bursts_as_it_says_as_far_apart_as_it_says() {
+    for (count, spacing) in [(4, 11.0), (3, 20.0), (6, 8.0), (1, 11.0)] {
+        let x = render(&song(&format!("clap(bursts={count}, spacing={spacing}ms, tail=300ms, band=4khz)"), ONE), 1);
+        let found = bursts(first_hit(&x), "4khz");
+        assert_eq!(found.len(), count, "bursts={count}: found them at {found:?} ms");
+        for (n, at) in found.iter().enumerate() {
+            let want = n as f32 * spacing;
+            assert!((at - want).abs() < 0.2, "burst {} of {count} at {at:.1} ms, not {want:.1}", n + 1);
+        }
+    }
+    // A bare clap() is four, 11 ms apart.
+    let found = bursts(first_hit(&render(&song("clap()", ONE), 1)), "1200hz");
+    assert_eq!(found.len(), 4, "{found:?}");
+    assert!((found[3] - 33.0).abs() < 0.2, "{found:?}");
+}
+
+#[test]
+fn a_clap_tail_is_sixty_db_down_when_it_says() {
+    // From the last burst: three gaps of 10 ms, then the tail.
+    for tail in [120.0, 500.0] {
+        let x = render(&song(&format!("clap(bursts=4, spacing=10ms, tail={tail}ms)"), ONE), 1);
+        let len = sounding_ms(&x);
+        assert!((len - (30.0 + tail)).abs() < 0.02 * tail + 2.0, "tail={tail}ms sounds {len:.1} ms");
+    }
+    let x = render(&song("clap(bursts=1, tail=400ms)", ONE), 1);
+    let half = db(rms_in(&x, 200.0, 20.0) / rms_in(&x, 0.0, 20.0));
+    assert!((half + 30.0).abs() < 3.0, "-30 dB half way, got {half:.1}");
+    // Each burst is 20 dB down when the next one comes.
+    let x = render(&song("clap(bursts=2, spacing=40ms, tail=400ms)", ONE), 1);
+    let fall = db(rms_in(&x, 36.0, 4.0) / rms_in(&x, 0.5, 4.0));
+    assert!((fall + 18.0).abs() < 4.0, "a burst falls about 20 dB before the next: {fall:.1}");
+}
+
+#[test]
+fn a_clap_sounds_in_the_band_it_is_given() {
+    for band in [800.0, 1200.0, 3000.0] {
+        let x = render(&song(&format!("clap(bursts=1, tail=600ms, band={band}hz)"), ONE), 1);
+        let c = log_centre(first_hit(&x));
+        assert!((c / band).ln().abs() < 0.25, "band={band}hz is centred on {c:.0} Hz");
+    }
+}
+
+#[test]
+fn a_clap_is_the_same_on_every_hit_and_every_run() {
+    same_on_every_run("clap()");
+    same_on_every_run("clap(vary=20%)");
+    let x = render(&song("clap()", FOUR), 2);
+    let all = hits(&x, ms(300.0));
+    assert_eq!(all.len(), 8);
+    assert!(all.iter().all(|h| *h == all[0]), "every hit is the same samples");
+    the_note_length_does_not_matter("clap(tail=600ms)");
+    velocity_scales_it("clap()");
+}
+
+#[test]
+fn a_clap_with_vary_does_not_land_twice_alike() {
+    let src = song("clap(bursts=3, spacing=20ms, tail=150ms, band=4khz, vary=20%)", FOUR);
+    let x = render(&src, 8);
+    let on = onsets(&x);
+    let gaps: Vec<f32> = on
+        .iter()
+        .filter(|&&o| o + ms(400.0) < x.len())
+        .map(|&o| {
+            let b = bursts(&x[o..o + ms(400.0)], "4khz");
+            assert_eq!(b.len(), 3, "{b:?}");
+            b[1]
+        })
+        .collect();
+    assert!(gaps.len() >= 30, "{} hits", gaps.len());
+    let (lo, hi) = gaps.iter().fold((f32::MAX, 0.0f32), |m, &g| (m.0.min(g), m.1.max(g)));
+    assert!(lo > 15.0 && hi < 25.0, "within 20% of 20 ms: {lo}..{hi}");
+    assert!(hi - lo > 2.0, "the spacing sways: {lo}..{hi} ms");
+    assert!(x == render(&src, 8), "the same on every play");
+}
+
+#[test]
+fn a_clap_out_of_range_is_an_error_at_its_line() {
+    let e = errors(&song("clap(bursts=12)", FOUR));
+    assert!(e.contains("bursts = 12 is out of range (1..8)") && e.contains(NODE_LINE), "{e}");
+    let e = errors(&song("clap(bursts=2.5)", FOUR));
+    assert!(e.contains("bursts=2.5 is not a whole number") && e.contains(NODE_LINE), "{e}");
+    let e = errors(&song("clap(spacing=1ms)", FOUR));
+    assert!(e.contains("spacing = 1 is out of range (2..50)") && e.contains(NODE_LINE), "{e}");
+    let e = errors(&song("clap(tail=220hz)", FOUR));
+    assert!(e.contains("'tail' takes ms or s") && e.contains(NODE_LINE), "{e}");
+    let e = errors(&song("clap(band=100hz)", FOUR));
+    assert!(e.contains("band = 100 is out of range (300..8000)") && e.contains(NODE_LINE), "{e}");
+    let e = errors(&song("clap(C3)", FOUR));
+    assert!(e.contains("is a note") && e.contains(NODE_LINE), "{e}");
+}
