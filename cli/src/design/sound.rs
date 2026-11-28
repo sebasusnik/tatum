@@ -1233,6 +1233,61 @@ mod tests {
         round_trips(&s.text());
     }
 
+    /// A sound with drum nodes and ports at once: a hat on a filter's cutoff
+    /// and a snare on an oscillator's FM, as the file has them, and wired
+    /// from the page. A drum node drives a port and has none of its own.
+    #[test]
+    fn drum_nodes_and_ports_open_turn_and_save_together() {
+        const BOTH: &str = "instrument zap {\n  osc pulse(110, width=0.4) as a\n  hat(decay=300ms) as h\n  snare(F#3) as s\n  s > gain(0.5) > a.fm\n  a > mix\n  s > mix\n  mix > svf(900hz, 0.4) as filt\n  h > filt cutoff\n  filt > out\n}\n";
+        let mut s = round_trips(BOTH);
+        let t = s.text();
+        for line in [
+            "  hat(decay=300ms) as h\n",
+            "  snare(F#3) as s\n",
+            "  h > filt.cutoff\n",
+            "  gain3 > a.fm\n",
+            "  s > mix\n",
+        ] {
+            assert!(t.contains(line), "{line:?} in\n{t}");
+        }
+        let before = rendered(BOTH, "zap");
+        assert_eq!(rendered(&t, "zap"), before, "Save changed what it plays");
+        assert_ne!(rendered(&t.replace("h > filt.cutoff", "h > filt"), "zap"), before, "the hat moves the filter");
+
+        let Body::Graph(g) = &s.body else { panic!("a graph") };
+        for drum in ["h", "s"] {
+            assert!(node_ports(g, drum).is_empty(), "{drum} has no ports to offer");
+        }
+        assert_eq!(node_ports(g, "filt"), ["cutoff", "morph"]);
+        // A knob of a drum that drives a port, and wires from the page.
+        apply(&mut s, "h.decay=120\n+node tom\n+wire tom1 a.pitch\n+wire s filt.morph\n-wire h filt.cutoff")
+            .expect("applies");
+        let t = s.text();
+        assert!(t.contains("hat(decay=120ms) as h") && t.contains("  tom() as tom1\n"), "{t}");
+        assert!(
+            t.contains("  tom1 > a.pitch\n") && t.contains("  s > filt.morph\n") && !t.contains("filt.cutoff"),
+            "{t}"
+        );
+        for (bad, why) in [
+            ("+wire a h.pitch", "has no ports"),
+            ("+wire a s.cutoff", "has no ports"),
+            ("+wire a tom1.fm", "has no ports"),
+            ("-wire h filt.cutoff", "there is no 'h > filt.cutoff' to take out"),
+        ] {
+            let before = s.clone();
+            let e = apply(&mut s, bad).expect_err(bad);
+            assert!(e.contains(why), "{bad}: {e}");
+            assert_eq!(s, before, "{bad} changed something");
+        }
+        let saved = round_trips(&t);
+        assert_eq!(saved.text(), t);
+        rendered(&t, "zap");
+        // A drum taken out takes its wires into the ports with it.
+        apply(&mut s, "-node s").expect("removes");
+        assert!(!s.text().contains("filt.morph") && !s.text().contains("snare"), "{}", s.text());
+        round_trips(&s.text());
+    }
+
     #[test]
     fn an_svf_opens_turns_and_saves() {
         assert!(graph_kinds().iter().any(|k| k.name == "svf"), "the page offers it");
