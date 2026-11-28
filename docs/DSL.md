@@ -1053,7 +1053,13 @@ what comes after the node: a filter, an EQ, a compressor, the rest of the mix.
 Read off one rendered hit of each of the kicks above it is 74.0, 54.6 and 65.0 Hz, and
 over fifteen shapes, clean and driven, the two were never more than 0.15 semitones
 apart. `analyze` averages a record's hits first, and where that average reads the tail
-wrong it reads the note heard wrong with it, so look at `tail` before trusting `heard`. Write it with its parentheses,
+wrong it reads the note heard wrong with it, so look at `tail` before trusting `heard`.
+
+Every hit of a `kick` is the same samples. `vary=0.03` sways its hold and release by up
+to 3% from hit to hit, and `vary_pitch=0.01` its whole sweep by up to 1% in pitch, slowly
+(the sway drifts over a few bars and does not repeat soon) and the same on every play:
+the breath of a hypnotic pulse, which a loop of one sample does not have. Both are 0 by
+default. Write it with its parentheses,
 `kick()`: a node named `kick` stays a name. A note name works wherever a node takes a
 frequency: `bell(A1, 2db, 1)` lifts the kick's fundamental.
 

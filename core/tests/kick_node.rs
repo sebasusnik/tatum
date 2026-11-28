@@ -328,6 +328,59 @@ fn heard_zero_is_the_kick_as_written() {
     assert_eq!(plain, 55.0);
 }
 
+/// How long a hit sounds: to where it last passes 1% of its peak, in ms.
+fn length_ms(hit: &[f32]) -> f32 {
+    let peak = hit.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+    hit.iter().rposition(|v| v.abs() > 0.01 * peak).unwrap_or(0) as f32 / 44.1
+}
+
+const SIXTEEN: &str = "C3 - - -  C3 - - -  C3 - - -  C3 - - -";
+
+#[test]
+fn vary_sways_the_length_slowly_by_what_it_says() {
+    let args = "A1, hold=80ms, release=150ms, vary=0.05";
+    let x = render(&song(args, SIXTEEN), 8);
+    let lens: Vec<f32> = hits(&x, 44100 * 2 / 5).iter().map(|h| length_ms(h)).collect();
+    assert!(lens.len() >= 30, "{} hits", lens.len());
+    let (lo, hi) = lens.iter().fold((f32::MAX, 0.0f32), |m, &l| (m.0.min(l), m.1.max(l)));
+    let mid = 0.5 * (lo + hi);
+    assert!(hi / lo - 1.0 > 0.02, "it sways: {lo}..{hi} ms");
+    assert!((hi - lo) / mid < 0.12, "by about what it says, ±5%: {lo}..{hi} ms");
+    // Slowly: one hit to the next moves much less than the whole sway.
+    let step = lens.windows(2).map(|w| (w[1] - w[0]).abs()).sum::<f32>() / (lens.len() - 1) as f32;
+    assert!(step < 0.35 * (hi - lo), "hit to hit {step:.2} ms against a sway of {:.2} ms", hi - lo);
+    // And the same on every play.
+    assert_eq!(x, render(&song(args, SIXTEEN), 8));
+}
+
+/// Stop and play again is the first play again: the hit count goes back to
+/// the top with the clock, so the sway a second play makes is the sway a
+/// render makes.
+#[test]
+fn a_swaying_kick_plays_the_same_after_a_stop() {
+    let src = song("A1, hold=80ms, release=150ms, vary=0.05, vary_pitch=0.02", SIXTEEN);
+    let mut e = SongEngine::from_source(&src).unwrap_or_else(|err| panic!("{}", err));
+    let (first, _) = e.render(4);
+    e.reset();
+    let (second, _) = e.render(4);
+    assert!(first.iter().any(|v| v.abs() > 0.1), "the kick is heard");
+    assert!(first == second, "the second play is not the first, sample for sample");
+    assert!(first == render(&src, 4), "nor a render on a new engine");
+}
+
+#[test]
+fn vary_pitch_sways_the_tail_and_vary_zero_is_none() {
+    let x = render(&song("A1, hold=200ms, release=100ms, vary_pitch=0.02", SIXTEEN), 4);
+    let tails: Vec<f32> =
+        onsets(&x).iter().filter(|&&o| o + 44100 / 4 < x.len()).map(|&o| pitch(&x[o..], 120.0, 240.0)).collect();
+    let (lo, hi) = tails.iter().fold((f32::MAX, 0.0f32), |m, &t| (m.0.min(t), m.1.max(t)));
+    assert!(hi / lo - 1.0 > 0.005, "it sways: {lo}..{hi} Hz");
+    assert!(lo > 55.0 * 0.975 && hi < 55.0 * 1.025, "within 2% of A1: {lo}..{hi} Hz");
+    let still = render(&song("A1, hold=200ms, release=100ms, vary=0, vary_pitch=0", SIXTEEN), 4);
+    let h = hits(&still, 44100 / 3);
+    assert!(h.windows(2).all(|w| w[0] == w[1]), "without vary every hit is the same samples");
+}
+
 #[test]
 fn heard_one_that_cannot_reach_its_note_is_an_error_that_says_what_to_change() {
     // Each of these used to compile to a kick settling on 20 Hz and still
