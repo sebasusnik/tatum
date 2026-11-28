@@ -1056,13 +1056,28 @@ the body (three times the note when left out); `click=-35db` adds a beater on to
 saturates the hit more than the tail, at the same peak.
 
 A sweep that is still falling while the kick is loud is heard over the note it lands on:
-`kick(A1, body=90ms)` is heard about two semitones up, as a B. `heard=1` makes the note
-written the note heard, and the kick settles under it as far as its sweep lifts it:
-`kick(A1, body=90ms, heard=1)` lands near F#1 and is heard as A1. The note heard is a
-model, not a law of the ear: the pitch on a log scale, each moment weighted by its
-energy and by how steady its pitch is (a fall faster than 0.1 semitones a millisecond
-counts for less), from 5 ms until it is 30 dB down. `tatum analyze` reports a record's
-kick the same way, as `heard`.
+`kick(A1, body=90ms)` settles on 55 Hz and is heard five semitones up, on 74 Hz, a D2.
+`heard=1` makes the note written the note heard, and the kick settles under it as far as
+its sweep lifts it: `kick(A1, body=90ms, heard=1)` settles on 40.8 Hz, just under E1, and
+is heard as A1. That is a fourth of difference in the tail, on a kick of the default
+shape: a 41 Hz tail and a 55 Hz one are not the same kick on a system, so `heard=1` is
+for a kick whose sweep is part of its note, and a shorter `body=` keeps the two close
+(`body=20ms` is heard within a semitone of where it lands). A kick whose sweep lifts it
+further than there is room under the note, down to 20 Hz, is an error that says so:
+`kick(A0, body=120ms, heard=1)` would still be heard two semitones over A0.
+
+The note heard is a model, not a law of the ear: the pitch on a log scale, each moment
+weighted by its energy and by how steady its pitch is (a fall faster than 0.1 semitones a
+millisecond counts for less), from 5 ms until it is 30 dB down. The energy is the body's
+after `drive=`, which flattens the top and so brings the note heard down towards the
+tail: `kick(A1, body=90ms, drive=1)` is heard on 64.7 Hz. It is computed from the kick's
+arguments alone, so it knows nothing of the click, of the harmonics drive adds, or of
+what comes after the node: a filter, an EQ, a compressor, the rest of the mix.
+`tatum analyze` reports a record's kick the same way, as `heard`, read off the sound.
+Read off one rendered hit of each of the kicks above it is 74.0, 54.6 and 65.0 Hz, and
+over fifteen shapes, clean and driven, the two were never more than 0.15 semitones
+apart. `analyze` averages a record's hits first, and where that average reads the tail
+wrong it reads the note heard wrong with it, so look at `tail` before trusting `heard`.
 
 Every hit of a `kick` is the same samples. `vary=0.03` (or `vary=3%`) sways its hold and release by up
 to 3% from hit to hit, and `vary_pitch=0.01` (or `1%`) its whole sweep by up to 1% in pitch, slowly
