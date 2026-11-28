@@ -306,7 +306,8 @@ function buildGraphEdit() {
   const names = sound.nodes.map((n) => n.alias);
   $("wire-from").innerHTML = [...names, "mix"].map((n) => `<option>${esc(n)}</option>`).join("");
   // A node's ports after it: `filt.cutoff` moves the knob, `filt` feeds it.
-  const targets = sound.nodes.flatMap((n) => [n.alias, ...n.ports.map((p) => `${n.alias}.${p}`)]);
+  // A node that makes its own signal (takes_input false) offers its ports only.
+  const targets = sound.nodes.flatMap((n) => [...(n.takes_input ? [n.alias] : []), ...n.ports.map((p) => `${n.alias}.${p}`)]);
   $("wire-to").innerHTML = ["out", "mix", ...targets].map((n) => `<option>${esc(n)}</option>`).join("");
   const w = $("wires");
   w.innerHTML = "";

@@ -447,6 +447,16 @@ pub fn ports(kind: &str) -> &'static [Port] {
 /// The universal chain-node option: dry/wet, where 0 bypasses.
 pub const WET: &str = "wet";
 
+/// Whether a node reads what is wired into its input. A source -- the
+/// oscillators, the noise, the LFO, the whole drums -- makes its own signal
+/// and reads nothing: the compiler refuses a plain connection into one, and
+/// one in a chain of effects, and the designer offers neither. An envelope
+/// does take input, through its VCA. A kind it does not know, it leaves to
+/// the error that kind gets.
+pub fn takes_input(kind: &str) -> bool {
+    lookup(kind).is_none_or(|d| d.category != Category::Source)
+}
+
 pub fn lookup(kind: &str) -> Option<&'static NodeDefSpec> {
     NODES.iter().find(|n| n.name == kind || n.aliases.contains(&kind))
 }
