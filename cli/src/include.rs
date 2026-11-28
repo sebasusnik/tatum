@@ -268,7 +268,7 @@ mod sounds_tests {
             assert!(peak < 1.0, "{sound} alone stays under full scale: peak {peak}");
             // Each file is one node and nothing else.
             let text = std::fs::read_to_string(Path::new("../sounds").join(file)).expect("reads");
-            let nodes = text.lines().filter(|l| l.contains(" as ")).count();
+            let nodes = text.lines().filter(|l| !l.starts_with('#') && l.contains(" as ")).count();
             assert_eq!(nodes, 1, "{file} is one node");
         }
         let (peak, _) = e.master_input_peak_rms();

@@ -2,8 +2,8 @@
 # with its second mode at 319 Hz, under wires in a wide band at 5 kHz, a
 # little more wires than body, lightly driven. Measured: the body's loudest
 # bin at 200 Hz; 20 dB down at 64 ms, 40 at 122, over (60 dB down) at 170 ms,
-# the wires' decay, the body gone by 110; peak 0.96. balance= sets wires
-# against body, body= and wires= their lengths.
+# the wires' decay, the body gone by 110; the node peaks at 0.96 of full
+# scale. balance= sets wires against body, body= and wires= their lengths.
 instrument crack {
   snare(200hz, snap=5ms, body=110ms, wires=170ms, band=5000hz, balance=0.55, drive=0.2) as s
   s > out
