@@ -1,20 +1,23 @@
 # The liquid sounds from sounds/liquid/ played together, sparse, at 108 BPM:
 # bubbles off the grid, a pad that is a detuned cluster, a bass that slides
-# into every note, a long falling drop and a soft FM bell, through a clean
-# delay a hair longer than a dotted eighth and a long reverb.
+# into every note, a long falling drop and a soft struck bell, through a
+# clean delay a hair longer than a dotted eighth and a long reverb. The bell
+# strikes the root of the first chord (G#4 over G#m) and the sixth of the
+# second (D#5 over F#), where every partial it holds is a tone of the chord.
 # The mix sits each part as the record's do, measured on this render (the
 # record's figures in brackets, from its mix, so bounds): the bubbles' pings
-# stand 12.5 dB over the bed in 350-1600 Hz with the pad alone and 15 dB with
-# the bass [10], and 6 and 3.1 a second of them are found there [3.4]; the
-# drop's line 18-22 dB under the whole band, 14-19 at its loudest [16-22,
-# 10-14]; the bell's strongest line 23-29 dB under the mix's power [25].
+# stand 14 dB over the bed in 350-1600 Hz with the pad and the bell and 16 dB
+# with the bass [10], and 6.3 and 3.2 a second of them are found there [3.4];
+# the drop's line 18-22 dB under the whole band, 14-19 at its loudest [16-22,
+# 10-14]; the bell's strongest partial 21-29 dB under the mix's power [25].
 # Above 400 Hz the bass is taken out on its track (two lowpasses), or its
 # saw buries the bubbles once it comes in. Width: the pad's chorus and reverb
 # put its side 2 dB under its mid [0 to -3]; the bubbles' chorus, autopan and
 # sends give an L/R correlation of 0.75 in their band [0.71]. In the reverb:
-# the bell as much as dry (+2 dB), the pad -4, the drop -5, the bubbles -7;
-# the bass dry. The whole scene's master: crest 13 dB, power under 250 Hz /
-# to 2.5 kHz / above -2.0 / -4.5 / -17.2 dB, correlation 0.79.
+# the bell 2.5 dB over dry, the pad -4, the drop -5, the bubbles -7; the bass
+# dry. The whole scene's master: crest 12 dB, power under 250 Hz / to 2.5 kHz
+# / above -2.0 / -4.5 / -19.4 dB, correlation 0.81. With no bass and no drop,
+# the first scene has almost nothing over 2.5 kHz (-43 dB).
 tempo 108
 scale G# minor
 delay sync=free time=0.4213 feedback=0.65 filter=0
@@ -28,12 +31,12 @@ pattern stream { D#3 ..*127 }
 pattern chords { [G#2 D#3 B3] ..*63 [F#2 C#3 A#3] ..*63 }
 pattern slides { G#1 ..*7 ~D#2 ..*7 ~F#2 ..*8 ~C#2 ..*6 ~G#1 ..*7 ~D#2 ..*8 ~A#1 ..*6 ~D#2 ..*7 }
 pattern falls  { -*24 G#4 ..*39 -*34 D#4 ..*29 }
-pattern bells  { -*8 C#5 ..*15 -*40 G#4 ..*15 -*48 }
+pattern bells  { -*8 G#4 ..*15 -*40 D#5 ..*15 -*48 }
 track bubbles { play stream using bubbles level 0.5 delay_send 0.12 reverb_send 0.2 out > chorus(0.2) > autopan(0.3, hz=1.2) > master }
 track pad     { play chords using shoal level 0.35 reverb_send 0.35 out > bell(900hz, -4db, 0.8) > chorus(0.6) > master }
 track bass    { play slides using tide level 0.32 out > lowpass(400hz, 0.01) > lowpass(400hz, 0.01) > master }
 track drop    { play falls using drop level 0.25 delay_send 0.11 reverb_send 0.3 out > autopan(0.5, bars=1) > master }
-track bell    { play bells using glass level 0.05 delay_send 0.1 reverb_send 0.6 }
+track bell    { play bells using glass level 0.028 delay_send 0.1 reverb_send 0.4 }
 scene shallows { track bubbles { play stream using bubbles } track pad { play chords using shoal } track bell { play bells using glass } }
 scene deep     { track bubbles { play stream using bubbles } track pad { play chords using shoal } track bass { play slides using tide } track drop { play falls using drop } }
 scene whole    { track bubbles { play stream using bubbles } track pad { play chords using shoal } track bass { play slides using tide } track drop { play falls using drop } track bell { play bells using glass } }

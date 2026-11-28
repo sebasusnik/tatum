@@ -3,7 +3,8 @@
 //! it is pitched. These are the numbers the sound was made to, read off a
 //! record with a script and then off our render with the same script; this
 //! is that script, so the numbers stay true of the sound as the engine and
-//! the patch change.
+//! the patch change. At the end, the bell of `sounds/liquid/glass.synth`:
+//! the level and the decay of each of its partials.
 //!
 //! The measure: a short-time spectrum of the band the pings are in, each
 //! bin against its own median over the whole render, so what stands still
@@ -246,3 +247,60 @@ const BEND: [f32; 3] = [-2.6, 0.0, 5.0];
 const FALLING: f32 = 0.26;
 const RISING: f32 = 0.31;
 const LEVELS: f32 = 4.4;
+
+/// The level in dB of `f` Hz in `buf` over a Hann window of 4096 samples
+/// (at 44.1 kHz) from `at` seconds.
+fn level_at(buf: &[f32], f: f32, at: f32) -> f32 {
+    let n = (4096.0 * SAMPLE_RATE / 44100.0) as usize;
+    let start = (at * SAMPLE_RATE) as usize;
+    let w = 2.0 * std::f64::consts::PI * f as f64 / SAMPLE_RATE as f64;
+    let (mut re, mut im, mut sum) = (0.0f64, 0.0f64, 0.0f64);
+    for (i, x) in buf[start..start + n].iter().enumerate() {
+        let hann = 0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / n as f64).cos();
+        re += *x as f64 * hann * (w * i as f64).cos();
+        im += *x as f64 * hann * (w * i as f64).sin();
+        sum += hann;
+    }
+    (20.0 * ((re * re + im * im).sqrt() / sum + 1e-12).log10()) as f32
+}
+
+/// `sounds/liquid/glass.synth` struck once on G#4: the partials of a church
+/// bell on the note, each as loud against the nominal and as long as the
+/// sound was made to, the top dying first. The level is read 50 ms after
+/// the strike and again 1 s later (0.2 s for the two fast ones), and the
+/// fall between the two given as the time to 60 dB down.
+#[test]
+fn the_bell_is_struck_on_its_partials_and_its_top_dies_first() {
+    let src = format!(
+        "tempo 108\n{}\npattern p {{ G#4 ..*15 -*48 }}\ntrack t {{ play p using glass out > master }}\n",
+        include_str!("../../sounds/liquid/glass.synth")
+    );
+    let mut engine = SongEngine::from_source(&src).unwrap_or_else(|e| panic!("{e}"));
+    let (out, _) = engine.render(4);
+    let note = 415.305f32;
+    // Ratio to the note, dB against the nominal read from 50 ms in (a window
+    // 93 ms long, so the fast ones read under their peak), T60 in s.
+    let partials = [
+        ("hum", 0.5f32, -5.2f32, 9.0f32),
+        ("note", 1.0, -4.0, 6.0),
+        ("tierce, a minor third", 1.1892, -7.8, 4.5),
+        ("nominal", 2.0, 0.0, 4.0),
+        ("twelfth", 2.9966, -10.0, 1.6),
+        ("a fourth two octaves up", 5.3394, -25.5, 0.4),
+    ];
+    let nominal = level_at(&out, 2.0 * note, 0.05);
+    let mut last = f32::MAX;
+    for (name, ratio, db, t60) in partials {
+        let f = note * ratio;
+        let first = level_at(&out, f, 0.05);
+        let span = if t60 > 1.0 { 1.0 } else { 0.2 };
+        let fall = first - level_at(&out, f, 0.05 + span);
+        let measured = 60.0 * span / fall;
+        println!("{name}: {f:.1} Hz, {:+.1} dB, T60 {measured:.2} s", first - nominal);
+        within(&format!("{name}, dB against the nominal"), first - nominal, db, 1.0);
+        within(&format!("{name}, seconds to 60 dB down"), measured, t60, 0.1 * t60);
+        // From the hum up, each partial dies no slower than the one under it.
+        assert!(measured <= last * 1.01, "{name} rings {measured} s, longer than the partial under it ({last} s)");
+        last = measured;
+    }
+}

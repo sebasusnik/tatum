@@ -1,24 +1,63 @@
-# A soft FM bell, held rather than struck: two carriers a hair apart at 1.5
-# times the note, each with a modulator just over the note, so the partials
-# sit at 0.5, 1.5, 2.5, 3.5... times it, a little mistuned, in pairs that beat
-# ten times a second. Measured on C#5: level to within 7 dB from 840 Hz to
-# 3.1 kHz, 10 dB down at 3.6 kHz, 16 at 4.2 kHz, 24 at 4.7 kHz and gone after.
-# The carriers come up over 0.3 s (the first 50 ms are 13 dB under the peak),
-# so a note has no edge. The modulators fade faster than the carriers: the
-# top dies first. A slow, shallow vibrato keeps a held note from standing
-# still.
-module fm glass {
-  algorithm dual_pairs
-  level 2
-  mod_index 92%
-  vibrato_rate 4.5hz
-  vibrato_depth 25%
-  op0_ratio 1.5x
-  op1_ratio 1.005x
-  op2_ratio 1.518x
-  op3_ratio 1.005x
-  op0_envelope 0.4 2 0.35 1.5
-  op1_envelope 0.2 1.8 0.55 1.2
-  op2_envelope 0.4 2 0.35 1.5
-  op3_envelope 0.2 1.8 0.55 1.2
+# A struck bell, soft: six sines on the partials of a church bell -- the hum
+# an octave under the note, the note itself, a minor third over it (the
+# tierce), the octave (the nominal, the loudest), the twelfth and, briefly,
+# a fourth two octaves up -- each with its own envelope, so the top dies
+# first: the upper partial is gone in a fraction of a second, the twelfth in
+# under two, and the hum rings on for seconds after the rest. A short burst
+# of noise in a band at 3 kHz is the strike. The partials are tuned to the
+# note in equal temperament. Struck on the root of a minor chord every one
+# of them but the brief fourth is a tone of the chord; on the sixth of a
+# major chord (D# over F#) its minor third is the chord's root, its twelfth
+# the chord's third and the rest the added sixth. Nowhere a semitone or a
+# tritone from a chord tone.
+# Measured on G#4, against the strongest partial (the nominal, 830 Hz), with
+# its decay to 60 dB down: hum 208 Hz -6 dB 9 s, note 415 Hz -5 dB 6 s,
+# tierce 494 Hz -8 dB 4.5 s, nominal 0 dB 4 s, twelfth 1244 Hz -8 dB 1.6 s,
+# 2218 Hz -14 dB 0.4 s. The nominal rises in 2 to 4 ms (10-90%), and the
+# centroid falls 6.5 semitones from the strike as the top dies.
+instrument glass {
+  osc sine(440, pitch=-12) as hum
+  osc sine(440, pitch=0) as prime
+  osc sine(440, pitch=3) as tierce
+  osc sine(440, pitch=12) as nominal
+  osc sine(440, pitch=19) as twelfth
+  osc sine(440, pitch=29) as upper
+  noise as hit
+  adsr(0.003, 9, 0, 9) as hum_e
+  gain(0.5) as hum_g
+  adsr(0.002, 6, 0, 6) as prime_e
+  gain(0.6) as prime_g
+  adsr(0.002, 4.5, 0, 4.5) as tierce_e
+  gain(0.4) as tierce_g
+  adsr(0.0015, 4, 0, 4) as nominal_e
+  gain(1) as nominal_g
+  adsr(0.001, 1.6, 0, 1.6) as twelfth_e
+  gain(0.4) as twelfth_g
+  adsr(0.001, 0.4, 0, 0.4) as upper_e
+  gain(0.2) as upper_g
+  svf(bandpass, 3000hz, 0.2) as hit_b
+  adsr(0.0005, 0.03, 0, 0.03) as hit_e
+  gain(0.1) as hit_g
+  hum > hum_e
+  hum_e > hum_g
+  hum_g > out
+  prime > prime_e
+  prime_e > prime_g
+  prime_g > out
+  tierce > tierce_e
+  tierce_e > tierce_g
+  tierce_g > out
+  nominal > nominal_e
+  nominal_e > nominal_g
+  nominal_g > out
+  twelfth > twelfth_e
+  twelfth_e > twelfth_g
+  twelfth_g > out
+  upper > upper_e
+  upper_e > upper_g
+  upper_g > out
+  hit > hit_b
+  hit_b > hit_e
+  hit_e > hit_g
+  hit_g > out
 }

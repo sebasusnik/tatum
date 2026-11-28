@@ -1232,13 +1232,14 @@ ones after it, both wired from `where` and `bend`, ring that out. A ping then ri
 dB down). `sounds/liquid/bubbles.synth` is written that way, and between its pings
 there is nothing but their tails.
 
-`sounds/liquid/` has four more made with the same sources, and
+`sounds/liquid/` has four more, three of them made with the same sources, and
 `sounds/liquid_kit.synth` plays them together: a `drop` whose pitch falls for seconds
 from a control envelope (`adsr` takes a decay of up to 30 s for that) by a depth that a
 `rand` changes on every note, under a 21 Hz vibrato whose LFO a second `rand` speeds up
 or slows down; a pad, `shoal`, that is five saws at 0, ±9 and ±20 cents with one
 `wander` on the filter of every voice; a bass, `tide`, with `glide=140ms` on its
-oscillator and a cutoff that wanders; and an FM bell, `glass`.
+oscillator and a cutoff that wanders; and a struck bell, `glass`: six sines on a church
+bell's partials, each with an `adsr` of its own, so the top dies first and the hum rings on.
 
 **A deep minimal kick.** The late-90s minimal kick is a sine that lands on the key,
 held round and then cut: the `kick` node writes it in those terms. The first argument
