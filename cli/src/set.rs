@@ -896,7 +896,10 @@ fn cmd_play(args: &[String]) -> Result<(), String> {
         let value = |i: usize| args.get(i + 1).map(|s| s.as_str());
         match args[i].as_str() {
             "--record" => {
-                record = Some(value(i).ok_or("--record needs a name for the take, like take1")?);
+                // A flag is not a name: `--record --tui` forgot it.
+                record = Some(
+                    value(i).filter(|v| !v.starts_with('-')).ok_or("--record needs a name for the take, like take1")?,
+                );
                 i += 1;
             }
             "--phrase" => {
@@ -1292,6 +1295,15 @@ fn emit(json: bool, verdict: &str, transition: &str, problems: &[String], pr: Op
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn record_needs_a_name_that_is_not_a_flag() {
+        let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        for line in [&["no-such-set", "--record"][..], &["no-such-set", "--record", "--tui"]] {
+            let err = cmd_play(&args(line)).unwrap_err();
+            assert!(err.contains("--record needs a name"), "{err}");
+        }
+    }
 
     #[test]
     fn a_header_names_its_scene_and_a_script_calls_one() {

@@ -430,6 +430,9 @@ already: a take is not written over another. `take1.wav` or `take1.txt` names th
 take; any other dot is part of the name (`--record take.v1` writes `take.v1.wav`).
 `q` ends the take. A WAV cannot hold more than about 6 h 46 min; past that the WAV
 stops, readable, and the script goes on.
+If the WAV can no longer be written while the take plays (the disk full, the drive gone),
+the status line says so then, in red on the screen, and the script goes on to the end: it
+renders the whole take again. The WAV left behind opens, as far as it was written.
 
 ```
 # take: phrase=8 ramp=4 blend=0 auto=off bars=32 steps=8c3f0e5a1d2b4c67
