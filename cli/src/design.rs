@@ -106,7 +106,14 @@ fn sound_json(state: &State) -> String {
                 let mut args = Vec::new();
                 let mut seen: Vec<&str> = Vec::new();
                 // `wet=` is on every node that can sit in a chain.
-                let wet = nodes::Arg { name: nodes::WET, min: 0.0, max: 1.0, default: 1.0, doc: "dry/wet; 0 bypasses" };
+                let wet = nodes::Arg {
+                    name: nodes::WET,
+                    min: 0.0,
+                    max: 1.0,
+                    default: 1.0,
+                    doc: "dry/wet; 0 bypasses",
+                    whole: false,
+                };
                 let extra: &[nodes::Arg] = if def.in_chains { std::slice::from_ref(&wet) } else { &[] };
                 for a in def.positional.iter().chain(def.named.iter()).chain(extra.iter()) {
                     if seen.contains(&a.name) {
@@ -114,11 +121,12 @@ fn sound_json(state: &State) -> String {
                     }
                     seen.push(a.name);
                     args.push(format!(
-                        "{{\"name\":{},\"min\":{},\"max\":{},\"default\":{},\"unit\":{},\"doc\":{},\"value\":{}}}",
+                        "{{\"name\":{},\"min\":{},\"max\":{},\"default\":{},\"whole\":{},\"unit\":{},\"doc\":{},\"value\":{}}}",
                         json_str(a.name),
                         json_num(a.min),
                         json_num(a.max),
                         json_num(a.default),
+                        a.whole,
                         json_str(sound::arg_unit(a)),
                         json_str(a.doc),
                         n.args.get(a.name).map_or("null".into(), |v| json_num(*v))
@@ -1352,6 +1360,112 @@ mod tests {
             let (l, _) = engine.render(1);
             assert!(l.iter().any(|v| v.abs() > 0.01), "{name}: the saved sound plays");
         }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// What the page's slider sends for `a`, one value a position: `scale`
+    /// and `knob` of design.html, said again here. Hz and ms that span
+    /// decades turn on a log scale, four significant figures leave the
+    /// slider, and an argument that counts has a position for each whole
+    /// number and no other.
+    fn slider_values(a: &nodes::Arg) -> Vec<f64> {
+        // The page has the range as it is written out, not as an f32.
+        let written = |v: f32| -> f64 { json_num(v).parse().expect("a number") };
+        let (min, max) = (written(a.min), written(a.max));
+        let log = matches!(sound::arg_unit(a), "hz" | "ms" | "s") && min > 0.0 && max / min >= 20.0;
+        let steps = if a.whole { ((max - min) as usize).max(1) } else { 1000 };
+        (0..=steps)
+            .map(|k| {
+                let p = k as f64 / steps as f64;
+                let v = if log { min * (max / min).powf(p) } else { min + p * (max - min) };
+                let v: f64 = format!("{v:.3e}").parse().expect("a number");
+                if a.whole {
+                    v.round()
+                } else {
+                    v
+                }
+            })
+            .collect()
+    }
+
+    /// A clap's `bursts` counts, and its slider had a thousand positions
+    /// like any other: every one but its two ends wrote a fraction
+    /// (`bursts=3.513`), which the compiler refuses, so the knob could not
+    /// be dragged. Every position of every slider of the four nodes is a
+    /// sound that compiles.
+    #[test]
+    fn every_position_of_every_slider_of_the_drum_nodes_compiles() {
+        assert!(
+            PAGE.contains("const steps = a.whole ? Math.max(1, a.max - a.min) : 1000;")
+                && PAGE.contains("<input type=\"range\" min=\"0\" max=\"${steps}\" step=\"1\">"),
+            "the page gives an argument that counts a position for each whole number"
+        );
+        let errors = |song: &str| -> Vec<String> {
+            let parsed = match tatum_core::dsl::parse(song) {
+                Ok(parsed) => parsed,
+                Err(errs) => return errs.iter().map(|e| e.message.clone()).collect(),
+            };
+            match tatum_core::dsl::compiler::compile(&parsed) {
+                Ok(_) => Vec::new(),
+                Err(errs) => errs.iter().map(|e| e.message.clone()).collect(),
+            }
+        };
+        let (mut positions, mut held) = (0, 0);
+        for kind in ["tom", "hat", "snare", "clap"] {
+            let def = nodes::lookup(kind).expect("in the table");
+            for a in def.positional.iter().chain(def.named.iter()) {
+                let values = slider_values(a);
+                assert_eq!(values.len(), if a.whole { (a.max - a.min) as usize + 1 } else { 1001 });
+                let ends = (values[0] as f32, *values.last().unwrap() as f32);
+                assert_eq!(ends, (a.min, a.max), "{kind}.{}", a.name);
+                for v in values {
+                    let mut s = Sound::parse(&format!("instrument piece {{\n  {kind}() as p\n  p > out\n}}\n"))
+                        .expect("a sound");
+                    sound::apply(&mut s, &format!("p.{}={v}", a.name)).unwrap_or_else(|e| panic!("{kind}: {e}"));
+                    let song = format!("{}pattern b {{ C3 - - - }}\ntrack t {{ play b using piece }}\n", s.text());
+                    let e = errors(&song);
+                    positions += 1;
+                    // One knob is held by another, as the kick's are: a tom
+                    // drops onto its note, so its `start` sits over it (0
+                    // leaves it to the node), and the 30 positions between
+                    // say so. Nothing else is refused anywhere.
+                    if kind == "tom" && a.name == "start" && v > 0.0 && v <= 1.1 * 110.0 {
+                        assert!(e.len() == 1 && e[0].contains("or leave start= out"), "tom start={v}: {e:?}");
+                        held += 1;
+                    } else {
+                        assert!(e.is_empty(), "{kind}({}={v}) from its slider: {e:?}", a.name);
+                    }
+                }
+            }
+        }
+        assert!(positions > 26_000 && held == 30, "{positions} positions, {held} held");
+
+        // And through the page's own calls: the knob is built as one that
+        // counts, each of its positions plays, and a fraction sent anyway (a
+        // page left open from before) lands on the nearest whole number.
+        let d = temp("sliders");
+        let text = std::fs::read_to_string("../sounds/claps/room.synth").expect("reads");
+        let path = d.join("sounds/claps/room.synth");
+        let mut state = state_of(&text, &path, Library::find(&path, None));
+        let req = Request {
+            method: "GET".into(),
+            path: "/api/sound".into(),
+            query: BTreeMap::new(),
+            headers: BTreeMap::new(),
+            body: Vec::new(),
+        };
+        let page = String::from_utf8(handle(&mut state, req).2).expect("utf-8");
+        assert!(page.contains("{\"name\":\"bursts\",\"min\":1,\"max\":8,\"default\":4,\"whole\":true,"), "{page}");
+        assert_eq!(page.matches("\"whole\":true").count(), 1, "and no other of a clap's knobs");
+        for bursts in 1..=8 {
+            let r = post(&mut state, "/api/set", &format!("c.bursts={bursts}"));
+            assert!(r.starts_with("{\"ok\":true"), "bursts={bursts}: {}", &r[..r.len().min(200)]);
+            assert!(state.sound.text().contains(&format!("clap(bursts={bursts},")), "{}", state.sound.text());
+            assert!(state.audition.hit(&state.sound).expect("a hit").iter().any(|v| v.abs() > 0.01));
+        }
+        let r = post(&mut state, "/api/set", "c.bursts=3.513");
+        assert!(r.starts_with("{\"ok\":true"), "{}", &r[..r.len().min(200)]);
+        assert!(state.sound.text().contains("clap(bursts=4,"), "{}", state.sound.text());
         let _ = std::fs::remove_dir_all(&d);
     }
 

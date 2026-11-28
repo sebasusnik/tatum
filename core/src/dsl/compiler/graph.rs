@@ -452,15 +452,10 @@ pub(super) fn node_def_to_spec(
         }
         "clap" => {
             let opt = |name: &str| named_or_default("clap", &node.params, name);
-            let bursts = opt("bursts");
-            if bursts != crate::math::floor(bursts) {
-                return Err(CompileError::new(format!(
-                    "clap: bursts={} is not a whole number; it counts the bursts, 1 to 8",
-                    bursts
-                )));
-            }
             Ok(NodeSpec::Clap {
-                bursts,
+                // A whole number: the table says so, and a fraction was
+                // refused with the rest of the arguments above.
+                bursts: opt("bursts"),
                 spacing_ms: opt("spacing"),
                 tail_ms: opt("tail"),
                 band: opt("band"),

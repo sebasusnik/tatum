@@ -42,9 +42,34 @@ pub struct Arg {
     pub max: f32,
     pub default: f32,
     pub doc: &'static str,
+    /// It counts things, so it only takes whole numbers: a fraction is a
+    /// compile error that says so, the reference lists it as whole, and the
+    /// designer's slider steps by one. Written `arg!(whole "bursts", ...)`.
+    /// An argument that rounds a fraction by itself is not one of these.
+    pub whole: bool,
 }
 
 impl Arg {
+    /// What is wrong with `v` for this argument of `node`, if anything: out
+    /// of its range, or a fraction where it counts.
+    fn problem(&self, node: &str, v: f32) -> Option<String> {
+        if v < self.min || v > self.max {
+            Some(format!("{}: {} = {} is out of range ({}..{})", node, self.name, v, self.min, self.max))
+        } else if self.whole && v != crate::math::floor(v) {
+            Some(format!(
+                "{}: {}={} is not a whole number; it takes one from {} to {}",
+                node, self.name, v, self.min, self.max
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// Its range as the reference shows it: `1..8`, or `1..8 in whole numbers`.
+    fn range(&self) -> String {
+        format!("{}..{}{}", self.min, self.max, if self.whole { " in whole numbers" } else { "" })
+    }
+
     /// Resolve a number written with a unit against this argument. Node
     /// arguments are already in real units, so a suffix is a scale plus a check
     /// that the author meant the unit the argument actually uses.
@@ -119,7 +144,10 @@ pub struct NodeDefSpec {
 
 macro_rules! arg {
     ($name:expr, $min:expr, $max:expr, $default:expr, $doc:expr) => {
-        Arg { name: $name, min: $min, max: $max, default: $default, doc: $doc }
+        Arg { name: $name, min: $min, max: $max, default: $default, doc: $doc, whole: false }
+    };
+    (whole $name:expr, $min:expr, $max:expr, $default:expr, $doc:expr) => {
+        Arg { name: $name, min: $min, max: $max, default: $default, doc: $doc, whole: true }
     };
 }
 
@@ -230,7 +258,7 @@ pub const NODES: &[NodeDefSpec] = &[
     NodeDefSpec { name: "clap", aliases: &[], category: Category::Source,
         positional: &[],
         named: &[
-            arg!("bursts", 1.0, 8.0, 4.0, "how many bursts of noise, the last one, which rings out, included; a whole number"),
+            arg!(whole "bursts", 1.0, 8.0, 4.0, "how many bursts of noise, the last one, which rings out, included"),
             arg!("spacing", 2.0, 50.0, 11.0, "ms from the start of one burst to the start of the next; each is 20 dB down when the next comes"),
             arg!("tail", 10.0, 3000.0, 220.0, "ms the last burst takes to fall 60 dB, where the voice ends"),
             arg!("band", 300.0, 8000.0, 1200.0, "Hz the noise is centred on"),
@@ -398,14 +426,7 @@ pub fn validate(kind: &str, params: &[Param]) -> Vec<String> {
             Param::Float(_) | Param::Expr(_) => {
                 let v = param_value(p).unwrap_or(0.0);
                 match spec.positional.get(positional_idx) {
-                    Some(arg) => {
-                        if v < arg.min || v > arg.max {
-                            errors.push(format!(
-                                "{}: {} = {} is out of range ({}..{})",
-                                spec.name, arg.name, v, arg.min, arg.max
-                            ));
-                        }
-                    }
+                    Some(arg) => errors.extend(arg.problem(spec.name, v)),
                     None => errors.push(format!(
                         "{}: too many positional arguments ({} takes {})",
                         spec.name,
@@ -428,14 +449,7 @@ pub fn validate(kind: &str, params: &[Param]) -> Vec<String> {
                 }
             }
             Param::Named(name, v) => match spec.named.iter().find(|a| a.name == name) {
-                Some(arg) => {
-                    if *v < arg.min || *v > arg.max {
-                        errors.push(format!(
-                            "{}: {} = {} is out of range ({}..{})",
-                            spec.name, arg.name, v, arg.min, arg.max
-                        ));
-                    }
-                }
+                Some(arg) => errors.extend(arg.problem(spec.name, *v)),
                 None => {
                     let known: Vec<&str> = spec.named.iter().map(|a| a.name).collect();
                     errors.push(if known.is_empty() {
@@ -485,18 +499,15 @@ pub fn markdown() -> String {
     out.push_str("|------|-------|-----------|---------|-------------|\n");
     for n in NODES {
         let mut args: Vec<String> =
-            n.positional.iter().map(|a| format!("`{}` {}..{} (default {})", a.name, a.min, a.max, a.default)).collect();
+            n.positional.iter().map(|a| format!("`{}` {} (default {})", a.name, a.range(), a.default)).collect();
         if n.waveform {
             args.push(String::from("waveform word"));
         }
         if n.rhythm {
             args.push(String::from("division like `1/8`"));
         }
-        let opts: Vec<String> = n
-            .named
-            .iter()
-            .map(|a| format!("`{}=` {}..{} (default {}), {}", a.name, a.min, a.max, a.default, a.doc))
-            .collect();
+        let opts: Vec<String> =
+            n.named.iter().map(|a| format!("`{}=` {} (default {}), {}", a.name, a.range(), a.default, a.doc)).collect();
         let name = if n.aliases.is_empty() {
             format!("`{}`", n.name)
         } else {
@@ -518,12 +529,14 @@ pub fn markdown() -> String {
 /// JSON reference of every node.
 pub fn json() -> String {
     let arg_json = |a: &Arg| {
+        // `whole` is there only where it is true: the arguments that count.
         format!(
-            "{{\"name\": \"{}\", \"min\": {}, \"max\": {}, \"default\": {}, \"doc\": \"{}\"}}",
+            "{{\"name\": \"{}\", \"min\": {}, \"max\": {}, \"default\": {}, {}\"doc\": \"{}\"}}",
             a.name,
             a.min,
             a.max,
             a.default,
+            if a.whole { "\"whole\": true, " } else { "" },
             a.doc.replace('"', "\\\"")
         )
     };
@@ -563,5 +576,33 @@ mod tests {
         assert!(validate("delay", &[Param::RhythmDiv(1, 8), Param::Float(0.4)]).is_empty());
         let e = validate("reverb", &[Param::RhythmDiv(1, 8)]);
         assert!(e[0].contains("rhythm division"), "{:?}", e);
+    }
+
+    /// An argument that counts takes whole numbers only, and everything that
+    /// shows the table says so: the error, the reference and the JSON.
+    #[test]
+    fn an_argument_that_counts_takes_whole_numbers() {
+        let bursts = arg_at("clap", Some("bursts"), 0).unwrap();
+        assert!(bursts.whole);
+        for v in 1..=8 {
+            assert!(validate("clap", &[Param::Named("bursts".into(), v as f32)]).is_empty(), "bursts={v}");
+        }
+        let e = validate("clap", &[Param::Named("bursts".into(), 3.513)]);
+        assert_eq!(e, ["clap: bursts=3.513 is not a whole number; it takes one from 1 to 8"]);
+        // Out of range is still said as out of range.
+        let e = validate("clap", &[Param::Named("bursts".into(), 9.0)]);
+        assert!(e[0].contains("out of range (1..8)"), "{e:?}");
+        assert!(markdown().contains("`bursts=` 1..8 in whole numbers (default 4), how many bursts"), "the reference");
+        assert!(json().contains("\"name\": \"bursts\", \"min\": 1, \"max\": 8, \"default\": 4, \"whole\": true,"));
+        // The only one today. `phaser`'s `stages` and `bitcrush`'s `bits`
+        // take a fraction (the first drops it, the second crushes to it), so
+        // they are not marked, and what they compile to has not changed.
+        let whole: Vec<&str> = NODES
+            .iter()
+            .flat_map(|n| n.positional.iter().chain(n.named.iter()).filter(|a| a.whole).map(|a| a.name))
+            .collect();
+        assert_eq!(whole, ["bursts"]);
+        assert!(validate("phaser", &[Param::Float(0.5), Param::Named("stages".into(), 5.5)]).is_empty());
+        assert!(validate("bitcrush", &[Param::Float(7.5)]).is_empty());
     }
 }

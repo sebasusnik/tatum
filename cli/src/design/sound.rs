@@ -755,13 +755,17 @@ fn apply_graph(g: &mut Graph, line: &str) -> Result<(), String> {
     let node =
         g.nodes.iter_mut().find(|n| n.alias == alias).ok_or_else(|| format!("'{line}': no node named '{alias}'"))?;
     let def = nodes::lookup(&node.kind).ok_or_else(|| format!("unknown node '{}'", node.kind))?;
-    let (name, min, max) = match def.positional.iter().chain(def.named.iter()).find(|a| a.name == arg) {
-        Some(a) => (a.name, a.min, a.max),
-        None if arg == nodes::WET && def.in_chains => (nodes::WET, 0.0, 1.0),
+    let (name, min, max, whole) = match def.positional.iter().chain(def.named.iter()).find(|a| a.name == arg) {
+        Some(a) => (a.name, a.min, a.max, a.whole),
+        None if arg == nodes::WET && def.in_chains => (nodes::WET, 0.0, 1.0, false),
         None => return Err(format!("'{line}': {} has no argument '{arg}'", node.kind)),
     };
     match value {
         Some(v) => {
+            // A knob stops at the ends of its range, and one that counts
+            // lands on a whole number wherever it is let go: a fraction
+            // there is a sound that does not compile.
+            let v = if whole { v.round() } else { v };
             node.args.insert(name.to_string(), v.clamp(min, max));
         }
         None => {
