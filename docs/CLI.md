@@ -258,7 +258,7 @@ refined while that render is further off than the node alone was. It prints the 
 ready to paste, the error left, and the two hits side by side:
 
 ```
-$ tatum kick fit outro.wav --from 5:40 --to 6:10
+$ tatum kick fit outro.wav --from 5:40 --to 6:10 --ms 200
 outro.wav: hits averaged at 124.00 BPM, the first 200 ms of each
 5389 kicks tried in 2.9 s
   round 1: the engine's render is off by 0.08 st in pitch (0.31 st over the attack), 0.03 dB in level, click +1.3 dB

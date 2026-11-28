@@ -307,7 +307,7 @@ $("fit").addEventListener("click", async () => {
     if (!r.ok) { status(r.error, true); return; }
     sound = r.sound; buildKnobs(); show(r.render);
     const f = r.fit;
-    status(`fitted: ${f.line} — left: pitch ${f.pitch_st.toFixed(2)} st (attack ${f.attack_st.toFixed(2)}), level ${f.level_db.toFixed(2)} dB, click ${f.click_db >= 0 ? "+" : ""}${f.click_db.toFixed(1)} dB`);
+    status(`fitted: ${f.line} — left, for the kick node alone: pitch ${f.pitch_st.toFixed(2)} st (attack ${f.attack_st.toFixed(2)}), level ${f.level_db.toFixed(2)} dB, click ${f.click_db >= 0 ? "+" : ""}${f.click_db.toFixed(1)} dB`);
   } catch (e) { status(String(e), true); }
   finally { $("fit").disabled = false; }
 });

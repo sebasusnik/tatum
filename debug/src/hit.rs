@@ -145,6 +145,9 @@ pub fn average_hit(mono: &[f32], bpm: f32, len_ms: f32) -> Option<Vec<f32>> {
 /// already sounding: a kick retriggered over its own long tail, or over a
 /// rumble as loud as itself, has no step to find.
 pub fn hit_start(y: &[f32]) -> Option<usize> {
+    if y.is_empty() {
+        return None;
+    }
     let peak = y.iter().fold(0.0f32, |m, v| m.max(v.abs()));
     let (back, gap) = (samples(3.0), samples(0.5).max(1));
     let recent = |i: usize| {
@@ -270,6 +273,12 @@ mod tests {
             k += 1;
         }
         out
+    }
+
+    #[test]
+    fn nothing_has_no_start() {
+        assert_eq!(hit_start(&[]), None);
+        assert!(crate::fit::cut_like_an_average(&[], 100.0).is_empty());
     }
 
     #[test]

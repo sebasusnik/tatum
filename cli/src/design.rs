@@ -912,9 +912,8 @@ mod tests {
         assert_eq!(s.gain, None);
     }
 
-    #[test]
-    fn fit_sets_the_kick_knobs_to_the_record() {
-        // A record made of a known kick, as the page would send it.
+    /// A record made of a known kick at 125 BPM, as the page would send it.
+    fn record_wav() -> Vec<u8> {
         let known = "kick(A1, start=900hz, knee=170hz, snap=3ms, body=75ms, hold=90ms, release=200ms, phase=20)";
         let one = crate::kick::engine_hit(known, 600.0).expect("renders");
         let beat = (60.0 / 125.0 * SAMPLE_RATE) as usize;
@@ -926,7 +925,12 @@ mod tests {
             }
             at += beat;
         }
-        let wav = tatum_core::wav::encode_stereo_16(&x, &x, SAMPLE_RATE as u32);
+        tatum_core::wav::encode_stereo_16(&x, &x, SAMPLE_RATE as u32)
+    }
+
+    #[test]
+    fn fit_sets_the_kick_knobs_to_the_record() {
+        let wav = record_wav();
         let mut state = State {
             path: PathBuf::from("/nonexistent/k.synth"),
             sound: Sound::parse(NEW_SOUND).expect("parses"),
@@ -957,10 +961,28 @@ mod tests {
             note: "C3".into(),
             reference: None,
         };
+        // A WAV it can read, so the query is what is looked at: what is not
+        // a number from 0 up is left out, and the reply is the one without it.
+        let wav = record_wav();
         let mut q = BTreeMap::new();
-        q.insert("from".to_string(), "NaN".to_string());
-        assert!(reference_reply(&mut state, &q, b"RIFF").contains("not a WAV"));
-        assert!(state.reference.is_none());
+        q.insert("bpm".to_string(), "125".to_string());
+        let plain = reference_reply(&mut state, &q, &wav);
+        assert!(plain.starts_with("{\"ok\":true"), "{}", &plain[..plain.len().min(200)]);
+        for (k, bad) in [("from", "NaN"), ("from", "-5"), ("to", "inf"), ("to", "-1"), ("ms", "NaN"), ("ms", "-inf")] {
+            let mut q = q.clone();
+            q.insert(k.to_string(), bad.to_string());
+            state.reference = None;
+            let r = reference_reply(&mut state, &q, &wav);
+            assert!(r == plain, "{k}={bad}: {}", &r[..r.len().min(200)]);
+            assert!(state.reference.is_some(), "{k}={bad}");
+        }
+        // A tempo that is not one is measured instead, not taken.
+        for bad in ["NaN", "inf", "-125", "0"] {
+            q.insert("bpm".to_string(), bad.to_string());
+            let r = reference_reply(&mut state, &q, &wav);
+            let bpm = r.strip_prefix("{\"ok\":true,\"bpm\":").and_then(|r| r.split(',').next()?.parse::<f32>().ok());
+            assert!(bpm.is_some_and(|b| (b - 125.0).abs() < 0.1), "bpm={bad}: {}", &r[..r.len().min(200)]);
+        }
     }
 
     #[test]
