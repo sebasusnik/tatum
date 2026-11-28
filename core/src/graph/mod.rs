@@ -68,7 +68,14 @@ pub struct GraphTemplate {
     pub output_gain: f32,
     /// Per node, one bit per [`port`] something is wired into; 0 for a node
     /// that only takes audio, which is then processed exactly as before ports.
-    pub mod_masks: [u8; MAX_GRAPH_NODES],
+    pub mod_masks: [u16; MAX_GRAPH_NODES],
+    /// One bit per node that has to be told each note's number and moment:
+    /// `rand`, `wander`, `dust`. 0 for a graph without them.
+    pub random_mask: u32,
+    /// Samples a note written `~note` takes to slide to its pitch without
+    /// starting again; 0, the instrument does not slide and the note starts
+    /// anew. From an oscillator's `glide=`.
+    pub glide_samples: u32,
 }
 
 impl GraphTemplate {
@@ -427,7 +434,15 @@ impl GraphBuilder {
         let envs = env_nodes[..env_count as usize].iter().fold(0u32, |m, &n| m | 1 << n);
         let hold_mask = if envs & !self.control_envs != 0 { envs & !self.control_envs } else { envs };
 
-        let mut mod_masks = [0u8; MAX_GRAPH_NODES];
+        let random_mask = self.specs[..node_count as usize].iter().enumerate().fold(0u32, |m, (i, spec)| {
+            if spec.is_random() {
+                m | 1 << i
+            } else {
+                m
+            }
+        });
+
+        let mut mod_masks = [0u16; MAX_GRAPH_NODES];
         for (mask, (edges, &count)) in mod_masks.iter_mut().zip(self.edges.iter().zip(self.input_counts.iter())) {
             for e in &edges[..count as usize] {
                 if e.port != port::AUDIO {
@@ -454,6 +469,8 @@ impl GraphBuilder {
             filter_count,
             output_gain: 1.0,
             mod_masks,
+            random_mask,
+            glide_samples: 0,
         })
     }
 }

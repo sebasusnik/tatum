@@ -1373,6 +1373,54 @@ mod tests {
         rendered(&s.text(), "v");
     }
 
+    /// The random sources come from the node table like any other node: the
+    /// page offers them, a sound made with them opens, its knobs turn within
+    /// their ranges, its ports wire, and what is saved plays.
+    #[test]
+    fn the_random_sources_open_turn_and_save() {
+        for kind in ["rand", "wander", "dust"] {
+            assert!(graph_kinds().iter().any(|k| k.name == kind), "the page offers {kind}");
+        }
+        let mut s = round_trips(
+            "instrument bub {\n  dust(6hz, jitter=0.9, spread=14db, level=30db) as d\n  rand(1) as where\n  rand(0.2, glide=70ms) as bend\n  wander(0.3hz, 0.5) as tide\n  lfo(4, 0.1) as wob\n  gain(1) as vol\n  svf(bandpass, 900hz, 0.93) as ping\n  adsr(0.005, 0.1, 1, 0.3) as amp\n  d > where.draw\n  d > bend.draw\n  d > ping\n  where > ping.cutoff\n  bend > ping.cutoff\n  tide > ping.cutoff\n  tide > d.rate\n  ping > vol\n  vol > amp\n  amp > out\n}\n",
+        );
+        let Body::Graph(g) = &s.body else { panic!("a graph") };
+        assert_eq!(node_ports(g, "d"), ["rate"]);
+        assert_eq!(node_ports(g, "where"), ["draw"]);
+        assert_eq!(node_ports(g, "wob"), ["rate"]);
+        assert_eq!(node_ports(g, "vol"), ["amount"]);
+        assert!(node_ports(g, "tide").is_empty());
+        let before = rendered(&s.text(), "bub");
+        assert!(before.iter().any(|v| v.abs() > 1e-3), "silence");
+        assert_eq!(before, rendered(&s.text(), "bub"), "the same sound twice");
+        apply(&mut s, "d.density=12\nd.spread=6\nwhere.spread=0.5\nbend.glide=120\ntide.rate=0.1\ntide.jitter=1")
+            .expect("turns");
+        let t = s.text();
+        assert!(t.contains("dust(12hz, jitter=0.9, spread=6db, level=30db) as d"), "{t}");
+        assert!(t.contains("rand(0.5) as where") && t.contains("rand(0.2, glide=120ms) as bend"), "{t}");
+        assert!(t.contains("wander(0.1hz, 0.5, jitter=1) as tide"), "{t}");
+        assert_ne!(rendered(&t, "bub"), before, "the knobs are heard");
+        // Past its range a knob stops at the end of it.
+        apply(&mut s, "d.density=99999\nwhere.bias=-7").expect("held");
+        assert!(s.text().contains("dust(2000hz") && s.text().contains("bias=-1)"), "{}", s.text());
+        // The new ports wire and unwire, and only where they are.
+        apply(&mut s, "+wire tide wob.rate\n+wire wob vol.amount\n-wire tide d.rate").expect("wires");
+        let t = s.text();
+        assert!(t.contains("  tide > wob.rate\n") && t.contains("  wob > vol.amount\n"), "{t}");
+        assert!(!t.contains("d.rate"), "{t}");
+        assert!(apply(&mut s.clone(), "+wire d tide.rate").is_err(), "a wander has no ports");
+        assert!(apply(&mut s.clone(), "+wire d vol.draw").is_err());
+        round_trips(&t);
+        rendered(&t, "bub");
+        // Added from the page, each is written with its parentheses.
+        apply(&mut s, "+node rand pick\n+node dust more\n+node wander sway\n+wire more pick.draw\n+wire sway ping.cutoff\n+wire pick ping.cutoff\n+wire more ping")
+            .expect("adds");
+        let t = s.text();
+        assert!(t.contains("rand() as pick") && t.contains("dust() as more") && t.contains("wander() as sway"), "{t}");
+        round_trips(&t);
+        rendered(&t, "bub");
+    }
+
     /// The compiler takes `bp` for `bandpass` on an `svf`, so the designer
     /// does: the file opens, saves as written, and has no `morph` port to
     /// offer, which the compiler would refuse.

@@ -1,0 +1,44 @@
+# Bubbles: one held note is a stream of resonant pings off the grid, and
+# nothing sounds between them. A dust fires about seven a second, swelling
+# and thinning; each impulse draws the pitch its ping rings at, within an
+# octave either side of 880 Hz, reached in a millisecond so the ping before
+# it does not click, and a small bend that takes 60 ms to arrive. No impulse
+# is heard: it is rounded by a lowpass and struck into a wide bandpass on
+# the ping's pitch, which turns it into a few milliseconds of tone, and only
+# that rings the two narrow ones after it. So a ping rises in 5 ms and has
+# no broadband edge, and two resonances in a row ring twice as long as one.
+# Not tuned to the note: any note plays it, and every note plays a different
+# stream. Measured on a solo render: an isolated ping rises in 5 ms (10-90%),
+# is 20 dB down 31 ms after its peak and 40 dB down at 53 ms; its first 3 ms
+# hold 40 dB less above 2.5 times its pitch than at it. Between pings there
+# is only their tails: half of all 10 ms stretches are 70 dB or more under
+# the pings, and the 40 ms before a ping that follows a gap are silent.
+instrument bubbles {
+  gain 6
+  dust(7.5hz, spread=5db, level=40db) as d
+  rand(0.95, glide=1ms) as where
+  rand(0.1, glide=60ms) as bend
+  wander(0.3hz, 1.5) as tide
+  lowpass(400hz, 0.01) as soft
+  svf(bandpass, 880hz, 0.1) as strike
+  svf(bandpass, 880hz, 0.95) as ping
+  svf(bandpass, 880hz, 0.95) as ring
+  lowpass(4000hz, 0.01) as round
+  adsr(0.005, 0.1, 1, 0.4) as amp
+  tide > d.rate
+  d > where.draw
+  d > bend.draw
+  d > soft
+  soft > strike
+  strike > ping
+  ping > ring
+  where > strike.cutoff
+  bend > strike.cutoff
+  where > ping.cutoff
+  bend > ping.cutoff
+  where > ring.cutoff
+  bend > ring.cutoff
+  ring > round
+  round > amp
+  amp > out
+}

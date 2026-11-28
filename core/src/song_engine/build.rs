@@ -374,6 +374,7 @@ impl SongEngine {
             tempo,
             samples_per_step,
             sample_counter: 0.0,
+            song_clock: 0,
             current_step_duration: samples_per_step,
             steps_per_bar,
             swing,

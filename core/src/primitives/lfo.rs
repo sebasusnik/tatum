@@ -121,6 +121,14 @@ impl Lfo {
         self.phase_inc = freq / self.sample_rate;
     }
 
+    /// Turn at `ratio` times the rate set, from this sample on: what a
+    /// `rate` port says, sample by sample. Never past half a cycle a sample.
+    #[inline]
+    pub fn bend_rate(&mut self, ratio: f32) {
+        self.recalc_phase_inc();
+        self.phase_inc = (self.phase_inc * ratio).min(0.5);
+    }
+
     /// Returns value in [-depth, +depth].
     pub fn next_sample(&mut self) -> f32 {
         let out = match self.waveform {

@@ -1,0 +1,48 @@
+# A liquid bass: a saw into a lowpass that never sits still, over a sine on
+# the same note. The cutoff wanders over an octave and a half on a curve
+# that does not repeat, opens a little differently on every note and closes
+# after each one; the pitch sways a few cents either way, so a held note is
+# not a ruled line, and a faint low noise lies under it. Written with ~
+# before a note it slides there in 140 ms (a pitch tracker with an 80 ms
+# window reads 210 to 240 ms, as it reads the record's 190 to 290). The soft
+# clip at the end bends an uneven wave more one way than the other, which
+# leaves the wave off centre (35 dB under its level, measured): a highpass
+# at 20 Hz after it takes that out (now 92 dB under). Its second and third
+# harmonics stand 2 and 4 dB under the fundamental, the fourth 4.
+instrument tide {
+  gain 0.8
+  osc saw(55, glide=140ms) as a
+  osc sine(55) as sub
+  gain(0.6) as la
+  gain(0.7) as lsub
+  svf(C4, 0.35) as filt
+  wander(0.35hz, 0.8) as drift
+  rand(0.4) as differs
+  adsr(0.005, 0.5, 0.2, 0.4) as fenv
+  gain(1.2) as sweep
+  adsr(0.01, 0.6, 0.85, 0.25) as amp
+  saturate(1.2) as warm
+  highpass(20hz, 0.01) as couple
+  wander(0.7hz, 0.012) as sway
+  noise as hiss
+  lowpass(300hz, 0.01) as dull
+  gain(0.02) as air
+  a > la
+  sub > lsub
+  la > filt
+  drift > filt.cutoff
+  differs > filt.cutoff
+  fenv > sweep
+  sweep > filt.cutoff
+  filt > mix
+  lsub > mix
+  hiss > dull
+  dull > air
+  air > mix
+  sway > a.pitch
+  sway > sub.pitch
+  mix > amp
+  amp > warm
+  warm > couple
+  couple > out
+}

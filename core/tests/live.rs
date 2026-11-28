@@ -593,3 +593,42 @@ fn a_midi_line_added_on_a_save_maps_the_knob_at_once() {
     let turn = planner.knob(74, 10, player.generation());
     assert!(!turn.plans.is_empty(), "cc 74 should move the bass now");
 }
+
+/// A `wander` is where the song is. An instrument that is edited is built
+/// again, and its curve used to start again with it, from the top, in the
+/// middle of the song. The new engine now counts on from the old one's
+/// sample, so the edited instrument's curve is where it would have been.
+/// It is on the pitch here, which an edit to the release does not move.
+#[test]
+fn an_edited_instrument_finds_its_wander_where_the_song_is() {
+    let song = "tempo 120\n\
+        instrument i {\n  osc sine(220) as src\n  wander(2hz, 1) as w\n  w > src.pitch\n  src > adsr(0.01, 0.2, 1, 0.05) as amp\n  amp > out\n}\n\
+        pattern p { C4 ..*13 - - }\n\
+        track t { play p using i out > master }\n";
+    let edited = song.replace("adsr(0.01, 0.2, 1, 0.05)", "adsr(0.01, 0.2, 1, 0.08)");
+    let straight = render_straight(song, 6).0;
+    let (live, _, swaps) = render_live(song, &[(BAR + 1000, &edited)], 6);
+    assert_eq!(swaps, vec![2]);
+    let pitch = |buf: &[f32]| {
+        let ups: Vec<f32> = (1..buf.len())
+            .filter(|&i| buf[i - 1] < 0.0 && buf[i] >= 0.0)
+            .map(|i| (i - 1) as f32 + buf[i - 1] / (buf[i - 1] - buf[i]))
+            .collect();
+        (ups.len() - 1) as f32 * SAMPLE_RATE / (ups[ups.len() - 1] - ups[0])
+    };
+    let window = (0.05 * SAMPLE_RATE) as usize;
+    let mut apart = 0.0f32;
+    for bar in 2..6 {
+        for seconds in [0.1f32, 0.5, 0.9, 1.4] {
+            let at = bar * BAR + (seconds * SAMPLE_RATE) as usize;
+            let (here, there) = (pitch(&live[at..at + window]), pitch(&straight[at..at + window]));
+            assert!(
+                (here / there - 1.0).abs() < 0.003,
+                "bar {bar}, {seconds} s in: {here} Hz after the edit, {there} Hz played straight"
+            );
+            let top = (seconds * SAMPLE_RATE) as usize;
+            apart = apart.max((here / pitch(&straight[top..top + window]) - 1.0).abs());
+        }
+    }
+    assert!(apart > 0.05, "the curve never left where it starts: {apart}");
+}

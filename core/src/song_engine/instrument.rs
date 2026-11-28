@@ -61,14 +61,19 @@ impl SongInstrument {
         }
     }
 
-    /// Glide to a new note without retriggering envelopes. Returns false when
-    /// the instrument has no portamento, so the caller falls back to note_on.
-    pub(super) fn slide_to(&mut self, note: u8, velocity: f32) -> bool {
+    /// Glide to a new note without retriggering envelopes, from the notes
+    /// the track holds (`held`, the last one started last). Returns false
+    /// when the instrument has no portamento, so the caller falls back to
+    /// note_on. A `bass` has one voice and it slides; a graph slides the
+    /// voice on the last held note and releases the others.
+    pub(super) fn slide_to(&mut self, held: &[u8], note: u8, velocity: f32) -> bool {
         match self {
             Self::Bass(m) => {
                 m.slide_to(note, velocity);
                 true
             }
+            // Only one whose oscillators say `glide=`.
+            Self::Graph(inst) => inst.slide_to(held, note),
             _ => false,
         }
     }
@@ -175,6 +180,14 @@ impl SongInstrument {
             Self::Fm(m) => Module::reset(m),
             Self::Keys(m) => Module::reset(m),
             Self::Beats(m) => Module::reset(m),
+        }
+    }
+
+    /// The song's sample count, for what runs on it whether or not the
+    /// instrument is rendered: a graph's `wander`.
+    pub(super) fn set_clock(&mut self, clock: u32) {
+        if let Self::Graph(inst) = self {
+            inst.set_clock(clock);
         }
     }
 

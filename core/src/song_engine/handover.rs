@@ -103,6 +103,15 @@ impl SongEngine {
         }
         self.current_step_duration = self.effective_step_samples(self.global_step);
         self.sample_counter = self.current_step_duration;
+        self.set_song_clock(self.samples_at_bar(bar));
+    }
+
+    /// Carry on counting the song's samples where `old`, the engine this
+    /// one takes over from, has got to: a `wander` goes on from where it
+    /// is across a swap, in an instrument that was edited as in one that
+    /// was not.
+    pub fn keep_clock_of(&mut self, old: &SongEngine) {
+        self.set_song_clock(old.song_clock);
     }
 
     /// Stop sequencing but keep rendering: what sounds decays, nothing new

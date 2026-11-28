@@ -272,6 +272,65 @@ fn a_graph_with_ports_and_an_svf_never_allocates() {
     assert!(heard, "rendered silence, so the test proved nothing");
 }
 
+/// The random sources: a dust pinging a filter and drawing two `rand`s, a
+/// `wander` on the cutoff and on the dust's rate, an LFO another LFO speeds
+/// up, a gain a `rand` moves. A note makes each of them again for its number
+/// and its moment, in place.
+const RANDOM: &str = r#"
+tempo 140
+instrument bubbles {
+  dust(12hz, jitter=0.9, spread=14db, level=30db) as d
+  rand(1.0) as where
+  rand(0.2, glide=70ms) as bend
+  rand(0.4) as loud
+  wander(0.5hz, 0.5) as tide
+  lfo(0.3, 1.0) as slow
+  lfo(6, 0.02) as vib
+  osc sine(55) as tone
+  gain(0.2) as vol
+  svf(900, 0.93, bandpass) as ping
+  d > where.draw
+  d > bend.draw
+  d > ping
+  where > ping.cutoff
+  bend > ping.cutoff
+  tide > ping.cutoff
+  tide > d.rate
+  slow > vib.rate
+  vib > tone.pitch
+  loud > vol.amount
+  tone > vol
+  vol > mix
+  ping > mix
+  mix > adsr(0.005, 0.1, 1.0, 0.3) as amp
+  amp > out
+}
+pattern line { C3 .. D#3 ..  G3 - [C4 G3] ..  C3 - - D#3  .. .. A#2 - }
+track t { play line using bubbles out > master }
+"#;
+
+#[test]
+fn the_random_sources_never_allocate() {
+    let mut engine = SongEngine::from_source(RANDOM).expect("compiles");
+    engine.start();
+    let mut l = [0.0f32; BLOCK_SIZE];
+    let mut r = [0.0f32; BLOCK_SIZE];
+    for _ in 0..64 {
+        engine.process_block_stereo(&mut l, &mut r);
+    }
+    reset();
+    counting(true);
+    let mut heard = false;
+    for _ in 0..4000 {
+        engine.process_block_stereo(&mut l, &mut r);
+        heard |= l.iter().any(|v| *v != 0.0);
+    }
+    counting(false);
+    let n = allocs();
+    assert_eq!(n, 0, "the random sources allocated {} times over 4000 blocks", n);
+    assert!(heard, "rendered silence, so the test proved nothing");
+}
+
 /// A voice dropped for a NaN is renewed where it is, and so is the note
 /// after it: neither the guard nor what follows touches the allocator.
 #[test]

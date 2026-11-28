@@ -1,0 +1,37 @@
+# A long falling drop, one thin line: a sine starts 4 octaves over the note
+# and falls onto it, fast at first and ever slower (0.7 to 0.8 octaves a
+# second over the first three seconds), with a 21 Hz vibrato of 66 cents from
+# top to bottom, and a second sine 17% above it, 14 dB quieter, as a faint
+# twin. Every note falls from a little higher or lower, wobbles a little
+# faster or slower and is a little louder or quieter than the last. Hold it
+# for four seconds or more, high: A4 starts near 7 kHz.
+instrument drop {
+  gain 0.5
+  osc sine(440) as a
+  osc sine(440, pitch=1.17) as b
+  adsr(0.001, 24, 0, 24) as fall
+  gain(4) as depth
+  rand(0.12) as differs
+  lfo(21hz, 0.026) as vib
+  rand(0.15) as hurry
+  gain(0.5) as la
+  gain(0.1) as lb
+  gain(1) as vol
+  rand(0.3) as loud
+  adsr(0.02, 0.5, 0.8, 2.5) as amp
+  fall > depth
+  differs > depth.amount
+  depth > a.pitch
+  depth > b.pitch
+  hurry > vib.rate
+  vib > a.pitch
+  vib > b.pitch
+  a > la
+  b > lb
+  la > mix
+  lb > mix
+  mix > vol
+  loud > vol.amount
+  vol > amp
+  amp > out
+}

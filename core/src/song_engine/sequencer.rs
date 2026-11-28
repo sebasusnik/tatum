@@ -66,6 +66,8 @@ pub(super) struct PendingTrigger {
     pub(super) velocity: f32,
     pub(super) release: u8,
     pub(super) slide: bool,
+    /// The note a slide leaves: the one before it in its run.
+    pub(super) from: u8,
 }
 pub(super) const NO_RELEASE: u8 = 255;
 
@@ -134,7 +136,15 @@ impl SongEngine {
         Self::push_pending(
             pending,
             instruments,
-            PendingTrigger { samples, inst_idx, midi_note, velocity: vel, release: NO_RELEASE, slide: false },
+            PendingTrigger {
+                samples,
+                inst_idx,
+                midi_note,
+                velocity: vel,
+                release: NO_RELEASE,
+                slide: false,
+                from: NO_RELEASE,
+            },
         );
     }
 
@@ -145,7 +155,7 @@ impl SongEngine {
         if pending.len() < MAX_PENDING_TRIGGERS {
             pending.push(t);
         } else if t.inst_idx < instruments.len() {
-            if t.slide && instruments[t.inst_idx].slide_to(t.midi_note, t.velocity) {
+            if t.slide && instruments[t.inst_idx].slide_to(&[t.from], t.midi_note, t.velocity) {
                 return;
             }
             if t.release != NO_RELEASE {
@@ -446,6 +456,7 @@ impl SongEngine {
                                             // and needs the note before it ended
                                             release: subs[k - 1].midi_note,
                                             slide: subs[k].slide,
+                                            from: subs[k - 1].midi_note,
                                         },
                                     );
                                 }
@@ -479,13 +490,15 @@ impl SongEngine {
                                 let inst_idx = self.trigger_instrument(ti);
                                 let raw_vel = velocity * self.tracks[ti].velocity;
                                 let vel = Self::humanize_vel(raw_vel, self.humanize_velocity, &mut self.tracks[ti].rng);
+                                let count = self.tracks[ti].current_notes_count as usize;
+                                let held_notes = self.tracks[ti].current_notes;
                                 let handled = inst_idx < self.instruments.len() && {
                                     self.instruments[inst_idx].stage_plock(
                                         plock.cutoff,
                                         plock.env_depth,
                                         plock.resonance,
                                     );
-                                    self.instruments[inst_idx].slide_to(midi_note, vel)
+                                    self.instruments[inst_idx].slide_to(&held_notes[..count], midi_note, vel)
                                 };
                                 if !handled {
                                     Self::release_track_notes(&mut self.tracks[ti], &mut self.instruments);

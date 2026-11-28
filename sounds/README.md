@@ -34,10 +34,18 @@ What is here:
 | `snares/crack.synth` | `crack` | a dry snare in one `snare` node: a body on 200 Hz under wires at 5 kHz, 60 dB down at 170 ms |
 | `claps/room.synth` | `room` | a clap in one `clap` node: four bursts 11 ms apart at 1.3 kHz, 60 dB down at 293 ms |
 | `toms/low.synth` | `low_tom` | a low tom in one `tom` node: a sine dropping onto G2, 60 dB down at 345 ms |
+| `liquid/bubbles.synth` | `bubbles` | one held note is a stream of soft resonant pings off the grid and silence between them: a `dust` strikes a narrow resonance whose pitch each impulse draws again, through a wide one that takes the edge off |
+| `liquid/drop.synth` | `drop` | a long falling drop, one thin line: a sine and a faint twin fall four octaves onto the note, ever slower, under a 21 Hz vibrato; no two notes fall alike |
+| `liquid/tide.synth` | `tide` | a liquid bass that slides into a note written `~note` in 140 ms, through a lowpass that wanders and never repeats |
+| `liquid/shoal.synth` | `shoal` | a pad that is a cluster: five saws at 0, ±9 and ±20 cents, a 4.5 Hz vibrato, one slow `wander` on every voice's filter |
+| `liquid/glass.synth` | `glass` | a soft struck bell: hum, note, minor third, octave, twelfth and a brief high fourth, six sines each with its own decay, from 9 s for the hum to 0.4 s for the top |
 
 The ones "in the spirit of" a machine are original sounds made with that machine's
 idea, not copies of it. `vintage_kit.synth`, here beside the folders, plays them
-together: `tatum play sounds/vintage_kit.synth`. The hats are quieter on an engine built
+together: `tatum play sounds/vintage_kit.synth`. `liquid_kit.synth` does the same for the
+five in `liquid/`, four of which are built on the random sources (`rand`, `wander`, `dust`; see
+"Bubbles, drops and sweeps that never repeat" in docs/DSL.md): every note of those differs
+from the last, and the piece is still the same samples on every render. The hats are quieter on an engine built
 under 44.1 kHz (`TATUM_SAMPLE_RATE`): 2.5 dB at 32 kHz, 9.5 dB at 22.05 kHz.
 
 `node_kit.synth` plays the kit made of one node a piece -- `kicks/deep`, `hats/tick`,
