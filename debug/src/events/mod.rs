@@ -280,24 +280,40 @@ pub fn measure(left: Vec<f32>, right: Vec<f32>, opts: &Options, native: bool) ->
     let band = found.band;
     let ctx = inside::Ctx { left: &left, right: &right, sign, mono: &mono, stft: &found.stft, floor: &found.floor };
     let hop = found.stft.hop;
-    let onsets: Vec<(usize, f32)> = found.ridges.iter().map(|(r, _)| (r.frame * hop, r.hz[0])).collect();
-    let mut events: Vec<Event> =
-        found.ridges.iter().filter_map(|(ridge, over)| inside::read(&ctx, ridge, *over, &onsets)).collect();
-    events.sort_by(|a, b| a.start_s.total_cmp(&b.start_s));
-    // Two ridges that turn out to start within the gap are one event: the
-    // louder is kept.
-    let gap = opts.min_gap_ms * 0.001;
-    let mut kept: Vec<Event> = Vec::new();
-    for e in events {
-        match kept.last_mut() {
-            Some(last) if e.start_s - last.start_s < gap => {
-                if e.over_floor_db > last.over_floor_db {
-                    *last = e;
+    // Read every ridge against every other's onset; then again against the
+    // onsets that turned out to be events, so a rise that is no event (two
+    // stages of one decay beating) does not cut the event it sits in short.
+    let read_all = |keep: &[bool]| -> Vec<Event> {
+        let onsets: Vec<(usize, f32)> = found
+            .ridges
+            .iter()
+            .zip(keep)
+            .filter(|(_, k)| **k)
+            .map(|((r, _), _)| (r.frame * hop, r.hz[0]))
+            .collect();
+        let mut events: Vec<Event> =
+            found.ridges.iter().filter_map(|(ridge, over)| inside::read(&ctx, ridge, *over, &onsets)).collect();
+        events.sort_by(|a, b| a.start_s.total_cmp(&b.start_s));
+        // Two ridges that turn out to start within the gap are one event: the
+        // louder is kept.
+        let gap = opts.min_gap_ms * 0.001;
+        let mut kept: Vec<Event> = Vec::new();
+        for e in events {
+            match kept.last_mut() {
+                Some(last) if e.start_s - last.start_s < gap => {
+                    if e.over_floor_db > last.over_floor_db {
+                        *last = e;
+                    }
                 }
+                _ => kept.push(e),
             }
-            _ => kept.push(e),
         }
-    }
+        kept
+    };
+    let first = read_all(&vec![true; found.ridges.len()]);
+    let survived: Vec<bool> =
+        found.ridges.iter().map(|(r, _)| first.iter().any(|e| e.ridge.frame == r.frame)).collect();
+    let kept = if survived.iter().all(|k| *k) { first } else { read_all(&survived) };
     let mut events = kept;
     inside::tails(&mut events);
     let delay = inside::delay(&ctx, &events, band);

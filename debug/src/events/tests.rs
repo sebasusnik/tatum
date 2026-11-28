@@ -484,7 +484,10 @@ fn where_an_event_sits_between_the_speakers() {
     let rep = measure(l, neg, &Options::default(), true);
     assert_eq!(rep.events.len(), 3, "antiphase");
     assert!(rep.note.is_some_and(|n| n.contains("antiphase")));
-    assert!(val(rep.events[0].inside.side_mid_db, "side") > 50.0);
+    // All side and no mid: the width is past what a ratio can say.
+    assert!(matches!(rep.events[0].inside.side_mid_db, Fig::AtLeast(v) if v >= 60.0), "{:?}", rep.events[0].inside.side_mid_db);
+    // And the correlation of the two channels is -1, not "nothing to read".
+    assert!(val(rep.events[0].inside.corr, "corr") < -0.99, "{:?}", rep.events[0].inside.corr);
 }
 
 fn echoed(interval: f32, gain: f32) -> Vec<f32> {
@@ -558,29 +561,39 @@ fn a_tail_is_what_is_left_beyond_the_decay_and_a_dry_event_has_none() {
             assert!(!matches!(e.inside.tail_db, Fig::Value(_)), "tau {tau}: {:?}", e.inside.tail_db);
         }
     }
-    // Wet: a tail at the ping's pitch, 20 dB down, falling over 300 ms.
+    // Wet: a tail at the ping's pitch, 20 and 30 dB down, falling over 300 ms.
     let tau = 15.0f32;
-    let mut x = vec![0.0f32; at(4.0)];
-    let mut n = Noise(5);
-    for t in [0.3f32, 1.5, 2.7] {
-        ping(&mut x, t, 1000.0, tau, 0.4, 0.5, 0.0);
-        let mut phase = 0.0f32;
-        for i in 0..at(0.9) {
-            let s = i as f32 / SR;
-            phase = (phase + (1000.0 + 15.0 * n.next()) / SR).fract();
-            x[at(t + 0.03) + i] += 0.4 * 0.1 * (-s / 0.3).exp() * (TAU * phase).sin();
+    for wet_gain in [0.1f32, 0.0316] {
+        let mut x = vec![0.0f32; at(4.0)];
+        let mut n = Noise(5);
+        for t in [0.3f32, 1.5, 2.7] {
+            ping(&mut x, t, 1000.0, tau, 0.4, 0.5, 0.0);
+            let mut phase = 0.0f32;
+            for i in 0..at(0.9) {
+                let s = i as f32 / SR;
+                phase = (phase + (1000.0 + 15.0 * n.next()) / SR).fract();
+                // A reverb builds up: no step where it starts.
+                let swell = (s * 100.0).min(1.0);
+                x[at(t + 0.03) + i] += 0.4 * wet_gain * swell * (-s / 0.3).exp() * (TAU * phase).sin();
+            }
         }
-    }
-    let r = run(x);
-    // The truth: the tail's energy from 50 to 400 ms after the decay is 20 dB
-    // down, against the ping's own up to there.
-    let t20 = tau * 10f32.ln() * 0.001;
-    let own = 0.5 * 0.16 * tau * 0.001 * (1.0 - 0.01);
-    let wet = |a: f32, b: f32| 0.5 * 0.0016 * 0.15 * ((-(a - 0.03) / 0.15).exp() - (-(b - 0.03) / 0.15).exp());
-    let truth = 10.0 * (wet(t20 + 0.05, t20 + 0.4) / own).log10();
-    for e in &r.events {
-        let v = val(e.inside.tail_db, "wet tail");
-        assert!((v - truth).abs() < 2.0, "tail {v} dB for {truth}");
+        let r = run(x);
+        assert_eq!(r.events.len(), 3, "{:?}", r.events.iter().map(|e| (e.start_s, e.end_s, e.inside.overlap)).collect::<Vec<_>>());
+        // The truth: the tail's energy from 50 to 400 ms after the ping's own
+        // decay is 20 dB down, against the ping's energy up to there. Energy
+        // of a e^(-t / tau): a^2 tau / 2 over all of it.
+        let t20 = tau * 10f32.ln() * 0.001;
+        let own = 0.16 * 0.5 * tau * 0.001 * (1.0 - 0.01);
+        let w2 = 0.16 * wet_gain * wet_gain;
+        let wet = |a: f32, b: f32| w2 * 0.15 * ((-(a - 0.03) / 0.15).exp() - (-(b - 0.03) / 0.15).exp());
+        let truth = 10.0 * (wet(t20 + 0.05, t20 + 0.4) / own).log10();
+        for e in &r.events {
+            let v = val(e.inside.tail_db, "wet tail");
+            assert!((v - truth).abs() < 1.5, "wet {wet_gain}: tail {v} dB for {truth}");
+            // The ping's own decay is read under the tail, not the tail's.
+            let rate = val(e.inside.decay_db_ms, "decay");
+            assert!((rate / (8.686 / tau) - 1.0).abs() < 0.1, "wet {wet_gain}: decay {rate}");
+        }
     }
 }
 

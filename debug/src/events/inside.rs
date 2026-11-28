@@ -619,6 +619,20 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     let step = ((stop - pk_i) / 200).max(samples(0.25)).max(1);
     let points: Vec<(f32, f32)> =
         (pk_i..stop).step_by(step).map(|i| (to_ms(i - pk_i), 20.0 * (level[i] / pk).max(1e-6).log10())).collect();
+    // The event's own decay is its first stage: the line through the fall
+    // to -10 dB, carried on while each reading stays within 2 dB of it (up
+    // to the first 30 dB). A reverb or a slow second stage under it bends
+    // the fall away from the line and is left to the tail.
+    let all_fit = line(&points);
+    let points: Vec<(f32, f32)> = {
+        let mut used = points.iter().position(|p| p.1 < -10.0).unwrap_or(points.len()).clamp(6.min(points.len()), points.len());
+        if let Some(l) = line(&points[..used]) {
+            while used < points.len() && (points[used].1 - (l.intercept + l.slope * points[used].0)).abs() <= 2.0 {
+                used += 1;
+            }
+        }
+        points[..used].to_vec()
+    };
     let fit = line(&points).filter(|f| points.len() >= 6 && f.slope < 0.0);
     let fastest = fastest_decay(f_mid);
     let decay_db_ms = match fit {
@@ -627,7 +641,7 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
         Some(f) => Fig::Value(-f.slope),
     };
     let decay_r2 = match (decay_db_ms, fit) {
-        (Fig::Value(_), Some(f)) => Fig::Value(f.r2),
+        (Fig::Value(_), Some(_)) => Fig::Value(all_fit.map_or(1.0, |f| f.r2)),
         _ => Fig::No("the decay is not read"),
     };
     let fall_to = |ratio: f32| -> Fig {
