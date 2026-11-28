@@ -55,6 +55,8 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
     }
 
     // Create implicit "mix" node if referenced
+    // Which nodes make their own signal and read nothing wired into them.
+    let mut sources = 0u32;
     if has_mix {
         let idx = builder.try_add_node(NodeSpec::Mix).map_err(|_| full(inst.line))?;
         name_to_idx.push((String::from("mix"), idx));
@@ -104,7 +106,9 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
                 }
             }
         } else {
+            let source = spec.is_source();
             let idx = builder.try_add_node(spec).map_err(|_| full(node_def.line))?;
+            sources |= (source as u32) << idx;
             if let Some(ref alias) = node_def.alias {
                 name_to_idx.push((alias.clone(), idx));
             }
@@ -129,6 +133,9 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
             None => port::AUDIO,
             Some(ref p) => connection_port(inst, conn, p)?,
         };
+        if conn.port.is_none() && sources & (1 << to_idx) != 0 {
+            return Err(CompileError::at(conn.line.0, into_a_source(inst, conn)));
+        }
         builder.try_connect_port(from_idx, to_idx, port).map_err(|_| {
             CompileError::at(
                 conn.line.0,
@@ -817,6 +824,33 @@ fn connection_port(inst: &InstrumentDef, conn: &ConnectionDef, name: &str) -> Re
         )));
     }
     Ok(port::from_name(name).expect("every documented port has a number"))
+}
+
+/// A plain connection into a node that makes its own signal: an oscillator,
+/// the noise, an LFO, a whole drum. The node reads nothing that comes in, so
+/// the connection compiled and what it carried was never heard. What was
+/// meant is the two together, which is `mix`, or to move the node, which is
+/// one of its ports.
+fn into_a_source(inst: &InstrumentDef, conn: &ConnectionDef) -> String {
+    let node = inst.nodes.iter().find(|n| n.alias.as_deref() == Some(conn.to.as_str()));
+    let kind = node.map_or("", |n| crate::nodes::lookup(&n.kind).map_or(n.kind.as_str(), |d| d.name));
+    let named = |alias: &str| if alias.starts_with("_anon_") { String::from(kind) } else { format!("'{}'", alias) };
+    let from = match inst.nodes.iter().find(|n| n.alias.as_deref() == Some(conn.from.as_str())) {
+        Some(n) if conn.from.starts_with("_anon_") => format!("the {}", n.kind),
+        _ => format!("'{}'", conn.from),
+    };
+    let to = named(&conn.to);
+    let article = if kind.starts_with(['a', 'e', 'i', 'o', 'u']) || kind == "lfo" { "an" } else { "a" };
+    let ports: Vec<&str> = node.map_or(Vec::new(), |n| crate::nodes::ports(&n.kind).iter().map(|p| p.name).collect());
+    let or_port = if ports.is_empty() || conn.to.starts_with("_anon_") {
+        String::new()
+    } else {
+        format!(", or into one of its ports to move it (`{}.{}`)", conn.to, ports[0])
+    };
+    format!(
+        "instrument '{}': {} goes into {}, and {} {} makes its own signal and takes nothing in: {} would not be heard. To hear both, wire each into `mix`{}",
+        inst.name, from, to, article, kind, from, or_port
+    )
 }
 
 /// The port of a node that a misspelt one was most likely meant to be, if

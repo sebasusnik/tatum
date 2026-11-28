@@ -695,6 +695,23 @@ impl NodeSpec {
         }
     }
 
+    /// A node that makes its own signal and reads nothing that is wired into
+    /// it: the oscillators, the noise, the LFO and the whole drums. (An
+    /// envelope is not one: sound wired into it goes through its VCA.)
+    pub fn is_source(&self) -> bool {
+        matches!(
+            self,
+            NodeSpec::Osc { .. }
+                | NodeSpec::PitchOsc { .. }
+                | NodeSpec::Kick { .. }
+                | NodeSpec::Hat { .. }
+                | NodeSpec::Snare { .. }
+                | NodeSpec::Clap { .. }
+                | NodeSpec::Noise { .. }
+                | NodeSpec::Lfo { .. }
+        )
+    }
+
     pub fn is_oscillator(&self) -> bool {
         matches!(self, NodeSpec::Osc { fixed: false, .. })
     }
@@ -1776,6 +1793,26 @@ impl NodeKind {
             NodeKind::Reverb(r) => r.process(inputs[0]),
 
             NodeKind::Output => inputs[0],
+        }
+    }
+
+    /// Several connections into a node that reads one input add up there, as
+    /// they do into `mix` and into a port. Each node reads `inputs[0]`, so
+    /// without this the first connection was the node's whole input and the
+    /// rest were dropped in silence: `a > out` and `b > out` played `a`. A
+    /// VCA keeps its envelope, wired first, apart from the sound it shapes.
+    /// Called only on a node with more than one connection.
+    #[inline]
+    pub fn add_up(&self, inputs: &mut [f32; MAX_NODE_INPUTS], input_count: u8) {
+        let n = (input_count as usize).min(MAX_NODE_INPUTS);
+        match self {
+            NodeKind::Mix => {}
+            NodeKind::Vca => {
+                if n > 2 {
+                    inputs[1] = inputs[1..n].iter().sum();
+                }
+            }
+            _ => inputs[0] = inputs[..n].iter().sum(),
         }
     }
 

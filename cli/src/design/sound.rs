@@ -1193,7 +1193,13 @@ mod tests {
         // Sample for sample the file's own sound, and not the one without the ports.
         let before = rendered(PORTS, "ob");
         assert_eq!(rendered(&t, "ob"), before, "Save changed what it plays");
-        assert_ne!(rendered(&t.replace("a.fm", "a").replace("filt.cutoff", "filt"), "ob"), before);
+        assert_ne!(rendered(&t.replace("filt.cutoff", "filt"), "ob"), before);
+        // Without its port the modulator would go into the oscillator's input,
+        // which takes nothing in: that file no longer compiles at all.
+        let plain =
+            format!("{}tempo 120\npattern p {{ C2 - - - }}\ntrack t {{ play p using ob }}\n", t.replace("a.fm", "a"));
+        let e = tatum_core::song_engine::SongEngine::from_source(&plain).err().expect("a wire into an oscillator");
+        assert!(e.contains("makes its own signal"), "{e}");
     }
 
     #[test]
