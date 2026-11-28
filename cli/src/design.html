@@ -15,40 +15,58 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, sans-serif; }
-header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 2; }
 header h1 { font-size: 15px; margin: 0; font-weight: 600; }
 header .path { color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; }
 header .spacer { flex: 1; }
+header .group { display: flex; gap: 6px; align-items: center; padding: 0 8px; border-left: 1px solid var(--line); }
 button, input, select { font: inherit; color: inherit; }
 button { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
 button.on { background: var(--accent); color: var(--bg); border-color: var(--accent); }
 button.primary { background: var(--ours); color: #fff; border-color: var(--ours); }
-input[type=number], input[type=text] { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
-main { display: grid; grid-template-columns: minmax(300px, 420px) 1fr; gap: 16px; padding: 16px; }
-@media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+button.small { padding: 1px 6px; font-size: 12px; }
+input[type=number], input[type=text], select { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+#bar-status { padding: 6px 16px; font-size: 12px; color: var(--muted); min-height: 1.6em; border-bottom: 1px solid var(--line); }
+#bar-status.error { color: var(--error); white-space: pre-wrap; font-family: ui-monospace, monospace; background: color-mix(in srgb, var(--error) 8%, transparent); }
+main { display: grid; grid-template-columns: minmax(320px, 460px) 1fr; gap: 16px; padding: 16px; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
 section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
-section h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
-.node { margin-bottom: 14px; }
-.node h3 { font-size: 13px; margin: 0 0 6px; font-family: ui-monospace, monospace; }
+section.broken { border-color: var(--error); }
+section h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+section h2 small { color: var(--muted); font-weight: 400; }
+.left { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.node { margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+.node h3 { font-size: 13px; margin: 0 0 6px; font-family: ui-monospace, monospace; display: flex; gap: 8px; align-items: center; }
 .node h3 small { color: var(--muted); font-weight: 400; font-family: system-ui, sans-serif; }
-.knob { display: grid; grid-template-columns: 86px 1fr 112px; gap: 8px; align-items: center; margin: 3px 0; }
+.node h3 .grow { flex: 1; }
+.knob { display: grid; grid-template-columns: 110px 1fr 122px; gap: 8px; align-items: center; margin: 3px 0; }
 .knob label { font-family: ui-monospace, monospace; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .knob.unset label { color: var(--muted); }
 .knob input[type=range] { width: 100%; accent-color: var(--ours); }
+.knob select { font-size: 12px; padding: 2px 4px; }
 .knob .val { display: flex; gap: 2px; align-items: center; }
 .knob .val input { width: 76px; padding: 2px 4px; font-size: 12px; }
-.knob .val span { color: var(--muted); font-size: 11px; width: 18px; }
+.knob .val span { color: var(--muted); font-size: 11px; width: 22px; }
 .knob button.reset { padding: 0 4px; font-size: 11px; border: none; background: none; color: var(--muted); }
-canvas { width: 100%; height: 220px; display: block; }
+.sub { font-size: 12px; font-weight: 600; margin: 12px 0 4px; color: var(--muted); }
+canvas { width: 100%; height: 200px; display: block; }
 .legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-top: 4px; }
 .legend b { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 4px; }
 .numbers { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 16px; font-size: 12px; }
 .numbers div span { color: var(--muted); }
-.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+.hint { font-size: 12px; color: var(--muted); }
 textarea { width: 100%; min-height: 170px; font: 12px/1.45 ui-monospace, monospace; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
 #status { font-size: 12px; color: var(--muted); min-height: 1.4em; }
 #status.error { color: var(--error); white-space: pre-wrap; font-family: ui-monospace, monospace; }
 .right { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.lib { max-height: 220px; overflow: auto; font-size: 13px; }
+.lib .type { color: var(--muted); font-size: 12px; margin: 6px 0 2px; }
+.lib .item { display: flex; align-items: center; gap: 6px; padding: 1px 0; font-family: ui-monospace, monospace; font-size: 12px; }
+.lib .item.current { font-weight: 700; color: var(--ours); }
+.lib .item span { flex: 1; }
+.wire { display: flex; gap: 6px; align-items: center; font-family: ui-monospace, monospace; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -56,23 +74,60 @@ textarea { width: 100%; min-height: 170px; font: 12px/1.45 ui-monospace, monospa
   <h1>tatum design</h1>
   <span class="path" id="path"></span>
   <span class="spacer"></span>
-  <button id="play">▶ Play</button>
-  <label>BPM <input id="bpm" type="number" value="125" min="40" max="220" step="1" style="width:64px"></label>
-  <select id="listen" title="What the loop plays">
-    <option value="ours">yours</option>
-    <option value="ref">reference</option>
-    <option value="ab">alternate: ref, yours</option>
-  </select>
+  <span class="group" title="What the loop plays">
+    <select id="pattern"></select>
+    <select id="note" title="The note it plays on"></select>
+    <select id="lane" title="The drum lane a hit plays" hidden></select>
+  </span>
+  <span class="group">
+    <button id="play">▶ Play</button>
+    <label>BPM <input id="bpm" type="number" value="125" min="40" max="220" step="1" style="width:64px"></label>
+    <select id="listen" title="What the loop plays">
+      <option value="ours">yours</option>
+      <option value="ref">reference</option>
+      <option value="ab">alternate: ref, yours</option>
+    </select>
+  </span>
   <button class="primary" id="save">Save</button>
 </header>
+<div id="bar-status"></div>
 <main>
-  <div>
-    <section>
-      <h2>Description</h2>
-      <input id="desc" type="text" style="width:100%">
+  <div class="left">
+    <section id="library">
+      <h2>Library <small id="lib-root"></small></h2>
+      <div class="lib" id="lib-list"></div>
+      <div class="row">
+        <span class="hint">Duplicate to</span>
+        <input id="dup-type" type="text" placeholder="type" style="width:80px">
+        <span>/</span>
+        <input id="dup-name" type="text" placeholder="new-name" style="width:120px">
+        <button id="dup">Duplicate</button>
+      </div>
     </section>
-    <div style="height:12px"></div>
+    <section>
+      <h2>Sound <small id="kind"></small></h2>
+      <div class="row"><label style="flex:1">Description <input id="desc" type="text" style="width:100%"></label></div>
+      <div class="row">
+        <label>Name <input id="name" type="text" style="width:150px" title="What a song plays it by: play ... using NAME"></label>
+        <label id="gain-row">gain <input id="gain" type="number" step="any" min="0" max="10" placeholder="1" style="width:70px"></label>
+      </div>
+    </section>
     <section id="knobs"><h2>Knobs</h2></section>
+    <section id="graph-edit" hidden>
+      <h2>Graph</h2>
+      <div class="row">
+        <select id="add-kind"></select>
+        <input id="add-alias" type="text" placeholder="name (optional)" style="width:120px">
+        <button id="add-node">Add node</button>
+      </div>
+      <div class="sub">Connections</div>
+      <div id="wires"></div>
+      <div class="row">
+        <select id="wire-from"></select> <span>&gt;</span> <select id="wire-to"></select>
+        <button id="wire-add">Connect</button>
+      </div>
+      <div class="hint">A node added starts with every argument at its default and nothing wired; connect it, then turn it. A sound that does not compile is shown with its error and is not saved.</div>
+    </section>
   </div>
   <div class="right">
     <section>
@@ -85,7 +140,7 @@ textarea { width: 100%; min-height: 170px; font: 12px/1.45 ui-monospace, monospa
       <canvas id="level"></canvas>
     </section>
     <section>
-      <h2>Measured</h2>
+      <h2>Measured <small>one hit</small></h2>
       <div class="numbers" id="numbers"></div>
     </section>
     <section>
@@ -99,12 +154,12 @@ textarea { width: 100%; min-height: 170px; font: 12px/1.45 ui-monospace, monospa
         <button id="ref-load">Average its hits</button>
         <button id="fit" class="primary" disabled title="Set the kick node's knobs to the ones whose hit matches the record's (tatum kick fit)">Fit to reference</button>
       </div>
-      <div style="font-size:12px;color:var(--muted)">A WAV of a record: its hits are averaged on the beat grid, so what comes with every hit is kept and the rest thins out. Pick a stretch where the kick plays alone or nearly (an intro, an outro), and only as many ms as come before the bass. An MP3 has to be a WAV first: <code>ffmpeg -i song.mp3 song.wav</code>.</div>
+      <div class="hint">A WAV of a record: its hits are averaged on the beat grid, so what comes with every hit is kept and the rest thins out. Pick a stretch where the kick plays alone or nearly (an intro, an outro), and only as many ms as come before the bass. An MP3 has to be a WAV first: <code>ffmpeg -i song.mp3 song.wav</code>.</div>
     </section>
     <section>
       <h2>The file</h2>
       <textarea id="text" spellcheck="false"></textarea>
-      <div class="row"><button id="apply-text">Apply the text</button><span style="font-size:12px;color:var(--muted)">To add a node or change the wiring: edit, then apply. The knobs follow.</span></div>
+      <div class="row"><button id="apply-text">Apply the text</button><span class="hint">Anything the buttons do not: edit, then apply. The knobs follow.</span></div>
       <div id="status"></div>
     </section>
   </div>
@@ -112,21 +167,34 @@ textarea { width: 100%; min-height: 170px; font: 12px/1.45 ui-monospace, monospa
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
-let sound = null, ours = null, ref = null;
-let ctx = null, buffers = { ours: null, ref: null }, playing = false, timer = null, nextAt = 0, beatN = 0;
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+let sound = null, ours = null, ref = null, kinds = [], dirty = false;
+let ctx = null, buffers = { ours: null, ref: null, bar: null }, playing = false, timer = null, nextAt = 0, beatN = 0;
 let pending = new Map(), sending = false;
 
-function status(msg, error) { const s = $("status"); s.textContent = msg || ""; s.className = error ? "error" : ""; }
-
-async function post(path, body, type) {
-  const r = await fetch(path, { method: "POST", body, headers: { "Content-Type": type || "text/plain", "X-Tatum-Design": "1" } });
-  return r.json();
+// One line for what is wrong, near the top, and the same under the text.
+function status(msg, error) {
+  for (const id of ["status", "bar-status"]) { const s = $(id); s.textContent = msg || ""; s.className = error ? "error" : ""; }
+  $("knobs").classList.toggle("broken", !!error);
 }
 
+let inflight = 0;
+async function post(path, body, type) {
+  inflight++;
+  try {
+    const r = await fetch(path, { method: "POST", body, headers: { "Content-Type": type || "text/plain", "X-Tatum-Design": "1" } });
+    return await r.json();
+  } finally { inflight--; }
+}
+// Whether anything is still on its way: for a test to wait on.
+window.designBusy = () => sending || pending.size > 0 || inflight > 0;
+window.designState = () => ({ sending, pending: [...pending.values()], inflight });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 // ── Knobs ──
-// Hz and ms that span decades turn on a log scale; the rest is linear.
+// Hz, ms and seconds that span decades turn on a log scale; the rest is linear.
 function scale(a) {
-  const log = (a.unit === "hz" || a.unit === "ms") && a.min > 0 && a.max / a.min >= 20;
+  const log = (a.unit === "hz" || a.unit === "ms" || a.unit === "s") && a.min > 0 && a.max / a.min >= 20;
   return {
     toPos: (v) => log ? Math.log(v / a.min) / Math.log(a.max / a.min) : (v - a.min) / (a.max - a.min),
     fromPos: (p) => log ? a.min * Math.pow(a.max / a.min, p) : a.min + p * (a.max - a.min),
@@ -138,57 +206,221 @@ function fmt(v) {
   return s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
 }
 
-function buildKnobs() {
+// A knob: a slider over `toPos`, a number box in units, and a reset.
+// `view` converts the stored value to what the box shows and back.
+function knob(label, a, value, view, send, unset) {
+  const sc = scale(a);
+  const row = document.createElement("div");
+  row.className = "knob" + (value === null ? " unset" : "");
+  row.title = a.doc || "";
+  row.dataset.name = label;
+  const v0 = value === null ? a.default : value;
+  row.innerHTML = `<label>${esc(label)}</label><input type="range" min="0" max="1000" step="1"><div class="val"><input type="number" step="any"><span>${esc(view.unit)}</span><button class="reset" title="back to the default (removed from the file)">×</button></div>`;
+  const range = row.querySelector("input[type=range]"), num = row.querySelector("input[type=number]");
+  const set = (v, go) => {
+    range.value = Math.round(1000 * Math.min(1, Math.max(0, sc.toPos(v))));
+    num.value = fmt(view.show(v));
+    if (go) { row.classList.remove("unset"); send(v); }
+  };
+  set(v0, false);
+  // Four significant figures from the slider: a knob, not a float.
+  range.addEventListener("input", () => set(Number(sc.fromPos(range.value / 1000).toPrecision(4)), true));
+  num.addEventListener("change", () => {
+    const shown = parseFloat(num.value);
+    if (!isFinite(shown)) { set(v0, false); status(`${label}: '${num.value}' is not a number`, true); return; }
+    const v = view.read(shown);
+    if (!isFinite(v)) { set(v0, false); return; }
+    set(Math.min(a.max, Math.max(a.min, v)), true);
+  });
+  row.querySelector("button.reset").addEventListener("click", () => { set(a.default, false); row.classList.add("unset"); unset(); });
+  return row;
+}
+const plain = (unit) => ({ unit, show: (v) => v, read: (v) => v });
+
+function choiceRow(label, choices, value, def, doc, send, unset) {
+  const row = document.createElement("div");
+  row.className = "knob" + (value === null ? " unset" : "");
+  row.title = doc || ""; row.dataset.name = label;
+  row.innerHTML = `<label>${esc(label)}</label><select class="choice">${choices.map((c) => `<option>${esc(c)}</option>`).join("")}</select><div class="val"><span></span><button class="reset" title="back to the default (removed from the file)">×</button></div>`;
+  const sel = row.querySelector("select");
+  sel.value = value === null ? def : value;
+  sel.addEventListener("change", () => { row.classList.remove("unset"); send(sel.value); });
+  row.querySelector("button.reset").addEventListener("click", () => { sel.value = def; row.classList.add("unset"); unset(); });
+  return row;
+}
+
+function buildAll() {
+  $("path").textContent = sound.path + (sound.library_spec ? `  (${sound.library_spec})` : "");
+  $("kind").textContent = sound.type === "graph" ? "instrument graph" : `module ${sound.module}`;
+  $("desc").value = sound.description; $("name").value = sound.name;
+  $("gain-row").hidden = sound.type !== "graph";
+  if (sound.type === "graph") $("gain").value = sound.gain === null ? "" : sound.gain;
+  $("graph-edit").hidden = sound.type !== "graph";
+  $("fit").title = sound.type === "graph" ? "Set the kick node's knobs to the ones whose hit matches the record's (tatum kick fit)" : "Fit sets a kick() node; this sound is a module";
+  buildAudition();
+  if (sound.type === "graph") { buildGraphKnobs(); buildGraphEdit(); } else buildModuleKnobs();
+}
+
+function buildGraphKnobs() {
   const box = $("knobs");
-  box.innerHTML = "<h2>Knobs</h2>";
+  box.innerHTML = "<h2>Knobs <small>every argument of every node</small></h2>";
   for (const n of sound.nodes) {
     const div = document.createElement("div");
-    div.className = "node";
-    div.innerHTML = `<h3>${n.alias} <small>${n.kind}</small></h3>`;
+    div.className = "node"; div.dataset.alias = n.alias;
+    div.innerHTML = `<h3><span>${esc(n.alias)}</span> <small>${esc(n.kind)}</small><span class="grow"></span></h3>`;
     div.title = n.doc;
+    const h3 = div.querySelector("h3");
+    if (n.word_choices.length) {
+      const sel = document.createElement("select");
+      sel.className = "word"; sel.title = "waveform / mode word";
+      sel.innerHTML = n.word_choices.map((w) => `<option>${esc(w)}</option>`).join("");
+      if (!n.words.length) sel.insertAdjacentHTML("afterbegin", `<option value="">(none)</option>`);
+      sel.value = n.words[0] || "";
+      sel.addEventListener("change", () => structural(`word ${n.alias}=${[sel.value, ...n.words.slice(1)].join(" ")}`));
+      h3.insertBefore(sel, h3.querySelector(".grow"));
+    }
+    const rm = document.createElement("button");
+    rm.className = "small remove-node"; rm.textContent = "remove"; rm.title = `take ${n.alias} out, and its connections`;
+    rm.addEventListener("click", () => structural(`-node ${n.alias}`));
+    h3.appendChild(rm);
     for (const a of n.args) {
-      const sc = scale(a);
-      const row = document.createElement("div");
-      row.className = "knob" + (a.value === null ? " unset" : "");
-      row.title = a.doc;
-      const v0 = a.value === null ? a.default : a.value;
-      row.innerHTML = `<label>${a.name}</label><input type="range" min="0" max="1000" step="1"><div class="val"><input type="number" step="any"><span>${a.unit}</span><button class="reset" title="back to the default (removed from the file)">×</button></div>`;
-      const range = row.querySelector("input[type=range]"), num = row.querySelector("input[type=number]");
-      const set = (v, send) => {
-        range.value = Math.round(1000 * Math.min(1, Math.max(0, sc.toPos(v))));
-        num.value = fmt(v);
-        if (send) { row.classList.remove("unset"); queue(`${n.alias}.${a.name}=${v}`, `${n.alias}.${a.name}`); }
-      };
-      set(v0, false);
-      // Four significant figures from the slider: a knob, not a float.
-      range.addEventListener("input", () => set(Number(sc.fromPos(range.value / 1000).toPrecision(4)), true));
-      num.addEventListener("change", () => { const v = parseFloat(num.value); if (isFinite(v)) set(Math.min(a.max, Math.max(a.min, v)), true); });
-      row.querySelector("button.reset").addEventListener("click", () => { set(a.default, false); row.classList.add("unset"); queue(`-${n.alias}.${a.name}`, `${n.alias}.${a.name}`); });
-      div.appendChild(row);
+      const key = `${n.alias}.${a.name}`;
+      div.appendChild(knob(a.name, a, a.value, plain(a.unit), (v) => queue(`${key}=${v}`, key), () => queue(`-${key}`, key)));
     }
     box.appendChild(div);
   }
+  if (!sound.nodes.length) box.insertAdjacentHTML("beforeend", `<div class="hint">No nodes yet: add one below.</div>`);
 }
 
-// Changes go one request at a time; while one is out the newest value of
-// each knob waits, so dragging never queues up stale renders.
-function queue(line, key) { pending.set(key, line); flush(); }
+function buildGraphEdit() {
+  const sel = $("add-kind");
+  if (!sel.options.length) {
+    const cats = {};
+    for (const k of kinds) (cats[k.category] ||= []).push(k);
+    sel.innerHTML = Object.entries(cats).map(([c, ks]) => `<optgroup label="${esc(c)}">${ks.map((k) => `<option value="${esc(k.name)}" title="${esc(k.doc)}">${esc(k.name)}</option>`).join("")}</optgroup>`).join("");
+  }
+  const names = sound.nodes.map((n) => n.alias);
+  $("wire-from").innerHTML = [...names, "mix"].map((n) => `<option>${esc(n)}</option>`).join("");
+  $("wire-to").innerHTML = ["out", "mix", ...names].map((n) => `<option>${esc(n)}</option>`).join("");
+  const w = $("wires");
+  w.innerHTML = "";
+  for (const [a, b] of sound.connections) {
+    const row = document.createElement("div");
+    row.className = "wire"; row.dataset.wire = `${a}>${b}`;
+    row.innerHTML = `<span>${esc(a)} &gt; ${esc(b)}</span><button class="small unwire" title="disconnect">×</button>`;
+    row.querySelector("button").addEventListener("click", () => structural(`-wire ${a} ${b}`));
+    w.appendChild(row);
+  }
+  if (!sound.connections.length) w.innerHTML = `<div class="hint">Nothing is wired: nothing reaches out.</div>`;
+}
+
+// A module parameter as its box shows it: in its unit through its curve,
+// a gain in dB, the rest as the number it is.
+function moduleView(p) {
+  if (p.curve && p.curve.exp) {
+    const [s, b] = p.curve.exp;
+    return { unit: p.unit, show: (k) => s * Math.pow(b, k), read: (r) => Math.log(r / s) / Math.log(b) };
+  }
+  if (p.curve && p.curve.lin) {
+    const [lo, hi] = p.curve.lin;
+    return { unit: p.unit, show: (k) => lo + k * (hi - lo), read: (r) => (r - lo) / (hi - lo) };
+  }
+  if (p.unit === "db") return { unit: "db", show: (k) => k > 0 ? 20 * Math.log10(k) : -120, read: (d) => d <= -120 ? 0 : Math.pow(10, d / 20) };
+  return plain("");
+}
+
+function buildModuleKnobs() {
+  const box = $("knobs");
+  box.innerHTML = `<h2>Knobs <small>module ${esc(sound.module)}: every parameter of <code>tatum params ${esc(sound.module)}</code></small></h2>`;
+  for (const p of sound.params) {
+    if (p.choices) {
+      const value = p.value === null ? null : p.choices[Math.min(p.choices.length - 1, Math.round(p.value * (p.choices.length - 1)))];
+      const def = p.choices[Math.min(p.choices.length - 1, Math.round(p.default * (p.choices.length - 1)))];
+      box.appendChild(choiceRow(p.name, p.choices, value, def, p.doc, (v) => queue(`${p.name}=${v}`, p.name), () => queue(`-${p.name}`, p.name)));
+    } else {
+      box.appendChild(knob(p.name, { min: p.min, max: p.max, default: p.default, unit: "", doc: p.doc }, p.value, moduleView(p),
+        (v) => queue(`${p.name}=${v}`, p.name), () => queue(`-${p.name}`, p.name)));
+    }
+  }
+  if (sound.module === "fm") {
+    const sub = document.createElement("div");
+    sub.className = "sub"; sub.textContent = "Operator envelopes (opN_envelope, seconds; they override opN_attack .. opN_release)";
+    box.appendChild(sub);
+    const stages = [["a", "attack"], ["d", "decay"], ["s", "sustain"], ["r", "release"]];
+    const ms = { unit: "ms", show: (s) => s * 1000, read: (m) => m / 1000 };
+    sound.envelopes.forEach((env, op) => {
+      stages.forEach(([st, word], i) => {
+        const a = st === "s" ? { min: 0, max: 1, default: sound.env_default[i], unit: "", doc: `op${op} envelope ${word}` }
+          : { min: sound.env_time[0], max: sound.env_time[1], default: sound.env_default[i], unit: "s", doc: `op${op} envelope ${word}, seconds` };
+        box.appendChild(knob(`op${op}.${word}`, a, env === null ? null : env[i], st === "s" ? plain("") : ms,
+          (v) => queue(`env${op}.${st}=${v}`, `env${op}.${st}`), () => structural(`-env${op}`)));
+      });
+    });
+  }
+}
+
+// ── Audition ──
+const NOTES = (() => { const n = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"], out = []; for (let o = 1; o <= 6; o++) for (const x of n) { out.push(x + o); if (o === 6) break; } return out; })();
+const PATTERN_NAMES = { hit: "single hit", four: "four on the floor", held: "held note", chord: "chord (minor triad)", groove: "groove: kick, hat, clap" };
+function buildAudition() {
+  const a = sound.audition, drums = sound.type === "beats";
+  $("pattern").innerHTML = sound.patterns.map((p) => `<option value="${p}">${PATTERN_NAMES[p] || p}</option>`).join("");
+  $("pattern").value = a.pattern;
+  if (!$("note").options.length) $("note").innerHTML = NOTES.map((n) => `<option>${n}</option>`).join("");
+  if (!NOTES.includes(a.note)) $("note").insertAdjacentHTML("beforeend", `<option>${esc(a.note)}</option>`);
+  $("note").value = a.note; $("note").hidden = drums;
+  $("lane").innerHTML = sound.lanes.map((l) => `<option>${l}</option>`).join("");
+  $("lane").value = a.lane; $("lane").hidden = !drums || a.pattern === "groove";
+  $("bpm").value = a.bpm;
+}
+async function audition(body) {
+  await structural(body, "/api/audition");
+}
+$("pattern").addEventListener("change", () => audition(`pattern=${$("pattern").value}`));
+$("note").addEventListener("change", () => audition(`note=${$("note").value}`));
+$("lane").addEventListener("change", () => audition(`lane=${$("lane").value}`));
+$("bpm").addEventListener("change", () => {
+  const b = parseFloat($("bpm").value);
+  if (!(b >= 40 && b <= 220)) { status("BPM: from 40 to 220", true); $("bpm").value = sound.audition.bpm; return; }
+  audition(`bpm=${b}`);
+});
+
+// Knob changes go one request at a time; while one is out the newest value
+// of each knob waits, so dragging never queues up stale renders.
+function queue(line, key) { pending.set(key, line); dirty = true; flush(); }
 async function flush() {
   if (sending || pending.size === 0) return;
   sending = true;
   const body = [...pending.values()].join("\n");
   pending.clear();
-  try { show(await post("/api/set", body)); } catch (e) { status(String(e), true); }
+  try { show(await post("/api/set", body), false); } catch (e) { status(String(e), true); }
+  sending = false;
+  flush();
+}
+async function drain() { while (sending || pending.size) { flush(); await sleep(15); } }
+// A change of shape (a node, a wire, a word, the pattern): after what is
+// queued, and the knobs built again from the reply.
+async function structural(body, path) {
+  await drain();
+  sending = true;
+  try {
+    const r = await post(path || "/api/set", body);
+    if (!path) dirty = true;
+    show(r, true);
+  } catch (e) { status(String(e), true); }
   sending = false;
   flush();
 }
 
-function show(r) {
+function show(r, rebuild) {
   if (r.text !== undefined) $("text").value = r.text;
+  if (r.sound && rebuild) { sound = r.sound; buildAll(); }
+  else if (r.sound) sound = r.sound;
   if (!r.ok) { status(r.error, true); return; }
   status("");
   ours = r.hit;
   decode(r.hit.audio).then((b) => { buffers.ours = b; });
+  if (r.bar) decode(r.bar.audio).then((b) => { buffers.bar = b; });
   draw();
 }
 
@@ -199,13 +431,17 @@ async function decode(b64) {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return ensureCtx().decodeAudioData(bytes.buffer);
 }
+function start(buf, at) { if (!buf) return; const s = ctx.createBufferSource(); s.buffer = buf; s.connect(ctx.destination); s.start(at); }
+// Yours: the rendered bar, started every bar. The reference: its hit on
+// every beat. Alternate: a bar of each.
 function tick() {
   const beat = 60 / Math.max(40, Math.min(220, parseFloat($("bpm").value) || 125));
   while (nextAt < ctx.currentTime + 0.15) {
-    const mode = $("listen").value;
-    const which = mode === "ab" ? (Math.floor(beatN / 4) % 2 === 0 ? "ref" : "ours") : mode;
-    const buf = buffers[which] || buffers.ours;
-    if (buf) { const s = ctx.createBufferSource(); s.buffer = buf; s.connect(ctx.destination); s.start(nextAt); }
+    const mode = $("listen").value, bar = Math.floor(beatN / 4), first = beatN % 4 === 0;
+    const which = mode === "ab" ? (bar % 2 === 0 ? "ref" : "ours") : mode;
+    if (which === "ref" && buffers.ref) start(buffers.ref, nextAt);
+    else if (buffers.bar) { if (first) start(buffers.bar, nextAt); }
+    else start(buffers.ours, nextAt);
     nextAt += beat; beatN++;
   }
 }
@@ -235,7 +471,7 @@ function plot(canvas, series, opts) {
     if (!s.data || !s.data.length) continue;
     g.strokeStyle = s.color; g.lineWidth = 2; g.beginPath();
     let started = false;
-    for (const [t, v] of s.data) { if (t > opts.tmax) break; const x = X(t), y = Y(v); started ? g.lineTo(x, y) : g.moveTo(x, y); started = true; }
+    for (const [t, v] of s.data) { if (t > opts.tmax) break; if (v === null) continue; const x = X(t), y = Y(v); started ? g.lineTo(x, y) : g.moveTo(x, y); started = true; }
     g.stroke();
   }
 }
@@ -256,7 +492,7 @@ function draw() {
 // The figures `tatum analyze` reports, read off the curves.
 function measure(h) {
   if (!h) return null;
-  const lvl = h.level, p = h.pitch;
+  const lvl = h.level, p = h.pitch.filter((x) => x[1] !== null);
   const reach = lvl.find((l) => l[1] < -18); const until = reach ? reach[0] : h.ms;
   const late = p.filter((x) => x[0] > until * 0.6 && x[0] <= until).map((x) => x[1]).sort((a, b) => a - b);
   const tail = late.length ? late[Math.floor(late.length / 2)] : null;
@@ -291,45 +527,110 @@ $("ref-load").addEventListener("click", async () => {
   status("averaging the hits…");
   const q = new URLSearchParams();
   for (const [k, id] of [["from", "ref-from"], ["to", "ref-to"], ["bpm", "ref-bpm"], ["ms", "ref-ms"]]) if ($(id).value) q.set(k, $(id).value);
-  const r = await post("/api/reference?" + q, await f.arrayBuffer(), "audio/wav");
-  if (!r.ok) { status(r.error, true); return; }
-  ref = r.hit; buffers.ref = await decode(r.hit.audio);
-  if (!$("ref-bpm").value) $("ref-bpm").placeholder = r.bpm.toFixed(2);
-  status(`reference: hits averaged at ${r.bpm.toFixed(2)} BPM`);
-  $("fit").disabled = false;
-  draw();
+  try {
+    const r = await post("/api/reference?" + q, await f.arrayBuffer(), "audio/wav");
+    if (!r.ok) { status(r.error, true); return; }
+    ref = r.hit; buffers.ref = await decode(r.hit.audio);
+    if (!$("ref-bpm").value) $("ref-bpm").placeholder = r.bpm.toFixed(2);
+    status(`reference: hits averaged at ${r.bpm.toFixed(2)} BPM`);
+    $("fit").disabled = false;
+    draw();
+  } catch (e) { status(String(e), true); }
 });
 $("fit").addEventListener("click", async () => {
   $("fit").disabled = true;
   status("fitting the kick to the reference…");
   try {
+    await drain();
     const r = await post("/api/fit", "");
     if (!r.ok) { status(r.error, true); return; }
-    sound = r.sound; buildKnobs(); show(r.render);
+    dirty = true;
+    show(r.render, true);
     const f = r.fit;
     status(`fitted: ${f.line} — left, for the kick node alone: pitch ${f.pitch_st.toFixed(2)} st (attack ${f.attack_st.toFixed(2)}), level ${f.level_db.toFixed(2)} dB, click ${f.click_db >= 0 ? "+" : ""}${f.click_db.toFixed(1)} dB`);
   } catch (e) { status(String(e), true); }
   finally { $("fit").disabled = false; }
 });
 
-// ── File ──
+// ── Graph editing ──
+$("add-node").addEventListener("click", () => {
+  const alias = $("add-alias").value.trim();
+  structural(`+node ${$("add-kind").value}${alias ? " " + alias : ""}`).then(() => { $("add-alias").value = ""; });
+});
+$("wire-add").addEventListener("click", () => structural(`+wire ${$("wire-from").value} ${$("wire-to").value}`));
+
+// ── Sound and file ──
 $("desc").addEventListener("change", () => queue("description=" + $("desc").value.replace(/\n/g, " "), "description"));
+$("name").addEventListener("change", () => structural("name=" + $("name").value.trim()));
+$("gain").addEventListener("change", () => {
+  const v = $("gain").value.trim();
+  if (v !== "" && !isFinite(parseFloat(v))) { status(`gain: '${v}' is not a number`, true); return; }
+  queue("gain=" + v, "gain");
+});
 $("save").addEventListener("click", async () => {
+  await drain();
   const r = await post("/api/save", "");
-  status(r.ok ? "saved " + r.path : r.error, !r.ok);
+  if (r.ok) { dirty = false; status("saved " + r.path); loadLibrary(); }
+  else status(r.error, true);
 });
 $("apply-text").addEventListener("click", async () => {
+  await drain();
   const r = await post("/api/text", $("text").value);
-  if (r.ok === false) { status(r.error, true); return; }
-  sound = r.sound; buildKnobs(); $("desc").value = sound.description; show(r.render);
+  if (r.ok === false && !r.sound) { status(r.error, true); return; }
+  dirty = true;
+  show(r, true);
 });
-async function start() {
-  sound = await (await fetch("/api/sound")).json();
-  $("path").textContent = sound.path; $("desc").value = sound.description;
-  buildKnobs();
-  show(await post("/api/set", ""));
+
+// ── Library ──
+async function loadLibrary() {
+  const r = await (await fetch("/api/library")).json();
+  const box = $("lib-list");
+  if (!r.ok) { box.innerHTML = `<div class="hint">${esc(r.error)}</div>`; $("dup").disabled = true; return; }
+  $("lib-root").textContent = r.root;
+  let html = "", last = null;
+  for (const s of r.sounds) {
+    if (s.type !== last) { html += `<div class="type">${esc(s.type)}/</div>`; last = s.type; }
+    const spec = `${s.type}/${s.name}`;
+    html += `<div class="item${spec === r.current ? " current" : ""}" data-spec="${esc(spec)}"><span>${esc(s.name)}</span><button class="small open">open</button></div>`;
+  }
+  box.innerHTML = html || `<div class="hint">The library is empty: duplicate this sound into it.</div>`;
+  for (const b of box.querySelectorAll("button.open")) b.addEventListener("click", () => openSound(b.parentElement.dataset.spec));
+  if (!$("dup-type").value && r.current) $("dup-type").value = r.current.split("/")[0];
 }
-start();
+async function openSound(spec) {
+  if (dirty && !confirm("The sound open has changes that are not saved. Open another and drop them?")) return;
+  await drain();
+  const r = await post("/api/open", spec);
+  if (r.ok === false && !r.sound) { status(r.error, true); return; }
+  dirty = false; $("dup-type").value = spec.split("/")[0];
+  show(r, true);
+  status(r.ok ? `opened ${spec}` : r.error, !r.ok);
+  loadLibrary();
+}
+$("dup").addEventListener("click", async () => {
+  const spec = `${$("dup-type").value.trim()}/${$("dup-name").value.trim()}`;
+  if (!/^[a-z0-9][a-z0-9_-]*\/[a-z0-9][a-z0-9_-]*$/.test(spec)) {
+    status(`'${spec}': a type and a name are lower-case letters, digits, _ and -`, true); return;
+  }
+  await drain();
+  const r = await post("/api/duplicate", spec);
+  if (r.ok === false && !r.sound) { status(r.error, true); return; }
+  dirty = false;
+  show(r, true);
+  if (r.ok) { status(`duplicated to ${spec}: Save writes it from now on`); $("dup-name").value = ""; }
+  loadLibrary();
+});
+window.addEventListener("beforeunload", (e) => { if (dirty) e.preventDefault(); });
+
+async function boot() {
+  kinds = await (await fetch("/api/kinds")).json();
+  sound = await (await fetch("/api/sound")).json();
+  buildAll();
+  loadLibrary();
+  await structural("", "/api/set");
+  dirty = false;
+}
+boot();
 </script>
 </body>
 </html>
