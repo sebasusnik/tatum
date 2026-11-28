@@ -327,3 +327,81 @@ fn heard_zero_is_the_kick_as_written() {
     assert_eq!(plain, zero);
     assert_eq!(plain, 55.0);
 }
+
+#[test]
+fn heard_one_that_cannot_reach_its_note_is_an_error_that_says_what_to_change() {
+    // Each of these used to compile to a kick settling on 20 Hz and still
+    // heard one and a half to fifteen semitones over the note written.
+    for args in [
+        "A0, body=120ms, heard=1",
+        "E1, body=150ms, hold=0, release=120ms, heard=1",
+        "A1, body=200ms, knee=400hz, heard=1",
+    ] {
+        let e = errors(&song(args, FOUR));
+        assert!(e.contains("heard=1 cannot bring this kick to be heard on"), "{args}: {e}");
+        assert!(e.contains("settling on 20 Hz"), "{args}: {e}");
+        assert!(e.contains("body=") && e.contains("knee="), "{args}: {e}");
+    }
+    // Without heard=1 the same kicks are kicks.
+    assert_eq!(errors(&song("A0, body=120ms", FOUR)), "");
+}
+
+#[test]
+fn every_heard_one_kick_is_heard_on_its_note_or_refused() {
+    let mut refused = 0;
+    let mut built = 0;
+    for note in [27.5f32, 41.2, 55.0, 98.0, 160.0] {
+        for body in [10.0f32, 60.0, 150.0, 400.0] {
+            for (hold, release) in [(0.0f32, 120.0f32), (60.0, 180.0), (300.0, 600.0)] {
+                for drive in [0.0f32, 0.5, 1.0] {
+                    for knee in [0.0f32, 400.0] {
+                        let args = format!(
+                            "{note}hz, body={body}ms, hold={hold}ms, release={release}ms, drive={drive}, knee={knee}hz, heard=1"
+                        );
+                        let src = format!("instrument x {{\n  kick({args}) as k\n  k > out\n}}\npattern p {{ C3 - - - }}\ntrack t {{ play p using x }}\n");
+                        let parsed = tatum_core::dsl::parse(&src).expect("parses");
+                        match tatum_core::dsl::compiler::kick_spec(&parsed.instruments[0].nodes[0].params) {
+                            Ok(spec) => {
+                                built += 1;
+                                let heard = tatum_core::graph::node::kick_heard_hz(&spec);
+                                assert!(st(heard, note).abs() < 0.05, "{args}: heard {heard}");
+                            }
+                            Err(e) => {
+                                refused += 1;
+                                let e = e.to_string();
+                                assert!(e.contains("settling on 20 Hz"), "{args}: {e}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(built > 100 && refused > 20, "{built} built, {refused} refused");
+}
+
+#[test]
+fn drive_brings_the_note_heard_nearer_the_note_it_lands_on() {
+    // Saturation flattens the top and lifts the tail against it: measured on
+    // the render, `kick(A1, body=90ms, drive=1)` is heard on 65 Hz, not the
+    // 74 Hz of the same kick clean.
+    let (clean, _) = heard_of("A1, body=90ms");
+    let (driven, _) = heard_of("A1, body=90ms, drive=1");
+    assert!(st(clean, 74.4).abs() < 0.1, "clean {clean}");
+    assert!(st(driven, 64.7).abs() < 0.1, "driven {driven}");
+    // So heard=1 leaves a driven kick's tail higher than a clean one's.
+    let (_, clean) = heard_of("A1, body=90ms, heard=1");
+    let (_, driven) = heard_of("A1, body=90ms, drive=1, heard=1");
+    assert!(driven > clean * 1.1, "driven settles on {driven}, clean on {clean}");
+}
+
+#[test]
+fn a_two_second_hold_counts_its_release() {
+    // The count used to stop at two seconds, on the last sample of the
+    // longest hold: whatever its release, the kick was heard the same. A
+    // release of five seconds rings on the note it landed on, and is heard
+    // nearer it than one cut in 5 ms.
+    let (cut, note) = heard_of("A1, body=1000ms, hold=2000ms, release=5ms");
+    let (ringing, _) = heard_of("A1, body=1000ms, hold=2000ms, release=5s");
+    assert!(st(cut, ringing) > 0.1, "cut {cut}, ringing {ringing}, on {note}");
+}

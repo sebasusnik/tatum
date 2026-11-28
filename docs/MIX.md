@@ -147,7 +147,11 @@ How to read the two:
 - **Heard** is the note the kick is heard as: its pitch weighted by its loudness and by
   how steady it is, the sweep included. A slow sweep is heard over its tail; two kicks
   on the same tail can be heard a tone apart. When the tails agree and this does not,
-  `kick(<note>, heard=1)` tunes the `kick` node by the note heard.
+  `kick(<note>, heard=1)` tunes the `kick` node by the note heard. On a kick that
+  already has it, `compare` says to write the note the reference is heard as instead:
+  the engine works the note out from the kick's arguments and `analyze` reads it off
+  the sound, within 0.3 semitones of each other on a kick alone, and further once an
+  EQ, a compressor or a bass under it has changed what is read.
 - **The sweep** is how long the pitch takes to land, **the hold** how long the body stays
   within 1 dB of its peak, and **the decay** how long it takes to fall 12 and 24 dB, all
   timed from the hit. On a `kick` node the sweep is `body=`, the hold `hold=`, and the

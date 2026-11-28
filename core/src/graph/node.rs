@@ -1049,6 +1049,15 @@ impl KickState {
         self.note + self.body_part + self.snap_part + self.chirp_part
     }
 
+    /// The peak of a cycle at this level once `drive` has saturated it.
+    fn sounding_level(&self) -> f32 {
+        if self.drive_gain > 1.0 {
+            crate::math::tanh(self.level * self.drive_gain) * self.drive_norm
+        } else {
+            self.level
+        }
+    }
+
     #[inline]
     fn step_pitch(&mut self) {
         self.body_part *= self.body_mul;
@@ -1100,11 +1109,14 @@ pub fn heard_weight(level: f32, st_per_ms: f32) -> f32 {
 
 /// The note a kick is heard as, in Hz. A sweep that is still falling while
 /// the kick is loud is heard over the note it lands on: a kick tuned to A1
-/// with a slow body reads as a B or a C. This is a model of that, not a
+/// with a slow body reads as a C or a D. This is a model of that, not a
 /// law of the ear: the mean of the pitch on a log scale, each moment weighted
 /// by its energy and by how steady its pitch is ([`heard_weight`]), from
 /// [`HEARD_FROM_MS`] until the level is [`HEARD_DOWN_DB`] under its top.
-/// `tatum analyze` reads a record's kick the same way, from its averaged hit.
+/// The level is the one that sounds, after `drive`: saturation flattens the
+/// top and lifts the tail against it, so a driven kick is heard nearer the
+/// note it lands on. `tatum analyze` reads a record's kick the same way, from
+/// its averaged hit.
 pub fn kick_heard_hz(spec: &NodeSpec) -> f32 {
     let NodeSpec::Kick { note, .. } = *spec else {
         return 0.0;
@@ -1114,13 +1126,14 @@ pub fn kick_heard_hz(spec: &NodeSpec) -> f32 {
     let floor = crate::math::pow(10.0, HEARD_DOWN_DB / 20.0);
     let (mut sum, mut weight) = (0.0f32, 0.0f32);
     let mut top = 0.0f32;
-    // Two seconds at most: past the longest hold the arguments allow, a
-    // release long enough to matter is still a kick ringing.
-    for i in 0..(2 * SAMPLE_RATE as u32) {
+    // Until it is `HEARD_DOWN_DB` down, which the release sees to; eight
+    // seconds at most, over the longest attack, hold and release together.
+    for i in 0..(8 * SAMPLE_RATE as u32) {
         k.step_level();
-        top = top.max(k.level);
+        let level = k.sounding_level();
+        top = top.max(level);
         if i >= from {
-            if k.level < floor * top && k.attack_left == 0 && k.hold_left == 0 {
+            if level < floor * top && k.attack_left == 0 && k.hold_left == 0 {
                 break;
             }
             let f = k.freq();
@@ -1128,7 +1141,7 @@ pub fn kick_heard_hz(spec: &NodeSpec) -> f32 {
             next.step();
             // Semitones the pitch falls in this sample, per ms.
             let st_per_ms = 12.0 / core::f32::consts::LN_2 * crate::math::ln(f / next.freq()) * SAMPLE_RATE * 0.001;
-            let w = heard_weight(k.level, crate::math::abs(st_per_ms));
+            let w = heard_weight(level, crate::math::abs(st_per_ms));
             sum += w * crate::math::ln(f);
             weight += w;
         }

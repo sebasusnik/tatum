@@ -153,7 +153,7 @@ dark_techno.wav: 300.7 s
     hit        89 Hz (the first half cycle)
     tail       39.0 Hz (D#1)
     sweep      33 ms to within 10% of the tail
-    heard      41.8 Hz (E1 +26c), +1.2 semitones from the tail: the sweep weighted by its loudness
+    heard      43.8 Hz (F1), +2.0 semitones from the tail: the sweep weighted by its loudness
     hold       none: it falls from the hit
     decay      -12 dB at 95 ms, -24 dB at 111 ms
     click      -32.1 dB (first 10 ms over 2 kHz against the body)

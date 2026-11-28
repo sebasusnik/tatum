@@ -80,6 +80,10 @@ pub struct Kick {
     /// sweep included (`tatum_debug::fit::heard_hz`). Over the tail on a kick
     /// whose sweep is still falling while it is loud.
     pub heard_hz: Option<f32>,
+    /// The song this was rendered from already tunes a `kick` node by the
+    /// note heard (`heard=1`). The sound does not say so: whoever rendered
+    /// it does, with [`Profile::rendered_from`]. False for a WAV.
+    pub heard_tuned: bool,
     /// From the hit while the body stays within 1 dB of its peak: the flat
     /// top of a kick held round before it falls. A few ms on a kick that
     /// starts falling at once.
@@ -100,6 +104,26 @@ pub struct Kick {
 impl Kick {
     pub fn masked(&self) -> bool {
         self.under_db > -10.0
+    }
+}
+
+impl Profile {
+    /// What the source a profile was rendered from says and the sound does
+    /// not: whether a `kick` node in it has `heard=1`, so that `compare`
+    /// does not tell a kick tuned by the note heard to be tuned by it.
+    pub fn rendered_from(mut self, source: &str) -> Profile {
+        let tuned = tatum_core::dsl::parse(source).is_ok_and(|song| {
+            song.instruments.iter().flat_map(|i| &i.nodes).any(|n| {
+                n.kind == "kick"
+                    && n.params
+                        .iter()
+                        .any(|p| matches!(p, tatum_core::dsl::ast::Param::Named(k, v) if k == "heard" && *v >= 0.5))
+            })
+        });
+        if let Some(k) = self.kick.as_mut() {
+            k.heard_tuned = tuned;
+        }
+        self
     }
 }
 
@@ -794,6 +818,7 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
         tail_hz,
         sweep_ms: sweep_ms.max(0.0),
         heard_hz,
+        heard_tuned: false,
         hold_ms: fall(0.891).unwrap_or(0.0),
         decay12_ms: fall(0.251),
         decay24_ms: fall(0.063),
@@ -1248,16 +1273,29 @@ fn kick_advice(r: &Kick, y: &Kick, todo: &mut Vec<String>) {
     if let (Some(rh), Some(yh)) = (r.heard_hz, y.heard_hz) {
         let heard_st = 12.0 * (yh / rh).log2();
         if heard_st.abs() >= 0.75 && st.abs() < 0.75 {
-            todo.push(format!(
-                "kick heard: yours is heard {:.1} semitones {} ({:.1} Hz against {:.1} Hz, {}) though the tails agree: its sweep is {} while it is loud -- `kick({}, heard=1)` tunes the kick node by the note heard",
+            let differs = format!(
+                "kick heard: yours is heard {:.1} semitones {} ({:.1} Hz against {:.1} Hz, {}) though the tails agree",
                 heard_st.abs(),
                 if heard_st > 0.0 { "higher" } else { "lower" },
                 yh,
                 rh,
                 note_name(rh),
-                if heard_st > 0.0 { "slower or louder" } else { "faster or quieter" },
-                note_name(rh)
-            ));
+            );
+            todo.push(if y.heard_tuned {
+                // It is tuned by the note heard already: the note written is
+                // not the reference's, or the model and this reading differ.
+                format!(
+                    "{differs}, and your kick already has `heard=1`: write the note the reference is heard as, `kick({rh:.1}hz, heard=1)`; if that is what it says, the engine's model and this reading differ on this kick, and the note written moves {:.1} semitones {} by hand",
+                    heard_st.abs(),
+                    if heard_st > 0.0 { "down" } else { "up" },
+                )
+            } else {
+                format!(
+                    "{differs}: its sweep is {} while it is loud -- `kick({}, heard=1)` tunes the kick node by the note heard",
+                    if heard_st > 0.0 { "slower or louder" } else { "faster or quieter" },
+                    note_name(rh)
+                )
+            });
         }
     }
     if (y.start_hz / r.start_hz - 1.0).abs() > 0.2 {
