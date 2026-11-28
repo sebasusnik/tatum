@@ -133,13 +133,14 @@ fn sound_json(state: &State) -> String {
                     ));
                 }
                 nodes_json.push(format!(
-                    "{{\"kind\":{},\"alias\":{},\"doc\":{},\"words\":{},\"word_choices\":{},\"word_needed\":{},\"ports\":{},\"args\":[{}]}}",
+                    "{{\"kind\":{},\"alias\":{},\"doc\":{},\"words\":{},\"word_choices\":{},\"word_needed\":{},\"takes_input\":{},\"ports\":{},\"args\":[{}]}}",
                     json_str(&n.kind),
                     json_str(&n.alias),
                     json_str(def.doc),
                     json_strs(n.words.iter().map(String::as_str)),
                     json_strs(sound::word_choices(&n.kind).iter().copied()),
                     !sound::default_words(&n.kind).is_empty(),
+                    nodes::takes_input(&n.kind),
                     json_strs(sound::node_ports(g, &n.alias).into_iter()),
                     args.join(",")
                 ));
@@ -1538,6 +1539,11 @@ mod tests {
         assert!(r.contains("[\"xm\",\"a\",\"fm\"]") && r.contains("[\"a\",\"filt\"]"), "{r}");
         assert!(r.contains("\"ports\":[\"fm\",\"pitch\",\"sync\",\"width\"]"), "the pulse's ports: {r}");
         assert!(r.contains("\"ports\":[\"cutoff\",\"morph\"]") && r.contains("\"name\":\"morph\""), "{r}");
+        // The oscillators take nothing in, a filter does: the page offers a
+        // plain wire only into a node that takes it, the compiler's rule.
+        assert_eq!(r.matches("\"takes_input\":false").count(), 2, "{r}");
+        assert_eq!(r.matches("\"takes_input\":true").count(), 2, "{r}");
+        assert!(PAGE.contains("[...(n.takes_input ? [n.alias] : []), ...n.ports.map("), "the page's wire-to list");
         // Wired from the page, turned, and saved: the file says what the page did.
         let r = post(&mut state, "/api/set", "+wire xm filt.cutoff\nfilt.morph=0.6");
         assert!(

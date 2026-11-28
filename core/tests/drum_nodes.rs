@@ -896,8 +896,12 @@ fn a_drum_node_has_no_ports_and_a_name_like_one_keeps_its_own() {
     let other = render(&patch(&graph("a", "f", "amp", "n")), 1);
     assert!(other.iter().any(|v| v.abs() > 0.01));
     assert_eq!(render(&named, 1), other, "a node named for a drum is the node it was made");
-    let unwired = render(&patch(&graph("a", "f", "amp", "n").replace("a width", "a").replace("f.cutoff", "f")), 1);
+    let unwired = render(&patch(&graph("a", "f", "amp", "n").replace("f.cutoff", "f")), 1);
     assert_ne!(other, unwired, "the ports are wired");
+    // Off its port the LFO would go into the oscillator's input, which takes
+    // nothing in: that is refused, not dropped.
+    let e = errors(&patch(&graph("a", "f", "amp", "n").replace("a width", "a")));
+    assert!(e.contains("the lfo goes into 'a'") && e.contains("makes its own signal"), "{e}");
     // And one named `kick`, which opens no node without its parentheses.
     assert_eq!(errors(&patch("  osc saw(55) as kick\n  lfo(5, 0.1) > kick.pitch\n  kick > out")), "");
 }
