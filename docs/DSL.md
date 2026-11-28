@@ -1087,6 +1087,53 @@ default. Write it with its parentheses,
 `kick()`: a node named `kick` stays a name. A note name works wherever a node takes a
 frequency: `bell(A1, 2db, 1)` lifts the kick's fundamental.
 
+**The rest of the kit, a node a piece.** `tom`, `hat`, `snare` and `clap` are written
+the way `kick` is: one line that says what is heard, in Hz, ms, dB and %, and a bare
+`hat()` already sounds like one. Like the kick, each carries its own level, plays whole
+whatever the length of the note (an open hat rings its `decay=` on a sixteenth), ends
+its voice when it is 60 dB down, follows the note's velocity, and plays the same samples
+on every hit and every render. None of them is tuned by the note played: `tom` and
+`snare` take their note as the first argument, in Hz or as a note name.
+
+```
+instrument low   { tom(G2, drop=45ms, hold=25ms, release=320ms, click=-30db) as t
+  t > out }
+instrument tick  { hat(decay=45ms, band=9khz, floor=7khz, noise=20%) as h
+  h > out }
+instrument crack { snare(F#3, snap=5ms, body=110ms, wires=170ms, band=5khz, balance=55%) as s
+  s > out }
+instrument room  { clap(bursts=4, spacing=11ms, tail=260ms, band=1300hz) as c
+  c > out }
+```
+
+- `tom(note, ...)` is the kick's machinery with one fall: a sine that drops from
+  `start=` (1.6 times the note when left out) onto the note, within 10% of it in
+  `drop=` ms, held for `hold=` and 60 dB down `release=` ms later. `click=-30db` puts the
+  stick on top, centred on `tone=`; `drive=` saturates the hit more than the tail.
+  Three of them a few notes apart are a set of toms.
+- `hat(...)` is six square partials that share no harmonic (the idea of the 606 and
+  the 808) and noise, `noise=` being the share of noise against the metal, through a band
+  centred on `band=` and cut under `floor=`. `decay=` is the time from the hit to -60 dB:
+  40 to 90 ms is closed, 250 ms and up is open, on a note of any length. `pitch=` is the
+  lowest partial, and the other five follow it.
+- `snare(note, ...)` is a body and its wires. The body is two sines a struck head's
+  interval apart, dropping onto the note from 1.7 times over it in `snap=` ms and 60 dB
+  down in `body=` ms; the wires are noise in a wide band centred on `band=`, 60 dB down in
+  `wires=` ms. `balance=` is the share of wires against body: 0 is the drum with its
+  wires off, 100% the wires alone. `drive=` saturates the whole hit at the same peak.
+- `clap(...)` is `bursts=` short bursts of noise in a band centred on `band=`, `spacing=`
+  ms from one to the next, each 20 dB down when the next comes, and the last one ringing
+  out: 60 dB down `tail=` ms after it starts.
+
+Every hit is the same samples. `vary=` sways it from hit to hit by that share, slowly and
+the same on every play, as the kick's does: a tom's hold and release, a hat's decay (its
+metal also starts each hit where oscillators that never stop would be), a snare's two
+decays, a clap's spacing and tail. A hat is quieter on an engine built under 44.1 kHz
+(3 dB at 32 kHz, 4.6 dB at 22.05 kHz: there is less room over its band); its partials and
+every band are held under 0.45 of the rate. Each is written with its parentheses, `hat()`:
+a node named `hat` or `snare` stays a name. `sounds/node_kit.synth` plays one of each with
+the kick.
+
 **An FM stab.** Two operators, short envelopes, a bit of feedback, off-beat pattern with
 rests, saturation in the chain and a delay send:
 

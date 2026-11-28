@@ -29,11 +29,21 @@ What is here:
 | `hats/metal_open.synth` | `metal_open` | the same metal, open: 60 dB down at 320 ms, however short the note |
 | `keys/chorus_pad.synth` | `chorus_pad` | a warm poly pad in the spirit of a Juno-106: two saws, a breathing lowpass, a wide stereo chorus |
 | `bass/rubber.synth` | `rubber` | a rubbery bass in the spirit of an SH-101: saw and sub through a resonant ladder that snaps shut |
+| `hats/tick.synth` | `tick` | a closed hat in one `hat` node: six partials and a fifth of noise in a band at 9 kHz, 60 dB down at 45 ms |
+| `snares/crack.synth` | `crack` | a dry snare in one `snare` node: a body on 200 Hz under wires at 5 kHz, 60 dB down at 170 ms |
+| `claps/room.synth` | `room` | a clap in one `clap` node: four bursts 11 ms apart at 1.3 kHz, 60 dB down at 293 ms |
+| `toms/low.synth` | `low_tom` | a low tom in one `tom` node: a sine dropping onto G2, 60 dB down at 345 ms |
 
 The ones "in the spirit of" a machine are original sounds made with that machine's
 idea, not copies of it. `vintage_kit.synth`, here beside the folders, plays them
 together: `tatum play sounds/vintage_kit.synth`. The hats are quieter on an engine built
 under 44.1 kHz (`TATUM_SAMPLE_RATE`): 2.5 dB at 32 kHz, 9.5 dB at 22.05 kHz.
+
+`node_kit.synth` plays the kit made of one node a piece -- `kicks/deep`, `hats/tick`,
+`snares/crack`, `claps/room` and `toms/low` -- together: `tatum play sounds/node_kit.synth`.
+Each of those files is a single line that says what is heard, in Hz and ms, and the
+comment over it says what was measured. `tick` is 3 dB quieter at 32 kHz and 6 dB at
+22.05 kHz; the other four play within 1 dB of the same level at any rate.
 
 Each file is made, and kept, with the designer:
 

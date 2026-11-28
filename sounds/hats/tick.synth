@@ -1,0 +1,10 @@
+# A closed hat, one node: six square partials from 205 Hz that share no
+# harmonic, a fifth of it noise, in a band at 9 kHz and cut under 7. Measured:
+# 20 dB down at 13 ms, 40 at 30, over (60 dB down) at 45 ms on a note of any
+# length; loudest at 8.8 kHz; peak 0.43. decay= is its length: 320ms is the
+# same hat open. Not tuned to the note. 3 dB quieter on an engine built at 32
+# kHz, 6 at 22.05.
+instrument tick {
+  hat(decay=45ms, band=9000hz, floor=7000hz, noise=0.2) as h
+  h > out
+}

@@ -1314,6 +1314,47 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
     }
 
+    /// The library's one-node pieces in the designer, as the page drives
+    /// it: each opens with its knobs, is heard as a single hit, takes a turn
+    /// of its main knob, and saves a file a song then plays.
+    #[test]
+    fn the_node_pieces_open_turn_and_save_in_the_designer() {
+        let d = temp("pieces");
+        for (kind, name, plays_as, knob, written) in [
+            ("hats", "tick", "tick", "h.decay=300", "decay=300ms"),
+            ("snares", "crack", "crack", "s.wires=260", "wires=260ms"),
+            ("claps", "room", "room", "c.tail=500", "tail=500ms"),
+            ("toms", "low", "low_tom", "t.release=450", "release=450ms"),
+        ] {
+            let text = std::fs::read_to_string(format!("../sounds/{kind}/{name}.synth")).expect("reads");
+            let path = d.join(format!("sounds/{kind}/{name}.synth"));
+            let mut state = state_of(&text, &path, Library::find(&path, None));
+            let req = Request {
+                method: "GET".into(),
+                path: "/api/sound".into(),
+                query: BTreeMap::new(),
+                headers: BTreeMap::new(),
+                body: Vec::new(),
+            };
+            let page = String::from_utf8(handle(&mut state, req).2).expect("utf-8");
+            assert!(page.contains(&format!("\"{plays_as}\"")), "{name}: {}", &page[..page.len().min(300)]);
+            let before = state.audition.hit(&state.sound).expect("a hit");
+            assert!(before.iter().any(|v| v.abs() > 0.01), "{name} is heard");
+            let r = post(&mut state, "/api/set", knob);
+            assert!(r.starts_with("{\"ok\":true"), "{name}: {}", &r[..r.len().min(200)]);
+            let after = state.audition.hit(&state.sound).expect("a hit");
+            assert!(after.len() > before.len(), "{name}: {knob} made it longer ({} to {})", before.len(), after.len());
+            assert!(post(&mut state, "/api/save", "").starts_with("{\"ok\":true"), "{name} saves");
+            let saved = std::fs::read_to_string(&path).expect("saved");
+            assert!(saved.contains(written), "{name}: {saved}");
+            let song = format!("{saved}pattern p {{ C3 - - -  C3 - - - }}\ntrack t {{ play p using {plays_as} }}\n");
+            let mut engine = SongEngine::from_source(&song).unwrap_or_else(|e| panic!("{name}: {e}"));
+            let (l, _) = engine.render(1);
+            assert!(l.iter().any(|v| v.abs() > 0.01), "{name}: the saved sound plays");
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     #[test]
     fn a_song_in_the_library_is_not_opened_and_saved_as_its_one_instrument() {
         let d = temp("song");

@@ -980,6 +980,62 @@ mod tests {
         round_trips(&t);
     }
 
+    /// The kit's nodes -- `tom`, `hat`, `snare`, `clap` -- open with a knob
+    /// for every argument in the table, turn, and write back in their units;
+    /// each is on the list of nodes the page can add.
+    #[test]
+    fn the_drum_nodes_open_turn_and_save() {
+        let kinds: Vec<&str> = graph_kinds().iter().map(|d| d.name).collect();
+        for (line, knob, written) in [
+            ("tom(G2, drop=45ms)", "p.release=400\np.note=110", "tom(A2, drop=45ms, release=400ms) as p"),
+            ("hat()", "p.decay=320\np.noise=0.6", "hat(decay=320ms, noise=0.6) as p"),
+            ("hat(decay=45ms, band=9khz)", "p.floor=5000", "hat(decay=45ms, band=9000hz, floor=5000hz) as p"),
+            (
+                "snare(F#3, balance=40%)",
+                "p.wires=250\np.band=6000",
+                "snare(F#3, wires=250ms, band=6000hz, balance=0.4) as p",
+            ),
+            ("clap(tail=300ms)", "p.bursts=3\np.spacing=18", "clap(bursts=3, spacing=18ms, tail=300ms) as p"),
+        ] {
+            let kind = line.split('(').next().unwrap();
+            assert!(kinds.contains(&kind), "{kind} can be added from the page");
+            let text = format!("# A piece.\ninstrument piece {{\n  {line} as p\n  p > out\n}}\n");
+            let mut s = round_trips(&text);
+            let Body::Graph(g) = &s.body else { panic!("a graph") };
+            assert_eq!(g.nodes[0].kind, kind);
+            apply(&mut s, knob).unwrap_or_else(|e| panic!("{kind}: {e}"));
+            let t = s.text();
+            assert!(t.contains(written), "{kind}: {t}");
+            round_trips(&t);
+            tatum_core::song_engine::SongEngine::from_source(&format!(
+                "{t}pattern b {{ C3 - - - }}\ntrack t {{ play b using piece }}\n"
+            ))
+            .unwrap_or_else(|e| panic!("{kind}: what is saved plays: {e}"));
+            // Turned past its range, a knob stops at the end of it.
+            apply(&mut s, "p.vary=5").unwrap_or_else(|e| panic!("{kind}: {e}"));
+            let top = if kind == "tom" { "vary=0.2)" } else { "vary=0.3)" };
+            assert!(s.text().contains(top), "{kind}: {}", s.text());
+            // Added from the page it starts as the bare node, which sounds.
+            apply(&mut s, &format!("+node {kind} extra")).unwrap_or_else(|e| panic!("+node {kind}: {e}"));
+            assert!(s.text().contains(&format!("{kind}() as extra")), "{}", s.text());
+        }
+    }
+
+    /// The one-node sounds of the library are in the text the designer
+    /// writes: opened and saved untouched, the file is the same bytes.
+    #[test]
+    fn the_node_sounds_are_as_the_designer_writes_them() {
+        for file in ["hats/tick", "snares/crack", "claps/room", "toms/low"] {
+            let path = format!("../sounds/{file}.synth");
+            let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+            let s = Sound::parse(&text).unwrap_or_else(|e| panic!("{path}: {e}"));
+            assert_eq!(s.text(), text, "{path}");
+            let Body::Graph(g) = &s.body else { panic!("{path}: a graph") };
+            assert_eq!(g.nodes.len(), 1, "{path}: one node");
+            assert!(!s.description.is_empty(), "{path}: says what it is");
+        }
+    }
+
     #[test]
     fn a_graph_keeps_what_it_does_not_show() {
         // A rhythm division, a wet= and an expression all come back.
