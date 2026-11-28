@@ -173,6 +173,52 @@ track kick { play four using deep }
     assert!(heard, "rendered silence, so the test proved nothing");
 }
 
+/// The rest of the kit as nodes, every one swaying: a `tom` (the kick's
+/// state), a `hat`, a `snare` and a `clap` are each made again on every hit,
+/// by the hit's number, in the box their voice already has.
+#[test]
+fn the_drum_nodes_never_allocate() {
+    let src = r#"
+tempo 140
+instrument low { tom(A2, click=-20db, drive=0.3, vary=10%) as t
+  t > out }
+instrument tick { hat(decay=90ms, vary=20%) as h
+  h > out }
+instrument ring { hat(decay=600ms, noise=60%) as h
+  h > out }
+instrument crack { snare(F#3, drive=0.4, vary=10%) as s
+  s > out }
+instrument room { clap(bursts=5, tail=400ms, vary=15%) as c
+  c > out }
+pattern four  { C3 - - -  C3 - - -  C3 - - -  C3 - - - }
+pattern eight { C3 - C3 -  C3 - C3 -  C3 - C3 -  C3 C3 C3 C3 }
+pattern back  { - - - -  C3 - - -  - - - -  C3 - - C3 }
+track tom   { play four using low }
+track hat   { play eight using tick }
+track open  { play back using ring }
+track snare { play back using crack }
+track clap  { play back using room }
+"#;
+    let mut engine = SongEngine::from_source(src).expect("compiles");
+    engine.start();
+    let mut l = [0.0f32; BLOCK_SIZE];
+    let mut r = [0.0f32; BLOCK_SIZE];
+    for _ in 0..64 {
+        engine.process_block_stereo(&mut l, &mut r);
+    }
+    reset();
+    counting(true);
+    let mut heard = false;
+    for _ in 0..4000 {
+        engine.process_block_stereo(&mut l, &mut r);
+        heard |= l.iter().any(|v| *v != 0.0);
+    }
+    counting(false);
+    let n = allocs();
+    assert_eq!(n, 0, "the drum nodes allocated {} times over 4000 blocks", n);
+    assert!(heard, "rendered silence, so the test proved nothing");
+}
+
 /// Modulation ports and the `svf`: a note-on renews every node in its box,
 /// and gathering what flows into the ports is arrays on the stack.
 const PORTS: &str = r#"
@@ -230,10 +276,52 @@ fn a_graph_with_ports_and_an_svf_never_allocates() {
 /// after it: neither the guard nor what follows touches the allocator.
 #[test]
 fn dropping_a_voice_never_allocates() {
+    drops_without_allocating(PORTS);
+}
+
+/// The drum nodes in a voice that is dropped: each is made again from its
+/// spec in the box it has (the hat with the level found when it was
+/// compiled), and made again for its hit number on the next note. Here they
+/// are the sound, and two of them drive ports as well.
+#[test]
+fn dropping_a_voice_of_drum_nodes_never_allocates() {
+    drops_without_allocating(
+        r#"
+tempo 140
+instrument kit {
+  kick(A1, body=40ms, hold=30ms, release=80ms, vary=0.2, vary_pitch=0.05) as k
+  tom(A2, click=-20db, drive=0.3, vary=10%) as t
+  hat(decay=90ms, band=6khz, noise=60%, vary=20%) as h
+  snare(F#3, drive=0.4, vary=10%) as s
+  clap(bursts=5, tail=200ms, vary=15%) as c
+  osc pulse(110, width=0.4) as a
+  s > gain(0.5) > a.fm
+  c > gain(0.2) > a.width
+  k > mix
+  t > mix
+  h > mix
+  s > mix
+  c > mix
+  a > gain(0.2) > mix
+  mix > svf(4000, 0.2) as filt
+  h > gain(2) > filt.cutoff
+  filt > gain(0.9) as trim
+  trim > out
+}
+pattern four { C3 - - -  C3 - - -  C3 - - -  C3 - - - }
+track kit { play four using kit }
+"#,
+    );
+}
+
+/// The first instrument of `src`, whose way out is a `gain(0.9)`: eight
+/// notes with that gain a NaN, each dropped on its first block, then the
+/// instrument mended and played on, all of it under the counting allocator.
+fn drops_without_allocating(src: &str) {
     use tatum_core::graph::node::NodeSpec;
     use tatum_core::graph::voice::Instrument;
 
-    let ast = tatum_core::dsl::parse(PORTS).expect("parses");
+    let ast = tatum_core::dsl::parse(src).expect("parses");
     let song = tatum_core::dsl::compiler::compile(&ast).expect("compiles");
     let mut template = song.instruments[0].as_graph().expect("a graph").clone();
     let gain = (0..template.node_count as usize)

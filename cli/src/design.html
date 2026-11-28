@@ -215,22 +215,26 @@ function knob(label, a, value, view, send, unset) {
   row.title = a.doc || "";
   row.dataset.name = label;
   const v0 = value === null ? a.default : value;
-  row.innerHTML = `<label>${esc(label)}</label><input type="range" min="0" max="1000" step="1"><div class="val"><input type="number" step="any"><span>${esc(view.unit)}</span><button class="reset" title="back to the default (removed from the file)">×</button></div>`;
+  // An argument that counts (a clap's `bursts`) has a position for each whole
+  // number and no other; the rest have a thousand.
+  const steps = a.whole ? Math.max(1, a.max - a.min) : 1000;
+  const snap = (v) => a.whole ? Math.round(v) : v;
+  row.innerHTML = `<label>${esc(label)}</label><input type="range" min="0" max="${steps}" step="1"><div class="val"><input type="number" step="${a.whole ? 1 : "any"}"><span>${esc(view.unit)}</span><button class="reset" title="back to the default (removed from the file)">×</button></div>`;
   const range = row.querySelector("input[type=range]"), num = row.querySelector("input[type=number]");
   const set = (v, go) => {
-    range.value = Math.round(1000 * Math.min(1, Math.max(0, sc.toPos(v))));
+    range.value = Math.round(steps * Math.min(1, Math.max(0, sc.toPos(v))));
     num.value = fmt(view.show(v));
     if (go) { row.classList.remove("unset"); send(v); }
   };
   set(v0, false);
   // Four significant figures from the slider: a knob, not a float.
-  range.addEventListener("input", () => set(Number(sc.fromPos(range.value / 1000).toPrecision(4)), true));
+  range.addEventListener("input", () => set(snap(Number(sc.fromPos(range.value / steps).toPrecision(4))), true));
   num.addEventListener("change", () => {
     const shown = parseFloat(num.value);
     if (!isFinite(shown)) { set(v0, false); status(`${label}: '${num.value}' is not a number`, true); return; }
     const v = view.read(shown);
     if (!isFinite(v)) { set(v0, false); return; }
-    set(Math.min(a.max, Math.max(a.min, v)), true);
+    set(Math.min(a.max, Math.max(a.min, snap(v))), true);
   });
   row.querySelector("button.reset").addEventListener("click", () => { set(a.default, false); row.classList.add("unset"); unset(); });
   return row;

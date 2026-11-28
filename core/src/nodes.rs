@@ -42,9 +42,34 @@ pub struct Arg {
     pub max: f32,
     pub default: f32,
     pub doc: &'static str,
+    /// It counts things, so it only takes whole numbers: a fraction is a
+    /// compile error that says so, the reference lists it as whole, and the
+    /// designer's slider steps by one. Written `arg!(whole "bursts", ...)`.
+    /// An argument that rounds a fraction by itself is not one of these.
+    pub whole: bool,
 }
 
 impl Arg {
+    /// What is wrong with `v` for this argument of `node`, if anything: out
+    /// of its range, or a fraction where it counts.
+    fn problem(&self, node: &str, v: f32) -> Option<String> {
+        if v < self.min || v > self.max {
+            Some(format!("{}: {} = {} is out of range ({}..{})", node, self.name, v, self.min, self.max))
+        } else if self.whole && v != crate::math::floor(v) {
+            Some(format!(
+                "{}: {}={} is not a whole number; it takes one from {} to {}",
+                node, self.name, v, self.min, self.max
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// Its range as the reference shows it: `1..8`, or `1..8 in whole numbers`.
+    fn range(&self) -> String {
+        format!("{}..{}{}", self.min, self.max, if self.whole { " in whole numbers" } else { "" })
+    }
+
     /// Resolve a number written with a unit against this argument. Node
     /// arguments are already in real units, so a suffix is a scale plus a check
     /// that the author meant the unit the argument actually uses.
@@ -119,7 +144,10 @@ pub struct NodeDefSpec {
 
 macro_rules! arg {
     ($name:expr, $min:expr, $max:expr, $default:expr, $doc:expr) => {
-        Arg { name: $name, min: $min, max: $max, default: $default, doc: $doc }
+        Arg { name: $name, min: $min, max: $max, default: $default, doc: $doc, whole: false }
+    };
+    (whole $name:expr, $min:expr, $max:expr, $default:expr, $doc:expr) => {
+        Arg { name: $name, min: $min, max: $max, default: $default, doc: $doc, whole: true }
     };
 }
 
@@ -199,6 +227,56 @@ pub const NODES: &[NodeDefSpec] = &[
         ],
         waveform: false, rhythm: false, in_chains: false,
         doc: "A whole kick in one node, written in the units a kick is thought in: the note it lands on, how long the snap and the body take in ms, and its level held then released. It plays every hit the same, sample for sample, whatever the note's length, unless `vary=` or `vary_pitch=` sway it, and the voice ends when it does. `kick(A1, body=70ms, hold=90ms, release=150ms)`. `chirp=` adds a third, faster stage on top for the tick of the attack, and `sag=` lets the held top lean. Write it with its parentheses, `kick()`, so a node named `kick` stays a name." },
+    NodeDefSpec { name: "tom", aliases: &[], category: Category::Source,
+        positional: &[arg!("note", 40.0, 1000.0, 110.0, "Hz the body settles on; a note name works too: tom(A2)")],
+        named: &[
+            arg!("start", 0.0, 4000.0, 0.0, "Hz the hit starts at, over the note by more than 10%; 0 or unset, 1.6 times the note"),
+            arg!("drop", 1.0, 500.0, 40.0, "ms from the hit until the pitch is within 10% of the note"),
+            arg!("hold", 0.0, 1000.0, 20.0, "ms the body stays at full level before it falls"),
+            arg!("release", 5.0, 5000.0, 250.0, "ms from the end of the hold to -60 dB, where the voice ends"),
+            arg!("click", -80.0, 0.0, -80.0, "dB of a short noise click against the body, the stick on the head; -80 is none"),
+            arg!("tone", 500.0, 12000.0, 2500.0, "Hz the click is centred on"),
+            arg!("drive", 0.0, 1.0, 0.0, "tanh saturation of the body, clean to heavy, at the same peak level; the tail saturates less than the hit"),
+            arg!("vary", 0.0, 0.2, 0.0, "share the hold and the release sway by from hit to hit, slowly and the same on every play; 0, every hit the same"),
+        ],
+        waveform: false, rhythm: false, in_chains: false,
+        doc: "A whole tom in one node: a sine that drops onto its note, held and then released, timed in ms. It is the kick's machinery with one fall, so it plays every hit the same, sample for sample, whatever the note's length, and the voice ends when it does. `tom(A2, drop=40ms, release=250ms)`; three of them a few notes apart are a set of toms. Write it with its parentheses, `tom()`, so a node named `tom` stays a name." },
+    NodeDefSpec { name: "hat", aliases: &[], category: Category::Source,
+        positional: &[],
+        named: &[
+            arg!("decay", 5.0, 5000.0, 60.0, "ms from the hit until it is 60 dB down, where the voice ends: 40 to 90 is closed, 250 and up is open"),
+            arg!("band", 1000.0, 16000.0, 8000.0, "Hz the band it sounds in is centred on: its colour"),
+            arg!("floor", 200.0, 12000.0, 6000.0, "Hz under which it is cut; lower lets the clank of the metal through"),
+            arg!("noise", 0.0, 1.0, 0.3, "share of noise against the metal: 0 is the six square partials alone, 1 is noise alone; `noise=30%` reads the same as 0.3"),
+            arg!("pitch", 100.0, 1000.0, 205.0, "Hz of the lowest of the six partials; the other five follow it"),
+            arg!("vary", 0.0, 0.3, 0.0, "share the decay sways by from hit to hit, slowly and the same on every play; 0, every hit the same samples. Over 0, at any share, the metal also starts each hit from another of its 29 places, which is an accent from hit to hit that the share does not scale: about 1.5 dB either way on `hat()`, more on a hat of a few ms"),
+        ],
+        waveform: false, rhythm: false, in_chains: false,
+        doc: "A whole hat in one node: six square partials that share no harmonic (the idea of the 606 and the 808) and noise, through a band and a highpass, falling 60 dB in `decay=` from the hit. The note's length does not cut it or stretch it, and the voice ends when it does: `hat(decay=45ms)` is closed and `hat(decay=320ms)` open on a step of any length. Not tuned to the note: any note plays it. Every hat comes out as loud as `hat()` whatever its band, floor, pitch and noise, and at any rate the engine is built for: the colour is not also the volume, and no hit goes over 0.95 of full scale: a peak higher than the ones its level was found from, late in a long hit or on one that sways, is held there, a few samples of a hit at the most (up to 3.9 dB off the top of a peak, measured). Its level is found when the line is compiled, at a cost that does not grow with `decay=`. On an engine built under 44.1 kHz the partials and the band are held under 0.45 of its rate. Write it with its parentheses, `hat()`, so a node named `hat` stays a name." },
+    NodeDefSpec { name: "snare", aliases: &[], category: Category::Source,
+        positional: &[arg!("note", 80.0, 500.0, 185.0, "Hz the body settles on; a note name works too: snare(F#3)")],
+        named: &[
+            arg!("snap", 0.5, 50.0, 8.0, "ms the body's pitch takes to drop onto the note from 1.7 times over it (to within 10%): short is a crack, long a thud"),
+            arg!("body", 10.0, 2000.0, 120.0, "ms the body takes to fall 60 dB"),
+            arg!("wires", 10.0, 3000.0, 180.0, "ms the wires take to fall 60 dB"),
+            arg!("band", 500.0, 12000.0, 4500.0, "Hz the wires' noise is centred on"),
+            arg!("balance", 0.0, 1.0, 0.5, "share of wires against body: 0 is the drum with its wires off, 1 the wires alone; `balance=60%` reads the same as 0.6"),
+            arg!("drive", 0.0, 1.0, 0.0, "tanh saturation of the whole hit, clean to heavy, at the same peak level"),
+            arg!("vary", 0.0, 0.3, 0.0, "share the body's and the wires' decays sway by from hit to hit, slowly and the same on every play; 0, every hit the same samples"),
+        ],
+        waveform: false, rhythm: false, in_chains: false,
+        doc: "A whole snare in one node: a body of two sines a struck head's interval apart (the second 1.593 times the first, dying twice as fast) that drops onto its note, and noise in a band for the wires, each with its own decay. It plays whole whatever the note's length and the voice ends when both are 60 dB down. `snare(F#3, body=120ms, wires=180ms, balance=50%)`. Write it with its parentheses, `snare()`, so a node named `snare` stays a name." },
+    NodeDefSpec { name: "clap", aliases: &[], category: Category::Source,
+        positional: &[],
+        named: &[
+            arg!(whole "bursts", 1.0, 8.0, 4.0, "how many bursts of noise, the last one, which rings out, included"),
+            arg!("spacing", 2.0, 50.0, 11.0, "ms from the start of one burst to the start of the next; each is 20 dB down when the next comes"),
+            arg!("tail", 10.0, 3000.0, 220.0, "ms the last burst takes to fall 60 dB, where the voice ends"),
+            arg!("band", 300.0, 8000.0, 1200.0, "Hz the noise is centred on"),
+            arg!("vary", 0.0, 0.3, 0.0, "share the spacing and the tail sway by from hit to hit, each on its own slow drift and the same on every play; 0, every hit the same samples"),
+        ],
+        waveform: false, rhythm: false, in_chains: false,
+        doc: "A whole clap in one node: a few short bursts of noise in a band, a few ms apart, as hands that do not land at once, and the last one ringing out. It plays whole whatever the note's length and the voice ends when the tail is 60 dB down. `clap(bursts=4, spacing=11ms, tail=220ms)`. Not tuned to the note: any note plays it. Write it with its parentheses, `clap()`, so a node named `clap` stays a name." },
     NodeDefSpec { name: "noise", aliases: &[], category: Category::Source, positional: &[], named: &[],
         waveform: false, rhythm: false, in_chains: false, doc: "White noise." },
     NodeDefSpec { name: "lfo", aliases: &[], category: Category::Source,
@@ -410,14 +488,7 @@ pub fn validate(kind: &str, params: &[Param]) -> Vec<String> {
             Param::Float(_) | Param::Expr(_) => {
                 let v = param_value(p).unwrap_or(0.0);
                 match spec.positional.get(positional_idx) {
-                    Some(arg) => {
-                        if v < arg.min || v > arg.max {
-                            errors.push(format!(
-                                "{}: {} = {} is out of range ({}..{})",
-                                spec.name, arg.name, v, arg.min, arg.max
-                            ));
-                        }
-                    }
+                    Some(arg) => errors.extend(arg.problem(spec.name, v)),
                     None => errors.push(format!(
                         "{}: too many positional arguments ({} takes {})",
                         spec.name,
@@ -440,14 +511,7 @@ pub fn validate(kind: &str, params: &[Param]) -> Vec<String> {
                 }
             }
             Param::Named(name, v) => match spec.named.iter().find(|a| a.name == name) {
-                Some(arg) => {
-                    if *v < arg.min || *v > arg.max {
-                        errors.push(format!(
-                            "{}: {} = {} is out of range ({}..{})",
-                            spec.name, arg.name, v, arg.min, arg.max
-                        ));
-                    }
-                }
+                Some(arg) => errors.extend(arg.problem(spec.name, *v)),
                 None => {
                     let known: Vec<&str> = spec.named.iter().map(|a| a.name).collect();
                     errors.push(if known.is_empty() {
@@ -497,18 +561,15 @@ pub fn markdown() -> String {
     out.push_str("|------|-------|-----------|---------|-------------|\n");
     for n in NODES {
         let mut args: Vec<String> =
-            n.positional.iter().map(|a| format!("`{}` {}..{} (default {})", a.name, a.min, a.max, a.default)).collect();
+            n.positional.iter().map(|a| format!("`{}` {} (default {})", a.name, a.range(), a.default)).collect();
         if n.waveform {
             args.push(String::from("waveform word"));
         }
         if n.rhythm {
             args.push(String::from("division like `1/8`"));
         }
-        let opts: Vec<String> = n
-            .named
-            .iter()
-            .map(|a| format!("`{}=` {}..{} (default {}), {}", a.name, a.min, a.max, a.default, a.doc))
-            .collect();
+        let opts: Vec<String> =
+            n.named.iter().map(|a| format!("`{}=` {} (default {}), {}", a.name, a.range(), a.default, a.doc)).collect();
         let name = if n.aliases.is_empty() {
             format!("`{}`", n.name)
         } else {
@@ -549,12 +610,14 @@ pub fn markdown() -> String {
 /// JSON reference of every node.
 pub fn json() -> String {
     let arg_json = |a: &Arg| {
+        // `whole` is there only where it is true: the arguments that count.
         format!(
-            "{{\"name\": \"{}\", \"min\": {}, \"max\": {}, \"default\": {}, \"doc\": \"{}\"}}",
+            "{{\"name\": \"{}\", \"min\": {}, \"max\": {}, \"default\": {}, {}\"doc\": \"{}\"}}",
             a.name,
             a.min,
             a.max,
             a.default,
+            if a.whole { "\"whole\": true, " } else { "" },
             a.doc.replace('"', "\\\"")
         )
     };
@@ -598,5 +661,33 @@ mod tests {
         assert!(validate("delay", &[Param::RhythmDiv(1, 8), Param::Float(0.4)]).is_empty());
         let e = validate("reverb", &[Param::RhythmDiv(1, 8)]);
         assert!(e[0].contains("rhythm division"), "{:?}", e);
+    }
+
+    /// An argument that counts takes whole numbers only, and everything that
+    /// shows the table says so: the error, the reference and the JSON.
+    #[test]
+    fn an_argument_that_counts_takes_whole_numbers() {
+        let bursts = arg_at("clap", Some("bursts"), 0).unwrap();
+        assert!(bursts.whole);
+        for v in 1..=8 {
+            assert!(validate("clap", &[Param::Named("bursts".into(), v as f32)]).is_empty(), "bursts={v}");
+        }
+        let e = validate("clap", &[Param::Named("bursts".into(), 3.513)]);
+        assert_eq!(e, ["clap: bursts=3.513 is not a whole number; it takes one from 1 to 8"]);
+        // Out of range is still said as out of range.
+        let e = validate("clap", &[Param::Named("bursts".into(), 9.0)]);
+        assert!(e[0].contains("out of range (1..8)"), "{e:?}");
+        assert!(markdown().contains("`bursts=` 1..8 in whole numbers (default 4), how many bursts"), "the reference");
+        assert!(json().contains("\"name\": \"bursts\", \"min\": 1, \"max\": 8, \"default\": 4, \"whole\": true,"));
+        // The only one today. `phaser`'s `stages` and `bitcrush`'s `bits`
+        // take a fraction (the first drops it, the second crushes to it), so
+        // they are not marked, and what they compile to has not changed.
+        let whole: Vec<&str> = NODES
+            .iter()
+            .flat_map(|n| n.positional.iter().chain(n.named.iter()).filter(|a| a.whole).map(|a| a.name))
+            .collect();
+        assert_eq!(whole, ["bursts"]);
+        assert!(validate("phaser", &[Param::Float(0.5), Param::Named("stages".into(), 5.5)]).is_empty());
+        assert!(validate("bitcrush", &[Param::Float(7.5)]).is_empty());
     }
 }

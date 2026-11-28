@@ -1,0 +1,9 @@
+# A clap, one node: four bursts of noise 11 ms apart in a band at 1.3 kHz, the
+# last ringing out over 260 ms. Measured: bursts at 0, 11, 22 and 33 ms, each
+# 20 dB down when the next comes; 20 dB down at 118 ms, 40 at 197, over (60 dB
+# down) at 293 ms; loudest at 1.25 kHz; the node peaks at 0.92 of full scale.
+# Not tuned to the note.
+instrument room {
+  clap(bursts=4, spacing=11ms, tail=260ms, band=1300hz) as c
+  c > out
+}

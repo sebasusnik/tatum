@@ -1182,6 +1182,103 @@ default. Write it with its parentheses,
 `kick()`: a node named `kick` stays a name. A note name works wherever a node takes a
 frequency: `bell(A1, 2db, 1)` lifts the kick's fundamental.
 
+**The rest of the kit, a node a piece.** `tom`, `hat`, `snare` and `clap` are written
+the way `kick` is: one line that says what is heard, in Hz, ms, dB and %, and a bare
+`hat()` already sounds like one. Like the kick, each carries its own level, plays whole
+whatever the length of the note (an open hat rings its `decay=` on a sixteenth), ends
+its voice when it is 60 dB down, follows the note's velocity, and plays the same samples
+on every hit and every render. None of them is tuned by the note played: `tom` and
+`snare` take their note as the first argument, in Hz or as a note name.
+
+```
+instrument low   { tom(G2, drop=45ms, hold=25ms, release=320ms, click=-30db) as t
+  t > out }
+instrument tick  { hat(decay=45ms, band=9khz, floor=7khz, noise=20%) as h
+  h > out }
+instrument crack { snare(F#3, snap=5ms, body=110ms, wires=170ms, band=5khz, balance=55%) as s
+  s > out }
+instrument room  { clap(bursts=4, spacing=11ms, tail=260ms, band=1300hz) as c
+  c > out }
+```
+
+- `tom(note, ...)` is the kick's machinery with one fall: a sine that drops from
+  `start=` (1.6 times the note when left out) onto the note, within 10% of it in
+  `drop=` ms, held for `hold=` and 60 dB down `release=` ms later. `click=-30db` puts the
+  stick on top, centred on `tone=`; `drive=` saturates the hit more than the tail.
+  Three of them a few notes apart are a set of toms.
+- `hat(...)` is six square partials that share no harmonic (the idea of the 606 and
+  the 808) and noise, `noise=` being the share of noise against the metal, through a band
+  centred on `band=` and cut under `floor=`. `decay=` is the time from the hit to -60 dB:
+  40 to 90 ms is closed, 250 ms and up is open, on a note of any length. `pitch=` is the
+  lowest partial, and the other five follow it. Whatever these four are set to, the hat
+  comes out as loud as `hat()`: its level is found when the line is compiled, so `band=`
+  and `floor=` are its colour and not also its volume. The hit is played for that as far
+  as `hat()` runs (1392 samples at the most, 32 ms at 44.1 kHz) and the rest of a longer
+  one is worked out from what its filters let through, so a hat that rings five seconds
+  costs no more to compile than `hat()` does, a few hundredths of a millisecond. The
+  level held is the hit's rms: within 0.4 dB of `hat()` where no peak holds it lower,
+  and up to 1.5 dB under where one that was played does (bare metal ringing for
+  seconds: 1.0 dB is the most found). With `vary=` it is the mean of the hits that is
+  held, from 3.5 dB under `hat()` where a peak holds it (3.0 found) to 1.4 dB over on
+  noise in a low band (1.1 found). Those bounds are what the tests hold at 44.1, 32 and
+  22.05 kHz, on 380 hats drawn across every range and on the furthest out of 19,000
+  more at each rate. Its peak moves with the colour and the
+  decay, from an eighth of full scale up, and none goes over 0.95 of it: the level gives
+  way to the peaks that were played, and a higher one later in a long hit, or from
+  another start of one that sways, is held at 0.95 by the hit itself. How many hats
+  reach that hold depends on the hats: at 44.1 kHz, 2 in 100 of those drawn across
+  every range and 6 in 100 with `vary=`; of bare metal ringing 0.3 to 5 s, 7 in 100,
+  and 18 in 100 with `vary=`, then on as many as 54 hits of 58; fewer at a lower rate.
+  What it takes is the top of a peak, a few samples of a hit at the most: 5 samples of
+  one hit and 2 in a row, off a peak up to 3.9 dB over (bare metal of 228 ms that
+  sways), and up to 0.43 dB of the level of one hit (of 100 ms; 0.1 dB on hits of
+  0.3 s and up). The tests hold every hat they play to 4.5 dB, 8 samples and 0.5 dB.
+- `snare(note, ...)` is a body and its wires. The body is two sines a struck head's
+  interval apart, dropping onto the note from 1.7 times over it in `snap=` ms and 60 dB
+  down in `body=` ms; the wires are noise in a wide band centred on `band=`, 60 dB down in
+  `wires=` ms. `balance=` is the share of wires against body: 0 is the drum with its
+  wires off, 100% the wires alone. `drive=` saturates the whole hit at the same peak.
+- `clap(...)` is `bursts=` short bursts of noise (a whole number of them, 1 to 8: a
+  fraction is an error) in a band centred on `band=`, `spacing=`
+  ms from one to the next, each 20 dB down when the next comes, and the last one ringing
+  out: 60 dB down `tail=` ms after it starts.
+
+Every hit is the same samples. `vary=` sways it from hit to hit by that share, slowly and
+the same on every play, as the kick's does: a tom's hold and release, a hat's decay (its
+metal also starts each hit from another of 29 places in its cycles, three partials high
+and three low from every one, so no hit opens on a click and none goes over full scale),
+a snare's two decays, a clap's spacing and tail. On a hat the 29 starts are an accent
+from hit to hit that the share does not scale: any `vary=` over 0 brings all of it, and
+only the decay's sway grows with the share. Each hit's rms against `hat()`, over 116
+hits at 44.1 kHz, was -1.3..+0.8 dB at `vary=1%`, -1.4..+1.1 dB at 10% and -2.5..+1.7 dB
+at 30%, with peaks from 0.30 to 0.71 of full scale (-2.0..+1.4 dB at 22.05 kHz at 10%);
+a hat of a few ms in a low band, only a few cycles long, moves more, -6..+4 dB at
+`decay=5ms, band=1khz`. It is the mean of the hits that is as loud as `hat()`, so the
+compiled level also steps between `vary=0` and any share over it, by 0.1 dB on `hat()`
+at 44.1 kHz and 0.8 dB at 22.05 kHz. The count of hits the sway goes by
+starts again when the song is stopped and played, and when a file is swapped in live. On
+an engine built under 44.1 kHz a hat's partials and every band are held under 0.45 of the
+rate, and a hat is as loud there as at 44.1 kHz. Each is written with its parentheses,
+`hat()`, also before `as`: a node named `hat` or `snare` stays a name, and `hat as h`
+is an error that says so. `sounds/node_kit.synth` plays one of each with
+the kick.
+
+A drum node, the kick among them, has no ports: `lfo(4, 0.5) > h.pitch` is an error at
+its line, "'h' is a hat, which has no ports to modulate". It can drive one, at audio
+rate like any other sound: `hat(decay=300ms) > filt.cutoff`, `snare() > gain(0.5) > a.fm`.
+It is sound and never a control signal, so the same node may go into a port and into
+the mix. It is also its own envelope: a graph that is only `snare() as s`, `s > out`
+plays the whole snare however short the note and the voice ends with it, an envelope
+that only moves a port does not hold that voice any longer, and a drum that only drives
+a port is still waited for until it has rung out.
+
+An instrument has 8 voices (`MAX_VOICES`), and a hit that finds none free takes the
+oldest, which stops where it is, with no fade. So a tail longer than eight hits apart is
+cut by the ninth: `hat(decay=...)` over 960 ms on sixteenths at 125 BPM, `tom(release=5000ms)`
+or `snare(wires=3000ms)` on quarter notes. On a hat the new hit covers it; on a long tom
+or snare tail it is a step, up to 8 dB under the tail's own level in what was measured.
+There is no choke either: an open hat is not cut by the closed one after it.
+
 **An FM stab.** Two operators, short envelopes, a bit of feedback, off-beat pattern with
 rests, saturation in the chain and a delay send:
 

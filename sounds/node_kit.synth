@@ -1,0 +1,19 @@
+# A kit made of one node a piece, from sounds/: the deep kick, a closed hat,
+# a snare, a clap and a low tom, each a single line in what is heard.
+tempo 124
+scale A minor
+use "kicks/deep.synth"
+use "hats/tick.synth"
+use "snares/crack.synth"
+use "claps/room.synth"
+use "toms/low.synth"
+pattern four  { C3 - - -  C3 - - -  C3 - - -  C3 - - - }
+pattern ticks { - - C3 -  - - C3 -  - - C3 -  - - C3 C3:0.5 }
+pattern back  { - - - -  C3 - - -  - - - -  C3 - - - }
+pattern hands { - - - -  C3 - - -  - - - -  C3 - - - }
+pattern fill  { - - - -  - - - -  - - - -  - - C3 C3:0.6 }
+track kick  { play four using deep_kick }
+track hat   { play ticks using tick level 0.8 }
+track snare { play back using crack level 0.6 }
+track clap  { play hands using room level 0.35 pan 0.15 reverb_send 0.15 }
+track tom   { play fill using low_tom level 0.5 pan -0.2 }

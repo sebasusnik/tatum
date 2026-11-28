@@ -1,0 +1,10 @@
+# A low tom, one node: a sine that drops from 157 Hz onto G2, 98 Hz, within
+# 10% of it 45 ms in, held 25 ms and released over 320, with the tick of the
+# stick on top. Measured: its tail at 98.3 Hz by zero crossings; 20 dB down at
+# 131 ms, 40 at 238, over (60 dB down) at 345 ms; the node peaks at full
+# scale, as a kick does. The note is the first argument: a few notes apart,
+# three of them are a set.
+instrument low_tom {
+  tom(G2, drop=45ms, hold=25ms, release=320ms, click=-30db) as t
+  t > out
+}
