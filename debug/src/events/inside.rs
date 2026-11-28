@@ -614,8 +614,14 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
         .find(|&i| level[i] < gone.max(bed * 1.5))
         .unwrap_or(rel(ridge_end, level.len()));
     let cut_short = next_near.is_some_and(|n| rel(n, level.len()) <= end + 1);
-    let stop =
-        (pk_i..=end).find(|&i| level[i] < (pk * 0.0316).max(bed * 2.0)).unwrap_or(end).max(pk_i + 1).min(level.len());
+    // Cut short by the next strike, the fall is read up to where that
+    // strike's own rise, smeared back by the band's low-pass, begins.
+    let fall_end = if cut_short { end.saturating_sub(smear).max(pk_i + 1) } else { end };
+    let stop = (pk_i..=fall_end)
+        .find(|&i| level[i] < (pk * 0.0316).max(bed * 2.0))
+        .unwrap_or(fall_end)
+        .max(pk_i + 1)
+        .min(level.len());
     let step = ((stop - pk_i) / 200).max(samples(0.25)).max(1);
     let points: Vec<(f32, f32)> =
         (pk_i..stop).step_by(step).map(|i| (to_ms(i - pk_i), 20.0 * (level[i] / pk).max(1e-6).log10())).collect();
@@ -635,8 +641,11 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     };
     let fit = line(&points).filter(|f| points.len() >= 6 && f.slope < 0.0);
     let fastest = fastest_decay(f_mid);
+    // Under 10 dB of fall the line is mostly the rounded top of the peak.
+    let fell = points.last().map_or(0.0, |p| -p.1);
     let decay_db_ms = match fit {
         None => Fig::No("no fall of 6 readings before the bed or the next event"),
+        Some(_) if fell < 10.0 => Fig::No("it falls under 10 dB before the bed or the next event"),
         Some(f) if -f.slope > 0.8 * fastest => Fig::AtLeast(-f.slope),
         Some(f) => Fig::Value(-f.slope),
     };
@@ -887,8 +896,17 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
             low = level[i];
         }
     }
+    // The bed just before it falling: something near its pitch still rings
+    // out under it, and the bed it is read against is not a bed.
+    let ringing = {
+        let (a, b) = bed_range(level.len());
+        let mid = (a + b) / 2;
+        b > a + samples(20.0) && bed > pk * 0.01 && rms(&level[a..mid]) > 1.41 * rms(&level[mid..b])
+    };
     let overlap = if rises > 0 {
         Some("its level rises again after its peak: it holds more than one strike")
+    } else if ringing {
+        Some("it starts while something near its pitch still rings")
     } else if cut_short {
         Some("the next event near its pitch starts before it has died away")
     } else {
@@ -1318,6 +1336,8 @@ fn wobble(pitch: &[(f32, f32)]) -> Option<(f32, f32)> {
 /// alone is withheld on those.
 pub(crate) fn tails(events: &mut [Event]) {
     let starts: Vec<(f32, f32, f32)> = events.iter().map(|e| (e.start_s, e.end_s, e.inside.start_hz)).collect();
+    let cut: Vec<bool> =
+        events.iter().map(|e| e.inside.overlap.is_some_and(|o| o.starts_with("the next event near its pitch"))).collect();
     for (i, e) in events.iter_mut().enumerate() {
         // The band's own low-pass rings ahead of the next onset by about two
         // of its periods: that is inside the window too.
@@ -1327,7 +1347,16 @@ pub(crate) fn tails(events: &mut [Event]) {
         });
         let (a, b) = e.inside.span_s;
         let inside_it = starts.iter().enumerate().any(|(j, &(t0, t1, _))| j != i && t0 < b && t1 > a);
-        if e.inside.overlap.is_none() && inside_it {
+        // The one before it near its pitch was cut short by it: this one
+        // starts on that one's ring, which its bed, its decay and its fall
+        // are read against.
+        let on_a_ring = i > 0
+            && cut.iter().enumerate().take(i).any(|(j, &c)| {
+                c && (e.start_s - starts[j].1) < 0.05 && (12.0 * (starts[j].2 / e.inside.start_hz).log2()).abs() < 4.0
+            });
+        if on_a_ring {
+            e.inside.overlap = Some("it starts while the event before it near its pitch still rings");
+        } else if e.inside.overlap.is_none() && inside_it {
             e.inside.overlap = Some("another event sounds while it does");
         }
         let x = &mut e.inside;
@@ -1343,7 +1372,7 @@ pub(crate) fn tails(events: &mut [Event]) {
             x.bandwidth_hz = x.bandwidth_hz.withhold(why);
             x.q = x.q.withhold(why);
             x.t40_ms = x.t40_ms.withhold(why);
-            if why.starts_with("its level rises") {
+            if why.starts_with("its level rises") || why.starts_with("it starts while") {
                 for f in [&mut x.decay_db_ms, &mut x.decay_r2, &mut x.ring_q, &mut x.t20_ms, &mut x.attack_ms] {
                     *f = f.withhold(why);
                 }

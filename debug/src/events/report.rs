@@ -51,6 +51,8 @@ fn length(e: &Event) -> Fig {
         Fig::No("the partial moves faster than its band follows it")
     } else if e.inside.overlap.is_some_and(|o| o.starts_with("the next event")) {
         Fig::AtLeast(ms)
+    } else if let Some(why) = e.inside.overlap.filter(|o| o.starts_with("it starts while") || o.starts_with("its level rises")) {
+        Fig::No(why)
     } else {
         Fig::Value(ms)
     }
