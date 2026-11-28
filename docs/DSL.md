@@ -337,7 +337,7 @@ Every track ends with a routing chain: `out > <fx>(...) > ... > master` or `> <b
 Buses are declared with `bus <name>` and get their own chain; the master chain is
 `master { in > ... > out }`. Effects take positional arguments and `key=value` options.
 A chain holds effects only, on a track, a bus, the master or a send return. A node that
-makes its own signal (`noise`, `osc`, `kick()` and the other drums, `lfo`) reads nothing
+makes its own signal (`noise`, `osc`, `pitch_osc`, `kick()` and the other drums, `lfo`) reads nothing
 of what the chain hands it and would replace the track's sound with its own, and an
 envelope there is never struck by a note and would silence it, so each is an error: a
 sound is built in an `instrument { }` and played on a track of its own.
@@ -1038,7 +1038,7 @@ Several connections into one node add up there: `a > out` and `b > out` on two l
 play both, the same as `a > mix`, `b > mix`, `mix > out`, and two oscillators wired into
 one filter or one envelope both go through it. `mix` is still the way to say it when the
 sum has a name to wire on from, and a node takes 8 connections at most (an envelope 7). A node that makes
-its own signal takes none: `osc`, `fixosc`, `noise`, `lfo`, `kick()`, `tom()`, `hat()`,
+its own signal takes none: `osc`, `fixosc`, `pitch_osc`, `noise`, `lfo`, `kick()`, `tom()`, `hat()`,
 `snare()` and `clap()` read nothing that comes in, so `a > noise` is an error at its line
 rather than a connection that is never heard. To hear the two together wire each into
 `mix`; to move an oscillator, wire into one of its ports, below.

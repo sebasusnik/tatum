@@ -7,7 +7,10 @@
 //! a whole drum) was dropped the same way, and such a node in a chain of
 //! effects replaced the track's sound: both are errors that say what to write.
 
+use tatum_core::graph::node::{port, MAX_NODE_INPUTS};
+use tatum_core::graph::{Graph, GraphTemplate};
 use tatum_core::song_engine::SongEngine;
+use tatum_core::BLOCK_SIZE;
 
 fn song(instrument: &str, chain: &str, extra: &str) -> String {
     format!(
@@ -24,6 +27,13 @@ fn song(instrument: &str, chain: &str, extra: &str) -> String {
 fn render(instrument: &str) -> Vec<f32> {
     let src = song(instrument, "master", "");
     SongEngine::from_source(&src).unwrap_or_else(|e| panic!("{e}\n{src}")).render(1).0
+}
+
+/// The instrument `v` of `song`, compiled to its graph.
+fn template(instrument: &str) -> GraphTemplate {
+    let ast = tatum_core::dsl::parse(&song(instrument, "master", "")).unwrap_or_else(|e| panic!("{e:?}"));
+    let song = tatum_core::dsl::compiler::compile(&ast).unwrap_or_else(|e| panic!("{e:?}"));
+    song.instruments[0].as_graph().expect("an instrument graph").clone()
 }
 
 /// The error `src` is refused with, its line included.
@@ -97,12 +107,71 @@ fn two_wires_into_an_envelope_are_both_shaped() {
     assert!(rms(&both[step * 6..step * 8]) < rms(&both[..step * 4]) * 0.001, "the second wire went round the envelope");
 }
 
+/// The frame loop as it was before connections added up: each node reads
+/// what was wired into it as it came, with nothing summed before it runs.
+/// The voice's own loop (`GraphTemplate::run_frame`) must play a graph with
+/// one connection into each node exactly like this.
+fn render_unsummed(t: &GraphTemplate, freq: f32, samples: usize) -> Vec<f32> {
+    let mut g = Graph::from_template(t);
+    g.set_frequency(t, freq);
+    g.gate_on(t);
+    let mut out = Vec::with_capacity(samples);
+    while out.len() < samples {
+        for s in 0..BLOCK_SIZE {
+            for &idx in &t.execution_order[..t.exec_len as usize] {
+                let i = idx as usize;
+                let mut audio = [0.0f32; MAX_NODE_INPUTS];
+                let mut mods = [0.0f32; port::COUNT];
+                let n = t.gather(i, &g.buffers, s, &mut audio, &mut mods);
+                if let Some(node) = g.nodes[i].as_mut() {
+                    if t.mod_masks[i] != 0 {
+                        node.modulate(&mods, t.mod_masks[i]);
+                    }
+                    g.buffers[i][s] = node.process(&audio, n);
+                }
+            }
+            out.push(g.buffers[t.output_node as usize][s]);
+        }
+    }
+    out.truncate(samples);
+    out
+}
+
+/// The voice's loop: `Graph::process_block`, through `run_frame`.
+fn render_voice(t: &GraphTemplate, freq: f32, samples: usize) -> Vec<f32> {
+    let mut g = Graph::from_template(t);
+    g.set_frequency(t, freq);
+    g.gate_on(t);
+    let mut out = Vec::with_capacity(samples);
+    let mut block = [0.0f32; BLOCK_SIZE];
+    while out.len() < samples {
+        g.process_block(t, &mut block);
+        out.extend_from_slice(&block);
+    }
+    out.truncate(samples);
+    out
+}
+
 #[test]
 fn one_wire_sounds_as_it_did() {
-    // Nothing changes for a graph with one connection into each node, a
-    // `mix` or a port included.
-    let x = render("osc saw as a\nosc sine(pitch=-12) as s\nlfo(3, 0.3) > a.pitch\na > mix\ns > mix\nmix > ladder(900, 0.4) as f\nf > adsr(0.005, 0.1, 0.8, 0.1) as e\ne > out");
-    assert!(rms(&x) > 0.01 && x.iter().all(|v| v.is_finite()));
+    // Pins that adding up touches nothing when each node has one connection:
+    // a `mix` of two (which sums them itself), a port, an LFO on a pitch, and
+    // every envelope's VCA, whose two inputs are the envelope and the sound
+    // and must not be added together. The voice's loop has to match the old
+    // loop above sample for sample, bit for bit; a sum run on any of these
+    // nodes changes the samples and fails here.
+    for body in [
+        "osc saw as a\nosc sine(pitch=-12) as s\nlfo(3, 0.3) > a.pitch\na > mix\ns > mix\nmix > ladder(900, 0.4) as f\nf > adsr(0.005, 0.1, 0.8, 0.1) as e\ne > out",
+        "osc saw > lowpass(1200, 0.3) > adsr(0.001, 0.2, 0.5, 0.1) > out",
+        "osc square as a\nosc saw(pitch=7) as b\nb > gain(0.4) > a.fm\na > svf(700, 0.5) as f\nadsr(0.001, 0.3, 0.0, 0.1) as sweep\nsweep > f.cutoff\nf > perc(0.001, 0.4) as e\ne > out",
+    ] {
+        let t = template(body);
+        let old = render_unsummed(&t, 110.0, 8192);
+        assert!(rms(&old) > 0.01 && old.iter().all(|v| v.is_finite()), "{body}");
+        let now = render_voice(&t, 110.0, 8192);
+        let first = now.iter().zip(old.iter()).position(|(a, b)| a.to_bits() != b.to_bits());
+        assert!(first.is_none(), "sample {first:?} differs from the loop before summing:\n{body}");
+    }
 }
 
 #[test]
@@ -117,6 +186,7 @@ fn a_wire_into_a_node_that_takes_nothing_in_is_an_error() {
         ("hat()", "hat"),
         ("snare()", "snare"),
         ("clap()", "clap"),
+        ("pitch_osc sine(300, 50, 0.999)", "pitch_osc"),
     ] {
         let src = song(&format!("{A}\n{kind} as n\na > n\nn > out"), "master", "");
         let e = error(&src);
@@ -139,7 +209,9 @@ fn a_wire_into_a_node_that_takes_nothing_in_is_an_error() {
 #[test]
 fn a_source_in_a_chain_of_effects_is_an_error() {
     let inst = format!("{A}\na > out");
-    for kind in ["noise", "kick(A1)", "hat()", "snare()", "clap()", "tom(A2)", "lfo(2, 0.5)"] {
+    for kind in
+        ["noise", "kick(A1)", "hat()", "snare()", "clap()", "tom(A2)", "lfo(2, 0.5)", "pitch_osc(300, 50, 0.999)"]
+    {
         let word = kind.split(['(', ' ']).next().unwrap();
         // A track's inserts, a bus, the master and a send return.
         let cases = [

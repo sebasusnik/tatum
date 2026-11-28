@@ -37,7 +37,7 @@ pub(super) fn check_unique_labels(owner: &str, labels: &[Option<String>]) -> Res
 /// sound gone without a word. An envelope there is never struck by a note, so
 /// it stayed shut and the chain was silent.
 pub(super) fn takes_what_comes_in(owner: &str, kind: &str, spec: &NodeSpec) -> Result<(), CompileError> {
-    if spec.is_source() {
+    if !crate::nodes::takes_input(kind) {
         return Err(CompileError::new(format!(
             "{}: `{}` makes its own signal and takes nothing in, so in a chain it would replace everything before it; a chain only holds effects. Build the sound in an `instrument {{ }}` and play it on a track of its own",
             owner, kind

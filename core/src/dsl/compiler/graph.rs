@@ -106,7 +106,7 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
                 }
             }
         } else {
-            let source = spec.is_source();
+            let source = !crate::nodes::takes_input(&node_def.kind);
             let idx = builder.try_add_node(spec).map_err(|_| full(node_def.line))?;
             sources |= (source as u32) << idx;
             if let Some(ref alias) = node_def.alias {

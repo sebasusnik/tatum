@@ -695,23 +695,6 @@ impl NodeSpec {
         }
     }
 
-    /// A node that makes its own signal and reads nothing that is wired into
-    /// it: the oscillators, the noise, the LFO and the whole drums. (An
-    /// envelope is not one: sound wired into it goes through its VCA.)
-    pub fn is_source(&self) -> bool {
-        matches!(
-            self,
-            NodeSpec::Osc { .. }
-                | NodeSpec::PitchOsc { .. }
-                | NodeSpec::Kick { .. }
-                | NodeSpec::Hat { .. }
-                | NodeSpec::Snare { .. }
-                | NodeSpec::Clap { .. }
-                | NodeSpec::Noise { .. }
-                | NodeSpec::Lfo { .. }
-        )
-    }
-
     pub fn is_oscillator(&self) -> bool {
         matches!(self, NodeSpec::Osc { fixed: false, .. })
     }

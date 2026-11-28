@@ -757,6 +757,16 @@ fn apply_graph(g: &mut Graph, line: &str) -> Result<(), String> {
                     });
                 }
             }
+            // Into the input of a node that reads none, the compiler's rule:
+            // an oscillator, the noise, an LFO or a drum takes a port or nothing.
+            if let (None, Some(n)) = (wire.port.as_deref(), g.nodes.iter().find(|n| n.alias == b)) {
+                if !nodes::takes_input(&n.kind) {
+                    return Err(format!(
+                        "'{line}': {b} ({}) makes its own signal and takes nothing in: wire into `mix`, or into one of its ports",
+                        n.kind
+                    ));
+                }
+            }
             if g.connections.contains(&wire) {
                 return Err(format!("'{a} > {target}' is already there"));
             }
@@ -1237,6 +1247,39 @@ mod tests {
         apply(&mut s, "-node filt").expect("removes");
         assert!(!s.text().contains("filt"), "{}", s.text());
         round_trips(&s.text());
+    }
+
+    /// `+wire` takes a plain connection into a node exactly when the compiler
+    /// does, for every kind the page can add: never into one that makes its
+    /// own signal, which would be saved as a file that does not compile.
+    #[test]
+    fn a_wire_is_taken_only_where_the_compiler_takes_it() {
+        let compiles = |t: &str| {
+            let src = format!("{t}tempo 120\npattern p {{ C2 - - - }}\ntrack t {{ play p using w }}\n");
+            tatum_core::song_engine::SongEngine::from_source(&src).map(|_| ()).map_err(|e| format!("{e}\n{src}"))
+        };
+        let mut refused = 0;
+        for k in graph_kinds() {
+            let mut s = Sound::parse("instrument w {\n  osc saw as a\n  a > out\n}\n").expect("parses");
+            apply(&mut s, &format!("+node {} nn\n+wire nn out", k.name)).unwrap_or_else(|e| panic!("{}: {e}", k.name));
+            compiles(&s.text()).unwrap_or_else(|e| panic!("{} without the wire: {e}", k.name));
+            let wired = s.text().replacen("  nn > out\n", "  a > nn\n  nn > out\n", 1);
+            let before = s.clone();
+            match apply(&mut s, "+wire a nn") {
+                Ok(()) => compiles(&s.text()).unwrap_or_else(|e| panic!("+wire a nn ({}) was taken: {e}", k.name)),
+                Err(e) => {
+                    assert!(
+                        compiles(&wired).is_err(),
+                        "{}: +wire a nn refused ({e}), and the compiler takes it",
+                        k.name
+                    );
+                    assert!(e.contains("makes its own signal"), "{}: {e}", k.name);
+                    assert_eq!(s, before, "{} changed something", k.name);
+                    refused += 1;
+                }
+            }
+        }
+        assert!(refused >= 10, "the sources and drums: {refused}");
     }
 
     /// A sound with drum nodes and ports at once: a hat on a filter's cutoff
