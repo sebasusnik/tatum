@@ -983,17 +983,7 @@ impl KickState {
         if self.done {
             return 0.0;
         }
-        // The level: attack, then hold, then release.
-        if self.attack_left > 0 {
-            self.attack_left -= 1;
-            self.level = (self.level + self.attack_step).min(1.0);
-        } else if self.hold_left > 0 {
-            self.hold_left -= 1;
-            self.level = self.held;
-            self.held *= self.sag_mul;
-        } else {
-            self.level *= self.release_mul;
-        }
+        self.step_level();
         let body = crate::math::sin(self.phase * crate::math::TWO_PI) * self.level;
         // Saturated with its level, so the hit drives harder than the tail.
         let body =
@@ -1009,14 +999,12 @@ impl KickState {
             0.0
         };
 
-        let freq = self.note + self.body_part + self.snap_part + self.chirp_part;
+        let freq = self.freq();
         self.phase += freq / SAMPLE_RATE;
         if self.phase >= 1.0 {
             self.phase -= 1.0;
         }
-        self.body_part *= self.body_mul;
-        self.snap_part *= self.snap_mul;
-        self.chirp_part *= self.chirp_mul;
+        self.step_pitch();
 
         if self.level < KICK_FLOOR && self.attack_left == 0 && self.hold_left == 0 && self.click == 0.0 {
             self.done = true;
@@ -1026,6 +1014,143 @@ impl KickState {
 
     pub fn is_idle(&self) -> bool {
         self.done
+    }
+
+    /// The level: attack, then hold, then release.
+    #[inline]
+    fn step_level(&mut self) {
+        if self.attack_left > 0 {
+            self.attack_left -= 1;
+            self.level = (self.level + self.attack_step).min(1.0);
+        } else if self.hold_left > 0 {
+            self.hold_left -= 1;
+            self.level = self.held;
+            self.held *= self.sag_mul;
+        } else {
+            self.level *= self.release_mul;
+        }
+    }
+
+    /// The pitch parts alone, to look one sample ahead.
+    fn shape(&self) -> KickPitch {
+        KickPitch {
+            note: self.note,
+            body_part: self.body_part,
+            body_mul: self.body_mul,
+            snap_part: self.snap_part,
+            snap_mul: self.snap_mul,
+            chirp_part: self.chirp_part,
+            chirp_mul: self.chirp_mul,
+        }
+    }
+
+    #[inline]
+    fn freq(&self) -> f32 {
+        self.note + self.body_part + self.snap_part + self.chirp_part
+    }
+
+    /// The peak of a cycle at this level once `drive` has saturated it.
+    fn sounding_level(&self) -> f32 {
+        if self.drive_gain > 1.0 {
+            crate::math::tanh(self.level * self.drive_gain) * self.drive_norm
+        } else {
+            self.level
+        }
+    }
+
+    #[inline]
+    fn step_pitch(&mut self) {
+        self.body_part *= self.body_mul;
+        self.snap_part *= self.snap_mul;
+        self.chirp_part *= self.chirp_mul;
+    }
+}
+
+/// A kick's pitch, without its level or its sound.
+struct KickPitch {
+    note: f32,
+    body_part: f32,
+    body_mul: f32,
+    snap_part: f32,
+    snap_mul: f32,
+    chirp_part: f32,
+    chirp_mul: f32,
+}
+
+impl KickPitch {
+    fn step(&mut self) {
+        self.body_part *= self.body_mul;
+        self.snap_part *= self.snap_mul;
+        self.chirp_part *= self.chirp_mul;
+    }
+
+    fn freq(&self) -> f32 {
+        self.note + self.body_part + self.snap_part + self.chirp_part
+    }
+}
+
+/// From here a kick's sweep is heard as pitch; before it, as the click of
+/// the hit.
+pub const HEARD_FROM_MS: f32 = 5.0;
+/// Under this, against the hit's top, it no longer counts.
+pub const HEARD_DOWN_DB: f32 = -30.0;
+/// Semitones per millisecond at which a falling pitch counts half: the ear
+/// needs a few steady cycles to hear a pitch, and a sweep moving faster than
+/// this is heard more as a fall than as a note.
+pub const HEARD_STEADY_ST_PER_MS: f32 = 0.1;
+
+/// How much a moment counts towards the note heard: its energy, times how
+/// steady its pitch is.
+#[inline]
+pub fn heard_weight(level: f32, st_per_ms: f32) -> f32 {
+    let r = st_per_ms / HEARD_STEADY_ST_PER_MS;
+    level * level / (1.0 + r * r)
+}
+
+/// The note a kick is heard as, in Hz. A sweep that is still falling while
+/// the kick is loud is heard over the note it lands on: a kick tuned to A1
+/// with a slow body reads as a C or a D. This is a model of that, not a
+/// law of the ear: the mean of the pitch on a log scale, each moment weighted
+/// by its energy and by how steady its pitch is ([`heard_weight`]), from
+/// [`HEARD_FROM_MS`] until the level is [`HEARD_DOWN_DB`] under its top.
+/// The level is the one that sounds, after `drive`: saturation flattens the
+/// top and lifts the tail against it, so a driven kick is heard nearer the
+/// note it lands on. `tatum analyze` reads a record's kick the same way, from
+/// its averaged hit.
+pub fn kick_heard_hz(spec: &NodeSpec) -> f32 {
+    let NodeSpec::Kick { note, .. } = *spec else {
+        return 0.0;
+    };
+    let mut k = KickState::new(spec);
+    let from = (HEARD_FROM_MS * 0.001 * SAMPLE_RATE) as u32;
+    let floor = crate::math::pow(10.0, HEARD_DOWN_DB / 20.0);
+    let (mut sum, mut weight) = (0.0f32, 0.0f32);
+    let mut top = 0.0f32;
+    // Until it is `HEARD_DOWN_DB` down, which the release sees to; eight
+    // seconds at most, over the longest attack, hold and release together.
+    for i in 0..(8 * SAMPLE_RATE as u32) {
+        k.step_level();
+        let level = k.sounding_level();
+        top = top.max(level);
+        if i >= from {
+            if level < floor * top && k.attack_left == 0 && k.hold_left == 0 {
+                break;
+            }
+            let f = k.freq();
+            let mut next = k.shape();
+            next.step();
+            // Semitones the pitch falls in this sample, per ms.
+            let st_per_ms = 12.0 / core::f32::consts::LN_2 * crate::math::ln(f / next.freq()) * SAMPLE_RATE * 0.001;
+            let w = heard_weight(level, crate::math::abs(st_per_ms));
+            sum += w * crate::math::ln(f);
+            weight += w;
+        }
+        k.step_pitch();
+    }
+    if weight > 0.0 {
+        crate::math::exp(sum / weight)
+    } else {
+        note
     }
 }
 

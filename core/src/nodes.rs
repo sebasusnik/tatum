@@ -174,6 +174,7 @@ pub const NODES: &[NodeDefSpec] = &[
             arg!("click", -80.0, 0.0, -80.0, "dB of a short noise click against the body; -80 is none"),
             arg!("tone", 500.0, 12000.0, 3000.0, "Hz the click is centred on"),
             arg!("drive", 0.0, 1.0, 0.0, "tanh saturation of the body, clean to heavy, at the same peak level; the tail saturates less than the hit"),
+            arg!("heard", 0.0, 1.0, 0.0, "1: the note given is the note the kick is heard as, the sweep included, and the note it settles on is found under it, a fourth under on the default shape; an error when 20 Hz is not low enough. A model from the arguments, drive included, that knows nothing of the click or of what comes after the node. 0: the note it settles on"),
         ],
         waveform: false, rhythm: false, in_chains: false,
         doc: "A whole kick in one node, written in the units a kick is thought in: the note it lands on, how long the snap and the body take in ms, and its level held then released. It plays every hit the same, sample for sample, whatever the note's length, and the voice ends when it does. `kick(A1, body=70ms, hold=90ms, release=150ms)`. `chirp=` adds a third, faster stage on top for the tick of the attack, and `sag=` lets the held top lean. Write it with its parentheses, `kick()`, so a node named `kick` stays a name." },

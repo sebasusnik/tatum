@@ -133,8 +133,8 @@ model, which cannot hear it or its own render. `analyze` turns it into numbers: 
 tempo (and its span when it moves), the key, the notes under 250 Hz, the loudness and
 how far the peaks sit over it, the width above 250 Hz and under 150 Hz, the spectrum per
 octave against the whole, and the kick -- the frequency it hits at, the note its sweep
-lands on, how long the sweep takes, how long the body holds and then falls (all timed
-from the hit), how much click, and how much else fills its band. It reads a WAV from 8 to 384 kHz, PCM or float; an MP3 has to be converted
+lands on, the note it is heard as (the sweep weighted by its loudness), how long the
+sweep takes, how long the body holds and then falls (all timed from the hit), how much click, and how much else fills its band. It reads a WAV from 8 to 384 kHz, PCM or float; an MP3 has to be converted
 first (`ffmpeg -i song.mp3 song.wav`). `--from`/`--to` take a stretch, in seconds or
 `m:ss`. At most 15 minutes are measured at once, enough for a long extended mix; a longer
 file, such as a DJ set, is refused with a pointer to `--from`/`--to`, and only the stretch
@@ -153,6 +153,7 @@ dark_techno.wav: 300.7 s
     hit        89 Hz (the first half cycle)
     tail       39.0 Hz (D#1)
     sweep      33 ms to within 10% of the tail
+    heard      43.8 Hz (F1), +2.0 semitones from the tail: the sweep weighted by its loudness
     hold       none: it falls from the hit
     decay      -12 dB at 95 ms, -24 dB at 111 ms
     click      -26.5 dB (first 10 ms over 2 kHz against the body)
