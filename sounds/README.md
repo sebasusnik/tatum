@@ -21,6 +21,7 @@ What is here:
 |---|---|---|
 | `kicks/deep.synth` | `deep_kick` | a deep held kick on 44.5 Hz, fitted to a minimal record |
 | `bass/roll.synth` | `roll` | a dark rolling offbeat bass: two saws, a short filter pluck |
+| `bass/abyss.synth` | `abyss` | a dark Oberheim-style bass graph: cross-mod, PWM, an `svf` swept through its `cutoff` port |
 | `fm/pluck.synth` | `pluck` | a dry two-operator FM pluck, a detail layer |
 | `keys/pad.synth` | `pad` | a dark poly pad whose filter breathes over four bars |
 | `drums/machine.synth` | `machine` | a dry machine kit; lanes kick, snare, clap, hat, ... |
@@ -46,7 +47,9 @@ every parameter of a module, and plays the sound in a loop as they turn: a
 single hit, four on the floor, a held note or a chord, on the note you pick (a
 drum kit plays a lane, or a groove). It draws one hit's pitch and level over
 time and lays a record's averaged hit next to it. A graph's nodes are added,
-removed and wired with buttons. The library is listed beside it: open any
+removed and wired with buttons. A wire can land on a node's port (`sweep >
+filt.cutoff`): the list shows it so, the "to" box offers each node's ports
+after the node, and Save writes it back as it was. The library is listed beside it: open any
 sound here, or duplicate the one open to a new name (`keys/pad-dark` plays as
 `pad_dark`) and make it your own. Save writes the file back as text anyone can
 read and diff, and only when it compiles. It writes the comment on top and the

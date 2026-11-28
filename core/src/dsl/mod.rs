@@ -11,12 +11,12 @@ pub mod transform_words;
 
 use ast::Song;
 use error::ParseResult;
-use lexer::tokenize;
+use lexer::tokenize_with_dots;
 use parser::Parser;
 
 /// Parse a .synth source string into a Song AST.
 pub fn parse(source: &str) -> ParseResult<Song> {
-    let tokens = tokenize(source);
-    let parser = Parser::new(tokens);
+    let (tokens, dots) = tokenize_with_dots(source);
+    let parser = Parser::new(tokens).with_dots(dots);
     parser.parse_song()
 }

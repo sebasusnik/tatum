@@ -352,6 +352,7 @@ master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2
 | `gain(amount)` | linear multiplier | |
 | `lowpass(cutoff_hz, resonance)` / `highpass` / `bandpass` | Hz, 0..1 (Q 0.5..20: 0.05 is gentle, 0.3 is already a +15 dB peak) | options: envelope `ea= ed= es= er= edepth=` (seconds, level, Hz); LFO `lfo_bars=` or `lfo_hz=` with `lfo_depth=` in Hz, e.g. `lowpass(800, 0.6, lfo_bars=2, lfo_depth=600)` |
 | `ladder(cutoff_hz, resonance)` | Hz, 0..1 | Moog-style 4-pole, same envelope and LFO options |
+| `svf(cutoff_hz, resonance, morph=)` | Hz, 0..1, 0..1 | Oberheim SEM-style 12 dB state-variable: `morph` 0 lowpass, 0.5 notch, 1 highpass; the word `bandpass` makes it the bandpass. Same envelope and LFO options |
 | `autopan(depth, bars=)` | 0..1, bars | slow stereo movement, `autopan(0.6, bars=4)`; `hz=` for a free rate |
 | `phaser(mix, bars=, stages=, feedback=, depth=)` | 0..1, bars, 2..12, 0..0.9, 0..1 | swept allpass phaser, the liquid pad effect: `phaser(0.5, bars=4)` |
 | `autowah(sens, base=, range=, peak=, attack=, release=, down=, wobble=, wobble_hz=)` | 0..1, Hz, Hz, 0..1, ms, ms, 0/1, Hz, Hz | envelope filter: the signal sweeps a resonant filter with its own loudness, no LFO. Add `lowpass`, `bandpass` or `highpass` as a word for the mode: `autowah(0.8, base=250, range=2500, peak=0.8, bandpass)`. `wobble` makes each hit ring the cutoff back and forth |
@@ -403,7 +404,7 @@ scene drop {
     auto reverb_mix 0.1 > 0.5
     auto reverb_freeze 0 > 1             # freezes once the lane crosses 0.5
     auto master tilt 0.4 > -0.2          # master chain sweeps: tilt, eq_low, eq_mid, eq_high, drive,
-    auto master cutoff 20000 > 400       #   gain, cutoff, comp_threshold (the node must be in the chain)
+    auto master cutoff 20000 > 400       #   gain, cutoff, morph, comp_threshold (the node must be in the chain)
     auto master dj cutoff 20000 > 400    # the master node named `as dj`, when the chain has two filters
     track drums { play beat using kit }
     track acid  { play riff using acid }
@@ -539,8 +540,8 @@ midi {
 ```
 
 A chain node answers to the parameters `auto master` sweeps: `cutoff` on a filter,
-`tilt`, `eq_low`/`eq_mid`/`eq_high`, `drive` on `saturate` or `clip`, `gain`, and
-`comp_threshold`. With no range a cutoff knob runs 20 Hz to 20 kHz, evenly to the ear
+`tilt`, `eq_low`/`eq_mid`/`eq_high`, `drive` on `saturate` or `clip`, `gain`,
+`morph` on an `svf` (0 lowpass, 0.5 notch, 1 highpass), and `comp_threshold`. With no range a cutoff knob runs 20 Hz to 20 kHz, evenly to the ear
 (each stretch of the knob is the same interval, not the same number of Hz), an EQ band
 ±12 dB, `drive` 0..2 on `saturate` and 1..10 on `clip` (under 1 a clip only turns the
 track down), and a tempo 60..180 BPM. The master chain is counted without its
@@ -1027,6 +1028,100 @@ instrument pluck {
   sat > out
 }
 ```
+
+**A dark Oberheim bass: cross-mod, sync, PWM and the SEM filter.** Inside an
+`instrument` a connection can land on a node's *port* instead of its input:
+`lfo(0.25, 0.2) > b.width` does not feed `b` a signal to play, it moves `b`'s pulse
+width every sample by what comes in. The port goes after the node's name, with a dot
+or a space, and ends the chain; a `gain` on the way says how far, and several
+connections into one port add up. A word there that is not a port of that node
+(`f.resonance`, `out.fm`, `mix.cutoff`) is an error at its line that lists the ports
+the node has, never a plain connection.
+
+| port | on | what it does |
+|------|----|--------------|
+| `fm` | `osc`, `fixosc` | linear FM, the Oberheim's X-mod: 1.0 swings the frequency a whole carrier either way |
+| `pitch` | `osc`, `fixosc` | exponential pitch in octaves: 1.0 an octave up, 1/12 a semitone |
+| `sync` | `osc`, `fixosc` | hard sync: the cycle starts again each time what comes in crosses zero going up |
+| `width` | `osc pulse`, `fixosc pulse` | added to `width=`: PWM |
+| `cutoff` | `svf`, `ladder` | octaves on top of the cutoff, retuned every sample: an oscillator here is the cross-mod into the filter |
+| `morph` | `svf` | added to `morph=`: sweeps the SEM's mode knob |
+
+An envelope that nothing flows into, wired towards a port, is a control source rather
+than a VCA, so `fenv > gain(2.5) > filt.cutoff` sweeps the filter two and a half octaves
+on every note, the poly-mod of the hardware. (Wired towards `out` instead it is still a
+VCA with nothing to shape, and adds nothing.) What moves a port is a control signal, not
+sound: an LFO, such an envelope, or a `gain` fed only by them, wired into a port and
+into the sound as well (`fenv > gain(2) as g`, `g > filt.cutoff`, `g > mix`) is an
+error, where it would have put the envelope's curve in the output as DC. An envelope
+sound flows into is still a VCA when it goes into a port: `a > adsr(...) as amp`,
+`amp > b.pitch` sends the enveloped oscillator, not the curve; for the curve, declare a
+second envelope with nothing flowing in. A voice ends when its envelopes have: those
+the sound goes through. A control envelope does not hold it, so a filter sweep with a
+five-second release costs nothing after the amp envelope has closed; only when a graph
+has no other envelope does the control one decide, and the voice is cut when it ends.
+
+The `svf` is the SEM's filter: one pair of
+integrators, a `morph` that crossfades the lowpass into the highpass through a notch, and
+a cutoff that an oscillator can push around at audio rate and stay finite. Finite is not
+quiet: a fast modulator through several octaves of `gain` onto noise or another broadband
+source raises the level many times over (17 times the static filter's peak at
+`gain(10)`, resonance 1), and nothing in the filter limits it, so keep the depth to an
+octave or two there or turn the instrument down. The `ladder` takes it too. The biquads (`lowpass`, `highpass`, `bandpass`) have no
+`cutoff` port: retuned every sample they go unstable, so wiring into one is an error
+that says to use `svf` or `ladder`; their `ea=`/`edepth=` envelope and `lfo_hz=` sweep
+them as before.
+
+A port is one-way. It is a connection like any other, so a loop through one is refused
+as a loop: `a > gain(0.3) > a.fm` (an oscillator into its own FM), `a > b.fm` with
+`b > a.fm` (mutual cross-mod), and a filter into its own `cutoff` all stop with "the
+connections loop back on themselves". Modulate one way, from a node that does not
+depend on the one it moves.
+
+A modulated oscillator stops at 0.45 of the sample rate however far `pitch` and `fm`
+push it.
+An oscillator with something in its `sync` or `fm` port is AC-coupled, as the
+hardware's output is, so a cycle cut short by the sync does not leave DC behind; the
+coupling tilts a low square and lifts its peak (1.8 dB at C1). `pitch` and `width` do
+not switch it on: vibrato or PWM leaves the wave as it was, and a wire that carries
+nothing changes no sample. A slave runs one sample late,
+which is what lets it smooth each reset on both sides.
+
+```
+instrument abyss {
+  osc saw(55) as a
+  osc pulse(55, width=0.4, pitch=-12) as b
+  lfo(0.25, 0.2) as pwm
+  lfo(0.4, 0.3) as drift
+  adsr(0.001, 0.6, 0.0, 0.3) as fenv
+  b > gain(0.35) > a.fm
+  pwm > b.width
+  a > gain(0.6) as la
+  b > gain(0.5) as lb
+  la > mix
+  lb > mix
+  mix > svf(220, 0.45, morph=0.15) as filt
+  fenv > gain(2.5) > filt.cutoff
+  drift > filt.morph
+  filt > adsr(0.005, 0.8, 0.7, 0.8) as amp
+  amp > saturate(1.6) as sat
+  sat > out
+}
+
+instrument sync_lead {
+  osc saw(110) as master_osc
+  osc saw(110, pitch=7) as slave
+  lfo(0.5, 0.5) as sweep
+  master_osc > slave.sync
+  sweep > slave.pitch
+  slave > lowpass(1800, 0.1) as f
+  f > adsr(0.01, 0.3, 0.6, 0.4) as amp
+  amp > out
+}
+```
+
+The slave's `pitch` moves under a master that holds the note, which is the sync sweep:
+the pitch stays put and the timbre tears. `examples/oberheim_dark.synth` takes the same ports somewhere darker: a reese bass with an oscillator tearing at its filter, a sync lead an envelope throws two octaves up on every hit, and noise ringing in a resonant `svf` bandpass the bass note drags around.
 
 **A deep minimal kick.** The late-90s minimal kick is a sine that lands on the key,
 held round and then cut: the `kick` node writes it in those terms. The first argument

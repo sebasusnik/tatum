@@ -178,6 +178,49 @@ impl Oscillator {
         self.phase
     }
 
+    /// How far the phase moves each sample, drift included.
+    pub fn phase_inc(&self) -> f32 {
+        self.phase_inc
+    }
+
+    /// Put the phase anywhere in the cycle: what a hard sync does when the
+    /// master starts a cycle of its own.
+    pub fn set_phase(&mut self, phase: f32) {
+        self.phase = fmod_1(phase);
+    }
+
+    /// The waveform at a phase with nothing band-limiting it: the value either
+    /// side of a jump the caller is about to smooth over itself.
+    pub fn naive_at(&self, p: f32) -> f32 {
+        match self.waveform {
+            Waveform::Sine => math::sin(p * math::TWO_PI),
+            Waveform::Saw => 2.0 * p - 1.0,
+            Waveform::Square => {
+                if p < 0.5 {
+                    1.0
+                } else {
+                    -1.0
+                }
+            }
+            Waveform::Triangle => {
+                if p < 0.25 {
+                    p * 4.0
+                } else if p < 0.75 {
+                    2.0 - p * 4.0
+                } else {
+                    p * 4.0 - 4.0
+                }
+            }
+            Waveform::Pulse(duty) => {
+                if p < duty {
+                    1.0
+                } else {
+                    -1.0
+                }
+            }
+        }
+    }
+
     pub fn reset(&mut self) {
         self.phase = 0.0;
         self.drift_value = 0.0;

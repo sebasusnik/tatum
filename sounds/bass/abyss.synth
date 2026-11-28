@@ -1,0 +1,32 @@
+# A dark Oberheim-style bass. The pulse an octave down tears at the saw
+# through its fm port, a slow LFO moves the pulse's width, and the svf sits
+# between lowpass and notch: an envelope throws its cutoff two and a half
+# octaves open on every note while a second LFO leans on its morph.
+instrument abyss {
+  osc saw(55) as a
+  osc pulse(55, pitch=-12, width=0.4) as b
+  lfo(0.25hz, 0.2) as pwm
+  lfo(0.4hz, 0.3) as drift
+  adsr(0.001, 0.6, 0, 0.3) as fenv
+  gain(0.35) as xmod
+  gain(2.5) as sweep
+  gain(0.6) as la
+  gain(0.5) as lb
+  svf(A3, 0.45, morph=0.15) as filt
+  adsr(0.005, 0.8, 0.7, 0.8) as amp
+  saturate(1.6) as sat
+  b > xmod
+  xmod > a.fm
+  pwm > b.width
+  a > la
+  b > lb
+  la > mix
+  lb > mix
+  mix > filt
+  fenv > sweep
+  sweep > filt.cutoff
+  drift > filt.morph
+  filt > amp
+  amp > sat
+  sat > out
+}

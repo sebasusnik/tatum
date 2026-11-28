@@ -234,3 +234,110 @@ impl LadderFilter {
         self.dc_y1 = 0.0;
     }
 }
+
+// ─── State-variable filter (SEM-style multimode, 12 dB) ───
+
+/// A two-pole state-variable filter in the trapezoidal (zero-delay feedback)
+/// form, with its lowpass, bandpass and highpass taken from one pair of
+/// integrators. The Oberheim SEM is this circuit: one knob crossfades the
+/// lowpass into the highpass and passes through a notch on the way, and a
+/// switch picks the bandpass instead.
+///
+/// The trapezoidal form is what lets the cutoff move at audio rate. A biquad
+/// whose coefficients change every sample is not the filter its coefficients
+/// describe, and pushed hard by an oscillator it rings or blows up; this one
+/// keeps its state in the integrators and stays the same filter at any speed.
+pub struct SvfFilter {
+    ic1eq: f32,
+    ic2eq: f32,
+    a1: f32,
+    a2: f32,
+    a3: f32,
+    k: f32,
+    cutoff: f32,
+    resonance: f32,
+    sample_rate: f32,
+}
+
+/// The three outputs of one step.
+#[derive(Clone, Copy, Debug)]
+pub struct SvfOut {
+    pub low: f32,
+    pub band: f32,
+    pub high: f32,
+}
+
+impl SvfFilter {
+    pub fn new(sample_rate: f32) -> Self {
+        let mut f = Self {
+            ic1eq: 0.0,
+            ic2eq: 0.0,
+            a1: 1.0,
+            a2: 0.0,
+            a3: 0.0,
+            k: 2.0,
+            cutoff: 10000.0,
+            resonance: 0.0,
+            sample_rate,
+        };
+        f.recalc();
+        f
+    }
+
+    /// Resonance reads as the biquads' does, Q = 0.5 + resonance * 19.5, so a
+    /// patch moved from `lowpass` to `svf` keeps its peak.
+    pub fn set_params(&mut self, cutoff: f32, resonance: f32) {
+        self.cutoff = math::clamp(cutoff, 20.0, self.sample_rate * 0.49);
+        self.resonance = math::clamp(resonance, 0.0, 1.0);
+        self.recalc();
+    }
+
+    pub fn set_cutoff(&mut self, cutoff: f32) {
+        self.cutoff = math::clamp(cutoff, 20.0, self.sample_rate * 0.49);
+        self.recalc();
+    }
+
+    fn recalc(&mut self) {
+        // g = tan(pi * fc / fs), with the cosine written as the biquad writes
+        // it, 1 - 2 sin²(w/2), so a low cutoff reads true off the sine table.
+        let w = math::PI * self.cutoff / self.sample_rate;
+        let half = math::sin(w * 0.5);
+        let g = math::sin(w) / (1.0 - 2.0 * half * half);
+        self.k = 1.0 / (0.5 + self.resonance * 19.5);
+        self.a1 = 1.0 / (1.0 + g * (g + self.k));
+        self.a2 = g * self.a1;
+        self.a3 = g * self.a2;
+    }
+
+    #[inline]
+    pub fn process(&mut self, input: f32) -> SvfOut {
+        let v3 = input - self.ic2eq;
+        let v1 = self.a1 * self.ic1eq + self.a2 * v3;
+        let v2 = self.ic2eq + self.a2 * self.ic1eq + self.a3 * v3;
+        self.ic1eq = 2.0 * v1 - self.ic1eq;
+        self.ic2eq = 2.0 * v2 - self.ic2eq;
+        SvfOut { low: v2, band: v1, high: input - self.k * v1 - v2 }
+    }
+
+    /// The SEM's mode knob: 0 lowpass, 0.5 notch, 1 highpass, crossfaded in
+    /// between. Halfway the two halves sum to a notch at half the level, so
+    /// the crossfade is scaled back up by the louder side: the passband holds
+    /// at unity all the way across.
+    #[inline]
+    pub fn morph(out: SvfOut, morph: f32) -> f32 {
+        let m = math::clamp(morph, 0.0, 1.0);
+        let lp = 1.0 - m;
+        (lp * out.low + m * out.high) / lp.max(m)
+    }
+
+    /// The bandpass at unity on its peak, as the biquad bandpass is.
+    #[inline]
+    pub fn band(&self, out: SvfOut) -> f32 {
+        out.band * self.k
+    }
+
+    pub fn reset(&mut self) {
+        self.ic1eq = 0.0;
+        self.ic2eq = 0.0;
+    }
+}

@@ -50,6 +50,7 @@ impl Parser {
             // Each line inside instrument is either:
             // 1. A node declaration + chain: "osc saw(55) as osc1"
             // 2. A connection chain: "osc1 > mix > lowpass(900) > out"
+            // Either can end on a node's port: "lfo(0.3, 0.2) > osc1.width"
             self.parse_instrument_line(&mut inst);
         }
 
@@ -73,7 +74,27 @@ impl Parser {
             }
 
             let elem = self.parse_chain_element();
+            // Once something flows in, a word after the node is the port it
+            // lands on, whether or not such a port exists. At the head of a
+            // line only a dot makes it one (`f.res > out`), which the port
+            // arm below then refuses: nothing comes out of a port.
+            let elem = if chain.is_empty() && !self.after_a_dot() { elem } else { self.port_after(elem) };
+            let is_port = matches!(elem, ChainElement::Port(..));
             chain.push(elem);
+
+            // A port is where a modulation lands: nothing comes out of it.
+            if is_port && matches!(self.peek(), Token::Arrow) {
+                let s = self.span().clone();
+                self.errors.push(ParseError {
+                    line: s.line,
+                    col: s.col,
+                    message: String::from(
+                        "a port ends the chain: what goes into `a.fm` moves a knob on `a`, it is not a signal that comes out the other side",
+                    ),
+                });
+                self.recover_to_line_end();
+                break;
+            }
 
             // Check for > (chain continues)
             self.skip_newlines();
@@ -96,17 +117,100 @@ impl Parser {
                     let name = node_def.alias.clone().unwrap();
                     inst.nodes.push(node_def);
                     if let Some(ref prev) = prev_name {
-                        inst.connections.push(ConnectionDef { from: prev.clone(), to: name.clone(), line });
+                        inst.connections.push(ConnectionDef { from: prev.clone(), to: name.clone(), port: None, line });
                     }
                     prev_name = Some(name);
                 }
                 ChainElement::Ref(name) => {
                     if let Some(ref prev) = prev_name {
-                        inst.connections.push(ConnectionDef { from: prev.clone(), to: name.clone(), line });
+                        inst.connections.push(ConnectionDef { from: prev.clone(), to: name.clone(), port: None, line });
+                    }
+                    prev_name = Some(name);
+                }
+                ChainElement::Port(name, port) => {
+                    match prev_name {
+                        Some(ref prev) => inst.connections.push(ConnectionDef {
+                            from: prev.clone(),
+                            to: name.clone(),
+                            port: Some(port),
+                            line,
+                        }),
+                        None => self.errors.push(ParseError {
+                            line: line.0,
+                            col: 1,
+                            message: format!(
+                                "`{}.{}` is a port, where a modulation lands; wire something into it: `lfo(0.3, 0.2) > {}.{}`",
+                                name, port, name, port
+                            ),
+                        }),
                     }
                     prev_name = Some(name);
                 }
             }
+        }
+    }
+
+    /// What `elem` becomes when a word follows it on its line: `x > f.word`,
+    /// or `x > f word`. That word names a port of `f`, and one `f` does not
+    /// have is for the compiler to refuse with the ports `f` does have. It
+    /// used to end the chain and be dropped, so `lfo > f.resonance` wired the
+    /// LFO into `f` as audio without a word.
+    ///
+    /// Written with a space, a word that opens a node (`a > b  osc saw(55)`,
+    /// or the instrument's own `gain 0.8` after a chain) or that something
+    /// flows out of (`a > b  c > d`, two chains on one line) is still the
+    /// next thing on the line, as it always was; with a dot it is a port.
+    fn port_after(&mut self, elem: ChainElement) -> ChainElement {
+        if matches!(elem, ChainElement::Port(..)) {
+            return elem;
+        }
+        let dotted = self.after_a_dot();
+        let word = match self.peek().clone() {
+            Token::Ident(w) => {
+                let opens_a_node = is_dsp_keyword(&w) || (w == "kick" && matches!(self.peek_ahead(1), Token::LParen));
+                let known = crate::graph::node::port::from_name(&w).is_some();
+                let starts_a_chain = !known && matches!(self.peek_ahead(1), Token::Arrow);
+                if !dotted && (opens_a_node || starts_a_chain) {
+                    return elem;
+                }
+                w
+            }
+            Token::Newline | Token::Arrow | Token::RBrace | Token::Eof if !dotted => return elem,
+            other if dotted => match word_of(&other) {
+                Some(w) => w,
+                None => {
+                    let s = self.span().clone();
+                    self.errors.push(ParseError {
+                        line: s.line,
+                        col: s.col,
+                        message: String::from("after the dot comes the name of a port: `osc1.fm`, `filt.cutoff`"),
+                    });
+                    self.recover_to_line_end();
+                    return elem;
+                }
+            },
+            _ => return elem,
+        };
+        match elem {
+            ChainElement::Ref(name) => {
+                self.advance();
+                ChainElement::Port(name, word)
+            }
+            ChainElement::NodeDef(def) => {
+                let s = self.span().clone();
+                let name = def.alias.clone().unwrap_or_else(|| def.kind.clone());
+                self.errors.push(ParseError {
+                    line: s.line,
+                    col: s.col,
+                    message: format!(
+                        "`{}.{}`: a port goes on a node that already has its name; put `{} ... as {}` on a line of its own, then wire into `{}.{}`",
+                        name, word, def.kind, name, name, word
+                    ),
+                });
+                self.recover_to_line_end();
+                ChainElement::NodeDef(def)
+            }
+            port => port,
         }
     }
 
@@ -143,8 +247,16 @@ impl Parser {
                 if is_dsp_keyword {
                     self.parse_inline_node_def(word)
                 } else {
-                    // Just a reference
+                    // Just a reference, or a port on one: `osc1.fm` (the
+                    // dot is optional, as everywhere a name has parts).
                     self.advance();
+                    if let Token::Ident(ref next) = self.peek().clone() {
+                        if crate::graph::node::port::from_name(next).is_some() {
+                            let port = next.clone();
+                            self.advance();
+                            return ChainElement::Port(word, port);
+                        }
+                    }
                     ChainElement::Ref(word)
                 }
             }
@@ -341,6 +453,28 @@ impl Parser {
 enum ChainElement {
     NodeDef(NodeDef),
     Ref(String),
+    /// A node and one of its modulation ports: `osc1.fm`.
+    Port(String, String),
+}
+
+/// The word a token was written as, for the ones a port could be mistaken
+/// for: `f.mix`, `f.level`, `f.out`.
+fn word_of(token: &Token) -> Option<String> {
+    let word = match token {
+        Token::Ident(w) | Token::Note(w) => return Some(w.clone()),
+        Token::Out => "out",
+        Token::In => "in",
+        Token::Mix => "mix",
+        Token::Master => "master",
+        Token::Level => "level",
+        Token::Pan => "pan",
+        Token::Velocity => "velocity",
+        Token::Scale => "scale",
+        Token::Swing => "swing",
+        Token::Sidechain => "sidechain",
+        _ => return None,
+    };
+    Some(String::from(word))
 }
 
 /// Check if a word is a DSP keyword (node type that can be instantiated).
@@ -358,6 +492,7 @@ fn is_dsp_keyword(word: &str) -> bool {
             | "highpass"
             | "bandpass"
             | "ladder"
+            | "svf"
             | "gain"
             | "saturate"
             | "drive"

@@ -133,6 +133,17 @@ const FILTER_ENV: &[Arg] = &[
     arg!("lfo_hz", 0.0, 20.0, 0.0, "free LFO rate in Hz"),
     arg!("lfo_depth", 0.0, 20000.0, 0.0, "LFO sweep in Hz around the cutoff; 0 = off"),
 ];
+const SVF_NAMED: &[Arg] = &[
+    arg!("morph", 0.0, 1.0, 0.0, "mode: 0 lowpass, 0.5 notch, 1 highpass, crossfaded in between"),
+    arg!("ea", 0.0, 10.0, 0.005, "envelope attack, seconds"),
+    arg!("ed", 0.0, 10.0, 0.2, "envelope decay, seconds"),
+    arg!("es", 0.0, 1.0, 0.0, "envelope sustain level"),
+    arg!("er", 0.0, 10.0, 0.1, "envelope release, seconds"),
+    arg!("edepth", -20000.0, 20000.0, 0.0, "envelope depth in Hz added to the cutoff"),
+    arg!("lfo_bars", 0.0, 64.0, 0.0, "LFO cycle length in bars (tempo-synced); 0 = use lfo_hz"),
+    arg!("lfo_hz", 0.0, 20.0, 0.0, "free LFO rate in Hz"),
+    arg!("lfo_depth", 0.0, 20000.0, 0.0, "LFO sweep in Hz around the cutoff; 0 = off"),
+];
 const FILTER_POS: &[Arg] = &[
     arg!("cutoff", 20.0, 20000.0, 1000.0, "Hz"),
     // The curve is Q = 0.5 + resonance * 19.5, so this number climbs fast:
@@ -207,6 +218,9 @@ pub const NODES: &[NodeDefSpec] = &[
         waveform: false, rhythm: false, in_chains: true, doc: "Biquad bandpass." },
     NodeDefSpec { name: "ladder", aliases: &[], category: Category::Filter, positional: FILTER_POS, named: FILTER_ENV,
         waveform: false, rhythm: false, in_chains: true, doc: "Moog-style 4-pole ladder lowpass with drive." },
+    NodeDefSpec { name: "svf", aliases: &[], category: Category::Filter, positional: FILTER_POS, named: SVF_NAMED,
+        waveform: true, rhythm: false, in_chains: true,
+        doc: "Oberheim SEM-style 12 dB state-variable filter: `morph=` turns it from lowpass (0) through a notch (0.5) to highpass (1), and the word `bandpass` makes it the bandpass instead. Its cutoff can move at audio rate and stay finite, which is what the `cutoff` port needs from an oscillator; it is not level-safe there: a fast modulator through a `gain` of several octaves onto noise or other broadband sound can raise the output many times over (17 times the static filter's peak, measured with noise and a square two octaves up at `gain(10)`, resonance 1), so keep the depth to an octave or two or turn the voice down: `svf(400, 0.4, morph=0.2)`." },
     NodeDefSpec { name: "mix", aliases: &[], category: Category::Util, positional: &[], named: &[],
         waveform: false, rhythm: false, in_chains: false, doc: "Sums every node routed into it." },
     NodeDefSpec { name: "gain", aliases: &[], category: Category::Util,
@@ -303,6 +317,54 @@ pub const NODES: &[NodeDefSpec] = &[
         positional: &[arg!("size", 0.0, 1.0, 0.5, "room size / decay")], named: &[],
         waveform: false, rhythm: false, in_chains: true, doc: "Plate reverb, wet only; use it on a bus." },
 ];
+
+/// A modulation input on a node inside an `instrument` graph: `src > a.fm`.
+#[derive(Debug, Clone, Copy)]
+pub struct Port {
+    pub name: &'static str,
+    pub doc: &'static str,
+}
+
+const OSC_PORTS: &[Port] = &[
+    Port {
+        name: "fm",
+        doc: "linear FM, the cross-mod: 1.0 swings the frequency a whole carrier either way; stops at 0 Hz",
+    },
+    Port { name: "pitch", doc: "exponential pitch in octaves: 1.0 is an octave up, 1/12 a semitone" },
+    Port { name: "sync", doc: "hard sync: restarts the cycle each time what comes in crosses zero going up" },
+    Port { name: "width", doc: "added to `width=`, kept within 0.05..0.95: PWM; pulse only" },
+];
+const CUTOFF_PORT: Port =
+    Port { name: "cutoff", doc: "octaves on top of the cutoff, retuned every sample: 1.0 is an octave up" };
+
+/// The ports each node has. A node not listed has none.
+pub const PORTS: &[(&str, &[Port])] = &[
+    ("osc", OSC_PORTS),
+    ("fixosc", OSC_PORTS),
+    // Not the biquads: a `lowpass`, `highpass` or `bandpass` retuned every
+    // sample is unstable, and runs off to infinity under an oscillator.
+    ("ladder", &[CUTOFF_PORT]),
+    ("svf", &[CUTOFF_PORT, Port { name: "morph", doc: "added to `morph=`, kept within 0..1; not with `bandpass`" }]),
+];
+
+/// The words that make an `svf` the bandpass.
+pub const SVF_BANDPASS: &[&str] = &["bandpass", "bp"];
+
+/// Whether a node written with these words has `port`, of the ports its kind
+/// lists: `width` is a pulse's, and the bandpass `svf` has no `morph`. The
+/// compiler and the sound designer both ask here, so they cannot disagree.
+pub fn port_fits(port: &str, has_word: impl Fn(&str) -> bool) -> bool {
+    match port {
+        "width" => has_word("pulse"),
+        "morph" => !SVF_BANDPASS.iter().any(|w| has_word(w)),
+        _ => true,
+    }
+}
+
+pub fn ports(kind: &str) -> &'static [Port] {
+    let name = lookup(kind).map_or(kind, |d| d.name);
+    PORTS.iter().find(|(n, _)| *n == name).map_or(&[], |(_, p)| p)
+}
 
 /// The universal chain-node option: dry/wet, where 0 bypasses.
 pub const WET: &str = "wet";
@@ -462,6 +524,25 @@ pub fn markdown() -> String {
         ));
     }
     out.push('\n');
+    out.push_str("### modulation ports\n\n");
+    out.push_str("Inside an `instrument` graph a connection can land on a node's port instead of its\n");
+    out.push_str("input: `lfo(0.3, 0.2) > a.width` does not feed `a` a signal, it moves one of its knobs\n");
+    out.push_str("every sample by the value coming in. Write the port after the node's name, with a dot\n");
+    out.push_str("or a space; it ends the chain. Several connections into one port add up, and a `gain`\n");
+    out.push_str("on the way sets how far: `b > gain(0.5) > a.fm`. An envelope nothing flows into, wired\n");
+    out.push_str("towards a port, is a control source: `adsr(0.001, 0.4, 0, 0.2) as fenv` then\n");
+    out.push_str("`fenv > gain(2) > filt.cutoff` sweeps two octaves per note. A port is one-way: a loop\n");
+    out.push_str("through one (`a > a.fm`, or `a > b.fm` with `b > a.fm`) is refused like any other loop.\n");
+    out.push_str("The biquads (`lowpass`, `highpass`, `bandpass`) have no `cutoff` port, because they go\n");
+    out.push_str("unstable retuned every sample: use `svf` or `ladder`.\n\n");
+    out.push_str("| node | port | what it does |\n");
+    out.push_str("|------|------|--------------|\n");
+    for (node, ports) in PORTS {
+        for p in ports.iter() {
+            out.push_str(&format!("| `{}` | `{}` | {} |\n", node, p.name, p.doc));
+        }
+    }
+    out.push('\n');
     out
 }
 
@@ -482,10 +563,14 @@ pub fn json() -> String {
         let pos: Vec<String> = n.positional.iter().map(arg_json).collect();
         let named: Vec<String> = n.named.iter().map(arg_json).collect();
         let aliases: Vec<String> = n.aliases.iter().map(|a| format!("\"{}\"", a)).collect();
+        let ports: Vec<String> = ports(n.name)
+            .iter()
+            .map(|p| format!("{{\"name\": \"{}\", \"doc\": \"{}\"}}", p.name, p.doc.replace('"', "\\\"")))
+            .collect();
         out.push_str(&format!(
-            "  {{\"name\": \"{}\", \"aliases\": [{}], \"category\": \"{}\", \"in_chains\": {}, \"waveform\": {}, \"rhythm\": {}, \"positional\": [{}], \"named\": [{}], \"doc\": \"{}\"}}{}\n",
+            "  {{\"name\": \"{}\", \"aliases\": [{}], \"category\": \"{}\", \"in_chains\": {}, \"waveform\": {}, \"rhythm\": {}, \"positional\": [{}], \"named\": [{}], \"ports\": [{}], \"doc\": \"{}\"}}{}\n",
             n.name, aliases.join(", "), n.category.as_str(), n.in_chains, n.waveform, n.rhythm,
-            pos.join(", "), named.join(", "), n.doc.replace('"', "\\\""),
+            pos.join(", "), named.join(", "), ports.join(", "), n.doc.replace('"', "\\\""),
             if i + 1 < NODES.len() { "," } else { "" }
         ));
     }
