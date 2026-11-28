@@ -133,17 +133,26 @@ fn sound_json(state: &State) -> String {
                     ));
                 }
                 nodes_json.push(format!(
-                    "{{\"kind\":{},\"alias\":{},\"doc\":{},\"words\":{},\"word_choices\":{},\"args\":[{}]}}",
+                    "{{\"kind\":{},\"alias\":{},\"doc\":{},\"words\":{},\"word_choices\":{},\"word_needed\":{},\"ports\":{},\"args\":[{}]}}",
                     json_str(&n.kind),
                     json_str(&n.alias),
                     json_str(def.doc),
                     json_strs(n.words.iter().map(String::as_str)),
                     json_strs(sound::word_choices(&n.kind).iter().copied()),
+                    !sound::default_words(&n.kind).is_empty(),
+                    json_strs(sound::node_ports(g, &n.alias).into_iter()),
                     args.join(",")
                 ));
             }
-            let wires: Vec<String> =
-                g.connections.iter().map(|(a, b)| format!("[{},{}]", json_str(a), json_str(b))).collect();
+            // `[from, to]`, or `[from, to, port]` for one that lands on a port.
+            let wires: Vec<String> = g
+                .connections
+                .iter()
+                .map(|w| match &w.port {
+                    Some(p) => format!("[{},{},{}]", json_str(&w.from), json_str(&w.to), json_str(p)),
+                    None => format!("[{},{}]", json_str(&w.from), json_str(&w.to)),
+                })
+                .collect();
             format!(
                 "\"gain\":{},\"nodes\":[{}],\"connections\":[{}]",
                 g.gain.map_or("null".into(), json_num),
@@ -1516,6 +1525,39 @@ mod tests {
         let r = post(&mut state, "/api/save", "");
         assert!(r.contains("not saved: it makes no sound on any lane"), "{r}");
         assert!(!d.join("sounds/drums/off.synth").exists());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_port_reaches_the_page_and_the_saved_file() {
+        let d = temp("ports");
+        let path = d.join("sounds/bass/ob.synth");
+        let text = "instrument ob {\n  osc saw(55) as a\n  osc pulse(55, width=0.4) as b\n  b > gain(0.35) as xm\n  xm > a.fm\n  a > svf(300hz, 0.4, morph=0.2) as filt\n  filt > out\n}\n";
+        let mut state = state_of(text, &path, Library::find(&path, None));
+        let r = sound_json(&state);
+        assert!(r.contains("[\"xm\",\"a\",\"fm\"]") && r.contains("[\"a\",\"filt\"]"), "{r}");
+        assert!(r.contains("\"ports\":[\"fm\",\"pitch\",\"sync\",\"width\"]"), "the pulse's ports: {r}");
+        assert!(r.contains("\"ports\":[\"cutoff\",\"morph\"]") && r.contains("\"name\":\"morph\""), "{r}");
+        // Wired from the page, turned, and saved: the file says what the page did.
+        let r = post(&mut state, "/api/set", "+wire xm filt.cutoff\nfilt.morph=0.6");
+        assert!(
+            r.starts_with("{\"ok\":true") && r.contains("[\"xm\",\"filt\",\"cutoff\"]"),
+            "{}",
+            &r[..r.len().min(300)]
+        );
+        assert!(post(&mut state, "/api/save", "").starts_with("{\"ok\":true"));
+        let saved = std::fs::read_to_string(&path).expect("saved");
+        for line in ["  xm > a.fm\n", "  xm > filt.cutoff\n", "  a > filt\n", "svf(300hz, 0.4, morph=0.6) as filt"] {
+            assert!(saved.contains(line), "{line:?} in\n{saved}");
+        }
+        // A port the node does not have is refused by the page's own button,
+        // and one the compiler refuses is not saved.
+        let r = post(&mut state, "/api/set", "+wire b a.width");
+        assert!(r.contains("has no port 'width'"), "{}", &r[..r.len().min(300)]);
+        let r = post(&mut state, "/api/set", "+wire b filt.morph\nword filt=bandpass");
+        assert!(r.starts_with("{\"ok\":false"), "{}", &r[..r.len().min(300)]);
+        assert!(post(&mut state, "/api/save", "").contains("not saved"));
+        assert_eq!(std::fs::read_to_string(&path).expect("still there"), saved);
         let _ = std::fs::remove_dir_all(&d);
     }
 

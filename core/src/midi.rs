@@ -69,6 +69,8 @@ const NODE_PARAMS: &[(&str, f32, f32, bool)] = &[
     ("comp_threshold", -40.0, 0.0, false),
     // A vowel filter's place along a-e-i-o-u.
     ("position", 0.0, 1.0, false),
+    // An `svf`'s mode: lowpass, notch, highpass.
+    ("morph", 0.0, 1.0, false),
 ];
 
 /// The widest a range on a node parameter may be written, which is what the
@@ -79,7 +81,7 @@ fn node_param_limits(param: &str) -> (f32, f32) {
         "tilt" => (-1.0, 1.0),
         "eq_low" | "eq_mid" | "eq_high" => (-12.0, 12.0),
         "drive" | "gain" => (0.0, 10.0),
-        "position" => (0.0, 1.0),
+        "position" | "morph" => (0.0, 1.0),
         _ => (-60.0, 0.0),
     }
 }
@@ -940,11 +942,10 @@ pub fn module_named<'a>(song: &'a Song, name: &str) -> Option<&'a crate::dsl::as
 /// the engine builds (which leaves out a `limiter`): the one named `label`,
 /// or with no label the first that has the parameter, as `auto master` picks.
 pub fn master_node(song: &Song, label: Option<&str>, param: &str) -> Option<usize> {
-    let kinds = node_kinds_for(param);
     let chain = song.master.as_ref()?.chain.iter().filter(|n| n.kind != "limiter");
     for (i, n) in chain.enumerate() {
         let named = label.is_none_or(|l| n.label.as_deref() == Some(l));
-        if named && kinds.contains(&n.kind.as_str()) {
+        if named && crate::dsl::compiler::chain_node_takes(&n.kind, &n.params, param) {
             return Some(i);
         }
         if named && label.is_some() {
@@ -1062,7 +1063,7 @@ pub fn knob_span(song: &Song, target: &str, range: &[RangeEnd]) -> Result<Span, 
                     ("cutoff", Some("khz")) => e.value * 1000.0,
                     ("eq_low" | "eq_mid" | "eq_high" | "comp_threshold", Some("db")) => e.value,
                     ("gain", Some("db")) => crate::math::pow(10.0, e.value / 20.0),
-                    ("tilt" | "position", Some("%")) => e.value / 100.0,
+                    ("tilt" | "position" | "morph", Some("%")) => e.value / 100.0,
                     (_, Some(u)) => return Err(format!("'{}' does not take '{}'", param, u)),
                 };
                 let (lo, hi) = node_param_limits(param);
@@ -1222,6 +1223,16 @@ fn reading(m: &Move, v: f32) -> String {
         Move::NodeParam { param: "position", .. } => {
             let x = v.clamp(0.0, 1.0) * 4.0;
             let near = ["a", "e", "i", "o", "u"][crate::math::floor(x + 0.5) as usize];
+            format!("{} ({:.0}%)", near, v * 100.0)
+        }
+        Move::NodeParam { param: "morph", .. } => {
+            let near = if v < 0.25 {
+                "lp"
+            } else if v < 0.75 {
+                "notch"
+            } else {
+                "hp"
+            };
             format!("{} ({:.0}%)", near, v * 100.0)
         }
         Move::NodeParam { .. } => format!("{:.2}", v),

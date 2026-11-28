@@ -22,11 +22,39 @@ pub struct Node {
     pub args: BTreeMap<String, f32>,
 }
 
+/// A connection: `from > to`, or `from > to.port` when it lands on one of
+/// the node's modulation ports instead of its input.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Wire {
+    pub from: String,
+    pub to: String,
+    pub port: Option<String>,
+}
+
+impl Wire {
+    /// Where it lands, as the file writes it: `filt`, or `filt.cutoff`.
+    pub fn target(&self) -> String {
+        match &self.port {
+            Some(p) => format!("{}.{p}", self.to),
+            None => self.to.clone(),
+        }
+    }
+
+    /// `filt` or `filt.cutoff` read back into a node and its port.
+    fn to_target(from: &str, target: &str) -> Wire {
+        let (to, port) = match target.split_once('.') {
+            Some((to, port)) => (to, Some(port.to_string())),
+            None => (target, None),
+        };
+        Wire { from: from.to_string(), to: to.to_string(), port }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Graph {
     pub gain: Option<f32>,
     pub nodes: Vec<Node>,
-    pub connections: Vec<(String, String)>,
+    pub connections: Vec<Wire>,
 }
 
 /// How a module parameter is written in its file, so it is written back the
@@ -135,8 +163,8 @@ impl Sound {
                 for n in &g.nodes {
                     let _ = writeln!(o, "  {}", node_text(n));
                 }
-                for (a, b) in &g.connections {
-                    let _ = writeln!(o, "  {a} > {b}");
+                for w in &g.connections {
+                    let _ = writeln!(o, "  {} > {}", w.from, w.target());
                 }
             }
             Body::Module(m) => {
@@ -296,7 +324,11 @@ fn parse_graph(inst: &InstrumentDef) -> Result<Graph, String> {
         nodes_out.push(Node { kind: n.kind.clone(), alias, words, rhythm, args });
     }
     let rename = |s: &str| renames.iter().find(|r| r.0 == s).map_or(s.to_string(), |r| r.1.clone());
-    let connections = inst.connections.iter().map(|c| (rename(&c.from), rename(&c.to))).collect();
+    let connections = inst
+        .connections
+        .iter()
+        .map(|c| Wire { from: rename(&c.from), to: rename(&c.to), port: c.port.clone() })
+        .collect();
     Ok(Graph { gain: inst.gain, nodes: nodes_out, connections })
 }
 
@@ -504,6 +536,8 @@ pub fn word_choices(kind: &str) -> &'static [&'static str] {
         Some("osc" | "fixosc" | "pitch_osc") => &["sine", "saw", "square", "triangle", "pulse"],
         Some("vowel") => &["a", "e", "i", "o", "u"],
         Some("autowah") => &["lowpass", "bandpass", "highpass"],
+        // With no word it is the lowpass-to-highpass `morph=` turns.
+        Some("svf") => nodes::SVF_BANDPASS,
         _ => &[],
     }
 }
@@ -603,7 +637,8 @@ pub fn finite(v: &str) -> Option<f32> {
 /// - on a graph: `alias.arg=value` sets a knob, `-alias.arg` unsets it,
 ///   `word alias=saw` sets a node's words, `+node kind alias` adds a node,
 ///   `-node alias` removes one and its connections, `+wire a b` and
-///   `-wire a b` connect and disconnect `a > b`;
+///   `-wire a b` connect and disconnect `a > b`, and `+wire a b.fm` and
+///   `-wire a b.fm` the same into a port of `b`;
 /// - on a module: `param=value` sets a knob (a number, or a choice by name),
 ///   `-param` unsets it, `envN.a=seconds` (a, d, s, r) sets an fm
 ///   operator's envelope and `-envN` removes it.
@@ -688,7 +723,7 @@ fn apply_graph(g: &mut Graph, line: &str) -> Result<(), String> {
         if g.nodes.len() == before {
             return Err(format!("'{line}': no node named '{alias}'"));
         }
-        g.connections.retain(|(a, b)| a != alias && b != alias);
+        g.connections.retain(|w| w.from != alias && w.to != alias);
         return Ok(());
     }
     for (prefix, add) in [("+wire ", true), ("-wire ", false)] {
@@ -697,7 +732,9 @@ fn apply_graph(g: &mut Graph, line: &str) -> Result<(), String> {
         let (Some(a), Some(b), None) = (w.next(), w.next(), w.next()) else {
             return Err(format!("'{line}': expected {}wire from to", &prefix[..1]));
         };
-        let pair = (a.to_string(), b.to_string());
+        let wire = Wire::to_target(a, b);
+        let target = b;
+        let b = wire.to.as_str();
         if add {
             if !(a == "mix" || taken(g, a)) {
                 return Err(format!("'{line}': no node named '{a}' to connect from"));
@@ -708,15 +745,27 @@ fn apply_graph(g: &mut Graph, line: &str) -> Result<(), String> {
             if a == b {
                 return Err(format!("'{line}': a node cannot take its own output"));
             }
-            if g.connections.contains(&pair) {
-                return Err(format!("'{a} > {b}' is already there"));
+            if let Some(port) = wire.port.as_deref() {
+                // The ports of the node as it stands: `width` is a pulse's.
+                let kind = g.nodes.iter().find(|n| n.alias == b).map_or("", |n| n.kind.as_str());
+                let has = node_ports(g, b);
+                if !has.contains(&port) {
+                    return Err(if has.is_empty() {
+                        format!("'{line}': {b} ({kind}) has no ports")
+                    } else {
+                        format!("'{line}': {b} ({kind}) has no port '{port}' ({})", has.join(" | "))
+                    });
+                }
             }
-            g.connections.push(pair);
+            if g.connections.contains(&wire) {
+                return Err(format!("'{a} > {target}' is already there"));
+            }
+            g.connections.push(wire);
         } else {
             let before = g.connections.len();
-            g.connections.retain(|c| *c != pair);
+            g.connections.retain(|c| *c != wire);
             if g.connections.len() == before {
-                return Err(format!("there is no '{a} > {b}' to take out"));
+                return Err(format!("there is no '{a} > {target}' to take out"));
             }
         }
         return Ok(());
@@ -787,6 +836,15 @@ fn wires_by(alias: &str) -> bool {
                 && i.connections[0].from == alias
         })
     })
+}
+
+/// The ports the node named `alias` has as it stands, for the page to offer
+/// and `+wire` to check: `width` only on a pulse, `morph` not on an `svf`
+/// that is a bandpass, which is what the compiler takes.
+pub fn node_ports(g: &Graph, alias: &str) -> Vec<&'static str> {
+    let Some(n) = g.nodes.iter().find(|n| n.alias == alias) else { return Vec::new() };
+    let word = |w: &str| n.words.iter().any(|x| x == w);
+    nodes::ports(&n.kind).iter().map(|p| p.name).filter(|p| nodes::port_fits(p, word)).collect()
 }
 
 fn taken(g: &Graph, alias: &str) -> bool {
@@ -1100,12 +1158,129 @@ mod tests {
         names.sort_unstable();
         names.dedup();
         assert_eq!(names.len(), 3, "two nodes by one name: {}", s.text());
-        assert!(g.connections.iter().all(|(a, b)| a != b), "{}", s.text());
+        assert!(g.connections.iter().all(|w| w.from != w.to), "{}", s.text());
         // And it plays: the same wires as the file, under the new name.
         let src = format!("{}pattern p {{ C3 - - - }}\ntrack t {{ play p using an }}\n", s.text());
         tatum_core::song_engine::SongEngine::from_source(&src).expect("compiles");
         // Two unnamed nodes of a kind, and a name already one ahead of them.
         round_trips("instrument an {\n  noise() as lowpass2\n  lowpass2 > lowpass(900hz) > lowpass(400hz) as lowpass3\n  lowpass3 > out\n}\n");
+    }
+
+    /// One note of `instrument` text, rendered: what a Save must not change.
+    fn rendered(text: &str, name: &str) -> Vec<f32> {
+        let src = format!("{text}tempo 120\npattern p {{ C2 - - - }}\ntrack t {{ play p using {name} }}\n");
+        let mut engine =
+            tatum_core::song_engine::SongEngine::from_source(&src).unwrap_or_else(|e| panic!("{e}\n{src}"));
+        let (l, _) = engine.render(1);
+        assert!(l.iter().any(|v| v.abs() > 1e-3), "it plays");
+        l
+    }
+
+    const PORTS: &str = "instrument ob {\n  osc saw(55) as a\n  osc pulse(55, width=0.4, pitch=-12) as b\n  adsr(0.001, 0.3, 0, 0.2) as fenv\n  b > gain(0.35) > a.fm\n  lfo(4, 0.2) > b width\n  a > svf(300hz, 0.4, morph=0.2) as filt\n  fenv > gain(2.5) > filt.cutoff\n  filt > adsr(0.005, 0.4, 0.7, 0.3) as amp\n  amp > out\n}\n";
+
+    #[test]
+    fn a_wire_into_a_port_is_read_shown_and_written_back_as_one() {
+        // `b > gain(0.35) > a.fm` used to come back as `... > a`: the
+        // modulator wired into the oscillator's input, and the sound another.
+        let s = round_trips(PORTS);
+        let t = s.text();
+        for line in ["  gain3 > a.fm\n", "  lfo4 > b.width\n", "  gain6 > filt.cutoff\n", "  a > filt\n"] {
+            assert!(t.contains(line), "{line:?} in\n{t}");
+        }
+        let Body::Graph(g) = &s.body else { panic!("a graph") };
+        let ports: Vec<_> = g.connections.iter().filter_map(|w| Some((w.to.as_str(), w.port.as_deref()?))).collect();
+        assert_eq!(ports, [("a", "fm"), ("b", "width"), ("filt", "cutoff")]);
+        // Sample for sample the file's own sound, and not the one without the ports.
+        let before = rendered(PORTS, "ob");
+        assert_eq!(rendered(&t, "ob"), before, "Save changed what it plays");
+        assert_ne!(rendered(&t.replace("a.fm", "a").replace("filt.cutoff", "filt"), "ob"), before);
+    }
+
+    #[test]
+    fn a_port_is_wired_and_unwired_from_the_page() {
+        let mut s = Sound::parse(PORTS).expect("parses");
+        let Body::Graph(g) = &s.body else { panic!("a graph") };
+        assert_eq!(node_ports(g, "a"), ["fm", "pitch", "sync"], "width is a pulse's");
+        assert_eq!(node_ports(g, "b"), ["fm", "pitch", "sync", "width"]);
+        assert_eq!(node_ports(g, "filt"), ["cutoff", "morph"]);
+        assert!(node_ports(g, "amp").is_empty() && node_ports(g, "out").is_empty());
+        // The audio wire and the port wire between the same two nodes are two wires.
+        apply(&mut s, "+wire b a.pitch\n-wire gain3 a.fm\n+wire lfo4 filt.morph").expect("applies");
+        let t = s.text();
+        assert!(t.contains("  b > a.pitch\n") && t.contains("  lfo4 > filt.morph\n"), "{t}");
+        assert!(!t.contains("a.fm") && t.contains("  b > gain3\n"), "only the port wire went: {t}");
+        apply(&mut s, "+wire b filt").expect("into the input, beside the port");
+        apply(&mut s, "-wire b filt").expect("and out again");
+        assert!(s.text().contains("  gain6 > filt.cutoff\n"), "{}", s.text());
+        for (bad, why) in [
+            ("+wire b a.width", "has no port 'width' (fm | pitch | sync)"),
+            ("+wire b amp.cutoff", "has no ports"),
+            ("+wire b filt.fm", "has no port 'fm' (cutoff | morph)"),
+            ("+wire b out.fm", "has no ports"),
+            ("+wire b zz.fm", "no node named 'zz'"),
+            ("+wire b a.pitch", "'b > a.pitch' is already there"),
+            ("-wire b a.fm", "there is no 'b > a.fm' to take out"),
+            ("-wire gain6 filt", "there is no 'gain6 > filt' to take out"),
+        ] {
+            let before = s.clone();
+            let e = apply(&mut s, bad).expect_err(bad);
+            assert!(e.contains(why), "{bad}: {e}");
+            assert_eq!(s, before, "{bad} changed something");
+        }
+        // A node taken out takes the wires into its ports with it.
+        apply(&mut s, "-node filt").expect("removes");
+        assert!(!s.text().contains("filt"), "{}", s.text());
+        round_trips(&s.text());
+    }
+
+    #[test]
+    fn an_svf_opens_turns_and_saves() {
+        assert!(graph_kinds().iter().any(|k| k.name == "svf"), "the page offers it");
+        let mut s =
+            round_trips("instrument v {\n  osc saw(110) as a\n  a > svf(400, 0.4, morph=0.2) as f\n  f > out\n}\n");
+        assert!(s.text().contains("svf(400hz, 0.4, morph=0.2) as f"), "{}", s.text());
+        apply(&mut s, "f.morph=0.75\nf.cutoff=900\nf.resonance=0.6").expect("turns");
+        assert!(s.text().contains("svf(900hz, 0.6, morph=0.75) as f"), "{}", s.text());
+        apply(&mut s, "f.morph=3").expect("held");
+        assert!(s.text().contains("morph=1)"), "{}", s.text());
+        let high = rendered(&s.text(), "v");
+        apply(&mut s, "-f.morph").expect("unsets");
+        assert!(s.text().contains("svf(900hz, 0.6) as f"), "{}", s.text());
+        assert_ne!(rendered(&s.text(), "v"), high, "morph is heard");
+        // The bandpass is a word, and comes off again.
+        assert_eq!(word_choices("svf"), ["bandpass", "bp"], "the two spellings the compiler takes");
+        apply(&mut s, "word f=bandpass").expect("a word");
+        let band = s.text();
+        assert!(band.contains("svf(bandpass, 900hz, 0.6) as f"), "{band}");
+        round_trips(&band);
+        let Body::Graph(g) = &s.body else { panic!("a graph") };
+        assert_eq!(node_ports(g, "f"), ["cutoff"], "no morph on a bandpass");
+        assert!(apply(&mut s.clone(), "+wire a f.morph").is_err());
+        assert!(apply(&mut s, "word f=notch").is_err());
+        apply(&mut s, "word f=").expect("no word");
+        assert!(s.text().contains("svf(900hz, 0.6) as f"), "{}", s.text());
+        // Added from the page, it is one too.
+        apply(&mut s, "+node svf notch\n+wire f notch\n+wire a notch.cutoff\nnotch.morph=0.5").expect("applies");
+        assert!(
+            s.text().contains("svf(morph=0.5) as notch") && s.text().contains("  a > notch.cutoff\n"),
+            "{}",
+            s.text()
+        );
+        rendered(&s.text(), "v");
+    }
+
+    /// The compiler takes `bp` for `bandpass` on an `svf`, so the designer
+    /// does: the file opens, saves as written, and has no `morph` port to
+    /// offer, which the compiler would refuse.
+    #[test]
+    fn an_svf_written_bp_is_the_bandpass_here_too() {
+        let mut s = round_trips("instrument v {\n  osc saw(110) as a\n  a > svf(bp, 900, 0.6) as f\n  f > out\n}\n");
+        let Body::Graph(g) = &s.body else { panic!("a graph") };
+        assert_eq!(node_ports(g, "f"), ["cutoff"], "no morph on a bandpass, however it is spelt");
+        assert!(apply(&mut s.clone(), "+wire a f.morph").is_err());
+        apply(&mut s, "+wire a f.cutoff").expect("the port it has");
+        rendered(&s.text(), "v");
+        apply(&mut s, "word f=bp").expect("the short word is a choice");
     }
 
     fn library_sounds() -> Vec<(std::path::PathBuf, String)> {
@@ -1124,6 +1299,10 @@ mod tests {
 
     #[test]
     fn saving_a_library_sound_changes_how_it_is_written_and_nothing_else() {
+        // One of them has wires into ports and an `svf`, and they are kept.
+        let ported =
+            |t: &str| ["> a.fm", "> b.width", "> filt.cutoff", "> filt.morph", "svf("].iter().all(|w| t.contains(w));
+        assert!(library_sounds().iter().any(|(_, t)| ported(t)), "no library sound uses ports");
         for (path, text) in library_sounds() {
             let at = path.display();
             let s = Sound::parse(&text).unwrap_or_else(|e| panic!("{at}: {e}"));
@@ -1132,6 +1311,11 @@ mod tests {
             // Every value exactly, not to a tolerance; and a second Save is the first.
             assert_eq!(again, s, "{at}: Save changed the sound");
             assert_eq!(again.text(), saved, "{at}: a second Save changed the text");
+            assert_eq!(ported(&saved), ported(&text), "{at}: Save changed a port\n{saved}");
+            // A graph plays the same samples before and after.
+            if let Body::Graph(_) = &s.body {
+                assert_eq!(rendered(&saved, &s.name), rendered(&text, &s.name), "{at}: Save changed what it plays");
+            }
             // Line for line the file's own, but for the comment's wrapping
             // and a number written another way.
             let body = |t: &str| t.lines().filter(|l| !l.starts_with('#')).map(String::from).collect::<Vec<_>>();

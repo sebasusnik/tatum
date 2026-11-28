@@ -216,7 +216,8 @@ becomes `1`), a time in `ms` (`1.2s` becomes `1200ms`) and a frequency in `hz`
 (`3khz` becomes `3000hz`) or as its note when it is one (`440` becomes `A4`); a graph
 is one node or one wire a line, every node named (the `lowpass(800hz)` of a chain
 `a > lowpass(800hz) > out` gets a name such as `lowpass1`, and the chain becomes two
-wires), an expression its value (`55 * 2` becomes `110`); a
+wires), an expression its value (`55 * 2` becomes `110`); a wire into a port keeps
+its port, written with the dot (`sweep > filt.cutoff`); a
 parameter written twice is written once; the comment on top becomes one paragraph
 wrapped at 78 columns; blank lines and spacing go. A file Save wrote is not changed
 by saving it again.
@@ -278,7 +279,8 @@ answered 503.
 The page talks to it over a small JSON API: `GET /api/sound`, `/api/kinds` (the node
 kinds a graph can add), `/api/library`; `POST /api/set` (knobs and graph edits, one a
 line: `alias.arg=v`, `-alias.arg`, `+node kind [alias]`, `-node alias`, `+wire a b`,
-`-wire a b`, `word alias=saw`, `param=v`, `envN.a=seconds`, `name=`, `description=`),
+`-wire a b` (`+wire a b.fm` and `-wire a b.fm` into a port of `b`; the page lists
+each node's ports after it in the "to" box), `word alias=saw`, `param=v`, `envN.a=seconds`, `name=`, `description=`),
 `/api/text`, `/api/audition` (`pattern=`, `note=`, `bpm=`, `lane=`), `/api/save`,
 `/api/open` and `/api/duplicate` (`type/name`), `/api/reference`, `/api/fit`.
 

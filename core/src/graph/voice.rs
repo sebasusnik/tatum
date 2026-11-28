@@ -2,7 +2,7 @@ extern crate alloc;
 use alloc::boxed::Box;
 
 use crate::graph::{GraphTemplate, MAX_GRAPH_NODES};
-use crate::graph::node::{NodeKind, MAX_NODE_INPUTS};
+use crate::graph::node::NodeKind;
 use crate::math;
 use crate::{BLOCK_SIZE, MAX_VOICES};
 
@@ -80,6 +80,17 @@ impl Voice {
         }
     }
 
+    /// Stop at once and forget everything: every node as it was built, with
+    /// none of what the note left in it. No allocation, as for a new note.
+    pub fn clear(&mut self, template: &GraphTemplate) {
+        for (node, spec) in self.nodes.iter_mut().zip(template.specs[..template.node_count as usize].iter()) {
+            if let Some(node) = node {
+                node.renew(spec);
+            }
+        }
+        self.active = false;
+    }
+
     pub fn release(&mut self, template: &GraphTemplate) {
         for &n in &template.env_nodes[..template.env_count as usize] {
             let idx = n as usize;
@@ -101,6 +112,9 @@ impl Voice {
         }
         for &n in &template.env_nodes[..template.env_count as usize] {
             let idx = n as usize;
+            if template.hold_mask & (1 << n) == 0 {
+                continue;
+            }
             if let Some(ref node) = self.nodes[idx] {
                 if !node.is_idle() {
                     return false;
@@ -214,6 +228,18 @@ impl Instrument {
                                 m.filter.set_resonance(cutoff, res);
                             }
                         }
+                        NodeKind::Svf(m) => {
+                            if let Some(cutoff) = self.staged_cutoff {
+                                m.base_cutoff = cutoff;
+                            }
+                            if let Some(depth) = self.staged_env_depth {
+                                m.env_depth = depth;
+                            }
+                            if let Some(res) = self.staged_resonance {
+                                let cutoff = self.staged_cutoff.unwrap_or(m.base_cutoff);
+                                m.filter.set_params(cutoff, res);
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -252,26 +278,28 @@ impl Instrument {
 
             // Process voice sample by sample using shared node buffers
             for s in 0..len {
-                for ei in 0..template.exec_len as usize {
-                    let node_idx = template.execution_order[ei] as usize;
-                    let input_count = template.input_counts[node_idx];
+                template.run_frame(&mut self.node_bufs, s, &mut voice.nodes);
+            }
 
-                    let mut input_vals = [0.0f32; MAX_NODE_INPUTS];
-                    let ic = input_count as usize;
-                    for (val, edge) in input_vals[..ic].iter_mut().zip(template.edges[node_idx][..ic].iter()) {
-                        if edge.is_connected() {
-                            *val = self.node_bufs[edge.src_node as usize][s];
-                        }
-                    }
+            let out_idx = template.output_node as usize;
 
-                    if let Some(ref mut node) = voice.nodes[node_idx] {
-                        self.node_bufs[node_idx][s] = node.process(&input_vals, input_count);
-                    }
-                }
+            // Nothing that is not a number leaves a voice. An infinity or a
+            // NaN let through would settle in whatever keeps state after it
+            // (the track's inserts, the sends, the master) and silence the
+            // song until it is rebuilt. Times zero every finite sample is
+            // zero and anything else is NaN, so the block is checked with
+            // one multiply and add a sample and no branch. A voice that
+            // fails is dropped, its block with it, and its nodes made new.
+            let mut bad = 0.0f32;
+            for &b in self.node_bufs[out_idx][..len].iter() {
+                bad += b * 0.0;
+            }
+            if bad.is_nan() {
+                voice.clear(template);
+                continue;
             }
 
             // Mix output into buffer
-            let out_idx = template.output_node as usize;
             let vel = voice.velocity * template.output_gain;
             for (o, &b) in output[..len].iter_mut().zip(self.node_bufs[out_idx][..len].iter()) {
                 *o += b * vel;

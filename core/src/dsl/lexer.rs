@@ -89,6 +89,15 @@ pub struct Span {
 
 /// Tokenize source text into a stream of tokens.
 pub fn tokenize(source: &str) -> Vec<Span> {
+    tokenize_with_dots(source).0
+}
+
+/// The tokens, and where each lone `.` stood (line, column). A dot joins the
+/// parts of a name and makes no token, so `a.b` and `a b` read the same; an
+/// instrument's chain looks here to tell `f.gain`, a port that does not
+/// exist, from `f` followed by a `gain` node.
+pub fn tokenize_with_dots(source: &str) -> (Vec<Span>, Vec<(usize, usize)>) {
+    let mut dots = Vec::new();
     let mut tokens = Vec::new();
     let mut line = 1usize;
     let mut col = 1usize;
@@ -358,12 +367,15 @@ pub fn tokenize(source: &str) -> Vec<Span> {
         }
 
         // Unknown character — skip
+        if ch == '.' {
+            dots.push((line, col));
+        }
         i += 1;
         col += 1;
     }
 
     tokens.push(Span { token: Token::Eof, line, col });
-    tokens
+    (tokens, dots)
 }
 
 /// Check if a word looks like a note name: A-G, optional #/b, followed by a digit.

@@ -63,7 +63,7 @@ fn assert_on_the_beat(src: &str, tempo: f32) {
     let x = render(src, 4);
     let on = onsets(&x);
     assert!(on.len() >= 15, "{} hits", on.len());
-    let beat = 44100.0 * 60.0 / tempo;
+    let beat = tatum_core::SAMPLE_RATE * 60.0 / tempo;
     for (n, &o) in on.iter().enumerate() {
         let due = on[0] as f32 + n as f32 * beat;
         assert!((o as f32 - due).abs() <= 1.0, "hit {} at {o}, due at {due:.1} (beat {beat:.2})", n + 1);
@@ -108,4 +108,31 @@ track b {{ play four using boom level {} }}
         )
     };
     assert_eq!(onsets(&one("a")), onsets(&one("b")));
+}
+
+/// A graph with modulation ports starts on its sample too: a synced slave
+/// under an envelope's pitch sweep, through an `svf` an envelope opens.
+#[test]
+fn a_graph_with_ports_starts_on_its_sample() {
+    for tempo in [120.0, 123.0, 137.0] {
+        let src = format!(
+            r#"
+tempo {tempo}
+instrument tear {{
+  osc saw(110) as master_osc
+  osc saw(110, pitch=7) as slave
+  adsr(0.001, 0.05, 0.0, 0.01) as bend
+  master_osc > slave.sync
+  bend > gain(1.5) > slave.pitch
+  slave > svf(900, 0.4, morph=0.1) as f
+  bend > gain(2) > f.cutoff
+  f > perc(0.0005, 0.04) as amp
+  amp > out
+}}
+pattern four {{ C3 - - -  C3 - - -  C3 - - -  C3 - - - }}
+track lead {{ play four using tear }}
+"#
+        );
+        assert_on_the_beat(&src, tempo);
+    }
 }
