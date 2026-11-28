@@ -874,9 +874,9 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     let spectral = spectral(c, from, fa, fb, start, reach, f_mid, tau, ramp, path_at);
     let (mut tonal_db, mut h2_db, mut h3_db, centroid_hz, centroid_move_st) = spectral;
     if !skirt_known {
-        // The partial's own skirt is modelled from its decay; a decay the
-        // band cannot follow leaves it unknown, and it is most of the rest.
-        let why = "its decay is faster than its band follows: its own skirt cannot be taken off";
+        // The partial's own skirt is modelled from its decay; a decay not
+        // read leaves it unknown, and it is most of the rest.
+        let why = "its decay is not read, so its own skirt cannot be taken off";
         for f in [&mut tonal_db, &mut h2_db, &mut h3_db] {
             *f = f.withhold(why);
         }
@@ -886,7 +886,7 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     let burst_db = if 1.5 * f_on >= 0.45 * SR {
         Fig::No("1.5 times its pitch is past what the file holds")
     } else if !skirt_known {
-        Fig::No("its decay is faster than its band follows: its own onset's skirt cannot be taken off")
+        Fig::No("its decay is not read, so its own onset's skirt cannot be taken off")
     } else {
         let above = band(&c.mono[wa..wb], 1.5 * f_on, 0.47 * SR);
         let at_it = band(&c.mono[wa..wb], f_on / 1.25, f_on * 1.25);
