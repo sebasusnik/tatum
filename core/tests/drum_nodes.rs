@@ -714,3 +714,30 @@ fn a_clap_out_of_range_is_an_error_at_its_line() {
     let e = errors(&song("clap(C3)", FOUR));
     assert!(e.contains("is a note") && e.contains(NODE_LINE), "{e}");
 }
+
+// ── Shares written as percentages ────────────────────────────────────────
+
+/// `vary` is a share on every one of them, as on the kick: `vary=3%` is
+/// `vary=0.03`, sample for sample, it is not `vary=0`, a share over the top
+/// of its range is an error whichever way it is written, and a unit that is
+/// not a share's says what a share takes.
+#[test]
+fn vary_takes_a_percentage_on_every_drum_node() {
+    for (node, with, top) in [
+        ("tom", "tom(A2, hold=40ms, release=150ms, ", "0.2"),
+        ("hat", "hat(decay=100ms, ", "0.3"),
+        ("snare", "snare(body=100ms, wires=120ms, ", "0.3"),
+        ("clap", "clap(tail=120ms, ", "0.3"),
+    ] {
+        let play = |vary: &str| render(&song(&format!("{with}{vary})"), FOUR), 4);
+        let (percent, plain, still) = (play("vary=3%"), play("vary=0.03"), play("vary=0"));
+        assert!(percent == plain, "{node}: vary=3% is vary=0.03, sample for sample");
+        assert!(percent != still, "{node}: and it is not vary=0");
+        assert!(play("vary=20%") == play("vary=0.2"), "{node}: vary=20% is vary=0.2");
+
+        let e = errors(&song(&format!("{with}vary=50%)"), FOUR));
+        assert!(e.contains(&format!("vary = 0.5 is out of range (0..{top})")) && e.contains(NODE_LINE), "{node}: {e}");
+        let e = errors(&song(&format!("{with}vary=3db)"), FOUR));
+        assert!(e.contains(&format!("'vary' takes % or a plain 0..{top} ")) && e.contains(NODE_LINE), "{node}: {e}");
+    }
+}
