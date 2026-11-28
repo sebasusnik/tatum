@@ -26,12 +26,36 @@ sidechain 0.4
 delay sync=dotted_eighth feedback=0.45 filter=0.5   # sync: free | quarter | dotted_eighth |
                                                     #       eighth | sixteenth (default) | triplet_eighth
                                                     # time=0.3 (seconds) applies when sync=free
+                                                    # wow=30% flutter=10%: bucket-brigade wobble, 0..1 each
 reverb size=0.7 damp=0.4 predelay=20 sidechain=0.5  # predelay in ms; size 1.0 is a ~15 s hall;
                                                     # sidechain= ducks the return against the kick (delay too)
 ```
 
 A value outside those spans is an error at its line (a scene's `tempo` too),
 not something the engine quietly plays as the nearest thing.
+
+`wow` and `flutter` give the delay an analog bucket-brigade character, as on a
+Memory Man: the delay time moves, so every repeat comes back slightly out of
+tune, and each pass through the feedback bends it again. Both are 0..1, or a
+percentage (`wow=30%`), and 0 by default, where the delay plays exactly as it
+did without them. (A node argument that is a share of something takes a
+percentage the same way: these two on the chain `delay(...)`, and the kick's
+`vary` and `vary_pitch`.)
+
+- `wow` is a slow drift, about 0.5 Hz and wandering in rate: at 1 the delay time
+  swings ±3.5 ms and the repeats sag and rise by up to about ±25 cents. 0.2 is a
+  worn tape; past 0.5 it is seasick.
+- `flutter` is a fast tremble, about 7 Hz, made irregular by two faster partials
+  and a little noise: at 1 the time swings about ±0.15 ms, up to about ±18 cents.
+  A little (0.1) blurs the repeats; a lot makes them warble.
+
+Left and right drift at slightly different rates, so a ping-pong spreads as it
+bends. The drift is seeded: a song renders the same every time. The chain
+`delay(...)` takes the same two as named arguments: `delay(1/8, 0.5, wow=30%)`.
+
+The swing needs a delay time longer than itself. A free time under about 4 ms
+with a full wow has no room: the time rests at its shortest for part of each
+cycle and the bend flattens there (no click). Lower the wow or lengthen the time.
 
 `humanize` spreads velocity; `timing` nudges the step clock, which is one clock
 for the whole song, so the band rushes and drags together rather than each part
@@ -343,7 +367,7 @@ master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2
 | `clip(drive, ceiling=)` | 0.1..20, dB -24..0 | hard clipper, antialiased: under the ceiling nothing changes, over it is cut flat. The density of a club kick |
 | `transient(attack, sustain)` | dB -24..24 each | the hit and the tail turned up or down whatever the level; a steady tone passes |
 | `tilt(amount)` | -1..1, negative = darker | one-knob tilt EQ |
-| `delay(1/8, feedback)` | note division, 0..1 | tempo-synced delay inside a chain |
+| `delay(1/8, feedback, wow=, flutter=)` | note division, 0..1, 0..1, 0..1 | tempo-synced delay inside a chain; `wow` and `flutter` as below |
 | `reverb(size)` | 0..1 | plate reverb inside a chain |
 
 Exact ranges and defaults for every node are in [PARAMS.md](PARAMS.md) under "effects and
@@ -1055,8 +1079,8 @@ over fifteen shapes, clean and driven, the two were never more than 0.15 semiton
 apart. `analyze` averages a record's hits first, and where that average reads the tail
 wrong it reads the note heard wrong with it, so look at `tail` before trusting `heard`.
 
-Every hit of a `kick` is the same samples. `vary=0.03` sways its hold and release by up
-to 3% from hit to hit, and `vary_pitch=0.01` its whole sweep by up to 1% in pitch, slowly
+Every hit of a `kick` is the same samples. `vary=0.03` (or `vary=3%`) sways its hold and release by up
+to 3% from hit to hit, and `vary_pitch=0.01` (or `1%`) its whole sweep by up to 1% in pitch, slowly
 (the sway drifts over a few bars and does not repeat soon) and the same on every play:
 the breath of a hypnotic pulse, which a loop of one sample does not have. Both are 0 by
 default. Write it with its parentheses,

@@ -17,7 +17,9 @@ sidechain 0.45 attack=1ms release=150ms
 # Dotted eighth at 122 = ~369 ms: the repeats land against the
 # offbeat stab instead of on top of it. filter=0.72 is a dark
 # one-pole in the feedback path, so every repeat loses top end.
-delay sync=dotted_eighth feedback=0.74 filter=0.28 sidechain=0.35
+# wow and flutter bend each pass a little, like a tired bucket
+# brigade: the tail drifts out of tune the longer it rings.
+delay sync=dotted_eighth feedback=0.74 filter=0.28 sidechain=0.35 wow=20% flutter=10%
 reverb size=0.88 damp=0.5 predelay=38 sidechain=0.5
 
 # Shape the repeats on the way back: out of the sub, under the
