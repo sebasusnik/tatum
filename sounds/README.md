@@ -34,7 +34,7 @@ What is here:
 | `snares/crack.synth` | `crack` | a dry snare in one `snare` node: a body on 200 Hz under wires at 5 kHz, 60 dB down at 170 ms |
 | `claps/room.synth` | `room` | a clap in one `clap` node: four bursts 11 ms apart at 1.3 kHz, 60 dB down at 293 ms |
 | `toms/low.synth` | `low_tom` | a low tom in one `tom` node: a sine dropping onto G2, 60 dB down at 345 ms |
-| `liquid/bubbles.synth` | `bubbles` | one held note is a stream of swells off the grid, with no click: a `dust` moves a resonance over a saw's harmonics and, smoothed by slow filters, swells its level |
+| `liquid/bubbles.synth` | `bubbles` | one held note is a stream of soft resonant pings off the grid and silence between them: a `dust` strikes a narrow resonance whose pitch each impulse draws again, through a wide one that takes the edge off |
 | `liquid/drop.synth` | `drop` | a long falling drop, one thin line: a sine and a faint twin fall four octaves onto the note, ever slower, under a 21 Hz vibrato; no two notes fall alike |
 | `liquid/tide.synth` | `tide` | a liquid bass that slides into a note written `~note` in 140 ms, through a lowpass that wanders and never repeats |
 | `liquid/shoal.synth` | `shoal` | a pad that is a cluster: five saws at 0, ±9 and ±20 cents, a 4.5 Hz vibrato, one slow `wander` on every voice's filter |

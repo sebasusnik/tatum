@@ -1221,13 +1221,16 @@ What each line is for, since each was put there by a measurement:
   so the higher its resonance.
 - The resonance is the length of a ping: 0.89 at 950 Hz rings about 70 ms.
 
-That is a struck resonator: every ping starts on the edge of an impulse. For bubbles
-with no edge at all, turn it round: hold a `saw` in the bandpass, let the dust only
-*move* the bandpass (`d > where.draw`), and send the same dust through a few slow
-filters into the `amount` of a `gain` after it (`d > svf(45hz, 0) as rise`, ...,
-`fall > gain(10) > swell.amount`): an impulse smoothed by four filters at 20 to 45 Hz
-is a rise and fall 45 to 120 ms long, so each bubble is a swell of the resonance over
-the saw's harmonics and not a strike. `sounds/liquid/bubbles.synth` is written that way.
+That is a struck resonator: every ping starts on the edge of an impulse, which a
+spectrogram shows as a line from the bottom to the top, and one `svf` rings at most
+Q 20 (resonance 1), about 16 ms to 20 dB down at 900 Hz. Both are put right by
+striking through one more filter: `soft` rounded down to `lowpass(400hz)`, then a
+wide bandpass that follows the same `where` (`svf(bandpass, 880hz, 0.1) as strike`)
+turns the impulse into a few milliseconds of tone at the ping's pitch, and two narrow
+ones after it, both wired from `where` and `bend`, ring that out. A ping then rises in
+5 ms with no edge, and two resonances in a row ring twice as long as one (31 ms to 20
+dB down). `sounds/liquid/bubbles.synth` is written that way, and between its pings
+there is nothing but their tails.
 
 `sounds/liquid/` has four more made with the same sources, and
 `sounds/liquid_kit.synth` plays them together: a `drop` whose pitch falls for seconds

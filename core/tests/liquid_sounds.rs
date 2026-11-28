@@ -207,6 +207,20 @@ fn the_bubbles_are_as_many_as_uneven_as_long_and_as_wide_as_measured() {
     within("the share that rises", rising, RISING, 0.06 * loose);
     // The record: 4.3 to 4.6 dB.
     within("the deviation of the levels, dB", levels, LEVELS, 0.5 * loose);
+    // Nothing sounds between the pings but their tails: half of all 10 ms
+    // stretches are 70 dB or more under the loudest (the 99th of a hundred).
+    // A layer held under them (the second version's saw read 19 dB under)
+    // fails here.
+    let n = (0.01 * SAMPLE_RATE) as usize;
+    let frames: Vec<f32> = out[from..to]
+        .chunks_exact(n)
+        .map(|c| 10.0 * (c.iter().map(|v| v * v).sum::<f32>() / n as f32 + 1e-14).log10())
+        .collect();
+    let [_, middle, _] = spread(&frames);
+    let mut sorted = frames.clone();
+    sorted.sort_by(|a, b| a.total_cmp(b));
+    let loud = sorted[(0.99 * (sorted.len() - 1) as f32) as usize];
+    assert!(middle < loud - 60.0, "between the pings: the middle 10 ms is {:.1} dB under the loudest", loud - middle);
 }
 
 // What the measure reads on the bubbles, and the "now" column of the table
@@ -214,15 +228,21 @@ fn the_bubbles_are_as_many_as_uneven_as_long_and_as_wide_as_measured() {
 // struck by impulses and read 5.55 a second, gaps of 0.06 / 0.13 / 0.35 s
 // spread 0.81, 46 / 73 / 130 ms, 560 / 1023 / 1561 Hz over 7.3 st, bends of
 // -3.5 / 0 / +3.0 st with 31% falling and 30% rising, levels 5.1 dB apart.
-// These are swells of a resonance over a saw, so a ping starts on one of the
-// saw's harmonics: that is the narrower spread of starts.
-const RATE: f32 = 5.37;
-const GAP: [f32; 3] = [0.056, 0.131, 0.348];
-const CV: f32 = 0.92;
-const LENGTH: [f32; 3] = [46.0, 67.0, 118.0];
-const START: [f32; 3] = [538.0, 1012.0, 1475.0];
-const WIDTH: f32 = 6.6;
-const BEND: [f32; 3] = [-3.8, 0.0, 3.4];
-const FALLING: f32 = 0.33;
+// The second were swells of a resonance over a held saw (5.37 a second,
+// CV 0.92, 46 / 67 / 118 ms, 538 / 1012 / 1475 Hz over 6.6 st, levels
+// 5.7 dB), with the saw sounding between them. These are struck again, by
+// an impulse rounded into a few milliseconds of tone and rung through two
+// narrow resonances in a row: each rings twice as long as the first ones,
+// so the pings measure longer (55 / 84 / 164 ms); the pitch is drawn round
+// 880 Hz instead of 950, so fewer pings ring above the band and are read
+// faintly at its edge, which is the narrower spread of levels (4.4 dB).
+const RATE: f32 = 5.55;
+const GAP: [f32; 3] = [0.058, 0.138, 0.357];
+const CV: f32 = 0.79;
+const LENGTH: [f32; 3] = [55.0, 84.0, 164.0];
+const START: [f32; 3] = [441.0, 947.0, 1572.0];
+const WIDTH: f32 = 8.3;
+const BEND: [f32; 3] = [-2.6, 0.0, 5.0];
+const FALLING: f32 = 0.26;
 const RISING: f32 = 0.31;
-const LEVELS: f32 = 5.7;
+const LEVELS: f32 = 4.4;
