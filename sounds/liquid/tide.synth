@@ -3,11 +3,12 @@
 # that does not repeat, opens a little differently on every note and closes
 # after each one; the pitch sways a few cents either way, so a held note is
 # not a ruled line, and a faint low noise lies under it. Written with ~
-# before a note it slides there in 140 ms. The soft clip at the end bends an
-# uneven wave more one way than the other, which leaves the wave off centre
-# (35 dB under its level, measured): a highpass at 20 Hz after it takes that
-# out (now 92 dB under). Its second and third harmonics stand 2 and 4 dB under
-# the fundamental, the fourth 4.
+# before a note it slides there in 140 ms (a pitch tracker with an 80 ms
+# window reads 210 to 240 ms, as it reads the record's 190 to 290). The soft
+# clip at the end bends an uneven wave more one way than the other, which
+# leaves the wave off centre (35 dB under its level, measured): a highpass
+# at 20 Hz after it takes that out (now 92 dB under). Its second and third
+# harmonics stand 2 and 4 dB under the fundamental, the fourth 4.
 instrument tide {
   gain 0.8
   osc saw(55, glide=140ms) as a

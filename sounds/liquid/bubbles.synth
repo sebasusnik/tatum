@@ -6,9 +6,9 @@
 # its level 20 dB and lets it back. So a bubble is two or three of the saw's
 # harmonics lighting up and going out, on harmonics that never stop, and it
 # is pitched on the note: play it low, D#3 or thereabouts. Every note plays a
-# different stream. Measured on D#3: 5.4 swells a second found, 46 / 67 /
-# 118 ms long, starting at 540 to 1480 Hz; a swell's second harmonic 19 dB
-# under it and its third 30; the floor between the harmonics 72 dB down.
+# different stream. Measured on D#3: 5.4 swells a second found, their gaps
+# as uneven as their mean (CV 0.92), 46 / 67 / 118 ms long, starting at 540 to
+# 1480 Hz; a swell rises in 31 ms (10-90%) and is 42 ms wide 6 dB down.
 instrument bubbles {
   gain 7
   osc saw(110) as src
