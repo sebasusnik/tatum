@@ -1,3 +1,4 @@
+pub mod drums;
 pub mod node;
 pub mod voice;
 

@@ -347,6 +347,13 @@ fn kick_spec_on(params: &[Param], note: f32) -> Result<NodeSpec, CompileError> {
     })
 }
 
+/// A named option of `kind` as written, or the default its table gives: the
+/// drum nodes keep their defaults in one place, the table the docs are made
+/// from.
+fn named_or_default(kind: &str, params: &[Param], name: &str) -> f32 {
+    named_param(params, name).unwrap_or_else(|| crate::nodes::arg_at(kind, Some(name), 0).map_or(0.0, |a| a.default))
+}
+
 pub(super) fn node_def_to_spec(
     node: &NodeDef,
     noise_seed: &mut u32,
@@ -419,6 +426,47 @@ pub(super) fn node_def_to_spec(
         }
         "kick" => kick_spec(&node.params),
         "tom" => tom_spec(&node.params),
+        "hat" => {
+            let opt = |name: &str| named_or_default("hat", &node.params, name);
+            Ok(NodeSpec::Hat {
+                decay_ms: opt("decay"),
+                band: opt("band"),
+                floor: opt("floor"),
+                noise: opt("noise"),
+                pitch: opt("pitch"),
+                vary: opt("vary"),
+            })
+        }
+        "snare" => {
+            let opt = |name: &str| named_or_default("snare", &node.params, name);
+            Ok(NodeSpec::Snare {
+                note: float_param_at(&node.params, 0).unwrap_or(185.0),
+                snap_ms: opt("snap"),
+                body_ms: opt("body"),
+                wires_ms: opt("wires"),
+                band: opt("band"),
+                balance: opt("balance"),
+                drive: opt("drive"),
+                vary: opt("vary"),
+            })
+        }
+        "clap" => {
+            let opt = |name: &str| named_or_default("clap", &node.params, name);
+            let bursts = opt("bursts");
+            if bursts != crate::math::floor(bursts) {
+                return Err(CompileError::new(format!(
+                    "clap: bursts={} is not a whole number; it counts the bursts, 1 to 8",
+                    bursts
+                )));
+            }
+            Ok(NodeSpec::Clap {
+                bursts,
+                spacing_ms: opt("spacing"),
+                tail_ms: opt("tail"),
+                band: opt("band"),
+                vary: opt("vary"),
+            })
+        }
         "noise" => {
             *noise_seed += 1;
             Ok(NodeSpec::Noise { seed: *noise_seed })

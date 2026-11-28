@@ -304,3 +304,167 @@ track t { play beat using piece }
         assert!(e.contains(&format!("`{piece}()`")), "{e}");
     }
 }
+
+/// Where the band `x` sounds in is centred: the middle of its spectrum (the
+/// level in each Hz) on a log axis, where a band of one shape is as far
+/// down an octave over its centre as an octave under it.
+fn log_centre(x: &[f32]) -> f32 {
+    let s = spectrum(x, 250.0);
+    let total: f32 = s.iter().map(|(f, e)| e / f).sum();
+    (s.iter().map(|(f, e)| f.ln() * e / f).sum::<f32>() / total).exp()
+}
+
+fn rms(x: &[f32]) -> f32 {
+    (x.iter().map(|v| v * v).sum::<f32>() / x.len().max(1) as f32).sqrt()
+}
+
+/// The rms of a window `win_ms` long starting `at_ms` after the onset.
+fn rms_in(x: &[f32], at_ms: f32, win_ms: f32) -> f32 {
+    let i = onset(x) + ms(at_ms);
+    rms(&x[i..(i + ms(win_ms)).min(x.len())])
+}
+
+/// The first hit of `x`, from its start to its last sample.
+fn first_hit(x: &[f32]) -> &[f32] {
+    let t0 = onset(x);
+    &x[t0..t0 + ms(sounding_ms(x))]
+}
+
+/// Each hit's length in samples, to its last sample that is not silence.
+fn lengths(x: &[f32], within_ms: f32) -> Vec<usize> {
+    hits(x, ms(within_ms)).iter().map(|h| h.iter().rposition(|v| *v != 0.0).unwrap_or(0)).collect()
+}
+
+/// A velocity of a half plays the same hit at half the level.
+fn velocity_scales_it(node: &str) {
+    let full = render(&song(node, "C3:1.0 - - -  - - - -  - - - -  - - - -"), 1);
+    let half = render(&song(node, "C3:0.5 - - -  - - - -  - - - -  - - - -"), 1);
+    let (pf, ph) = (peak_in(&full, 0.0, 100.0), peak_in(&half, 0.0, 100.0));
+    assert!((ph / pf - 0.5).abs() < 0.01, "{node}: half the velocity is {} of the level", ph / pf);
+}
+
+// ── hat ──
+
+#[test]
+fn a_hat_is_sixty_db_down_when_its_decay_says() {
+    for decay in [45.0, 320.0, 1200.0] {
+        let x = render(&song(&format!("hat(decay={decay}ms)"), ONE), 1);
+        let len = sounding_ms(&x);
+        assert!((len - decay).abs() < 0.02 * decay + 1.0, "decay={decay}ms sounds {len:.1} ms");
+    }
+    // Evenly in dB on the way: half way there it is 30 dB down.
+    let x = render(&song("hat(decay=400ms, noise=100%)", ONE), 1);
+    let half = db(rms_in(&x, 200.0, 20.0) / rms_in(&x, 0.0, 20.0));
+    assert!((half + 30.0).abs() < 3.0, "-30 dB half way, got {half:.1}");
+    // A bare hat() is a closed one: 60 ms.
+    let bare = sounding_ms(&render(&song("hat()", ONE), 1));
+    assert!((bare - 60.0).abs() < 2.0, "hat() sounds {bare:.1} ms");
+}
+
+#[test]
+fn an_open_hat_rings_whole_on_a_note_of_any_length() {
+    the_note_length_does_not_matter("hat(decay=320ms)");
+    the_note_length_does_not_matter("hat(decay=30ms)");
+    // A sixteenth at 120 BPM is 125 ms; the hat is still there at 250.
+    let x = render(&song("hat(decay=320ms)", ONE), 1);
+    assert!(rms_in(&x, 250.0, 20.0) > 0.0, "it rings past the step");
+}
+
+#[test]
+fn a_hat_sounds_in_the_band_it_is_given() {
+    // Noise alone, the floor out of the way: the band is all there is.
+    let centre = |band: f32| {
+        let x = render(&song(&format!("hat(decay=400ms, noise=100%, band={band}hz, floor=200hz)"), ONE), 1);
+        log_centre(first_hit(&x))
+    };
+    for band in [2500.0, 5000.0] {
+        let c = centre(band);
+        assert!((c / band).ln().abs() < 0.2, "band={band}hz is centred on {c:.0} Hz");
+    }
+    // The floor cuts under it, whatever the source.
+    let x = render(&song("hat(decay=400ms, band=5khz, floor=4khz)", ONE), 1);
+    let under = 1.0 - share_over(first_hit(&x), 2000.0);
+    assert!(under < 0.02, "{:.1}% of it is under 2 kHz with the floor at 4", under * 100.0);
+    let open = render(&song("hat(decay=400ms, band=5khz, floor=200hz, noise=0)", ONE), 1);
+    let under_open = 1.0 - share_over(first_hit(&open), 2000.0);
+    assert!(under_open > 4.0 * under, "a low floor lets the clank through: {under_open} against {under}");
+}
+
+#[test]
+fn a_hat_is_six_partials_that_follow_its_pitch() {
+    // The metal alone, a low band so the partials themselves are heard. The
+    // second partial is 1.4827 times the first; nothing sits at 1.63 times.
+    for pitch in [205.0, 300.0] {
+        let x = render(&song(&format!("hat(decay=1500ms, noise=0, pitch={pitch}hz, band=1khz, floor=200hz)"), ONE), 1);
+        let t0 = onset(&x);
+        let w = &x[t0..t0 + ms(500.0)];
+        let (partial, gap) = (bin(w, pitch * 1.4827), bin(w, pitch * 1.63));
+        assert!(partial > 8.0 * gap, "pitch={pitch}hz: {partial} at the partial, {gap} beside it");
+        let top = bin(w, pitch * 3.8967);
+        assert!(top > 8.0 * gap, "and the sixth: {top}");
+    }
+    // Noise is the other source: with it alone there are no partials.
+    let x = render(&song("hat(decay=1500ms, noise=100%, band=1khz, floor=200hz)", ONE), 1);
+    let t0 = onset(&x);
+    let w = &x[t0..t0 + ms(500.0)];
+    let (a, b) = (bin(w, 205.0 * 1.4827), bin(w, 205.0 * 1.63));
+    assert!(a < 4.0 * b && b < 4.0 * a, "noise is even: {a} and {b}");
+}
+
+#[test]
+fn a_hat_is_the_same_on_every_hit_and_every_run() {
+    same_on_every_run("hat()");
+    same_on_every_run("hat(decay=200ms, vary=20%)");
+    let x = render(&song("hat()", FOUR), 2);
+    let all = hits(&x, ms(100.0));
+    assert_eq!(all.len(), 8);
+    assert!(all.iter().all(|h| *h == all[0]), "every hit is the same samples");
+    velocity_scales_it("hat()");
+}
+
+#[test]
+fn a_hat_with_vary_breathes() {
+    let src = song("hat(decay=100ms, vary=20%)", "C3 - C3 -  C3 - C3 -  C3 - C3 -  C3 - C3 -");
+    let x = render(&src, 4);
+    let lens = lengths(&x, 124.0);
+    assert!(lens.len() >= 30, "{} hits", lens.len());
+    let (lo, hi) = (*lens.iter().min().unwrap() as f32, *lens.iter().max().unwrap() as f32);
+    assert!(hi / lo > 1.1 && hi / lo < 1.6, "the decay sways by about ±20%: {lo}..{hi} samples");
+    let mean = lens.iter().sum::<usize>() as f32 / lens.len() as f32;
+    assert!((mean / ms(100.0) as f32 - 1.0).abs() < 0.1, "around what it says: {mean} samples");
+    // Slowly: one hit to the next moves much less than the whole sway.
+    let step = lens.windows(2).map(|w| (w[1] as f32 - w[0] as f32).abs()).sum::<f32>() / (lens.len() - 1) as f32;
+    assert!(step < 0.4 * (hi - lo), "hit to hit {step:.1} samples against a sway of {:.1}", hi - lo);
+    // And the metal does not start twice alike.
+    let h = hits(&x, ms(20.0));
+    assert!(h[0] != h[1] && h[1] != h[2], "no two hits are the same samples");
+}
+
+#[test]
+fn a_hat_out_of_range_is_an_error_at_its_line() {
+    let e = errors(&song("hat(decay=2ms)", FOUR));
+    assert!(e.contains("decay = 2 is out of range (5..5000)") && e.contains(NODE_LINE), "{e}");
+    let e = errors(&song("hat(band=20khz)", FOUR));
+    assert!(e.contains("band = 20000 is out of range (1000..16000)") && e.contains(NODE_LINE), "{e}");
+    let e = errors(&song("hat(noise=150%)", FOUR));
+    assert!(e.contains("noise = 1.5 is out of range (0..1)") && e.contains(NODE_LINE), "{e}");
+    let e = errors(&song("hat(60)", FOUR));
+    assert!(e.contains("too many positional") && e.contains(NODE_LINE), "{e}");
+    let e = errors(&song("hat(decay=60hz)", FOUR));
+    assert!(e.contains("'decay' takes ms or s") && e.contains(NODE_LINE), "{e}");
+    let e = errors(&song("hat(length=60)", FOUR));
+    assert!(e.contains("unknown option 'length'"), "{e}");
+}
+
+#[test]
+fn a_hat_asked_higher_than_the_rate_goes_is_held_under_it() {
+    // The highest of everything: at 22050 Hz the band and the floor would sit
+    // over half the rate. It plays, finite and in range, and what it plays is
+    // high.
+    let x = render(&song("hat(decay=300ms, band=16khz, floor=12khz, pitch=1khz)", ONE), 1);
+    assert!(x.iter().all(|v| v.is_finite()));
+    let peak = peak_in(&x, 0.0, 300.0);
+    assert!(peak > 0.005 && peak < 1.0, "it plays, at {peak}");
+    let c = log_centre(first_hit(&x));
+    assert!(c > 0.25 * SAMPLE_RATE && c < 0.5 * SAMPLE_RATE, "centred on {c:.0} Hz at {SAMPLE_RATE} Hz");
+}
