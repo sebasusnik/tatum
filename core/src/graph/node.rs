@@ -128,6 +128,9 @@ pub enum NodeSpec {
         noise: f32,
         /// Hz of the lowest of the six partials.
         pitch: f32,
+        /// What brings the hat these arguments make to the level every hat
+        /// has, found when it is compiled (`drums::hat_gain`); 1, as it is.
+        gain: f32,
         /// Share the decay sways by, hit to hit; 0, none.
         vary: f32,
     },
@@ -1846,6 +1849,7 @@ mod renew_tests {
             floor: 6000.0,
             noise: 0.3,
             pitch: 205.0,
+            gain: 1.0,
             vary: 0.0,
         });
         renews_like_new(NodeSpec::Snare {

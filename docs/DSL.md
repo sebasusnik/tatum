@@ -1115,23 +1115,34 @@ instrument room  { clap(bursts=4, spacing=11ms, tail=260ms, band=1300hz) as c
   the 808) and noise, `noise=` being the share of noise against the metal, through a band
   centred on `band=` and cut under `floor=`. `decay=` is the time from the hit to -60 dB:
   40 to 90 ms is closed, 250 ms and up is open, on a note of any length. `pitch=` is the
-  lowest partial, and the other five follow it.
+  lowest partial, and the other five follow it. Whatever these four are set to, the hat
+  comes out as loud as `hat()`: its level is found when the line is compiled, by playing
+  the hit once, so `band=` and `floor=` are its colour and not also its volume. The level
+  held is the hit's rms; its peak moves with the colour and the decay, between an eighth
+  and nine tenths of full scale in what was measured, and is never let over 0.95 of it:
+  where the level would take it there (bare metal ringing for seconds, or with `vary=`,
+  where the loudest of its hits is what is held) the level gives way, by up to 2.7 dB in
+  what was measured.
 - `snare(note, ...)` is a body and its wires. The body is two sines a struck head's
   interval apart, dropping onto the note from 1.7 times over it in `snap=` ms and 60 dB
   down in `body=` ms; the wires are noise in a wide band centred on `band=`, 60 dB down in
   `wires=` ms. `balance=` is the share of wires against body: 0 is the drum with its
   wires off, 100% the wires alone. `drive=` saturates the whole hit at the same peak.
-- `clap(...)` is `bursts=` short bursts of noise in a band centred on `band=`, `spacing=`
+- `clap(...)` is `bursts=` short bursts of noise (a whole number of them, 1 to 8: a
+  fraction is an error) in a band centred on `band=`, `spacing=`
   ms from one to the next, each 20 dB down when the next comes, and the last one ringing
   out: 60 dB down `tail=` ms after it starts.
 
 Every hit is the same samples. `vary=` sways it from hit to hit by that share, slowly and
 the same on every play, as the kick's does: a tom's hold and release, a hat's decay (its
-metal also starts each hit where oscillators that never stop would be), a snare's two
-decays, a clap's spacing and tail. A hat is quieter on an engine built under 44.1 kHz
-(3 dB at 32 kHz, 4.6 dB at 22.05 kHz: there is less room over its band); its partials and
-every band are held under 0.45 of the rate. Each is written with its parentheses, `hat()`:
-a node named `hat` or `snare` stays a name. `sounds/node_kit.synth` plays one of each with
+metal also starts each hit from another of 29 places in its cycles, three partials high
+and three low from every one, so no hit opens on a click and none goes over full scale),
+a snare's two decays, a clap's spacing and tail. The count of hits the sway goes by
+starts again when the song is stopped and played, and when a file is swapped in live. On
+an engine built under 44.1 kHz a hat's partials and every band are held under 0.45 of the
+rate, and a hat is as loud there as at 44.1 kHz. Each is written with its parentheses,
+`hat()`, also before `as`: a node named `hat` or `snare` stays a name, and `hat as h`
+is an error that says so. `sounds/node_kit.synth` plays one of each with
 the kick.
 
 **An FM stab.** Two operators, short envelopes, a bit of feedback, off-beat pattern with

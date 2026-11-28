@@ -369,6 +369,10 @@ fn velocity_scales_it(node: &str) {
 
 // ── hat ──
 
+/// The rms of the 100 ms `hat()` is over in, as `render` gives it: one hit at
+/// full velocity on a track at 0.8, at 44.1 kHz.
+const HAT_RMS: f32 = 0.010_16;
+
 #[test]
 fn a_hat_is_sixty_db_down_when_its_decay_says() {
     for decay in [45.0, 320.0, 1200.0] {
@@ -462,6 +466,55 @@ fn a_hat_with_vary_breathes() {
     // And the metal does not start twice alike.
     let h = hits(&x, ms(20.0));
     assert!(h[0] != h[1] && h[1] != h[2], "no two hits are the same samples");
+}
+
+/// The metal used to go through at one gain whatever the band, the noise
+/// at one loudness: `hat(noise=0, band=2khz, floor=200hz, pitch=1khz)` came
+/// out 14 dB over `hat()` and over full scale by itself, and a floor over the
+/// band 26 dB under. The level is now found when the line is compiled, so
+/// the colour of a hat is not also its volume.
+#[test]
+fn a_hat_holds_its_level_whatever_its_colour() {
+    // One hit and the 100 ms it is over in, as rendered: after the track's
+    // level and the engine's headroom, which are the same for every line.
+    let hit = |node: &str| {
+        let x = render(&song(node, ONE), 1);
+        let w = &x[..ms(100.0)];
+        (rms(w), w.iter().fold(0.0f32, |m, v| m.max(v.abs())))
+    };
+    let (level, peak) = hit("hat()");
+    // The same number at every rate the engine is built for: the hat used to
+    // lose 3 dB at 32 kHz and 4.6 dB at 22.05 kHz.
+    assert!(db(level / HAT_RMS).abs() < 0.5, "hat() is at {level} at {SAMPLE_RATE} Hz");
+    // A tom's hit is the node's full scale; a hat's peak is under it.
+    let full = hit("tom()").1;
+    assert!(peak < 0.6 * full, "hat() peaks at {} of full scale", peak / full);
+    let (mut low, mut high) = (0.0f32, 0.0f32);
+    for band in ["1khz", "2khz", "4khz", "8khz", "16khz"] {
+        for floor in ["200hz", "1khz", "6khz", "12khz"] {
+            for noise in ["0", "30%", "100%"] {
+                for pitch in ["100hz", "205hz", "1khz"] {
+                    let node = format!("hat(band={band}, floor={floor}, noise={noise}, pitch={pitch})");
+                    let (l, p) = hit(&node);
+                    let off = db(l / level);
+                    assert!(off.abs() < 2.0, "{node}: {off:+.1} dB from hat()");
+                    assert!(p < full, "{node}: peaks at {} of full scale", p / full);
+                    (low, high) = (low.min(off), high.max(off));
+                }
+            }
+        }
+    }
+    assert!(low > -0.5 && high < 0.5, "it holds much closer than that: {low:+.2}..{high:+.2} dB");
+    // And with `vary`, where every hit is another, none goes over.
+    for node in [
+        "hat(vary=30%)",
+        "hat(decay=320ms, band=9khz, floor=7khz, noise=20%, vary=30%)",
+        "hat(band=16khz, floor=200hz, noise=0, pitch=100hz, vary=30%)",
+    ] {
+        let x = render(&song(node, "C3 C3 C3 C3  C3 C3 C3 C3  C3 C3 C3 C3  C3 C3 C3 C3"), 8);
+        let top = x.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+        assert!(top < full, "{node}: a hit peaks at {} of full scale", top / full);
+    }
 }
 
 #[test]

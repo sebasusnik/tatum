@@ -34,8 +34,14 @@ fn noise_gain(band: f32, reference: f32, wide: bool) -> f32 {
 /// that do not divide, as the kick sways, so it breathes over bars and does
 /// not repeat soon. The same hit number is always the same value.
 fn sway(hit: u32, a: f32, pa: f32, b: f32, pb: f32) -> f32 {
-    let n = hit as f32;
-    0.6 * math::sin(math::TWO_PI * n / a + pa) + 0.4 * math::sin(math::TWO_PI * n / b + pb)
+    // Where the hit is in each period, found in f64 and kept to one turn: as
+    // an f32 the count outgrew it, 4% off by hit 1,000,000 and anywhere at
+    // all by hit 100,000,000.
+    let turn = |period: f32| {
+        let turns = hit as f64 / period as f64;
+        (turns - (turns as u64) as f64) as f32
+    };
+    0.6 * math::sin(math::TWO_PI * turn(a) + pa) + 0.4 * math::sin(math::TWO_PI * turn(b) + pb)
 }
 
 fn samples(ms: f32) -> f32 {
@@ -64,13 +70,72 @@ const HAT_SEED: u32 = 0x4841_5421;
 /// The band's width: a Q of about 1.5, a band and not a whistle.
 const HAT_BAND_RES: f32 = 0.05;
 /// What brings the metal and the noise, each alone through the default band,
-/// to the same loudness, and a hit to a peak near half of full scale.
+/// to the same loudness, and a hit to a peak near half of full scale. Only
+/// the balance between the two is left to them: `hat_gain` sets the level.
 const HAT_METAL_GAIN: f32 = 6.0;
 const HAT_NOISE_GAIN: f32 = 0.95;
+/// The level every hat is brought to: the root mean square of `hat()` over
+/// its 60 ms at 44.1 kHz, where it peaks near half of full scale.
+const HAT_LEVEL: f32 = 0.045_277_47;
+/// No hit of any hat goes over this peak, so that none clips its track: the
+/// level gives way to it on a hat that is all edge.
+const HAT_PEAK: f32 = 0.95;
 /// Where each partial is in its cycle when a hit starts. Six squares that all
 /// step up on the same sample are one loud click before they are a hat; a
-/// hit starts with them already apart.
+/// hit starts with them already apart, three high and three low.
 const HAT_PHASES: [f32; 6] = [0.0, 0.37, 0.71, 0.13, 0.55, 0.89];
+/// How many places the metal can start a hit from when it sways. They come
+/// round by the hit's number, so hit 40,000 is as different from its
+/// neighbours as hit 4, and not in step with a bar of any length; and they
+/// are few enough for every one to be played when the line is compiled.
+const HAT_STARTS: u32 = 29;
+
+/// Where the six partials are when a hit starts from place `start`: where
+/// oscillators that never stop would be `start` sixteenths at 125 BPM on,
+/// each kept to the half of its cycle `HAT_PHASES` puts it in, so the six
+/// steps of the first sample cancel from every place as they do from the
+/// first. Left free they all step the same way from one place in thirty.
+fn hat_phases(start: u32, pitch: f32) -> [f32; 6] {
+    core::array::from_fn(|i| {
+        let half = if HAT_PHASES[i] < 0.5 { 0.0 } else { 0.5 };
+        let turns = 2.0 * (HAT_PHASES[i] - half) + start as f32 * 0.12 * pitch * HAT_RATIOS[i];
+        half + (0.5 * (turns - math::floor(turns))).min(0.499_999)
+    })
+}
+
+/// What brings the hat these arguments make to the level `hat()` has. The
+/// band, the floor, the pitch and the share of noise each decide how much of
+/// the six squares and of the noise comes through, by tens of dB from one end
+/// of their ranges to the other, and so does the rate the engine runs at;
+/// nothing short of playing the hit says by how much. So it is played here,
+/// once, when the line is compiled, and measured: its mean square over its
+/// length, and its peak. With `vary` it is played from every place the metal
+/// can start, at the longest its decay sways to: the level is their mean and
+/// the peak the highest of them, which no hit can then pass. A hit costs
+/// what it did, and nothing is allocated.
+pub fn hat_gain(decay_ms: f32, band: f32, floor: f32, noise: f32, pitch: f32, vary: f32) -> f32 {
+    let decay_ms = decay_ms * (1.0 + vary);
+    let spec = NodeSpec::Hat { decay_ms, band, floor, noise, pitch, gain: 1.0, vary: 0.0 };
+    let len = samples(decay_ms);
+    let starts = if vary > 0.0 { HAT_STARTS } else { 1 };
+    let (mut peak, mut power) = (0.0f32, 0.0f64);
+    for start in 0..starts {
+        let mut hat = HatState::new(&spec);
+        hat.phase = hat_phases(start, pitch);
+        // As far as 30 dB down: a thousandth of it is left after that.
+        for _ in 0..(len * 0.5) as usize + 1 {
+            let s = hat.next_sample();
+            peak = peak.max(s.abs());
+            power += (s * s) as f64;
+        }
+    }
+    let level = math::sqrt((power / (len as f64 * starts as f64)) as f32);
+    if level < 1.0e-9 {
+        // Nothing comes through at all: there is nothing to bring up.
+        return 1.0;
+    }
+    (HAT_LEVEL / level).min(HAT_PEAK / peak)
+}
 
 /// A band-limited square: the step at each edge smoothed over one sample
 /// (polyBLEP), so the partials' harmonics above half the rate stay quiet.
@@ -112,15 +177,15 @@ impl HatState {
     }
 
     /// The hat for hit number `hit` of its instrument. With `vary=`, its
-    /// decay sways by that share, slowly, and the metal starts where six
-    /// oscillators that never stop would be by then, so no two hits are the
-    /// same samples; the same hit number is always the same hat.
+    /// decay sways by that share, slowly, and the metal starts from another
+    /// of its places on every hit, so no two hits are the same samples; the
+    /// same hit number is always the same hat.
     pub fn new_hit(spec: &NodeSpec, hit: u32) -> Self {
         Self::build(spec, Some(hit))
     }
 
     fn build(spec: &NodeSpec, hit: Option<u32>) -> Self {
-        let NodeSpec::Hat { decay_ms, band, floor, noise, pitch, vary } = *spec else {
+        let NodeSpec::Hat { decay_ms, band, floor, noise, pitch, gain, vary } = *spec else {
             unreachable!("HatState takes a hat")
         };
         let top = TOP * SAMPLE_RATE;
@@ -128,18 +193,13 @@ impl HatState {
         let mut decay_ms = decay_ms;
         if let (Some(hit), true) = (hit, vary > 0.0) {
             decay_ms *= 1.0 + vary * sway(hit, 31.0, 0.7, 12.3, 2.1);
-            for (i, p) in phase.iter_mut().enumerate() {
-                // A sixteenth at 125 BPM between hits: far enough for every
-                // partial to have turned many times, each by its own amount.
-                let turns = HAT_PHASES[i] + hit as f32 * 0.12 * pitch * HAT_RATIOS[i];
-                *p = turns - math::floor(turns);
-            }
+            phase = hat_phases(hit % HAT_STARTS, pitch);
         }
         Self {
             phase,
             inc: core::array::from_fn(|i| (pitch * HAT_RATIOS[i]).min(top) / SAMPLE_RATE),
-            metal: (1.0 - noise) * HAT_METAL_GAIN / 6.0,
-            noise: noise * HAT_NOISE_GAIN * noise_gain(band, 8000.0, true),
+            metal: gain * (1.0 - noise) * HAT_METAL_GAIN / 6.0,
+            noise: gain * noise * HAT_NOISE_GAIN * noise_gain(band, 8000.0, true),
             band: bandpass(band, HAT_BAND_RES),
             floor: highpass(floor),
             level: 1.0,
@@ -402,14 +462,195 @@ mod tests {
     /// rate the engine is built at (the CI renders at 22050 and 32000 Hz too).
     #[test]
     fn nothing_is_set_over_half_the_rate() {
-        let spec =
-            NodeSpec::Hat { decay_ms: 60.0, band: 16000.0, floor: 12000.0, noise: 0.3, pitch: 4000.0, vary: 0.0 };
+        let spec = NodeSpec::Hat {
+            decay_ms: 60.0,
+            band: 16000.0,
+            floor: 12000.0,
+            noise: 0.3,
+            pitch: 4000.0,
+            gain: 1.0,
+            vary: 0.0,
+        };
         let hat = HatState::new(&spec);
         for inc in hat.inc {
             assert!(inc <= TOP + 1e-6, "a partial at {} of the rate", inc);
         }
         // A square's phase step over a half would be a wave running backwards.
         assert!(hat.inc.iter().all(|i| *i < 0.5));
+    }
+
+    fn hat(decay_ms: f32, band: f32, floor: f32, noise: f32, pitch: f32, vary: f32) -> NodeSpec {
+        let gain = hat_gain(decay_ms, band, floor, noise, pitch, vary);
+        NodeSpec::Hat { decay_ms, band, floor, noise, pitch, gain, vary }
+    }
+
+    /// Where the six partials start on hit `hit`, as bits.
+    fn start_of(spec: &NodeSpec, hit: u32) -> [u32; 6] {
+        HatState::new_hit(spec, hit).phase.map(f32::to_bits)
+    }
+
+    /// The hit count as a float outgrew the fraction it was multiplied for:
+    /// at `pitch=1khz` 64 hits in a row started 54 ways from hit 0, 11 ways
+    /// from hit 5,000 and one way, all six partials at zero, from hit 40,000.
+    #[test]
+    fn the_metal_starts_as_many_ways_at_hit_forty_thousand_as_at_hit_four() {
+        for pitch in [205.0, 1000.0] {
+            let spec = hat(60.0, 8000.0, 6000.0, 0.0, pitch, 0.1);
+            let ways = |from: u32| {
+                let starts: [[u32; 6]; 64] = core::array::from_fn(|i| start_of(&spec, from.wrapping_add(i as u32)));
+                (0..64).filter(|&i| !starts[..i].contains(&starts[i])).count()
+            };
+            let first = ways(0);
+            assert_eq!(first, HAT_STARTS as usize, "pitch={pitch}: every start is another");
+            for from in [4, 5_000, 40_000, 700_000, 16_777_216, 4_000_000_000, u32::MAX - 20] {
+                assert_eq!(ways(from), first, "pitch={pitch}: 64 hits from hit {from}");
+            }
+            // And a hit never starts the way the one before it did.
+            for hit in [4, 40_000, 4_000_000_000] {
+                assert_ne!(start_of(&spec, hit), start_of(&spec, hit + 1), "pitch={pitch}: hit {hit} and the next");
+            }
+        }
+    }
+
+    /// The slow drift of a hat's, a snare's and a clap's lengths took the hit
+    /// count as an f32: right to 0.001 at hit 40,000, 0.04 off at hit
+    /// 1,000,000, 0.5 off at 16,000,000 and anywhere at all after that. It is
+    /// where two exact sines would be at any count.
+    #[test]
+    fn the_sway_is_as_slow_at_hit_four_thousand_million_as_at_hit_four() {
+        let tau = core::f64::consts::TAU;
+        for from in [4u32, 40_000, 1_000_000, 16_000_000, 100_000_000, 4_000_000_000, u32::MAX - 64] {
+            for hit in from..from + 64 {
+                for (a, pa, b, pb) in
+                    [(31.0f32, 0.7f32, 12.3f32, 2.1f32), (41.0, 1.3, 14.9, 0.2), (23.0, 2.4, 9.7, 0.9)]
+                {
+                    let n = hit as f64;
+                    let exact =
+                        0.6 * (tau * n / a as f64 + pa as f64).sin() + 0.4 * (tau * n / b as f64 + pb as f64).sin();
+                    let got = sway(hit, a, pa, b, pb) as f64;
+                    assert!((got - exact).abs() < 2e-3, "hit {hit}: {got} for {exact}");
+                }
+            }
+        }
+    }
+
+    /// From every place the metal starts, three partials are high and three
+    /// low, so the first sample's six steps cancel: no hit opens on a click.
+    #[test]
+    fn every_start_has_three_partials_high_and_three_low() {
+        for pitch in [100.0, 205.0, 733.0, 1000.0] {
+            for start in 0..HAT_STARTS {
+                let phases = hat_phases(start, pitch);
+                assert!(phases.iter().all(|p| (0.0..1.0).contains(p)), "{phases:?}");
+                let high = phases.iter().filter(|p| **p < 0.5).count();
+                assert_eq!(high, 3, "pitch={pitch}, start {start}: {phases:?}");
+            }
+        }
+        assert_eq!(hat_phases(0, 205.0), HAT_PHASES, "the first place is where a plain hit starts");
+    }
+
+    /// The peak of hit `hit` and its mean square over the length it is
+    /// written with, at the node, before velocity and the track's level.
+    fn measure(spec: &NodeSpec, hit: Option<u32>) -> (f32, f32) {
+        let NodeSpec::Hat { decay_ms, .. } = *spec else { unreachable!() };
+        let mut hat = match hit {
+            Some(hit) => HatState::new_hit(spec, hit),
+            None => HatState::new(spec),
+        };
+        let (mut peak, mut power, mut n) = (0.0f32, 0.0f64, 0usize);
+        while !hat.is_idle() {
+            let s = hat.next_sample();
+            assert!(s.is_finite());
+            peak = peak.max(s.abs());
+            power += (s * s) as f64;
+            n += 1;
+        }
+        assert!(n > 0);
+        (peak, math::sqrt((power / samples(decay_ms) as f64) as f32))
+    }
+
+    fn db(ratio: f32) -> f32 {
+        20.0 * math::log10(ratio)
+    }
+
+    /// The metal went through with one gain whatever the band: at `noise=0`
+    /// a band of 1 to 4 kHz over a floor of 200 Hz peaked at 1.3 to 2.4, and
+    /// a floor over the band left 26 dB less than `hat()`. Every hat is now at
+    /// the level of `hat()`, at any rate the engine is built for, and under
+    /// full scale.
+    #[test]
+    fn a_hat_is_as_loud_whatever_its_band_floor_noise_and_pitch() {
+        let (_, level) = measure(&hat(60.0, 8000.0, 6000.0, 0.3, 205.0, 0.0), None);
+        assert!(db(level / HAT_LEVEL).abs() < 0.1, "hat() is at {level}");
+        let (mut low, mut high, mut top) = (0.0f32, 0.0f32, 0.0f32);
+        for decay in [5.0, 60.0, 400.0] {
+            for band in [1000.0, 2000.0, 4000.0, 8000.0, 16000.0] {
+                for floor in [200.0, 1000.0, 6000.0, 12000.0] {
+                    for noise in [0.0, 0.3, 1.0] {
+                        for pitch in [100.0, 205.0, 1000.0] {
+                            let (peak, level) = measure(&hat(decay, band, floor, noise, pitch, 0.0), None);
+                            let off = db(level / HAT_LEVEL);
+                            let line = (decay, band, floor, noise, pitch);
+                            assert!(off.abs() < 2.0, "{line:?}: {off:+.1} dB from hat()");
+                            assert!(peak <= HAT_PEAK + 1e-4, "{line:?}: peaks at {peak}");
+                            (low, high, top) = (low.min(off), high.max(off), top.max(peak));
+                        }
+                    }
+                }
+            }
+        }
+        // The level holds much closer than the 2 dB asked of it; the peak is
+        // let move, a hat of clicks being more peak for its level than one
+        // of noise.
+        assert!(low > -0.5 && high < 0.5, "{low:+.2}..{high:+.2} dB");
+        assert!(top < 1.0, "{top}");
+        // Where the level would take the peak over 0.95 it is the level that
+        // gives: the bare metal ringing for seconds, the most peak a hat has
+        // for its level, comes out up to 2.7 dB under, and nothing over.
+        for (band, floor, noise, pitch) in
+            [(8000.0, 200.0, 0.0, 100.0), (16000.0, 200.0, 0.05, 100.0), (1000.0, 12000.0, 0.0, 150.0)]
+        {
+            let (peak, level) = measure(&hat(5000.0, band, floor, noise, pitch, 0.0), None);
+            let off = db(level / HAT_LEVEL);
+            assert!(off > -3.0 && off < 0.5, "decay=5s, {band} {floor} {noise} {pitch}: {off:+.1} dB from hat()");
+            assert!(peak <= HAT_PEAK + 1e-4, "decay=5s, {band} {floor} {noise} {pitch}: peaks at {peak}");
+        }
+    }
+
+    /// With `vary` every hit is another: the level the sweep holds is the
+    /// mean of the hits, and no hit goes over full scale, whatever place the
+    /// metal starts from and however long its decay has swayed.
+    #[test]
+    fn no_hit_of_a_swaying_hat_goes_over_full_scale() {
+        for decay in [5.0, 60.0, 400.0] {
+            for (band, floor, noise, pitch) in [
+                (8000.0, 6000.0, 0.3, 205.0),
+                (9000.0, 7000.0, 0.2, 205.0),
+                (16000.0, 200.0, 0.0, 100.0),
+                (8000.0, 4000.0, 0.1, 100.0),
+                (2000.0, 200.0, 0.0, 1000.0),
+                (1000.0, 12000.0, 0.0, 100.0),
+                (1500.0, 12000.0, 0.1, 205.0),
+                (16000.0, 12000.0, 1.0, 1000.0),
+            ] {
+                let spec = hat(decay, band, floor, noise, pitch, 0.3);
+                let (mut top, mut power) = (0.0f32, 0.0f32);
+                let hits = 4 * HAT_STARTS;
+                for hit in (0..hits).chain([40_000, 55_434, 71_272, 87_110, u32::MAX]) {
+                    let (peak, level) = measure(&spec, Some(hit));
+                    top = top.max(peak);
+                    if hit < hits {
+                        power += level * level / hits as f32;
+                    }
+                }
+                let line = (decay, band, floor, noise, pitch);
+                assert!(top <= HAT_PEAK + 1e-4, "{line:?}: a hit peaks at {top}");
+                // Its hits are around the level of `hat()`, under it where
+                // the peak is what holds them.
+                let off = db(math::sqrt(power) / HAT_LEVEL);
+                assert!(off < 1.0 && off > -3.0, "{line:?}: {off:+.1} dB from hat()");
+            }
+        }
     }
 
     #[test]

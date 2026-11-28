@@ -42,8 +42,12 @@ under 44.1 kHz (`TATUM_SAMPLE_RATE`): 2.5 dB at 32 kHz, 9.5 dB at 22.05 kHz.
 `node_kit.synth` plays the kit made of one node a piece -- `kicks/deep`, `hats/tick`,
 `snares/crack`, `claps/room` and `toms/low` -- together: `tatum play sounds/node_kit.synth`.
 Each of those files is a single line that says what is heard, in Hz and ms, and the
-comment over it says what was measured. `tick` is 3 dB quieter at 32 kHz and 6 dB at
-22.05 kHz; the other four play within 1 dB of the same level at any rate.
+comment over it says what was measured. Measured at the node on an engine built at 44.1,
+32 and 22.05 kHz (`TATUM_SAMPLE_RATE`), one hit: the kick and the tom peak the same at
+all three; `tick` has the same rms at all three and peaks at 0.47, 0.37 and 0.40 of full
+scale; `crack` peaks at 0.96, 0.97 and 0.95, its rms 0.5 dB lower at 32 kHz and 0.9 dB
+lower at 22.05; `room` peaks at 0.92, 0.83 and 0.99 (1.0 dB under and 0.6 dB over what it
+does at 44.1 kHz, 1.6 dB between the two lower rates), its rms 0.2 and 0.6 dB lower.
 
 Each file is made, and kept, with the designer:
 

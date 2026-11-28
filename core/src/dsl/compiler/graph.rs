@@ -428,14 +428,11 @@ pub(super) fn node_def_to_spec(
         "tom" => tom_spec(&node.params),
         "hat" => {
             let opt = |name: &str| named_or_default("hat", &node.params, name);
-            Ok(NodeSpec::Hat {
-                decay_ms: opt("decay"),
-                band: opt("band"),
-                floor: opt("floor"),
-                noise: opt("noise"),
-                pitch: opt("pitch"),
-                vary: opt("vary"),
-            })
+            let (decay_ms, band, floor, noise, pitch, vary) =
+                (opt("decay"), opt("band"), opt("floor"), opt("noise"), opt("pitch"), opt("vary"));
+            // Found here, once, so a hit costs nothing more for it.
+            let gain = crate::graph::drums::hat_gain(decay_ms, band, floor, noise, pitch, vary);
+            Ok(NodeSpec::Hat { decay_ms, band, floor, noise, pitch, gain, vary })
         }
         "snare" => {
             let opt = |name: &str| named_or_default("snare", &node.params, name);

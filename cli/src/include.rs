@@ -241,9 +241,9 @@ mod sounds_tests {
     /// kick, the hat, the snare, the clap and the tom are each read from
     /// their own file and each is heard on its own track. The floors are a
     /// third of what each measures at 44.1 kHz over four bars (kick 0.139,
-    /// hat 0.0048, snare 0.0173, clap 0.0088, tom 0.0317), and a sixth for
-    /// the hat, which a build at 22.05 kHz plays 6 dB down: a piece gone
-    /// silent fails here whatever the other four do.
+    /// hat 0.0052, snare 0.0173, clap 0.0088, tom 0.0317), the hat's too now
+    /// that a build at 22.05 kHz plays it as loud: a piece gone silent fails
+    /// here whatever the other four do.
     #[test]
     fn the_node_kit_plays_every_piece() {
         let src = Source::load(Path::new("../sounds/node_kit.synth")).expect("every use resolves");
@@ -252,7 +252,7 @@ mod sounds_tests {
         assert!(l.iter().chain(&r).all(|v| v.is_finite()));
         let sounds = [
             ("kick", "deep_kick", "kicks/deep.synth", 0.045),
-            ("hat", "tick", "hats/tick.synth", 0.0008),
+            ("hat", "tick", "hats/tick.synth", 0.0017),
             ("snare", "crack", "snares/crack.synth", 0.0055),
             ("clap", "room", "claps/room.synth", 0.0029),
             ("tom", "low_tom", "toms/low.synth", 0.0105),
