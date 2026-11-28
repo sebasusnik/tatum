@@ -377,6 +377,8 @@ fn row(
     // against 40 says nothing about either sound.
     let alone = matches!(key, "over_bed_db" | "over_floor_db") && av.zip(bv).is_some_and(|(a, b)| a.min(b) > 35.0);
     let flagged = flagged && !alone;
+    // With nothing on one side there is no ratio: the difference is shown.
+    let ratio = ratio && av.zip(bv).is_some_and(|(a, b)| a > 0.0 && b > 0.0);
     Row { key: key.into(), label: label.into(), unit, a: av, b: bv, difference, ratio, flagged, weight }
 }
 

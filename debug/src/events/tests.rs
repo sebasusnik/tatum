@@ -472,3 +472,40 @@ fn the_text_the_json_and_the_sheet_come_out_whole() {
     let two = draw::sheet(&a, "a.wav", Some((&b, "b.wav")), 6);
     assert!(two.height > one.height && one.width == two.width && one.width > 6 * 220);
 }
+
+#[test]
+fn a_dense_mix_is_read_without_falling_over() {
+    // Pings, glides, hiss and a pad on top of each other, at every threshold:
+    // whatever is found, every number is a number.
+    let mut x = bed(12.0, 0.03, 0.08);
+    let mut n = Noise(21);
+    let mut t = 0.1f32;
+    while t < 11.0 {
+        let hz = 300.0 + 1500.0 * (0.5 + 0.5 * n.next());
+        ping(
+            &mut x,
+            t,
+            hz,
+            4.0 + 60.0 * (0.5 + 0.5 * n.next()),
+            0.05 + 0.2 * (0.5 + 0.5 * n.next()),
+            8.0 * n.next().abs(),
+            80.0 * n.next(),
+        );
+        t += 0.02 + 0.15 * n.next().abs();
+    }
+    for threshold_db in [6.0, 12.0, 24.0] {
+        let right: Vec<f32> = x.iter().rev().copied().collect();
+        let opts = Options { threshold_db, sustained: true, ..Options::default() };
+        let r = measure(x.clone(), right, &opts, true);
+        assert!(threshold_db > 12.0 || r.events.len() > 10, "{} events at {threshold_db}", r.events.len());
+        for e in &r.events {
+            assert!(e.end_s > e.start_s && e.inside.direct_end_s >= e.start_s - 0.05, "{} {}", e.start_s, e.end_s);
+            for me in report::MEASURES {
+                assert!((me.get)(e).is_none_or(f32::is_finite), "{} at {}", me.key, e.start_s);
+            }
+        }
+        let text = report::against(&r, &r, "a", "a");
+        assert!(text.contains("nothing differs"), "{text}");
+        let _ = draw::sheet(&r, "a", Some((&r, "a")), 4);
+    }
+}

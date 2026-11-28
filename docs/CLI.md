@@ -13,6 +13,7 @@
 | [`audit`](#audit) | measure every note of every tonal track for what is not its harmonics |
 | [`analyze`](#analyze-and-compare) | measure a reference track: tempo, key, the kick, the spectrum, density |
 | [`compare`](#analyze-and-compare) | a reference and your song side by side, and what in the file moves each difference |
+| [`events`](#events) | one sound's events read from the inside, or two files side by side: attack, decay, Q, purity, level in the mix, tail, and what should not be in a render |
 | [`design`](#design) | design any sound -- a graph or a module -- in the browser, against a record's kick, and keep it in `sounds/` |
 | [`set`](#set) | render, check, gate and play a live set |
 | [`tui-shot`](#tui-shot) | a picture of the live screen at any second |

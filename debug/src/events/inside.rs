@@ -330,6 +330,7 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32) -> Option<Event> 
 
     // What comes with the start above the resonance.
     let burst_db = (1.5 * f_on < 0.45 * SR).then(|| {
+        // `None` too when nothing of the resonance is there yet in its first 5 ms.
         let above = band(&c.mono[wa..wb], 1.5 * f_on, 0.47 * SR);
         let at_it = band(&c.mono[wa..wb], f_on / 1.25, f_on * 1.25);
         let power = |z: &[(f32, f32)], a: usize, b: usize| {
@@ -339,9 +340,14 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32) -> Option<Event> 
         let (pa, pb) = (w_rel(early.saturating_sub(samples(70.0))), w_rel(early.saturating_sub(samples(8.0))));
         let share = (b - a) as f64 / (pb - pa).max(1) as f64;
         let up = (power(&above, a, b) - share * power(&above, pa, pb)).max(0.0);
-        let it = (power(&at_it, a, b) - share * power(&at_it, pa, pb)).max(1e-20);
-        db((up / it) as f32).max(-80.0)
+        let it = power(&at_it, a, b) - share * power(&at_it, pa, pb);
+        (it > 0.0).then(|| db((up / it) as f32).clamp(-80.0, 40.0))
     });
+    let burst_db = burst_db.flatten();
+
+    // In a mix the partial can peak in its narrow band before the wide one
+    // has risen: the event is never taken to start after its own peak.
+    let begin = rel(start).min(pk_i);
 
     // The fall.
     let ridge_end = (centre + ridge_len + s.size / 2).min(to - 1);
@@ -366,7 +372,7 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32) -> Option<Event> 
 
     // The pitch: the tone's own frequency plus how fast the phase still turns.
     let cycles = samples(2.0).max((2.0 * SR / f_on) as usize) + smear / 4;
-    let v0 = (rel(start) + cycles).min(pk_i.max(rel(start) + 1));
+    let v0 = (begin + cycles).min(pk_i.max(begin + 1));
     let quiet = (pk * 0.1).max(bed * 2.0);
     let v1 = (v0..=end).rev().find(|&i| level[i] >= quiet).unwrap_or(v0).max(v0);
     let stride = ((v1 - v0) / 400).max(samples(1.0)).max(1);
@@ -412,7 +418,7 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32) -> Option<Event> 
     let wobble = wobble(&pitch);
 
     // The width of the partial, its glide taken out.
-    let (bandwidth_hz, peak_off) = width(&tr, rel(start), end.max(rel(start) + samples(2.0)).min(level.len()));
+    let (bandwidth_hz, peak_off) = width(&tr, begin, end.max(begin + samples(2.0)).min(level.len()));
     let f_peak = (tr.hz[pk_i] + peak_off).max(1.0);
     let q = f_peak / bandwidth_hz.max(1e-3);
     let ring_q = decay_db_ms.map(|r| std::f32::consts::PI * f_peak * 8.686 / (r * 1000.0));
@@ -466,7 +472,7 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32) -> Option<Event> 
 
     // Between the speakers.
     let (mut ll, mut rr, mut lr) = (0.0f64, 0.0f64, 0.0f64);
-    for i in rel(start)..=direct_end.max(rel(start)) {
+    for i in begin..=direct_end.max(begin) {
         let (a, b) = (tr.l[i], tr.r[i]);
         ll += (a.0 * a.0 + a.1 * a.1) as f64;
         rr += (b.0 * b.0 + b.1 * b.1) as f64;
@@ -478,12 +484,12 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32) -> Option<Event> 
     // What is left after it.
     let (ta, tb) = (direct_end + samples(50.0), direct_end + samples(400.0));
     let tail_db = (tb < level.len()).then(|| {
-        let own: f64 = level[rel(start)..=direct_end].iter().map(|v| (*v as f64).powi(2)).sum();
+        let own: f64 = level[begin..=direct_end].iter().map(|v| (*v as f64).powi(2)).sum();
         let after: f64 = level[ta..tb].iter().map(|v| ((*v as f64).powi(2) - (bed as f64).powi(2)).max(0.0)).sum();
         db((after / own.max(1e-20)) as f32).max(-60.0)
     });
 
-    let curve_from = rel(start).saturating_sub(samples(10.0));
+    let curve_from = begin.saturating_sub(samples(10.0));
     let curve: Vec<f32> = (curve_from..=end.max(curve_from))
         .step_by(samples(1.0).max(1))
         .take(6000)
