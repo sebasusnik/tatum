@@ -372,6 +372,16 @@ impl Instrument {
         }
     }
 
+    /// Stop every voice where it is, with no release: what is left of a track
+    /// once a scene has dropped it and its fade is over. Each voice is made
+    /// new by its next note, so nothing of the old one is heard again. The
+    /// hit count goes on, as it does through any silence.
+    pub fn cut(&mut self) {
+        for voice in self.voices.iter_mut() {
+            voice.active = false;
+        }
+    }
+
     pub fn all_notes_off(&mut self) {
         for voice in self.voices.iter_mut() {
             if voice.active {

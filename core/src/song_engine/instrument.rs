@@ -145,6 +145,19 @@ impl SongInstrument {
         }
     }
 
+    /// Stop everything the instrument is sounding, at once and with no
+    /// release, and forget what it was ringing; its modulation goes on from
+    /// where it is. For a track a scene has dropped, once its fade is over.
+    pub(super) fn cut(&mut self) {
+        match self {
+            Self::Graph(inst) => inst.cut(),
+            Self::Bass(m) => m.cut(),
+            Self::Fm(m) => m.cut(),
+            Self::Keys(m) => m.cut(),
+            Self::Beats(m) => m.cut(),
+        }
+    }
+
     pub(super) fn stage_plock(&mut self, cutoff: Option<f32>, env_depth: Option<f32>, resonance: Option<f32>) {
         match self {
             Self::Graph(inst) => inst.stage_plock(cutoff, env_depth, resonance),

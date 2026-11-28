@@ -2154,6 +2154,33 @@ impl NodeKind {
         }
     }
 
+    /// Forget the sound the node is holding (an echo, a tail, a filter still
+    /// ringing) and leave its slow movement where it is: an autopan, a phaser
+    /// or a vowel goes on from the point of its sweep it had reached. For an
+    /// insert chain whose track a scene has dropped: what it was ringing must
+    /// not come back with the track, and its sweeps are not something to
+    /// start over.
+    pub fn clear(&mut self) {
+        match self {
+            NodeKind::AutoPan { .. } | NodeKind::Lfo(_) => {}
+            // The wobble goes on; the follower and the filters start empty.
+            NodeKind::AutoWah { left, right, env, peak, cutoff, base, .. } => {
+                left.reset();
+                right.reset();
+                *env = 0.0;
+                *peak = 0.0;
+                *cutoff = *base;
+            }
+            NodeKind::Phaser(p) => p.clear(),
+            NodeKind::Vowel(v) => v.clear(),
+            NodeKind::Chorus(c) => c.clear(),
+            NodeKind::Delay(d) => d.clear(),
+            // The rest hold sound and nothing that sweeps on its own, or
+            // (the filters) keep their LFO through a reset already.
+            other => other.reset(),
+        }
+    }
+
     pub fn reset(&mut self) {
         match self {
             NodeKind::Osc(osc) => osc.reset(),

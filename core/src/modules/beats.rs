@@ -681,6 +681,17 @@ impl Default for BeatsModule {
 }
 
 impl BeatsModule {
+    /// Stop every drum where it is: see [`crate::graph::voice::Instrument::cut`].
+    pub fn cut(&mut self) {
+        self.kick.active = false;
+        self.snare.active = false;
+        self.hihat.active = false;
+        self.clap.active = false;
+        self.tom.active = false;
+        self.crash.active = false;
+        self.stutter_remaining = 0;
+    }
+
     /// True when nothing is sounding and nothing is still releasing. A track
     /// whose level is 0 and whose instrument is idle is skipped whole by the
     /// song engine: no voices, no insert chain, no mix. That is what makes a

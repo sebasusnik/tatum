@@ -194,6 +194,15 @@ impl KeysModule {
     pub fn is_idle(&self) -> bool {
         !self.voices.iter().any(|v| v.active)
     }
+
+    /// Stop every voice where it is and empty the chorus, leaving the LFO,
+    /// the vibrato and the bend as they are: see [`crate::graph::voice::Instrument::cut`].
+    pub fn cut(&mut self) {
+        for voice in &mut self.voices {
+            voice.reset();
+        }
+        self.chorus.clear();
+    }
     pub fn new() -> Self {
         Self {
             voices: core::array::from_fn(|i| KeysVoice::new(i as u32)),

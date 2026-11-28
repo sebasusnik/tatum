@@ -173,6 +173,12 @@ impl Formant {
         self.process_stereo(x, x).0
     }
 
+    /// Forget the sound in the filters and keep the vowel where it is.
+    pub fn clear(&mut self) {
+        self.left.reset();
+        self.right.reset();
+    }
+
     pub fn reset(&mut self) {
         self.left.reset();
         self.right.reset();

@@ -83,6 +83,10 @@ pub(super) struct TrackPlayback {
     /// its wave to zero mid-cycle, and that was the loudest click in most
     /// arranged songs: `tatum debug` found it on every section change.
     pub(super) leaving: u32,
+    /// The track's instrument has sounded since the track was last cleared:
+    /// there may be something of it left, in its voices or its insert chain,
+    /// when a scene drops it. A track that never played has nothing to clear.
+    pub(super) rang: bool,
     pub(super) stereo_src: bool, // true if instrument produces native stereo (BeatsModule)
     // Arpeggiator: the pattern supplies held notes, the arp schedules them per sample
     pub(super) arp: Option<ArpProcessor>,

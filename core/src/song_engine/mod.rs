@@ -183,6 +183,8 @@ pub struct SongEngine {
     /// its chain has put out nothing: past `QUIET_BLOCKS` it is skipped too,
     /// fader up or not, until a note comes.
     track_quiet: Vec<u16>,
+    /// How many times a dropped track has had what its fade left cleared.
+    tracks_cleared: u32,
     /// Per track, whether its patterns play no notes at all: a voice only
     /// the keys or a pad play. Only such a track is skipped while idle, so a
     /// track of the song never has its chain's modulation stopped.

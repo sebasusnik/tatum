@@ -7,13 +7,43 @@ use crate::SAMPLE_RATE;
 
 use super::automation::{ActiveAutomation, LaneSource};
 use super::instrument::SongInstrument;
+use super::sequencer::PendingTrigger;
 use super::track::{make_arp, pan_gains};
 use super::SongEngine;
 
 /// How long a track the new scene drops takes to fade out: 10 ms.
 pub(super) const SCENE_FADE: u32 = 441;
 
+/// Stop what `inst_idx` is still sounding, and drop the hits still queued for
+/// it. A track out of the scene is not rendered, so anything left in its
+/// instrument would stay as it is, mid-release, and come back when the track
+/// does, bars later.
+pub(super) fn cut_instrument(instruments: &mut [SongInstrument], pending: &mut Vec<PendingTrigger>, inst_idx: usize) {
+    if let Some(inst) = instruments.get_mut(inst_idx) {
+        inst.cut();
+    }
+    pending.retain(|t| t.inst_idx != inst_idx);
+}
+
 impl SongEngine {
+    /// What a dropped track leaves once its fade is over is cleared: its
+    /// voices, the hits still queued for it, and what its insert chain was
+    /// holding. The fade has taken it to nothing, so this is not heard; left
+    /// alone, the engine skips the track from here on, with its notes frozen
+    /// mid-release and its filters and delays mid-ring, and the scene that
+    /// brought it back opened with the end of a note from the last time.
+    ///
+    /// A track that has not sounded since it was last cleared is left as it
+    /// is: one the song's first scene does not name, for one.
+    pub(super) fn clear_dropped_track(&mut self, ti: usize) {
+        if !core::mem::take(&mut self.tracks[ti].rang) {
+            return;
+        }
+        cut_instrument(&mut self.instruments, &mut self.pending_triggers, self.tracks[ti].instrument_idx);
+        self.tracks[ti].insert_fx.clear();
+        self.tracks_cleared = self.tracks_cleared.wrapping_add(1);
+    }
+
     /// Apply a scene's track configuration.
     pub(super) fn apply_scene(&mut self, scene_idx: usize) {
         if scene_idx >= self.scenes.len() {
@@ -87,6 +117,13 @@ impl SongEngine {
                 // Only a track that was already sounding glides to its new
                 // settings; one coming in from silence starts at them.
                 let arriving = !tp.sounding();
+                // A track that goes on with another instrument leaves the one
+                // it had unrendered from here on: it is stopped now, as a
+                // dropped track's is, so it is not heard again when the track
+                // takes it back. One that has not sounded holds nothing.
+                if !arriving && tp.rang && tp.instrument_idx != inst_idx {
+                    cut_instrument(&mut self.instruments, &mut self.pending_triggers, tp.instrument_idx);
+                }
                 tp.instrument_idx = inst_idx;
                 tp.pattern_idx = st.pattern_idx;
                 tp.play = st.play;

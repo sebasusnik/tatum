@@ -423,7 +423,14 @@ top level is a compile error, and so is an unknown override. Tracks the scene do
 mention are silent for its duration. `auto` runs over the scene's whole length in the
 arrangement and its targets are validated: the module and parameter must exist.
 
-On a scene change, a track the new scene drops fades out over 10 ms. A track it keeps
+On a scene change, a track the new scene drops fades out over 10 ms, and what it was
+sounding ends there: its notes, and whatever its own `out > ...` chain was still ringing
+(a delay, a reverb). When a later scene brings it back it starts from silence, on the
+first step of its pattern, with nothing left over from the last time. What it had sent
+to the shared reverb and delay is not its own any more and rings on over the change, so
+a tail that should outlive the scene goes through `reverb_send` or `delay_send`, not
+through the track's chain. The same holds for an instrument a track stops playing
+because the scene gives it another (`play p using other`). A track the scene keeps
 glides to its new level, pan, sends and sidechain amount, and so do `reverb_mix` and
 `delay_mix`, arriving within about 15 ms. The same glide smooths `auto ... level` and a
 fader moved live. A rebalance between sections is heard as a change of balance, not a

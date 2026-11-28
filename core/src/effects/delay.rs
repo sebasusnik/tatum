@@ -357,6 +357,18 @@ impl Delay {
         (l + r) * 0.5
     }
 
+    /// Forget the echoes and keep the line where it is, its drift included.
+    pub fn clear(&mut self) {
+        for s in self.buffer_l.iter_mut() {
+            *s = 0.0;
+        }
+        for s in self.buffer_r.iter_mut() {
+            *s = 0.0;
+        }
+        self.fb_filter_l = 0.0;
+        self.fb_filter_r = 0.0;
+    }
+
     pub fn reset(&mut self) {
         for s in self.buffer_l.iter_mut() {
             *s = 0.0;

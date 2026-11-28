@@ -241,4 +241,13 @@ impl SongEngine {
     pub fn silent_track_count(&self) -> usize {
         self.track_silent.iter().filter(|s| **s).count()
     }
+
+    /// How many times, since the song was loaded, a track a scene dropped has
+    /// had what its fade left cleared: its voices, the hits queued for it and
+    /// its insert chain. A track that has not sounded since it was last
+    /// cleared is not, so this is how a test sees that one which never played
+    /// costs nothing and is left as it was.
+    pub fn cleared_track_count(&self) -> u32 {
+        self.tracks_cleared
+    }
 }
