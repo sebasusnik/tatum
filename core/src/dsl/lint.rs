@@ -650,6 +650,27 @@ pub fn lint_song(song: &Song) -> Vec<Lint> {
         }
     }
 
+    // ── dust_without_envelope: a stream of pings nobody holds open ──
+    //
+    // A voice lasts as long as its envelopes, and one with none ends in the
+    // block it started in. `dust(...) > svf(...) > out` reads as a finished
+    // patch -- the node's own example was written that way -- compiles, and
+    // renders silence without a word.
+    for inst in &song.instruments {
+        let named = |n: &super::ast::NodeDef, names: &[&str]| {
+            crate::nodes::lookup(&n.kind).is_some_and(|d| names.contains(&d.name))
+        };
+        let dust = inst.nodes.iter().any(|n| named(n, &["dust"]));
+        let held = inst.nodes.iter().any(|n| named(n, &["adsr", "perc", "kick"]));
+        if dust && !held {
+            out.push(lint(
+                "dust_without_envelope",
+                format!("instrument '{}' has a `dust` and no envelope, so its notes end as they start and it plays nothing", inst.name),
+                "A voice lasts as long as its envelopes. Put one after the filter the dust rings and send that to `out`: `ping > adsr(0.005, 0.1, 1, 0.4) as amp`, `amp > out`. The stream then runs for as long as the note is held.",
+            ));
+        }
+    }
+
     // ── unused definitions ──
     for m in &song.module_defs {
         if !all_tracks.iter().any(|t| t.using_instrument == m.name) {

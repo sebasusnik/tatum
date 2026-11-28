@@ -188,3 +188,30 @@ fn a_gate_lock_alone_is_not_flagged() {
     compiler::compile(&ast).expect("compile");
     assert!(lint::lint_song(&ast).iter().all(|l| l.code != "plock_ignored"));
 }
+
+/// A voice lasts as long as its envelopes: a dust into a filter into `out`
+/// compiles and plays nothing, and the check says so.
+#[test]
+fn a_dust_with_no_envelope_is_flagged() {
+    let bare = "tempo 120\n\
+        instrument pings {\n  dust(6hz, spread=12db, level=30db) as d\n  svf(bandpass, 900hz, 0.9) as ping\n  d > ping\n  ping > out\n}\n\
+        pattern p { C3 ..*15 }\n\
+        track t { play p using pings out > master }\n";
+    let found = lint::lint_song(&dsl::parse(bare).expect("parse"));
+    let l = found.iter().find(|l| l.code == "dust_without_envelope").expect("the bare dust is flagged");
+    assert!(l.message.contains("'pings'"), "{}", l.message);
+    assert!(l.hint.contains("adsr"), "{}", l.hint);
+    // What it warns of is true: the render is silent.
+    let (out, _) = tatum_core::song_engine::SongEngine::from_source(bare).expect("compiles").render(1);
+    assert!(out[4096..].iter().all(|v| v.abs() < 1e-6), "a dust with no envelope sounded");
+
+    let held = bare.replace("  ping > out\n", "  ping > adsr(0.005, 0.1, 1, 0.4) as amp\n  amp > out\n");
+    assert!(!lints(&held).contains(&"dust_without_envelope"));
+    let (out, _) = tatum_core::song_engine::SongEngine::from_source(&held).expect("compiles").render(1);
+    assert!(out.iter().any(|v| v.abs() > 1e-3), "with an envelope it sounds");
+    // A `perc` holds it too, and an instrument with no dust is not this lint's business.
+    let perc = bare.replace("  ping > out\n", "  ping > perc(0.001, 0.5) as amp\n  amp > out\n");
+    assert!(!lints(&perc).contains(&"dust_without_envelope"));
+    let plain = bare.replace("dust(6hz, spread=12db, level=30db) as d", "osc saw(110) as d");
+    assert!(!lints(&plain).contains(&"dust_without_envelope"));
+}
