@@ -353,6 +353,21 @@ fn vary_sways_the_length_slowly_by_what_it_says() {
     assert_eq!(x, render(&song(args, SIXTEEN), 8));
 }
 
+/// Stop and play again is the first play again: the hit count goes back to
+/// the top with the clock, so the sway a second play makes is the sway a
+/// render makes.
+#[test]
+fn a_swaying_kick_plays_the_same_after_a_stop() {
+    let src = song("A1, hold=80ms, release=150ms, vary=0.05, vary_pitch=0.02", SIXTEEN);
+    let mut e = SongEngine::from_source(&src).unwrap_or_else(|err| panic!("{}", err));
+    let (first, _) = e.render(4);
+    e.reset();
+    let (second, _) = e.render(4);
+    assert!(first.iter().any(|v| v.abs() > 0.1), "the kick is heard");
+    assert!(first == second, "the second play is not the first, sample for sample");
+    assert!(first == render(&src, 4), "nor a render on a new engine");
+}
+
 #[test]
 fn vary_pitch_sways_the_tail_and_vary_zero_is_none() {
     let x = render(&song("A1, hold=200ms, release=100ms, vary_pitch=0.02", SIXTEEN), 4);

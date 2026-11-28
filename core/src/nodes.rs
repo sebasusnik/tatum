@@ -179,7 +179,7 @@ pub const NODES: &[NodeDefSpec] = &[
             arg!("heard", 0.0, 1.0, 0.0, "1: the note given is the note the kick is heard as, the sweep included, and the note it settles on is found under it; 0: the note it settles on"),
         ],
         waveform: false, rhythm: false, in_chains: false,
-        doc: "A whole kick in one node, written in the units a kick is thought in: the note it lands on, how long the snap and the body take in ms, and its level held then released. It plays every hit the same, sample for sample, whatever the note's length, and the voice ends when it does. `kick(A1, body=70ms, hold=90ms, release=150ms)`. `chirp=` adds a third, faster stage on top for the tick of the attack, and `sag=` lets the held top lean. Write it with its parentheses, `kick()`, so a node named `kick` stays a name." },
+        doc: "A whole kick in one node, written in the units a kick is thought in: the note it lands on, how long the snap and the body take in ms, and its level held then released. It plays every hit the same, sample for sample, whatever the note's length, unless `vary=` or `vary_pitch=` sway it, and the voice ends when it does. `kick(A1, body=70ms, hold=90ms, release=150ms)`. `chirp=` adds a third, faster stage on top for the tick of the attack, and `sag=` lets the held top lean. Write it with its parentheses, `kick()`, so a node named `kick` stays a name." },
     NodeDefSpec { name: "noise", aliases: &[], category: Category::Source, positional: &[], named: &[],
         waveform: false, rhythm: false, in_chains: false, doc: "White noise." },
     NodeDefSpec { name: "lfo", aliases: &[], category: Category::Source,
