@@ -135,10 +135,11 @@ impl Parser {
             Token::Ident(ref word) => {
                 let word = word.clone();
                 // Check if this is a DSP keyword (followed by parentheses = node creation)
-                // `kick` is a node only with its parentheses: a node named
+                // `kick` and the rest of the kit (`tom`, `hat`, `snare`,
+                // `clap`) are nodes only with their parentheses: a node named
                 // `kick` (`pitch_osc ... as kick`) stays a name.
                 let is_dsp_keyword =
-                    is_dsp_keyword(&word) || (word == "kick" && matches!(self.peek_ahead(1), Token::LParen));
+                    is_dsp_keyword(&word) || (is_drum_node(&word) && matches!(self.peek_ahead(1), Token::LParen));
 
                 if is_dsp_keyword {
                     self.parse_inline_node_def(word)
@@ -341,6 +342,13 @@ impl Parser {
 enum ChainElement {
     NodeDef(NodeDef),
     Ref(String),
+}
+
+/// The drum nodes: a whole piece of the kit in one node. They are words
+/// people name their own nodes by (`... as hat`), so they are nodes only when
+/// written with parentheses.
+pub(crate) fn is_drum_node(word: &str) -> bool {
+    matches!(word, "kick" | "tom" | "hat" | "snare" | "clap")
 }
 
 /// Check if a word is a DSP keyword (node type that can be instantiated).
