@@ -818,3 +818,258 @@ fn vary_takes_a_percentage_on_every_drum_node() {
         assert!(e.contains(&format!("'vary' takes % or a plain 0..{top} ")) && e.contains(NODE_LINE), "{node}: {e}");
     }
 }
+
+// ── Where the kit meets the modulation ports ──
+
+/// The five drum nodes, each as it is written bare.
+const KIT: [&str; 5] = ["kick", "tom", "hat", "snare", "clap"];
+
+/// An instrument with `body` for its lines, one note in its song. The body
+/// starts on line 4.
+fn patch(body: &str) -> String {
+    format!("tempo 120\ninstrument piece {{\n  gain 1\n{body}\n}}\npattern beat {{ C3 - - - }}\ntrack t {{ play beat using piece out > master }}\n")
+}
+
+fn template(body: &str) -> tatum_core::graph::GraphTemplate {
+    let src = patch(body);
+    let ast = tatum_core::dsl::parse(&src).unwrap_or_else(|e| panic!("{e:?}\n{src}"));
+    let song = tatum_core::dsl::compiler::compile(&ast).unwrap_or_else(|e| panic!("{e:?}\n{src}"));
+    song.instruments[0].as_graph().expect("an instrument graph").clone()
+}
+
+/// One note on `inst`, let go after `held` blocks, played until the voice
+/// ends: what it played, a whole number of blocks.
+fn note(inst: &mut tatum_core::graph::voice::Instrument, held: usize) -> Vec<f32> {
+    use tatum_core::BLOCK_SIZE;
+    inst.note_on(48, 1.0);
+    let mut out = Vec::new();
+    let mut block = [0.0f32; BLOCK_SIZE];
+    for n in 0..20 * SAMPLE_RATE as usize / BLOCK_SIZE {
+        if n == held {
+            inst.note_off(48);
+        }
+        inst.process_block(&mut block);
+        out.extend_from_slice(&block);
+        if inst.is_idle() {
+            return out;
+        }
+    }
+    panic!("the voice never ended");
+}
+
+fn seconds(x: &[f32]) -> f32 {
+    x.len() as f32 / SAMPLE_RATE
+}
+
+/// A drum node has no ports: a wire into one, with a dot or a space, is an
+/// error at its line that says so, by the rule every node without ports goes
+/// by. A node named like a piece of the kit has the ports its kind has.
+#[test]
+fn a_drum_node_has_no_ports_and_a_name_like_one_keeps_its_own() {
+    for piece in KIT {
+        for wire in ["wob > p.pitch", "wob > p pitch", "lfo(4, 0.5) > p.cutoff", "osc sine(50) > gain(0.2) > p.fm"] {
+            let e = errors(&patch(&format!("  {piece}() as p\n  lfo(4, 0.5) as wob\n  {wire}\n  p > out")));
+            assert!(e.starts_with("line 6:") && e.lines().count() == 1, "{piece}, {wire}: {e}");
+            assert!(e.contains(&format!("'p' is a {piece}, which has no ports to modulate")), "{piece}, {wire}: {e}");
+        }
+        // On the node as it opens, it is the port rule's own error.
+        let e = errors(&patch(&format!("  lfo(4, 0.5) > {piece}() as p.pitch\n  p > out")));
+        assert!(
+            e.starts_with("line 4:") && e.contains("`p.pitch`: a port goes on a node that already has its name"),
+            "{e}"
+        );
+        // A port on the bare word, with no node of that name, is still the
+        // node written without its parentheses.
+        let e = errors(&patch(&format!("  osc saw(55) as a\n  lfo(4, 0.5) > {piece}.pitch\n  a > out")));
+        assert!(e.starts_with("line 5:") && e.contains(&format!("`{piece}()`")), "{piece}: {e}");
+    }
+
+    // Nodes named for the kit, with wires into their ports, against the same
+    // graph under other names: the same samples.
+    let graph = |osc: &str, filt: &str, amp: &str, src: &str| {
+        format!(
+            "  osc pulse(110) as {osc}\n  noise as {src}\n  {osc} > mix\n  {src} > gain(0.1) > mix\n  mix > svf(800, 0.3) as {filt}\n  lfo(2, 0.5) > {filt}.cutoff\n  lfo(3, 0.2) > {osc} width\n  {src} > gain(0.2) > {osc}.fm\n  {filt} > adsr(0.01, 0.1, 0.5, 0.1) as {amp}\n  {amp} > out"
+        )
+    };
+    let named = patch(&graph("hat", "clap", "tom", "snare"));
+    assert_eq!(errors(&named), "");
+    let other = render(&patch(&graph("a", "f", "amp", "n")), 1);
+    assert!(other.iter().any(|v| v.abs() > 0.01));
+    assert_eq!(render(&named, 1), other, "a node named for a drum is the node it was made");
+    let unwired = render(&patch(&graph("a", "f", "amp", "n").replace("a width", "a").replace("f.cutoff", "f")), 1);
+    assert_ne!(other, unwired, "the ports are wired");
+    // And one named `kick`, which opens no node without its parentheses.
+    assert_eq!(errors(&patch("  osc saw(55) as kick\n  lfo(5, 0.1) > kick.pitch\n  kick > out")), "");
+}
+
+/// After a chain on the same line a word is a port of the last node unless
+/// it opens a node: a drum node with its parentheses does, as `kick(` did,
+/// and without them it gets the hint, not a port's error.
+#[test]
+fn a_drum_node_opens_after_a_chain_on_its_line() {
+    for piece in KIT {
+        let apart = patch(&format!("  noise as n\n  n > gain(0.01) > mix\n  {piece}() as p\n  p > mix\n  mix > out"));
+        let joined = patch(&format!("  noise as n\n  n > gain(0.01) > mix  {piece}() as p  p > mix  mix > out"));
+        assert_eq!(errors(&joined), "", "{piece}");
+        let heard = render(&apart, 1);
+        assert!(
+            heard.iter().any(|v| v.abs() > 0.05),
+            "{piece} sounds: {}",
+            heard.iter().fold(0.0f32, |m, v| m.max(v.abs()))
+        );
+        assert_eq!(render(&joined, 1), heard, "{piece}: one line or three");
+
+        let e = errors(&patch(&format!("  noise as n\n  n > gain(0.01) > mix  {piece} as p  p > mix  mix > out")));
+        assert!(e.starts_with("line 5:") && e.lines().count() == 1, "{piece}: {e}");
+        assert!(e.ends_with(&format!("written with its parentheses, `{piece}() as ...`")), "{piece}: {e}");
+    }
+    // A name that is one of the words is still a name there: two chains.
+    let apart = patch("  noise as hat\n  gain(0.5) as b\n  hat > b\n  b > out");
+    let joined = patch("  noise as hat\n  gain(0.5) as b\n  b > out  hat > b");
+    assert_eq!(errors(&joined), "");
+    assert_eq!(render(&joined, 1), render(&apart, 1));
+}
+
+/// A drum node is sound, and its own envelope: alone in its graph it plays
+/// its whole tail however short the note, and then the voice ends. Beside an
+/// envelope that only moves a port it is still what the voice waits for, and
+/// the only thing.
+#[test]
+fn a_drum_node_alone_plays_its_tail_and_ends_the_voice() {
+    use tatum_core::graph::voice::Instrument;
+    for (node, least_ms, most_ms) in [
+        ("kick(A1, hold=80ms, release=200ms)", 200.0, 500.0),
+        ("tom(A2, hold=40ms, release=300ms)", 250.0, 600.0),
+        ("hat(decay=400ms)", 350.0, 700.0),
+        ("snare(body=120ms, wires=300ms)", 250.0, 700.0),
+        ("clap(tail=400ms)", 350.0, 800.0),
+    ] {
+        let alone = template(&format!("  {node} as s\n  s > out"));
+        assert_eq!(alone.env_count, 1, "{node}: the node is what the voice waits for");
+        assert_eq!(alone.hold_mask, 1 << alone.env_nodes[0], "{node}");
+        let short = note(&mut Instrument::new(alone.clone()), 1);
+        let held = note(&mut Instrument::new(alone), 100_000);
+        assert_eq!(short, held, "{node}: the length of the note is not heard");
+        let len = seconds(&short) * 1000.0;
+        assert!(len > least_ms && len < most_ms, "{node}: the voice ran {len} ms");
+        // Loud at the start and gone by the end: the tail was played out.
+        let last = &short[short.len() - ms(5.0)..];
+        assert!(peak_in(&short, 0.0, 60.0) > 0.05, "{node} sounds");
+        assert!(last.iter().all(|v| v.abs() < 2e-3), "{node}: cut at {}", peak_in(last, 0.0, 5.0));
+
+        // Through a filter that an envelope with five seconds of release
+        // sweeps: the sweep does not hold the voice, the drum still does.
+        let filtered = format!("  {node} as s\n  s > svf(3000, 0.2) as f\n  f > out");
+        let plain = note(&mut Instrument::new(template(&filtered)), 1);
+        let swept_graph =
+            template(&format!("{filtered}\n  adsr(0.001, 0.2, 0.5, 5.0) as fenv\n  fenv > gain(1.5) > f.cutoff"));
+        assert_eq!(swept_graph.hold_mask.count_ones(), 1, "{node}: only the drum holds");
+        let swept = note(&mut Instrument::new(swept_graph), 1);
+        assert_eq!(swept.len(), short.len(), "{node}: the sweep's release held the voice, or cut the drum");
+        assert_eq!(plain.len(), short.len());
+        assert!(swept != plain && swept.iter().all(|v| v.is_finite()), "{node}: the sweep is heard");
+    }
+}
+
+/// A drum node is sound, not a control signal: wired into a port and into
+/// the mix as well it is not refused, as an LFO or a bare envelope would be,
+/// through a `gain` or not.
+#[test]
+fn a_drum_node_into_a_port_and_the_sound_is_not_a_control_signal() {
+    for piece in KIT {
+        let voice = "  osc saw(55) as a\n  a > svf(800, 0.3) as f\n  f > mix\n  mix > out";
+        for wires in ["  d > f.cutoff\n  d > mix", "  d > gain(2) as ctl\n  ctl > f.cutoff\n  ctl > mix"] {
+            let src = patch(&format!("  {piece}() as d\n{voice}\n{wires}"));
+            assert_eq!(errors(&src), "", "{piece}");
+        }
+        // The same wires from an LFO are the error.
+        let e = errors(&patch(&format!("  lfo(4, 0.5) as d\n{voice}\n  d > f.cutoff\n  d > mix")));
+        assert!(e.contains("'d' carries a control signal"), "{e}");
+    }
+}
+
+/// What comes out of a drum node can go into any port, at audio rate, like
+/// any other sound: a hat on a filter's cutoff, a snare on an oscillator's
+/// FM, a tom on its pitch, a clap on a pulse's width, a kick on its sync.
+/// The output is another sound, and stays finite and bounded. The drum is
+/// then one of the things the voice waits for, heard or not.
+#[test]
+fn a_drum_node_drives_a_port_at_audio_rate() {
+    use tatum_core::graph::voice::Instrument;
+    const VOICE: &str = "  osc pulse(110, width=0.5) as a\n  a > svf(900, 0.4) as filt\n  filt > adsr(0.001, 0.1, 1.0, 0.05) as amp\n  amp > out";
+    let plain = note(&mut Instrument::new(template(VOICE)), 40);
+    assert!(plain.iter().any(|v| v.abs() > 0.1));
+    for wire in [
+        "hat(decay=300ms) > filt.cutoff",
+        "hat(decay=300ms) > gain(4) > filt.cutoff",
+        "snare() > a.fm",
+        "snare() > gain(8) > a.fm",
+        "tom(A2) > gain(0.5) > a.pitch",
+        "clap() > gain(0.4) > a.width",
+        "kick(A1) > a.sync",
+        "clap() > filt.morph",
+    ] {
+        let t = template(&format!("{VOICE}\n  {wire}"));
+        assert_eq!(t.env_count, 2, "{wire}");
+        assert_eq!(t.hold_mask.count_ones(), 2, "{wire}: the drum and the envelope both hold");
+        let bent = note(&mut Instrument::new(t.clone()), 40);
+        assert!(
+            bent.iter().all(|v| v.is_finite() && v.abs() < 4.0),
+            "{wire}: {:?}",
+            bent.iter().fold(0.0f32, |m, v| m.max(v.abs()))
+        );
+        let n = plain.len().min(bent.len());
+        assert!(bent[..n] != plain[..n], "{wire}: nothing moved");
+        // The same on every note with no `vary`: the drum starts with it.
+        assert_eq!(note(&mut Instrument::new(t), 40), bent, "{wire}");
+    }
+    // A swaying drum as the modulator sways the port by the hit's number.
+    let mut inst = Instrument::new(template(&format!("{VOICE}\n  snare(vary=30%) > gain(4) > a.fm")));
+    let hits: Vec<Vec<f32>> = (0..3).map(|_| note(&mut inst, 40)).collect();
+    assert!(hits[0] != hits[1] && hits[1] != hits[2], "no hit differs");
+    let mut again = Instrument::new(template(&format!("{VOICE}\n  snare(vary=30%) > gain(4) > a.fm")));
+    assert_eq!(note(&mut again, 40), hits[0]);
+}
+
+/// A voice dropped for leaving the numbers has its nodes made new from
+/// their specs, a drum node among them: with the hat's level as it was found
+/// when the line was compiled, and for a node that sways, on the next note,
+/// the hit it would have been -- not hit 0 again, not the dropped one's.
+#[test]
+fn a_dropped_voice_leaves_every_drum_node_as_it_was_compiled() {
+    use tatum_core::graph::node::NodeSpec;
+    use tatum_core::graph::voice::Instrument;
+    use tatum_core::BLOCK_SIZE;
+    for node in [
+        "tom(A2, hold=20ms, release=120ms, click=-20db, drive=0.3, vary=10%)",
+        "hat(decay=90ms, band=5khz, floor=2khz, noise=60%, vary=20%)",
+        "hat(decay=90ms, band=3khz, floor=500hz, noise=0, pitch=400hz)",
+        "snare(F#3, wires=120ms, drive=0.4, vary=10%)",
+        "clap(bursts=5, tail=150ms, vary=15%)",
+    ] {
+        let sways = node.contains("vary");
+        let template = template(&format!("  {node} as p\n  p > gain(1) as trim\n  trim > out"));
+        let gain = (0..template.node_count as usize)
+            .find(|&i| matches!(template.specs[i], NodeSpec::Gain { .. }))
+            .expect("the gain");
+        let mut clean = Instrument::new(template.clone());
+        let hits: Vec<Vec<f32>> = (0..4).map(|_| note(&mut clean, 1)).collect();
+        assert!(hits[3].iter().any(|v| v.abs() > 0.02), "{node} sounds");
+        assert_eq!(sways, hits[0] != hits[3] && hits[2] != hits[3], "{node}");
+
+        for poison in [f32::NAN, f32::INFINITY] {
+            let mut inst = Instrument::new(template.clone());
+            assert_eq!(note(&mut inst, 1), hits[0], "{node}");
+            assert_eq!(note(&mut inst, 1), hits[1], "{node}");
+            // Hit 2 goes wrong and is dropped whole, on its first block.
+            inst.template.specs[gain] = NodeSpec::Gain { amount: poison };
+            let dropped = note(&mut inst, 1);
+            assert!(dropped.iter().all(|&x| x == 0.0), "{node}: {poison} got out");
+            assert_eq!(dropped.len(), BLOCK_SIZE, "{node}: dropped on its first block");
+            inst.template.specs[gain] = NodeSpec::Gain { amount: 1.0 };
+            let after = note(&mut inst, 1);
+            assert_eq!(after.len(), hits[3].len(), "{node}");
+            assert!(after.iter().zip(hits[3].iter()).all(|(a, b)| a.to_bits() == b.to_bits()), "{node}: not hit 3");
+        }
+    }
+}

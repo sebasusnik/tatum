@@ -167,7 +167,11 @@ impl Parser {
         let dotted = self.after_a_dot();
         let word = match self.peek().clone() {
             Token::Ident(w) => {
-                let opens_a_node = is_dsp_keyword(&w) || (w == "kick" && matches!(self.peek_ahead(1), Token::LParen));
+                // A drum node opens one with its parentheses, and with `as`
+                // too: `hat as h` is the node missing them, which the next
+                // element says, not a port of the node before it.
+                let opens_a_node =
+                    is_dsp_keyword(&w) || (is_drum_node(&w) && matches!(self.peek_ahead(1), Token::LParen | Token::As));
                 let known = crate::graph::node::port::from_name(&w).is_some();
                 let starts_a_chain = !known && matches!(self.peek_ahead(1), Token::Arrow);
                 if !dotted && (opens_a_node || starts_a_chain) {

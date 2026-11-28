@@ -1240,6 +1240,15 @@ rate, and a hat is as loud there as at 44.1 kHz. Each is written with its parent
 is an error that says so. `sounds/node_kit.synth` plays one of each with
 the kick.
 
+A drum node, the kick among them, has no ports: `lfo(4, 0.5) > h.pitch` is an error at
+its line, "'h' is a hat, which has no ports to modulate". It can drive one, at audio
+rate like any other sound: `hat(decay=300ms) > filt.cutoff`, `snare() > gain(0.5) > a.fm`.
+It is sound and never a control signal, so the same node may go into a port and into
+the mix. It is also its own envelope: a graph that is only `snare() as s`, `s > out`
+plays the whole snare however short the note and the voice ends with it, an envelope
+that only moves a port does not hold that voice any longer, and a drum that only drives
+a port is still waited for until it has rung out.
+
 **An FM stab.** Two operators, short envelopes, a bit of feedback, off-beat pattern with
 rests, saturation in the chain and a delay send:
 
