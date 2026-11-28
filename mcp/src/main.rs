@@ -103,7 +103,13 @@ and parts that do not go quiet between notes, with the bar of each, plus the pat
 with every part's spectrogram stacked over the mix. Open that picture to see where it is. \
 When the user names a record to sound like, you cannot hear it, and neither can you hear your \
 render: ask for a WAV of it, measure it with `tatum_analyze`, and close in with `tatum_compare`, \
-which says what differs and what in the file moves it. Never claim a likeness from a name alone.";
+which says what differs and what in the file moves it. Never claim a likeness from a name alone. \
+Those two measure a mix. For one sound -- pings, bubbles, a drop, a bell, a pad -- render it alone \
+and run `tatum_events`: it finds each event on no grid and reads it from the inside (attack, decay, \
+the bend of its pitch, the Q of its resonance, how much of it is its partial, its level over the \
+bed, the tail after it, echoes), measures what holds, and says what should not be in a render at \
+all (aliasing, steps, zipper). With `against` it holds your render next to a stretch of the record \
+and names what differs most. Open the sheet it writes: the events of both, up close, on one scale.";
 
 fn main() {
     let ctx = Ctx::from_env();
@@ -327,6 +333,28 @@ fn tool_definitions() -> Vec<Value> {
                 "additionalProperties": false
             }
         }),
+        json!({
+            "name": "tatum_events",
+            "description": "What each event of a sound is like inside, for events on no grid (pings, bubbles, drops, struck notes) over whatever bed runs under them: found where a band jumps over its own floor, then each read along its own partial: attack (10-90%) and how much sits above the resonance in its first 5 ms (a click reads high), decay in dB/ms and how exponential, pitch at the start and end with the bend and its shape, the -3 dB width and Q of the resonance, the partial against the rest of the event (clean reads high), 2nd and 3rd harmonics, level over the bed in its own band and against the whole mix (subtle reads low), left over right and correlation, the energy left 50-400 ms after it (reverb), and echoes (interval, loss per repeat). With under 3 events, or `sustained`, also what holds: third-octave spectrum, the partials of the steadiest stretch and how far and how fast each one's level and pitch move, beats, flux, width per octave. Always: what should not be in a render -- partials folded back from above Nyquist, DC, steps in the wave, a modulation that moves in stairs, a tone left in the quiet -- each in dB under the signal. `against` measures a second WAV the same way and returns both side by side, the rows outside the first file's own spread flagged, and what differs most as advice: `path` is the reference, `against` is yours. Writes a PNG sheet with events of each file up close on the same time and frequency scales, at two resolutions, and their median level and pitch curves: open it. Render the sound alone (tatum_render with solo) to measure it; in a mix every figure includes what plays with it.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "Path to a .wav file (8 to 384 kHz); a relative path is read from the render directory. At most 2 minutes are read at once." },
+                    "against": { "type": "string", "description": "A second .wav, measured the same way and held against the first." },
+                    "from": { "type": "number", "minimum": 0, "description": "Start of the stretch of `path`, in seconds." },
+                    "to": { "type": "number", "minimum": 0, "description": "End of the stretch of `path`, in seconds." },
+                    "against_from": { "type": "number", "minimum": 0, "description": "Start of the stretch of `against`, in seconds." },
+                    "against_to": { "type": "number", "minimum": 0, "description": "End of the stretch of `against`, in seconds." },
+                    "band": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Look for events between these two frequencies in Hz. Default: where the onsets are." },
+                    "threshold": { "type": "number", "description": "How far over its bin's floor an event has to stand, dB. Default 24; lower it for events deep in a mix." },
+                    "sustained": { "type": "boolean", "description": "Measure what holds too, even when events are found." },
+                    "json": { "type": "boolean", "description": "Return JSON instead of text." },
+                    "sheet": { "type": "string", "description": "Where to write the PNG, inside the render directory (\"events/take2.png\"); no absolute paths or '..'. Default: events/<file name>.png." }
+                },
+                "required": ["path"],
+                "additionalProperties": false
+            }
+        }),
     ]
 }
 
@@ -345,6 +373,7 @@ fn call_tool(ctx: &Ctx, params: &Value) -> Result<Value, (i64, String)> {
         "tatum_debug" => tool_debug(ctx, &args),
         "tatum_analyze" => tool_analyze(ctx, &args),
         "tatum_compare" => tool_compare(ctx, &args),
+        "tatum_events" => tool_events(ctx, &args),
         other => return Err((-32602, format!("unknown tool: {}", other))),
     };
     Ok(match outcome {
@@ -577,6 +606,68 @@ fn tool_compare(ctx: &Ctx, args: &Value) -> Result<String, String> {
     let mine = tatum_debug::reference::measure(&l, &r).rendered_from(source);
     let ref_name = args.get("reference").and_then(Value::as_str).unwrap_or_default();
     Ok(tatum_debug::reference::compare(&reference, &mine, ref_name, &slug_from_source(source)))
+}
+
+/// The events of one WAV, or of two side by side, and the sheet that shows
+/// them. Like `reference_profile`, it reads only `.wav` files and returns
+/// numbers; the sheet is written inside the render directory.
+fn tool_events(ctx: &Ctx, args: &Value) -> Result<String, String> {
+    use tatum_debug::events;
+    let mut opts = events::Options::default();
+    if let Some(band) = args.get("band") {
+        let ends: Vec<f32> =
+            band.as_array().map(|a| a.iter().filter_map(Value::as_f64).map(|v| v as f32).collect()).unwrap_or_default();
+        let [lo, hi] = ends.as_slice() else { return Err("band: two frequencies in Hz, low then high".into()) };
+        opts.band = Some((*lo, *hi));
+    }
+    if let Some(t) = args.get("threshold").and_then(Value::as_f64) {
+        opts.threshold_db = (t as f32).clamp(3.0, 80.0);
+    }
+    opts.sustained = args.get("sustained").and_then(Value::as_bool).unwrap_or(false);
+    let seconds = |k: &str| args.get(k).and_then(Value::as_f64).map(|v| v as f32);
+    let measure = |key: &str, from: &str, to: &str| -> Result<(String, events::Report), String> {
+        let path = args.get(key).and_then(Value::as_str).ok_or(format!("missing '{key}'"))?;
+        if !path.to_lowercase().ends_with(".wav") {
+            return Err(format!(
+                "{key}: a path to a .wav file; convert other formats first (ffmpeg -i song.mp3 song.wav)"
+            ));
+        }
+        let audio = tatum_debug::wav::read(&ctx.render_dir.join(path))?;
+        let report = events::analyze(&audio, seconds(from), seconds(to), &opts).map_err(|e| format!("{path}: {e}"))?;
+        Ok((path.to_string(), report))
+    };
+    let (name_a, a) = measure("path", "from", "to")?;
+    let b = match args.get("against") {
+        Some(_) => Some(measure("against", "against_from", "against_to")?),
+        None => None,
+    };
+    let stem = |p: &str| Path::new(p).file_stem().and_then(|s| s.to_str()).unwrap_or("events").to_string();
+    let sheet = match args.get("sheet").and_then(Value::as_str) {
+        Some(name) => in_render_dir(ctx, name)?,
+        None => ctx.render_dir.join("events").join(match &b {
+            Some((name_b, _)) => format!("{}_against_{}.png", stem(name_b), stem(&name_a)),
+            None => format!("{}.png", stem(&name_a)),
+        }),
+    };
+    let json = args.get("json").and_then(Value::as_bool).unwrap_or(false);
+    let mut out = match (&b, json) {
+        (Some((name_b, b)), false) => events::report::against(&a, b, &name_a, name_b),
+        (Some((name_b, b)), true) => events::report::json_against(&a, b, &name_a, name_b),
+        (None, false) => events::report::describe(&a, &name_a, opts.first),
+        (None, true) => events::report::json(&a, &name_a),
+    };
+    if a.events.is_empty() && b.as_ref().is_none_or(|b| b.1.events.is_empty()) {
+        return Ok(out);
+    }
+    if let Some(dir) = sheet.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    }
+    events::draw::sheet(&a, &name_a, b.as_ref().map(|(n, r)| (r, n.as_str())), 6).save(&sheet)?;
+    // JSON stays one document: the sheet's path is not added to it.
+    if !json {
+        out.push_str(&format!("sheet: {}\n", sheet.display()));
+    }
+    Ok(out)
 }
 
 /// Refuse a song longer than `MAX_RENDER_MINUTES`, before rendering any of it.
@@ -1026,7 +1117,8 @@ mod tests {
                 "tatum_render",
                 "tatum_debug",
                 "tatum_analyze",
-                "tatum_compare"
+                "tatum_compare",
+                "tatum_events"
             ]
         );
         assert_eq!(r["id"], "x");
@@ -1127,6 +1219,57 @@ mod tests {
             json!({ "jsonrpc": "2.0", "id": 23, "method": "tools/call", "params": { "name": "tatum_analyze", "arguments": { "path": "/etc/passwd" } } }),
         );
         assert_eq!(r["result"]["isError"], true);
+    }
+
+    #[test]
+    fn the_events_of_a_render_are_read_and_held_against_another() {
+        let c = ctx();
+        // Hats on no grid worth the name, alone: events to find.
+        let src = "tempo 120\nmodule beats kit { }\n\
+                   pattern hits { hat: X - - X - - - X - X - - - - X - }\n\
+                   track drums { play hits using kit }\n\
+                   scene a { track drums { play hits using kit } }\narrange { a x4 }\n";
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 30, "method": "tools/call", "params": { "name": "tatum_render", "arguments": { "source": src, "output": "events_test.wav" } } }),
+        );
+        assert_eq!(r["result"]["isError"], false, "{}", r);
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 31, "method": "tools/call", "params": { "name": "tatum_events", "arguments": { "path": "events_test.wav", "sheet": "events_test/one.png" } } }),
+        );
+        let text = r["result"]["content"][0]["text"].as_str().unwrap();
+        assert_eq!(r["result"]["isError"], false, "{text}");
+        assert!(text.contains("attack 10-90%") && text.contains("clean"), "{text}");
+        assert!(c.render_dir.join("events_test/one.png").exists(), "{text}");
+        // Against itself nothing differs, and the JSON is JSON.
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 32, "method": "tools/call", "params": { "name": "tatum_events", "arguments": { "path": "events_test.wav", "against": "events_test.wav", "sheet": "events_test/two.png" } } }),
+        );
+        let text = r["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("nothing differs by enough to matter"), "{text}");
+        let r = call(
+            &c,
+            json!({ "jsonrpc": "2.0", "id": 33, "method": "tools/call", "params": { "name": "tatum_events", "arguments": { "path": "events_test.wav", "against": "events_test.wav", "json": true, "sheet": "events_test/three.png" } } }),
+        );
+        let text = r["result"]["content"][0]["text"].as_str().unwrap();
+        let v: Value = serde_json::from_str(text).unwrap_or_else(|e| panic!("{e}: {text}"));
+        assert!(v["a"]["events"].as_array().unwrap().len() >= 8, "{text}");
+        assert_eq!(v["advice"].as_array().unwrap().len(), 0, "{text}");
+        assert!(v["rows"].as_array().unwrap().iter().all(|r| r["flagged"] == false));
+        // Only a WAV is read, and the sheet stays inside the render directory.
+        for args in [
+            json!({ "path": "/etc/passwd" }),
+            json!({ "path": "events_test.wav", "sheet": "../out.png" }),
+            json!({ "path": "events_test.wav", "band": [900] }),
+        ] {
+            let r = call(
+                &c,
+                json!({ "jsonrpc": "2.0", "id": 34, "method": "tools/call", "params": { "name": "tatum_events", "arguments": args } }),
+            );
+            assert_eq!(r["result"]["isError"], true, "{}", r);
+        }
     }
 
     #[test]

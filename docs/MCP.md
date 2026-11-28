@@ -15,6 +15,7 @@ songs with the compiler in the loop. Transport is stdio; nothing is sent anywher
 | `tatum_debug` | `source`, `solo?`, `mute?`, `bars?` (`"17-24"`), `dry?`, `output?` | the `tatum debug` report and the path of `sheet.png`, every part's spectrogram stacked over the mix, to open and look at; the report names a `zoom.*.png` close-up for the worst moment of each part |
 | `tatum_analyze` | `path` (a `.wav`; relative to the render directory), `from?`, `to?` (seconds; at most 15 minutes) | the `tatum analyze` report: tempo, key, low notes, loudness and density, width, the kick, the spectrum per octave |
 | `tatum_compare` | `reference` (a `.wav`), `source`, `from?`, `to?`, `bars?`, `solo?`, `mute?` | the `tatum compare` report: the reference and the song side by side, and what differs with what in the file moves it |
+| `tatum_events` | `path` (a `.wav`), `against?` (a second `.wav`), `from?`, `to?`, `against_from?`, `against_to?`, `band?` (`[lo, hi]` Hz), `threshold?`, `sustained?`, `json?`, `sheet?` | the `tatum events` report: each event of a sound read from the inside (attack, decay, bend, Q, purity, harmonics, level over its bed, position, tail, echoes), what holds, what should not be in a render; with `against`, both files side by side and what differs most; and the path of a PNG with the events of each up close on one scale |
 
 ### The mix report
 

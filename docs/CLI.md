@@ -187,6 +187,132 @@ counted as `debug` counts it, each scene at its own tempo, and a first bar past 
 an error. `--bars`, `--solo` and `--mute` pick parts of a song, so with a second WAV they
 are an error rather than ignored; that WAV is measured whole.
 
+## events
+
+```
+tatum events a.wav [--from 1:04] [--to 1:36] [--band LO HI] [--min-gap MS] [--threshold DB]
+                   [--sustained] [--first N] [--png sheet.png] [--show N] [--json]
+tatum events a.wav --against b.wav [--b-from S] [--b-to S] ...
+```
+
+`analyze` and `compare` measure a mix, and a kick on its grid. `events` measures one
+sound: what each of its events is like inside, and how it sits in what runs under it.
+Pings, bubbles, a drop, a struck bell are on no grid, and two renders can match in when
+their events come, where they start and how long they last and still not sound alike:
+one clicks at the start and the other does not, one rings pure and the other carries
+noise, one sits 12 dB over its bed and the other inside it. Those are numbers too.
+
+An event is found where the spectrum in a band jumps over its own floor -- the level each
+bin sits at a tenth of the time, so a pad or a reverb underneath is floor -- and followed
+along its strongest partial until that partial is back in the floor. The band is where
+the onsets are unless `--band` gives one. Each event is then demodulated by its own
+partial, which leaves its level and pitch sample by sample however far it glides:
+
+| row | what it is |
+|---|---|
+| attack 10-90% | milliseconds from a tenth to nine tenths of the peak, in a band from an octave under the partial to two over |
+| burst over the resonance | the energy above 1.5 times the partial's frequency against the energy at it, over the first 5 ms: a click or a noise burst at the start reads high |
+| fall to -20 / -40 dB, decay | from the peak; the decay in dB per millisecond over the first 30 dB, and how straight it is in dB (1 is an exponential) |
+| start pitch, end pitch, bend | the partial's frequency to a few cents, and the shape of the way between: flat, straight, fast then slow, slow then fast, arch, dip; a vibrato's rate and depth when there is one |
+| -3 dB width, Q | of the partial with its glide taken out; and the Q a resonator needs to ring with that decay (pi f tau). The two agree for a struck resonator and part when the level is shaped by something else |
+| partial over the rest | the partial against everything else the event adds to the spectrum: noise, other partials, splatter. Clean reads high |
+| 2nd, 3rd harmonic | against the partial |
+| over the bed, against the mix | the partial at its peak over what was in its own band just before it, and against the level of the whole mix over the second around it. Subtle reads low |
+| left over right, correlation | where the event sits and how alike the two sides are |
+| tail | the energy in the partial's band from 50 to 400 ms after the event has fallen 20 dB, against the event: reverb, or a second slower decay |
+| centroid | of what the event adds, at its peak, and how far it has moved when the partial is 12 dB down |
+| repeats | echoes: the interval, the first repeat against the event, and what each repeat after loses |
+
+Each row is the median over the events with the quarter either side, then the first
+events one by one. With fewer than three events, or with `--sustained`, what holds is
+measured as well: the spectrum in third octaves, the partials of the steadiest stretch
+with how far and how fast each one's level and pitch move, beats, how much the spectrum
+changes from frame to frame, the width per octave. And always, what should not be in a
+render: partials folded back from above Nyquist (looked for where harmonic `k` of each
+event's note would land, `rate - k f`, less what is beside it), DC, steps in the wave,
+a modulation that moves in stairs, a tone left in the quiet -- each in dB under the
+signal, with where.
+
+The tom of `sounds/node_kit.synth` rendered alone (`tatum render sounds/node_kit.synth
+--solo tom -o tom.wav`):
+
+```
+tom.wav: 7.7 s, 4 events in 38-532 Hz (where the onsets are), 0.52 a second
+                                 median   25%..75%                n
+  over its floor                77.4 dB   77.4..77.5              4
+  length                         347 ms   321..347                4
+  attack 10-90%                 5.18 ms   5.17..5.18              4
+  burst over the resonance     -4.91 dB   -5.05..-4.73            4
+  fall to -20 dB                88.0 ms   86.9..88.7              4
+  fall to -40 dB                 323 ms   323..323                3
+  decay                      0.08 dB/ms   0.07..0.08              4
+  decay straightness               0.63   0.55..0.63              4
+  start pitch                    120 Hz   120..121                4
+  end pitch                     98.8 Hz   98.7..98.9              4
+  bend                         -3.39 st   -3.43..-3.38            4
+  bend, either way              3.39 st   3.38..3.43              4
+  -3 dB width                   3.37 Hz   3.29..3.48              4
+  Q (f / width)                    34.9   33.5..36.4              4
+  Q (from the decay)               40.6   40.3..47.2              4
+  partial over the rest         5.17 dB   4.87..5.21              4
+  2nd harmonic                 -24.1 dB   -24.1..-23.7            4
+  3rd harmonic                 -35.2 dB   -35.2..-35.0            4
+  over the bed in its band      64.2 dB   62.2..65.7              4
+  against the whole mix         11.7 dB   11.4..11.7              4
+  left over right               2.78 dB   2.78..2.78              4
+  off centre, either side       2.78 dB   2.78..2.78              4
+  left/right correlation           1.00   1.00..1.00              4
+  tail, 50-400 ms after        -7.11 dB   -7.20..-6.87            3
+  centroid at the peak           124 Hz   124..125                4
+  centroid by -12 dB           -3.50 st   -3.60..-3.30            4
+  pitch shape                slow then fast 100%; 100% fall and 0% rise by more than a semitone
+  repeats                    none found
+  tail read on               the 4 events nothing near their pitch follows within 400 ms
+first 4 events
+    #     at s      Hz bend st  len ms  att ms  burst   dB/ms      Q  tonal    bed    mix    L-R   tail
+    1    1.692     120    -3.4     347    5.18  -5.03    0.08     37    5.2   65.7   11.7   +2.8  -7.29
+    2    3.628     120    -3.4     347    5.13  -4.58    0.08     34    4.0   60.4   11.7   +2.8  -6.63
+    3    5.563     120    -3.4     347    5.19  -4.78    0.08     36    5.3   62.7   11.7   +2.8  -7.11
+    4    7.499     122    -3.5     243    5.18  -5.09    0.05     34    5.2   65.8   10.4   +2.8      -
+clean
+  nothing found: DC -44 dB under the signal, no steps, no zipper, nothing in the quiet, nothing folded back
+```
+
+`--against` measures a second file the same way. A is the reference: a row is starred
+when B's median is outside the middle half of A's own events and off by enough to
+matter, and the starred rows come back as sentences, the furthest off first, each with
+what to try. The same kit's snare held against that tom ends:
+
+```
+what differs most, B against A:
+  - brightness: the events' centroid is 4212 Hz against 124 Hz: B is brighter: a lower cutoff after the source, or less in the exciter
+  - little tail after B's events (0% of an event's energy, -60.0 dB): A keeps 19% in the 400 ms after (-7.11 dB): more of the part in the reverb or delay
+  - decay 0.53 dB/ms against 0.08: B rings shorter: more `resonance`, or a longer decay
+  - resonance Q 11 against 41 (from the decay): raise the `resonance`
+  - the partial stands -4.23 dB over the rest of the event against 5.17 dB: B carries more beside its partial: less noise or drive in the exciter, fewer harmonics in the source
+  - the first 5 ms carry 5.07 dB above the resonance against -4.91 dB: there is a click or noise at the start that A does not have; soften the exciter (low-pass it, less noise in it, a few ms of attack)
+```
+
+`--png` writes a sheet to open and look at: `--show` events of each file (six unless
+told), each from 1/8 of the panel before its start, A's row above B's on the same time
+and frequency scales, once with a window short enough to show an attack or an echo and
+once with one long enough to show a partial and what is beside it; under them the
+median level of the partial and the median pitch against each event's own start, A and
+B over each other. The scales are printed on it. `--json` gives every number, each
+event's included.
+
+What it cannot tell. In a mix nothing is alone: an event's figures include whatever
+plays in its band at the same time, so a record's numbers are bounds more than values,
+and aliasing is not looked for at all when the events stand under 30 dB over their bed,
+nor in a file converted from another rate. The level and the pitch are read in a band
+about two semitones either side of the partial, which a ping that dies in a few
+milliseconds never fills: its peak reads up to 2 dB low, and the level curve on the
+sheet rises a few milliseconds before the event does. A dry event with a slow second
+stage to its decay reads as having a tail. A pattern that repeats reads as a repeat
+with no loss, and is said to be one. Events that sound in the same bin more than nine
+tenths of the time have no floor to stand over and are not found; `--sustained`
+measures those. At most two minutes are read at once.
+
 ## design
 
 ```
