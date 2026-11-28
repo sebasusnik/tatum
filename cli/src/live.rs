@@ -158,14 +158,14 @@ fn list_devices() {
 pub static BUFFER: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
 
 /// Errors the audio stream reported: dropouts, as a rule.
-static STREAM_ERRORS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+pub(crate) static STREAM_ERRORS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
 /// The engine renders 44.1 kHz stereo. Take that rate when the device offers
 /// it (no conversion, sample-exact), otherwise the device's own default rate
 /// if it comes in stereo f32, otherwise the highest stereo f32 rate it has;
 /// the output is resampled to it. Bluetooth headphones are the usual case:
 /// they offer 48 kHz and 24 kHz and nothing else.
-fn pick_config(device: &cpal::Device, forced: Option<u32>) -> Result<(cpal::StreamConfig, u32), String> {
+pub(crate) fn pick_config(device: &cpal::Device, forced: Option<u32>) -> Result<(cpal::StreamConfig, u32), String> {
     let engine = SAMPLE_RATE as u32;
     let ranges: Vec<_> = device
         .supported_output_configs()
@@ -199,7 +199,7 @@ fn pick_config(device: &cpal::Device, forced: Option<u32>) -> Result<(cpal::Stre
     }
 }
 
-fn open_device(wanted: Option<&str>) -> Result<cpal::Device, String> {
+pub(crate) fn open_device(wanted: Option<&str>) -> Result<cpal::Device, String> {
     let host = cpal::default_host();
     match wanted {
         None => host.default_output_device().ok_or_else(|| "no default output device".to_string()),
@@ -1117,7 +1117,7 @@ fn edit_play(
 }
 
 /// The keys the song binds, for the plain screen.
-fn print_keyboard(planner: &LivePlanner) {
+pub(crate) fn print_keyboard(planner: &LivePlanner) {
     let (bindings, bars) = planner.keyboard();
     if bindings.is_empty() {
         return;
@@ -1147,17 +1147,17 @@ fn print_keyboard(planner: &LivePlanner) {
 }
 
 /// Where the session's messages go: lines on stderr, or the screen.
-enum Ui {
+pub(crate) enum Ui {
     Plain(Status),
     Screen(Box<crate::tui::Screen>),
 }
 
 impl Ui {
-    fn is_screen(&self) -> bool {
+    pub(crate) fn is_screen(&self) -> bool {
         matches!(self, Ui::Screen(_))
     }
 
-    fn say(&mut self, t: f32, line: &str, tone: crate::tui::Tone) {
+    pub(crate) fn say(&mut self, t: f32, line: &str, tone: crate::tui::Tone) {
         match self {
             Ui::Plain(status) => {
                 status.close();
@@ -1167,7 +1167,7 @@ impl Ui {
         }
     }
 
-    fn readings(&mut self, readings: Vec<String>) {
+    pub(crate) fn readings(&mut self, readings: Vec<String>) {
         match self {
             Ui::Plain(status) => status.show(&readings.join("   ")),
             Ui::Screen(screen) => {
@@ -1179,7 +1179,7 @@ impl Ui {
     }
 
     /// A step waiting for its phrase line. The screen shows it in the steps.
-    fn waiting(&mut self, line: &str) {
+    pub(crate) fn waiting(&mut self, line: &str) {
         if let Ui::Plain(status) = self {
             status.show(line);
         }
@@ -1211,7 +1211,7 @@ impl Ui {
         }
     }
 
-    fn song(&mut self, title: &str, source: &Source) {
+    pub(crate) fn song(&mut self, title: &str, source: &Source) {
         if let Ui::Screen(screen) = self {
             if let Some(info) = crate::tui::SongInfo::from_source(title, &source.text) {
                 screen.set_song(info);
@@ -1240,13 +1240,13 @@ fn verb(watch: bool) -> &'static str {
 /// rewritten in place, so turning a knob does not scroll everything else off
 /// the screen; any other message closes it first and it redraws on the next
 /// move. Off a terminal every reading is a line of its own.
-struct Status {
+pub(crate) struct Status {
     open: bool,
     terminal: bool,
 }
 
 impl Status {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { open: false, terminal: std::io::stderr().is_terminal() }
     }
 

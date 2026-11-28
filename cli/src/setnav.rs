@@ -73,6 +73,10 @@ pub struct SetNav {
     /// once closed, how many bars it is. The engine plays them again; the
     /// bar count here keeps going, and `music` says where the step is.
     pub bar_loop: Option<(usize, Option<usize>)>,
+    /// Build each step from the text loaded with the set, not from its file
+    /// as it is when the step is built: a render, and a take, which has to
+    /// play back what was heard however the files change meanwhile.
+    pub frozen: bool,
 }
 
 impl SetNav {
@@ -95,6 +99,7 @@ impl SetNav {
             looping: false,
             land_at: None,
             bar_loop: None,
+            frozen: false,
         }
     }
 
@@ -348,11 +353,19 @@ impl SetNav {
             if (last_bar || self.phrase == 1) && self.built_on != Some(bar) {
                 self.built_on = Some(bar);
                 self.queued = None;
-                match Source::load(&self.steps[step].path) {
+                // Live, the file as it is now: a step can be edited before it
+                // plays. Frozen, the text loaded with the set.
+                let loaded = if self.frozen { Ok(None) } else { Source::load(&self.steps[step].path).map(Some) };
+                match loaded {
                     Err(e) => said.push(format!("{}: {}", self.describe(step), e)),
-                    Ok(src) => match planner.plan(&src.text, generation) {
+                    Ok(source) => match planner
+                        .plan(source.as_ref().map_or(self.steps[step].src.as_str(), |s| s.text.as_str()), generation)
+                    {
                         Err(err) => {
-                            src.print_errors(&err);
+                            match &source {
+                                Some(src) => src.print_errors(&err),
+                                None => said.push(format!("{}: {}", self.describe(step), crate::set::describe(&err))),
+                            }
                             said.push(format!("{} does not compile; staying", self.describe(step)));
                         }
                         Ok(Plan::Unchanged) => {
@@ -375,7 +388,8 @@ impl SetNav {
                             // Values only: it would apply the moment it is
                             // sent, so it waits for the line. Its tempo is
                             // read from the text.
-                            let to = src_tempo(&src.text).unwrap_or(tempo);
+                            let text = source.as_ref().map_or(self.steps[step].src.as_str(), |s| s.text.as_str());
+                            let to = src_tempo(text).unwrap_or(tempo);
                             self.held = Some((plan, step, tempo, to));
                         }
                     },

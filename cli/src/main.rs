@@ -10,6 +10,8 @@ mod live;
 mod midi;
 mod set;
 mod setnav;
+mod stage;
+mod take;
 mod keys;
 mod resample;
 mod tui;
@@ -67,7 +69,7 @@ USAGE:
     tatum params [bass|fm|keys|beats|track|fx] [--json]
     tatum play <song.synth> [--tui] [--device <name>] [--rate <hz>] [--midi <name>]
     tatum set render <dir> [-o out.wav] | set check <dir> | set next <dir> <file>
-    tatum set play <dir> [--tui] [--auto] [--phrase 8] [--midi <name>]
+    tatum set play <dir> [--tui] [--auto] [--phrase 8] [--midi <name>] [--record <name>]
     tatum audit <song.synth> [--bars N] [--json] [--strict]
     tatum debug <song.synth> [--bars N | A-B] [--dry] [-o dir] [--solo a,b] [--mute c]
     tatum analyze <reference.wav> [--from 1:04] [--to 1:36]
@@ -156,7 +158,9 @@ COMMANDS:
               `next` is the gate a proposed step has to pass. How long a step
               holds travels in the file: `# set: bars=32 phase=build energy=5`.
               `play` plays it live, a key or a pad moving to the next step on
-              the next phrase; --auto walks it on its own.
+              the next phrase; --auto walks it on its own; --record take1
+              writes take1.wav and take1.txt, a script `set render --perform`
+              renders back to the same WAV, sample for sample.
     tui-shot  A picture of the --tui screen at a moment of a song or a set's
               step, without a terminal or an audio device: the song is
               rendered offline up to --at seconds and the screen fed on the
