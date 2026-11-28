@@ -1,6 +1,8 @@
-# An open hat in the spirit of a 606: six square waves at unrelated pitches
-# make a metallic buzz, a band around 8 kHz keeps its shimmer, and a 320 ms
-# decay lets it ring. Not tuned to the note: any note plays it.
+# An open hat in the spirit of a 606: the six square waves and the band around
+# 8 kHz of metal_closed, with a 320 ms decay that the release carries on when
+# the note ends, so it rings 320 ms down to -60 dB however short the note. Not
+# tuned to the note: any note plays it. Quieter under 44.1 kHz, as
+# metal_closed is.
 instrument metal_open {
   gain 7
   fixosc square(263) as m1
@@ -12,7 +14,7 @@ instrument metal_open {
   gain(0.167) as scaled
   bandpass(8200hz, 0.35) as band
   highpass(6500hz, 0.2) as air
-  perc(0.001, 0.32) as env
+  adsr(0.001, 0.32, 0, 0.32) as env
   m1 > mix
   m2 > mix
   m3 > mix

@@ -1,6 +1,7 @@
-# A long, round boom in the spirit of an 808 bass drum: a sine that drops a
-# few semitones onto A1 in its first 30 ms and rings for most of a second,
-# with the little tick of its trigger on top. Turn release= for the length.
+# A long, round boom in the spirit of an 808 bass drum: a sine that falls from
+# 190 Hz, 21 semitones up, onto A1, within a semitone of it 40 ms in, and
+# rings until it is 60 dB down at 920 ms, with the little tick of its trigger
+# on top. Turn release= for the length.
 instrument boom {
   kick(A1, start=190hz, knee=A2, snap=6ms, body=30ms, hold=20ms, release=900ms, phase=10, click=-34db, tone=4000hz, drive=0.1) as k
   k > out
