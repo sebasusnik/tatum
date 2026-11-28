@@ -98,8 +98,8 @@ impl Phaser {
     #[inline]
     fn run(ch: &mut Channel, x: f32, a: f32, stages: usize, feedback: f32) -> f32 {
         let mut v = x + ch.fb * feedback;
-        for s in 0..stages {
-            v = ch.stages[s].process(v, a);
+        for stage in ch.stages[..stages].iter_mut() {
+            v = stage.process(v, a);
         }
         ch.fb = v;
         v

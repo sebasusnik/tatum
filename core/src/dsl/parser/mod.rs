@@ -172,6 +172,11 @@ impl Parser {
         if negative {
             self.advance();
         }
+        if let Token::Note(note) = self.peek().clone() {
+            if !negative {
+                return self.note_as_hz(kind, Some(name), 0, &note);
+            }
+        }
         if let Token::Quantity(raw, suffix) = self.peek().clone() {
             let raw = if negative { -raw } else { raw };
             let sp = self.span();
@@ -209,6 +214,33 @@ impl Parser {
             return None;
         }
         value
+    }
+
+    /// A note name written where a node's argument is a frequency, as that
+    /// note's frequency: `kick(A1)` is 55 Hz. Anywhere else it is an error
+    /// that says what the argument takes. Consumes the note either way.
+    fn note_as_hz(&mut self, kind: &str, name: Option<&str>, index: usize, note: &str) -> Option<f32> {
+        let sp = self.span();
+        let (line, col) = (sp.line, sp.col);
+        self.advance();
+        let arg = crate::nodes::arg_at(kind, name, index);
+        let message = match arg {
+            Some(a) if a.doc.starts_with("Hz") => {
+                if crate::dsl::compiler::notes::note_in_midi_range(note) {
+                    let midi = crate::dsl::compiler::notes::note_name_to_midi(note);
+                    return Some(crate::math::midi_to_freq(midi));
+                }
+                format!("{} is not a MIDI note (C-1 to G9)", note)
+            }
+            Some(a) => format!("'{}' is a note, and {} takes {}, not a frequency", note, a.name, a.doc),
+            None => format!(
+                "'{}' is a note, but {} has no argument there to take it",
+                note,
+                if kind.is_empty() { "this" } else { kind }
+            ),
+        };
+        self.errors.push(ParseError { line, col, message });
+        None
     }
 
     fn resolve_arg_quantity(

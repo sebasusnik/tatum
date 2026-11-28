@@ -76,7 +76,19 @@ pub struct Kick {
     pub tail_hz: f32,
     /// From the hit until the pitch is within 10% of the tail.
     pub sweep_ms: f32,
-    /// From the peak until the body is 12 and 24 dB down. `None`: it was
+    /// The note the hit is heard as: its pitch weighted by its energy, the
+    /// sweep included (`tatum_debug::fit::heard_hz`). Over the tail on a kick
+    /// whose sweep is still falling while it is loud.
+    pub heard_hz: Option<f32>,
+    /// The song this was rendered from already tunes a `kick` node by the
+    /// note heard (`heard=1`). The sound does not say so: whoever rendered
+    /// it does, with [`Profile::rendered_from`]. False for a WAV.
+    pub heard_tuned: bool,
+    /// From the hit while the body stays within 1 dB of its peak: the flat
+    /// top of a kick held round before it falls. A few ms on a kick that
+    /// starts falling at once.
+    pub hold_ms: f32,
+    /// From the hit until the body is 12 and 24 dB down. `None`: it was
     /// still above that when the next hit came.
     pub decay12_ms: Option<f32>,
     pub decay24_ms: Option<f32>,
@@ -92,6 +104,26 @@ pub struct Kick {
 impl Kick {
     pub fn masked(&self) -> bool {
         self.under_db > -10.0
+    }
+}
+
+impl Profile {
+    /// What the source a profile was rendered from says and the sound does
+    /// not: whether a `kick` node in it has `heard=1`, so that `compare`
+    /// does not tell a kick tuned by the note heard to be tuned by it.
+    pub fn rendered_from(mut self, source: &str) -> Profile {
+        let tuned = tatum_core::dsl::parse(source).is_ok_and(|song| {
+            song.instruments.iter().flat_map(|i| &i.nodes).any(|n| {
+                n.kind == "kick"
+                    && n.params
+                        .iter()
+                        .any(|p| matches!(p, tatum_core::dsl::ast::Param::Named(k, v) if k == "heard" && *v >= 0.5))
+            })
+        });
+        if let Some(k) = self.kick.as_mut() {
+            k.heard_tuned = tuned;
+        }
+        self
     }
 }
 
@@ -154,7 +186,12 @@ pub fn analyze(audio: &Audio, from: Option<f32>, to: Option<f32>) -> Result<Prof
 
 /// The stretch `from`..`to` of `audio`, checked, no longer than `longest`
 /// seconds, and at the engine's rate.
-fn stretch(audio: &Audio, from: Option<f32>, to: Option<f32>, longest: f32) -> Result<(Vec<f32>, Vec<f32>), String> {
+pub fn stretch(
+    audio: &Audio,
+    from: Option<f32>,
+    to: Option<f32>,
+    longest: f32,
+) -> Result<(Vec<f32>, Vec<f32>), String> {
     let rate = audio.rate;
     if !(MIN_RATE..=MAX_RATE).contains(&rate) {
         return Err(format!("a sample rate of {rate} Hz; a reference has to be between {MIN_RATE} and {MAX_RATE} Hz"));
@@ -322,20 +359,20 @@ fn to_engine_rate(x: &[f32], from: u32) -> Vec<f32> {
 /// RBJ biquad, in f64: the analysis runs over minutes of audio and a sub
 /// filter at 44.1 kHz has its poles very near the unit circle.
 #[derive(Clone, Copy)]
-struct Biquad {
+pub(crate) struct Biquad {
     b: [f64; 3],
     a: [f64; 2],
 }
 
 impl Biquad {
-    fn lowpass(hz: f64) -> Self {
+    pub(crate) fn lowpass(hz: f64) -> Self {
         let w = 2.0 * std::f64::consts::PI * hz / SR;
         let alpha = w.sin() / (2.0 * std::f64::consts::FRAC_1_SQRT_2);
         let c = w.cos();
         Self::norm([(1.0 - c) / 2.0, 1.0 - c, (1.0 - c) / 2.0], [1.0 + alpha, -2.0 * c, 1.0 - alpha])
     }
 
-    fn highpass(hz: f64) -> Self {
+    pub(crate) fn highpass(hz: f64) -> Self {
         let w = 2.0 * std::f64::consts::PI * hz / SR;
         let alpha = w.sin() / (2.0 * std::f64::consts::FRAC_1_SQRT_2);
         let c = w.cos();
@@ -360,7 +397,7 @@ impl Biquad {
     }
 
     /// Two in series: 24 dB an octave.
-    fn run_twice(&self, x: &[f32]) -> Vec<f32> {
+    pub(crate) fn run_twice(&self, x: &[f32]) -> Vec<f32> {
         self.run(&self.run(x))
     }
 }
@@ -627,12 +664,18 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
     };
     let total_hits = starts.len();
     let starts: Vec<usize> = if keep >= 2 { ranked[..keep].iter().map(|r| r.0).collect() } else { starts };
-    let average = |starts: &[usize]| {
+    // A hit is found a hop or two late, so a window that starts there starts
+    // with the kick already sounding: its first cycles, its hit frequency and
+    // every time taken from the hit came out short (a 900 Hz start read as
+    // 130). Each window starts this much early, and the hit is found in it.
+    let pre = samples(20.0);
+    let starts: Vec<usize> = starts.iter().filter(|&&on| on >= pre).map(|&on| on - pre).collect();
+    let average_of = |signal: &[f32], starts: &[usize]| {
         let mut sum = vec![0.0f64; len];
         let mut n = 0;
         for &on in starts {
-            if on + len <= body.len() {
-                for (s, v) in sum.iter_mut().zip(&body[on..on + len]) {
+            if on + len <= signal.len() {
+                for (s, v) in sum.iter_mut().zip(&signal[on..on + len]) {
                     *s += *v as f64;
                 }
                 n += 1;
@@ -640,6 +683,7 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
         }
         (n > 0).then(|| sum.iter().map(|v| (v / n as f64) as f32).collect::<Vec<f32>>())
     };
+    let average = |starts: &[usize]| average_of(&body, starts);
     let first = average(&starts)?;
     let (reach, span) = (samples(2.0), samples(30.0).min(len));
     let aligned: Vec<usize> = starts
@@ -661,12 +705,21 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
     let env: Vec<f32> = (0..x.len())
         .map(|i| x[i.saturating_sub(half)..(i + half).min(x.len())].iter().fold(0.0f32, |m, v| m.max(v.abs())))
         .collect();
-    let (tp, pv) = env.iter().copied().enumerate().fold((0, 0.0f32), |m, e| if e.1 > m.1 { e } else { m });
+    let pv = env.iter().copied().fold(0.0f32, f32::max);
     if pv <= 0.0 {
         return None;
     }
-    let fall = |ratio: f32| env[tp..].iter().position(|&v| v < pv * ratio).map(|i| ms(i as f32));
-    let onset = x.iter().position(|v| v.abs() >= 0.1 * pv).unwrap_or(0);
+    // The hit is where the body first reaches 10% of its peak -- or twice
+    // what was already sounding before it, when the last hit's tail is still
+    // there at the start of the window.
+    let before = x[..pre / 2].iter().fold(0.0f32, |m, v| m.max(v.abs()));
+    let onset = x.iter().position(|v| v.abs() >= (0.1 * pv).max(2.0 * before)).unwrap_or(0);
+    // Timed from the hit, not from the peak: on a kick held flat the peak
+    // can be anywhere along the top, and a decay timed from it read short
+    // by however far in it fell. The envelope is the peak of a window, so it
+    // lets go half a window after the signal does; that half is taken off.
+    let fall =
+        |ratio: f32| env[onset..].iter().position(|&v| v < pv * ratio).map(|i| ms((i as f32 - half as f32).max(0.0)));
 
     // Pitch from the zero crossings, both ways, so a half cycle is a
     // reading: while the body is within 18 dB of its peak, which is where
@@ -734,11 +787,37 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
     };
     let sweep_ms = cycles.iter().find(|c| c.1 <= tail_hz * 1.1).map_or(cycles[cycles.len() - 1].0, |c| c.0);
 
-    // The click is not averaged: hats land on some hits and not others, and
-    // the median of the hits leaves them out.
+    // Where the hit starts in the average of the unfiltered hits, looked for
+    // up to 10 ms past the onset read on the body, not over the whole beat:
+    // an offbeat sample louder than the kick is locked to the grid too, so
+    // it survives the average, and was taken for the hit, the click read on
+    // it half a beat on (70 dB over the kick's, under an open hat on a
+    // limited master).
+    let raw = average_of(mono, &aligned);
+    let hit = raw
+        .as_deref()
+        .and_then(|raw| crate::hit::hit_start(&raw[..(onset + samples(10.0)).min(raw.len())]))
+        .unwrap_or(onset);
+    // The note the hit is heard as, read off the unfiltered average.
+    let heard_hz = raw.as_deref().and_then(|r| crate::fit::heard_hz(&r[hit.min(r.len())..]));
+    // The click is not averaged but read hit by hit, and the median taken:
+    // a hat that lands on fewer than half the hits is left out. One on every
+    // hit is not, played or sampled: its highs count as click, where the
+    // averaged hit of `tatum design` and `kick fit` thins out whatever is
+    // not the same from hit to hit, so on a full mix this reads higher than
+    // they do (13 dB under a played hat a seventh of the kick's level).
     let mut click: Vec<f32> = aligned
         .iter()
         .filter_map(|&on| {
+            // From where the hit starts in the average of the unfiltered
+            // hits, which every aligned window shares, found as `tatum
+            // design` and `kick fit` find it. Not from where each hit was
+            // first found: a bass ringing up to the beat walked that back
+            // 30 ms, and the click was read in the silence before the hit
+            // (-121 dB on a kick with a -30 dB click). Nor from the onset
+            // read on the low-passed average: late by the filter and by its
+            // threshold, it missed the first milliseconds, where a click is.
+            let on = on + hit;
             let e_top: f32 = top.get(on..on + samples(10.0))?.iter().map(|v| v * v).sum();
             let e_body: f32 = body.get(on..on + samples(100.0))?.iter().map(|v| v * v).sum();
             (e_body > 0.0).then(|| 10.0 * (e_top.max(1e-12) / e_body).log10())
@@ -751,6 +830,9 @@ fn kick(mono: &[f32], odf: &Onsets, tempo: Option<f32>) -> Option<Kick> {
         start_hz,
         tail_hz,
         sweep_ms: sweep_ms.max(0.0),
+        heard_hz,
+        heard_tuned: false,
+        hold_ms: fall(0.891).unwrap_or(0.0),
         decay12_ms: fall(0.251),
         decay24_ms: fall(0.063),
         click_db: if click.is_empty() { -60.0 } else { median(&mut click) },
@@ -980,6 +1062,21 @@ pub fn describe(p: &Profile, name: &str) -> String {
             let _ = writeln!(o, "    hit        {:.0} Hz (the first half cycle)", k.start_hz);
             let _ = writeln!(o, "    tail       {:.1} Hz ({})", k.tail_hz, note_name(k.tail_hz));
             let _ = writeln!(o, "    sweep      {:.0} ms to within 10% of the tail", k.sweep_ms);
+            if let Some(h) = k.heard_hz {
+                let st = 12.0 * (h / k.tail_hz).log2();
+                let _ = writeln!(
+                    o,
+                    "    heard      {:.1} Hz ({}), {:+.1} semitones from the tail: the sweep weighted by its loudness",
+                    h,
+                    note_name(h),
+                    st
+                );
+            }
+            let _ = if k.hold_ms < 5.0 {
+                writeln!(o, "    hold       none: it falls from the hit")
+            } else {
+                writeln!(o, "    hold       {:.0} ms within 1 dB of the peak", k.hold_ms)
+            };
             let _ =
                 writeln!(o, "    decay      -12 dB at {}, -24 dB at {}", opt_ms(k.decay12_ms), opt_ms(k.decay24_ms));
             let _ = writeln!(o, "    click      {:.1} dB (first 10 ms over 2 kHz against the body)", k.click_db);
@@ -1080,6 +1177,9 @@ pub fn compare(reference: &Profile, yours: &Profile, ref_name: &str, your_name: 
                 format!("{:.1} Hz {}", b.tail_hz, note_name(b.tail_hz)),
             );
             row(&mut o, "  sweep", format!("{:.0} ms", a.sweep_ms), format!("{:.0} ms", b.sweep_ms));
+            let heard = |k: &Kick| k.heard_hz.map_or("-".to_string(), |h| format!("{:.1} Hz {}", h, note_name(h)));
+            row(&mut o, "  heard", heard(a), heard(b));
+            row(&mut o, "  hold", format!("{:.0} ms", a.hold_ms), format!("{:.0} ms", b.hold_ms));
             row(&mut o, "  decay -12 dB", opt_ms(a.decay12_ms), opt_ms(b.decay12_ms));
             row(&mut o, "  decay -24 dB", opt_ms(a.decay24_ms), opt_ms(b.decay24_ms));
             row(&mut o, "  click", format!("{:.1} dB", a.click_db), format!("{:.1} dB", b.click_db));
@@ -1161,8 +1261,8 @@ fn trim(s: &str, w: usize) -> String {
     }
 }
 
-/// What to change on the kick, in the words of a `pitch_osc` + `perc` kick
-/// and of the `beats` kick.
+/// What to change on the kick, in the words of the `kick` node, of a
+/// `pitch_osc` + `perc` kick and of the `beats` kick.
 fn kick_advice(r: &Kick, y: &Kick, todo: &mut Vec<String>) {
     if r.masked() || y.masked() {
         click_advice(r, y, todo);
@@ -1171,18 +1271,49 @@ fn kick_advice(r: &Kick, y: &Kick, todo: &mut Vec<String>) {
     let st = 12.0 * (y.tail_hz / r.tail_hz).log2();
     if st.abs() >= 0.75 {
         todo.push(format!(
-            "kick tail: yours settles {:.1} semitones {} ({:.1} Hz against {:.1} Hz, {}): `pitch_osc`'s end frequency to {:.0}, or `kick_pitch` on `beats`",
+            "kick tail: yours settles {:.1} semitones {} ({:.1} Hz against {:.1} Hz, {}): `kick({:.1}hz)`, `pitch_osc`'s end frequency to {:.0}, or `kick_pitch` on `beats`",
             st.abs(),
             if st > 0.0 { "higher" } else { "lower" },
             y.tail_hz,
             r.tail_hz,
             note_name(r.tail_hz),
+            r.tail_hz,
             r.tail_hz
         ));
     }
+    // Two kicks with the same tail can be heard a tone apart when one sweeps
+    // slower: the heard note is what to tune when the tails agree.
+    if let (Some(rh), Some(yh)) = (r.heard_hz, y.heard_hz) {
+        let heard_st = 12.0 * (yh / rh).log2();
+        if heard_st.abs() >= 0.75 && st.abs() < 0.75 {
+            let differs = format!(
+                "kick heard: yours is heard {:.1} semitones {} ({:.1} Hz against {:.1} Hz, {}) though the tails agree",
+                heard_st.abs(),
+                if heard_st > 0.0 { "higher" } else { "lower" },
+                yh,
+                rh,
+                note_name(rh),
+            );
+            todo.push(if y.heard_tuned {
+                // It is tuned by the note heard already: the note written is
+                // not the reference's, or the model and this reading differ.
+                format!(
+                    "{differs}, and your kick already has `heard=1`: write the note the reference is heard as, `kick({rh:.1}hz, heard=1)`; if that is what it says, the engine's model and this reading differ on this kick, and the note written moves {:.1} semitones {} by hand",
+                    heard_st.abs(),
+                    if heard_st > 0.0 { "down" } else { "up" },
+                )
+            } else {
+                format!(
+                    "{differs}: its sweep is {} while it is loud -- `kick({}, heard=1)` tunes the kick node by the note heard",
+                    if heard_st > 0.0 { "slower or louder" } else { "faster or quieter" },
+                    note_name(rh)
+                )
+            });
+        }
+    }
     if (y.start_hz / r.start_hz - 1.0).abs() > 0.2 {
         todo.push(format!(
-            "kick hit: yours starts at {:.0} Hz against {:.0} Hz: `pitch_osc`'s start frequency",
+            "kick hit: yours starts at {:.0} Hz against {:.0} Hz: `kick`'s `start=`, or `pitch_osc`'s start frequency",
             y.start_hz, r.start_hz
         ));
     }
@@ -1193,19 +1324,28 @@ fn kick_advice(r: &Kick, y: &Kick, todo: &mut Vec<String>) {
     let ratio = y.sweep_ms / r.sweep_ms.max(0.1);
     if !(0.7..=1.4).contains(&ratio) && r.start_hz > r.tail_hz * 1.2 {
         todo.push(format!(
-            "kick sweep: yours takes {:.0} ms to land against {:.0} ms: a {} drop -- multiply how far `pitch_osc`'s decay is from 1 by {:.2} (0.995 becomes {:.4})",
+            "kick sweep: yours takes {:.0} ms to land against {:.0} ms: a {} drop -- `kick`'s `body={:.0}ms`, or multiply how far `pitch_osc`'s decay is from 1 by {:.2} (0.995 becomes {:.4})",
             y.sweep_ms,
             r.sweep_ms,
             if ratio > 1.0 { "faster" } else { "slower" },
+            r.sweep_ms,
             ratio,
             1.0 - 0.005 * ratio
+        ));
+    }
+    // A held top is only worth naming once it is longer than a decay's own
+    // first dB, a few ms.
+    if (r.hold_ms - y.hold_ms).abs() > 15.0 && (r.hold_ms / y.hold_ms.max(1.0) - 1.0).abs() > 0.3 {
+        todo.push(format!(
+            "kick hold: yours stays within 1 dB of its peak for {:.0} ms against {:.0} ms: `kick`'s `hold={:.0}ms`",
+            y.hold_ms, r.hold_ms, r.hold_ms
         ));
     }
     if let (Some(a), Some(b)) = (r.decay12_ms, y.decay12_ms) {
         let ratio = a / b.max(1.0);
         if !(0.75..=1.33).contains(&ratio) {
             todo.push(format!(
-                "kick length: yours is 12 dB down at {b:.0} ms against {a:.0} ms: {} -- multiply the body's `perc` decay by {ratio:.2}; on `beats`, {} `kick_decay`",
+                "kick length: yours is 12 dB down at {b:.0} ms against {a:.0} ms: {} -- multiply `kick`'s `release=` or the body's `perc` decay by {ratio:.2}; on `beats`, {} `kick_decay`",
                 if ratio < 1.0 { "shorter" } else { "longer" },
                 if ratio < 1.0 { "less" } else { "more" }
             ));
@@ -1264,6 +1404,50 @@ mod tests {
         assert!(p.width_low < 0.001);
     }
 
+    /// A kick held flat for `hold` seconds, then falling with time constant `tau`.
+    fn held_kicks(bpm: f32, seconds: f32, end: f32, hold: f32, tau: f32) -> Vec<f32> {
+        let n = (seconds * SAMPLE_RATE) as usize;
+        let beat = (60.0 / bpm * SAMPLE_RATE) as usize;
+        let held = (hold * SAMPLE_RATE) as usize;
+        let mut out = vec![0.0f32; n];
+        let mut at = 0;
+        while at < n {
+            let (mut f, mut phase) = (200.0f32, 0.0f32);
+            for i in 0..beat.min(n - at) {
+                let env = if i < held { 1.0 } else { (-((i - held) as f32) / (tau * SAMPLE_RATE)).exp() };
+                out[at + i] += 0.8 * env * (2.0 * std::f32::consts::PI * phase).sin();
+                phase = (phase + f / SAMPLE_RATE).fract();
+                f = end + (f - end) * 0.9993;
+            }
+            at += beat;
+        }
+        out
+    }
+
+    #[test]
+    fn a_held_kick_is_timed_from_the_hit() {
+        // 90 ms flat, then -12 dB 1.386 time constants later: at 90 + 83 ms.
+        let x = held_kicks(126.0, 12.0, 50.0, 0.09, 0.06);
+        let k = measure(&x, &x).kick.expect("kick");
+        assert!((k.hold_ms - 90.0).abs() < 10.0, "hold {}", k.hold_ms);
+        let d = k.decay12_ms.expect("decay");
+        assert!((d - 173.0).abs() < 15.0, "decay from the hit {d}");
+        // A kick that falls at once holds only its first dB: 0.115 time
+        // constants, 14 ms at 120, give or take the envelope's half cycle.
+        let y = kicks(126.0, 12.0, 200.0, 50.0, 0.9993, 0.12);
+        let k = measure(&y, &y).kick.expect("kick");
+        assert!(k.hold_ms < 25.0, "hold {}", k.hold_ms);
+    }
+
+    #[test]
+    fn a_shorter_hold_is_named_with_the_kick_node() {
+        let a = held_kicks(126.0, 12.0, 50.0, 0.12, 0.06);
+        let b = held_kicks(126.0, 12.0, 50.0, 0.03, 0.06);
+        let report = compare(&measure(&a, &a), &measure(&b, &b), "ref.wav", "mine.synth");
+        assert!(report.contains("kick hold"), "{report}");
+        assert!(report.contains("hold="), "{report}");
+    }
+
     #[test]
     fn a_shorter_kick_is_called_shorter_and_given_a_number() {
         let a = measure(&kicks(126.0, 12.0, 220.0, 52.0, 0.9993, 0.08), &kicks(126.0, 12.0, 220.0, 52.0, 0.9993, 0.08));
@@ -1319,6 +1503,63 @@ mod tests {
         // The click is a second into the stretch.
         let at = (0..l.len()).max_by(|&a, &b| l[a].abs().total_cmp(&l[b].abs())).unwrap();
         assert!((at as i64 - 44_100).abs() <= 2, "{at}");
+    }
+
+    /// A `kick(...)` with a click and no chirp, four to the bar at 125 BPM
+    /// for 24 seconds, peaking at 0.7; `extra` adds what else plays on each
+    /// beat, given the beat's number, its first sample and its length.
+    fn clicked_kicks(mut extra: impl FnMut(usize, usize, usize, &mut [f32])) -> Vec<f32> {
+        let k = crate::fit::KickArgs { note: 46.25, start: 400.0, click: -30.0, ..Default::default() };
+        let one = k.render(400.0).expect("a kick");
+        let peak = one.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+        let beat = (60.0 / 125.0 * SAMPLE_RATE) as usize;
+        let mut out = vec![0.0f32; 24 * SAMPLE_RATE as usize];
+        let (mut at, mut b) = (1000, 0);
+        while at + beat < out.len() {
+            for (o, v) in out[at..].iter_mut().zip(&one) {
+                *o += 0.7 / peak * v;
+            }
+            extra(b, at, beat, &mut out);
+            at += beat;
+            b += 1;
+        }
+        out
+    }
+
+    /// Noise that falls away over `ms`, peaking at `peak`: a hat. The same
+    /// `seed` is the same sample.
+    fn hat(seed: u32, peak: f32, ms: f32) -> Vec<f32> {
+        let n = (ms * 0.001 * SAMPLE_RATE) as usize;
+        let mut s = seed;
+        let x: Vec<f32> = (0..n)
+            .map(|i| {
+                s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                ((s >> 8) as f32 / 8_388_608.0 - 1.0) * (-5.0 * i as f32 / n as f32).exp()
+            })
+            .collect();
+        let top = x.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+        x.iter().map(|v| v * peak / top).collect()
+    }
+
+    #[test]
+    fn a_louder_offbeat_sample_is_not_taken_for_the_hit() {
+        // The same open hat on every offbeat, louder than the kick, as on a
+        // master limited hard: locked to the grid, it survives the average,
+        // and the start of the hit was looked for over the whole beat, so
+        // the click was read on the hat, half a beat on (+20.0 dB).
+        let alone = measure_kick(&clicked_kicks(|_, _, _, _| {})).click_db;
+        let sample = hat(7, 0.9, 60.0);
+        let with_hat = clicked_kicks(|_, at, beat, out| {
+            for (o, v) in out[at + beat / 2..].iter_mut().zip(&sample) {
+                *o += v;
+            }
+        });
+        let k = measure_kick(&with_hat);
+        assert!((k.click_db - alone).abs() < 1.0, "with the hat {:.1} dB, alone {alone:.1} dB", k.click_db);
+    }
+
+    fn measure_kick(x: &[f32]) -> Kick {
+        measure(x, x).kick.expect("a kick")
     }
 
     #[test]

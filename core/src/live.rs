@@ -11,9 +11,10 @@
 //!   at the start of the block in which the next bar line falls. The new
 //!   engine takes that whole block, positioned just before the line with its
 //!   step clock phase-aligned to the old one, so it crosses the line itself on
-//!   the exact sample, and the downbeat fires once. (The engine triggers steps
-//!   at the start of the block they fall in, so handing over a whole block is
-//!   what keeps a swapped render identical to a straight one.) The new engine
+//!   the exact sample, and the downbeat fires once. (A block's notes start on
+//!   their own samples, rendered up to each one, in whichever engine owns the
+//!   block; handing over a whole block is what keeps a swapped render
+//!   identical to a straight one.) The new engine
 //!   inherits, by name, every piece of state whose definition did not change
 //!   in the text (instruments keep their voices, sends and buses keep their
 //!   tails, unchanged tracks keep their place and their held notes), all moved

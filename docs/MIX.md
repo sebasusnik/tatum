@@ -142,12 +142,23 @@ How to read the two:
 
 - **The kick's tail** is the note its pitch sweep lands on, in Hz and as a note. It is the
   number to tune first: a kick a semitone or two off the record's never sounds like it,
-  whatever else matches. On an instrument kick it is `pitch_osc`'s end frequency; on
-  `beats`, `kick_pitch` moves the whole sweep.
-- **The sweep** is how long the pitch takes to land, and **the decay** how long the body
-  takes to fall 12 and 24 dB. The comparison gives each as a factor on what the file
-  already says: a sweep's time follows how far `pitch_osc`'s decay is from 1, a body's
-  follows `perc`'s decay.
+  whatever else matches. On a `kick` node it is the note it is given; on a `pitch_osc`
+  kick its end frequency; on `beats`, `kick_pitch` moves the whole sweep.
+- **Heard** is the note the kick is heard as: its pitch weighted by its loudness and by
+  how steady it is, the sweep included. A slow sweep is heard over its tail; two kicks
+  on the same tail can be heard a tone apart. When the tails agree and this does not,
+  `kick(<note>, heard=1)` tunes the `kick` node by the note heard. On a kick that
+  already has it, `compare` says to write the note the reference is heard as instead:
+  the engine works the note out from the kick's arguments and `analyze` reads it off
+  the sound, within 0.3 semitones of each other on a kick alone, and further once an
+  EQ, a compressor or a bass under it has changed what is read.
+- **The sweep** is how long the pitch takes to land, **the hold** how long the body stays
+  within 1 dB of its peak, and **the decay** how long it takes to fall 12 and 24 dB, all
+  timed from the hit. On a `kick` node the sweep is `body=`, the hold `hold=`, and the
+  decay follows `release=`, which is timed to -60 dB: -12 dB comes a fifth of the way in.
+  On a `pitch_osc` kick the comparison gives each as a factor on what the file already
+  says: a sweep's time follows how far `pitch_osc`'s decay is from 1, a body's follows
+  `perc`'s decay.
 - **Under it** is how loud the kick's band is late in the beat, when the kick has died.
   Above about -10 dB something else fills it, usually a held bass, and the tail and the
   decay are partly that: measure a stretch where the kick plays alone (`--from`/`--to`).

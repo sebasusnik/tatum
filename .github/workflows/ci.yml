@@ -81,7 +81,7 @@ jobs:
         # these songs is a breaking change.
         run: |
           fails=0
-          for f in examples/*.synth examples/rigs/*.synth; do
+          for f in examples/*.synth examples/rigs/*.synth sounds/*/*.synth; do
             if ! ./target/ci/tatum check "$f" >/dev/null 2>&1; then
               echo "::error file=$f::does not compile"
               ./target/ci/tatum check "$f" 2>&1 | head -20

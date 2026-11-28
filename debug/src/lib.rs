@@ -15,6 +15,8 @@
 
 pub mod draw;
 pub mod fft;
+pub mod fit;
+pub mod hit;
 pub mod listen;
 pub mod mixing;
 pub mod picture;

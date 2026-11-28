@@ -311,7 +311,7 @@ fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "tatum_compare",
-            "description": "The tatum_analyze measures for a reference WAV and for a song (rendered from source) side by side, then what differs by enough to hear, each with what in the .synth file moves it: the kick's tail note in Hz for `pitch_osc`'s end frequency, the sweep and the body's decay as factors on what the file says, the octave bands to take down or bring up, the density, the low end's width, the tempo. Loudness itself is not compared: the engine brings every song to -18 LUFS and a record is mastered louder; density (peak to loudness) is. Iterate: change what it names, compare again. solo a track (e.g. the drums) to compare one part against the reference's kick.",
+            "description": "The tatum_analyze measures for a reference WAV and for a song (rendered from source) side by side, then what differs by enough to hear, each with what in the .synth file moves it: the kick's tail note in Hz for the `kick` node's note or `pitch_osc`'s end frequency, the sweep (the `kick` node's `body=`), how long it holds within 1 dB of its peak (`hold=`) and the body's decay, timed from the hit, the octave bands to take down or bring up, the density, the low end's width, the tempo. Loudness itself is not compared: the engine brings every song to -18 LUFS and a record is mastered louder; density (peak to loudness) is. Iterate: change what it names, compare again. solo a track (e.g. the drums) to compare one part against the reference's kick.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -574,7 +574,7 @@ fn tool_compare(ctx: &Ctx, args: &Value) -> Result<String, String> {
     if l.len() < SAMPLE_RATE as usize * 2 {
         return Err("the render is under two seconds; give `bars` more of the song".into());
     }
-    let mine = tatum_debug::reference::measure(&l, &r);
+    let mine = tatum_debug::reference::measure(&l, &r).rendered_from(source);
     let ref_name = args.get("reference").and_then(Value::as_str).unwrap_or_default();
     Ok(tatum_debug::reference::compare(&reference, &mine, ref_name, &slug_from_source(source)))
 }

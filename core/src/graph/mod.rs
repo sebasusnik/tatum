@@ -171,14 +171,14 @@ impl Graph {
     }
 
     pub fn gate_on(&mut self, template: &GraphTemplate) {
-        for i in 0..template.env_count as usize {
-            let idx = template.env_nodes[i] as usize;
+        for &n in &template.env_nodes[..template.env_count as usize] {
+            let idx = n as usize;
             if let Some(ref mut node) = self.nodes[idx] {
                 node.gate_on();
             }
         }
-        for i in 0..template.filter_count as usize {
-            let idx = template.filter_nodes[i] as usize;
+        for &n in &template.filter_nodes[..template.filter_count as usize] {
+            let idx = n as usize;
             if let Some(ref mut node) = self.nodes[idx] {
                 node.gate_on();
             }
@@ -186,14 +186,14 @@ impl Graph {
     }
 
     pub fn gate_off(&mut self, template: &GraphTemplate) {
-        for i in 0..template.env_count as usize {
-            let idx = template.env_nodes[i] as usize;
+        for &n in &template.env_nodes[..template.env_count as usize] {
+            let idx = n as usize;
             if let Some(ref mut node) = self.nodes[idx] {
                 node.gate_off();
             }
         }
-        for i in 0..template.filter_count as usize {
-            let idx = template.filter_nodes[i] as usize;
+        for &n in &template.filter_nodes[..template.filter_count as usize] {
+            let idx = n as usize;
             if let Some(ref mut node) = self.nodes[idx] {
                 node.gate_off();
             }
@@ -215,8 +215,8 @@ impl Graph {
         if template.env_count == 0 {
             return true;
         }
-        for i in 0..template.env_count as usize {
-            let idx = template.env_nodes[i] as usize;
+        for &n in &template.env_nodes[..template.env_count as usize] {
+            let idx = n as usize;
             if let Some(ref node) = self.nodes[idx] {
                 if !node.is_idle() {
                     return false;
@@ -323,19 +323,18 @@ impl GraphBuilder {
         let mut filter_nodes = [0u8; MAX_GRAPH_NODES];
         let mut filter_count = 0u8;
 
-        for i in 0..node_count as usize {
-            if self.specs[i].is_oscillator() {
-                let offset =
-                    if let NodeSpec::Osc { pitch_semitones, .. } = self.specs[i] { pitch_semitones } else { 0.0 };
+        for (i, spec) in self.specs[..node_count as usize].iter().enumerate() {
+            if spec.is_oscillator() {
+                let offset = if let NodeSpec::Osc { pitch_semitones, .. } = *spec { pitch_semitones } else { 0.0 };
                 osc_nodes[osc_count as usize] = i as u8;
                 osc_pitch_offsets[osc_count as usize] = offset;
                 osc_count += 1;
             }
-            if self.specs[i].is_envelope() {
+            if spec.is_envelope() {
                 env_nodes[env_count as usize] = i as u8;
                 env_count += 1;
             }
-            if self.specs[i].has_filter_env() {
+            if spec.has_filter_env() {
                 filter_nodes[filter_count as usize] = i as u8;
                 filter_count += 1;
             }
@@ -344,8 +343,8 @@ impl GraphBuilder {
         // Topological sort (Kahn's algorithm)
         let mut in_degree = [0u16; MAX_GRAPH_NODES];
         for (dst, degree) in in_degree[..node_count as usize].iter_mut().enumerate() {
-            for inp in 0..self.input_counts[dst] as usize {
-                if self.edges[dst][inp].is_connected() {
+            for edge in &self.edges[dst][..self.input_counts[dst] as usize] {
+                if edge.is_connected() {
                     *degree += 1;
                 }
             }
@@ -356,8 +355,7 @@ impl GraphBuilder {
         let mut dep_counts = [0u8; MAX_GRAPH_NODES];
 
         for dst in 0..node_count as usize {
-            for inp in 0..self.input_counts[dst] as usize {
-                let edge = &self.edges[dst][inp];
+            for edge in &self.edges[dst][..self.input_counts[dst] as usize] {
                 if edge.is_connected() {
                     let src = edge.src_node as usize;
                     let dc = dep_counts[src] as usize;

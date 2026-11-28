@@ -2,7 +2,7 @@ extern crate alloc;
 use alloc::boxed::Box;
 
 use crate::graph::{GraphTemplate, MAX_GRAPH_NODES};
-use crate::graph::node::NodeKind;
+use crate::graph::node::{KickState, NodeKind, NodeSpec};
 use crate::math;
 use crate::{BLOCK_SIZE, MAX_VOICES};
 
@@ -45,8 +45,8 @@ impl Voice {
                 None => self.nodes[i] = Some(Box::new(template.specs[i].instantiate())),
             }
         }
-        for i in template.node_count as usize..MAX_GRAPH_NODES {
-            self.nodes[i] = None;
+        for node in self.nodes[template.node_count as usize..].iter_mut() {
+            *node = None;
         }
         self.note = note;
         self.velocity = velocity;
@@ -63,16 +63,16 @@ impl Voice {
             }
         }
 
-        for i in 0..template.env_count as usize {
-            let idx = template.env_nodes[i] as usize;
+        for &n in &template.env_nodes[..template.env_count as usize] {
+            let idx = n as usize;
             if let Some(ref mut node) = self.nodes[idx] {
                 node.gate_on();
             }
         }
 
         // Gate on + set velocity for filter envelope nodes
-        for i in 0..template.filter_count as usize {
-            let idx = template.filter_nodes[i] as usize;
+        for &n in &template.filter_nodes[..template.filter_count as usize] {
+            let idx = n as usize;
             if let Some(ref mut node) = self.nodes[idx] {
                 node.set_velocity(velocity);
                 node.gate_on();
@@ -92,14 +92,14 @@ impl Voice {
     }
 
     pub fn release(&mut self, template: &GraphTemplate) {
-        for i in 0..template.env_count as usize {
-            let idx = template.env_nodes[i] as usize;
+        for &n in &template.env_nodes[..template.env_count as usize] {
+            let idx = n as usize;
             if let Some(ref mut node) = self.nodes[idx] {
                 node.gate_off();
             }
         }
-        for i in 0..template.filter_count as usize {
-            let idx = template.filter_nodes[i] as usize;
+        for &n in &template.filter_nodes[..template.filter_count as usize] {
+            let idx = n as usize;
             if let Some(ref mut node) = self.nodes[idx] {
                 node.gate_off();
             }
@@ -110,8 +110,8 @@ impl Voice {
         if template.env_count == 0 {
             return true;
         }
-        for i in 0..template.env_count as usize {
-            let idx = template.env_nodes[i] as usize;
+        for &n in &template.env_nodes[..template.env_count as usize] {
+            let idx = n as usize;
             if let Some(ref node) = self.nodes[idx] {
                 if !node.is_idle() {
                     return false;
@@ -132,6 +132,8 @@ pub struct Instrument {
     staged_cutoff: Option<f32>,
     staged_env_depth: Option<f32>,
     staged_resonance: Option<f32>,
+    /// Notes started so far: the hit number a kick with `vary=` sways by.
+    hits: u32,
 }
 
 impl Instrument {
@@ -155,6 +157,7 @@ impl Instrument {
             staged_cutoff: None,
             staged_env_depth: None,
             staged_resonance: None,
+            hits: 0,
         }
     }
 
@@ -166,28 +169,29 @@ impl Instrument {
     }
 
     pub fn note_on(&mut self, note: u8, velocity: f32) {
-        let mut slot = None;
-        for i in 0..MAX_VOICES {
-            if !self.voices[i].active {
-                slot = Some(i);
-                break;
-            }
-        }
-
-        if slot.is_none() {
-            let mut oldest_age = 0u32;
-            let mut oldest_idx = 0;
-            for i in 0..MAX_VOICES {
-                if self.voices[i].age > oldest_age {
-                    oldest_age = self.voices[i].age;
-                    oldest_idx = i;
+        // A free voice, else the oldest: the first of the oldest, as before.
+        let idx = self.voices.iter().position(|v| !v.active).unwrap_or_else(|| {
+            let mut oldest = (0usize, 0u32);
+            for (i, v) in self.voices.iter().enumerate() {
+                if v.age > oldest.1 {
+                    oldest = (i, v.age);
                 }
             }
-            slot = Some(oldest_idx);
-        }
-
-        let idx = slot.unwrap();
+            oldest.0
+        });
         self.voices[idx].init(&self.template, note, velocity);
+        let hit = self.hits;
+        self.hits = self.hits.wrapping_add(1);
+        // A kick that sways is made again for its hit number, in its own box.
+        for i in 0..self.template.node_count as usize {
+            if let NodeSpec::Kick { vary, vary_pitch, .. } = self.template.specs[i] {
+                if vary > 0.0 || vary_pitch > 0.0 {
+                    if let Some(NodeKind::Kick(k)) = self.voices[idx].nodes[i].as_deref_mut() {
+                        *k = KickState::new_hit(&self.template.specs[i], hit);
+                    }
+                }
+            }
+        }
 
         // Apply staged p-lock values to filter nodes on the newly initialized voice
         let has_plocks =
@@ -319,5 +323,7 @@ impl Instrument {
         for voice in self.voices.iter_mut() {
             voice.active = false;
         }
+        // The next play counts its hits from the top, as a render does.
+        self.hits = 0;
     }
 }

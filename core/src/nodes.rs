@@ -57,7 +57,11 @@ impl Arg {
         let is_ms = doc.starts_with("ms");
         let is_db = doc.starts_with("dB");
         let is_linear_gain = doc.starts_with("linear gain");
+        // A share of something, written as a percentage of it: the delay's
+        // `wow` and `flutter`, and the kick's `vary` and `vary_pitch`.
+        let is_share = doc.starts_with("share");
         let resolved = match suffix {
+            "%" if is_share => Some(value / 100.0),
             "hz" if is_hz => Some(value),
             "khz" if is_hz => Some(value * 1000.0),
             "ms" if is_ms => Some(value),
@@ -68,6 +72,10 @@ impl Arg {
         };
         match resolved {
             Some(v) => Ok(v),
+            None if is_share => Err(format!(
+                "'{}' takes % or a plain {}..{} ({}), not '{}'",
+                self.name, self.min, self.max, self.doc, suffix
+            )),
             None => {
                 let accepts = if is_hz {
                     "hz or khz"
@@ -168,6 +176,29 @@ pub const NODES: &[NodeDefSpec] = &[
         ],
         waveform: true, rhythm: false, in_chains: false,
         doc: "Pitch-sweeping oscillator for kicks and toms. `mid=` splits the sweep in two: a snap from start to mid at `fast=`, then the body from mid to end at `decay`: `pitch_osc sine(1200, 49, 0.9993, mid=160, fast=0.97)`." },
+    NodeDefSpec { name: "kick", aliases: &[], category: Category::Source,
+        positional: &[arg!("note", 20.0, 200.0, 50.0, "Hz the body settles on; a note name works too: kick(A1)")],
+        named: &[
+            arg!("start", 40.0, 5000.0, 800.0, "Hz the hit starts at, the top of the snap"),
+            arg!("knee", 0.0, 2000.0, 0.0, "Hz where the snap hands over to the body, over the note by more than 10% and at most start; 0 or unset, three times the note"),
+            arg!("snap", 0.1, 100.0, 6.0, "ms the snap takes to fall to within 10% of the knee"),
+            arg!("chirp", 0.0, 12000.0, 0.0, "Hz of a third, fastest stage over the start: the tick of pitch in the first milliseconds of a hit; 0 or unset, none"),
+            arg!("chirp_time", 0.1, 20.0, 1.0, "ms the chirp takes to fall to within 10% of the start"),
+            arg!("body", 1.0, 1000.0, 60.0, "ms from the hit until the pitch is within 10% of the note: what `tatum analyze` reports as the sweep"),
+            arg!("attack", 0.0, 20.0, 0.0, "ms the level takes to rise; 0 starts at full"),
+            arg!("hold", 0.0, 2000.0, 60.0, "ms the body stays at full level before it falls"),
+            arg!("sag", -24.0, 0.0, 0.0, "dB the level sinks across the hold, evenly in dB: a top that leans before the release takes it"),
+            arg!("release", 5.0, 5000.0, 180.0, "ms from the end of the hold to -60 dB, where the voice ends"),
+            arg!("phase", 0.0, 90.0, 0.0, "degrees the sine starts at: 0 rises from silence, 90 starts at the top, more punch and a click"),
+            arg!("click", -80.0, 0.0, -80.0, "dB of a short noise click against the body; -80 is none"),
+            arg!("tone", 500.0, 12000.0, 3000.0, "Hz the click is centred on"),
+            arg!("drive", 0.0, 1.0, 0.0, "tanh saturation of the body, clean to heavy, at the same peak level; the tail saturates less than the hit"),
+            arg!("vary", 0.0, 0.2, 0.0, "share the hold and the release sway by from hit to hit, slowly and the same on every play: 0.03 is 3%, the breath of a hypnotic pulse; 0, every hit the same"),
+            arg!("vary_pitch", 0.0, 0.1, 0.0, "share the whole sweep sways by in pitch from hit to hit, slowly and the same on every play: 0.01 is about a sixth of a semitone; 0, every hit the same"),
+            arg!("heard", 0.0, 1.0, 0.0, "1: the note given is the note the kick is heard as, the sweep included, and the note it settles on is found under it, a fourth under on the default shape; an error when 20 Hz is not low enough. A model from the arguments, drive included, that knows nothing of the click or of what comes after the node. 0: the note it settles on"),
+        ],
+        waveform: false, rhythm: false, in_chains: false,
+        doc: "A whole kick in one node, written in the units a kick is thought in: the note it lands on, how long the snap and the body take in ms, and its level held then released. It plays every hit the same, sample for sample, whatever the note's length, unless `vary=` or `vary_pitch=` sway it, and the voice ends when it does. `kick(A1, body=70ms, hold=90ms, release=150ms)`. `chirp=` adds a third, faster stage on top for the tick of the attack, and `sag=` lets the held top lean. Write it with its parentheses, `kick()`, so a node named `kick` stays a name." },
     NodeDefSpec { name: "noise", aliases: &[], category: Category::Source, positional: &[], named: &[],
         waveform: false, rhythm: false, in_chains: false, doc: "White noise." },
     NodeDefSpec { name: "lfo", aliases: &[], category: Category::Source,
@@ -248,8 +279,11 @@ pub const NODES: &[NodeDefSpec] = &[
         waveform: false, rhythm: false, in_chains: true,
         doc: "Transient shaper: the hit and the tail turned up or down whatever the level. `transient(6db, -4db)` is a harder, shorter kick; a steady tone passes." },
     NodeDefSpec { name: "delay", aliases: &[], category: Category::Effect,
-        positional: &[arg!("feedback", 0.0, 0.95, 0.3, "repeat level")], named: &[],
-        waveform: false, rhythm: true, in_chains: true, doc: "Tempo-synced delay inside a chain: `delay(1/8, 0.4)`. Division defaults to 1/4." },
+        positional: &[arg!("feedback", 0.0, 0.95, 0.3, "repeat level")],
+        named: &[arg!("wow", 0.0, 1.0, 0.0, "share of a slow (~0.5 Hz), wandering drift of the delay time: the repeats sag and rise in pitch, up to about ±25 cents at 1; `wow=30%` reads the same as 0.3"),
+                 arg!("flutter", 0.0, 1.0, 0.0, "share of a fast (~7 Hz), irregular tremble of the delay time, up to about ±18 cents at 1; `flutter=20%` reads the same as 0.2")],
+        waveform: false, rhythm: true, in_chains: true,
+        doc: "Tempo-synced delay inside a chain: `delay(1/8, 0.4)`. Division defaults to 1/4. `wow` and `flutter` give it a bucket-brigade wobble, left and right drifting apart: `delay(1/8, 0.5, wow=30%, flutter=15%)`." },
     NodeDefSpec { name: "autopan", aliases: &[], category: Category::Effect,
         positional: &[arg!("depth", 0.0, 1.0, 0.5, "0 = still, 1 = full left/right")],
         named: &[arg!("bars", 0.0, 64.0, 0.0, "cycle length in bars (tempo-synced)"), arg!("hz", 0.0, 20.0, 0.25, "free rate in Hz when bars is 0")],

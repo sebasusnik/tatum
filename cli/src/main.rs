@@ -3,11 +3,15 @@ mod audit;
 mod controls;
 mod fmt;
 mod debug;
+mod design;
 mod include;
+mod kick;
 mod live;
 mod midi;
 mod set;
 mod setnav;
+mod stage;
+mod take;
 mod keys;
 mod resample;
 mod tui;
@@ -30,6 +34,8 @@ fn main() {
         "analyze" => analyze::cmd_analyze(&args[2..]),
         "compare" => analyze::cmd_compare(&args[2..]),
         "debug" => debug::cmd(&args[2..]),
+        "design" => design::cmd(&args[2..]),
+        "kick" => kick::cmd(&args[2..]),
         "params" => cmd_params(&args[2..]),
         "fmt" => fmt::cmd(&args[2..]),
         "set" => set::cmd(&args[2..]),
@@ -63,11 +69,13 @@ USAGE:
     tatum params [bass|fm|keys|beats|track|fx] [--json]
     tatum play <song.synth> [--tui] [--device <name>] [--rate <hz>] [--midi <name>]
     tatum set render <dir> [-o out.wav] | set check <dir> | set next <dir> <file>
-    tatum set play <dir> [--tui] [--auto] [--phrase 8] [--midi <name>]
+    tatum set play <dir> [--tui] [--auto] [--phrase 8] [--midi <name>] [--record <name>]
     tatum audit <song.synth> [--bars N] [--json] [--strict]
     tatum debug <song.synth> [--bars N | A-B] [--dry] [-o dir] [--solo a,b] [--mute c]
     tatum analyze <reference.wav> [--from 1:04] [--to 1:36]
     tatum compare <reference.wav> <song.synth | other.wav> [--from S] [--to S] [--bars N | A-B] [--solo a,b]
+    tatum design <sound.synth> [--library <dir>] [--port N] [--no-open]
+    tatum kick fit <reference.wav> [--from S] [--to S] [--bpm N] [--ms 230] [--effort 1] [--hit hit.wav]
     tatum watch <song.synth> [--tui] [--device <name>] [--rate <hz>] [--midi <name>] [--buffer <frames>]
     tatum midi monitor [<song.synth> | <set dir> [--step N]] [--midi <name>] | midi list
     tatum tui-shot <song.synth | set dir> [--at <seconds>] [--size 160x48] [--font f.ttf] [--frames N] [-o shot.png]
@@ -133,13 +141,28 @@ COMMANDS:
               bands to take down or bring up, the density, the low end's
               width. --solo kick compares one part against the reference;
               --bars picks the stretch of the song.
+    design    A sound designer in the browser, served from this machine,
+              for one instrument graph or one module (beats, bass, fm, keys):
+              a knob for every argument and parameter, nodes added, removed
+              and wired with buttons, the sound looped as a hit, four on the
+              floor, a held note or a chord on any note, its pitch and level
+              over time, a record's averaged hit laid next to it, and the
+              sounds/ library to open and duplicate. Save writes only a sound
+              that compiles; a song plays it with `use`. See sounds/README.md.
+    kick fit  The kick(...) line whose hit matches a record's kick: its hits
+              are averaged on the beat grid, the node is fitted to their
+              pitch and level over time, and the line is rendered by the
+              engine and measured again until it holds. Prints the line and
+              the error left.
     set       A live set: a directory of numbered .synth files, each the whole
               rig at a moment. `render` walks them with real hot swaps into one
               continuous WAV; `check` validates every step and reports the arc;
               `next` is the gate a proposed step has to pass. How long a step
               holds travels in the file: `# set: bars=32 phase=build energy=5`.
               `play` plays it live, a key or a pad moving to the next step on
-              the next phrase; --auto walks it on its own.
+              the next phrase; --auto walks it on its own; --record take1
+              writes take1.wav and take1.txt, a script `set render --perform`
+              renders back to the same WAV, sample for sample.
     tui-shot  A picture of the --tui screen at a moment of a song or a set's
               step, without a terminal or an audio device: the song is
               rendered offline up to --at seconds and the screen fed on the

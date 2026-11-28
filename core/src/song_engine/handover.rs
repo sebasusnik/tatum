@@ -173,8 +173,7 @@ impl SongEngine {
         }
         // Nudged hits still in flight follow their instrument. The queue's
         // capacity is reserved, so this cannot allocate.
-        for k in 0..old.pending_triggers.len() {
-            let t = old.pending_triggers[k];
+        for &t in old.pending_triggers.iter() {
             if let Some(i) = map.instruments.iter().position(|m| *m == Some(t.inst_idx)) {
                 if self.pending_triggers.len() < MAX_PENDING_TRIGGERS {
                     self.pending_triggers.push(PendingTrigger { inst_idx: i, ..t });

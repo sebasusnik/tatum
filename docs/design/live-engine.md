@@ -301,10 +301,13 @@ All five steps are done. Two things changed from the design above, both
 because of measurements:
 
 - **The swap does not split the block at the exact sample: it comes in at the
-  start of the block the bar falls in.** The engine fires a step at the start
-  of the block it falls in (the sequencer loop runs before the instruments
-  render), so splitting the block gave a result *more* precise than the
-  direct render, and therefore not identical. The new engine takes the whole
+  start of the block the bar falls in.** When this was built the engine fired
+  a step at the start of the block it fell in (the sequencer loop ran before
+  the instruments rendered), so splitting the block gave a result *more*
+  precise than the direct render, and therefore not identical. The engine now
+  renders up to each note so it starts on its own sample, and the handover
+  still gives the block whole to one engine, which is what keeps a swap equal
+  to the direct render. The new engine takes the whole
   block with its step clock phase-aligned to the old one, and starts
   positioned *before* the bar line (`start_before_bar`) so it crosses it
   itself: scene change, end of the arrangement and automation progress land
@@ -327,3 +330,38 @@ swap latency after save: mean 0.84 s, max 1.56 s (one bar at 120 BPM is 2 s)
 Zero late callbacks, zero stale plans, zero engines freed on the audio
 thread. The worst callback is the swap's (two engines in one block plus the
 fade); in `play` with no edits the worst is 2.4 ms.
+
+## Takes (`set play --record`)
+
+The plain live session is not reproducible, and is not meant to be: the main
+thread plans what the controller sends whenever it wakes, and the callback
+applies it at the top of whichever callback comes next, so where a knob lands
+depends on the device's buffer; a tempo ramp is stepped by the wall clock
+every 50 ms; a step that only changes values goes out on the first poll after
+its line. A take has to render back sample for sample from a script, so
+`--record` plays the set another way, the way `set render` does.
+
+`cli/src/stage.rs` is the set as it plays, one block at a time: planner,
+player and `SetNav`, with a performer's act (`set::Act`) handed in between two
+blocks and the session's clock counted in samples rendered. `set render`
+walks it on its own; a take walks it on the main thread, rendering a little
+ahead of the device into a lock-free ring (`take::Ring`, two arrays of
+`AtomicU32` and two counters, one writer and one reader). The callback only
+copies out of the ring (and through the converter, off 44.1 kHz). Every block
+also goes, with the script's lines, down a channel to a thread that writes
+the WAV and the script. What arrived from the controller since the last block
+acts on the next block's first sample, and is written as `<bar>@<sample>`;
+`set render --perform` lands an act with a sample at the start of that block.
+The engine's blocks are the same 128 samples from the top in both, whatever
+the device's callback size.
+
+The cost is latency: what the hands do waits behind the frames already in the
+ring, 1024 by default (23 ms), or two of the device's callbacks and a block
+when they are bigger. A step built in the last bar of a phrase is built on
+the same thread: on `sets/hiperespacio` the worst block, build included, took
+2.7 ms of the 23 ms. A late block is silence on the device and nothing in the
+take. The tests in `cli/src/take/tests.rs` play takes with callbacks of 64,
+256, 512 and 441 frames, with knobs through a values-only step change and
+through a swap with and without a blend, and hold the take, the WAV, what the
+device was handed and the render of the script to the same samples; moving
+the render's acts one block later fails every one that has an act.

@@ -13,6 +13,7 @@
 | [`audit`](#audit) | measure every note of every tonal track for what is not its harmonics |
 | [`analyze`](#analyze-and-compare) | measure a reference track: tempo, key, the kick, the spectrum, density |
 | [`compare`](#analyze-and-compare) | a reference and your song side by side, and what in the file moves each difference |
+| [`design`](#design) | design any sound -- a graph or a module -- in the browser, against a record's kick, and keep it in `sounds/` |
 | [`set`](#set) | render, check, gate and play a live set |
 | [`tui-shot`](#tui-shot) | a picture of the live screen at any second |
 | [`params`](#params) | every module parameter, its range and units |
@@ -132,8 +133,8 @@ model, which cannot hear it or its own render. `analyze` turns it into numbers: 
 tempo (and its span when it moves), the key, the notes under 250 Hz, the loudness and
 how far the peaks sit over it, the width above 250 Hz and under 150 Hz, the spectrum per
 octave against the whole, and the kick -- the frequency it hits at, the note its sweep
-lands on, how long the sweep and the body take, how much click, and how much else fills
-its band. It reads a WAV from 8 to 384 kHz, PCM or float; an MP3 has to be converted
+lands on, the note it is heard as (the sweep weighted by its loudness), how long the
+sweep takes, how long the body holds and then falls (all timed from the hit), how much click, and how much else fills its band. It reads a WAV from 8 to 384 kHz, PCM or float; an MP3 has to be converted
 first (`ffmpeg -i song.mp3 song.wav`). `--from`/`--to` take a stretch, in seconds or
 `m:ss`. At most 15 minutes are measured at once, enough for a long extended mix; a longer
 file, such as a DJ set, is refused with a pointer to `--from`/`--to`, and only the stretch
@@ -144,19 +145,21 @@ What it says about `dark_techno` rendered, the engine's own song:
 ```
 dark_techno.wav: 300.7 s
   tempo        137.0 BPM (137..150)
-  key          G# major / F minor, weakly: little in it is tonal
-  low notes    D# 32%, E 16%, G 9%   (under 250 Hz, the kick's tail included)
-  loudness     -18.0 LUFS, peak -1.3 dBFS, peak to loudness 16.7 dB
-  width        1% above 250 Hz, 0.0% under 150 Hz
-  kick         582 hits, measured on the 36 with the least under them
+  key          F minor / G# major, weakly: little in it is tonal
+  low notes    D# 19%, E 14%, G 10%   (under 250 Hz, the kick's tail included)
+  loudness     -18.0 LUFS, peak -1.2 dBFS, peak to loudness 16.8 dB
+  width        3% above 250 Hz, 0.1% under 150 Hz
+  kick         1016 hits, measured on the 50 with the least under them
     hit        89 Hz (the first half cycle)
-    tail       37.9 Hz (D#1 -44c)
-    sweep      44 ms to within 10% of the tail
-    decay      -12 dB at 82 ms, -24 dB at 146 ms
-    click      -62.3 dB (first 10 ms over 2 kHz against the body)
-    under it   -45.3 dB (the band under 400 Hz late in the beat)
+    tail       39.0 Hz (D#1)
+    sweep      33 ms to within 10% of the tail
+    heard      43.8 Hz (F1), +2.0 semitones from the tail: the sweep weighted by its loudness
+    hold       none: it falls from the hit
+    decay      -12 dB at 95 ms, -24 dB at 111 ms
+    click      -26.5 dB (first 10 ms over 2 kHz against the body)
+    under it   -45.6 dB (the band under 400 Hz late in the beat)
   spectrum     31.5    63   125   250   500    1k    2k    4k    8k   16k
-  (dB)         -1.1  -8.0 -15.1 -17.9 -21.2 -23.8 -26.8 -25.0 -25.1 -26.5
+  (dB)         -2.2  -7.0 -10.9 -12.6 -16.7 -19.5 -22.9 -21.1 -21.3 -22.6
 ```
 
 The kick is measured on every hit averaged together, so the bass, the pads and the reverb
@@ -184,6 +187,141 @@ counted as `debug` counts it, each scene at its own tempo, and a first bar past 
 an error. `--bars`, `--solo` and `--mute` pick parts of a song, so with a second WAV they
 are an error rather than ignored; that WAV is measured whole.
 
+## design
+
+```
+tatum design sounds/kicks/deep.synth [--library sounds] [--port 7350] [--no-open]
+```
+
+A sound designer in the browser, served from this machine (127.0.0.1 only), for every
+sound tatum has. A sound is a file with one `instrument` graph or one `module` (`beats`,
+`bass`, `fm`, `keys`) in it and a comment on top that says what it is; a file that does
+not exist yet starts as a deep kick, and Save creates it. A file with anything else in
+it is not opened, since Save writes the comment on top and the one definition and
+nothing more: a song (a `tempo`, patterns, tracks) with one instrument in it, or a sound
+with a comment inside the definition or after it, is refused with the line to move.
+
+**Knobs.** A graph gets a knob for every argument of every node, a module one for every
+parameter, from the same tables `params` prints and the compiler checks against. A
+module's knob shows its value in its unit (`hz`, `ms`, `st`, `x`, a gain in dB) and a
+choice is a menu; an fm module also has knobs for each operator's `opN_envelope`. A
+knob's × takes the parameter out of the file, back to its default. A value past its
+range is held to it; NaN is refused. A module's parameter is written back in the style
+its file uses: one written `80%` stays a percentage, one in dB stays in dB, one written
+as a plain number stays one, and one set for the first time is written in its unit (a
+gain in dB, a choice by name). Reading what it writes gives back the same sound, but
+Save does not keep the text byte for byte. It normalises how things are written, on
+the first Save of a file made by hand: a number is written the shortest way (`1.0`
+becomes `1`), a time in `ms` (`1.2s` becomes `1200ms`) and a frequency in `hz`
+(`3khz` becomes `3000hz`) or as its note when it is one (`440` becomes `A4`); a graph
+is one node or one wire a line, every node named (the `lowpass(800hz)` of a chain
+`a > lowpass(800hz) > out` gets a name such as `lowpass1`, and the chain becomes two
+wires), an expression its value (`55 * 2` becomes `110`); a
+parameter written twice is written once; the comment on top becomes one paragraph
+wrapped at 78 columns; blank lines and spacing go. A file Save wrote is not changed
+by saving it again.
+
+**Graph editing.** Add a node (any kind an instrument line can hold, every argument at
+its default), pick an oscillator's waveform, remove a node with its connections, and
+connect or disconnect `a > b`, all from buttons. The file's text is on the page too, for
+anything the buttons do not do: edit it and apply. Every change is compiled; an error is
+shown at the top of the page, and the knobs stay as they are.
+
+**What the loop plays.** A single hit, four on the floor, a held note, or a chord (a
+minor triad on the note; on `keys` only `voice_mode poly` holds it), on a note from C1
+to C6, at the BPM given. A `beats` module plays a lane (kick, snare, clap, hat, ...)
+once or on every beat, or a groove of kick, hat and clap. It is rendered through the
+instrument alone, with no master chain and no loudness, and looped a bar at a time.
+Beside the knobs, one hit's pitch over time on a log scale and its level in dB, and the
+figures `analyze` reports for a kick: the tail and its note, the sweep, the hold, the
+falls, and the click: the first 10 ms over 2 kHz against the first 100 ms under 400 Hz.
+That figure counts everything up there in those milliseconds -- the top of the sweep, a
+chirp, a phase's step, drive -- so a quiet `click=` barely moves it: on a plain kick,
+`click=-30db` reads within half a dB of no click at all.
+
+**Reference.** A record can be laid next to it. Load a WAV, give the stretch (an intro
+or an outro where the kick plays alone or nearly) and how many milliseconds of each hit
+to keep (as many as come before an offbeat bass); its hits are averaged on the beat
+grid, so what comes with every hit stays and the rest thins out. The two are drawn on
+the same axes, and the loop can play the record's hit, yours, or the two in turn. The
+record's click is read on that averaged hit, as yours is on its one hit, so the two
+compare. `tatum analyze` reads the record's hits one by one instead and takes the median,
+which keeps a hat or a hiss that comes with every hit: on a full mix it can print a click
+10 dB over the one shown here, and is not the number to tune yours to.
+
+Once a record is loaded, **Fit to reference** sets the kick node's knobs to what
+`tatum kick fit` finds for it (see below), and says what error is left.
+
+**Library.** The `sounds/` directory the file sits in, or one beside a directory above
+it (or `--library <dir>`), is listed as `sounds/<type>/<name>.synth`. Open one, or
+duplicate the sound open to `<type>/<new-name>`: the new file takes its name as the
+sound's name (`pad-dark` plays as `pad_dark`), and Save writes it from then on. A
+duplicate never overwrites a file, and a type or name is lower-case letters, digits,
+`_` and `-` only: no `..`, no slashes, no absolute paths, and no link out of the library
+is followed.
+
+**Save** writes only a sound that compiles and makes a sound (a graph with nothing
+wired to `out` is refused; a drum kit is saved when any of its lanes sounds, whichever
+one the loop is playing). The text is the sound: a song plays it with
+`use "../sounds/kicks/deep.synth"` and `play ... using deep_kick`.
+
+It answers only its own page. Any site open in the same browser can send a request to
+127.0.0.1, so a request whose `Host` or `Origin` is not this server, or a POST without
+the page's own header, is refused (403). It writes only the file it was started on and
+files inside the library. A request is refused on its head, before any of its body is
+read; a WAV is taken up to 400 MB, and only on `/api/reference`, anything else up to
+1 MB. A request has a deadline as a whole, not for each read: 10 seconds for its head,
+then 30 for its body (two minutes for a WAV), so one that stops sending, or sends a
+byte now and then, is let go. Sixteen connections are read at once; one more is
+answered 503.
+
+The page talks to it over a small JSON API: `GET /api/sound`, `/api/kinds` (the node
+kinds a graph can add), `/api/library`; `POST /api/set` (knobs and graph edits, one a
+line: `alias.arg=v`, `-alias.arg`, `+node kind [alias]`, `-node alias`, `+wire a b`,
+`-wire a b`, `word alias=saw`, `param=v`, `envN.a=seconds`, `name=`, `description=`),
+`/api/text`, `/api/audition` (`pattern=`, `note=`, `bpm=`, `lane=`), `/api/save`,
+`/api/open` and `/api/duplicate` (`type/name`), `/api/reference`, `/api/fit`.
+
+## kick fit
+
+```
+tatum kick fit <reference.wav> [--from S] [--to S] [--bpm N] [--ms 230] [--effort 1] [--hit hit.wav]
+```
+
+The `kick(...)` line whose hit matches a record's kick. The record's hits between
+`--from` and `--to` (seconds or `m:ss`) are averaged on its beat grid, the first `--ms`
+of each: pick a stretch where the kick plays alone or nearly, an intro or an outro, and
+only as many milliseconds as come before an offbeat bass. The tempo is measured unless
+`--bpm` gives it; a tempo measured a hundredth of a BPM off still averages cleanly,
+since every hit is aligned again on its own attack.
+
+The node's note, start, knee, snap, chirp, body, hold, sag, release, phase and click are
+then fitted to that average: its pitch in semitones on an even grid from 0.6 to 215 ms
+(the attack, to 10 ms, counted again on its own) and its level in dB. After the first
+10 ms both are read through an 800 Hz low-pass, so hats on the beat are not taken for
+the kick, and the pitch is only compared while the record's hit is within 30 dB of its
+peak. The search starts from what the curves say (the tail, where the sweep starts, the
+hold, the fall) and from four guesses around it; the click comes last, as the one whose
+whole score is best, so the highs a master adds are reported, not chased.
+
+The line is then rendered by the whole engine, measured against the record again, and
+refined while that render is further off than the node alone was. It prints the line,
+ready to paste, the error left, and the two hits side by side:
+
+```
+$ tatum kick fit outro.wav --from 5:40 --to 6:10 --ms 200
+outro.wav: hits averaged at 124.00 BPM, the first 200 ms of each
+5389 kicks tried in 2.9 s
+  round 1: the engine's render is off by 0.08 st in pitch (0.31 st over the attack), 0.03 dB in level, click +1.3 dB
+kick(F#1, start=1.66khz, knee=172.3hz, snap=2.12ms, chirp=3.24khz, chirp_time=0.61ms, body=79.4ms, hold=95ms, sag=-1.9db, release=209.9ms, phase=6, click=-32.5db)
+# left: pitch 0.08 st (attack 0.31 st), level 0.03 dB, click +1.3 dB (the record's has more)
+```
+
+`--hit` writes the averaged hit to a WAV, to hear what was fitted to. `drive=` and
+`attack=` are not fitted: a record's saturation comes back as phase and click. In
+`tatum design`, **Fit to reference** does the same to the sound's kick node once a record
+is loaded, and its knobs move to the result.
+
 ## set
 
 A set is a directory of numbered `.synth` files, each the whole rig at a moment,
@@ -195,7 +333,7 @@ walked in filename order. A step's header says how long it holds and what it is:
 tatum set check  <dir> [--bars N] [--json]
 tatum set render <dir> [-o set.wav] [--bars N] [--phrase 1] [--ramp 4] [--blend 0] [--perform script.txt]
 tatum set next   <dir> <candidate.synth> [--json] [--max-voices N]
-tatum set play   <dir> [--tui] [--auto] [--phrase 8] [--ramp 4] [--blend 0] [--device <name>] [--midi <name>] [--buffer <frames>]
+tatum set play   <dir> [--tui] [--auto] [--phrase 8] [--ramp 4] [--blend 0] [--device <name>] [--midi <name>] [--buffer <frames>] [--record <name>]
 tatum set controls <dir> [--step N] [--bars 2]
 ```
 
@@ -214,7 +352,9 @@ tatum set controls <dir> [--step N] [--bars 2]
   lands on the next phrase line (`--phrase`, 8 bars by default). `--auto` lets the set
   walk itself by its headers, `--ramp` is how many bars a tempo change takes, `--blend`
   mixes two steps the way a DJ does. `--tui` runs full screen, with the steps and their
-  cues ([TUI.md](TUI.md)).
+  cues ([TUI.md](TUI.md)). `--record take1` records the take: `take1.wav`, and
+  `take1.txt`, a script of everything played that `render --perform` renders again
+  sample for sample (see "Recording a take" below).
 
 ### Playing a set live
 
@@ -316,8 +456,13 @@ set's first downbeat and fractional:
 21.0   bend 12000      # the pitch strip, 0..16383, 8192 at rest
 35.0   next            # ask for the next step; also `prev`, `step 3`
 40.0   perform drop    # a scene, as its computer key would call it
-41.0   press pad 40 90 # aftertouch on a held pad (or `press key 45 90`)
+41.0   press pad 40 90 # aftertouch on a held pad (or `press key 45 90`; `press key 90`
+                       # with no note is the whole channel's)
 42.0   voice bass      # the knobs' page (also `voice next`, `voice prev`)
+43.0   reset           # every knob back to the text, as the reset key does
+50.0   loop down       # `l` down: a loop of bars; `loop up` is `l` let go
+60.0   keep            # Shift+L: keep a step that would move on by itself
+61.0   mute lead       # a track muted from the screen; `solo bass lead` solos
 96.0   end             # stop here
 ```
 
@@ -332,6 +477,64 @@ header's bars and every event has happened. The render prints what the script di
 under the step markers, in the script's bars, from 0: `bar 12.00: acid cutoff 1.2khz`,
 `bar 35.00: asked for 4/12 04.synth, lands on bar 36`, `bar 36: now 4/12 04.synth`.
 (`set play`'s status line counts bars from 1, as a performer does.)
+
+### Recording a take
+
+`tatum set play <dir> --record take1` plays the set as `set play` does and writes two
+files as it goes: `take1.wav`, what came out, and `take1.txt`, every knob, fader, pad,
+key, the strip and aftertouch, every step asked for, scene called, loop, page, reset,
+mute and solo, each on the bar and the sample it landed on. Neither file may exist
+already: a take is not written over another. `take1.wav` or `take1.txt` names the same
+take; any other dot is part of the name (`--record take.v1` writes `take.v1.wav`).
+`q` ends the take. A WAV cannot hold more than about 6 h 46 min; past that the WAV
+stops, readable, and the script goes on.
+If the WAV can no longer be written while the take plays (the disk full, the drive gone),
+the status line says so then, in red on the screen, and the script goes on to the end: it
+renders the whole take again. The WAV left behind opens, as far as it was written.
+
+```
+# take: phrase=8 ramp=4 blend=0 auto=off bars=32 steps=8c3f0e5a1d2b4c67
+# a take of sets/mine, from `tatum set play --record`
+# set render <dir> --perform <this file> plays it back, sample for sample
+0.000000@0  cc 30 5                 # bass level 0.04
+1.249524@110208  pad 41 110
+1.500590@132352  next               # next: 2/9 02.synth, on bar 9
+2.007075@177024  perform drop       # scene drop, on bar 4
+6.218594@548480  cc 74 98           # acid cutoff 2.1khz
+6.999365@617344  end
+```
+
+(At 120 BPM a bar is 88200 samples; an act lands on the first sample of the
+128-sample block it was handed in on, which is why the samples are multiples of 128.)
+
+`tatum set render <dir> --perform take1.txt -o again.wav` renders it again, and
+`again.wav` is `take1.wav` byte for byte. A take's line gives its time as
+`<bar>@<sample>`: the bar to read, from 0 as in any script, and the sample of the set
+the act landed on, which is where the render lands it again (a script's bar alone is
+only good to a block). A script whose every line has a sample acts in sample order,
+any other in bar order, as before; a hand-written script can mix both. What follows
+a `#` is what the act did, for the reader. The `# take:` line, read as such only as the
+script's first line and only with its `key=value` fields (elsewhere it is a comment),
+is how the set was played (`--phrase`, `--ramp`, `--blend`, `--auto`, the bars a step without `bars=`
+holds) and `set render` plays it back that way, the set walked as `set play` walks it:
+a step whose header says `auto` or `max=` moves on by itself and nothing but the take
+asks for one. A flag given to `render` wins over the line, and the render says it is
+then not the take; so it does when the steps' files have changed since (`steps=` is
+their fingerprint). A take plays the files as they were when it started: they are
+not watched while it records, the screen's edit keys say no, and a step edited
+meanwhile still plays as it was loaded (as `set render` builds every step from the
+text it loaded, not from the file when the step comes up).
+
+To come back sample for sample the take is played the way `set render` plays: the
+main thread renders the set a block at a time, a little ahead of the device, and
+what the controller sent acts between two blocks. The audio callback only copies
+those blocks out of a lock-free ring, and a thread of its own writes the WAV and the
+script, so nothing in the callback allocates, waits or touches a file. Two things
+follow. What the hands do is heard about 23 ms later than without `--record` (1024
+frames, or two of the device's callbacks when they are bigger, counted at the
+engine's rate when the device runs at another). And a dropout heard
+live -- the machine late with a block -- is not in the take: the take is the set as
+it was rendered, and the summary says how much silence the device played instead.
 
 ## tui-shot
 

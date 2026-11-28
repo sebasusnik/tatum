@@ -1,0 +1,18 @@
+# A dark poly pad that holds a chord: a slow attack and a long release, the
+# lowpass breathing over four bars so it never sits still. Keep it under the
+# kick with a sidechain in the song.
+module keys pad {
+  voice_mode poly
+  cutoff 900hz
+  resonance 25%
+  detune 20%
+  chorus_mix 35%
+  level 0.5
+  attack 300ms
+  decay 800ms
+  sustain 70%
+  release 1.2s
+  lfo_target cutoff
+  lfo_sync bars_4
+  lfo_depth 0.15
+}

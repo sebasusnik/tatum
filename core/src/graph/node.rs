@@ -112,6 +112,45 @@ pub enum NodeSpec {
         mid_freq: f32,
         fast: f32,
     },
+    /// A whole kick: a two-stage sweep onto `note`, a level held and then
+    /// released, a click and a saturator, timed in milliseconds. Not
+    /// MIDI-note tracked, and deaf to the note's end: every hit plays whole.
+    Kick {
+        /// Hz the body settles on.
+        note: f32,
+        /// Hz at the hit.
+        start: f32,
+        /// Hz where the snap hands over to the body.
+        knee: f32,
+        /// ms the snap takes to fall to 10% of its span.
+        snap_ms: f32,
+        /// Hz of a third, fastest stage over the start: the tick of pitch a
+        /// hit has in its first milliseconds. Equal to `start`, none.
+        chirp: f32,
+        /// ms the chirp takes to fall to 10% of its span.
+        chirp_ms: f32,
+        /// ms until the pitch is within 10% of `note`.
+        body_ms: f32,
+        attack_ms: f32,
+        hold_ms: f32,
+        /// dB the level sinks across the hold (0 or negative): a top that
+        /// leans before the release takes it.
+        sag_db: f32,
+        /// ms from the end of the hold to -60 dB.
+        release_ms: f32,
+        /// Where the sine starts, in cycles: 0 at the zero crossing, 0.25 at the top.
+        phase: f32,
+        /// Linear level of the click against the body; 0 is none.
+        click: f32,
+        /// Hz the click is centred on.
+        tone: f32,
+        /// 0 clean to 1 heavy.
+        drive: f32,
+        /// Share the hold and the release sway by, hit to hit; 0, none.
+        vary: f32,
+        /// Share the pitch sways by, hit to hit; 0, none.
+        vary_pitch: f32,
+    },
     Noise {
         seed: u32,
     },
@@ -257,6 +296,10 @@ pub enum NodeSpec {
     Delay {
         sync_div: f32,
         feedback: f32,
+        /// Slow drift of the delay time, 0..1.
+        wow: f32,
+        /// Fast, irregular tremble of the delay time, 0..1.
+        flutter: f32,
     },
     /// Reverb (bus/master chain only, not per-voice).
     Reverb {
@@ -368,6 +411,7 @@ impl NodeSpec {
                     fast: crate::per_sample(fast),
                 })
             }
+            NodeSpec::Kick { .. } => NodeKind::Kick(KickState::new(self)),
             NodeSpec::Noise { seed } => NodeKind::Noise(NoiseGen::new(seed)),
             NodeSpec::Lfo { rate, depth } => {
                 let mut lfo = Lfo::new(SAMPLE_RATE);
@@ -557,9 +601,11 @@ impl NodeSpec {
             NodeSpec::Transient { attack_db, sustain_db } => {
                 NodeKind::Transient(Transient::new(attack_db, sustain_db, SAMPLE_RATE))
             }
-            NodeSpec::Delay { feedback, .. } => {
+            NodeSpec::Delay { feedback, wow, flutter, .. } => {
                 let mut d = Delay::new(SAMPLE_RATE, 2.0);
                 d.set_feedback(feedback);
+                d.set_wow(wow);
+                d.set_flutter(flutter);
                 d.set_mix(1.0); // wet-only for sends
                 NodeKind::Delay(d)
             }
@@ -580,10 +626,12 @@ impl NodeSpec {
     /// line covers that too.
     pub fn instantiate_in_chain(&self, slowest_bpm: f32) -> NodeKind {
         match *self {
-            NodeSpec::Delay { sync_div, feedback } => {
+            NodeSpec::Delay { sync_div, feedback, wow, flutter } => {
                 let synced = 60.0 / slowest_bpm.max(20.0) * 4.0 * sync_div;
                 let mut d = Delay::new(SAMPLE_RATE, (synced.max(0.3) * 1.2).min(2.0));
                 d.set_feedback(feedback);
+                d.set_wow(wow);
+                d.set_flutter(flutter);
                 d.set_mix(1.0);
                 NodeKind::Delay(d)
             }
@@ -599,8 +647,10 @@ impl NodeSpec {
         matches!(self, NodeSpec::PitchOsc { .. })
     }
 
+    /// A node the voice waits on: it ends when every one of these is idle.
+    /// A kick carries its own level, so it is one, though it brings no VCA.
     pub fn is_envelope(&self) -> bool {
-        matches!(self, NodeSpec::Env { .. })
+        matches!(self, NodeSpec::Env { .. } | NodeSpec::Kick { .. })
     }
 
     pub fn is_filter(&self) -> bool {
@@ -1154,6 +1204,337 @@ impl PitchOscState {
     }
 }
 
+// ── Kick state ──
+
+/// Below this the release has reached -60 dB and the kick is over.
+const KICK_FLOOR: f32 = 1.0e-3;
+/// The click lasts this long to -60 dB: a beater, not a tick and not a hiss.
+const KICK_CLICK_MS: f32 = 4.0;
+/// The noise is seeded the same on every hit, so every click is the same.
+const KICK_CLICK_SEED: u32 = 0x4b49_434b;
+/// The highest the kick's pitch goes, as a share of the sample rate.
+const KICK_TOP: f32 = 0.45;
+
+/// Per-sample factor that takes a level down by `db` (a negative number) in
+/// `ms` milliseconds.
+fn fall_per_sample(db: f32, ms: f32) -> f32 {
+    let samples = (ms * 0.001 * SAMPLE_RATE).max(1.0);
+    crate::math::exp(db * (core::f32::consts::LN_10 / 20.0) / samples)
+}
+
+/// The `kick` node at run time. The pitch is the note plus two decaying
+/// parts, the body (knee to note) and the snap (start to knee), each falling
+/// on its own time constant; the level is attack, hold, then an exponential
+/// release to -60 dB. Everything is set when the hit starts, so two hits of
+/// the same kick are the same samples.
+pub struct KickState {
+    /// Where the sine is, in cycles.
+    phase: f32,
+    note: f32,
+    body_part: f32,
+    body_mul: f32,
+    snap_part: f32,
+    snap_mul: f32,
+    chirp_part: f32,
+    chirp_mul: f32,
+    /// Samples of attack left, and how much each one adds.
+    attack_left: u32,
+    attack_step: f32,
+    hold_left: u32,
+    /// Where the hold has sunk to, and how much more each sample of it.
+    held: f32,
+    sag_mul: f32,
+    release_mul: f32,
+    level: f32,
+    drive_gain: f32,
+    /// 1 / tanh(drive_gain): the saturated peak stays where the clean one was.
+    drive_norm: f32,
+    click: f32,
+    click_mul: f32,
+    click_filter: BiquadFilter,
+    rng: crate::rng::Rng,
+    done: bool,
+}
+
+impl KickState {
+    fn new(spec: &NodeSpec) -> Self {
+        let NodeSpec::Kick {
+            note,
+            start,
+            knee,
+            snap_ms,
+            chirp,
+            chirp_ms,
+            body_ms,
+            attack_ms,
+            hold_ms,
+            sag_db,
+            release_ms,
+            phase,
+            click,
+            tone,
+            drive,
+            ..
+        } = *spec
+        else {
+            unreachable!("KickState::new takes a kick")
+        };
+        let ms = |t: f32| t * 0.001 * SAMPLE_RATE;
+        // A sine over half the rate folds back down: at 22.05 kHz a 12 kHz
+        // chirp would play as a 10 kHz one. The top of the sweep is held
+        // under 0.45 of the rate, which at 44.1 kHz is over anything the
+        // arguments allow, so only a smaller machine hears a difference.
+        let top = KICK_TOP * SAMPLE_RATE;
+        let chirp = chirp.min(top);
+        let start = start.min(chirp);
+        let knee = knee.min(start);
+        // The body is within 10% of the note when its part is down to a tenth
+        // of the note: from knee - note to 0.1 * note in `body_ms`, which is
+        // how `tatum analyze` times a sweep. The compiler keeps the knee over
+        // 1.1 times the note, so the ratio is over 1.
+        let body_part = knee - note;
+        let body_ratio = (body_part / (0.1 * note)).max(1.0001);
+        let body_tau = ms(body_ms).max(1.0) / crate::math::ln(body_ratio);
+        // The snap falls by 10x in `snap_ms`.
+        let snap_tau = ms(snap_ms).max(1.0) / core::f32::consts::LN_10;
+        let chirp_tau = ms(chirp_ms).max(1.0) / core::f32::consts::LN_10;
+        let hold = ms(hold_ms) as u32;
+        let attack_left = ms(attack_ms) as u32;
+        let drive_gain = 1.0 + 5.0 * drive;
+        let mut click_filter = BiquadFilter::new(SAMPLE_RATE);
+        click_filter.set_params(FilterType::BandPass, tone, 0.01);
+        Self {
+            phase,
+            note,
+            body_part,
+            body_mul: crate::math::exp(-1.0 / body_tau),
+            snap_part: start - knee,
+            snap_mul: crate::math::exp(-1.0 / snap_tau),
+            chirp_part: chirp - start,
+            chirp_mul: crate::math::exp(-1.0 / chirp_tau),
+            attack_left,
+            attack_step: 1.0 / (attack_left.max(1) as f32),
+            hold_left: hold,
+            held: 1.0,
+            // 0 dB is exactly 1: an unsagged hold stays at full level.
+            sag_mul: if sag_db < 0.0 && hold > 0 { fall_per_sample(sag_db, hold_ms) } else { 1.0 },
+            release_mul: fall_per_sample(-60.0, release_ms),
+            level: if attack_left > 0 { 0.0 } else { 1.0 },
+            drive_gain,
+            drive_norm: 1.0 / crate::math::tanh(drive_gain),
+            click,
+            click_mul: fall_per_sample(-60.0, KICK_CLICK_MS),
+            click_filter,
+            rng: crate::rng::Rng::new(KICK_CLICK_SEED),
+            done: false,
+        }
+    }
+
+    #[inline]
+    pub fn next_sample(&mut self) -> f32 {
+        if self.done {
+            return 0.0;
+        }
+        self.step_level();
+        let body = crate::math::sin(self.phase * crate::math::TWO_PI) * self.level;
+        // Saturated with its level, so the hit drives harder than the tail.
+        let body =
+            if self.drive_gain > 1.0 { crate::math::tanh(body * self.drive_gain) * self.drive_norm } else { body };
+        let click = if self.click > 0.0 {
+            let c = self.click_filter.process(self.rng.next_bipolar()) * self.click;
+            self.click *= self.click_mul;
+            if self.click < KICK_FLOOR * KICK_FLOOR {
+                self.click = 0.0;
+            }
+            c
+        } else {
+            0.0
+        };
+
+        let freq = self.freq();
+        self.phase += freq / SAMPLE_RATE;
+        if self.phase >= 1.0 {
+            self.phase -= 1.0;
+        }
+        self.step_pitch();
+
+        if self.level < KICK_FLOOR && self.attack_left == 0 && self.hold_left == 0 && self.click == 0.0 {
+            self.done = true;
+        }
+        body + click
+    }
+
+    pub fn is_idle(&self) -> bool {
+        self.done
+    }
+
+    /// The kick for hit number `hit` of its instrument: with `vary=` or
+    /// `vary_pitch=`, its hold and release, or its whole sweep, swayed by a
+    /// share that drifts slowly from hit to hit -- two slow sines of periods
+    /// that do not divide, 37 and 13.7 hits, so the pulse breathes over bars
+    /// and does not repeat soon. The same hit number is always the same kick.
+    pub fn new_hit(spec: &NodeSpec, hit: u32) -> Self {
+        let NodeSpec::Kick { vary, vary_pitch, .. } = *spec else { unreachable!("KickState::new_hit takes a kick") };
+        if vary <= 0.0 && vary_pitch <= 0.0 {
+            return Self::new(spec);
+        }
+        let mut s = *spec;
+        let n = hit as f32;
+        let sway = |a: f32, pa: f32, b: f32, pb: f32| {
+            0.6 * crate::math::sin(crate::math::TWO_PI * n / a + pa)
+                + 0.4 * crate::math::sin(crate::math::TWO_PI * n / b + pb)
+        };
+        if let NodeSpec::Kick { note, start, knee, chirp, hold_ms, release_ms, .. } = &mut s {
+            let decay = 1.0 + vary * sway(37.0, 0.3, 13.7, 1.1);
+            *hold_ms *= decay;
+            *release_ms *= decay;
+            let pitch = 1.0 + vary_pitch * sway(29.0, 2.0, 11.1, 0.5);
+            *note *= pitch;
+            *start *= pitch;
+            *knee *= pitch;
+            *chirp *= pitch;
+        }
+        Self::new(&s)
+    }
+
+    /// The level: attack, then hold, then release.
+    #[inline]
+    fn step_level(&mut self) {
+        if self.attack_left > 0 {
+            self.attack_left -= 1;
+            self.level = (self.level + self.attack_step).min(1.0);
+        } else if self.hold_left > 0 {
+            self.hold_left -= 1;
+            self.level = self.held;
+            self.held *= self.sag_mul;
+        } else {
+            self.level *= self.release_mul;
+        }
+    }
+
+    /// The pitch parts alone, to look one sample ahead.
+    fn shape(&self) -> KickPitch {
+        KickPitch {
+            note: self.note,
+            body_part: self.body_part,
+            body_mul: self.body_mul,
+            snap_part: self.snap_part,
+            snap_mul: self.snap_mul,
+            chirp_part: self.chirp_part,
+            chirp_mul: self.chirp_mul,
+        }
+    }
+
+    #[inline]
+    fn freq(&self) -> f32 {
+        self.note + self.body_part + self.snap_part + self.chirp_part
+    }
+
+    /// The peak of a cycle at this level once `drive` has saturated it.
+    fn sounding_level(&self) -> f32 {
+        if self.drive_gain > 1.0 {
+            crate::math::tanh(self.level * self.drive_gain) * self.drive_norm
+        } else {
+            self.level
+        }
+    }
+
+    #[inline]
+    fn step_pitch(&mut self) {
+        self.body_part *= self.body_mul;
+        self.snap_part *= self.snap_mul;
+        self.chirp_part *= self.chirp_mul;
+    }
+}
+
+/// A kick's pitch, without its level or its sound.
+struct KickPitch {
+    note: f32,
+    body_part: f32,
+    body_mul: f32,
+    snap_part: f32,
+    snap_mul: f32,
+    chirp_part: f32,
+    chirp_mul: f32,
+}
+
+impl KickPitch {
+    fn step(&mut self) {
+        self.body_part *= self.body_mul;
+        self.snap_part *= self.snap_mul;
+        self.chirp_part *= self.chirp_mul;
+    }
+
+    fn freq(&self) -> f32 {
+        self.note + self.body_part + self.snap_part + self.chirp_part
+    }
+}
+
+/// From here a kick's sweep is heard as pitch; before it, as the click of
+/// the hit.
+pub const HEARD_FROM_MS: f32 = 5.0;
+/// Under this, against the hit's top, it no longer counts.
+pub const HEARD_DOWN_DB: f32 = -30.0;
+/// Semitones per millisecond at which a falling pitch counts half: the ear
+/// needs a few steady cycles to hear a pitch, and a sweep moving faster than
+/// this is heard more as a fall than as a note.
+pub const HEARD_STEADY_ST_PER_MS: f32 = 0.1;
+
+/// How much a moment counts towards the note heard: its energy, times how
+/// steady its pitch is.
+#[inline]
+pub fn heard_weight(level: f32, st_per_ms: f32) -> f32 {
+    let r = st_per_ms / HEARD_STEADY_ST_PER_MS;
+    level * level / (1.0 + r * r)
+}
+
+/// The note a kick is heard as, in Hz. A sweep that is still falling while
+/// the kick is loud is heard over the note it lands on: a kick tuned to A1
+/// with a slow body reads as a C or a D. This is a model of that, not a
+/// law of the ear: the mean of the pitch on a log scale, each moment weighted
+/// by its energy and by how steady its pitch is ([`heard_weight`]), from
+/// [`HEARD_FROM_MS`] until the level is [`HEARD_DOWN_DB`] under its top.
+/// The level is the one that sounds, after `drive`: saturation flattens the
+/// top and lifts the tail against it, so a driven kick is heard nearer the
+/// note it lands on. `tatum analyze` reads a record's kick the same way, from
+/// its averaged hit.
+pub fn kick_heard_hz(spec: &NodeSpec) -> f32 {
+    let NodeSpec::Kick { note, .. } = *spec else {
+        return 0.0;
+    };
+    let mut k = KickState::new(spec);
+    let from = (HEARD_FROM_MS * 0.001 * SAMPLE_RATE) as u32;
+    let floor = crate::math::pow(10.0, HEARD_DOWN_DB / 20.0);
+    let (mut sum, mut weight) = (0.0f32, 0.0f32);
+    let mut top = 0.0f32;
+    // Until it is `HEARD_DOWN_DB` down, which the release sees to; eight
+    // seconds at most, over the longest attack, hold and release together.
+    for i in 0..(8 * SAMPLE_RATE as u32) {
+        k.step_level();
+        let level = k.sounding_level();
+        top = top.max(level);
+        if i >= from {
+            if level < floor * top && k.attack_left == 0 && k.hold_left == 0 {
+                break;
+            }
+            let f = k.freq();
+            let mut next = k.shape();
+            next.step();
+            // Semitones the pitch falls in this sample, per ms.
+            let st_per_ms = 12.0 / core::f32::consts::LN_2 * crate::math::ln(f / next.freq()) * SAMPLE_RATE * 0.001;
+            let w = heard_weight(level, crate::math::abs(st_per_ms));
+            sum += w * crate::math::ln(f);
+            weight += w;
+        }
+        k.step_pitch();
+    }
+    if weight > 0.0 {
+        crate::math::exp(sum / weight)
+    } else {
+        note
+    }
+}
+
 // ── NodeKind: runtime DSP node with full state ──
 
 /// Every DSP primitive and effect as a first-class node.
@@ -1165,6 +1546,7 @@ pub enum NodeKind {
     // ── Sources ──
     Osc(NoteOsc),
     PitchOsc(PitchOscState),
+    Kick(KickState),
     Noise(NoiseGen),
     Lfo(Lfo),
 
@@ -1255,6 +1637,7 @@ impl NodeKind {
         match self {
             NodeKind::Osc(osc) => osc.next_sample(),
             NodeKind::PitchOsc(po) => po.next_sample(),
+            NodeKind::Kick(k) => k.next_sample(),
             NodeKind::Noise(noise) => noise.next_sample(),
             NodeKind::Lfo(lfo) => lfo.next_sample(),
             NodeKind::Capture(c) => c.process(inputs[0]),
@@ -1619,6 +2002,7 @@ impl NodeKind {
     pub fn is_idle(&self) -> bool {
         match self {
             NodeKind::Env(env) => env.is_idle(),
+            NodeKind::Kick(k) => k.is_idle(),
             _ => false,
         }
     }
@@ -1631,9 +2015,11 @@ impl NodeKind {
     /// and it lives on buses and the master, never in a voice.
     pub fn renew(&mut self, spec: &NodeSpec) {
         match (&mut *self, spec) {
-            (NodeKind::Delay(d), NodeSpec::Delay { feedback, .. }) => {
+            (NodeKind::Delay(d), NodeSpec::Delay { feedback, wow, flutter, .. }) => {
                 d.reset();
                 d.set_feedback(*feedback);
+                d.set_wow(*wow);
+                d.set_flutter(*flutter);
                 d.set_mix(1.0);
             }
             (NodeKind::Capture(c), NodeSpec::Capture { .. }) => c.reset(),
@@ -1649,6 +2035,8 @@ impl NodeKind {
         match self {
             NodeKind::Osc(osc) => osc.reset(),
             NodeKind::PitchOsc(po) => po.reset(),
+            // A kick is made again on every hit (`renew`); reset only stops it.
+            NodeKind::Kick(k) => k.done = true,
             NodeKind::Noise(_) => {}
             NodeKind::Lfo(lfo) => lfo.reset(),
             NodeKind::AutoPan { lfo, .. } => lfo.reset(),
@@ -1715,13 +2103,33 @@ mod renew_tests {
 
     #[test]
     fn a_renewed_node_plays_like_a_new_one() {
-        renews_like_new(NodeSpec::Delay { sync_div: 0.25, feedback: 0.6 });
+        renews_like_new(NodeSpec::Delay { sync_div: 0.25, feedback: 0.6, wow: 0.0, flutter: 0.0 });
+        renews_like_new(NodeSpec::Delay { sync_div: 0.25, feedback: 0.6, wow: 0.7, flutter: 0.5 });
         renews_like_new(NodeSpec::Capture { samples: 4_000, start_samples: 0, speed: 0.5, reverse: true, mix: 1.0 });
         renews_like_new(NodeSpec::Chorus { mix: 0.5 });
         renews_like_new(NodeSpec::Saturator { drive: 2.0 });
         renews_like_new(NodeSpec::ParamEq { band: Band::Bell, freq: 300.0, gain_db: -6.0, q: 2.0 });
         renews_like_new(NodeSpec::Clip { drive: 4.0, ceiling: 0.7 });
         renews_like_new(NodeSpec::Transient { attack_db: 6.0, sustain_db: -6.0 });
+        renews_like_new(NodeSpec::Kick {
+            note: 55.0,
+            start: 900.0,
+            knee: 165.0,
+            snap_ms: 4.0,
+            chirp: 3000.0,
+            chirp_ms: 1.0,
+            body_ms: 70.0,
+            attack_ms: 1.0,
+            hold_ms: 80.0,
+            sag_db: -2.0,
+            release_ms: 160.0,
+            phase: 0.25,
+            click: 0.02,
+            tone: 3000.0,
+            drive: 0.3,
+            vary: 0.0,
+            vary_pitch: 0.0,
+        });
     }
 
     /// With `mid` at the start, a sweep plays sample for sample what it did
@@ -1756,5 +2164,40 @@ mod renew_tests {
     #[test]
     fn a_node_is_small_enough_to_keep_per_voice() {
         assert!(core::mem::size_of::<NodeKind>() <= 512, "NodeKind is {} bytes", core::mem::size_of::<NodeKind>());
+    }
+}
+
+#[cfg(test)]
+mod kick_tests {
+    use super::*;
+
+    /// The highest a kick can be asked to start, chirp and all, plays under
+    /// half the rate at whatever rate the engine is built for (the CI renders
+    /// at 22050 and 32000 Hz too).
+    #[test]
+    fn the_kick_never_starts_over_half_the_rate() {
+        let spec = NodeSpec::Kick {
+            note: 200.0,
+            start: 5000.0,
+            knee: 2000.0,
+            snap_ms: 4.0,
+            chirp: 12000.0,
+            chirp_ms: 1.0,
+            body_ms: 70.0,
+            attack_ms: 0.0,
+            hold_ms: 80.0,
+            sag_db: 0.0,
+            release_ms: 160.0,
+            phase: 0.0,
+            click: 0.0,
+            tone: 3000.0,
+            drive: 0.0,
+            vary: 0.0,
+            vary_pitch: 0.0,
+        };
+        let NodeKind::Kick(k) = spec.instantiate() else { panic!("a kick") };
+        let top = k.note + k.body_part + k.snap_part + k.chirp_part;
+        assert!(top <= 0.45 * SAMPLE_RATE + 0.5, "starts at {top} Hz at {SAMPLE_RATE} Hz");
+        assert!(k.snap_part >= 0.0 && k.chirp_part >= 0.0 && k.body_part > 0.0);
     }
 }

@@ -853,11 +853,21 @@ impl BeatsModule {
 
     /// Process a block with per-drum stereo panning (equal-power).
     pub fn process_block_stereo(&mut self, output_l: &mut [f32], output_r: &mut [f32]) {
+        self.process_block_stereo_at(output_l, output_r, 0);
+    }
+
+    /// [`Self::process_block_stereo`] for the part of a block that starts
+    /// `offset` samples in: the engine renders up to each note so the note
+    /// starts on its own sample, and the kick's envelope, which the sidechain
+    /// reads by its place in the block, is written at that place.
+    pub fn process_block_stereo_at(&mut self, output_l: &mut [f32], output_r: &mut [f32], offset: usize) {
         for i in 0..output_l.len() {
             self.process_stutter();
 
             let k = self.kick.next_sample();
-            self.kick_env[i] = math::abs(k);
+            if let Some(e) = self.kick_env.get_mut(offset + i) {
+                *e = math::abs(k);
+            }
             let (snare_l, snare_r) = self.snare.next_sample_stereo();
             let h = self.hihat.next_sample();
             let c = self.clap.next_sample();

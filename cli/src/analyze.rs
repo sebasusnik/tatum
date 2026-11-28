@@ -56,7 +56,7 @@ pub fn cmd_compare(args: &[String]) {
             eprintln!("error: the render is under two seconds; give --bars more of the song");
             process::exit(1);
         }
-        reference::measure(&l, &r)
+        reference::measure(&l, &r).rendered_from(&source.text)
     };
     print!("{}", reference::compare(&reference, &mine, reference_path, yours));
 }
@@ -119,7 +119,7 @@ fn flags(args: &[String], usage: &str) -> Flags {
 }
 
 /// `64`, `64.5` or `1:04`.
-fn seconds(v: &str) -> Option<f32> {
+pub(crate) fn seconds(v: &str) -> Option<f32> {
     let s = match v.split_once(':') {
         Some((m, s)) => m.parse::<f32>().ok()? * 60.0 + s.parse::<f32>().ok()?,
         None => v.parse().ok()?,

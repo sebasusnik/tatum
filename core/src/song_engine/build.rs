@@ -335,6 +335,8 @@ impl SongEngine {
         send_delay.set_sync(sync, tempo, SAMPLE_RATE);
         send_delay.set_feedback(d.feedback.unwrap_or(0.25));
         send_delay.set_filter(d.filter.unwrap_or(0.6));
+        send_delay.set_wow(d.wow.unwrap_or(0.0));
+        send_delay.set_flutter(d.flutter.unwrap_or(0.0));
 
         let mut send_reverb = Reverb::new(SAMPLE_RATE);
         let r = &song.globals.send_reverb;

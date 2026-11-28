@@ -1,0 +1,141 @@
+# ╔════════════════════════════════════════════════════════╗
+# ║  minimal_hypnotic.synth — "Gleichlauf"                 ║
+# ║  125 BPM, A minor, 4/4                                 ║
+# ║  Late-90s minimal: a deep kick tuned to the key, a     ║
+# ║  bass that only speaks between kicks, one stab, and    ║
+# ║  nothing that changes faster than it has to.           ║
+# ╚════════════════════════════════════════════════════════╝
+
+tempo 125
+meter 4/4
+scale A minor
+swing 0.53
+
+delay sync=dotted_eighth feedback=0.55 filter=0.3 sidechain=0.4
+reverb size=0.6 damp=0.55
+
+# ════════════════════════════════════════════════════════
+# INSTRUMENTS
+# ════════════════════════════════════════════════════════
+
+# The kick, written as it is heard. It lands on A1, the key's root, so
+# the kick and the bass are one low end rather than two notes rubbing.
+# The snap takes 4 ms from 900 Hz to the knee; the body takes 70 ms to
+# come within 10% of the note -- the number `tatum analyze` reports as
+# the sweep. Held flat for 80 ms, then 160 ms to -60 dB: round, and
+# still gone before the bass on the offbeat. A little drive so the sub
+# reads on a small speaker; no click, the snap is the attack.
+instrument deep {
+  kick(A1, start=900hz, snap=4ms, body=70ms, hold=80ms, release=160ms, drive=0.25) as k
+  k > bell(320hz, -3db, 1.4) as unbox
+  unbox > out
+}
+
+# The bass: a sine an octave over the kick with a little square under
+# it for the harmonics, short, plucked by its own envelope.
+instrument dub_bass {
+  gain 0.9
+  osc sine(110) as body
+  osc square(110, pitch=-12) as edge
+  edge > lowpass(300, 0.05) as soft
+  soft > gain(0.25) as lvl_edge
+  body > mix
+  lvl_edge > mix
+  mix > adsr(0.002, 0.12, 0.2, 0.06) as amp
+  amp > out
+}
+
+# The stab: two detuned saws through a low ladder, gone in 150 ms.
+# What is heard is the delay.
+instrument stab {
+  gain 0.8
+  osc saw(220) as a
+  osc saw(220, pitch=0.08) as b
+  a > mix
+  b > mix
+  mix > ladder(700, 0.35, ea=0.001, ed=0.09, edepth=1400) as filt
+  filt > adsr(0.002, 0.15, 0.0, 0.05) as amp
+  amp > out
+}
+
+# Hats and a rim only: the kick is the instrument above.
+module beats kit {
+  hihat_level 100%
+  hihat_decay 12%
+  hihat_pitch 1.3x
+  hihat_pan 30%
+  snare_level -10db
+  snare_decay 4%
+  snare_pitch 1.9x
+  snare_snap 60%
+  snare_pan -30%
+}
+
+# ════════════════════════════════════════════════════════
+# PATTERNS
+# ════════════════════════════════════════════════════════
+
+pattern four {
+  C3 - - -  C3 - - -  C3 - - -  C3 - - -
+}
+
+pattern hats {
+  hat:   - - x:0.7 -  - - x:0.6 -  - - x:0.7 -  - - x:0.55 x:0.3
+}
+
+pattern hats_rim {
+  hat:   - - x:0.7 -  - - x:0.6 -  - - x:0.7 -  - - x:0.55 x:0.3
+  snare: - - - -  - - - -  - - - x:0.5  - - - -
+}
+
+# Between the kicks only, so the two never share the sub.
+pattern bass_line {
+  - - A2:0.8 -  - - A2:0.6 -  - - A2:0.8 -  - - E2:0.6 -
+}
+
+pattern stab_one {
+  - - - -  - - - -  - - Am7:0.6 -  - - - -
+}
+
+# ════════════════════════════════════════════════════════
+# TRACKS
+# ════════════════════════════════════════════════════════
+
+track kick { play four using deep level 0.9 }
+track drums { play hats using kit level 1.0 }
+track bass { play bass_line using dub_bass level 0.55 sidechain 0.5 from=kick }
+track chord { play stab_one using stab level 0.3 delay_send 0.5 reverb_send 0.2 sidechain 0.4 from=kick
+              out > highpass(250, 0.05) > master }
+
+# ════════════════════════════════════════════════════════
+# SCENES
+# ════════════════════════════════════════════════════════
+
+scene intro {
+  track kick { play four using deep level 0.9 }
+}
+
+scene groove {
+  track kick  { play four using deep level 0.9 }
+  track drums { play hats using kit level 1.0 }
+  track bass  { play bass_line using dub_bass level 0.55 }
+}
+
+scene full {
+  track kick  { play four using deep level 0.9 }
+  track drums { play hats_rim using kit level 1.0 }
+  track bass  { play bass_line using dub_bass level 0.55 }
+  track chord { play stab_one using stab level 0.3 }
+}
+
+scene out {
+  track kick  { play four using deep level 0.9 }
+  track drums { play hats using kit level 0.9 }
+}
+
+arrange {
+  intro x8
+  groove x16
+  full x16
+  out x8
+}

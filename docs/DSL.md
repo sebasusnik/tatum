@@ -26,12 +26,36 @@ sidechain 0.4
 delay sync=dotted_eighth feedback=0.45 filter=0.5   # sync: free | quarter | dotted_eighth |
                                                     #       eighth | sixteenth (default) | triplet_eighth
                                                     # time=0.3 (seconds) applies when sync=free
+                                                    # wow=30% flutter=10%: bucket-brigade wobble, 0..1 each
 reverb size=0.7 damp=0.4 predelay=20 sidechain=0.5  # predelay in ms; size 1.0 is a ~15 s hall;
                                                     # sidechain= ducks the return against the kick (delay too)
 ```
 
 A value outside those spans is an error at its line (a scene's `tempo` too),
 not something the engine quietly plays as the nearest thing.
+
+`wow` and `flutter` give the delay an analog bucket-brigade character, as on a
+Memory Man: the delay time moves, so every repeat comes back slightly out of
+tune, and each pass through the feedback bends it again. Both are 0..1, or a
+percentage (`wow=30%`), and 0 by default, where the delay plays exactly as it
+did without them. (A node argument that is a share of something takes a
+percentage the same way: these two on the chain `delay(...)`, and the kick's
+`vary` and `vary_pitch`.)
+
+- `wow` is a slow drift, about 0.5 Hz and wandering in rate: at 1 the delay time
+  swings ±3.5 ms and the repeats sag and rise by up to about ±25 cents. 0.2 is a
+  worn tape; past 0.5 it is seasick.
+- `flutter` is a fast tremble, about 7 Hz, made irregular by two faster partials
+  and a little noise: at 1 the time swings about ±0.15 ms, up to about ±18 cents.
+  A little (0.1) blurs the repeats; a lot makes them warble.
+
+Left and right drift at slightly different rates, so a ping-pong spreads as it
+bends. The drift is seeded: a song renders the same every time. The chain
+`delay(...)` takes the same two as named arguments: `delay(1/8, 0.5, wow=30%)`.
+
+The swing needs a delay time longer than itself. A free time under about 4 ms
+with a full wow has no room: the time rests at its shortest for part of each
+cycle and the bend flattens there (no click). Lower the wow or lengthen the time.
 
 `humanize` spreads velocity; `timing` nudges the step clock, which is one clock
 for the whole song, so the band rushes and drags together rather than each part
@@ -344,7 +368,7 @@ master { in > eq(low=1.5, mid=1.0, high=1.2) > compressor(-10, ratio=4, attack=2
 | `clip(drive, ceiling=)` | 0.1..20, dB -24..0 | hard clipper, antialiased: under the ceiling nothing changes, over it is cut flat. The density of a club kick |
 | `transient(attack, sustain)` | dB -24..24 each | the hit and the tail turned up or down whatever the level; a steady tone passes |
 | `tilt(amount)` | -1..1, negative = darker | one-knob tilt EQ |
-| `delay(1/8, feedback)` | note division, 0..1 | tempo-synced delay inside a chain |
+| `delay(1/8, feedback, wow=, flutter=)` | note division, 0..1, 0..1, 0..1 | tempo-synced delay inside a chain; `wow` and `flutter` as below |
 | `reverb(size)` | 0..1 | plate reverb inside a chain |
 
 Exact ranges and defaults for every node are in [PARAMS.md](PARAMS.md) under "effects and
@@ -1079,6 +1103,65 @@ instrument sync_lead {
 
 The slave's `pitch` moves under a master that holds the note, which is the sync sweep:
 the pitch stays put and the timbre tears. `examples/oberheim_dark.synth` takes the same ports somewhere darker: a reese bass with an oscillator tearing at its filter, a sync lead an envelope throws two octaves up on every hit, and noise ringing in a resonant `svf` bandpass the bass note drags around.
+
+**A deep minimal kick.** The late-90s minimal kick is a sine that lands on the key,
+held round and then cut: the `kick` node writes it in those terms. The first argument
+is the note it settles on, in Hz or as a note name; `body=` is how long the pitch takes
+to come within 10% of it, the same number `tatum analyze` reports as the sweep, so a
+record's kick can be copied by reading its report; `hold=` keeps it at full level and
+`release=` takes it to -60 dB, where the voice ends. Every hit plays the same samples,
+and the length of the step never cuts it:
+
+```
+instrument deep {
+  kick(A1, start=900hz, snap=4ms, body=70ms, hold=80ms, release=160ms, drive=0.25) as k
+  k > bell(320hz, -3db, 1.4) as unbox
+  unbox > out
+}
+track kick { play four using deep }
+track bass { play line using sub sidechain 0.5 from=kick }   # the bass waits for it
+```
+
+Tune it to the root or the fifth of the scale and keep the bass off its beat: the two
+are then one low end. A kick measured off a record is often three falls, not two: a tick
+of pitch in the first milliseconds, the fall onto the body, and a slow last settling.
+`chirp=4khz, chirp_time=0.7ms` adds the tick over the start, and `sag=-3db` lets the held
+top lean the way a long kick does before it is cut. `snap=` and `start=` are the attack, `knee=` where it hands over to
+the body (three times the note when left out); `click=-35db` adds a beater on top and
+`phase=90` starts the sine at its peak, for more punch and a click of its own. `drive=`
+saturates the hit more than the tail, at the same peak.
+
+A sweep that is still falling while the kick is loud is heard over the note it lands on:
+`kick(A1, body=90ms)` settles on 55 Hz and is heard five semitones up, on 74 Hz, a D2.
+`heard=1` makes the note written the note heard, and the kick settles under it as far as
+its sweep lifts it: `kick(A1, body=90ms, heard=1)` settles on 40.8 Hz, just under E1, and
+is heard as A1. That is a fourth of difference in the tail, on a kick of the default
+shape: a 41 Hz tail and a 55 Hz one are not the same kick on a system, so `heard=1` is
+for a kick whose sweep is part of its note, and a shorter `body=` keeps the two close
+(`body=20ms` is heard within a semitone of where it lands). A kick whose sweep lifts it
+further than there is room under the note, down to 20 Hz, is an error that says so:
+`kick(A0, body=120ms, heard=1)` would still be heard two semitones over A0.
+
+The note heard is a model, not a law of the ear: the pitch on a log scale, each moment
+weighted by its energy and by how steady its pitch is (a fall faster than 0.1 semitones a
+millisecond counts for less), from 5 ms until it is 30 dB down. The energy is the body's
+after `drive=`, which flattens the top and so brings the note heard down towards the
+tail: `kick(A1, body=90ms, drive=1)` is heard on 64.7 Hz. It is computed from the kick's
+arguments alone, so it knows nothing of the click, of the harmonics drive adds, or of
+what comes after the node: a filter, an EQ, a compressor, the rest of the mix.
+`tatum analyze` reports a record's kick the same way, as `heard`, read off the sound.
+Read off one rendered hit of each of the kicks above it is 74.0, 54.6 and 65.0 Hz, and
+over fifteen shapes, clean and driven, the two were never more than 0.15 semitones
+apart. `analyze` averages a record's hits first, and where that average reads the tail
+wrong it reads the note heard wrong with it, so look at `tail` before trusting `heard`.
+
+Every hit of a `kick` is the same samples. `vary=0.03` (or `vary=3%`) sways its hold and release by up
+to 3% from hit to hit, and `vary_pitch=0.01` (or `1%`) its whole sweep by up to 1% in pitch, slowly
+(the sway drifts over a few bars and does not repeat soon) and the same on every play:
+the breath of a hypnotic pulse, which a loop of one sample does not have. Both are 0 by
+default. Write it with its parentheses,
+`kick()`: a node named `kick` stays a name. A note name works wherever a node takes a
+frequency: `bell(A1, 2db, 1)` lifts the kick's fundamental.
 
 **An FM stab.** Two operators, short envelopes, a bit of feedback, off-beat pattern with
 rests, saturation in the chain and a delay send:
