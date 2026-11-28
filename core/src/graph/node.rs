@@ -18,6 +18,7 @@ use crate::effects::reverb::DattorroReverb;
 use crate::effects::capture::Capture;
 use crate::rng::Rng;
 use crate::SAMPLE_RATE;
+use super::drums::{ClapState, HatState, SnareState};
 extern crate alloc;
 use alloc::boxed::Box;
 
@@ -169,6 +170,58 @@ pub enum NodeSpec {
         vary: f32,
         /// Share the pitch sways by, hit to hit; 0, none.
         vary_pitch: f32,
+    },
+    /// A whole hat: six inharmonic square partials and noise through a band
+    /// and a highpass, falling 60 dB in `decay_ms`. Deaf to the note and to
+    /// its end, like the kick.
+    Hat {
+        /// ms from the hit to -60 dB.
+        decay_ms: f32,
+        /// Hz the band is centred on.
+        band: f32,
+        /// Hz under which it is cut.
+        floor: f32,
+        /// Share of noise against the metal, 0..1.
+        noise: f32,
+        /// Hz of the lowest of the six partials.
+        pitch: f32,
+        /// What brings the hat these arguments make to the level every hat
+        /// has, found when it is compiled (`drums::hat_gain`); 1, as it is.
+        gain: f32,
+        /// Share the decay sways by, hit to hit; 0, none.
+        vary: f32,
+    },
+    /// A whole snare: a body of two modes dropping onto `note`, and noise
+    /// through a band for the wires, each with its own decay.
+    Snare {
+        /// Hz the body's lower mode settles on.
+        note: f32,
+        /// ms the drop takes to come within 10% of the note.
+        snap_ms: f32,
+        /// ms the body takes to fall 60 dB.
+        body_ms: f32,
+        /// ms the wires take to fall 60 dB.
+        wires_ms: f32,
+        /// Hz the wires' band is centred on.
+        band: f32,
+        /// Share of wires against body, 0..1.
+        balance: f32,
+        /// 0 clean to 1 heavy.
+        drive: f32,
+        /// Share the two decays sway by, hit to hit; 0, none.
+        vary: f32,
+    },
+    /// A whole clap: `bursts` short bursts of noise in a band, `spacing_ms`
+    /// apart, the last one falling 60 dB in `tail_ms`.
+    Clap {
+        /// How many bursts, the one that rings out included; a whole number.
+        bursts: f32,
+        spacing_ms: f32,
+        tail_ms: f32,
+        /// Hz the band is centred on.
+        band: f32,
+        /// Share the spacing and the tail sway by, hit to hit; 0, none.
+        vary: f32,
     },
     Noise {
         seed: u32,
@@ -464,6 +517,9 @@ impl NodeSpec {
                 })
             }
             NodeSpec::Kick { .. } => NodeKind::Kick(KickState::new(self)),
+            NodeSpec::Hat { .. } => NodeKind::Hat(HatState::new(self)),
+            NodeSpec::Snare { .. } => NodeKind::Snare(SnareState::new(self)),
+            NodeSpec::Clap { .. } => NodeKind::Clap(ClapState::new(self)),
             NodeSpec::Noise { seed } => NodeKind::Noise(NoiseGen::new(seed)),
             NodeSpec::Lfo { rate, depth } => {
                 let mut lfo = Lfo::new(SAMPLE_RATE);
@@ -702,16 +758,34 @@ impl NodeSpec {
         matches!(self, NodeSpec::PitchOsc { .. })
     }
 
-    /// A node the voice waits on: it ends when every one of these is idle.
-    /// A kick carries its own level, so it is one, though it brings no VCA.
     /// The nodes a note has to be told its number and its moment: what they
     /// play is drawn from those. See [`NodeKind::strike`].
     pub fn is_random(&self) -> bool {
         matches!(self, NodeSpec::Rand { .. } | NodeSpec::Wander { .. } | NodeSpec::Dust { .. })
     }
 
+    /// A node the voice waits on: it ends when every one of these is idle.
+    /// A kick carries its own level, so it is one, though it brings no VCA;
+    /// so do a hat, a snare and a clap.
     pub fn is_envelope(&self) -> bool {
-        matches!(self, NodeSpec::Env { .. } | NodeSpec::Kick { .. })
+        matches!(
+            self,
+            NodeSpec::Env { .. }
+                | NodeSpec::Kick { .. }
+                | NodeSpec::Hat { .. }
+                | NodeSpec::Snare { .. }
+                | NodeSpec::Clap { .. }
+        )
+    }
+
+    /// A drum node with `vary=`: it is made again for each hit by the hit's
+    /// number ([`NodeKind::renew_hit`]).
+    pub fn sways(&self) -> bool {
+        match *self {
+            NodeSpec::Kick { vary, vary_pitch, .. } => vary > 0.0 || vary_pitch > 0.0,
+            NodeSpec::Hat { vary, .. } | NodeSpec::Snare { vary, .. } | NodeSpec::Clap { vary, .. } => vary > 0.0,
+            _ => false,
+        }
     }
 
     pub fn is_filter(&self) -> bool {
@@ -1580,7 +1654,7 @@ const KICK_TOP: f32 = 0.45;
 
 /// Per-sample factor that takes a level down by `db` (a negative number) in
 /// `ms` milliseconds.
-fn fall_per_sample(db: f32, ms: f32) -> f32 {
+pub(super) fn fall_per_sample(db: f32, ms: f32) -> f32 {
     let samples = (ms * 0.001 * SAMPLE_RATE).max(1.0);
     crate::math::exp(db * (core::f32::consts::LN_10 / 20.0) / samples)
 }
@@ -1910,6 +1984,9 @@ pub enum NodeKind {
     Osc(NoteOsc),
     PitchOsc(PitchOscState),
     Kick(KickState),
+    Hat(HatState),
+    Snare(SnareState),
+    Clap(ClapState),
     Noise(NoiseGen),
     Lfo(Lfo),
     Rand(RandState),
@@ -2011,6 +2088,9 @@ impl NodeKind {
             NodeKind::Osc(osc) => osc.next_sample(),
             NodeKind::PitchOsc(po) => po.next_sample(),
             NodeKind::Kick(k) => k.next_sample(),
+            NodeKind::Hat(h) => h.next_sample(),
+            NodeKind::Snare(s) => s.next_sample(),
+            NodeKind::Clap(c) => c.next_sample(),
             NodeKind::Noise(noise) => noise.next_sample(),
             NodeKind::Lfo(lfo) => lfo.next_sample(),
             NodeKind::Rand(r) => r.next_sample(),
@@ -2066,6 +2146,26 @@ impl NodeKind {
             NodeKind::Reverb(r) => r.process(inputs[0]),
 
             NodeKind::Output => inputs[0],
+        }
+    }
+
+    /// Several connections into a node that reads one input add up there, as
+    /// they do into `mix` and into a port. Each node reads `inputs[0]`, so
+    /// without this the first connection was the node's whole input and the
+    /// rest were dropped in silence: `a > out` and `b > out` played `a`. A
+    /// VCA keeps its envelope, wired first, apart from the sound it shapes.
+    /// Called only on a node with more than one connection.
+    #[inline]
+    pub fn add_up(&self, inputs: &mut [f32; MAX_NODE_INPUTS], input_count: u8) {
+        let n = (input_count as usize).min(MAX_NODE_INPUTS);
+        match self {
+            NodeKind::Mix => {}
+            NodeKind::Vca => {
+                if n > 2 {
+                    inputs[1] = inputs[1..n].iter().sum();
+                }
+            }
+            _ => inputs[0] = inputs[..n].iter().sum(),
         }
     }
 
@@ -2389,6 +2489,9 @@ impl NodeKind {
         match self {
             NodeKind::Env(env) => env.is_idle(),
             NodeKind::Kick(k) => k.is_idle(),
+            NodeKind::Hat(h) => h.is_idle(),
+            NodeKind::Snare(s) => s.is_idle(),
+            NodeKind::Clap(c) => c.is_idle(),
             _ => false,
         }
     }
@@ -2403,6 +2506,19 @@ impl NodeKind {
             NodeKind::Rand(r) => *r = RandState::new(spec, hit),
             NodeKind::Dust(d) => *d = DustState::new(spec, hit),
             NodeKind::Wander(w) => *w = WanderState::new(spec, clock),
+            _ => {}
+        }
+    }
+
+    /// Become the drum `spec` describes for hit number `hit` of its
+    /// instrument, in place: what a node that sways ([`NodeSpec::sways`]) is
+    /// on that hit. Anything else is left as it is.
+    pub fn renew_hit(&mut self, spec: &NodeSpec, hit: u32) {
+        match self {
+            NodeKind::Kick(k) => *k = KickState::new_hit(spec, hit),
+            NodeKind::Hat(h) => *h = HatState::new_hit(spec, hit),
+            NodeKind::Snare(s) => *s = SnareState::new_hit(spec, hit),
+            NodeKind::Clap(c) => *c = ClapState::new_hit(spec, hit),
             _ => {}
         }
     }
@@ -2449,6 +2565,9 @@ impl NodeKind {
             NodeKind::PitchOsc(po) => po.reset(),
             // A kick is made again on every hit (`renew`); reset only stops it.
             NodeKind::Kick(k) => k.done = true,
+            NodeKind::Hat(h) => h.done = true,
+            NodeKind::Snare(s) => s.done = true,
+            NodeKind::Clap(c) => c.done = true,
             NodeKind::Noise(_) => {}
             // Made again for each note (`renew`, then `strike`).
             NodeKind::Rand(_) | NodeKind::Wander(_) | NodeKind::Dust(_) => {}
@@ -2544,6 +2663,26 @@ mod renew_tests {
             vary: 0.0,
             vary_pitch: 0.0,
         });
+        renews_like_new(NodeSpec::Hat {
+            decay_ms: 80.0,
+            band: 8000.0,
+            floor: 6000.0,
+            noise: 0.3,
+            pitch: 205.0,
+            gain: 1.0,
+            vary: 0.0,
+        });
+        renews_like_new(NodeSpec::Snare {
+            note: 185.0,
+            snap_ms: 8.0,
+            body_ms: 120.0,
+            wires_ms: 180.0,
+            band: 4500.0,
+            balance: 0.5,
+            drive: 0.3,
+            vary: 0.0,
+        });
+        renews_like_new(NodeSpec::Clap { bursts: 4.0, spacing_ms: 11.0, tail_ms: 220.0, band: 1200.0, vary: 0.0 });
     }
 
     /// With `mid` at the start, a sweep plays sample for sample what it did

@@ -1,3 +1,4 @@
+pub mod drums;
 pub mod node;
 pub mod voice;
 
@@ -125,6 +126,9 @@ impl GraphTemplate {
                 let mask = self.mod_masks[node_idx];
                 if mask != 0 {
                     node.modulate(&mods, mask);
+                }
+                if n > 1 {
+                    node.add_up(&mut audio, n);
                 }
                 bufs[node_idx][s] = node.process(&audio, n);
             }

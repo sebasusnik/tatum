@@ -273,6 +273,44 @@ mod sounds_tests {
         assert!(l == again, "two renders of the liquid kit differ");
     }
 
+    /// `sounds/node_kit.synth` plays the kit made of one node a piece: the
+    /// kick, the hat, the snare, the clap and the tom are each read from
+    /// their own file and each is heard on its own track. The floors are a
+    /// third of what each measures at 44.1 kHz over four bars (kick 0.139,
+    /// hat 0.0052, snare 0.0173, clap 0.0088, tom 0.0317), the hat's too now
+    /// that a build at 22.05 kHz plays it as loud: a piece gone silent fails
+    /// here whatever the other four do.
+    #[test]
+    fn the_node_kit_plays_every_piece() {
+        let src = Source::load(Path::new("../sounds/node_kit.synth")).expect("every use resolves");
+        let mut e = tatum_core::song_engine::SongEngine::from_source(&src.text).expect("compiles");
+        let (l, r) = e.render(4);
+        assert!(l.iter().chain(&r).all(|v| v.is_finite()));
+        let sounds = [
+            ("kick", "deep_kick", "kicks/deep.synth", 0.045),
+            ("hat", "tick", "hats/tick.synth", 0.0017),
+            ("snare", "crack", "snares/crack.synth", 0.0055),
+            ("clap", "room", "claps/room.synth", 0.0029),
+            ("tom", "low_tom", "toms/low.synth", 0.0105),
+        ];
+        assert_eq!(e.track_count(), sounds.len());
+        for (track, sound, file, floor) in sounds {
+            assert!(src.files.iter().any(|f| f.ends_with(file)), "{file} is read");
+            let t = (0..e.track_count()).find(|&t| e.track_name(t) == track).expect(track);
+            let inst = e.track_instrument(t).map(|i| e.instrument_name(i));
+            assert_eq!(inst, Some(sound), "track {track} plays {sound}");
+            let (peak, rms) = (e.track_peak(t), e.track_rms(t));
+            assert!(rms > floor, "{sound} plays: rms {rms}, floor {floor}");
+            assert!(peak < 1.0, "{sound} alone stays under full scale: peak {peak}");
+            // Each file is one node and nothing else.
+            let text = std::fs::read_to_string(Path::new("../sounds").join(file)).expect("reads");
+            let nodes = text.lines().filter(|l| !l.starts_with('#') && l.contains(" as ")).count();
+            assert_eq!(nodes, 1, "{file} is one node");
+        }
+        let (peak, _) = e.master_input_peak_rms();
+        assert!(peak < 1.0, "the five together do not clip the mix: peak {peak} into the master");
+    }
+
     /// The open hat rings its 320 ms whatever the length of the note: on a
     /// one-step note (123 ms at 122 BPM) it is still there 200 ms in, and
     /// gone by 400.

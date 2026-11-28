@@ -167,8 +167,13 @@ impl Parser {
         let dotted = self.after_a_dot();
         let word = match self.peek().clone() {
             Token::Ident(w) => {
-                let opens_a_node =
-                    is_dsp_keyword(&w) || (needs_parens(&w) && matches!(self.peek_ahead(1), Token::LParen));
+                // A drum node opens one with its parentheses, and with `as`
+                // too: `hat as h` is the node missing them, which the next
+                // element says, not a port of the node before it. The random
+                // sources open one only with their parentheses.
+                let opens_a_node = is_dsp_keyword(&w)
+                    || (is_drum_node(&w) && matches!(self.peek_ahead(1), Token::LParen | Token::As))
+                    || (needs_parens(&w) && matches!(self.peek_ahead(1), Token::LParen));
                 let known = crate::graph::node::port::from_name(&w).is_some();
                 let starts_a_chain = !known && matches!(self.peek_ahead(1), Token::Arrow);
                 if !dotted && (opens_a_node || starts_a_chain) {
@@ -240,13 +245,27 @@ impl Parser {
             Token::Ident(ref word) => {
                 let word = word.clone();
                 // Check if this is a DSP keyword (followed by parentheses = node creation)
-                // `kick` is a node only with its parentheses: a node named
+                // `kick` and the rest of the kit (`tom`, `hat`, `snare`,
+                // `clap`) are nodes only with their parentheses: a node named
                 // `kick` (`pitch_osc ... as kick`) stays a name. So are the
                 // random sources, whose words a song may have used as names.
                 let is_dsp_keyword =
                     is_dsp_keyword(&word) || (needs_parens(&word) && matches!(self.peek_ahead(1), Token::LParen));
 
                 if is_dsp_keyword {
+                    self.parse_inline_node_def(word)
+                } else if is_drum_node(&word) && matches!(self.peek_ahead(1), Token::As) {
+                    // `hat as h`: the node was meant, as `noise as n` is one.
+                    // Without its parentheses the word is a name, and a name
+                    // takes no `as`, which said only "got As".
+                    let s = self.span().clone();
+                    self.errors.push(ParseError {
+                        line: s.line,
+                        col: s.col,
+                        message: format!(
+                            "`{word} as ...`: the {word} node is written with its parentheses, `{word}() as ...`"
+                        ),
+                    });
                     self.parse_inline_node_def(word)
                 } else {
                     // Just a reference, or a port on one: `osc1.fm` (the
@@ -479,6 +498,13 @@ fn word_of(token: &Token) -> Option<String> {
     Some(String::from(word))
 }
 
+/// The drum nodes: a whole piece of the kit in one node. They are words
+/// people name their own nodes by (`... as hat`), so they are nodes only when
+/// written with parentheses.
+pub(crate) fn is_drum_node(word: &str) -> bool {
+    matches!(word, "kick" | "tom" | "hat" | "snare" | "clap")
+}
+
 /// Check if a word is a DSP keyword (node type that can be instantiated).
 fn is_dsp_keyword(word: &str) -> bool {
     matches!(
@@ -519,7 +545,7 @@ fn is_dsp_keyword(word: &str) -> bool {
 /// a node or a track named with the same word stays a name: `kick()`, and
 /// `rand()`, `wander()`, `dust()`.
 fn needs_parens(word: &str) -> bool {
-    matches!(word, "kick" | "rand" | "wander" | "dust")
+    is_drum_node(word) || matches!(word, "rand" | "wander" | "dust")
 }
 
 /// Vowel words accepted by the `vowel` node.

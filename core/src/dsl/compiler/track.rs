@@ -97,6 +97,7 @@ pub(super) fn compile_track(
                 let wet = named_param(&rnode.params, crate::nodes::WET).unwrap_or(1.0);
                 match node_def_to_spec(&node, &mut noise_seed, &mut drift_seed, samples_per_bar) {
                     Ok(spec) => {
+                        super::chains::takes_what_comes_in(&format!("track '{}'", track.name), &rnode.kind, &spec)?;
                         insert_fx.push(ChainStep { spec, wet });
                         insert_fx_labels.push(rnode.label.clone());
                     }

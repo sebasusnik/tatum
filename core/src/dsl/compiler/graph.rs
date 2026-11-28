@@ -58,6 +58,8 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
     }
 
     // Create implicit "mix" node if referenced
+    // Which nodes make their own signal and read nothing wired into them.
+    let mut sources = 0u32;
     if has_mix {
         let idx = builder.try_add_node(NodeSpec::Mix).map_err(|_| full(inst.line))?;
         name_to_idx.push((String::from("mix"), idx));
@@ -111,7 +113,9 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
                 }
             }
         } else {
+            let source = !crate::nodes::takes_input(&node_def.kind);
             let idx = builder.try_add_node(spec).map_err(|_| full(node_def.line))?;
+            sources |= (source as u32) << idx;
             if let Some(ref alias) = node_def.alias {
                 name_to_idx.push((alias.clone(), idx));
             }
@@ -136,6 +140,9 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
             None => port::AUDIO,
             Some(ref p) => connection_port(inst, conn, p)?,
         };
+        if conn.port.is_none() && sources & (1 << to_idx) != 0 {
+            return Err(CompileError::at(conn.line.0, into_a_source(inst, conn)));
+        }
         builder.try_connect_port(from_idx, to_idx, port).map_err(|_| {
             CompileError::at(
                 conn.line.0,
@@ -221,13 +228,58 @@ fn node_waveform(node: &NodeDef) -> Result<Waveform, CompileError> {
 }
 
 /// A connection names a node that is not there. `kick` without its
-/// parentheses is a name, so say how to make it the node.
+/// parentheses is a name, so say how to make it the node; the same for the
+/// rest of the kit.
 fn unknown_node(instrument: &str, name: &str) -> String {
-    if name == "kick" {
-        format!("instrument '{instrument}': unknown node 'kick'; the kick node is written with its parentheses, `kick()` or `kick(A1)`")
-    } else {
-        format!("instrument '{instrument}': unknown node '{name}'")
+    match name {
+        "kick" => format!("instrument '{instrument}': unknown node 'kick'; the kick node is written with its parentheses, `kick()` or `kick(A1)`"),
+        "tom" => format!("instrument '{instrument}': unknown node 'tom'; the tom node is written with its parentheses, `tom()` or `tom(A2)`"),
+        "hat" | "snare" | "clap" => format!("instrument '{instrument}': unknown node '{name}'; the {name} node is written with its parentheses, `{name}()`"),
+        _ => format!("instrument '{instrument}': unknown node '{name}'"),
     }
+}
+
+/// `tom(note, ...)`: a kick's machinery with one fall instead of three -- a
+/// sine that drops from `start` onto its note in `drop` ms, held and released.
+/// It is the kick node's state with the snap and the chirp left out (the knee
+/// and the chirp sit on the start), so the two share every line of DSP.
+pub fn tom_spec(params: &[Param]) -> Result<NodeSpec, CompileError> {
+    let opt = |name: &str, default: f32| named_param(params, name).unwrap_or(default);
+    let note = float_param_at(params, 0).unwrap_or(110.0);
+    // Unset (or 0), the hit starts 1.6 times over the note, a minor sixth:
+    // the drop of a tom struck hard, heard as one drum and not as a sweep.
+    let start = match opt("start", 0.0) {
+        s if s > 0.0 => s,
+        _ => 1.6 * note,
+    };
+    if start <= 1.1 * note {
+        return Err(CompileError::new(format!(
+            "tom: start={} is within 10% of the note {} or under it; a tom drops from its start onto its note, so the start sits over {:.0} Hz (or leave start= out)",
+            start,
+            note,
+            1.1 * note
+        )));
+    }
+    let click_db = opt("click", -80.0);
+    Ok(NodeSpec::Kick {
+        note,
+        start,
+        knee: start,
+        snap_ms: 1.0,
+        chirp: start,
+        chirp_ms: 1.0,
+        body_ms: opt("drop", 40.0),
+        attack_ms: 0.0,
+        hold_ms: opt("hold", 20.0),
+        sag_db: 0.0,
+        release_ms: opt("release", 250.0),
+        phase: 0.0,
+        click: if click_db <= -80.0 { 0.0 } else { crate::math::pow(10.0, click_db / 20.0) },
+        tone: opt("tone", 2500.0),
+        drive: opt("drive", 0.0),
+        vary: opt("vary", 0.0),
+        vary_pitch: 0.0,
+    })
 }
 
 /// `kick(note, ...)`: the times come in ms and the levels in dB, as written;
@@ -344,6 +396,13 @@ fn kick_spec_on(params: &[Param], note: f32) -> Result<NodeSpec, CompileError> {
     })
 }
 
+/// A named option of `kind` as written, or the default its table gives: the
+/// drum nodes keep their defaults in one place, the table the docs are made
+/// from.
+fn named_or_default(kind: &str, params: &[Param], name: &str) -> f32 {
+    named_param(params, name).unwrap_or_else(|| crate::nodes::arg_at(kind, Some(name), 0).map_or(0.0, |a| a.default))
+}
+
 pub(super) fn node_def_to_spec(
     node: &NodeDef,
     noise_seed: &mut u32,
@@ -415,6 +474,40 @@ pub(super) fn node_def_to_spec(
             Ok(NodeSpec::PitchOsc { waveform: wf, start_freq, end_freq, decay, mid_freq, fast })
         }
         "kick" => kick_spec(&node.params),
+        "tom" => tom_spec(&node.params),
+        "hat" => {
+            let opt = |name: &str| named_or_default("hat", &node.params, name);
+            let (decay_ms, band, floor, noise, pitch, vary) =
+                (opt("decay"), opt("band"), opt("floor"), opt("noise"), opt("pitch"), opt("vary"));
+            // Found here, once, so a hit costs nothing more for it.
+            let gain = crate::graph::drums::hat_gain(decay_ms, band, floor, noise, pitch, vary);
+            Ok(NodeSpec::Hat { decay_ms, band, floor, noise, pitch, gain, vary })
+        }
+        "snare" => {
+            let opt = |name: &str| named_or_default("snare", &node.params, name);
+            Ok(NodeSpec::Snare {
+                note: float_param_at(&node.params, 0).unwrap_or(185.0),
+                snap_ms: opt("snap"),
+                body_ms: opt("body"),
+                wires_ms: opt("wires"),
+                band: opt("band"),
+                balance: opt("balance"),
+                drive: opt("drive"),
+                vary: opt("vary"),
+            })
+        }
+        "clap" => {
+            let opt = |name: &str| named_or_default("clap", &node.params, name);
+            Ok(NodeSpec::Clap {
+                // A whole number: the table says so, and a fraction was
+                // refused with the rest of the arguments above.
+                bursts: opt("bursts"),
+                spacing_ms: opt("spacing"),
+                tail_ms: opt("tail"),
+                band: opt("band"),
+                vary: opt("vary"),
+            })
+        }
         "noise" => {
             *noise_seed += 1;
             Ok(NodeSpec::Noise { seed: *noise_seed })
@@ -778,6 +871,33 @@ fn connection_port(inst: &InstrumentDef, conn: &ConnectionDef, name: &str) -> Re
         )));
     }
     Ok(port::from_name(name).expect("every documented port has a number"))
+}
+
+/// A plain connection into a node that makes its own signal: an oscillator,
+/// the noise, an LFO, a whole drum. The node reads nothing that comes in, so
+/// the connection compiled and what it carried was never heard. What was
+/// meant is the two together, which is `mix`, or to move the node, which is
+/// one of its ports.
+fn into_a_source(inst: &InstrumentDef, conn: &ConnectionDef) -> String {
+    let node = inst.nodes.iter().find(|n| n.alias.as_deref() == Some(conn.to.as_str()));
+    let kind = node.map_or("", |n| crate::nodes::lookup(&n.kind).map_or(n.kind.as_str(), |d| d.name));
+    let named = |alias: &str| if alias.starts_with("_anon_") { String::from(kind) } else { format!("'{}'", alias) };
+    let from = match inst.nodes.iter().find(|n| n.alias.as_deref() == Some(conn.from.as_str())) {
+        Some(n) if conn.from.starts_with("_anon_") => format!("the {}", n.kind),
+        _ => format!("'{}'", conn.from),
+    };
+    let to = named(&conn.to);
+    let article = if kind.starts_with(['a', 'e', 'i', 'o', 'u']) || kind == "lfo" { "an" } else { "a" };
+    let ports: Vec<&str> = node.map_or(Vec::new(), |n| crate::nodes::ports(&n.kind).iter().map(|p| p.name).collect());
+    let or_port = if ports.is_empty() || conn.to.starts_with("_anon_") {
+        String::new()
+    } else {
+        format!(", or into one of its ports to move it (`{}.{}`)", conn.to, ports[0])
+    };
+    format!(
+        "instrument '{}': {} goes into {}, and {} {} makes its own signal and takes nothing in: {} would not be heard. To hear both, wire each into `mix`{}",
+        inst.name, from, to, article, kind, from, or_port
+    )
 }
 
 /// The port of a node that a misspelt one was most likely meant to be, if

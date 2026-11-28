@@ -757,6 +757,16 @@ fn apply_graph(g: &mut Graph, line: &str) -> Result<(), String> {
                     });
                 }
             }
+            // Into the input of a node that reads none, the compiler's rule:
+            // an oscillator, the noise, an LFO or a drum takes a port or nothing.
+            if let (None, Some(n)) = (wire.port.as_deref(), g.nodes.iter().find(|n| n.alias == b)) {
+                if !nodes::takes_input(&n.kind) {
+                    return Err(format!(
+                        "'{line}': {b} ({}) makes its own signal and takes nothing in: wire into `mix`, or into one of its ports",
+                        n.kind
+                    ));
+                }
+            }
             if g.connections.contains(&wire) {
                 return Err(format!("'{a} > {target}' is already there"));
             }
@@ -804,13 +814,17 @@ fn apply_graph(g: &mut Graph, line: &str) -> Result<(), String> {
     let node =
         g.nodes.iter_mut().find(|n| n.alias == alias).ok_or_else(|| format!("'{line}': no node named '{alias}'"))?;
     let def = nodes::lookup(&node.kind).ok_or_else(|| format!("unknown node '{}'", node.kind))?;
-    let (name, min, max) = match def.positional.iter().chain(def.named.iter()).find(|a| a.name == arg) {
-        Some(a) => (a.name, a.min, a.max),
-        None if arg == nodes::WET && def.in_chains => (nodes::WET, 0.0, 1.0),
+    let (name, min, max, whole) = match def.positional.iter().chain(def.named.iter()).find(|a| a.name == arg) {
+        Some(a) => (a.name, a.min, a.max, a.whole),
+        None if arg == nodes::WET && def.in_chains => (nodes::WET, 0.0, 1.0, false),
         None => return Err(format!("'{line}': {} has no argument '{arg}'", node.kind)),
     };
     match value {
         Some(v) => {
+            // A knob stops at the ends of its range, and one that counts
+            // lands on a whole number wherever it is let go: a fraction
+            // there is a sound that does not compile.
+            let v = if whole { v.round() } else { v };
             node.args.insert(name.to_string(), v.clamp(min, max));
         }
         None => {
@@ -1038,6 +1052,62 @@ mod tests {
         round_trips(&t);
     }
 
+    /// The kit's nodes -- `tom`, `hat`, `snare`, `clap` -- open with a knob
+    /// for every argument in the table, turn, and write back in their units;
+    /// each is on the list of nodes the page can add.
+    #[test]
+    fn the_drum_nodes_open_turn_and_save() {
+        let kinds: Vec<&str> = graph_kinds().iter().map(|d| d.name).collect();
+        for (line, knob, written) in [
+            ("tom(G2, drop=45ms)", "p.release=400\np.note=110", "tom(A2, drop=45ms, release=400ms) as p"),
+            ("hat()", "p.decay=320\np.noise=0.6", "hat(decay=320ms, noise=0.6) as p"),
+            ("hat(decay=45ms, band=9khz)", "p.floor=5000", "hat(decay=45ms, band=9000hz, floor=5000hz) as p"),
+            (
+                "snare(F#3, balance=40%)",
+                "p.wires=250\np.band=6000",
+                "snare(F#3, wires=250ms, band=6000hz, balance=0.4) as p",
+            ),
+            ("clap(tail=300ms)", "p.bursts=3\np.spacing=18", "clap(bursts=3, spacing=18ms, tail=300ms) as p"),
+        ] {
+            let kind = line.split('(').next().unwrap();
+            assert!(kinds.contains(&kind), "{kind} can be added from the page");
+            let text = format!("# A piece.\ninstrument piece {{\n  {line} as p\n  p > out\n}}\n");
+            let mut s = round_trips(&text);
+            let Body::Graph(g) = &s.body else { panic!("a graph") };
+            assert_eq!(g.nodes[0].kind, kind);
+            apply(&mut s, knob).unwrap_or_else(|e| panic!("{kind}: {e}"));
+            let t = s.text();
+            assert!(t.contains(written), "{kind}: {t}");
+            round_trips(&t);
+            tatum_core::song_engine::SongEngine::from_source(&format!(
+                "{t}pattern b {{ C3 - - - }}\ntrack t {{ play b using piece }}\n"
+            ))
+            .unwrap_or_else(|e| panic!("{kind}: what is saved plays: {e}"));
+            // Turned past its range, a knob stops at the end of it.
+            apply(&mut s, "p.vary=5").unwrap_or_else(|e| panic!("{kind}: {e}"));
+            let top = if kind == "tom" { "vary=0.2)" } else { "vary=0.3)" };
+            assert!(s.text().contains(top), "{kind}: {}", s.text());
+            // Added from the page it starts as the bare node, which sounds.
+            apply(&mut s, &format!("+node {kind} extra")).unwrap_or_else(|e| panic!("+node {kind}: {e}"));
+            assert!(s.text().contains(&format!("{kind}() as extra")), "{}", s.text());
+        }
+    }
+
+    /// The one-node sounds of the library are in the text the designer
+    /// writes: opened and saved untouched, the file is the same bytes.
+    #[test]
+    fn the_node_sounds_are_as_the_designer_writes_them() {
+        for file in ["hats/tick", "snares/crack", "claps/room", "toms/low"] {
+            let path = format!("../sounds/{file}.synth");
+            let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+            let s = Sound::parse(&text).unwrap_or_else(|e| panic!("{path}: {e}"));
+            assert_eq!(s.text(), text, "{path}");
+            let Body::Graph(g) = &s.body else { panic!("{path}: a graph") };
+            assert_eq!(g.nodes.len(), 1, "{path}: one node");
+            assert!(!s.description.is_empty(), "{path}: says what it is");
+        }
+    }
+
     #[test]
     fn a_graph_keeps_what_it_does_not_show() {
         // A rhythm division, a wet= and an expression all come back.
@@ -1133,7 +1203,13 @@ mod tests {
         // Sample for sample the file's own sound, and not the one without the ports.
         let before = rendered(PORTS, "ob");
         assert_eq!(rendered(&t, "ob"), before, "Save changed what it plays");
-        assert_ne!(rendered(&t.replace("a.fm", "a").replace("filt.cutoff", "filt"), "ob"), before);
+        assert_ne!(rendered(&t.replace("filt.cutoff", "filt"), "ob"), before);
+        // Without its port the modulator would go into the oscillator's input,
+        // which takes nothing in: that file no longer compiles at all.
+        let plain =
+            format!("{}tempo 120\npattern p {{ C2 - - - }}\ntrack t {{ play p using ob }}\n", t.replace("a.fm", "a"));
+        let e = tatum_core::song_engine::SongEngine::from_source(&plain).err().expect("a wire into an oscillator");
+        assert!(e.contains("makes its own signal"), "{e}");
     }
 
     #[test]
@@ -1170,6 +1246,94 @@ mod tests {
         // A node taken out takes the wires into its ports with it.
         apply(&mut s, "-node filt").expect("removes");
         assert!(!s.text().contains("filt"), "{}", s.text());
+        round_trips(&s.text());
+    }
+
+    /// `+wire` takes a plain connection into a node exactly when the compiler
+    /// does, for every kind the page can add: never into one that makes its
+    /// own signal, which would be saved as a file that does not compile.
+    #[test]
+    fn a_wire_is_taken_only_where_the_compiler_takes_it() {
+        let compiles = |t: &str| {
+            let src = format!("{t}tempo 120\npattern p {{ C2 - - - }}\ntrack t {{ play p using w }}\n");
+            tatum_core::song_engine::SongEngine::from_source(&src).map(|_| ()).map_err(|e| format!("{e}\n{src}"))
+        };
+        let mut refused = 0;
+        for k in graph_kinds() {
+            let mut s = Sound::parse("instrument w {\n  osc saw as a\n  a > out\n}\n").expect("parses");
+            apply(&mut s, &format!("+node {} nn\n+wire nn out", k.name)).unwrap_or_else(|e| panic!("{}: {e}", k.name));
+            compiles(&s.text()).unwrap_or_else(|e| panic!("{} without the wire: {e}", k.name));
+            let wired = s.text().replacen("  nn > out\n", "  a > nn\n  nn > out\n", 1);
+            let before = s.clone();
+            match apply(&mut s, "+wire a nn") {
+                Ok(()) => compiles(&s.text()).unwrap_or_else(|e| panic!("+wire a nn ({}) was taken: {e}", k.name)),
+                Err(e) => {
+                    assert!(
+                        compiles(&wired).is_err(),
+                        "{}: +wire a nn refused ({e}), and the compiler takes it",
+                        k.name
+                    );
+                    assert!(e.contains("makes its own signal"), "{}: {e}", k.name);
+                    assert_eq!(s, before, "{} changed something", k.name);
+                    refused += 1;
+                }
+            }
+        }
+        assert!(refused >= 10, "the sources and drums: {refused}");
+    }
+
+    /// A sound with drum nodes and ports at once: a hat on a filter's cutoff
+    /// and a snare on an oscillator's FM, as the file has them, and wired
+    /// from the page. A drum node drives a port and has none of its own.
+    #[test]
+    fn drum_nodes_and_ports_open_turn_and_save_together() {
+        const BOTH: &str = "instrument zap {\n  osc pulse(110, width=0.4) as a\n  hat(decay=300ms) as h\n  snare(F#3) as s\n  s > gain(0.5) > a.fm\n  a > mix\n  s > mix\n  mix > svf(900hz, 0.4) as filt\n  h > filt cutoff\n  filt > out\n}\n";
+        let mut s = round_trips(BOTH);
+        let t = s.text();
+        for line in [
+            "  hat(decay=300ms) as h\n",
+            "  snare(F#3) as s\n",
+            "  h > filt.cutoff\n",
+            "  gain3 > a.fm\n",
+            "  s > mix\n",
+        ] {
+            assert!(t.contains(line), "{line:?} in\n{t}");
+        }
+        let before = rendered(BOTH, "zap");
+        assert_eq!(rendered(&t, "zap"), before, "Save changed what it plays");
+        assert_ne!(rendered(&t.replace("h > filt.cutoff", "h > filt"), "zap"), before, "the hat moves the filter");
+
+        let Body::Graph(g) = &s.body else { panic!("a graph") };
+        for drum in ["h", "s"] {
+            assert!(node_ports(g, drum).is_empty(), "{drum} has no ports to offer");
+        }
+        assert_eq!(node_ports(g, "filt"), ["cutoff", "morph"]);
+        // A knob of a drum that drives a port, and wires from the page.
+        apply(&mut s, "h.decay=120\n+node tom\n+wire tom1 a.pitch\n+wire s filt.morph\n-wire h filt.cutoff")
+            .expect("applies");
+        let t = s.text();
+        assert!(t.contains("hat(decay=120ms) as h") && t.contains("  tom() as tom1\n"), "{t}");
+        assert!(
+            t.contains("  tom1 > a.pitch\n") && t.contains("  s > filt.morph\n") && !t.contains("filt.cutoff"),
+            "{t}"
+        );
+        for (bad, why) in [
+            ("+wire a h.pitch", "has no ports"),
+            ("+wire a s.cutoff", "has no ports"),
+            ("+wire a tom1.fm", "has no ports"),
+            ("-wire h filt.cutoff", "there is no 'h > filt.cutoff' to take out"),
+        ] {
+            let before = s.clone();
+            let e = apply(&mut s, bad).expect_err(bad);
+            assert!(e.contains(why), "{bad}: {e}");
+            assert_eq!(s, before, "{bad} changed something");
+        }
+        let saved = round_trips(&t);
+        assert_eq!(saved.text(), t);
+        rendered(&t, "zap");
+        // A drum taken out takes its wires into the ports with it.
+        apply(&mut s, "-node s").expect("removes");
+        assert!(!s.text().contains("filt.morph") && !s.text().contains("snare"), "{}", s.text());
         round_trips(&s.text());
     }
 
