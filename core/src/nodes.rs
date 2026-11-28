@@ -57,7 +57,8 @@ impl Arg {
         let is_ms = doc.starts_with("ms");
         let is_db = doc.starts_with("dB");
         let is_linear_gain = doc.starts_with("linear gain");
-        // A share of something, written as a percentage of it.
+        // A share of something, written as a percentage of it: the delay's
+        // `wow` and `flutter`, and the kick's `vary` and `vary_pitch`.
         let is_share = doc.starts_with("share");
         let resolved = match suffix {
             "%" if is_share => Some(value / 100.0),
@@ -71,6 +72,10 @@ impl Arg {
         };
         match resolved {
             Some(v) => Ok(v),
+            None if is_share => Err(format!(
+                "'{}' takes % or a plain {}..{} ({}), not '{}'",
+                self.name, self.min, self.max, self.doc, suffix
+            )),
             None => {
                 let accepts = if is_hz {
                     "hz or khz"
@@ -78,8 +83,6 @@ impl Arg {
                     "ms or s"
                 } else if is_db || is_linear_gain {
                     "db"
-                } else if is_share {
-                    "% or a plain 0..1"
                 } else {
                     "no unit"
                 };

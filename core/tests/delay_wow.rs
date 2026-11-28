@@ -119,6 +119,7 @@ fn at_zero_wow_and_flutter_the_delay_plays_exactly_as_before() {
         (0.5, 0.75, 0.6, 0.95, 0.5),
         (0.36, 0.0, 0.5, 0.3, 1.0),
         (1.2, 0.2, 0.0, 0.0, 0.7),
+        (2.0, 1.8, 0.7, 0.4, 1.0),
     ];
     for (n, &(max_time, time, feedback, filter, mix)) in cases.iter().enumerate() {
         let mut old = before::Delay::new(SAMPLE_RATE, max_time);
@@ -365,6 +366,41 @@ fn a_delay_set_at_the_end_of_its_line_has_room_to_swing() {
     }
 }
 
+/// A tone that repeats every nine samples through a delay of `nines` times
+/// nine samples, no feedback, wet only: `len` samples from `from` on.
+fn nine_sample_tone_through(nines: usize, wow: f32, flutter: f32, from: usize, len: usize) -> Vec<(f32, f32)> {
+    let cycle: Vec<f32> = (0..9).map(|k| (k as f32 / 9.0 * core::f32::consts::TAU).sin() * 0.5).collect();
+    let mut d = Delay::new(SAMPLE_RATE, 2.0);
+    // Half a sample over, so the whole number of samples is the one meant.
+    d.set_time((nines * 9) as f32 / SAMPLE_RATE + 0.5 / SAMPLE_RATE, SAMPLE_RATE);
+    d.set_feedback(0.0);
+    d.set_wow(wow);
+    d.set_flutter(flutter);
+    (0..from + len).map(|i| d.process_stereo_wet(cycle[i % 9], cycle[(i + 3) % 9])).skip(from).collect()
+}
+
+#[test]
+fn a_long_delay_bends_as_finely_as_a_short_one() {
+    // The wow and flutter move the same way whatever the time, and the tone
+    // repeats every nine samples, so two times a whole number of cycles apart
+    // read the same point of the same wave: once both lines are full the long
+    // delay must play what the short one does. A read position kept as one
+    // f32 moves in steps of 1/128 sample past 65536 samples, and the long one
+    // comes out a thousandth off.
+    let long = (1.85 * SAMPLE_RATE) as usize / 9;
+    assert!(long * 9 > 65_536 && long * 9 < (1.95 * SAMPLE_RATE) as usize, "the long time is not in the coarse range");
+    let from = seconds(2.1);
+    for (wow, flutter) in [(0.2, 0.3), (0.0, 1.0), (1.0, 0.0)] {
+        let near = nine_sample_tone_through(100, wow, flutter, from, seconds(3.0));
+        let far = nine_sample_tone_through(long, wow, flutter, from, seconds(3.0));
+        let worst = near.iter().zip(&far).map(|(a, b)| (a.0 - b.0).abs().max((a.1 - b.1).abs())).fold(0.0f32, f32::max);
+        assert!(worst < 1e-6, "wow {wow}, flutter {flutter}: the long delay is {worst} off the short one");
+        // And it is bending: not the dry tone a still delay would give.
+        let still = nine_sample_tone_through(long, 0.0, 0.0, from, seconds(3.0));
+        assert!(far.iter().zip(&still).any(|(a, b)| (a.0 - b.0).abs() > 0.01), "wow {wow}, flutter {flutter}: no bend");
+    }
+}
+
 const SONG: &str = r#"
 tempo 120
 scale A minor
@@ -424,7 +460,40 @@ fn the_chain_delay_takes_wow_and_flutter_as_shares_or_percent() {
     assert!(errs[0].to_string().contains("wow = 2 is out of range (0..1)"), "{}", errs[0]);
 
     let errs = dsl::parse(&song("", "delay(1/8, 0.4, wow=3hz)")).unwrap_err();
-    assert!(errs[0].message.contains("'wow' takes %"), "{}", errs[0].message);
+    assert!(errs[0].message.contains("'wow' takes % or a plain 0..1 "), "{}", errs[0].message);
+}
+
+/// One `kick(...)` on four hits a bar, two bars.
+fn kick(args: &str) -> Result<Vec<f32>, String> {
+    let src = format!(
+        "tempo 120\nscale A minor\ninstrument boom {{\n  kick({args}) as k\n  k > out\n}}\n\
+         pattern four {{ C3 - - -  C3 - - -  C3 - - -  C3 - - - }}\n\
+         track kick {{ play four using boom level 0.8 out > master }}\n"
+    );
+    let mut engine = SongEngine::from_source(&src).map_err(|e| e.to_string())?;
+    Ok(engine.render(2).0)
+}
+
+#[test]
+fn every_share_takes_a_percentage_the_kick_s_vary_too() {
+    // `%` goes with every argument that is a share of something, not only the
+    // delay's two: the kick's sway is written as a percentage as well.
+    let plain = kick("A1, hold=80ms, release=150ms, vary=0.05, vary_pitch=0.01").unwrap();
+    let percent = kick("A1, hold=80ms, release=150ms, vary=5%, vary_pitch=1%").unwrap();
+    assert_eq!(plain, percent, "vary=5% is not vary=0.05");
+    assert_ne!(plain, kick("A1, hold=80ms, release=150ms").unwrap(), "vary does nothing here");
+
+    // Past the range it is the same error a plain number gets, and a wrong
+    // unit names the span the argument really has, which is not 0..1.
+    let over = kick("A1, vary=50%").unwrap_err();
+    assert!(over.contains("vary") && over.contains("0..0.2"), "{over}");
+    let unit = kick("A1, vary=3hz").unwrap_err();
+    assert!(unit.contains("'vary' takes % or a plain 0..0.2 "), "{unit}");
+    let unit = kick("A1, vary_pitch=3ms").unwrap_err();
+    assert!(unit.contains("'vary_pitch' takes % or a plain 0..0.1 "), "{unit}");
+    // An argument that is not a share still refuses it.
+    let not_a_share = kick("A1, hold=80%").unwrap_err();
+    assert!(not_a_share.contains("'hold' takes ms or s"), "{not_a_share}");
 }
 
 fn render(src: &str) -> Vec<f32> {

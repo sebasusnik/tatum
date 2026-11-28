@@ -38,7 +38,9 @@ not something the engine quietly plays as the nearest thing.
 Memory Man: the delay time moves, so every repeat comes back slightly out of
 tune, and each pass through the feedback bends it again. Both are 0..1, or a
 percentage (`wow=30%`), and 0 by default, where the delay plays exactly as it
-did without them.
+did without them. (A node argument that is a share of something takes a
+percentage the same way: these two on the chain `delay(...)`, and the kick's
+`vary` and `vary_pitch`.)
 
 - `wow` is a slow drift, about 0.5 Hz and wandering in rate: at 1 the delay time
   swings ±3.5 ms and the repeats sag and rise by up to about ±25 cents. 0.2 is a
@@ -50,6 +52,10 @@ did without them.
 Left and right drift at slightly different rates, so a ping-pong spreads as it
 bends. The drift is seeded: a song renders the same every time. The chain
 `delay(...)` takes the same two as named arguments: `delay(1/8, 0.5, wow=30%)`.
+
+The swing needs a delay time longer than itself. A free time under about 4 ms
+with a full wow has no room: the time rests at its shortest for part of each
+cycle and the bend flattens there (no click). Lower the wow or lengthen the time.
 
 `humanize` spreads velocity; `timing` nudges the step clock, which is one clock
 for the whole song, so the band rushes and drags together rather than each part
@@ -1058,8 +1064,8 @@ energy and by how steady its pitch is (a fall faster than 0.1 semitones a millis
 counts for less), from 5 ms until it is 30 dB down. `tatum analyze` reports a record's
 kick the same way, as `heard`.
 
-Every hit of a `kick` is the same samples. `vary=0.03` sways its hold and release by up
-to 3% from hit to hit, and `vary_pitch=0.01` its whole sweep by up to 1% in pitch, slowly
+Every hit of a `kick` is the same samples. `vary=0.03` (or `vary=3%`) sways its hold and release by up
+to 3% from hit to hit, and `vary_pitch=0.01` (or `1%`) its whole sweep by up to 1% in pitch, slowly
 (the sway drifts over a few bars and does not repeat soon) and the same on every play:
 the breath of a hypnotic pulse, which a loop of one sample does not have. Both are 0 by
 default. Write it with its parentheses,
