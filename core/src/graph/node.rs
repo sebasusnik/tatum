@@ -1779,6 +1779,26 @@ impl NodeKind {
         }
     }
 
+    /// Several connections into a node that reads one input add up there, as
+    /// they do into `mix` and into a port. Each node reads `inputs[0]`, so
+    /// without this the first connection was the node's whole input and the
+    /// rest were dropped in silence: `a > out` and `b > out` played `a`. A
+    /// VCA keeps its envelope, wired first, apart from the sound it shapes.
+    /// Called only on a node with more than one connection.
+    #[inline]
+    pub fn add_up(&self, inputs: &mut [f32; MAX_NODE_INPUTS], input_count: u8) {
+        let n = (input_count as usize).min(MAX_NODE_INPUTS);
+        match self {
+            NodeKind::Mix => {}
+            NodeKind::Vca => {
+                if n > 2 {
+                    inputs[1] = inputs[1..n].iter().sum();
+                }
+            }
+            _ => inputs[0] = inputs[..n].iter().sum(),
+        }
+    }
+
     /// Take this sample's modulation, from the ports `mask` says are wired.
     /// Called before [`process`](Self::process), and only on a node that has
     /// something wired into a port.
