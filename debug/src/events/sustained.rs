@@ -195,10 +195,12 @@ pub fn measure(left: &[f32], right: &[f32]) -> Option<Sustained> {
     peaks.sort_by(|a, b| a.0.total_cmp(&b.0));
     let f0 = fundamental(&peaks);
 
-    // Each partial brought to 0 Hz over up to twelve seconds, and what its
-    // level and pitch do there.
-    let take = mono.len().min(1 << 19);
-    let begin = (mono.len() - take) / 2;
+    // Each partial brought to 0 Hz over the steady stretch and as much again
+    // around it -- three seconds: a few cycles of a slow vibrato, and few
+    // enough that a held chord has not moved on -- and what its level and
+    // pitch do there.
+    let take = (2 * long).min(mono.len());
+    let begin = (first + long / 2).saturating_sub(take / 2).min(mono.len() - take);
     let mut beats: Vec<f32> = Vec::new();
     let partials: Vec<Partial> = peaks
         .iter()
@@ -220,7 +222,7 @@ pub fn measure(left: &[f32], right: &[f32]) -> Option<Sustained> {
             let z = lowpassed(&mono[begin..begin + take], &tone, cutoff);
             // 200 readings a second, the ends (where the filter wraps) left out.
             let step = (SR / 200.0) as usize;
-            let edge = (0.25 * SR) as usize;
+            let edge = ((0.12 * SR) as usize).min(take / 8);
             let mut level = Vec::new();
             let mut cents = Vec::new();
             let mut n = edge + step;

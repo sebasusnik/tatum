@@ -528,8 +528,35 @@ pub fn advice(a: &Report, b: &Report, rows: &[Row], _name_b: &str) -> Vec<String
     flagged.sort_by(|x, y| y.weight.total_cmp(&x.weight));
     let has = |key: &str| flagged.iter().any(|r| r.key == key);
     let mut out = Vec::new();
+    // The width, octave by octave, is one thing to say.
+    let sides: Vec<&&Row> = flagged.iter().filter(|r| r.key.starts_with("side_")).collect();
+    let mut said_width = false;
     for r in &flagged {
         let (Some(x), Some(y)) = (r.a, r.b) else { continue };
+        if r.key.starts_with("side_") && sides.len() >= 3 {
+            if !said_width {
+                said_width = true;
+                let mid =
+                    |f: fn(&Row) -> Option<f32>| spread(sides.iter().filter_map(|r| f(r))).map_or(0.0, |s| s.median);
+                let (wa, wb) = (mid(|r| r.a), mid(|r| r.b));
+                out.push(format!(
+                    "width: over {} octaves B's side sits {} dB against its mid, A's {} dB: {}",
+                    sides.len(),
+                    n(wb),
+                    n(wa),
+                    if wb < wa {
+                        if wb < -60.0 {
+                            "B is mono: a stereo reverb or chorus on it, voices panned apart"
+                        } else {
+                            "B is narrower: more stereo reverb or chorus, voices panned apart"
+                        }
+                    } else {
+                        "B is wider: less stereo effect"
+                    }
+                ));
+            }
+            continue;
+        }
         let more = y > x;
         let line = match r.key.as_str() {
             "over_bed_db" | "in_mix_db" if r.key == "in_mix_db" || !has("in_mix_db") => {

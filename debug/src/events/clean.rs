@@ -121,7 +121,7 @@ pub(crate) fn measure(c: &Ctx, events: &[Event], sustained: Option<&Sustained>, 
     let alias_unread = if !native {
         Some("the file was converted from another rate, which takes off what would fold")
     } else if !alone {
-        Some("the events sit in a mix, where other sounds land on the same lines")
+        Some("the events stand under 30 dB over what is in their band (a mix, or notes that overlap), and other lines land where folds would")
     } else {
         None
     };
