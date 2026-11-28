@@ -214,55 +214,59 @@ fn a_bend_is_followed_to_a_few_cents() {
     assert!(val(e.inside.bandwidth_hz, "width") < 16.0, "width {:?}", e.inside.bandwidth_hz);
 }
 
+/// A start pitch is the truth within 8%, or a bound the truth is inside
+/// that says at least 60% of it; a bend likewise within 1.5 st or a bound.
+fn start_holds(f: Fig, truth: f32, what: &str) {
+    match f {
+        Fig::Value(v) => assert!((v / truth - 1.0).abs() < 0.08, "{what}: start {v} for {truth}"),
+        Fig::AtLeast(v) => assert!(v <= truth * 1.01 && v >= 0.6 * truth, "{what}: start at least {v} for {truth}"),
+        other => panic!("{what}: start {other:?} for {truth}"),
+    }
+}
+
+fn bend_holds(f: Fig, truth: f32, what: &str) {
+    match f {
+        Fig::Value(v) => assert!((v - truth).abs() < 1.5, "{what}: bend {v} for {truth}"),
+        Fig::AtMost(v) => assert!(truth <= v + 0.3 && v < 0.5 * truth, "{what}: bend at most {v} for {truth}"),
+        other => panic!("{what}: bend {other:?} for {truth}"),
+    }
+}
+
 #[test]
 fn a_kick_sweep_and_a_zap_are_followed_from_their_start() {
-    // 200 Hz falling to 50 with a 20 ms time constant, ringing 150 ms: the
-    // spectrogram's frames are longer than the sweep.
-    let mut x = vec![0.0f32; at(4.0)];
-    for k in 0..4 {
-        sweep(&mut x, 0.3 + 0.9 * k as f32, 200.0, 50.0, 20.0, 150.0, 0.5);
-    }
-    let r = run(x);
-    assert_eq!(r.events.len(), 4);
-    for e in &r.events {
-        let i = &e.inside;
-        let start = val(i.start, "kick start");
-        assert!((start / 200.0 - 1.0).abs() < 0.08, "start {start} for 200");
-        let bend = val(i.bend, "kick bend");
-        assert!((bend + 24.0).abs() < 1.5, "bend {bend} for -24");
-        let decay = val(i.decay_db_ms, "kick decay");
-        assert!((decay / 0.0579 - 1.0).abs() < 0.1, "decay {decay} for 0.058");
-        let len = (e.end_s - e.start_s) * 1000.0;
-        assert!((len / 690.0 - 1.0).abs() < 0.15, "length {len} for 690");
-    }
-    // 2 kHz to 500 Hz in 20 ms, ringing 80 ms.
-    let mut x = vec![0.0f32; at(4.0)];
-    for k in 0..4 {
-        sweep(&mut x, 0.3 + 0.9 * k as f32, 2000.0, 500.0, 20.0, 80.0, 0.5);
-    }
-    let r = run(x);
-    assert_eq!(r.events.len(), 4);
-    for e in &r.events {
-        let i = &e.inside;
-        let start = val(i.start, "zap start");
-        assert!((start / 2000.0 - 1.0).abs() < 0.08, "start {start} for 2000");
-        let bend = val(i.bend, "zap bend");
-        assert!((bend + 24.0).abs() < 1.5, "bend {bend} for -24");
-        let decay = val(i.decay_db_ms, "zap decay");
-        assert!((decay / 0.1086 - 1.0).abs() < 0.1, "decay {decay} for 0.109");
-        let len = (e.end_s - e.start_s) * 1000.0;
-        assert!((len / 368.0 - 1.0).abs() < 0.15, "length {len} for 368");
-        assert!(!matches!(i.tail_db, Fig::Value(_)), "a dry zap has no tail: {:?}", i.tail_db);
-    }
-    // Faster than the fastest sweep read (400 to 40 Hz in 3 ms): the start
-    // is a bound, never a number.
-    let mut x = vec![0.0f32; at(4.0)];
-    for k in 0..4 {
-        sweep(&mut x, 0.3 + 0.9 * k as f32, 400.0, 40.0, 3.0, 150.0, 0.5);
-    }
-    let r = run(x);
-    for e in &r.events {
-        assert!(e.inside.start.value().is_none_or(|hz| (hz / 400.0 - 1.0).abs() < 0.08), "{:?}", e.inside.start);
+    // (from, to, pitch time constant, level time constant, what it falls to
+    // -40 dB in): kicks whose spectrogram frames are longer than the sweep,
+    // a zap, and a kick faster than the fastest sweep read.
+    for (f0, f1, tau_f, tau_a, what) in [
+        (200.0f32, 50.0f32, 20.0f32, 150.0f32, "kick 200-50"),
+        (150.0, 45.0, 40.0, 200.0, "kick 150-45"),
+        (400.0, 50.0, 10.0, 150.0, "kick 400-50"),
+        (2000.0, 500.0, 20.0, 80.0, "zap 2000-500"),
+        (400.0, 40.0, 3.0, 150.0, "kick 400-40 in 3 ms"),
+    ] {
+        let mut x = vec![0.0f32; at(4.0)];
+        for k in 0..4 {
+            sweep(&mut x, 0.3 + 0.9 * k as f32, f0, f1, tau_f, tau_a, 0.5);
+        }
+        let r = run(x);
+        assert_eq!(r.events.len(), 4, "{what}");
+        // The pitch over the stretch above -20 dB: from f0 to where the sweep
+        // is when the level is 20 dB down.
+        let t20 = tau_a * 10f32.ln();
+        let at20 = f1 + (f0 - f1) * (-t20 / tau_f).exp();
+        let bend = 12.0 * (at20 / f0).log2();
+        for e in &r.events {
+            let i = &e.inside;
+            start_holds(i.start, f0, what);
+            bend_holds(i.bend, bend, what);
+            let decay = val(i.decay_db_ms, what);
+            assert!((decay / (8.686 / tau_a) - 1.0).abs() < 0.05, "{what}: decay {decay}");
+            let len = (e.end_s - e.start_s) * 1000.0;
+            let to40 = tau_a * 100f32.ln();
+            assert!((len / to40 - 1.0).abs() < 0.1, "{what}: length {len} for {to40}");
+            assert!(!matches!(i.tail_db, Fig::Value(_)), "{what}: a dry sweep has no tail: {:?}", i.tail_db);
+            assert!(!i.lost, "{what}");
+        }
     }
 }
 
@@ -1025,3 +1029,15 @@ fn a_band_under_15_hz_is_refused() {
     assert!(analyze(&audio, None, None, &opts).is_err());
 }
 
+#[test]
+fn zz_scratch() {
+    let mut x = vec![0.0f32; at(4.0)];
+    for k in 0..4 {
+        sweep(&mut x, 0.3 + 0.9 * k as f32, 200.0, 50.0, 20.0, 150.0, 0.5);
+    }
+    let r = run(x);
+    for e in &r.events {
+        let i = &e.inside;
+        eprintln!("SCR at {:.4} start {:?} att {:?} ridge0 {:?} p {:?}", e.start_s, i.start, i.attack_ms, &e.ridge.hz[..4], &i.pitch[..4]);
+    }
+}

@@ -587,8 +587,8 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
         level[a..=b.max(a)].iter().map(|v| (*v as f64).powi(2)).sum()
     };
     let mut swept = false;
-    if let Some(fine) = fine {
-        let ft = track_path(c, &fine, from, cutoff);
+    if let Some(fine) = &fine {
+        let ft = track_path(c, fine, from, cutoff);
         let fl: Vec<f32> = (0..ft.l.len()).map(|i| ft.level(i)).collect();
         if kept(&fl) > 1.25 * kept(&level) {
             (tr, level, swept) = (ft, fl, true);
@@ -675,7 +675,11 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
 
     // The pitch: the tone's own frequency plus how fast the phase still turns.
     let cycles = samples(2.0).max((2.0 * SR / f_on) as usize) + smear / 2;
-    let v0 = (begin + if swept { (1.5 * SR / f_on.max(1.0)) as usize } else { cycles }).min(pk_i.max(begin + 1));
+    // A sweep is read from three quarters of a cycle in, at the frequency
+    // the phase gives there: its first reading averages its first cycle and
+    // a half.
+    let first_cycle = |i: usize| (0.75 * SR / tr.hz[(i + samples(1.0)).min(tr.hz.len() - 1)].max(1.0)) as usize;
+    let v0 = (begin + if swept { first_cycle(begin).max(samples(0.5)) } else { cycles }).min(pk_i.max(begin + 1));
     let quiet = (pk * 0.1).max(bed * 2.0);
     let v1 = (v0..=end).rev().find(|&i| level[i] >= quiet).unwrap_or(v0).max(v0);
     let stride = ((v1 - v0) / 400).max(samples(1.0).min(if swept { samples(0.5) } else { usize::MAX })).max(1);
@@ -705,16 +709,50 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     // A sweep that has moved on by the first reading: its pitch at the
     // start is the line through the first readings, taken back to it.
     let mut sweep_rate = 0.0f32;
-    if swept && pitch.len() >= 6 {
-        let cycles_ms = 3000.0 / start_hz.max(1.0);
+    // The first reading is some way after the start. On a steady note that
+    // does not matter; on a glide the start is taken back over that gap
+    // along the line through the first cycle of readings, which holds when
+    // the gap is under a cycle and the line fits; otherwise all that is
+    // known of a fall is that it started at least as high as first read.
+    let mut start_bound: Option<Fig> = None;
+    // Read near the start: the demodulated readings of a sweep, or else the
+    // phase of the wide band itself from three quarters of a cycle in (the
+    // narrow band's low-pass keeps its own readings a few cycles off the
+    // start).
+    let near_start: Vec<(f32, f32)> = match &fine {
+        Some(fp) => {
+            let rel_start = rel(start, fp.len());
+            let i0 = rel_start + (0.75 * SR / fp[(rel_start + samples(1.0)).min(fp.len() - 1)].max(1.0)) as usize;
+            let i1 = (i0 + samples(12.0)).min(end.max(i0));
+            (i0..i1).step_by(samples(0.25).max(1)).map(|i| (to_ms(from + i) - to_ms(start), fp[i])).collect()
+        }
+        _ => pitch.clone(),
+    };
+    if near_start.len() >= 3 {
+        let span_ms = (1000.0 / near_start[0].1.max(1.0)).max(1.5);
         let first: Vec<(f32, f32)> =
-            pitch.iter().take_while(|p| p.0 <= pitch[0].0 + cycles_ms).map(|p| (p.0, p.1.log2())).collect();
-        if let Some(f) = line(&first).filter(|_| first.len() >= 4) {
-            let back = 2f32.powf(f.intercept);
-            // Octaves per ms times ms per cycle: the share it moves in a cycle.
-            sweep_rate = (f.slope.abs() * std::f32::consts::LN_2) * 1000.0 / back.max(1.0);
-            if 12.0 * (back / start_hz).log2().abs() > 0.3 {
-                start_hz = back;
+            near_start.iter().take_while(|p| p.0 <= near_start[0].0 + span_ms).map(|p| (p.0, p.1.log2())).collect();
+        if let Some(f) = line(&first).filter(|_| first.len() >= 3) {
+            let gap_ms = near_start[0].0.max(0.0);
+            // A glide at the start: it moves 0.3 st or more over the first
+            // readings themselves.
+            let moved_st = 12.0 * f.slope.abs() * (first[first.len() - 1].0 - first[0].0).max(gap_ms);
+            if moved_st > 0.3 {
+                let back = 2f32.powf(f.intercept);
+                // Octaves per ms times ms per cycle: the share it moves in a cycle.
+                sweep_rate = (f.slope.abs() * std::f32::consts::LN_2) * 1000.0 / back.max(1.0);
+                let gap_cycles = gap_ms * 0.001 * back;
+                let fits = f.r2 >= 0.9;
+                if gap_cycles <= 1.0 && fits && sweep_rate <= FASTEST_SWEEP {
+                    start_hz = back;
+                } else {
+                    let firsts = first.iter().map(|p| 2f32.powf(p.1));
+                    start_bound = Some(if f.slope < 0.0 {
+                        Fig::AtLeast(firsts.fold(0.0f32, f32::max))
+                    } else {
+                        Fig::AtMost(firsts.fold(f32::MAX, f32::min))
+                    });
+                }
             }
         }
     }
@@ -726,11 +764,15 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     } else if read_cycles < 4.0 {
         let no = Fig::No("under four cycles above -20 dB: too few to read a pitch");
         (no, no, no)
-    } else if sweep_rate > FASTEST_SWEEP {
-        // Past the fastest sweep read, the start is at least as far as read.
-        let s = if bend_st < 0.0 { Fig::AtLeast(start_hz) } else { Fig::AtMost(start_hz) };
-        let b = if bend_st < 0.0 { Fig::AtMost(bend_st) } else { Fig::AtLeast(bend_st) };
-        (s, Fig::Value(end_hz), b)
+    } else if let Some(bound) = start_bound {
+        // Past the fastest sweep read, or read too long after it began, the
+        // start is a bound, and so is the bend.
+        let b = match bound {
+            Fig::AtLeast(v) => Fig::AtMost(12.0 * (end_hz / v).log2()),
+            Fig::AtMost(v) => Fig::AtLeast(12.0 * (end_hz / v).log2()),
+            other => other,
+        };
+        (bound, Fig::Value(end_hz), b)
     } else {
         (Fig::Value(start_hz), Fig::Value(end_hz), Fig::Value(bend_st))
     };
@@ -987,12 +1029,13 @@ fn phase_path(
         };
         pre[n + 1] = (pre[n].0 + re, pre[n].1 + im);
     }
+    // Nothing before the start is read: the band there is the bed's.
+    let (a, b) = (start - from, until - from);
     let read = |n: usize, w: usize| -> f32 {
-        let (i, j) = (n.saturating_sub(w / 2).max(1), (n + w / 2 + 1).min(z.len()));
+        let (i, j) = (n.saturating_sub(w / 2).max(a).max(1), (n + w / 2 + 1).min(z.len()).max(a.max(1) + 2));
         let (re, im) = (pre[j].0 - pre[i].0, pre[j].1 - pre[i].1);
         (im.atan2(re) as f32 * SR / std::f32::consts::TAU).clamp(lo, hi)
     };
-    let (a, b) = (start - from, until - from);
     let one: Vec<f32> = (a..b).map(|n| read(n, (1.5 * SR / guess[n].max(lo)) as usize)).collect();
     let two: Vec<f32> = (a..b).map(|n| read(n, (1.5 * SR / one[n - a]) as usize)).collect();
     let mut path = vec![two[0]; to - from];
