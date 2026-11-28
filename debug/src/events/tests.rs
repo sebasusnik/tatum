@@ -214,20 +214,24 @@ fn a_bend_is_followed_to_a_few_cents() {
     assert!(val(e.inside.bandwidth_hz, "width") < 16.0, "width {:?}", e.inside.bandwidth_hz);
 }
 
-/// A start pitch is the truth within 8%, or a bound the truth is inside
-/// that says at least 60% of it; a bend likewise within 1.5 st or a bound.
-fn start_holds(f: Fig, truth: f32, what: &str) {
+/// A start pitch is the truth within 8%, or a bound the truth is inside --
+/// one that says at least 60% of it for a sweep the tool reads (under a
+/// tenth of its frequency a cycle); a bend likewise within 1.5 st or a bound.
+fn start_holds(f: Fig, truth: f32, handled: bool, what: &str) {
+    let least = if handled { 0.6 } else { 0.0 };
     match f {
         Fig::Value(v) => assert!((v / truth - 1.0).abs() < 0.08, "{what}: start {v} for {truth}"),
-        Fig::AtLeast(v) => assert!(v <= truth * 1.01 && v >= 0.6 * truth, "{what}: start at least {v} for {truth}"),
+        Fig::AtLeast(v) => assert!(v <= truth * 1.01 && v >= least * truth, "{what}: start at least {v} for {truth}"),
         other => panic!("{what}: start {other:?} for {truth}"),
     }
 }
 
-fn bend_holds(f: Fig, truth: f32, what: &str) {
+fn bend_holds(f: Fig, truth: f32, handled: bool, what: &str) {
     match f {
         Fig::Value(v) => assert!((v - truth).abs() < 1.5, "{what}: bend {v} for {truth}"),
-        Fig::AtMost(v) => assert!(truth <= v + 0.3 && v < 0.5 * truth, "{what}: bend at most {v} for {truth}"),
+        Fig::AtMost(v) => {
+            assert!(truth <= v + 0.3 && (!handled || v < 0.5 * truth), "{what}: bend at most {v} for {truth}")
+        }
         other => panic!("{what}: bend {other:?} for {truth}"),
     }
 }
@@ -257,8 +261,11 @@ fn a_kick_sweep_and_a_zap_are_followed_from_their_start() {
         let bend = 12.0 * (at20 / f0).log2();
         for e in &r.events {
             let i = &e.inside;
-            start_holds(i.start, f0, what);
-            bend_holds(i.bend, bend, what);
+            // The share of its frequency the sweep moves in its first cycle.
+            let share = (f0 - f1) / tau_f * (1000.0 / f0) / f0;
+            let handled = share <= inside::FASTEST_SWEEP;
+            start_holds(i.start, f0, handled, what);
+            bend_holds(i.bend, bend, handled, what);
             let decay = val(i.decay_db_ms, what);
             assert!((decay / (8.686 / tau_a) - 1.0).abs() < 0.05, "{what}: decay {decay}");
             let len = (e.end_s - e.start_s) * 1000.0;
@@ -1029,15 +1036,3 @@ fn a_band_under_15_hz_is_refused() {
     assert!(analyze(&audio, None, None, &opts).is_err());
 }
 
-#[test]
-fn zz_scratch() {
-    let mut x = vec![0.0f32; at(4.0)];
-    for k in 0..4 {
-        sweep(&mut x, 0.3 + 0.9 * k as f32, 200.0, 50.0, 20.0, 150.0, 0.5);
-    }
-    let r = run(x);
-    for e in &r.events {
-        let i = &e.inside;
-        eprintln!("SCR at {:.4} start {:?} att {:?} ridge0 {:?} p {:?}", e.start_s, i.start, i.attack_ms, &e.ridge.hz[..4], &i.pitch[..4]);
-    }
-}

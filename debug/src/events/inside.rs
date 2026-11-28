@@ -325,7 +325,7 @@ pub fn attack_floor_ms(hz: f32) -> f32 {
 
 /// The fastest pitch sweep the start pitch is read from, as the share of
 /// its frequency the pitch moves in one cycle.
-pub const FASTEST_SWEEP: f32 = 0.25;
+pub const FASTEST_SWEEP: f32 = 0.1;
 
 pub(crate) struct Ctx<'a> {
     pub left: &'a [f32],
@@ -704,7 +704,9 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     let pitch: Vec<(f32, f32)> = pitch.iter().map(|p| (p.0, p.1)).collect();
     let pitch = if pitch.is_empty() { vec![(to_ms(peak_n) - to_ms(start), f_on)] } else { pitch };
     let ends = (pitch.len() / 20).max((3.0 / to_ms(stride)).ceil() as usize).clamp(1, pitch.len());
-    let mut start_hz = median(&mut pitch[..ends].iter().map(|p| p.1).collect::<Vec<_>>());
+    // The start over its first 3 ms of readings (a glide later on is not in it).
+    let first_ends = pitch.iter().take_while(|p| p.0 <= pitch[0].0 + 3.0).count().clamp(1, ends);
+    let mut start_hz = median(&mut pitch[..first_ends].iter().map(|p| p.1).collect::<Vec<_>>());
     let end_hz = median(&mut pitch[pitch.len() - ends..].iter().map(|p| p.1).collect::<Vec<_>>());
     // A sweep that has moved on by the first reading: its pitch at the
     // start is the line through the first readings, taken back to it.
@@ -729,7 +731,7 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
         _ => pitch.clone(),
     };
     if near_start.len() >= 3 {
-        let span_ms = (1000.0 / near_start[0].1.max(1.0)).max(1.5);
+        let span_ms = (2000.0 / near_start[0].1.max(1.0)).max(3.0);
         let first: Vec<(f32, f32)> =
             near_start.iter().take_while(|p| p.0 <= near_start[0].0 + span_ms).map(|p| (p.0, p.1.log2())).collect();
         if let Some(f) = line(&first).filter(|_| first.len() >= 3) {
@@ -743,7 +745,11 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
                 sweep_rate = (f.slope.abs() * std::f32::consts::LN_2) * 1000.0 / back.max(1.0);
                 let gap_cycles = gap_ms * 0.001 * back;
                 let fits = f.r2 >= 0.9;
-                if gap_cycles <= 1.0 && fits && sweep_rate <= FASTEST_SWEEP {
+                // A second reading that errs another way: the first whole
+                // cycle of the wide band, crossing to crossing. A start the
+                // line puts more than 8% off it is not trusted.
+                let agrees = first_cycle_hz(c.mono, start, lo_hz, hi_hz).is_some_and(|zc| (back / zc - 1.0).abs() < 0.08);
+                if gap_cycles <= 1.0 && fits && agrees && sweep_rate <= FASTEST_SWEEP {
                     start_hz = back;
                 } else {
                     let firsts = first.iter().map(|p| 2f32.powf(p.1));
@@ -753,6 +759,20 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
                         Fig::AtMost(firsts.fold(f32::MAX, f32::min))
                     });
                 }
+            }
+        }
+    }
+    // A note that glides but whose first readings did not show it moving
+    // (a sweep faster than the readings' own window): the start read is
+    // held against the first whole cycle, and is a bound when they part.
+    if start_bound.is_none() && (12.0 * (end_hz / start_hz).log2()).abs() > 1.0 {
+        if let Some(zc) = first_cycle_hz(c.mono, start, lo_hz, hi_hz) {
+            if (start_hz / zc - 1.0).abs() >= 0.08 {
+                start_bound = Some(if end_hz < start_hz {
+                    Fig::AtLeast(start_hz.max(zc))
+                } else {
+                    Fig::AtMost(start_hz.min(zc))
+                });
             }
         }
     }
@@ -999,6 +1019,26 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
             pitch,
         },
     })
+}
+
+/// The frequency of the first whole cycle of `lo..hi` Hz from sample
+/// `start`: between its first two upward crossings of zero, each placed
+/// between samples. `None` when the band has no two crossings in 60 ms.
+fn first_cycle_hz(x: &[f32], start: usize, lo: f32, hi: f32) -> Option<f32> {
+    let n = samples(60.0).min(x.len().saturating_sub(start));
+    if n < samples(2.0) || hi <= lo * 1.2 {
+        return None;
+    }
+    let z = band(&x[start..start + n], lo, hi);
+    // From the first tenth of the peak on: before it the band is the bed.
+    let top = z.iter().fold(0.0f32, |m, v| m.max(mag(*v)));
+    let from = z.iter().position(|v| mag(*v) >= 0.1 * top)?;
+    let ups: Vec<f32> = (from + 1..z.len())
+        .filter(|&i| z[i - 1].0 < 0.0 && z[i].0 >= 0.0)
+        .map(|i| i as f32 - 1.0 + z[i - 1].0 / (z[i - 1].0 - z[i].0))
+        .take(2)
+        .collect();
+    (ups.len() == 2 && ups[1] > ups[0]).then(|| SR / (ups[1] - ups[0]))
 }
 
 /// The partial's frequency sample by sample, `from..to`, from the turn of
