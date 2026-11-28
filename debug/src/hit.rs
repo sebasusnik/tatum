@@ -21,23 +21,34 @@ fn samples(ms: f32) -> usize {
 /// `bpm`, `len_ms` long from where the hit starts. The grid's phase is where
 /// the low band rises most sharply, beat after beat; each hit is then slid by
 /// up to 2 ms to where it best matches the others, and the average starts
-/// where it first reaches 5% of its peak. `None` with fewer than four hits.
+/// where the hit rises from what rang before it. `None` with fewer than four
+/// hits.
 pub fn average_hit(mono: &[f32], bpm: f32, len_ms: f32) -> Option<Vec<f32>> {
     if !(20.0..=400.0).contains(&bpm) {
         return None;
     }
     let beat = 60.0 / bpm * SAMPLE_RATE;
     let low = Biquad::lowpass(600.0).run_twice(mono);
-    // How sharply the low band rises at each sample, smoothed over 0.7 ms.
-    let smooth = 32usize;
+    // How sharply the low band rises at each sample, its level held at its
+    // peak over the last 25 ms: longer than a cycle of the lowest kick, so a
+    // steady or falling body never rises, and a hit rises at once, in the
+    // first quarter cycle of its body. A level averaged over a short window
+    // rose with every half cycle of a 94 Hz body, and over a long one rippled
+    // as the sweep slowed: either way the grid could land 10 to 60 ms into
+    // the kick, past the lead-in, with the attack cut off.
+    let hold = samples(25.0).max(1);
     let mut level = vec![0.0f32; low.len()];
-    let mut acc = 0.0f32;
-    for i in 0..low.len() {
-        acc += low[i].abs();
-        if i >= smooth {
-            acc -= low[i - smooth].abs();
+    let mut window: std::collections::VecDeque<(usize, f32)> = std::collections::VecDeque::new();
+    for (i, v) in low.iter().enumerate() {
+        let v = v.abs();
+        while window.back().is_some_and(|b| b.1 <= v) {
+            window.pop_back();
         }
-        level[i] = acc / smooth as f32;
+        window.push_back((i, v));
+        while window.front().is_some_and(|f| f.0 + hold <= i) {
+            window.pop_front();
+        }
+        level[i] = window.front().map_or(0.0, |f| f.1);
     }
     let rise: Vec<f32> =
         (0..level.len()).map(|i| if i == 0 { 0.0 } else { (level[i] - level[i - 1]).max(0.0) }).collect();
@@ -53,7 +64,9 @@ pub fn average_hit(mono: &[f32], bpm: f32, len_ms: f32) -> Option<Vec<f32>> {
             score(a).total_cmp(&score(b))
         })
         .unwrap_or(0);
-    let pre = samples(10.0);
+    // The mark is where that level rises fastest, a few ms into the hit at
+    // most: the lead-in is longer, so the hit starts inside it.
+    let pre = samples(25.0);
     let len = samples(len_ms) + pre;
     let starts: Vec<usize> = (0..beats)
         .map(|k| phase + (k as f32 * beat) as usize)
@@ -84,13 +97,77 @@ pub fn average_hit(mono: &[f32], bpm: f32, len_ms: f32) -> Option<Vec<f32>> {
             (s - reach..=s + reach).max_by(|&a, &b| score(a).total_cmp(&score(b))).unwrap_or(s)
         })
         .collect();
+    // That alignment is to the body: over 30 ms the low end decides it, and
+    // a hit a few samples off still matches. The attack does not: a 900 Hz
+    // start is 49 samples a cycle, and hits a few samples apart cancel it
+    // in the average -- with the tempo measured 0.01 BPM off, a minimal
+    // kick's 900 Hz start averaged into a flat 94 Hz. So each hit is slid
+    // again, by at most half a millisecond, to match the average over its
+    // first few milliseconds, twice.
+    let mut aligned = aligned;
+    for _ in 0..2 {
+        let y = average(&aligned);
+        let h = hit_start(&y).unwrap_or(pre);
+        let (w0, w1) = (h.saturating_sub(samples(1.0)), (h + samples(8.0)).min(len));
+        let fine = samples(0.5);
+        aligned = aligned
+            .iter()
+            .map(|&s| {
+                let score = |at: usize| -> f32 {
+                    mono.get(at + w0..at + w1).map_or(f32::MIN, |x| x.iter().zip(&y[w0..w1]).map(|(a, b)| a * b).sum())
+                };
+                (s.saturating_sub(fine)..=s + fine).max_by(|&a, &b| score(a).total_cmp(&score(b))).unwrap_or(s)
+            })
+            .filter(|&s| s + len <= mono.len())
+            .collect();
+    }
     let y = average(&aligned);
     let peak = y.iter().fold(0.0f32, |m, v| m.max(v.abs()));
     if peak <= 0.0 {
         return None;
     }
-    let at = y.iter().position(|v| v.abs() >= 0.05 * peak).unwrap_or(0);
+    // With no step to find, the hit is taken to start at the grid's mark.
+    let at = hit_start(&y).unwrap_or(pre);
     Some(y[at..(at + samples(len_ms)).min(y.len())].to_vec())
+}
+
+/// Where a hit starts in `y`. Not where it first reaches 5% of its peak: an
+/// offbeat bass ringing up to the beat is louder than that, and an average
+/// cut there began on the bass, the hit some milliseconds later. The hit is
+/// the first sample that is both 30% of the peak and three times the mean
+/// level of the 3 ms before it (to half a millisecond before): a sine, however
+/// loud, never peaks over 1.6 times its own mean level; a hit coming in over
+/// it does. It is looked for in the 20 ms before the hit first comes near
+/// its peak. From there it is followed back down its first half cycle, while
+/// each sample is quieter than the one after it and of the same sign, for at
+/// most a millisecond: to its zero crossing, or to the step where it came in
+/// at a phase over the bass. `None` when nothing comes in over what was
+/// already sounding: a kick retriggered over its own long tail, or over a
+/// rumble as loud as itself, has no step to find.
+pub fn hit_start(y: &[f32]) -> Option<usize> {
+    if y.is_empty() {
+        return None;
+    }
+    let peak = y.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+    let (back, gap) = (samples(3.0), samples(0.5).max(1));
+    let recent = |i: usize| {
+        let w = &y[i.saturating_sub(back)..i.saturating_sub(gap)];
+        w.iter().map(|v| v.abs()).sum::<f32>() / w.len().max(1) as f32
+    };
+    // Looked for in the 20 ms before the hit first comes near its peak, its
+    // first cycle: a kick held flat has its peak anywhere along the top. An
+    // average's lead-in is 25 ms, so the search starts inside it, never on
+    // its first sample, where there would be nothing to compare with.
+    let near = y.iter().position(|v| v.abs() >= 0.9 * peak).unwrap_or(0);
+    let from = near.saturating_sub(samples(20.0));
+    // Before half a millisecond there is nothing to compare with: a hit at
+    // the very start of `y` is a hit, as in a kick rendered on its own.
+    let sure = (from..=near).find(|&i| y[i].abs() >= 0.3 * peak && (i < gap || y[i].abs() >= 3.0 * recent(i)))?;
+    let mut at = sure;
+    while at > 0 && sure - at < samples(1.0) && y[at - 1].abs() < y[at].abs() && (y[at - 1] < 0.0) == (y[at] < 0.0) {
+        at -= 1;
+    }
+    Some(at)
 }
 
 /// A hit's pitch and level over time, from where it starts.
@@ -199,6 +276,12 @@ mod tests {
     }
 
     #[test]
+    fn nothing_has_no_start() {
+        assert_eq!(hit_start(&[]), None);
+        assert!(crate::fit::cut_like_an_average(&[], 100.0).is_empty());
+    }
+
+    #[test]
     fn the_average_hit_is_the_kick_that_made_it() {
         let x = song(125.0, 20.0, 47.0);
         let y = average_hit(&x, 125.0, 200.0).expect("a hit");
@@ -214,6 +297,19 @@ mod tests {
         let at = |ms: f32| c.level.iter().find(|l| l.0 >= ms).expect("a level").1;
         assert!(at(60.0) > -1.0, "held {}", at(60.0));
         assert!(at(180.0) < -6.0, "falling {}", at(180.0));
+    }
+
+    #[test]
+    fn the_average_starts_on_the_hit_not_on_the_bass_before_it() {
+        // The bass rings up to the next beat, louder than 5% of the kick.
+        let x = song(125.0, 20.0, 47.0);
+        let y = average_hit(&x, 125.0, 200.0).expect("a hit");
+        let peak = y.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+        // The kick starts at its zero crossing and is at full level within a
+        // few samples, its first cycle near 400 Hz: the cut is on that rise.
+        assert!(y[..8].iter().any(|v| v.abs() > 0.2 * peak), "{:?}", &y[..8]);
+        let c = curves(&y);
+        assert!(c.pitch[0].1 > 250.0, "the first half cycle is the hit's: {:?}", &c.pitch[..3]);
     }
 
     #[test]

@@ -164,15 +164,22 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
     lines
 }
 
-/// A number as short as it can be written and still be the same knob:
-/// at most five decimals, no trailing zeros.
+/// A number as short as it can be written and still be the same knob: the
+/// shortest text that reads back as the same f32 (173.4, not 173.39999),
+/// held to five decimals.
 fn number(v: f32) -> String {
-    let s = format!("{v:.5}");
-    let s = s.trim_end_matches('0').trim_end_matches('.');
+    let short = format!("{v}");
+    let s = match short.split_once('.') {
+        Some((_, frac)) if frac.len() > 5 => {
+            let s = format!("{v:.5}");
+            s.trim_end_matches('0').trim_end_matches('.').to_string()
+        }
+        _ => short,
+    };
     if s == "-0" {
         "0".into()
     } else {
-        s.to_string()
+        s
     }
 }
 
@@ -390,6 +397,8 @@ struct State {
     sound: Sound,
     /// The note the hit is played on, for instruments that follow it.
     note: String,
+    /// The record's averaged hit, once one is loaded: what Fit fits to.
+    reference: Option<Vec<f32>>,
 }
 
 /// `alias.arg=value` lines set a knob, `-alias.arg` unsets one (back to its
@@ -455,33 +464,83 @@ fn render_reply(state: &State) -> String {
 }
 
 /// A record's hits, averaged: `from`, `to` (seconds), `bpm` (else measured)
-/// and `ms` (how much of each hit) from the query.
-fn reference_reply(query: &BTreeMap<String, String>, body: &[u8]) -> String {
-    let get = |k: &str| query.get(k).and_then(|v| v.parse::<f32>().ok());
+/// and `ms` (how much of each hit) from the query, as `tatum kick fit`
+/// takes them. The average is kept for Fit.
+fn reference_reply(state: &mut State, query: &BTreeMap<String, String>, body: &[u8]) -> String {
+    let get = |k: &str| query.get(k).and_then(|v| v.parse::<f32>().ok()).filter(|v| v.is_finite() && *v >= 0.0);
+    let fail = |e: &str| format!("{{\"ok\":false,\"error\":{}}}", json_str(e));
     let audio = match tatum_debug::wav::decode(body) {
         Ok(a) => a,
-        Err(e) => return format!("{{\"ok\":false,\"error\":{}}}", json_str(&format!("not a WAV it can read: {e}"))),
+        Err(e) => return fail(&format!("not a WAV it can read: {e}")),
     };
-    let (l, r) = match tatum_debug::reference::stretch(&audio, get("from"), get("to"), 15.0 * 60.0) {
-        Ok(lr) => lr,
-        Err(e) => return format!("{{\"ok\":false,\"error\":{}}}", json_str(&e)),
+    let req = crate::kick::FitRequest {
+        from: get("from"),
+        to: get("to"),
+        bpm: get("bpm").filter(|b| *b > 0.0),
+        ms: get("ms").unwrap_or(230.0).clamp(20.0, 2000.0),
+        effort: 1.0,
+        hit: None,
     };
-    let bpm = match get("bpm").filter(|b| *b > 0.0) {
-        Some(b) => b,
-        None => match tatum_debug::reference::measure(&l, &r).tempo {
-            Some(t) => t,
-            None => return format!("{{\"ok\":false,\"error\":{}}}", json_str("no steady beat in it; give the tempo")),
-        },
-    };
-    let mono: Vec<f32> = l.iter().zip(&r).map(|(a, b)| 0.5 * (a + b)).collect();
-    let ms = get("ms").unwrap_or(230.0).clamp(20.0, 2000.0);
-    match hit::average_hit(&mono, bpm, ms) {
-        Some(y) => format!("{{\"ok\":true,\"bpm\":{},\"hit\":{}}}", json_num(bpm), hit_json(&y)),
-        None => format!(
-            "{{\"ok\":false,\"error\":{}}}",
-            json_str("fewer than four beats in that stretch; give it a few bars")
-        ),
+    match crate::kick::reference_hit(&audio, &req) {
+        Ok((y, bpm)) => {
+            let reply = format!("{{\"ok\":true,\"bpm\":{},\"hit\":{}}}", json_num(bpm), hit_json(&y));
+            state.reference = Some(y);
+            reply
+        }
+        Err(e) => fail(&e),
     }
+}
+
+/// The first `kick` node of the sound fitted to the loaded record: its
+/// knobs set to what `tatum kick fit` finds, the hit rendered again.
+fn fit_reply(state: &mut State) -> String {
+    let fail = |e: &str| format!("{{\"ok\":false,\"error\":{}}}", json_str(e));
+    let Some(reference) = state.reference.clone() else {
+        return fail("load a record first: Fit fits the kick to its averaged hit");
+    };
+    let Some(node) = state.sound.nodes.iter().position(|n| n.kind == "kick") else {
+        return fail("there is no kick() node to fit; Fit sets the kick node's knobs");
+    };
+    let target = tatum_debug::fit::Target::new(reference);
+    let fitted = match crate::kick::fit_kick(&target, 0.6) {
+        Ok(f) => f,
+        Err(e) => return fail(&e),
+    };
+    let k = &fitted.args;
+    let args = &mut state.sound.nodes[node].args;
+    for (name, v) in [
+        ("note", k.note),
+        ("start", k.start),
+        ("knee", k.knee),
+        ("snap", k.snap),
+        ("body", k.body),
+        ("hold", k.hold),
+        ("sag", k.sag),
+        ("release", k.release),
+        ("phase", k.phase),
+        ("click", k.click),
+        ("tone", k.tone),
+    ] {
+        args.insert(name.to_string(), v);
+    }
+    if k.chirp > 0.0 {
+        args.insert("chirp".into(), k.chirp);
+        args.insert("chirp_time".into(), k.chirp_time);
+    } else {
+        args.remove("chirp");
+        args.remove("chirp_time");
+    }
+    let s = fitted.score;
+    let render = render_reply(state);
+    let sound = sound_json(&state.sound, &state.path);
+    format!(
+        "{{\"ok\":true,\"sound\":{sound},\"render\":{render},\"fit\":{{\"line\":{},\"pitch_st\":{},\"attack_st\":{},\"level_db\":{},\"click_db\":{}}}}}",
+        json_str(&k.line()),
+        json_num(s.pitch_st),
+        json_num(s.attack_st),
+        json_num(s.level_db),
+        json_num(s.click_db)
+    )
 }
 
 // ── HTTP, the little of it a local page needs ──
@@ -647,7 +706,10 @@ fn handle(state: &mut State, req: Request) -> (String, &'static str, Vec<u8>) {
             };
             ("200 OK".into(), json, reply.into_bytes())
         }
-        ("POST", "/api/reference") => ("200 OK".into(), json, reference_reply(&req.query, &req.body).into_bytes()),
+        ("POST", "/api/reference") => {
+            ("200 OK".into(), json, reference_reply(state, &req.query, &req.body).into_bytes())
+        }
+        ("POST", "/api/fit") => ("200 OK".into(), json, fit_reply(state).into_bytes()),
         _ => ("404 Not Found".into(), "text/plain", b"not here".to_vec()),
     }
 }
@@ -682,7 +744,7 @@ pub fn cmd(args: &[String]) {
         eprintln!("{}: {e}", path.display());
         process::exit(1);
     });
-    let mut state = State { path, sound, note: "C3".into() };
+    let mut state = State { path, sound, note: "C3".into(), reference: None };
     if let Err(e) = render_hit(&state.sound, &state.note) {
         eprintln!("{}: {e}", state.path.display());
         process::exit(1);
@@ -753,6 +815,8 @@ mod tests {
         assert!(t.contains("body=85ms"), "{t}");
         assert!(t.contains("sag=-3db"), "{t}");
         assert!(t.contains("kick(F#1,"), "a note comes back as its name: {t}");
+        apply(&mut s, "k.knee=173.4\nk.snap=1.97\n").expect("applies");
+        assert!(s.text().contains("knee=173.4hz, snap=1.97ms"), "the shortest text: {}", s.text());
         apply(&mut s, "-k.sag").expect("unsets");
         assert!(!s.text().contains("sag="), "{}", s.text());
         assert!(apply(&mut s, "k.nope=1").is_err());
@@ -841,6 +905,79 @@ mod tests {
         assert_eq!(s.gain, Some(0.8));
         apply(&mut s, "gain=").expect("no gain");
         assert_eq!(s.gain, None);
+    }
+
+    /// A record made of a known kick at 125 BPM, as the page would send it.
+    fn record_wav() -> Vec<u8> {
+        let known = "kick(A1, start=900hz, knee=170hz, snap=3ms, body=75ms, hold=90ms, release=200ms, phase=20)";
+        let one = crate::kick::engine_hit(known, 600.0).expect("renders");
+        let beat = (60.0 / 125.0 * SAMPLE_RATE) as usize;
+        let mut x = vec![0.0f32; 20 * SAMPLE_RATE as usize];
+        let mut at = 500;
+        while at + beat < x.len() {
+            for (i, v) in one.iter().enumerate().take(beat) {
+                x[at + i] += 0.8 * v;
+            }
+            at += beat;
+        }
+        tatum_core::wav::encode_stereo_16(&x, &x, SAMPLE_RATE as u32)
+    }
+
+    #[test]
+    fn fit_sets_the_kick_knobs_to_the_record() {
+        let wav = record_wav();
+        let mut state = State {
+            path: PathBuf::from("/nonexistent/k.synth"),
+            sound: Sound::parse(NEW_SOUND).expect("parses"),
+            note: "C3".into(),
+            reference: None,
+        };
+        assert!(fit_reply(&mut state).contains("load a record first"));
+        let mut q = BTreeMap::new();
+        q.insert("bpm".to_string(), "125".to_string());
+        let r = reference_reply(&mut state, &q, &wav);
+        assert!(r.starts_with("{\"ok\":true"), "{}", &r[..r.len().min(200)]);
+        let r = fit_reply(&mut state);
+        assert!(r.starts_with("{\"ok\":true"), "{}", &r[..r.len().min(300)]);
+        let text = state.sound.text();
+        assert!(text.contains("kick(A1,"), "{text}");
+        let body = state.sound.nodes[0].args["body"];
+        assert!((body - 75.0).abs() < 8.0, "{text}");
+        // No kick node: said, not guessed.
+        state.sound = Sound::parse("instrument x {\n  osc sine(110) as w\n  w > out\n}\n").expect("parses");
+        assert!(fit_reply(&mut state).contains("no kick() node"));
+    }
+
+    #[test]
+    fn a_bad_reference_query_is_not_taken_for_a_number() {
+        let mut state = State {
+            path: PathBuf::from("/nonexistent/k.synth"),
+            sound: Sound::parse(NEW_SOUND).expect("parses"),
+            note: "C3".into(),
+            reference: None,
+        };
+        // A WAV it can read, so the query is what is looked at: what is not
+        // a number from 0 up is left out, and the reply is the one without it.
+        let wav = record_wav();
+        let mut q = BTreeMap::new();
+        q.insert("bpm".to_string(), "125".to_string());
+        let plain = reference_reply(&mut state, &q, &wav);
+        assert!(plain.starts_with("{\"ok\":true"), "{}", &plain[..plain.len().min(200)]);
+        for (k, bad) in [("from", "NaN"), ("from", "-5"), ("to", "inf"), ("to", "-1"), ("ms", "NaN"), ("ms", "-inf")] {
+            let mut q = q.clone();
+            q.insert(k.to_string(), bad.to_string());
+            state.reference = None;
+            let r = reference_reply(&mut state, &q, &wav);
+            assert!(r == plain, "{k}={bad}: {}", &r[..r.len().min(200)]);
+            assert!(state.reference.is_some(), "{k}={bad}");
+        }
+        // A tempo that is not one is measured instead, not taken.
+        for bad in ["NaN", "inf", "-125", "0"] {
+            q.insert("bpm".to_string(), bad.to_string());
+            let r = reference_reply(&mut state, &q, &wav);
+            let bpm = r.strip_prefix("{\"ok\":true,\"bpm\":").and_then(|r| r.split(',').next()?.parse::<f32>().ok());
+            assert!(bpm.is_some_and(|b| (b - 125.0).abs() < 0.1), "bpm={bad}: {}", &r[..r.len().min(200)]);
+        }
     }
 
     #[test]

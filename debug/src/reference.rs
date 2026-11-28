@@ -344,7 +344,7 @@ impl Biquad {
         Self::norm([(1.0 - c) / 2.0, 1.0 - c, (1.0 - c) / 2.0], [1.0 + alpha, -2.0 * c, 1.0 - alpha])
     }
 
-    fn highpass(hz: f64) -> Self {
+    pub(crate) fn highpass(hz: f64) -> Self {
         let w = 2.0 * std::f64::consts::PI * hz / SR;
         let alpha = w.sin() / (2.0 * std::f64::consts::FRAC_1_SQRT_2);
         let c = w.cos();

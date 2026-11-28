@@ -190,7 +190,8 @@ fn unknown_node(instrument: &str, name: &str) -> String {
 
 /// `kick(note, ...)`: the times come in ms and the levels in dB, as written;
 /// the spec takes cycles for the phase and a linear level for the click.
-fn kick_spec(params: &[Param]) -> Result<NodeSpec, CompileError> {
+/// Public so that `tatum kick fit` builds every kick it tries by these rules.
+pub fn kick_spec(params: &[Param]) -> Result<NodeSpec, CompileError> {
     let opt = |name: &str, default: f32| named_param(params, name).unwrap_or(default);
     let note = float_param_at(params, 0).unwrap_or(50.0);
     let start = opt("start", 800.0);

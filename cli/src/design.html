@@ -97,6 +97,7 @@ textarea { width: 100%; min-height: 170px; font: 12px/1.45 ui-monospace, monospa
         <label>BPM <input id="ref-bpm" type="number" step="0.01" placeholder="auto" style="width:70px"></label>
         <label>first <input id="ref-ms" type="number" value="230" style="width:60px"> ms</label>
         <button id="ref-load">Average its hits</button>
+        <button id="fit" class="primary" disabled title="Set the kick node's knobs to the ones whose hit matches the record's (tatum kick fit)">Fit to reference</button>
       </div>
       <div style="font-size:12px;color:var(--muted)">A WAV of a record: its hits are averaged on the beat grid, so what comes with every hit is kept and the rest thins out. Pick a stretch where the kick plays alone or nearly (an intro, an outro), and only as many ms as come before the bass. An MP3 has to be a WAV first: <code>ffmpeg -i song.mp3 song.wav</code>.</div>
     </section>
@@ -159,7 +160,8 @@ function buildKnobs() {
         if (send) { row.classList.remove("unset"); queue(`${n.alias}.${a.name}=${v}`, `${n.alias}.${a.name}`); }
       };
       set(v0, false);
-      range.addEventListener("input", () => set(sc.fromPos(range.value / 1000), true));
+      // Four significant figures from the slider: a knob, not a float.
+      range.addEventListener("input", () => set(Number(sc.fromPos(range.value / 1000).toPrecision(4)), true));
       num.addEventListener("change", () => { const v = parseFloat(num.value); if (isFinite(v)) set(Math.min(a.max, Math.max(a.min, v)), true); });
       row.querySelector("button.reset").addEventListener("click", () => { set(a.default, false); row.classList.add("unset"); queue(`-${n.alias}.${a.name}`, `${n.alias}.${a.name}`); });
       div.appendChild(row);
@@ -293,7 +295,20 @@ $("ref-load").addEventListener("click", async () => {
   ref = r.hit; buffers.ref = await decode(r.hit.audio);
   if (!$("ref-bpm").value) $("ref-bpm").placeholder = r.bpm.toFixed(2);
   status(`reference: hits averaged at ${r.bpm.toFixed(2)} BPM`);
+  $("fit").disabled = false;
   draw();
+});
+$("fit").addEventListener("click", async () => {
+  $("fit").disabled = true;
+  status("fitting the kick to the reference…");
+  try {
+    const r = await post("/api/fit", "");
+    if (!r.ok) { status(r.error, true); return; }
+    sound = r.sound; buildKnobs(); show(r.render);
+    const f = r.fit;
+    status(`fitted: ${f.line} — left, for the kick node alone: pitch ${f.pitch_st.toFixed(2)} st (attack ${f.attack_st.toFixed(2)}), level ${f.level_db.toFixed(2)} dB, click ${f.click_db >= 0 ? "+" : ""}${f.click_db.toFixed(1)} dB`);
+  } catch (e) { status(String(e), true); }
+  finally { $("fit").disabled = false; }
 });
 
 // ── File ──
