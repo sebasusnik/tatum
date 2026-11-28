@@ -31,7 +31,7 @@ What is here:
 | `keys/chorus_pad.synth` | `chorus_pad` | a warm poly pad in the spirit of a Juno-106: two saws, a breathing lowpass, a wide stereo chorus |
 | `bass/rubber.synth` | `rubber` | a rubbery bass in the spirit of an SH-101: saw and sub through a resonant ladder that snaps shut |
 | `liquid/bubbles.synth` | `bubbles` | one held note is a stream of swells off the grid, with no click: a `dust` moves a resonance over a saw's harmonics and, smoothed by slow filters, swells its level |
-| `liquid/drop.synth` | `drop` | a long falling drop: four sines 7% apart fall four octaves onto the note, ever slower, under a 21 Hz vibrato; no two notes fall alike |
+| `liquid/drop.synth` | `drop` | a long falling drop, one thin line: a sine and a faint twin fall four octaves onto the note, ever slower, under a 21 Hz vibrato; no two notes fall alike |
 | `liquid/tide.synth` | `tide` | a liquid bass that slides into a note written `~note` in 140 ms, through a lowpass that wanders and never repeats |
 | `liquid/shoal.synth` | `shoal` | a pad that is a cluster: five saws at 0, ±9 and ±20 cents, a 4.5 Hz vibrato, one slow `wander` on every voice's filter |
 | `liquid/glass.synth` | `glass` | a soft FM bell, held: partials at 1.5, 2.5, 3.5... times the note, in pairs 10 Hz apart |
