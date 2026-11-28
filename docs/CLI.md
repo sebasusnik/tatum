@@ -212,17 +212,17 @@ partial, which leaves its level and pitch sample by sample however far it glides
 | row | what it is |
 |---|---|
 | attack 10-90% | milliseconds from a tenth to nine tenths of the peak, in a band from an octave under the partial to two over |
-| burst over the resonance | the energy above 1.5 times the partial's frequency against the energy at it, over the first 5 ms: a click or a noise burst at the start reads high |
-| fall to -20 / -40 dB, decay | from the peak; the decay in dB per millisecond over the first 30 dB, and how straight it is in dB (1 is an exponential) |
-| start pitch, end pitch, bend | the partial's frequency to a few cents, and the shape of the way between: flat, straight, fast then slow, slow then fast, arch, dip; a vibrato's rate and depth when there is one |
-| -3 dB width, Q | of the partial with its glide taken out; and the Q a resonator needs to ring with that decay (pi f tau). The two agree for a struck resonator and part when the level is shaped by something else |
-| partial over the rest | the partial against everything else the event adds to the spectrum: noise, other partials, splatter. Clean reads high |
-| 2nd, 3rd harmonic | against the partial |
-| over the bed, against the mix | the partial at its peak over what was in its own band just before it, and against the level of the whole mix over the second around it. Subtle reads low |
-| left over right, correlation | where the event sits and how alike the two sides are |
-| tail | the energy in the partial's band from 50 to 400 ms after the event has fallen 20 dB, against the event: reverb, or a second slower decay |
-| centroid | of what the event adds, at its peak, and how far it has moved when the partial is 12 dB down |
-| repeats | echoes: the interval, the first repeat against the event, and what each repeat after loses |
+| burst over the resonance | the energy above 1.5 times the partial's frequency in the first 5 ms, less what the bed puts there and what the partial's own onset spreads there, against the energy at the partial: a click or a noise burst at the start reads high |
+| fall to -20 / -40 dB, decay | from the peak; the decay in dB per millisecond of the event's first stage (the line through its fall to -10 dB, carried on while the fall stays within 2 dB of it, at most 30 dB), and how straight the first 30 dB are in dB (1 is an exponential) |
+| start pitch, end pitch, bend | the partial's frequency, and the shape of the way between: flat, straight, fast then slow, slow then fast, arch, dip; a vibrato's rate and depth when there is one. The bend is over the stretch above -20 dB |
+| -3 dB width, Q | of the partial with its glide taken out; and the Q a resonator needs to ring with the decay read (pi f tau) |
+| partial over the rest | the partial against everything else the event adds to the spectrum -- the bed just before it taken off bin by bin, and the partial's own skirt (from its attack and decay) taken off what lies beside it: noise, other partials, splatter. Clean reads high |
+| 2nd, 3rd harmonic | against the partial, the bed and the partial's skirt taken off the same way |
+| over the bed, against the mix | the partial at its peak over what was in its own band just before it; and against the mix over the second around it, its own span left out |
+| left over right, side over mid, correlation | where the event sits; side against mid in its band (the width: a mono event has no side); and the correlation of the two channels' signals in its band (an inter-channel delay of a quarter period reads 0) |
+| tail | the energy in the partial's band from 50 to 400 ms after its decay is 20 dB down, beyond what that decay itself still leaves there (the decay's own model put through the same band), against the event: reverb, or a second slower stage. A dry event of any decay has none |
+| centroid | of what the event adds over the bed, at its peak, and how far it has moved when the partial is 12 dB down |
+| repeats | echoes: the interval, the first repeat against the event, and what each repeat after loses; a repeat has to be a quieter copy of the event, shaped like it |
 
 Each row is the median over the events with the quarter either side, then the first
 events one by one. With fewer than three events, or with `--sustained`, what holds is
@@ -302,17 +302,41 @@ median level of the partial and the median pitch against each event's own start,
 B over each other. The scales are printed on it. `--json` gives every number, each
 event's included.
 
-What it cannot tell. In a mix nothing is alone: an event's figures include whatever
-plays in its band at the same time, so a record's numbers are bounds more than values,
-and aliasing is not looked for at all when the events stand under 30 dB over their bed,
-nor in a file converted from another rate. The level and the pitch are read in a band
-about two semitones either side of the partial, which a ping that dies in a few
-milliseconds never fills: its peak reads up to 2 dB low, and the level curve on the
-sheet rises a few milliseconds before the event does. A dry event with a slow second
-stage to its decay reads as having a tail. A pattern that repeats reads as a repeat
-with no loss, and is said to be one. Events that sound in the same bin more than nine
-tenths of the time have no floor to stand over and are not found; `--sustained`
-measures those. At most two minutes are read at once.
+What it cannot tell. Every figure has a domain where it is right within what the table
+below says; outside it the figure is not printed as a number. It is a bound (`< -40 dB`:
+the truth is at most that; `> 172 Hz`: at least) when the event cannot be told from the
+bed under it or from its own decay's skirt, or `not measurable here:` with the reason. In
+JSON a bound or a reason is `median: null` with `at_most`, `at_least` or `why`, and each
+event's own nulls are explained under its `limits`. `--against` never advises from a bound
+or a missing figure; with fewer than 4 events on either side there is no spread to hold a
+difference against, and a row is starred only when it is off by more than the measure's
+own error on one event. At most two minutes are read at once.
+
+| measure | domain where it is trusted | what it prints outside it |
+|---|---|---|
+| events, start | a start to 2 ms from 400 Hz up, on events that stand the threshold over their bin's 10th-percentile floor | events that sound in one bin nine tenths of the time are not found (`--sustained` reads those) |
+| attack 10-90% | over 1.25 times 0.8 of a period (1 ms at 1 kHz, 9 ms at 110 Hz), its 10% point three of the bed's own deviations clear of it | `< x ms` under that floor; not measurable when the start is in the bed |
+| burst | the excess standing twice its uncertainty (bed spread and onset skirt) clear; the partial's decay followed by its band | `< x dB` under that floor; not measurable when the decay is faster than the band, or 1.5 f is past Nyquist |
+| decay, fall to -20/-40, r2 | at least 10 dB of fall before the bed or the next event, slower than the band around the partial follows (0.8 of `3 / (2 pi cutoff)`, cutoff 0.12 f within 30..500 Hz: 0.44 dB/ms at 110 Hz, 1.7 at 1 kHz) | `> x dB/ms` (and `< x ms`) when faster; not measurable under 10 dB of fall, on another event's ring, or when the partial is lost |
+| start pitch, bend | steady notes; a glide whose first reading is within one cycle of its start, that moves under a tenth of its frequency per cycle there (`FASTEST_SWEEP`), and whose start agrees within 8% with its first whole cycle | `> x Hz` for a fall (the first reading: a fall starts at least there) and `< x st` for its bend; not measurable under four cycles above -20 dB, or when the partial moves faster than its band follows |
+| end pitch, shape, vibrato | the stretch above -20 dB; vibrato 2.5-45 Hz, 8 cents and more | not measurable as above |
+| -3 dB width, Q (f / width) | an event alone, its span 1.5 times longer than the window's own width (0.886 / T) | `< x Hz` near the window floor, `> x Hz` when the decay is faster than the band; not measurable when overlapped |
+| Q (from the decay) | wherever the decay is a value; kept when the next strike cuts the event, which the width is not | follows the decay |
+| partial over the rest, 2nd/3rd harmonic | the bed's spectrum read in the 0.6 s before the event; the partial standing over it; the figure twice its uncertainty clear. Held within 1 dB as a white bed rises from -70 to -20 dB under a ping | `> x dB` / `< x dB`: the bed-limited floor; not measurable with no bed before it in the file, a decay faster than the band, harmonics closer than the spectrum resolves, a pitch that moves more in a frame than the partial is wide, or another event in it |
+| over the bed in its band | always | over silence both files read 40-90 dB: not advised on when both are over 35 |
+| against the whole mix | something sounding under the event (within 40 dB in the 120 ms before) | not measurable alone: a solo render's mix is the event itself |
+| left over right, side over mid | always (left over right clamps at 40 dB) | side over mid `> 60 dB` when there is no mid at all |
+| correlation | both channels within 30 dB of each other | not measurable when one side is more than 30 dB down |
+| tail | the event's own decay a value, nothing near its pitch starting in the 400 ms after, the excess twice its uncertainty clear | `< x dB`; not measurable otherwise |
+| centroid, its move | the bed could move it by under a quarter of a semitone (under a semitone for the move) | not measurable |
+| repeats | up to 1.6 s after each event; a repeat is a quieter copy shaped like the event, and the next quieter again | `ambiguous with the note grid` when one pitch on a grid repeats at a multiple of half its spacing, `a pattern` when as loud as the event: neither is advised on |
+| aliasing | a file at the engine's rate whose events stand 30 dB over their bed, a steady note alone long enough to put six bins between its folds and its harmonics; found when six fold positions stand 10 dB over their neighbours with each harmonic's window leakage taken off | `aliasing not examined:` and why; `nothing folded back over x dB at the n fold positions examined` only when some were |
+| DC | an offset through most of the file (the median of every tenth of a second, quiet ones too) | an offset under half the file is not DC (a jump is a step) |
+| steps | a sample the band-limited interpolation of its neighbours misses eight times more than any other within 3 ms, not at an onset, not coming back every period | -- |
+| zipper | a miss at the same place in every block of 16-2048 samples, the wave itself not repeating at a few blocks | -- |
+
+The level and the pitch are read in a band about two semitones either side of the
+partial; the level curve on the sheet rises a few milliseconds before the event does.
 
 ## design
 

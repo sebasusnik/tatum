@@ -974,7 +974,7 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
         b > a + samples(20.0) && bed > pk * 0.01 && rms(&level[a..mid]) > 1.41 * rms(&level[mid..b])
     };
     let overlap = if rises > 0 {
-        Some("its level rises again after its peak: it holds more than one strike")
+        Some("its level falls and rises again after its peak (a second strike, or partials beating)")
     } else if ringing {
         Some("it starts while something near its pitch still rings")
     } else if cut_short {
@@ -1434,7 +1434,9 @@ pub(crate) fn tails(events: &mut [Event]) {
         // of its periods: that is inside the window too.
         let until = e.inside.direct_end_s + 0.4 + 2.0 / cutoff_for(e.inside.end_hz);
         e.inside.tail_clear = !starts.iter().enumerate().any(|(j, &(t, _, hz))| {
-            j != i && t > e.start_s + 0.005 && t <= until && (12.0 * (hz / e.inside.end_hz).log2()).abs() < 4.0
+            // An onset spreads over the band around it: anything within an
+            // octave starting there is in the tail's band.
+            j != i && t > e.start_s + 0.005 && t <= until && (12.0 * (hz / e.inside.end_hz).log2()).abs() < 12.0
         });
         let (a, b) = e.inside.span_s;
         let inside_it = starts.iter().enumerate().any(|(j, &(t0, t1, _))| j != i && t0 < b && t1 > a);
@@ -1443,7 +1445,9 @@ pub(crate) fn tails(events: &mut [Event]) {
         // are read against.
         let on_a_ring = i > 0
             && cut.iter().enumerate().take(i).any(|(j, &c)| {
-                c && (e.start_s - starts[j].1) < 0.05 && (12.0 * (starts[j].2 / e.inside.start_hz).log2()).abs() < 4.0
+                // Cut short by it, or still sounding when it starts.
+                let near = (12.0 * (starts[j].2 / e.inside.start_hz).log2()).abs() < 4.0;
+                near && (e.start_s - starts[j].1) < 0.05 && (c || starts[j].1 > e.start_s - 0.005)
             });
         if on_a_ring {
             e.inside.overlap = Some("it starts while the event before it near its pitch still rings");
@@ -1452,7 +1456,7 @@ pub(crate) fn tails(events: &mut [Event]) {
         }
         let x = &mut e.inside;
         if !x.tail_clear {
-            x.tail_db = x.tail_db.withhold("another event near its pitch starts in the 400 ms after it");
+            x.tail_db = x.tail_db.withhold("another event within an octave of it starts in the 400 ms after it");
         }
         if let Some(why) = x.overlap {
             for f in [&mut x.tonal_db, &mut x.h2_db, &mut x.h3_db, &mut x.centroid_hz, &mut x.centroid_move_st, &mut x.tail_db, &mut x.burst_db] {
@@ -1463,10 +1467,17 @@ pub(crate) fn tails(events: &mut [Event]) {
             x.bandwidth_hz = x.bandwidth_hz.withhold(why);
             x.q = x.q.withhold(why);
             x.t40_ms = x.t40_ms.withhold(why);
-            if why.starts_with("its level rises") || why.starts_with("it starts while") {
+            if why.starts_with("it starts while") {
+                // Its bed is another event's ring: its start and its fall are
+                // read against something that is not a bed.
                 for f in [&mut x.decay_db_ms, &mut x.decay_r2, &mut x.ring_q, &mut x.t20_ms, &mut x.attack_ms] {
                     *f = f.withhold(why);
                 }
+            } else if why.starts_with("its level falls and rises") {
+                // The first stage of its fall, before it rises, is still its
+                // own (the decay is read only while it stays within 2 dB of
+                // a line); where it crosses -20 dB may be a notch.
+                x.t20_ms = x.t20_ms.withhold(why);
             }
         }
     }

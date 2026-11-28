@@ -9,7 +9,7 @@ use std::fmt::Write as _;
 
 use super::inside::{Fig, Shape};
 use super::sustained::Sustained;
-use super::{spread, Event, Report, Spread};
+use super::{db, spread, Event, Report, Spread};
 use crate::reference::note_name;
 
 /// One thing measured on every event.
@@ -51,7 +51,7 @@ fn length(e: &Event) -> Fig {
         Fig::No("the partial moves faster than its band follows it")
     } else if e.inside.overlap.is_some_and(|o| o.starts_with("the next event")) {
         Fig::AtLeast(ms)
-    } else if let Some(why) = e.inside.overlap.filter(|o| o.starts_with("it starts while") || o.starts_with("its level rises")) {
+    } else if let Some(why) = e.inside.overlap.filter(|o| o.starts_with("it starts while") || o.starts_with("its level falls and rises")) {
         Fig::No(why)
     } else {
         Fig::Value(ms)
@@ -705,6 +705,21 @@ fn centroid_move_advice(x: f32, y: f32) -> &'static str {
     }
 }
 
+/// Whether a file's side over mid is what its events' pan alone gives a
+/// single coherent source, ((g - 1) / (g + 1))^2 with g the left over right
+/// gain, within 2 dB: no width beyond the pan.
+fn only_pan(r: &Report) -> bool {
+    let me = |key: &str| MEASURES.iter().find(|m| m.key == key).and_then(|m| population(r, m).median());
+    match (me("pan_db"), me("side_mid_db")) {
+        (Some(pan), Some(side)) => {
+            let g = 10f32.powf(pan / 20.0);
+            let implied = db(((g - 1.0) / (g + 1.0)).powi(2)).max(-60.0);
+            (side - implied).abs() < 2.0
+        }
+        _ => false,
+    }
+}
+
 /// The flagged rows as sentences, the furthest off first.
 pub fn advice(a: &Report, b: &Report, rows: &[Row], _name_b: &str) -> Vec<String> {
     let mut flagged: Vec<&Row> = rows.iter().filter(|r| r.flagged).collect();
@@ -828,6 +843,8 @@ pub fn advice(a: &Report, b: &Report, rows: &[Row], _name_b: &str) -> Vec<String
                 n(x),
                 if more { "narrower panning" } else { "pan the events apart, or a ping-pong delay on them" }
             ),
+            // A level difference alone puts side in: that is the pan, said on its own line.
+            "side_mid_db" if only_pan(a) && only_pan(b) => continue,
             "side_mid_db" => format!(
                 "side over mid in the events' band {} dB against {} dB: {}",
                 n(y),

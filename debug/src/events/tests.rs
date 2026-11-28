@@ -477,6 +477,14 @@ fn where_an_event_sits_between_the_speakers() {
         // Side (0.25) over mid (0.75): -9.5 dB.
         assert!((val(e.inside.side_mid_db, "side") + 9.54).abs() < 0.3, "{:?}", e.inside.side_mid_db);
     }
+    // Panned 3 dB left against centred: the side it has is the pan's, and
+    // the advice says pan, not stereo spread.
+    let centre = measure(l.clone(), l.clone(), &Options::default(), true);
+    let right: Vec<f32> = l.iter().map(|v| v * 10f32.powf(-3.0 / 20.0)).collect();
+    let panned = measure(l.clone(), right, &Options::default(), true);
+    let lines = advice_of(&centre, &panned);
+    assert!(lines.iter().any(|l| l.contains("off centre")), "{lines:?}");
+    assert!(!lines.iter().any(|l| l.contains("stereo spread")), "{lines:?}");
     // The right a different ping at the same time: nothing shared.
     let mut other = vec![0.0f32; at(1.5)];
     for t in [0.2, 0.6, 1.0] {
@@ -571,6 +579,15 @@ fn a_tail_is_what_is_left_beyond_the_decay_and_a_dry_event_has_none() {
         for e in &run(x).events {
             assert!(!matches!(e.inside.tail_db, Fig::Value(_)), "tau {tau}: {:?}", e.inside.tail_db);
         }
+    }
+    // Dry pings four semitones apart, 600 ms apart: the next one's onset is
+    // in each one's tail window, and no tail is read.
+    let mut x = vec![0.0f32; at(7.5)];
+    for k in 0..11 {
+        ping(&mut x, 0.4 + 0.6 * k as f32, [800.0, 1000.0, 1260.0, 1587.0][k % 4], 100.0, 0.2, 2.0, 0.0);
+    }
+    for e in &run(x).events {
+        assert!(!matches!(e.inside.tail_db, Fig::Value(_)), "at {}: {:?}", e.start_s, e.inside.tail_db);
     }
     // Wet: a tail at the ping's pitch, 20 and 30 dB down, falling over 300 ms.
     let tau = 15.0f32;
