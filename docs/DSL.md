@@ -1018,14 +1018,28 @@ connections into one port add up.
 | `pitch` | `osc`, `fixosc` | exponential pitch in octaves: 1.0 an octave up, 1/12 a semitone |
 | `sync` | `osc`, `fixosc` | hard sync: the cycle starts again each time what comes in crosses zero going up |
 | `width` | `osc pulse`, `fixosc pulse` | added to `width=`: PWM |
-| `cutoff` | `lowpass`, `highpass`, `bandpass`, `ladder`, `svf` | octaves on top of the cutoff, retuned every sample: an oscillator here is the cross-mod into the filter |
+| `cutoff` | `svf`, `ladder` | octaves on top of the cutoff, retuned every sample: an oscillator here is the cross-mod into the filter |
 | `morph` | `svf` | added to `morph=`: sweeps the SEM's mode knob |
 
-An envelope that nothing flows into is a control source rather than a VCA, so
-`fenv > gain(2.5) > filt.cutoff` sweeps the filter two and a half octaves on every note,
-the poly-mod of the hardware. The `svf` is the SEM's filter: one pair of integrators, a
-`morph` that crossfades the lowpass into the highpass through a notch, and a cutoff
-that an oscillator can push around at audio rate without it ringing or blowing up.
+An envelope that nothing flows into, wired towards a port, is a control source rather
+than a VCA, so `fenv > gain(2.5) > filt.cutoff` sweeps the filter two and a half octaves
+on every note, the poly-mod of the hardware. (Wired towards `out` instead it is still a
+VCA with nothing to shape, and adds nothing.) The `svf` is the SEM's filter: one pair of
+integrators, a `morph` that crossfades the lowpass into the highpass through a notch, and
+a cutoff that an oscillator can push around at audio rate without it ringing or blowing
+up. The `ladder` takes it too. The biquads (`lowpass`, `highpass`, `bandpass`) have no
+`cutoff` port: retuned every sample they go unstable, so wiring into one is an error
+that says to use `svf` or `ladder`; their `ea=`/`edepth=` envelope and `lfo_hz=` sweep
+them as before.
+
+A port is one-way. It is a connection like any other, so a loop through one is refused
+as a loop: `a > gain(0.3) > a.fm` (an oscillator into its own FM), `a > b.fm` with
+`b > a.fm` (mutual cross-mod), and a filter into its own `cutoff` all stop with "the
+connections loop back on themselves". Modulate one way, from a node that does not
+depend on the one it moves.
+
+A modulated oscillator stops at 0.45 of the sample rate however far `pitch` and `fm`
+push it.
 Synced and modulated oscillators are AC-coupled, as the hardware's output is, so a
 cycle cut short by the sync does not leave DC behind. A slave runs one sample late,
 which is what lets it smooth each reset on both sides.

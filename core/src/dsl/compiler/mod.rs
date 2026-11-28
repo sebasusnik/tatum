@@ -30,7 +30,7 @@ pub use compiled::{
     ModulePreset, StepPLock, SubNote, MAX_CHORD_NOTES, MAX_SUBDIV, PlayPlan, LoopCondition,
 };
 pub use notes::{drum_note, note_in_midi_range, note_name_to_midi, resolve_note, scale_context};
-pub use validate::{master_auto_node_kinds, MASTER_AUTO_PARAMS};
+pub use validate::{chain_node_takes, master_auto_node_kinds, MASTER_AUTO_PARAMS};
 
 use chains::{compile_fx_chain, compile_scene, without_limiter};
 use graph::compile_instrument;

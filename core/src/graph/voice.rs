@@ -80,6 +80,17 @@ impl Voice {
         }
     }
 
+    /// Stop at once and forget everything: every node as it was built, with
+    /// none of what the note left in it. No allocation, as for a new note.
+    pub fn clear(&mut self, template: &GraphTemplate) {
+        for (node, spec) in self.nodes.iter_mut().zip(template.specs[..template.node_count as usize].iter()) {
+            if let Some(node) = node {
+                node.renew(spec);
+            }
+        }
+        self.active = false;
+    }
+
     pub fn release(&mut self, template: &GraphTemplate) {
         for i in 0..template.env_count as usize {
             let idx = template.env_nodes[i] as usize;
@@ -264,8 +275,25 @@ impl Instrument {
                 template.run_frame(&mut self.node_bufs, s, &mut voice.nodes);
             }
 
-            // Mix output into buffer
             let out_idx = template.output_node as usize;
+
+            // Nothing that is not a number leaves a voice. An infinity or a
+            // NaN let through would settle in whatever keeps state after it
+            // (the track's inserts, the sends, the master) and silence the
+            // song until it is rebuilt. Times zero every finite sample is
+            // zero and anything else is NaN, so the block is checked with
+            // one multiply and add a sample and no branch. A voice that
+            // fails is dropped, its block with it, and its nodes made new.
+            let mut bad = 0.0f32;
+            for &b in self.node_bufs[out_idx][..len].iter() {
+                bad += b * 0.0;
+            }
+            if bad.is_nan() {
+                voice.clear(template);
+                continue;
+            }
+
+            // Mix output into buffer
             let vel = voice.velocity * template.output_gain;
             for (o, &b) in output[..len].iter_mut().zip(self.node_bufs[out_idx][..len].iter()) {
                 *o += b * vel;

@@ -60,10 +60,14 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
         name_to_idx.push((String::from("mix"), idx));
     }
 
-    // An envelope nothing flows into is a control source, not a VCA: its
-    // connections leave from the envelope itself, so `fenv > filt.cutoff`
-    // sweeps the filter instead of multiplying silence.
+    // An envelope nothing flows into, wired towards a port, is a control
+    // source, not a VCA: those connections leave from the envelope itself, so
+    // `fenv > gain(2) > filt.cutoff` sweeps the filter instead of multiplying
+    // silence. Its other connections still leave from the VCA, which with
+    // nothing in it is silent: a stray `adsr(...) as e` then `e > mix` adds
+    // nothing to the sound, as it never did, rather than its curve as DC.
     let fed = |alias: &str| inst.connections.iter().any(|c| c.to == alias && c.port.is_none());
+    let to_port = connections_towards_a_port(&inst.connections);
     let mut env_sources: Vec<(String, u8)> = Vec::new();
 
     // Create explicit nodes
@@ -107,11 +111,11 @@ pub(super) fn compile_instrument(inst: &InstrumentDef, samples_per_bar: f32) -> 
     name_to_idx.push((String::from("out"), out_idx));
 
     // Second pass: create connections
-    for conn in &inst.connections {
-        let from_idx =
-            find_node(&env_sources, &conn.from).or_else(|| find_node(&name_to_idx, &conn.from)).ok_or_else(|| {
-                CompileError::at(conn.line.0, format!("instrument '{}': unknown node '{}'", inst.name, conn.from))
-            })?;
+    for (conn, &control) in inst.connections.iter().zip(to_port.iter()) {
+        let as_control = if control { find_node(&env_sources, &conn.from) } else { None };
+        let from_idx = as_control.or_else(|| find_node(&name_to_idx, &conn.from)).ok_or_else(|| {
+            CompileError::at(conn.line.0, format!("instrument '{}': unknown node '{}'", inst.name, conn.from))
+        })?;
         let to_idx = find_node(&name_to_idx, &conn.to).ok_or_else(|| {
             CompileError::at(conn.line.0, format!("instrument '{}': unknown node '{}'", inst.name, conn.to))
         })?;
@@ -560,6 +564,13 @@ fn connection_port(inst: &InstrumentDef, conn: &ConnectionDef, name: &str) -> Re
         )));
     };
     let ports = crate::nodes::ports(&node.kind);
+    let kind = crate::nodes::lookup(&node.kind).map_or(node.kind.as_str(), |d| d.name);
+    if name == "cutoff" && matches!(kind, "lowpass" | "highpass" | "bandpass") {
+        return Err(err(format!(
+            "'{}' is a {}, a biquad, which goes unstable when its cutoff is moved every sample; make it an `svf` or a `ladder`, whose `cutoff` port stays bounded under anything",
+            conn.to, node.kind
+        )));
+    }
     if !ports.iter().any(|p| p.name == name) {
         let known: Vec<&str> = ports.iter().map(|p| p.name).collect();
         return Err(err(if known.is_empty() {
@@ -582,6 +593,26 @@ fn connection_port(inst: &InstrumentDef, conn: &ConnectionDef, name: &str) -> Re
         )));
     }
     Ok(port::from_name(name).expect("every documented port has a number"))
+}
+
+/// For each connection, whether what it carries ends up on a port: it lands
+/// on one, or the node it goes into is wired on towards one (`e > gain(2) >
+/// f.cutoff` is two connections, and both are). Worked back from the ports,
+/// one pass per link of the longest chain.
+fn connections_towards_a_port(connections: &[ConnectionDef]) -> Vec<bool> {
+    let mut towards: Vec<bool> = connections.iter().map(|c| c.port.is_some()).collect();
+    loop {
+        let mut grew = false;
+        for i in 0..connections.len() {
+            if !towards[i] && connections.iter().zip(towards.iter()).any(|(c, &t)| t && c.from == connections[i].to) {
+                towards[i] = true;
+                grew = true;
+            }
+        }
+        if !grew {
+            return towards;
+        }
+    }
 }
 
 fn find_node(names: &[(String, u8)], name: &str) -> Option<u8> {

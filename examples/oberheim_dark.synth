@@ -124,7 +124,7 @@ track dread  { play dread_hold using dread level 0.3 pan -0.2 reverb_send 0.35 s
                out > highpass(90, 0.05) > autopan(0.4, bars=4) > master }
 
 master {
-  in > eq(low=1.5, mid=-0.5, high=1.0) > compressor(-12, ratio=4, attack=5, release=60, makeup=7db) > out
+  in > eq(low=1.5, mid=-0.5, high=1.0) > compressor(-12, ratio=4, attack=5, release=60) > out
 }
 
 # No kick yet: nothing to duck under.

@@ -942,11 +942,10 @@ pub fn module_named<'a>(song: &'a Song, name: &str) -> Option<&'a crate::dsl::as
 /// the engine builds (which leaves out a `limiter`): the one named `label`,
 /// or with no label the first that has the parameter, as `auto master` picks.
 pub fn master_node(song: &Song, label: Option<&str>, param: &str) -> Option<usize> {
-    let kinds = node_kinds_for(param);
     let chain = song.master.as_ref()?.chain.iter().filter(|n| n.kind != "limiter");
     for (i, n) in chain.enumerate() {
         let named = label.is_none_or(|l| n.label.as_deref() == Some(l));
-        if named && kinds.contains(&n.kind.as_str()) {
+        if named && crate::dsl::compiler::chain_node_takes(&n.kind, &n.params, param) {
             return Some(i);
         }
         if named && label.is_some() {

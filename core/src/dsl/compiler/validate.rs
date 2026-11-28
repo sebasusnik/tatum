@@ -350,8 +350,9 @@ tapestop, gate [<1/8|1/16|1/32>], crush, scream, cut, sweep, next, prev, step <n
                             .push(err(format!("a knob on the master moves one of {}", MASTER_AUTO_PARAMS.join(", "))));
                     } else if crate::midi::master_node(song, None, param).is_none() {
                         errors.push(err(format!(
-                            "the master chain has no {} node",
-                            master_auto_node_kinds(param).join(" or ")
+                            "the master chain has no {} node{}",
+                            master_auto_node_kinds(param).join(" or "),
+                            bandpass_has_no_morph(master_has_bandpass_svf(song), param)
                         )));
                     }
                 }
@@ -382,8 +383,14 @@ tapestop, gate [<1/8|1/16|1/32>], crush, scream, cut, sweep, next, prev, step <n
                             "track '{}' has no node named '{}'; name one with `> effect(...) as {}`",
                             track, node, node
                         ))),
-                        Some(n) if master_auto_node_kinds(param).contains(&n.kind.as_str()) => {}
-                        Some(n) => errors.push(err(format!("'{}' is a {}, which has no '{}'", node, n.kind, param))),
+                        Some(n) if chain_node_takes(&n.kind, &n.params, param) => {}
+                        Some(n) => errors.push(err(format!(
+                            "'{}' is a {}, which has no '{}'{}",
+                            node,
+                            n.kind,
+                            param,
+                            bandpass_has_no_morph(is_bandpass_svf(&n.kind, &n.params), param)
+                        ))),
                     },
                 },
                 [track, node, "wet"] => match song.tracks.iter().find(|t| &t.name == track) {
@@ -426,6 +433,31 @@ tapestop, gate [<1/8|1/16|1/32>], crush, scream, cut, sweep, next, prev, step <n
         }
     }
     errors
+}
+
+/// Whether a chain node answers to `param`: its kind carries it, and it is
+/// not the one case where the kind does and the node does not, `morph` on an
+/// `svf` written as the `bandpass`, which has no mode to turn.
+pub fn chain_node_takes(kind: &str, params: &[Param], param: &str) -> bool {
+    master_auto_node_kinds(param).contains(&kind) && !(param == "morph" && is_bandpass_svf(kind, params))
+}
+
+fn is_bandpass_svf(kind: &str, params: &[Param]) -> bool {
+    kind == "svf" && params.iter().any(|p| matches!(p, Param::Waveform(w) if w == "bandpass" || w == "bp"))
+}
+
+/// What to add to "no node takes `morph`" when an `svf` is there, as the
+/// bandpass.
+fn bandpass_has_no_morph(bandpass_svf: bool, param: &str) -> &'static str {
+    if param == "morph" && bandpass_svf {
+        "; an `svf` written as `bandpass` has no mode for `morph` to turn"
+    } else {
+        ""
+    }
+}
+
+fn master_has_bandpass_svf(song: &Song) -> bool {
+    song.master.as_ref().is_some_and(|m| m.chain.iter().any(|n| is_bandpass_svf(&n.kind, &n.params)))
 }
 
 /// Validate `auto <target> ...` lanes against tracks, instruments and the param registry.
@@ -480,12 +512,17 @@ pub(super) fn validate_automations(song: &Song) -> Vec<CompileError> {
                     param,
                     MASTER_AUTO_PARAMS.join(", ")
                 )));
-            } else if !song.master.as_ref().is_some_and(|m| m.chain.iter().any(|n| needed.contains(&n.kind.as_str()))) {
+            } else if !song
+                .master
+                .as_ref()
+                .is_some_and(|m| m.chain.iter().any(|n| chain_node_takes(&n.kind, &n.params, param)))
+            {
                 errors.push(CompileError::new(format!(
-                    "{}automation — `auto master {}` needs a {} node in the master chain",
+                    "{}automation — `auto master {}` needs a {} node in the master chain{}",
                     owner,
                     param,
-                    needed.join(" or ")
+                    needed.join(" or "),
+                    bandpass_has_no_morph(master_has_bandpass_svf(song), param)
                 )));
             }
             continue;

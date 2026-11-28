@@ -217,9 +217,12 @@ Inside an `instrument` graph a connection can land on a node's port instead of i
 input: `lfo(0.3, 0.2) > a.width` does not feed `a` a signal, it moves one of its knobs
 every sample by the value coming in. Write the port after the node's name, with a dot
 or a space; it ends the chain. Several connections into one port add up, and a `gain`
-on the way sets how far: `b > gain(0.5) > a.fm`. An envelope nothing flows into is a
-control source: `adsr(0.001, 0.4, 0, 0.2) as fenv` then `fenv > gain(2) > filt.cutoff`
-sweeps two octaves per note.
+on the way sets how far: `b > gain(0.5) > a.fm`. An envelope nothing flows into, wired
+towards a port, is a control source: `adsr(0.001, 0.4, 0, 0.2) as fenv` then
+`fenv > gain(2) > filt.cutoff` sweeps two octaves per note. A port is one-way: a loop
+through one (`a > a.fm`, or `a > b.fm` with `b > a.fm`) is refused like any other loop.
+The biquads (`lowpass`, `highpass`, `bandpass`) have no `cutoff` port, because they go
+unstable retuned every sample: use `svf` or `ladder`.
 
 | node | port | what it does |
 |------|------|--------------|
@@ -231,9 +234,6 @@ sweeps two octaves per note.
 | `fixosc` | `pitch` | exponential pitch in octaves: 1.0 is an octave up, 1/12 a semitone |
 | `fixosc` | `sync` | hard sync: restarts the cycle each time what comes in crosses zero going up |
 | `fixosc` | `width` | added to `width=`, kept within 0.05..0.95: PWM; pulse only |
-| `lowpass` | `cutoff` | octaves on top of the cutoff, retuned every sample: 1.0 is an octave up |
-| `highpass` | `cutoff` | octaves on top of the cutoff, retuned every sample: 1.0 is an octave up |
-| `bandpass` | `cutoff` | octaves on top of the cutoff, retuned every sample: 1.0 is an octave up |
 | `ladder` | `cutoff` | octaves on top of the cutoff, retuned every sample: 1.0 is an octave up |
 | `svf` | `cutoff` | octaves on top of the cutoff, retuned every sample: 1.0 is an octave up |
 | `svf` | `morph` | added to `morph=`, kept within 0..1; not with `bandpass` |

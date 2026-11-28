@@ -307,9 +307,8 @@ const CUTOFF_PORT: Port =
 pub const PORTS: &[(&str, &[Port])] = &[
     ("osc", OSC_PORTS),
     ("fixosc", OSC_PORTS),
-    ("lowpass", &[CUTOFF_PORT]),
-    ("highpass", &[CUTOFF_PORT]),
-    ("bandpass", &[CUTOFF_PORT]),
+    // Not the biquads: a `lowpass`, `highpass` or `bandpass` retuned every
+    // sample is unstable, and runs off to infinity under an oscillator.
     ("ladder", &[CUTOFF_PORT]),
     ("svf", &[CUTOFF_PORT, Port { name: "morph", doc: "added to `morph=`, kept within 0..1; not with `bandpass`" }]),
 ];
@@ -482,9 +481,12 @@ pub fn markdown() -> String {
     out.push_str("input: `lfo(0.3, 0.2) > a.width` does not feed `a` a signal, it moves one of its knobs\n");
     out.push_str("every sample by the value coming in. Write the port after the node's name, with a dot\n");
     out.push_str("or a space; it ends the chain. Several connections into one port add up, and a `gain`\n");
-    out.push_str("on the way sets how far: `b > gain(0.5) > a.fm`. An envelope nothing flows into is a\n");
-    out.push_str("control source: `adsr(0.001, 0.4, 0, 0.2) as fenv` then `fenv > gain(2) > filt.cutoff`\n");
-    out.push_str("sweeps two octaves per note.\n\n");
+    out.push_str("on the way sets how far: `b > gain(0.5) > a.fm`. An envelope nothing flows into, wired\n");
+    out.push_str("towards a port, is a control source: `adsr(0.001, 0.4, 0, 0.2) as fenv` then\n");
+    out.push_str("`fenv > gain(2) > filt.cutoff` sweeps two octaves per note. A port is one-way: a loop\n");
+    out.push_str("through one (`a > a.fm`, or `a > b.fm` with `b > a.fm`) is refused like any other loop.\n");
+    out.push_str("The biquads (`lowpass`, `highpass`, `bandpass`) have no `cutoff` port, because they go\n");
+    out.push_str("unstable retuned every sample: use `svf` or `ladder`.\n\n");
     out.push_str("| node | port | what it does |\n");
     out.push_str("|------|------|--------------|\n");
     for (node, ports) in PORTS {

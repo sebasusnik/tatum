@@ -409,7 +409,6 @@ impl NodeSpec {
                     lfo_bars: lfo.bars,
                     lfo_tick: 0,
                     glide_to: 0.0,
-                    cut_mod: None,
                 })
             }
             NodeSpec::AutoPan { hz, bars, depth } => NodeKind::AutoPan { lfo: make_lfo(hz), bars, depth },
@@ -807,9 +806,6 @@ pub struct ModBiquad {
     /// Where a knob is taking the cutoff, while it gets there; 0 when still.
     /// See [`glide_cutoff`].
     pub glide_to: f32,
-    /// Octaves the `cutoff` port moves it by this sample, when something is
-    /// wired there.
-    pub cut_mod: Option<f32>,
 }
 
 impl ModBiquad {
@@ -842,7 +838,9 @@ impl ModBiquad {
             self.env_depth,
             &mut self.lfo,
             self.lfo_depth,
-            self.cut_mod,
+            // No `cutoff` port on a biquad: retuned every sample its state
+            // no longer fits its coefficients, and it blows up.
+            None,
         ) {
             self.filter.set_cutoff(cutoff);
             self.filter_r.set_cutoff(cutoff);
@@ -1007,6 +1005,10 @@ struct OscMods {
 /// note it was given as a plain one.
 const PITCH_ENV_FLOOR: f32 = 0.01;
 
+/// As high as its ports can push an oscillator, at whatever rate the engine
+/// runs: just under half of it.
+const MOD_FREQ_TOP: f32 = 0.45 * SAMPLE_RATE;
+
 impl NoteOsc {
     /// Take this sample's values from the ports. `mask` says which are wired.
     #[inline]
@@ -1060,7 +1062,10 @@ impl NoteOsc {
         // phase backwards, which the band-limiting here does not follow, so
         // it stops at standing still.
         freq *= (1.0 + m.fm).max(0.0);
-        self.osc.set_frequency(freq);
+        // Nothing wired into a port takes it past the top: over half the
+        // sample rate the phase moves more than a cycle a sample and the
+        // band-limiting stops meaning anything. `min` also drops a NaN.
+        self.osc.set_frequency(freq.min(MOD_FREQ_TOP));
         if let Some(w) = m.width {
             self.osc.set_waveform(Waveform::Pulse(crate::math::clamp(self.duty + w, 0.05, 0.95)));
         }
@@ -1312,7 +1317,6 @@ impl NodeKind {
         let cut = (mask & port::bit(port::CUTOFF) != 0).then(|| mods[port::CUTOFF as usize]);
         match self {
             NodeKind::Osc(osc) => osc.modulate(mods, mask),
-            NodeKind::Biquad(m) => m.cut_mod = cut,
             NodeKind::Ladder(m) => m.cut_mod = cut,
             NodeKind::Svf(m) => {
                 m.cut_mod = cut;
@@ -1528,7 +1532,9 @@ impl NodeKind {
                 m.filter_r.set_cutoff(value);
                 true
             }
-            (NodeKind::Svf(m), "morph") => {
+            // Not the bandpass, which has no mode to turn: it passes the knob
+            // on to the next `svf` of the chain.
+            (NodeKind::Svf(m), "morph") if !m.bandpass => {
                 m.morph = crate::math::clamp(value, 0.0, 1.0);
                 true
             }
