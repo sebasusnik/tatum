@@ -721,8 +721,16 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     // phase of the wide band itself from three quarters of a cycle in (the
     // narrow band's low-pass keeps its own readings a few cycles off the
     // start).
+    // The wide band's phase is the partial's only where the partial
+    // rules the band: it has to agree with the narrow band's first reading.
+    let agrees_at = |fp: &[f32]| {
+        pitch.first().is_some_and(|p0| {
+            let i = rel(start + samples(p0.0.max(0.0)), fp.len());
+            (fp[i] / p0.1 - 1.0).abs() < 0.02
+        })
+    };
     let near_start: Vec<(f32, f32)> = match &fine {
-        Some(fp) => {
+        Some(fp) if swept || agrees_at(fp) => {
             let rel_start = rel(start, fp.len());
             let i0 = rel_start + (0.75 * SR / fp[(rel_start + samples(1.0)).min(fp.len() - 1)].max(1.0)) as usize;
             let i1 = (i0 + samples(12.0)).min(end.max(i0));

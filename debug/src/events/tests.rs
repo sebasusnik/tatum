@@ -688,7 +688,7 @@ fn saw(f0: f32, seconds: f32, naive: bool) -> Vec<f32> {
 
 #[test]
 fn a_naive_saw_folds_and_a_band_limited_one_does_not() {
-    for f0 in [110.0, 220.0, 440.0, 1000.0, 1760.0, 3520.0] {
+    for f0 in [55.0, 110.0, 220.0, 440.0, 1000.0, 1760.0, 3520.0] {
         let naive = run(saw(f0, 2.0, true));
         let c = &naive.clean;
         assert!(c.alias.is_some() || c.alias_unread.is_some(), "{f0} Hz naive: {:?}", c.lines());
@@ -697,6 +697,24 @@ fn a_naive_saw_folds_and_a_band_limited_one_does_not() {
         let clean = run(saw(f0, 2.0, false));
         assert!(clean.clean.alias.is_none(), "{f0} Hz band-limited: {:?}", clean.clean.alias);
     }
+    // A naive square folds too; plucked naive saws, struck four times, as well.
+    let square: Vec<f32> = saw(440.0, 2.0, true).iter().map(|v| if *v >= 0.0 { 0.2 } else { -0.2 }).collect();
+    assert!(run(square).clean.alias.is_some(), "naive square");
+    let mut plucks = vec![0.0f32; at(5.5)];
+    for k in 0..4 {
+        let s0 = at(0.3 + 1.25 * k as f32);
+        for i in 0..at(0.8) {
+            let t = i as f32 / SR;
+            plucks[s0 + i] += 0.3 * (-t / 0.25).exp() * (2.0 * (440.0 * t).fract() - 1.0);
+        }
+    }
+    let r = run(plucks);
+    assert!(r.clean.alias.is_some(), "plucked naive saw: {:?}", r.clean.lines());
+    // A file at another rate has been resampled on the way in: not looked at, and said.
+    let x = saw(440.0, 2.0, true);
+    let audio = crate::wav::Audio { rate: 48_000, left: x.clone(), right: x };
+    let r = analyze(&audio, None, None, &Options::default()).unwrap();
+    assert!(r.clean.alias.is_none() && r.clean.alias_unread.is_some_and(|w| w.contains("converted")), "{:?}", r.clean.lines());
     // Where a fold lands on the note's own harmonics nothing can be seen, and it is said.
     let r = run(saw(SR / 400.0, 2.0, true));
     assert!(r.clean.alias.is_some() || r.clean.alias_unread.is_some_and(|w| w.starts_with("not examined")), "{:?}", r.clean.lines());

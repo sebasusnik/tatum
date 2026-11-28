@@ -573,17 +573,36 @@ struct NoteFolds {
     has_harmonics: bool,
 }
 
+/// The four-term Blackman-Harris window's coefficients.
+const BH: [f64; 4] = [0.35875, 0.48829, 0.14128, 0.01168];
+
+/// The window's response `d` bins off a line, against its response on it.
+fn bh_kernel(d: f64) -> f64 {
+    let sinc = |x: f64| if x.abs() < 1e-9 { 1.0 } else { (std::f64::consts::PI * x).sin() / (std::f64::consts::PI * x) };
+    let k = BH[0] * sinc(d) + (1..4).map(|m| 0.5 * BH[m] * (sinc(d - m as f64) + sinc(d + m as f64))).sum::<f64>();
+    k / BH[0]
+}
+
 fn fold_lines(x: &[f32], hint: f32) -> Result<NoteFolds, &'static str> {
+    // Its first and last 60 ms left out: a fade spreads every harmonic
+    // over the bins beside it.
+    let trim = ms(60.0);
+    let x = if x.len() > 4096 + 2 * trim { &x[trim..x.len() - trim] } else { x };
     if x.len() < 4096 {
         return Err("not examined: no note steady and alone long enough to resolve its folds");
     }
     // A first spectrum to find the note: the strongest peak near the hint, or
     // the strongest of all.
     let n0 = (x.len().next_power_of_two() / 2).clamp(4096, 65536);
+    // A Blackman-Harris window: a line leaks under -92 dB from five bins out,
+    // so what stands there beside a harmonic is not the harmonic's own skirt.
     let spec = |n: usize| -> Vec<f64> {
         let (mut re, mut im) = (vec![0.0f64; n], vec![0.0f64; n]);
-        for i in 0..n.min(x.len()) {
-            re[i] = x[i] as f64 * (0.5 - 0.5 * (std::f64::consts::TAU * i as f64 / n as f64).cos());
+        let m = n.min(x.len());
+        for i in 0..m {
+            let t = std::f64::consts::TAU * i as f64 / m as f64;
+            let w = BH[0] - BH[1] * t.cos() + BH[2] * (2.0 * t).cos() - BH[3] * (3.0 * t).cos();
+            re[i] = x[i] as f64 * w;
         }
         fft(&mut re, &mut im);
         (0..n / 2).map(|k| re[k] * re[k] + im[k] * im[k]).collect()
@@ -620,8 +639,9 @@ fn fold_lines(x: &[f32], hint: f32) -> Result<NoteFolds, &'static str> {
     }
     let r = SR % f;
     let off = r.min(f - r);
-    // Four bins between a fold and the nearest harmonic.
-    let need = ((4.0 * SR / off.max(1e-3)) as usize).next_power_of_two().max(4096);
+    // Six bins between a fold and the nearest harmonic: past the window's
+    // main lobe.
+    let need = ((6.0 * SR / off.max(1e-3)) as usize).next_power_of_two().max(4096);
     if need > 65536 || need > x.len() {
         return Err(if need > 65536 {
             "not examined: at this pitch its folds land on its own harmonics"
@@ -652,13 +672,26 @@ fn fold_lines(x: &[f32], hint: f32) -> Result<NoteFolds, &'static str> {
         let fold = if up > SR / 2.0 { SR - up } else { up };
         let kb = at(fold);
         let harmonic = (fold / f).round() * f;
-        if kb < 30 || kb + 30 >= p.len() || (fold - harmonic).abs() < 3.0 * bin {
+        if kb < 30 || kb + 30 >= p.len() || (fold - harmonic).abs() < 5.0 * bin {
             continue;
         }
         examined += 1;
         let floor = local(kb).max(1e-30);
         floors.push(floor);
-        let line = three(kb);
+        // What the two harmonics either side leak there, from the window's
+        // own response, taken off.
+        let leak: f64 = [harmonic, harmonic + if fold > harmonic { f } else { -f }]
+            .iter()
+            .filter(|h| **h > bin && **h < 0.5 * SR - bin)
+            .map(|&h| {
+                let beta = (h / bin) as f64;
+                let hb = beta.round() as usize;
+                let got = three(hb.clamp(1, p.len() - 2));
+                let shape = |k: usize| (-1..=1).map(|j| bh_kernel((k as i64 + j) as f64 - beta).powi(2)).sum::<f64>();
+                got * shape(kb) / shape(hb).max(1e-30)
+            })
+            .sum();
+        let line = (three(kb) - leak).max(0.0);
         if line > 3.0 * 10.0 * floor {
             lines += 1;
             let v = line - 3.0 * floor;
