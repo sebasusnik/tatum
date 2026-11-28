@@ -156,7 +156,7 @@ dark_techno.wav: 300.7 s
     heard      43.8 Hz (F1), +2.0 semitones from the tail: the sweep weighted by its loudness
     hold       none: it falls from the hit
     decay      -12 dB at 95 ms, -24 dB at 111 ms
-    click      -32.1 dB (first 10 ms over 2 kHz against the body)
+    click      -26.5 dB (first 10 ms over 2 kHz against the body)
     under it   -45.6 dB (the band under 400 Hz late in the beat)
   spectrum     31.5    63   125   250   500    1k    2k    4k    8k   16k
   (dB)         -2.2  -7.0 -10.9 -12.6 -16.7 -19.5 -22.9 -21.1 -21.3 -22.6
@@ -203,13 +203,21 @@ from gets its knobs; a knob's × takes the argument out of the file, back to its
 default. Each turn is rendered at once -- one hit, the instrument alone, with no
 master chain and no loudness -- and played in a loop at the tempo given. Beside the
 knobs, the hit's pitch over time on a log scale and its level in dB, and the figures
-`analyze` reports for a kick: the tail and its note, the sweep, the hold, the falls.
+`analyze` reports for a kick: the tail and its note, the sweep, the hold, the falls,
+and the click: the first 10 ms over 2 kHz against the first 100 ms under 400 Hz. That
+figure counts everything up there in those milliseconds -- the top of the sweep, a
+chirp, a phase's step, drive -- so a quiet `click=` barely moves it: on a plain kick,
+`click=-30db` reads within half a dB of no click at all.
 
 A record can be laid next to it. Load a WAV, give the stretch (an intro or an outro
 where the kick plays alone or nearly) and how many milliseconds of each hit to keep
 (as many as come before an offbeat bass); its hits are averaged on the beat grid, so
 what comes with every hit stays and the rest thins out. The two are drawn on the same
-axes, and the loop can play the record's hit, yours, or the two in turn.
+axes, and the loop can play the record's hit, yours, or the two in turn. The record's
+click is read on that averaged hit, as yours is on its one hit, so the two compare.
+`tatum analyze` reads the record's hits one by one instead and takes the median, which
+keeps a hat or a hiss that comes with every hit: on a full mix it can print a click
+10 dB over the one shown here, and is not the number to tune yours to.
 
 Once a record is loaded, **Fit to reference** sets the kick node's knobs to what
 `tatum kick fit` finds for it (see below), and says what error is left.
@@ -251,7 +259,7 @@ refined while that render is further off than the node alone was. It prints the 
 ready to paste, the error left, and the two hits side by side:
 
 ```
-$ tatum kick fit outro.wav --from 5:40 --to 6:10
+$ tatum kick fit outro.wav --from 5:40 --to 6:10 --ms 200
 outro.wav: hits averaged at 124.00 BPM, the first 200 ms of each
 5389 kicks tried in 2.9 s
   round 1: the engine's render is off by 0.08 st in pitch (0.31 st over the attack), 0.03 dB in level, click +1.3 dB

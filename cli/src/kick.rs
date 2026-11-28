@@ -61,7 +61,13 @@ fn parse(args: &[String]) -> Result<(String, FitRequest), String> {
         match args[i].as_str() {
             "--from" => req.from = Some(crate::analyze::seconds(&value(i)?).ok_or("--from takes seconds or m:ss")?),
             "--to" => req.to = Some(crate::analyze::seconds(&value(i)?).ok_or("--to takes seconds or m:ss")?),
-            "--bpm" => req.bpm = Some(number(i)?),
+            "--bpm" => {
+                let bpm = number(i)?;
+                if !(20.0..=400.0).contains(&bpm) {
+                    return Err(format!("--bpm: {bpm} is not a tempo it can average on; 20 to 400"));
+                }
+                req.bpm = Some(bpm);
+            }
             "--ms" => req.ms = number(i)?.clamp(20.0, 2000.0),
             "--effort" => req.effort = number(i)?.clamp(0.05, 10.0),
             "--hit" => req.hit = Some(value(i)?),
@@ -142,8 +148,11 @@ pub fn fit_kick(target: &Target, effort: f32) -> Result<Fitted, String> {
     let mut tried = found.evals;
     let alone = found.score;
     let mut rounds = Vec::new();
-    let mut score = Score::default();
-    for round in 1..=3 {
+    let mut score;
+    // Up to three refinements, each rendered and measured after it: the
+    // line returned is always the one the last round measured.
+    let mut round = 1;
+    loop {
         let y = engine_hit(&args.line(), target.ms)?;
         score = fit::score(target, &y);
         rounds.push(format!(
@@ -152,12 +161,13 @@ pub fn fit_kick(target: &Target, effort: f32) -> Result<Fitted, String> {
         ));
         // The engine plays the node as it is; a render further off than the
         // node alone was is a difference the search has to see.
-        if score.cost() <= alone.cost() + 0.02 {
+        if score.cost() <= alone.cost() + 0.02 || round > 3 {
             break;
         }
         let evals = (300.0 * effort) as usize;
         args = fit::refine(&mut Engine { target }, &args, evals);
         tried += evals;
+        round += 1;
     }
     Ok(Fitted { args, score, rounds, tried })
 }
@@ -235,6 +245,11 @@ mod tests {
         assert_eq!((r.from, r.to, r.bpm, r.ms), (Some(64.0), Some(96.0), Some(124.0), 200.0));
         assert!(a(&["ref.wav", "--bpm", "NaN"]).is_err());
         assert!(a(&["ref.wav", "--bpm"]).is_err());
+        // A tempo the average has no grid for is said to be the tempo.
+        for bpm in ["500", "10"] {
+            let e = a(&["ref.wav", "--bpm", bpm]).err().expect("refused");
+            assert!(e.contains("--bpm"), "{e}");
+        }
         assert!(a(&["ref.wav", "--nope"]).is_err());
         assert!(a(&[]).is_err());
     }
