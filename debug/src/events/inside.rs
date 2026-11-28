@@ -643,6 +643,8 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     let decay_db_ms = match fit {
         None => Fig::No("no fall of 6 readings before the bed or the next event"),
         Some(_) if fell < 10.0 => Fig::No("it falls under 10 dB before the bed or the next event"),
+        // Its first 30 dB nothing like one line: no decay to speak of.
+        Some(_) if all_fit.is_some_and(|f| f.r2 < 0.5) => Fig::No("its level does not fall as one decay"),
         // Near what the band follows, the reading errs either way (a third
         // fast at 1 kHz, half slow at 110 Hz): no bound holds.
         Some(f) if -f.slope > 0.8 * fastest => Fig::No("its decay is faster than its band follows"),
@@ -1216,7 +1218,9 @@ fn spectral(
                 den += v;
             }
         }
-        if den <= 0.0 {
+        // What the event adds has to be a spectrum: where the bed's swing
+        // outweighs it, a centroid can land anywhere, below zero included.
+        if den <= 0.0 || num <= 0.0 || num / den >= s.bins as f64 {
             return None;
         }
         let cen = num / den;

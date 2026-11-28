@@ -1146,6 +1146,11 @@ fn a_dense_mix_is_read_without_falling_over() {
             for me in report::MEASURES {
                 assert!((me.get)(e).any().is_none_or(f32::is_finite), "{} at {}", me.key, e.start_s);
             }
+            // A centroid is somewhere in the spectrum; a decay is a line.
+            assert!(e.inside.centroid_hz.any().is_none_or(|c| c > 0.0 && c < SR / 2.0), "{:?}", e.inside.centroid_hz);
+            if e.inside.decay_db_ms.value().is_some() {
+                assert!(e.inside.decay_r2.value().is_some_and(|r| r >= 0.5), "{:?}", e.inside.decay_r2);
+            }
         }
         // In a mix this dense, events overlap: what needs one alone is not read.
         assert!(r.events.iter().any(|e| e.inside.overlap.is_some()));
