@@ -701,9 +701,6 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
     let first_ends = pitch.iter().take_while(|p| p.0 <= pitch[0].0 + 3.0).count().clamp(1, ends);
     let mut start_hz = median(&mut pitch[..first_ends].iter().map(|p| p.1).collect::<Vec<_>>());
     let end_hz = median(&mut pitch[pitch.len() - ends..].iter().map(|p| p.1).collect::<Vec<_>>());
-    // A sweep that has moved on by the first reading: its pitch at the
-    // start is the line through the first readings, taken back to it.
-    let mut sweep_rate = 0.0f32;
     // The first reading is some way after the start. On a steady note that
     // does not matter; on a glide the start is taken back over that gap
     // along the line through the first cycle of readings, which holds when
@@ -743,7 +740,7 @@ pub(crate) fn read(c: &Ctx, ridge: &Ridge, over_floor_db: f32, onsets: &[(usize,
             if moved_st > 0.3 {
                 let back = 2f32.powf(f.intercept);
                 // Octaves per ms times ms per cycle: the share it moves in a cycle.
-                sweep_rate = (f.slope.abs() * std::f32::consts::LN_2) * 1000.0 / back.max(1.0);
+                let sweep_rate = (f.slope.abs() * std::f32::consts::LN_2) * 1000.0 / back.max(1.0);
                 let gap_cycles = gap_ms * 0.001 * back;
                 let fits = f.r2 >= 0.9;
                 // A second reading that errs another way: the first whole
@@ -1193,8 +1190,8 @@ fn spectral(
         let (a, b) = (u0.saturating_sub(1).max(fa), (u0 + 1).min(fb));
         let (mut num, mut den, mut spread_sum) = (0.0f64, 0.0f64, 0.0f64);
         for u in a..=b {
-            for k in 1..s.bins {
-                let v = s.at(u, k) as f64 - bed.mean[k];
+            for (k, m) in bed.mean.iter().enumerate().skip(1) {
+                let v = s.at(u, k) as f64 - m;
                 num += k as f64 * v;
                 den += v;
             }
@@ -1204,8 +1201,8 @@ fn spectral(
         }
         let cen = num / den;
         let frames = (b + 1 - a) as f64;
-        for k in 1..s.bins {
-            spread_sum += (k as f64 - cen).powi(2) * bed.spread[k].powi(2);
+        for (k, sp) in bed.spread.iter().enumerate().skip(1) {
+            spread_sum += (k as f64 - cen).powi(2) * sp.powi(2);
         }
         let sd = (7.5 * spread_sum * frames * (1.0 + frames / m as f64)).sqrt() / den;
         let hz = (cen * bin_hz as f64) as f32;

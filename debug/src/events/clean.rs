@@ -288,11 +288,11 @@ fn interpolator() -> Vec<f64> {
     };
     let m = TAPS;
     let mut g = vec![vec![0.0f64; m + 1]; m];
-    for j in 0..m {
-        for k in 0..m {
-            g[j][k] = 4.0 * cc((j + 1) as f64, (k + 1) as f64) + if j == k { 1e-9 } else { 0.0 };
+    for (j, row) in g.iter_mut().enumerate() {
+        for (k, v) in row.iter_mut().enumerate().take(m) {
+            *v = 4.0 * cc((j + 1) as f64, (k + 1) as f64) + if j == k { 1e-9 } else { 0.0 };
         }
-        g[j][m] = 2.0 * ((j + 1) as f64 * w).sin() / (j + 1) as f64;
+        row[m] = 2.0 * ((j + 1) as f64 * w).sin() / (j + 1) as f64;
     }
     // Gaussian elimination with partial pivoting.
     for col in 0..m {
@@ -549,7 +549,6 @@ fn alias(
     if examined == 0 {
         return (None, Err(why));
     }
-    let mut floors = floors;
     floors.sort_by(f32::total_cmp);
     let floor = floors[floors.len() / 2];
     if signal <= 0.0 || folded <= 0.0 {
