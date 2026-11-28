@@ -1293,6 +1293,15 @@ or `snare(wires=3000ms)` on quarter notes. On a hat the new hit covers it; on a 
 or snare tail it is a step, up to 8 dB under the tail's own level in what was measured.
 There is no choke either: an open hat is not cut by the closed one after it.
 
+A note struck again while its last strike is still releasing takes a new voice, and the
+old one keeps releasing under it, as a key struck again does: `C3 C3 C3 C3 - - - -` on a
+release of a second is four tails overlapping, all gone a second after the last. The end
+of a note reaches the latest strike of that note still held from the same place, never a
+voice already releasing: the pattern's note-offs end only what the pattern struck, and a
+key or pad let go only what was played live into the track, so a key held on the note the
+pattern plays sounds until it is let go. A graph has no glide, so a slide is struck anew
+and ends the note before it, inside a step too: `<C3 ~E3>` is `C3` then `E3`.
+
 **An FM stab.** Two operators, short envelopes, a bit of feedback, off-beat pattern with
 rests, saturation in the chain and a delay send:
 

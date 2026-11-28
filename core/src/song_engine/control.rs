@@ -167,7 +167,7 @@ impl SongEngine {
         }
         let inst = self.trigger_instrument(track_idx);
         if let Some(i) = self.instruments.get_mut(inst) {
-            i.note_on(note, velocity.clamp(0.0, 1.0));
+            i.live_note_on(note, velocity.clamp(0.0, 1.0));
         }
     }
 
@@ -177,7 +177,7 @@ impl SongEngine {
     pub fn live_note_off(&mut self, track_idx: usize, note: u8) {
         let Some(inst) = self.tracks.get(track_idx).map(|t| t.instrument_idx) else { return };
         if let Some(i) = self.instruments.get_mut(inst) {
-            i.note_off(note);
+            i.live_note_off(note);
         }
     }
 
