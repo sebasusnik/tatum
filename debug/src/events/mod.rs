@@ -390,8 +390,18 @@ fn find(mono: &[f32], opts: &Options) -> Found {
             continue;
         };
         let ridge = follow(&s, &floor, t, b);
-        let (peak_i, peak) =
-            ridge.power.iter().enumerate().fold((0, 0.0f32), |m, (i, &p)| if p > m.1 { (i, p) } else { m });
+        // The onset's own peak: up to where the ridge has fallen 6 dB from
+        // the most it reached, or 300 ms. A flutter of a bed that a ridge
+        // follows on into a later, louder sound is not that sound's onset.
+        let reach = ((0.3 / s.frame_s()) as usize).max(2);
+        let (mut peak_i, mut peak) = (0usize, 0.0f32);
+        for (i, &p) in ridge.power.iter().enumerate().take(reach) {
+            if p > peak {
+                (peak_i, peak) = (i, p);
+            } else if p < 0.25 * peak {
+                break;
+            }
+        }
         let peak_bin = s.bin(ridge.hz[peak_i]);
         let before = if t > lag {
             (b.saturating_sub(1)..=(b + 1).min(s.bins - 1)).map(|x| s.at(t - lag - 1, x)).fold(0.0f32, f32::max)

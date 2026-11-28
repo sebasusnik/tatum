@@ -332,40 +332,55 @@ fn coloured(bed_db: f32, seed: u32) -> Report {
 
 #[test]
 fn purity_and_harmonics_hold_as_the_bed_rises_until_they_are_withheld() {
+    // Each event's noise is its own, so each is held against its own reading
+    // with no bed; the same six events come back as the bed rises 76 dB.
     let quiet = coloured(-70.0, 1);
-    let (h2_0, ton_0) = (
-        quiet.events.iter().map(|e| val(e.inside.h2_db, "h2")).sum::<f32>() / 6.0,
-        quiet.events.iter().map(|e| val(e.inside.tonal_db, "tonal")).sum::<f32>() / 6.0,
-    );
-    assert!((h2_0 + 20.0).abs() < 1.5, "h2 {h2_0}");
-    let mut withheld = false;
-    for bed_db in [-60.0, -50.0, -40.0, -30.0] {
+    assert_eq!(quiet.events.len(), 6);
+    let h2_0: Vec<f32> = quiet.events.iter().map(|e| val(e.inside.h2_db, "h2")).collect();
+    let ton_0: Vec<f32> = quiet.events.iter().map(|e| val(e.inside.tonal_db, "tonal")).collect();
+    let cen_0: Vec<f32> = quiet.events.iter().map(|e| val(e.inside.centroid_hz, "centroid")).collect();
+    let mv_0: Vec<f32> = quiet.events.iter().map(|e| val(e.inside.centroid_move_st, "move")).collect();
+    for v in &h2_0 {
+        assert!((v + 20.0).abs() < 2.5, "h2 {v} for a planted -20");
+    }
+    let mut last_values = usize::MAX;
+    for bed_db in [-60.0, -50.0, -40.0, -30.0, -20.0, -10.0, 0.0, 6.0] {
         let r = coloured(bed_db, 2);
-        assert_eq!(r.events.len(), 6, "bed {bed_db}");
+        if bed_db <= -20.0 {
+            assert_eq!(r.events.len(), 6, "bed {bed_db}");
+        }
+        let mut values = 0;
         for e in &r.events {
+            let Some(k) = quiet.events.iter().position(|q| (q.start_s - e.start_s).abs() < 0.03) else { continue };
             let x = &e.inside;
             match x.h2_db {
-                Fig::Value(v) => assert!((v - h2_0).abs() < 1.5, "bed {bed_db}: h2 {v} for {h2_0}"),
-                Fig::AtMost(v) => {
-                    assert!(v >= h2_0 - 1.5, "bed {bed_db}: a bound under the truth {v}");
-                    withheld = true
+                Fig::Value(v) => {
+                    assert!((v - h2_0[k]).abs() < 1.0, "bed {bed_db}: h2 {v} for {}", h2_0[k]);
+                    values += 1;
                 }
-                other => panic!("bed {bed_db}: {other:?}"),
+                Fig::AtMost(v) => assert!(v >= h2_0[k] - 1.0, "bed {bed_db}: a bound under the truth {v}"),
+                Fig::AtLeast(v) => panic!("bed {bed_db}: h2 at least {v}"),
+                Fig::No(_) => {}
             }
             match x.tonal_db {
-                Fig::Value(v) => assert!((v - ton_0).abs() < 1.5, "bed {bed_db}: tonal {v} for {ton_0}"),
-                Fig::AtLeast(v) => assert!(v <= ton_0 + 1.5, "bed {bed_db}: a bound over the truth {v}"),
-                other => panic!("bed {bed_db}: {other:?}"),
+                Fig::Value(v) => assert!((v - ton_0[k]).abs() < 1.0, "bed {bed_db}: tonal {v} for {}", ton_0[k]),
+                Fig::AtLeast(v) => assert!(v <= ton_0[k] + 1.0, "bed {bed_db}: a bound over the truth {v}"),
+                Fig::AtMost(v) => panic!("bed {bed_db}: tonal at most {v}"),
+                Fig::No(_) => {}
             }
             if let Fig::Value(c) = x.centroid_hz {
-                assert!((12.0 * (c / quiet.events[0].inside.centroid_hz.value().unwrap()).log2()).abs() < 0.5, "centroid {c}");
+                assert!((12.0 * (c / cen_0[k]).log2()).abs() < 0.5, "bed {bed_db}: centroid {c} for {}", cen_0[k]);
             }
             if let Fig::Value(m) = x.centroid_move_st {
-                assert!(m.abs() < 1.5, "bed {bed_db}: the centroid moves {m} st");
+                assert!((m - mv_0[k]).abs() < 1.0, "bed {bed_db}: the centroid moves {m} st for {}", mv_0[k]);
             }
         }
+        if bed_db <= -20.0 {
+            assert_eq!(values, 6, "bed {bed_db}: the 2nd harmonic stands 30 dB over the bed and is not read");
+        }
+        last_values = values;
     }
-    assert!(withheld, "30 dB of bed more and the 2nd harmonic is still read as a number");
+    assert_eq!(last_values, 0, "a bed louder than the ping, and the 2nd harmonic is still read as a number");
     // A pure ping has no harmonic to read: never a number for one, at any bed.
     for bed_db in [-90.0, -50.0, -30.0] {
         let mut x = vec![0.0f32; at(6.0)];
@@ -996,3 +1011,4 @@ fn a_band_under_15_hz_is_refused() {
     let opts = Options { band: Some((10.0, 11.0)), ..Options::default() };
     assert!(analyze(&audio, None, None, &opts).is_err());
 }
+

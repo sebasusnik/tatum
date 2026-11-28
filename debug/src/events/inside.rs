@@ -1097,7 +1097,7 @@ fn spectral(
     let at_peak = centroid(loudest);
     let centroid_hz = match at_peak {
         None => Fig::No("nothing over the bed at its peak"),
-        Some((_, off)) if off > 0.5 => Fig::No("the bed moves the centroid by more than half a semitone"),
+        Some((_, off)) if off > 0.25 => Fig::No("the bed could move the centroid by more than a quarter of a semitone"),
         Some((hz, _)) => Fig::Value(hz),
     };
     let down = frames_t[loudest - fa] * 0.063;
