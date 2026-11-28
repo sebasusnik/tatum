@@ -1,9 +1,13 @@
 # A pad that is a cluster, not a chorus: five saws per voice at 0, 9 and 20
-# cents either side of the note, so the cluster beats at about one to four
-# times a second on a low note, under a 4.5 Hz vibrato of 45 cents from top to
-# bottom. One lowpass per voice follows a single slow curve that never
-# repeats, the same for every note of a chord, and each note opens it a touch
-# differently. Hold chords; slow attack and release.
+# cents either side of the note, the outer two a little quieter, so on D3 the
+# cluster beats at 0.8, 1.7, 2.5 and 3.4 times a second and a partial swings
+# 21 dB rather than vanishing, under a 4.5 Hz vibrato of 45 cents from top to
+# bottom. A breath of noise goes in with the saws, so between the partials
+# there is a floor 55 dB under the strongest and not silence. One lowpass per
+# voice follows a single slow curve that never repeats, the same for every
+# note of a chord, and each note opens it a touch differently. Hold chords;
+# slow attack and release. It is mono: its width is the track's (a chorus,
+# the reverb).
 instrument shoal {
   gain 0.5
   osc saw(110) as a
@@ -11,6 +15,8 @@ instrument shoal {
   osc saw(110, pitch=-0.09) as c
   osc saw(110, pitch=0.2) as e
   osc saw(110, pitch=-0.2) as f
+  gain(0.6) as le
+  gain(0.6) as lf
   lfo(4.5hz, 0.019) as vib
   rand(0.08) as hurry
   gain(0.2) as trim
@@ -19,6 +25,8 @@ instrument shoal {
   wander(1.3hz, 0.3, jitter=1) as ripple
   rand(0.25) as differs
   adsr(1.2, 1, 0.85, 2.5) as amp
+  noise as hiss
+  gain(0.03) as air
   hurry > vib.rate
   vib > a.pitch
   vib > b.pitch
@@ -28,8 +36,12 @@ instrument shoal {
   a > mix
   b > mix
   c > mix
-  e > mix
-  f > mix
+  e > le
+  f > lf
+  le > mix
+  lf > mix
+  hiss > air
+  air > mix
   mix > trim
   trim > filt
   sweep > filt.cutoff
