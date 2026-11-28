@@ -196,17 +196,30 @@ tatum design sounds/kicks/deep.synth [--library sounds] [--port 7350] [--no-open
 A sound designer in the browser, served from this machine (127.0.0.1 only), for every
 sound tatum has. A sound is a file with one `instrument` graph or one `module` (`beats`,
 `bass`, `fm`, `keys`) in it and a comment on top that says what it is; a file that does
-not exist yet starts as a deep kick, and Save creates it.
+not exist yet starts as a deep kick, and Save creates it. A file with anything else in
+it is not opened, since Save writes the comment on top and the one definition and
+nothing more: a song (a `tempo`, patterns, tracks) with one instrument in it, or a sound
+with a comment inside the definition or after it, is refused with the line to move.
 
 **Knobs.** A graph gets a knob for every argument of every node, a module one for every
 parameter, from the same tables `params` prints and the compiler checks against. A
 module's knob shows its value in its unit (`hz`, `ms`, `st`, `x`, a gain in dB) and a
 choice is a menu; an fm module also has knobs for each operator's `opN_envelope`. A
 knob's × takes the parameter out of the file, back to its default. A value past its
-range is held to it; NaN is refused. The file is written back in the style it uses: a
-parameter written `80%` stays a percentage, one written as a plain number stays one,
-and one set for the first time is written in its unit (a gain in dB, a choice by name).
-Reading what it writes gives back the same sound.
+range is held to it; NaN is refused. A module's parameter is written back in the style
+its file uses: one written `80%` stays a percentage, one in dB stays in dB, one written
+as a plain number stays one, and one set for the first time is written in its unit (a
+gain in dB, a choice by name). Reading what it writes gives back the same sound, but
+Save does not keep the text byte for byte. It normalises how things are written, on
+the first Save of a file made by hand: a number is written the shortest way (`1.0`
+becomes `1`), a time in `ms` (`1.2s` becomes `1200ms`) and a frequency in `hz`
+(`3khz` becomes `3000hz`) or as its note when it is one (`440` becomes `A4`); a graph
+is one node or one wire a line, every node named (the `lowpass(800hz)` of a chain
+`a > lowpass(800hz) > out` gets a name such as `lowpass1`, and the chain becomes two
+wires), an expression its value (`55 * 2` becomes `110`); a
+parameter written twice is written once; the comment on top becomes one paragraph
+wrapped at 78 columns; blank lines and spacing go. A file Save wrote is not changed
+by saving it again.
 
 **Graph editing.** Add a node (any kind an instrument line can hold, every argument at
 its default), pick an oscillator's waveform, remove a node with its connections, and
@@ -240,14 +253,19 @@ duplicate never overwrites a file, and a type or name is lower-case letters, dig
 is followed.
 
 **Save** writes only a sound that compiles and makes a sound (a graph with nothing
-wired to `out` is refused). The text is the sound: a song plays it with
+wired to `out` is refused; a drum kit is saved when any of its lanes sounds, whichever
+one the loop is playing). The text is the sound: a song plays it with
 `use "../sounds/kicks/deep.synth"` and `play ... using deep_kick`.
 
 It answers only its own page. Any site open in the same browser can send a request to
 127.0.0.1, so a request whose `Host` or `Origin` is not this server, or a POST without
 the page's own header, is refused (403). It writes only the file it was started on and
-files inside the library. A WAV is taken up to 400 MB; a request that stops sending is
-let go after 30 seconds.
+files inside the library. A request is refused on its head, before any of its body is
+read; a WAV is taken up to 400 MB, and only on `/api/reference`, anything else up to
+1 MB. A request has a deadline as a whole, not for each read: 10 seconds for its head,
+then 30 for its body (two minutes for a WAV), so one that stops sending, or sends a
+byte now and then, is let go. Sixteen connections are read at once; one more is
+answered 503.
 
 The page talks to it over a small JSON API: `GET /api/sound`, `/api/kinds` (the node
 kinds a graph can add), `/api/library`; `POST /api/set` (knobs and graph edits, one a

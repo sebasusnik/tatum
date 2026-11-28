@@ -38,8 +38,12 @@ drum kit plays a lane, or a groove). It draws one hit's pitch and level over
 time and lays a record's averaged hit next to it. A graph's nodes are added,
 removed and wired with buttons. The library is listed beside it: open any
 sound here, or duplicate the one open to a new name (`keys/pad-dark` plays as
-`pad_dark`) and make it your own. Save writes the file back in the same text
-anyone can read and diff, and only when it compiles. A file that does not
+`pad_dark`) and make it your own. Save writes the file back as text anyone can
+read and diff, and only when it compiles. It writes the comment on top and the
+one definition, in its own spelling (`1.0` as `1`, `1.2s` as `1200ms`, `3khz`
+as `3000hz`, the comment wrapped again), so the first Save of a file made by
+hand can change how it is written, never what it plays; and a file with more
+in it (a song, a comment inside the definition) is not opened at all. A file that does not
 exist yet starts as a deep kick.
 
 The name is what a song plays it by, so two sounds a song uses together need

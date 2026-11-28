@@ -217,6 +217,20 @@ impl Audition {
         Ok(y)
     }
 
+    /// Whether the sound makes any sound at all, whatever the loop is set
+    /// to: a drum kit does when any of its lanes does (a kit of hats and
+    /// claps has a silent kick), anything else when its hit does.
+    pub fn sounds(&self, sound: &Sound) -> Result<bool, String> {
+        if !is_drums(sound) {
+            return Ok(self.hit(sound)?.iter().any(|v| *v != 0.0));
+        }
+        let lanes: String = LANES.iter().map(|l| format!("  {l}: X - - -  - - - -  - - - -  - - - -\n")).collect();
+        let src =
+            format!("tempo 60\n{}\npattern p {{\n{lanes}}}\ntrack t {{ play p using {} }}\n", sound.text(), sound.name);
+        let (l, r) = render(&src, 1)?;
+        Ok(l.iter().chain(r.iter()).any(|v| *v != 0.0))
+    }
+
     /// The bar the loop plays, in stereo, with what rings past it, from the
     /// bar's first sample: the page starts one every bar.
     pub fn bar(&self, sound: &Sound) -> Result<(Vec<f32>, Vec<f32>), String> {
