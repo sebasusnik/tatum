@@ -12,7 +12,7 @@ instrument abyss {
   gain(2.5) as sweep
   gain(0.6) as la
   gain(0.5) as lb
-  svf(220hz, 0.45, morph=0.15) as filt
+  svf(A3, 0.45, morph=0.15) as filt
   adsr(0.005, 0.8, 0.7, 0.8) as amp
   saturate(1.6) as sat
   b > xmod
