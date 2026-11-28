@@ -1279,6 +1279,11 @@ or `snare(wires=3000ms)` on quarter notes. On a hat the new hit covers it; on a 
 or snare tail it is a step, up to 8 dB under the tail's own level in what was measured.
 There is no choke either: an open hat is not cut by the closed one after it.
 
+A note struck again while its last strike is still releasing takes a new voice, and the
+old one keeps releasing under it, as a key struck again does: `C3 C3 C3 C3 - - - -` on a
+release of a second is four tails overlapping, all gone a second after the last. The end
+of a note always reaches its latest strike still held, never a voice already releasing.
+
 **An FM stab.** Two operators, short envelopes, a bit of feedback, off-beat pattern with
 rests, saturation in the chain and a delay send:
 

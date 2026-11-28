@@ -13,6 +13,12 @@ pub struct Voice {
     pub velocity: f32,
     pub active: bool,
     pub age: u32,
+    /// The key is still down: set by a strike, cleared by its note-off. A
+    /// voice that is active and not held is ringing out its release.
+    pub held: bool,
+    /// Which strike of the instrument this is, to tell the latest of two
+    /// voices held on one note.
+    pub strike: u32,
 }
 
 impl Default for Voice {
@@ -23,7 +29,15 @@ impl Default for Voice {
 
 impl Voice {
     pub fn new() -> Self {
-        Self { nodes: core::array::from_fn(|_| None), note: 0, velocity: 0.0, active: false, age: 0 }
+        Self {
+            nodes: core::array::from_fn(|_| None),
+            note: 0,
+            velocity: 0.0,
+            active: false,
+            age: 0,
+            held: false,
+            strike: 0,
+        }
     }
 
     /// The voice's nodes, allocated once for `template`: a note renews them
@@ -51,6 +65,7 @@ impl Voice {
         self.note = note;
         self.velocity = velocity;
         self.active = true;
+        self.held = true;
         self.age = 0;
 
         let freq = math::midi_to_freq(note);
@@ -89,9 +104,11 @@ impl Voice {
             }
         }
         self.active = false;
+        self.held = false;
     }
 
     pub fn release(&mut self, template: &GraphTemplate) {
+        self.held = false;
         for &n in &template.env_nodes[..template.env_count as usize] {
             let idx = n as usize;
             if let Some(ref mut node) = self.nodes[idx] {
@@ -184,6 +201,7 @@ impl Instrument {
         });
         self.voices[idx].init(&self.template, note, velocity);
         let hit = self.hits;
+        self.voices[idx].strike = hit;
         self.hits = self.hits.wrapping_add(1);
         // A drum node that sways is made again for its hit number, in its own box.
         for i in 0..self.template.node_count as usize {
@@ -252,12 +270,25 @@ impl Instrument {
         }
     }
 
+    /// Release `note`: the latest strike of it that is still held. A voice
+    /// already releasing is never the one. A note struck again while its last
+    /// strike still rings has two voices on it, the old one keeps releasing as
+    /// a re-struck key does, and taking the first match by note number used to
+    /// hand the new strike's note-off to the old voice: the new one was then
+    /// held until it was stolen, ringing through every rest after it.
     pub fn note_off(&mut self, note: u8) {
-        for voice in self.voices.iter_mut() {
-            if voice.active && voice.note == note {
-                voice.release(&self.template);
-                break;
+        let mut latest: Option<(usize, u32)> = None;
+        for (i, v) in self.voices.iter().enumerate() {
+            if v.active && v.held && v.note == note {
+                // The distance back from the next strike, so the count wrapping changes nothing.
+                let back = self.hits.wrapping_sub(v.strike);
+                if latest.is_none_or(|(_, b)| back < b) {
+                    latest = Some((i, back));
+                }
             }
+        }
+        if let Some((i, _)) = latest {
+            self.voices[i].release(&self.template);
         }
     }
 
@@ -309,6 +340,7 @@ impl Instrument {
 
             if voice.all_envelopes_idle(template) {
                 voice.active = false;
+                voice.held = false;
             }
         }
     }
@@ -324,6 +356,7 @@ impl Instrument {
     pub fn reset(&mut self) {
         for voice in self.voices.iter_mut() {
             voice.active = false;
+            voice.held = false;
         }
         // The next play counts its hits from the top, as a render does.
         self.hits = 0;
