@@ -4,6 +4,7 @@ mod controls;
 mod fmt;
 mod debug;
 mod design;
+mod events;
 mod include;
 mod kick;
 mod live;
@@ -33,6 +34,7 @@ fn main() {
         "audit" => audit::cmd(&args[2..]),
         "analyze" => analyze::cmd_analyze(&args[2..]),
         "compare" => analyze::cmd_compare(&args[2..]),
+        "events" => events::cmd(&args[2..]),
         "debug" => debug::cmd(&args[2..]),
         "design" => design::cmd(&args[2..]),
         "kick" => kick::cmd(&args[2..]),
@@ -74,6 +76,7 @@ USAGE:
     tatum debug <song.synth> [--bars N | A-B] [--dry] [-o dir] [--solo a,b] [--mute c]
     tatum analyze <reference.wav> [--from 1:04] [--to 1:36]
     tatum compare <reference.wav> <song.synth | other.wav> [--from S] [--to S] [--bars N | A-B] [--solo a,b]
+    tatum events <a.wav> [--against <b.wav>] [--from S] [--to S] [--band LO HI] [--sustained] [--png sheet.png] [--json]
     tatum design <sound.synth> [--library <dir>] [--port N] [--no-open]
     tatum kick fit <reference.wav> [--from S] [--to S] [--bpm N] [--ms 230] [--effort 1] [--hit hit.wav]
     tatum watch <song.synth> [--tui] [--device <name>] [--rate <hz>] [--midi <name>] [--buffer <frames>]
@@ -141,6 +144,15 @@ COMMANDS:
               bands to take down or bring up, the density, the low end's
               width. --solo kick compares one part against the reference;
               --bars picks the stretch of the song.
+    events    What each event of a sound is like inside, on no grid and over
+              whatever bed runs under it: attack, decay, the bend of its
+              pitch, the width and Q of its resonance, how much of it is its
+              partial, harmonics, its level over the bed and in the mix,
+              where it sits between the speakers, the tail after it, echoes;
+              for what holds (--sustained) the partials and how each moves;
+              and what should not be in a render (aliasing, steps, zipper).
+              --against measures a second WAV the same way and says what
+              differs most; --png puts the events of both on one sheet.
     design    A sound designer in the browser, served from this machine,
               for one instrument graph or one module (beats, bass, fm, keys):
               a knob for every argument and parameter, nodes added, removed

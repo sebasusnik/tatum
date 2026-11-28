@@ -14,6 +14,7 @@
 //! where to look.
 
 pub mod draw;
+pub mod events;
 pub mod fft;
 pub mod fit;
 pub mod hit;
