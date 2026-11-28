@@ -195,7 +195,8 @@ fn unknown_node(instrument: &str, name: &str) -> String {
 /// With `heard=1` the note written is the note the kick is heard as
 /// ([`crate::graph::node::kick_heard_hz`]), and the note it settles on is
 /// found under it: a few steps of the settling note times written over
-/// heard, each a rendering of the shape, not of the sound.
+/// heard, each a rendering of the shape, not of the sound. A kick that is
+/// still heard over the note written when it settles on 20 Hz is an error.
 pub fn kick_spec(params: &[Param]) -> Result<NodeSpec, CompileError> {
     let written = float_param_at(params, 0).unwrap_or(50.0);
     if named_param(params, "heard").unwrap_or(0.0) < 0.5 {
@@ -211,8 +212,29 @@ pub fn kick_spec(params: &[Param]) -> Result<NodeSpec, CompileError> {
             break;
         }
     }
-    kick_spec_on(params, note)
+    // The steps only stop short of the note written at the floor of the
+    // range: a sweep that lifts the note heard by more than there is room
+    // under it. That kick is not the one asked for, so it is not built.
+    let spec = kick_spec_on(params, note)?;
+    let heard = crate::graph::node::kick_heard_hz(&spec);
+    let over = 12.0 * crate::math::ln(heard / written) / core::f32::consts::LN_2;
+    if crate::math::abs(over) > HEARD_WITHIN_ST {
+        return Err(CompileError::new(format!(
+            "kick: heard=1 cannot bring this kick to be heard on {} Hz: settling on {:.0} Hz, the lowest a kick goes, it is still heard {:.1} semitones over, on {:.1} Hz, because its sweep stays loud for too long; shorten body={} or lower knee= until it fits, or leave heard=1 out and write the note it settles on",
+            written,
+            note,
+            over,
+            heard,
+            named_param(params, "body").unwrap_or(60.0),
+        )));
+    }
+    Ok(spec)
 }
+
+/// How near the note written a `heard=1` kick has to be heard, in semitones:
+/// a tenth of what an ear tells apart down there, and far over where the
+/// steps stop when there is room under the note.
+const HEARD_WITHIN_ST: f32 = 0.05;
 
 /// The kick settling on `note`.
 fn kick_spec_on(params: &[Param], note: f32) -> Result<NodeSpec, CompileError> {
