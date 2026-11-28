@@ -1,0 +1,19 @@
+# A warm polysynth pad in the spirit of a Juno-106: two saws a hair apart per
+# voice, a soft lowpass breathing slowly with an LFO, and a wide stereo chorus
+# that does most of the work. Hold chords; slow attack and release.
+module keys chorus_pad {
+  voice_mode poly
+  detune 8%
+  cutoff 1400hz
+  resonance 15%
+  attack 350ms
+  decay 800ms
+  sustain 80%
+  release 1400ms
+  lfo_target cutoff
+  lfo_waveform triangle
+  lfo_rate 0.3hz
+  lfo_depth 12%
+  chorus_mix 60%
+  level 0.6
+}
