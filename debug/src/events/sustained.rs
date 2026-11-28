@@ -273,7 +273,7 @@ fn swing(v: &[f32], per_second: f32) -> (f32, Option<f32>) {
         return (0.0, None);
     }
     let points: Vec<(f32, f32)> = v.iter().enumerate().map(|(i, y)| (i as f32, *y)).collect();
-    let slope = line(&points).map_or(0.0, |l| l.0);
+    let slope = line(&points).map_or(0.0, |l| l.slope);
     let mean = v.iter().sum::<f32>() / v.len() as f32;
     let mid = (v.len() - 1) as f32 / 2.0;
     let rest: Vec<f32> = v.iter().enumerate().map(|(i, y)| y - mean - slope * (i as f32 - mid)).collect();

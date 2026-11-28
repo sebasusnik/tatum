@@ -1,3 +1,5 @@
+use super::inside::Fig;
+use super::report::Summary;
 use super::*;
 use std::f32::consts::TAU;
 
@@ -28,6 +30,18 @@ fn ping(out: &mut [f32], when: f32, hz: f32, tau_ms: f32, amp: f32, attack_ms: f
     }
 }
 
+/// A pitch that falls from `f0` towards `f1` with time constant `tau_f_ms`,
+/// struck at full level and falling with `tau_a_ms`: a kick's body, a zap.
+fn sweep(out: &mut [f32], when: f32, f0: f32, f1: f32, tau_f_ms: f32, tau_a_ms: f32, amp: f32) {
+    let start = at(when);
+    let mut phase = 0.0f64;
+    for i in 0..at(tau_a_ms * 0.008).min(out.len() - start) {
+        let t = i as f32 * 1000.0 / SR;
+        out[start + i] += amp * (-t / tau_a_ms).exp() * (std::f64::consts::TAU * phase).sin() as f32;
+        phase += ((f1 + (f0 - f1) * (-t / tau_f_ms).exp()) / SR) as f64;
+    }
+}
+
 fn bed(seconds: f32, noise: f32, pad: f32) -> Vec<f32> {
     let mut n = Noise(7);
     (0..at(seconds))
@@ -38,8 +52,32 @@ fn bed(seconds: f32, noise: f32, pad: f32) -> Vec<f32> {
         .collect()
 }
 
+fn hiss(x: &mut [f32], amp: f32, seed: u32) {
+    let mut n = Noise(seed);
+    for v in x.iter_mut() {
+        *v += amp * n.next();
+    }
+}
+
 fn run(x: Vec<f32>) -> Report {
     measure(x.clone(), x, &Options::default(), true)
+}
+
+fn val(f: Fig, what: &str) -> f32 {
+    match f {
+        Fig::Value(v) => v,
+        other => panic!("{what}: {other:?}"),
+    }
+}
+
+fn median_of(r: &Report, key: &str) -> Summary {
+    let me = report::MEASURES.iter().find(|m| m.key == key).unwrap();
+    report::population(r, me)
+}
+
+fn advice_of(a: &Report, b: &Report) -> Vec<String> {
+    let rows = report::rows(a, b);
+    report::advice(a, b, &rows, "b.wav")
 }
 
 const TIMES: [f32; 12] = [0.31, 0.52, 0.61, 0.93, 1.28, 1.37, 1.74, 2.02, 2.33, 2.41, 2.86, 3.19];
@@ -84,27 +122,74 @@ fn a_damped_sine_gives_back_its_attack_decay_and_width() {
     assert_eq!(r.events.len(), 4);
     for e in &r.events {
         let i = &e.inside;
-        assert!((i.attack_ms - 4.0).abs() < 1.0, "attack {}", i.attack_ms);
-        let rate = i.decay_db_ms.expect("a decay");
-        assert!((rate / 0.347 - 1.0).abs() < 0.05, "decay {rate} dB/ms");
-        assert!(i.decay_r2.unwrap() > 0.99, "an exponential is straight in dB: {:?}", i.decay_r2);
-        assert!((i.t20_ms.unwrap() - 57.6).abs() < 4.0, "-20 dB at {:?}", i.t20_ms);
+        assert!((val(i.attack_ms, "attack") - 4.0).abs() < 0.5, "attack {:?}", i.attack_ms);
+        let rate = val(i.decay_db_ms, "decay");
+        assert!((rate / 0.347 - 1.0).abs() < 0.03, "decay {rate} dB/ms");
+        assert!(val(i.decay_r2, "r2") > 0.99, "an exponential is straight in dB: {:?}", i.decay_r2);
+        assert!((val(i.t20_ms, "t20") - 57.6).abs() < 4.0, "-20 dB at {:?}", i.t20_ms);
         assert!((i.start_hz - 1000.0).abs() < 2.0 && i.bend_st.abs() < 0.05, "{} Hz, bend {}", i.start_hz, i.bend_st);
         assert_eq!(i.shape, inside::Shape::Flat);
-        assert!((i.bandwidth_hz / 12.73 - 1.0).abs() < 0.2, "width {} Hz", i.bandwidth_hz);
-        assert!((i.q / 78.5 - 1.0).abs() < 0.2, "Q {}", i.q);
-        assert!((i.ring_q.unwrap() / 78.5 - 1.0).abs() < 0.06, "Q from the decay {:?}", i.ring_q);
+        assert!((val(i.bandwidth_hz, "width") / 12.73 - 1.0).abs() < 0.1, "width {:?}", i.bandwidth_hz);
+        assert!((val(i.q, "q") / 78.5 - 1.0).abs() < 0.1, "Q {:?}", i.q);
+        assert!((val(i.ring_q, "ring q") / 78.5 - 1.0).abs() < 0.03, "Q from the decay {:?}", i.ring_q);
     }
-    // Struck with no rise at all, it reads under a millisecond.
+    // Struck with no rise at all, it reads under a millisecond, as a bound:
+    // eight tenths of a period is as fast as the band rises.
     let mut x = vec![0.0f32; at(1.0)];
     ping(&mut x, 0.3, 1000.0, 25.0, 0.5, 0.0, 0.0);
     let r = run(x);
-    assert!(r.events[0].inside.attack_ms < 1.0, "attack {}", r.events[0].inside.attack_ms);
+    assert!(matches!(r.events[0].inside.attack_ms, Fig::AtMost(v) if v < 1.0), "{:?}", r.events[0].inside.attack_ms);
     // And a quarter of the time constant is four times the decay rate.
     let mut x = vec![0.0f32; at(1.0)];
     ping(&mut x, 0.3, 1000.0, 6.25, 0.5, 0.0, 0.0);
-    let rate = run(x).events[0].inside.decay_db_ms.unwrap();
-    assert!((rate / 1.39 - 1.0).abs() < 0.08, "decay {rate} dB/ms");
+    let rate = val(run(x).events[0].inside.decay_db_ms, "decay");
+    assert!((rate / 1.39 - 1.0).abs() < 0.05, "decay {rate} dB/ms");
+}
+
+#[test]
+fn low_notes_refuse_what_their_band_cannot_resolve() {
+    // At 110 Hz the attack band rises no faster than 7 ms: an instant onset
+    // and a 4 ms one both read as "at most", and nothing is advised.
+    let make = |attack: f32| {
+        let mut x = vec![0.0f32; at(4.0)];
+        for k in 0..4 {
+            ping(&mut x, 0.3 + 0.9 * k as f32, 110.0, 80.0, 0.4, attack, 0.0);
+        }
+        run(x)
+    };
+    let (instant, five) = (make(0.0), make(5.0));
+    for r in [&instant, &five] {
+        assert!(r.events.iter().all(|e| matches!(e.inside.attack_ms, Fig::AtMost(_))), "{:?}", r.events[0].inside.attack_ms);
+    }
+    assert!(advice_of(&instant, &five).iter().all(|l| !l.starts_with("attack")), "{:?}", advice_of(&instant, &five));
+    // A slow one is read: 15 ms of rise is 12 ms from 10 to 90%.
+    let slow = make(15.0);
+    let a = val(slow.events[0].inside.attack_ms, "attack");
+    assert!((a / 12.0 - 1.0).abs() < 0.15, "attack {a}");
+    // A 2 ms decay at 110 Hz is faster than its band: a bound, and no
+    // skirt-dependent figure.
+    let mut x = vec![0.0f32; at(3.0)];
+    for k in 0..4 {
+        ping(&mut x, 0.3 + 0.6 * k as f32, 110.0, 2.0, 0.4, 0.0, 0.0);
+    }
+    let r = run(x);
+    for e in &r.events {
+        assert!(matches!(e.inside.decay_db_ms, Fig::AtLeast(_) | Fig::No(_)), "{:?}", e.inside.decay_db_ms);
+        assert!(e.inside.tonal_db.value().is_none() && e.inside.h2_db.value().is_none(), "{:?}", e.inside.h2_db);
+    }
+    // At 50 Hz a ping of 25 ms has under four cycles above -20 dB: no pitch.
+    let mut x = vec![0.0f32; at(3.0)];
+    for k in 0..4 {
+        ping(&mut x, 0.3 + 0.6 * k as f32, 50.0, 25.0, 0.4, 0.0, 0.0);
+    }
+    let r = run(x);
+    for e in &r.events {
+        match e.inside.start {
+            Fig::Value(hz) => assert!((hz / 50.0 - 1.0).abs() < 0.01, "{hz}"),
+            Fig::No(_) => {}
+            other => panic!("{other:?}"),
+        }
+    }
 }
 
 #[test]
@@ -126,7 +211,59 @@ fn a_bend_is_followed_to_a_few_cents() {
     assert!((e.inside.bend_st - expect).abs() < 0.2, "bend {} for {expect}", e.inside.bend_st);
     assert_eq!(e.inside.shape, inside::Shape::Straight);
     // The glide is taken out of the width: it is the decay's, 8 Hz, not the 250 Hz swept.
-    assert!(e.inside.bandwidth_hz < 16.0, "width {}", e.inside.bandwidth_hz);
+    assert!(val(e.inside.bandwidth_hz, "width") < 16.0, "width {:?}", e.inside.bandwidth_hz);
+}
+
+#[test]
+fn a_kick_sweep_and_a_zap_are_followed_from_their_start() {
+    // 200 Hz falling to 50 with a 20 ms time constant, ringing 150 ms: the
+    // spectrogram's frames are longer than the sweep.
+    let mut x = vec![0.0f32; at(4.0)];
+    for k in 0..4 {
+        sweep(&mut x, 0.3 + 0.9 * k as f32, 200.0, 50.0, 20.0, 150.0, 0.5);
+    }
+    let r = run(x);
+    assert_eq!(r.events.len(), 4);
+    for e in &r.events {
+        let i = &e.inside;
+        let start = val(i.start, "kick start");
+        assert!((start / 200.0 - 1.0).abs() < 0.08, "start {start} for 200");
+        let bend = val(i.bend, "kick bend");
+        assert!((bend + 24.0).abs() < 1.5, "bend {bend} for -24");
+        let decay = val(i.decay_db_ms, "kick decay");
+        assert!((decay / 0.0579 - 1.0).abs() < 0.1, "decay {decay} for 0.058");
+        let len = (e.end_s - e.start_s) * 1000.0;
+        assert!((len / 690.0 - 1.0).abs() < 0.15, "length {len} for 690");
+    }
+    // 2 kHz to 500 Hz in 20 ms, ringing 80 ms.
+    let mut x = vec![0.0f32; at(4.0)];
+    for k in 0..4 {
+        sweep(&mut x, 0.3 + 0.9 * k as f32, 2000.0, 500.0, 20.0, 80.0, 0.5);
+    }
+    let r = run(x);
+    assert_eq!(r.events.len(), 4);
+    for e in &r.events {
+        let i = &e.inside;
+        let start = val(i.start, "zap start");
+        assert!((start / 2000.0 - 1.0).abs() < 0.08, "start {start} for 2000");
+        let bend = val(i.bend, "zap bend");
+        assert!((bend + 24.0).abs() < 1.5, "bend {bend} for -24");
+        let decay = val(i.decay_db_ms, "zap decay");
+        assert!((decay / 0.1086 - 1.0).abs() < 0.1, "decay {decay} for 0.109");
+        let len = (e.end_s - e.start_s) * 1000.0;
+        assert!((len / 368.0 - 1.0).abs() < 0.15, "length {len} for 368");
+        assert!(!matches!(i.tail_db, Fig::Value(_)), "a dry zap has no tail: {:?}", i.tail_db);
+    }
+    // Faster than the fastest sweep read (400 to 40 Hz in 3 ms): the start
+    // is a bound, never a number.
+    let mut x = vec![0.0f32; at(4.0)];
+    for k in 0..4 {
+        sweep(&mut x, 0.3 + 0.9 * k as f32, 400.0, 40.0, 3.0, 150.0, 0.5);
+    }
+    let r = run(x);
+    for e in &r.events {
+        assert!(e.inside.start.value().is_none_or(|hz| (hz / 400.0 - 1.0).abs() < 0.08), "{:?}", e.inside.start);
+    }
 }
 
 #[test]
@@ -145,16 +282,17 @@ fn noise_struck_with_the_event_lowers_its_tonal_reading_by_what_was_added() {
         }
         let r = run(x);
         assert_eq!(r.events.len(), 3);
-        spread(r.events.iter().map(|e| e.inside.tonal_db)).unwrap().median
+        median_of(&r, "tonal_db")
     };
+    // A damped sine alone is as pure as can be told: a bound, well up.
     let clean = make(0.0);
-    assert!(clean > 12.0, "a damped sine alone: {clean} dB");
+    assert!(matches!(clean, Summary::AtLeast(v, _) if v > 12.0), "a damped sine alone: {clean:?}");
     // Noise 3 dB under the sine: (0.867^2 / 3) / 0.5 = 0.5.
-    let noisy = make(0.867);
+    let noisy = make(0.867).median().expect("a value");
     assert!((noisy - 3.0).abs() < 1.5, "{noisy} dB with noise 3 dB under");
     // And 10 dB under.
-    let less = make(0.387);
-    assert!((less - 10.0).abs() < 2.5 && less < clean, "{less} dB with noise 10 dB under");
+    let less = make(0.387).median().expect("a value");
+    assert!((less - 10.0).abs() < 2.0, "{less} dB with noise 10 dB under");
 }
 
 #[test]
@@ -168,8 +306,82 @@ fn harmonics_are_read_against_the_fundamental() {
     let r = run(x);
     let e = &r.events[0];
     assert!((e.inside.start_hz - 900.0).abs() < 3.0, "{}", e.inside.start_hz);
-    assert!((e.inside.h2_db.unwrap() + 20.0).abs() < 1.5, "2nd {:?}", e.inside.h2_db);
-    assert!((e.inside.h3_db.unwrap() + 30.0).abs() < 2.0, "3rd {:?}", e.inside.h3_db);
+    assert!((val(e.inside.h2_db, "h2") + 20.0).abs() < 1.5, "2nd {:?}", e.inside.h2_db);
+    assert!((val(e.inside.h3_db, "h3") + 30.0).abs() < 2.0, "3rd {:?}", e.inside.h3_db);
+}
+
+/// Six pings at 1 kHz with a planted 2nd harmonic 20 dB down and noise
+/// struck with them 8 dB down, over a white bed `bed_db` under the ping.
+fn coloured(bed_db: f32, seed: u32) -> Report {
+    let mut x = vec![0.0f32; at(6.0)];
+    let mut n = Noise(99);
+    for k in 0..6 {
+        let t = 0.4 + 0.83 * k as f32;
+        ping(&mut x, t, 1000.0, 40.0, 0.3, 2.0, 0.0);
+        ping(&mut x, t, 2000.0, 40.0, 0.03, 2.0, 0.0);
+        for i in 0..at(0.4) {
+            let s = i as f32 / SR;
+            x[at(t) + i] += 0.3 * 0.55 * (s * 500.0).min(1.0) * (-s * 25.0).exp() * n.next();
+        }
+    }
+    // The ping's peak is 0.212 rms; the bed's rms is amp / sqrt 3.
+    let amp = 0.212 * 10f32.powf(bed_db / 20.0) * 3f32.sqrt();
+    hiss(&mut x, amp, seed);
+    run(x)
+}
+
+#[test]
+fn purity_and_harmonics_hold_as_the_bed_rises_until_they_are_withheld() {
+    let quiet = coloured(-70.0, 1);
+    let (h2_0, ton_0) = (
+        quiet.events.iter().map(|e| val(e.inside.h2_db, "h2")).sum::<f32>() / 6.0,
+        quiet.events.iter().map(|e| val(e.inside.tonal_db, "tonal")).sum::<f32>() / 6.0,
+    );
+    assert!((h2_0 + 20.0).abs() < 1.5, "h2 {h2_0}");
+    let mut withheld = false;
+    for bed_db in [-60.0, -50.0, -40.0, -30.0] {
+        let r = coloured(bed_db, 2);
+        assert_eq!(r.events.len(), 6, "bed {bed_db}");
+        for e in &r.events {
+            let x = &e.inside;
+            match x.h2_db {
+                Fig::Value(v) => assert!((v - h2_0).abs() < 1.5, "bed {bed_db}: h2 {v} for {h2_0}"),
+                Fig::AtMost(v) => {
+                    assert!(v >= h2_0 - 1.5, "bed {bed_db}: a bound under the truth {v}");
+                    withheld = true
+                }
+                other => panic!("bed {bed_db}: {other:?}"),
+            }
+            match x.tonal_db {
+                Fig::Value(v) => assert!((v - ton_0).abs() < 1.5, "bed {bed_db}: tonal {v} for {ton_0}"),
+                Fig::AtLeast(v) => assert!(v <= ton_0 + 1.5, "bed {bed_db}: a bound over the truth {v}"),
+                other => panic!("bed {bed_db}: {other:?}"),
+            }
+            if let Fig::Value(c) = x.centroid_hz {
+                assert!((12.0 * (c / quiet.events[0].inside.centroid_hz.value().unwrap()).log2()).abs() < 0.5, "centroid {c}");
+            }
+            if let Fig::Value(m) = x.centroid_move_st {
+                assert!(m.abs() < 1.5, "bed {bed_db}: the centroid moves {m} st");
+            }
+        }
+    }
+    assert!(withheld, "30 dB of bed more and the 2nd harmonic is still read as a number");
+    // A pure ping has no harmonic to read: never a number for one, at any bed.
+    for bed_db in [-90.0, -50.0, -30.0] {
+        let mut x = vec![0.0f32; at(6.0)];
+        for k in 0..6 {
+            ping(&mut x, 0.4 + 0.83 * k as f32, 1000.0, 25.0, 0.3, 2.0, 0.0);
+        }
+        hiss(&mut x, 0.212 * 10f32.powf(bed_db / 20.0) * 3f32.sqrt(), 5);
+        let r = run(x);
+        for e in &r.events {
+            assert!(e.inside.h2_db.value().is_none() && e.inside.h3_db.value().is_none(), "bed {bed_db}: {:?}", e.inside.h2_db);
+            assert!(e.inside.burst_db.value().is_none(), "bed {bed_db}: burst {:?}", e.inside.burst_db);
+        }
+    }
+    // Only the bed differs: nothing to advise.
+    let (a, b) = (coloured(-60.0, 3), coloured(-30.0, 4));
+    assert!(advice_of(&a, &b).is_empty(), "{:?}", advice_of(&a, &b));
 }
 
 #[test]
@@ -195,7 +407,32 @@ fn the_level_over_the_bed_and_in_the_mix() {
     let r = run(x);
     assert_eq!(r.events.len(), 3, "{:?}", r.events.iter().map(|e| e.start_s).collect::<Vec<_>>());
     for e in &r.events {
-        assert!(e.inside.in_mix_db < -2.0 && e.inside.in_mix_db > -5.0, "in the mix {}", e.inside.in_mix_db);
+        let v = val(e.inside.in_mix_db, "in the mix");
+        assert!(v < -2.0 && v > -5.0, "in the mix {v}");
+    }
+}
+
+#[test]
+fn alone_the_mix_is_not_read_and_a_decay_change_is_advised_as_a_decay() {
+    // The same ping, same level, alone: ringing 25 against 100 ms.
+    let make = |tau: f32| {
+        let mut x = vec![0.0f32; at(6.5)];
+        for k in 0..6 {
+            ping(&mut x, 0.4 + 0.83 * k as f32, 1000.0, tau, 0.3, 2.0, 0.0);
+        }
+        run(x)
+    };
+    let (a, b) = (make(25.0), make(100.0));
+    for e in a.events.iter().chain(&b.events) {
+        assert!(matches!(e.inside.in_mix_db, Fig::No(_)), "{:?}", e.inside.in_mix_db);
+    }
+    let lines = advice_of(&a, &b);
+    assert!(lines.iter().any(|l| l.starts_with("decay")), "{lines:?}");
+    for l in &lines {
+        assert!(
+            l.starts_with("decay") || l.starts_with("resonance Q") || l.starts_with("length"),
+            "only the decay changed: {l}"
+        );
     }
 }
 
@@ -210,15 +447,29 @@ fn where_an_event_sits_between_the_speakers() {
     let rep = measure(l.clone(), r, &Options::default(), true);
     for e in &rep.events {
         assert!((e.inside.pan_db - 6.02).abs() < 0.2, "pan {}", e.inside.pan_db);
-        assert!(e.inside.corr > 0.99, "correlation {}", e.inside.corr);
+        assert!(val(e.inside.corr, "corr") > 0.99, "correlation {:?}", e.inside.corr);
+        // Side (0.25) over mid (0.75): -9.5 dB.
+        assert!((val(e.inside.side_mid_db, "side") + 9.54).abs() < 0.3, "{:?}", e.inside.side_mid_db);
     }
     // The right a different ping at the same time: nothing shared.
     let mut other = vec![0.0f32; at(1.5)];
     for t in [0.2, 0.6, 1.0] {
         ping(&mut other, t, 1236.0, 25.0, 0.4, 1.0, 0.0);
     }
-    let rep = measure(l, other, &Options::default(), true);
-    assert!(rep.events[0].inside.corr.abs() < 0.5, "correlation {}", rep.events[0].inside.corr);
+    let rep = measure(l.clone(), other, &Options::default(), true);
+    assert!(val(rep.events[0].inside.corr, "corr").abs() < 0.5, "correlation {:?}", rep.events[0].inside.corr);
+    // Hard left: no correlation to read, and side is as loud as mid.
+    let rep = measure(l.clone(), vec![0.0; l.len()], &Options::default(), true);
+    for e in &rep.events {
+        assert!(matches!(e.inside.corr, Fig::No(_)), "{:?}", e.inside.corr);
+        assert!(val(e.inside.side_mid_db, "side").abs() < 0.3, "{:?}", e.inside.side_mid_db);
+    }
+    // Left and right in antiphase: the sum is silence, the file is not.
+    let neg: Vec<f32> = l.iter().map(|v| -v).collect();
+    let rep = measure(l, neg, &Options::default(), true);
+    assert_eq!(rep.events.len(), 3, "antiphase");
+    assert!(rep.note.is_some_and(|n| n.contains("antiphase")));
+    assert!(val(rep.events[0].inside.side_mid_db, "side") > 50.0);
 }
 
 fn echoed(interval: f32, gain: f32) -> Vec<f32> {
@@ -241,6 +492,7 @@ fn a_delay_gives_back_its_time_and_its_loss() {
     assert!((d.interval_ms - 170.0).abs() < 1.5, "interval {}", d.interval_ms);
     assert!((d.first_db + 6.02).abs() < 1.0, "first {}", d.first_db);
     assert!((d.per_repeat_db.unwrap() + 6.02).abs() < 1.0, "per repeat {:?}", d.per_repeat_db);
+    assert!(d.ambiguous.is_none());
     // Another time and another loss read as themselves.
     let r = run(echoed(0.233, 0.708));
     let d = r.delay.as_ref().expect("a delay");
@@ -251,63 +503,192 @@ fn a_delay_gives_back_its_time_and_its_loss() {
 }
 
 #[test]
-fn a_tail_after_the_events_is_read_and_a_dry_event_has_none() {
-    let make = |wet: f32| {
-        let mut x = vec![0.0f32; at(4.0)];
-        let mut n = Noise(5);
-        for t in [0.3f32, 1.5, 2.7] {
-            ping(&mut x, t, 1000.0, 15.0, 0.4, 0.5, 0.0);
-            // A tail at the ping's own pitch, wandering in phase, falling over 300 ms.
-            let mut phase = 0.0f32;
-            for i in 0..at(0.9) {
-                let s = i as f32 / SR;
-                phase = (phase + (1000.0 + 15.0 * n.next()) / SR).fract();
-                x[at(t + 0.03) + i] += 0.4 * wet * (-s / 0.3).exp() * (TAU * phase).sin();
-            }
+fn a_delay_on_one_pitch_on_a_grid_is_not_read_as_the_note_spacing() {
+    // 127.2 BPM eighths of one note, a 353.7 ms delay (three sixteenths),
+    // 6 dB a repeat: the notes and the repeats interleave.
+    let s = 60.0 / 127.2 / 4.0;
+    let mut x = bed(14.0, 0.002, 0.0);
+    for i in (0..48).step_by(2) {
+        let mut amp = 0.3;
+        for n in 0..5 {
+            ping(&mut x, 0.3 + i as f32 * s + n as f32 * 0.3537, 1000.0, 15.0, amp, 0.5, 0.0);
+            amp *= 0.5;
         }
-        let r = run(x);
-        spread(r.events.iter().filter_map(|e| e.inside.tail_db)).expect("tails").median
-    };
-    let dry = make(0.0);
-    assert!(dry < -30.0, "dry {dry} dB");
-    let wet = make(0.1);
-    assert!(wet > -12.0 && wet < 0.0, "a tail a tenth as loud, held twenty times longer: {wet} dB");
+    }
+    let r = run(x);
+    if let Some(d) = &r.delay {
+        assert!(
+            d.ambiguous.is_some() || (d.interval_ms - 353.7).abs() < 2.0,
+            "a wrong time given as a delay: {d:?}"
+        );
+    }
+    // Two equal pings are not a note and its echo.
+    let mut x = bed(3.0, 0.03, 0.0);
+    for t in [0.4, 1.23] {
+        ping(&mut x, t, 1000.0, 25.0, 0.3, 2.0, 0.0);
+    }
+    assert!(run(x).delay.is_none());
 }
 
-/// A held note at `f0` with `harmonics` partials at 1/k, a second long fade
-/// in, and whatever `also` adds per sample.
-fn held(seconds: f32, f0: f32, harmonics: usize, also: impl Fn(f32) -> f32) -> Vec<f32> {
+#[test]
+fn a_tail_is_what_is_left_beyond_the_decay_and_a_dry_event_has_none() {
+    // Dry: whatever the decay, no tail.
+    for tau in [10.0, 25.0, 100.0, 400.0] {
+        let gap = (tau * 0.014f32).max(0.5);
+        let mut x = vec![0.0f32; at(0.3 + 4.0 * gap + 1.0)];
+        for k in 0..4 {
+            ping(&mut x, 0.3 + gap * k as f32, 1000.0, tau, 0.4, 0.5, 0.0);
+        }
+        for e in &run(x).events {
+            assert!(!matches!(e.inside.tail_db, Fig::Value(_)), "tau {tau}: {:?}", e.inside.tail_db);
+        }
+    }
+    // Wet: a tail at the ping's pitch, 20 dB down, falling over 300 ms.
+    let tau = 15.0f32;
+    let mut x = vec![0.0f32; at(4.0)];
+    let mut n = Noise(5);
+    for t in [0.3f32, 1.5, 2.7] {
+        ping(&mut x, t, 1000.0, tau, 0.4, 0.5, 0.0);
+        let mut phase = 0.0f32;
+        for i in 0..at(0.9) {
+            let s = i as f32 / SR;
+            phase = (phase + (1000.0 + 15.0 * n.next()) / SR).fract();
+            x[at(t + 0.03) + i] += 0.4 * 0.1 * (-s / 0.3).exp() * (TAU * phase).sin();
+        }
+    }
+    let r = run(x);
+    // The truth: the tail's energy from 50 to 400 ms after the decay is 20 dB
+    // down, against the ping's own up to there.
+    let t20 = tau * 10f32.ln() * 0.001;
+    let own = 0.5 * 0.16 * tau * 0.001 * (1.0 - 0.01);
+    let wet = |a: f32, b: f32| 0.5 * 0.0016 * 0.15 * ((-(a - 0.03) / 0.15).exp() - (-(b - 0.03) / 0.15).exp());
+    let truth = 10.0 * (wet(t20 + 0.05, t20 + 0.4) / own).log10();
+    for e in &r.events {
+        let v = val(e.inside.tail_db, "wet tail");
+        assert!((v - truth).abs() < 2.0, "tail {v} dB for {truth}");
+    }
+}
+
+#[test]
+fn struck_again_before_it_dies_the_event_says_so() {
+    // The same dry ping (Q 314) every 150 ms: its width is the window's,
+    // its Q from the decay still holds.
+    let mut x = vec![0.0f32; at(7.0)];
+    for k in 0..40 {
+        ping(&mut x, 0.4 + 0.15 * k as f32, 1000.0, 100.0, 0.2, 2.0, 0.0);
+    }
+    let r = run(x);
+    assert!(!r.events.is_empty());
+    for e in &r.events {
+        assert!(e.inside.overlap.is_some(), "at {}", e.start_s);
+        assert!(e.inside.q.value().is_none() && e.inside.tonal_db.value().is_none(), "{:?}", e.inside.q);
+        if let Fig::Value(q) = e.inside.ring_q {
+            assert!((q / 314.0 - 1.0).abs() < 0.1, "Q from the decay {q}");
+        }
+    }
+    // A roll faster than the re-strike rule: what is found is not passed
+    // off as one clean event.
+    let mut x = vec![0.0f32; at(5.0)];
+    for k in 0..40 {
+        ping(&mut x, 0.4 + 0.08 * k as f32, 1000.0, 100.0, 0.2, 2.0, 0.0);
+    }
+    let r = run(x);
+    for e in &r.events {
+        assert!(e.inside.overlap.is_some(), "a roll read as one clean event at {}", e.start_s);
+        assert!(e.inside.q.value().is_none() && e.inside.tail_db.value().is_none(), "{:?}", e.inside.q);
+    }
+}
+
+#[test]
+fn events_in_the_first_milliseconds_are_read_without_falling_over() {
+    // In a debug build the echo search once subtracted past zero here.
+    for (t0, hz) in [(0.0f32, 1000.0f32), (0.005, 1000.0), (0.010, 1000.0), (0.015, 1000.0), (0.03, 80.0)] {
+        let mut x = vec![0.0f32; at(3.0)];
+        for t in [t0, 1.0, 2.0] {
+            ping(&mut x, t, hz, 40.0, 0.3, 0.0, 0.0);
+        }
+        let r = run(x);
+        assert!(r.events.first().is_some_and(|e| e.start_s < t0 + 0.02), "{t0} s at {hz} Hz: {:?}", r.events.iter().map(|e| e.start_s).collect::<Vec<_>>());
+    }
+}
+
+#[test]
+fn one_or_two_events_are_held_against_the_estimators_error_not_a_spread() {
+    let one = |seed: u32, n: usize| {
+        let mut x = vec![0.0f32; at(3.0)];
+        for k in 0..n {
+            ping(&mut x, 0.4 + 0.83 * k as f32, 1000.0, 25.0, 0.3, 2.0, 0.0);
+        }
+        hiss(&mut x, 0.03, seed);
+        run(x)
+    };
+    let (a, b) = (one(1, 1), one(2, 1));
+    assert!(advice_of(&a, &b).is_empty(), "{:?}", advice_of(&a, &b));
+    let (a, b) = (one(3, 2), one(4, 2));
+    assert!(advice_of(&a, &b).is_empty(), "{:?}", advice_of(&a, &b));
+}
+
+/// A held sawtooth with 50 ms fades: naive (it folds) or summed from its
+/// harmonics up to 20 kHz (it does not).
+fn saw(f0: f32, seconds: f32, naive: bool) -> Vec<f32> {
+    let top = (20_000.0f32.min(0.45 * SR) / f0) as usize;
     (0..at(seconds))
         .map(|i| {
             let t = i as f32 / SR;
-            let tone: f32 = (1..=harmonics).map(|k| (TAU * (f0 * k as f32 * t).fract()).sin() / k as f32).sum();
-            0.2 * (t * 2.0).min(1.0) * (tone + also(t))
+            let fade = (t * 20.0).min(1.0) * ((seconds - t) * 20.0).min(1.0);
+            let v = if naive {
+                2.0 * (f0 as f64 * i as f64 / SR as f64).fract() as f32 - 1.0
+            } else {
+                let ph = (f0 as f64 * i as f64 / SR as f64).fract() as f32;
+                (1..=top).map(|k| (TAU * (ph * k as f32).fract()).sin() / k as f32).sum::<f32>() * -2.0 / std::f32::consts::PI
+            };
+            0.2 * fade * v
         })
         .collect()
 }
 
 #[test]
-fn partials_folded_back_are_found_at_their_level_and_a_clean_note_has_none() {
-    let f0 = SR / 42.3;
-    let harmonics = 12;
-    // Five harmonics from above Nyquist, folded: each 47 dB under the
-    // fundamental, together 40 dB under it.
-    let first = (SR / 2.0 / f0) as usize + 3;
-    let folded = |t: f32| -> f32 {
-        (first..first + 5).map(|k| 10f32.powf(-47.0 / 20.0) * (TAU * ((SR - k as f32 * f0) * t).fract()).sin()).sum()
-    };
-    let r = run(held(4.0, f0, harmonics, folded));
-    let a = r.clean.alias.as_ref().expect("aliasing");
-    assert!((a.db + 40.0).abs() < 3.0, "{} dB", a.db);
-    assert!((first..first + 5).contains(&a.worst.0), "harmonic {}", a.worst.0);
-    assert!((a.f0 / f0 - 1.0).abs() < 0.01, "f0 {}", a.f0);
-    let clean = run(held(4.0, f0, harmonics, |_| 0.0));
-    assert!(clean.clean.alias.is_none(), "{:?}", clean.clean.alias);
-    assert!(clean.clean.findings().is_empty(), "{:?}", clean.clean.findings());
-    // A file converted from another rate is not looked at for folds.
-    let x = held(4.0, f0, harmonics, folded);
-    let other = measure(x.clone(), x, &Options::default(), false);
-    assert!(other.clean.alias.is_none() && other.clean.alias_unread.is_some());
+fn a_naive_saw_folds_and_a_band_limited_one_does_not() {
+    for f0 in [110.0, 220.0, 440.0, 1000.0, 1760.0, 3520.0] {
+        let naive = run(saw(f0, 2.0, true));
+        let c = &naive.clean;
+        assert!(c.alias.is_some() || c.alias_unread.is_some(), "{f0} Hz naive: {:?}", c.lines());
+        assert!(!c.lines().iter().any(|l| l.contains("nothing folded")), "{f0} Hz naive: {:?}", c.lines());
+        assert!(c.alias.is_some(), "{f0} Hz naive: {:?}", c.lines());
+        let clean = run(saw(f0, 2.0, false));
+        assert!(clean.clean.alias.is_none(), "{f0} Hz band-limited: {:?}", clean.clean.alias);
+    }
+    // Where a fold lands on the note's own harmonics nothing can be seen, and it is said.
+    let r = run(saw(SR / 400.0, 2.0, true));
+    assert!(r.clean.alias.is_some() || r.clean.alias_unread.is_some_and(|w| w.starts_with("not examined")), "{:?}", r.clean.lines());
+    // A pure sine has nothing to fold, even with lines planted where folds would land.
+    let f0 = 1000.0f32;
+    let x: Vec<f32> = (0..at(2.0))
+        .map(|i| {
+            let t = i as f32 / SR;
+            let fade = (t * 20.0).min(1.0) * ((2.0 - t) * 20.0).min(1.0);
+            let folds: f32 = (23..27).map(|k| 0.003 * (TAU * ((SR - k as f32 * f0) * t).fract()).sin()).sum();
+            0.2 * fade * ((TAU * (f0 * t).fract()).sin() + folds)
+        })
+        .collect();
+    assert!(run(x).clean.alias.is_none());
+}
+
+#[test]
+fn a_steep_band_limited_edge_is_not_a_step_and_a_real_one_is() {
+    for f0 in [55.0, 110.0, 220.0] {
+        let r = run(saw(f0, 2.0, false));
+        assert!(r.clean.steps.is_empty(), "{f0} Hz band-limited saw: {:?}", r.clean.steps);
+    }
+    // A naive saw's edges come round every period: they are not steps.
+    assert!(run(saw(110.0, 2.0, true)).clean.steps.is_empty());
+    // A jump in the middle of a band-limited saw is.
+    let mut x = saw(110.0, 2.0, false);
+    for v in x[at(1.3)..].iter_mut() {
+        *v += 0.03;
+    }
+    let r = run(x);
+    assert!(r.clean.steps.iter().any(|s| (s.at_s - 1.3).abs() < 0.001), "{:?}", r.clean.steps);
 }
 
 #[test]
@@ -325,8 +706,10 @@ fn a_step_dc_and_a_stepped_modulation_are_flagged_and_a_clean_signal_is_not() {
     let r = run(stepped);
     assert_eq!(r.clean.steps.len(), 1, "{:?}", r.clean.steps);
     assert!((r.clean.steps[0].at_s - 1.7).abs() < 0.001, "{:?}", r.clean.steps);
-    // 0.03 against a tone of 0.3 (0.212 rms): -17 dB.
-    assert!((r.clean.steps[0].db + 17.0).abs() < 3.0, "{:?}", r.clean.steps);
+    // 0.03 against a tone of 0.3 (0.212 rms), and the interpolation misses
+    // half the jump: -23 dB.
+    assert!((r.clean.steps[0].db + 23.0).abs() < 3.0, "{:?}", r.clean.steps);
+    // An offset of 0.03 for the last 1.3 s of 3: the median second holds it.
     assert!(r.clean.dc_db > -40.0 && r.clean.findings().iter().any(|f| f.starts_with("DC")));
 
     // A tremolo worked out every 64 samples and held, against the same one smooth.
@@ -336,7 +719,23 @@ fn a_step_dc_and_a_stepped_modulation_are_flagged_and_a_clean_signal_is_not() {
     assert!(run(smooth).clean.zipper.is_none());
     let z = run(held).clean.zipper.expect("a zipper");
     assert_eq!(z.period, 64);
-    assert!(z.db < -30.0 && z.db > -80.0, "{} dB", z.db);
+    // The gain moves up to 0.4 * 2 pi * 3 * 64 / rate (0.011) a step, on a
+    // tone of 0.3: about -40 dB under the signal's level.
+    assert!(z.db < -34.0 && z.db > -48.0, "{} dB", z.db);
+    // A wave whose period is exactly 64 samples is not a zipper.
+    assert!(run(saw(SR / 64.0, 2.0, true)).clean.zipper.is_none());
+}
+
+#[test]
+fn a_short_low_note_is_not_dc_and_a_real_offset_is() {
+    // A 50 Hz thump in a second of file: the mean of its first half cycle is
+    // not an offset in the render.
+    let mut x = vec![0.0f32; at(1.0)];
+    ping(&mut x, 0.1, 50.0, 60.0, 0.6, 0.0, 0.0);
+    assert!(run(x).clean.dc_db < clean::DC_DB);
+    let x: Vec<f32> = (0..at(2.0)).map(|i| 0.3 * (TAU * 220.0 * i as f32 / SR).sin() + 0.01).collect();
+    let dc = run(x).clean.dc_db;
+    assert!((dc + 26.5).abs() < 1.0, "{dc}");
 }
 
 #[test]
@@ -394,7 +793,13 @@ fn sustained_material_gives_back_its_partials_and_how_they_move() {
     let r = run(hiss);
     let s = r.sustained.as_ref().expect("sustained");
     assert!(s.hnr_db < -5.0 && s.flux > 0.2, "{} {}", s.hnr_db, s.flux);
-    let r = run(held(4.0, 110.0, 8, |_| 0.0));
+    let held: Vec<f32> = (0..at(4.0))
+        .map(|i| {
+            let t = i as f32 / SR;
+            0.2 * (t * 2.0).min(1.0) * (1..=8).map(|k| (TAU * (110.0 * k as f32 * t).fract()).sin() / k as f32).sum::<f32>()
+        })
+        .collect();
+    let r = run(held);
     let s = r.sustained.as_ref().expect("sustained");
     assert!((s.f0.expect("a note") - 110.0).abs() < 0.5, "{:?}", s.f0);
     assert!(s.flux < 0.02 && s.hnr_db > 30.0, "{} {}", s.flux, s.hnr_db);
@@ -417,11 +822,18 @@ fn against_flags_what_was_changed_and_nothing_in_a_file_against_itself() {
     let b = run(pings(6.0, 0.002, 0.01));
     let rows = report::rows(&a, &b);
     let decay = rows.iter().find(|r| r.key == "decay_db_ms").unwrap();
-    assert!(decay.flagged && (decay.difference.unwrap() - 3.0).abs() < 0.4, "{:?}", decay.difference);
+    assert!(decay.flagged && (decay.difference.unwrap() - 3.0).abs() < 0.3, "{:?}", decay.difference);
     assert!(rows.iter().find(|r| r.key == "ring_q").unwrap().flagged);
-    // What was not changed is not flagged.
-    for key in ["start_hz", "pan_db", "per_second", "attack_ms"] {
+    // What was not changed is not flagged, and no line says it was.
+    for key in ["start_hz", "pan_db", "per_second", "attack_ms", "tonal_db", "h2_db", "h3_db", "tail_db", "in_mix_db", "burst_db"] {
         assert!(!rows.iter().find(|r| r.key == key).unwrap().flagged, "{key}");
+    }
+    let lines = report::advice(&a, &b, &rows, "b.wav");
+    for l in &lines {
+        assert!(
+            ["decay", "resonance Q", "length", "the centroid moves"].iter().any(|p| l.starts_with(p)),
+            "a decay change: {l}"
+        );
     }
     let text = report::against(&a, &b, "a.wav", "b.wav");
     assert!(text.contains("resonance Q") && text.contains("raise the `resonance`"), "{text}");
@@ -439,6 +851,34 @@ fn against_flags_what_was_changed_and_nothing_in_a_file_against_itself() {
     let rows = report::rows(&a, &b);
     let level = rows.iter().find(|r| r.key == "over_bed_db").unwrap();
     assert!(level.flagged && (level.difference.unwrap() + 9.0).abs() < 1.5, "{:?}", level.difference);
+}
+
+#[test]
+fn the_centroid_advice_names_the_file_that_moves() {
+    let empty = run(vec![0.0; at(1.0)]);
+    let spread = |v: f32| Summary::Spread(Spread { median: v, low: v, high: v, n: 6 });
+    let line = |x: f32, y: f32| {
+        let rows = vec![report::Row {
+            key: "centroid_move_st".into(),
+            label: "centroid by -12 dB".into(),
+            unit: "st",
+            a: spread(x),
+            b: spread(y),
+            difference: Some(y - x),
+            ratio: false,
+            flagged: true,
+            weight: 1.0,
+        }];
+        report::advice(&empty, &empty, &rows, "b.wav").remove(0)
+    };
+    // A holds, B brightens: nothing of A darkening.
+    let l = line(0.25, 13.2);
+    assert!(l.contains("B's events brighten") && l.contains("A's keep their brightness"), "{l}");
+    // Both brighten, B less: B does not "darken more".
+    let l = line(6.0, 3.0);
+    assert!(l.contains("B's events brighten") && l.contains("A's brighten"), "{l}");
+    let l = line(-3.5, 4.5);
+    assert!(l.contains("B's events brighten") && l.contains("A's darken"), "{l}");
 }
 
 #[test]
@@ -464,8 +904,15 @@ fn the_text_the_json_and_the_sheet_come_out_whole() {
         }
         assert!(depth == 0 && !in_string, "{json}");
         assert!(json.contains("\"decay_db_ms\":{\"unit\":\"dB/ms\",\"median\":"), "{json}");
+        // Every measure is there, with a number or the reason it has none.
+        for me in report::MEASURES {
+            assert!(json.contains(&format!("\"{}\":{{\"unit\"", me.key)), "{} missing", me.key);
+        }
         assert!(!json.contains("NaN") && !json.contains("inf"), "{json}");
     }
+    // With no events every measure still says why.
+    let none = report::json(&run(vec![0.0; at(1.0)]), "s.wav");
+    assert!(none.contains("\"tail_db\":{\"unit\":\"dB\",\"median\":null,\"why\":"), "{none}");
     // The same input gives the same report, to the byte.
     assert_eq!(report::json(&a, "a.wav"), report::json(&run(pings(18.0, 0.002, 0.01)), "a.wav"));
     let one = draw::sheet(&a, "a.wav", None, 6);
@@ -497,13 +944,15 @@ fn a_dense_mix_is_read_without_falling_over() {
         let right: Vec<f32> = x.iter().rev().copied().collect();
         let opts = Options { threshold_db, sustained: true, ..Options::default() };
         let r = measure(x.clone(), right, &opts, true);
-        assert!(threshold_db > 12.0 || r.events.len() > 10, "{} events at {threshold_db}", r.events.len());
+        assert!(r.events.len() > 10, "{} events at {threshold_db}", r.events.len());
         for e in &r.events {
             assert!(e.end_s > e.start_s && e.inside.direct_end_s >= e.start_s - 0.05, "{} {}", e.start_s, e.end_s);
             for me in report::MEASURES {
-                assert!((me.get)(e).is_none_or(f32::is_finite), "{} at {}", me.key, e.start_s);
+                assert!((me.get)(e).any().is_none_or(f32::is_finite), "{} at {}", me.key, e.start_s);
             }
         }
+        // In a mix this dense, events overlap: what needs one alone is not read.
+        assert!(r.events.iter().any(|e| e.inside.overlap.is_some()));
         let text = report::against(&r, &r, "a", "a");
         assert!(text.contains("nothing differs"), "{text}");
         let _ = draw::sheet(&r, "a", Some((&r, "a")), 4);
@@ -531,4 +980,11 @@ fn a_long_glide_with_a_vibrato_is_one_event_with_its_vibrato() {
     assert!((rate - 20.0).abs() < 0.5 && (depth - 80.0).abs() < 15.0, "{rate} Hz, {depth} cents");
     assert!((e.inside.bend_st + 28.0).abs() < 3.0, "bend {}", e.inside.bend_st);
     assert_eq!(e.inside.shape, inside::Shape::Straight);
+}
+
+#[test]
+fn a_band_under_15_hz_is_refused() {
+    let audio = crate::wav::Audio { rate: SR as u32, left: vec![0.0; at(1.0)], right: vec![0.0; at(1.0)] };
+    let opts = Options { band: Some((10.0, 11.0)), ..Options::default() };
+    assert!(analyze(&audio, None, None, &opts).is_err());
 }

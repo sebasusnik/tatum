@@ -222,6 +222,8 @@ pub struct Delay {
     /// Events with a repeat found after them, of those looked at.
     pub confirmed: usize,
     pub of: usize,
+    /// Why the interval cannot be told from the notes' own spacing, when it cannot.
+    pub ambiguous: Option<&'static str>,
 }
 
 pub struct Report {
@@ -232,6 +234,8 @@ pub struct Report {
     pub delay: Option<Delay>,
     pub sustained: Option<sustained::Sustained>,
     pub clean: clean::Clean,
+    /// Said before the figures when the file is read another way than usual.
+    pub note: Option<&'static str>,
     /// Left and right at the engine's rate: the pictures are drawn from them.
     pub left: Vec<f32>,
     pub right: Vec<f32>,
@@ -250,8 +254,8 @@ pub fn analyze(audio: &Audio, from: Option<f32>, to: Option<f32>, opts: &Options
         return Err("less than a fifth of a second of audio".into());
     }
     if let Some((lo, hi)) = opts.band {
-        if !(lo >= 10.0 && hi > lo * 1.05 && hi <= SR / 2.0) {
-            return Err(format!("--band takes two frequencies in Hz, low then high, up to {:.0}", SR / 2.0));
+        if !(lo >= 15.0 && hi > lo * 1.05 && hi <= SR / 2.0) {
+            return Err(format!("--band takes two frequencies in Hz, low then high, from 15 up to {:.0}", SR / 2.0));
         }
     }
     // A file converted from another rate has been through a filter that
@@ -262,11 +266,23 @@ pub fn analyze(audio: &Audio, from: Option<f32>, to: Option<f32>, opts: &Options
 /// Measure audio already at the engine's rate.
 pub fn measure(left: Vec<f32>, right: Vec<f32>, opts: &Options, native: bool) -> Report {
     let mono: Vec<f32> = left.iter().zip(&right).map(|(a, b)| 0.5 * (a + b)).collect();
+    // Channels that cancel when summed are read one at a time: the sum of
+    // an antiphase file is silence, and so would be its report.
+    let energy = |x: &[f32]| x.iter().map(|v| (*v as f64).powi(2)).sum::<f64>();
+    let (el, er, em) = (energy(&left), energy(&right), energy(&mono));
+    let (mono, note, sign) = if em < 0.25 * 0.5 * (el + er) {
+        let side: Vec<f32> = left.iter().zip(&right).map(|(a, b)| 0.5 * (a - b)).collect();
+        (side, Some("left and right cancel when summed (they are in antiphase): read on their difference"), -1.0)
+    } else {
+        (mono, None, 1.0)
+    };
     let found = find(&mono, opts);
     let band = found.band;
-    let ctx = inside::Ctx { left: &left, right: &right, mono: &mono, stft: &found.stft, floor: &found.floor };
+    let ctx = inside::Ctx { left: &left, right: &right, sign, mono: &mono, stft: &found.stft, floor: &found.floor };
+    let hop = found.stft.hop;
+    let onsets: Vec<(usize, f32)> = found.ridges.iter().map(|(r, _)| (r.frame * hop, r.hz[0])).collect();
     let mut events: Vec<Event> =
-        found.ridges.iter().filter_map(|(ridge, over)| inside::read(&ctx, ridge, *over)).collect();
+        found.ridges.iter().filter_map(|(ridge, over)| inside::read(&ctx, ridge, *over, &onsets)).collect();
     events.sort_by(|a, b| a.start_s.total_cmp(&b.start_s));
     // Two ridges that turn out to start within the gap are one event: the
     // louder is kept.
@@ -295,6 +311,7 @@ pub fn measure(left: Vec<f32>, right: Vec<f32>, opts: &Options, native: bool) ->
         delay,
         sustained,
         clean,
+        note,
         left,
         right,
     }
@@ -338,12 +355,14 @@ fn find(mono: &[f32], opts: &Options) -> Found {
     let ratio = 10f32.powf(opts.threshold_db / 10.0);
     let stand = 0.5 * ratio.sqrt();
     let over = |t: usize, b: usize| (s.at(t, b).sqrt() - stand * floor.at(t, b).sqrt()).max(0.0);
+    // Before the file there is nothing: an event in its first frames gains
+    // against silence.
     let mut flux = vec![0.0f32; frames];
-    for (t, v) in flux.iter_mut().enumerate().skip(lag) {
-        *v = (b0..=b1).map(|b| (over(t, b) - over(t - lag, b)).max(0.0)).sum();
+    for (t, v) in flux.iter_mut().enumerate() {
+        *v = (b0..=b1).map(|b| (over(t, b) - if t >= lag { over(t - lag, b) } else { 0.0 }).max(0.0)).sum();
     }
     let gap = ((opts.min_gap_ms * 0.001 / s.frame_s()).ceil() as usize).max(1);
-    let peaks: Vec<usize> = (lag..frames)
+    let peaks: Vec<usize> = (0..frames)
         .filter(|&t| {
             flux[t] > 0.0
                 && (t.saturating_sub(gap)..(t + gap + 1).min(frames))
@@ -366,18 +385,19 @@ fn find(mono: &[f32], opts: &Options) -> Found {
     let mut ridges: Vec<(Ridge, f32)> = Vec::new();
     let mut starts: Vec<(usize, usize)> = Vec::new();
     for &t in peaks.iter().filter(|&&t| flux[t] >= need) {
-        let Some(b) =
-            (b0..=b1).max_by(|&x, &y| (s.at(t, x) - s.at(t - lag, x)).total_cmp(&(s.at(t, y) - s.at(t - lag, y))))
-        else {
+        let was = |u: usize, x: usize| if u >= lag { s.at(u - lag, x) } else { 0.0 };
+        let Some(b) = (b0..=b1).max_by(|&x, &y| (s.at(t, x) - was(t, x)).total_cmp(&(s.at(t, y) - was(t, y)))) else {
             continue;
         };
         let ridge = follow(&s, &floor, t, b);
         let (peak_i, peak) =
             ridge.power.iter().enumerate().fold((0, 0.0f32), |m, (i, &p)| if p > m.1 { (i, p) } else { m });
         let peak_bin = s.bin(ridge.hz[peak_i]);
-        let before = (b.saturating_sub(1)..=(b + 1).min(s.bins - 1))
-            .map(|x| s.at(t.saturating_sub(lag + 1), x))
-            .fold(0.0f32, f32::max);
+        let before = if t > lag {
+            (b.saturating_sub(1)..=(b + 1).min(s.bins - 1)).map(|x| s.at(t - lag - 1, x)).fold(0.0f32, f32::max)
+        } else {
+            0.0
+        };
         if peak < ratio * floor.at(t + peak_i, peak_bin) || peak < 4.0 * before || ridge.hz.len() < 2 {
             continue;
         }
