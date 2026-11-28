@@ -237,6 +237,42 @@ mod sounds_tests {
         assert!(peak < 1.0, "the five together do not clip the mix: peak {peak} into the master");
     }
 
+    /// `sounds/liquid_kit.synth` plays the liquid sounds together: each is
+    /// read from its own file and sounds on its own track somewhere in the
+    /// 24 bars, nothing leaves full scale, and the piece is the same samples
+    /// on every render, random sources and all.
+    #[test]
+    fn the_liquid_kit_plays_its_sounds_together() {
+        let src = Source::load(Path::new("../sounds/liquid_kit.synth")).expect("every use resolves");
+        let sounds = [
+            ("bubbles", "bubbles", "liquid/bubbles.synth"),
+            ("pad", "shoal", "liquid/shoal.synth"),
+            ("bass", "tide", "liquid/tide.synth"),
+            ("drop", "drop", "liquid/drop.synth"),
+            ("bell", "glass", "liquid/glass.synth"),
+        ];
+        let play = |bars: u32| {
+            let mut e = tatum_core::song_engine::SongEngine::from_source(&src.text).expect("compiles");
+            let out = e.render(bars);
+            (e, out)
+        };
+        // The last scene has all five; the meters read the end of it.
+        let (e, (l, r)) = play(24);
+        assert!(l.iter().chain(&r).all(|v| v.is_finite() && v.abs() <= 1.0));
+        assert_eq!(e.track_count(), sounds.len());
+        for (track, sound, file) in sounds {
+            assert!(src.files.iter().any(|f| f.ends_with(file)), "{file} is read");
+            let t = (0..e.track_count()).find(|&t| e.track_name(t) == track).expect(track);
+            let inst = e.track_instrument(t).map(|i| e.instrument_name(i));
+            assert_eq!(inst, Some(sound), "track {track} plays {sound}");
+            let (peak, rms) = (e.track_peak(t), e.track_rms(t));
+            assert!(rms > 0.001, "{sound} plays: rms {rms}");
+            assert!(peak < 1.0, "{sound} alone stays under full scale: peak {peak}");
+        }
+        let (again, _) = play(24).1;
+        assert!(l == again, "two renders of the liquid kit differ");
+    }
+
     /// The open hat rings its 320 ms whatever the length of the note: on a
     /// one-step note (123 ms at 122 BPM) it is still there 200 ms in, and
     /// gone by 400.

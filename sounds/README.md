@@ -30,10 +30,18 @@ What is here:
 | `hats/metal_open.synth` | `metal_open` | the same metal, open: 60 dB down at 320 ms, however short the note |
 | `keys/chorus_pad.synth` | `chorus_pad` | a warm poly pad in the spirit of a Juno-106: two saws, a breathing lowpass, a wide stereo chorus |
 | `bass/rubber.synth` | `rubber` | a rubbery bass in the spirit of an SH-101: saw and sub through a resonant ladder that snaps shut |
+| `liquid/bubbles.synth` | `bubbles` | one held note is a stream of resonant pings off the grid: a `dust` strikes a bandpass and draws each ping's pitch from a `rand` |
+| `liquid/drop.synth` | `drop` | a long falling drop: four sines 7% apart fall four octaves onto the note, ever slower, under a 21 Hz vibrato; no two notes fall alike |
+| `liquid/tide.synth` | `tide` | a liquid bass that slides into a note written `~note` in 140 ms, through a lowpass that wanders and never repeats |
+| `liquid/shoal.synth` | `shoal` | a pad that is a cluster: five saws at 0, ±9 and ±20 cents, a 4.5 Hz vibrato, one slow `wander` on every voice's filter |
+| `liquid/glass.synth` | `glass` | a soft FM bell, held: partials at 1.5, 2.5, 3.5... times the note, in pairs 10 Hz apart |
 
 The ones "in the spirit of" a machine are original sounds made with that machine's
 idea, not copies of it. `vintage_kit.synth`, here beside the folders, plays them
-together: `tatum play sounds/vintage_kit.synth`. The hats are quieter on an engine built
+together: `tatum play sounds/vintage_kit.synth`. `liquid_kit.synth` does the same for the
+five in `liquid/`, which are built on the random sources (`rand`, `wander`, `dust`; see
+"Bubbles, drops and sweeps that never repeat" in docs/DSL.md): every note of them differs
+from the last, and the piece is still the same samples on every render. The hats are quieter on an engine built
 under 44.1 kHz (`TATUM_SAMPLE_RATE`): 2.5 dB at 32 kHz, 9.5 dB at 22.05 kHz.
 
 Each file is made, and kept, with the designer:

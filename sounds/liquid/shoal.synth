@@ -1,0 +1,40 @@
+# A pad that is a cluster, not a chorus: five saws per voice at 0, 9 and 20
+# cents either side of the note, so the cluster beats at about one to four
+# times a second on a low note, under a 4.5 Hz vibrato of 45 cents from top to
+# bottom. One lowpass per voice follows a single slow curve that never
+# repeats, the same for every note of a chord, and each note opens it a touch
+# differently. Hold chords; slow attack and release.
+instrument shoal {
+  gain 0.5
+  osc saw(110) as a
+  osc saw(110, pitch=0.09) as b
+  osc saw(110, pitch=-0.09) as c
+  osc saw(110, pitch=0.2) as e
+  osc saw(110, pitch=-0.2) as f
+  lfo(4.5hz, 0.019) as vib
+  rand(0.08) as hurry
+  gain(0.2) as trim
+  svf(700hz, 0.25) as filt
+  wander(0.3hz, 0.65) as sweep
+  wander(1.3hz, 0.3, jitter=1) as ripple
+  rand(0.25) as differs
+  adsr(1.2, 1, 0.85, 2.5) as amp
+  hurry > vib.rate
+  vib > a.pitch
+  vib > b.pitch
+  vib > c.pitch
+  vib > e.pitch
+  vib > f.pitch
+  a > mix
+  b > mix
+  c > mix
+  e > mix
+  f > mix
+  mix > trim
+  trim > filt
+  sweep > filt.cutoff
+  ripple > filt.cutoff
+  differs > filt.cutoff
+  filt > amp
+  amp > out
+}

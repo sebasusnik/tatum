@@ -1,0 +1,47 @@
+# A long falling drop: four sines 7% apart start 4 octaves over the note and
+# fall onto it, fast at first and ever slower, with a 21 Hz vibrato on top.
+# Every note falls from a little higher or lower, wobbles a little faster or
+# slower and is a little louder or quieter than the last. Hold it for four
+# seconds or more, high: A4 starts near 7 kHz.
+instrument drop {
+  gain 0.5
+  osc sine(440) as a
+  osc sine(440, pitch=1.17) as b
+  osc sine(440, pitch=2.34) as c
+  osc sine(440, pitch=3.51) as e
+  adsr(0.001, 24, 0, 24) as fall
+  gain(4) as depth
+  rand(0.12) as differs
+  lfo(21hz, 0.04) as vib
+  rand(0.15) as hurry
+  gain(0.5) as la
+  gain(0.32) as lb
+  gain(0.22) as lc
+  gain(0.14) as le
+  gain(1) as vol
+  rand(0.3) as loud
+  adsr(0.04, 0.5, 0.8, 2.5) as amp
+  fall > depth
+  differs > depth.amount
+  depth > a.pitch
+  depth > b.pitch
+  depth > c.pitch
+  depth > e.pitch
+  hurry > vib.rate
+  vib > a.pitch
+  vib > b.pitch
+  vib > c.pitch
+  vib > e.pitch
+  a > la
+  b > lb
+  c > lc
+  e > le
+  la > mix
+  lb > mix
+  lc > mix
+  le > mix
+  mix > vol
+  loud > vol.amount
+  vol > amp
+  amp > out
+}

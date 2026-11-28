@@ -1,0 +1,27 @@
+# Bubbles: one held note is a stream of resonant pings off the grid. A dust
+# fires about eight a second, swelling and thinning; each impulse draws the
+# pitch its ping rings at, anywhere within an octave either side of 950 Hz
+# and reached in a millisecond so the ping before it does not click, and a
+# small bend that takes 60 ms to arrive. Not tuned to the note: any note
+# plays it, and every note plays a different stream.
+instrument bubbles {
+  gain 2.5
+  dust(8hz, spread=11db, level=32db) as d
+  rand(1.1, glide=1ms) as where
+  rand(0.15, glide=60ms) as bend
+  wander(0.3hz, 1.5) as tide
+  lowpass(1600hz, 0.01) as soft
+  svf(bandpass, 950hz, 0.89) as ping
+  lowpass(4000hz, 0.01) as round
+  adsr(0.005, 0.1, 1, 0.4) as amp
+  d > where.draw
+  d > bend.draw
+  d > soft
+  soft > ping
+  where > ping.cutoff
+  bend > ping.cutoff
+  tide > d.rate
+  ping > round
+  round > amp
+  amp > out
+}

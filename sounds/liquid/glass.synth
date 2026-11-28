@@ -1,0 +1,20 @@
+# A soft FM bell, held rather than struck: two carriers a hair apart at 1.5
+# times the note, each with a modulator just over the note, so the partials
+# sit at 1.5, 2.5, 3.5... times it, a little mistuned, in pairs that beat. The
+# modulators fade faster than the carriers: the top dies first. A slow, shallow
+# vibrato keeps a held note from standing still.
+module fm glass {
+  algorithm dual_pairs
+  level 2
+  mod_index 92%
+  vibrato_rate 4.5hz
+  vibrato_depth 25%
+  op0_ratio 1.5x
+  op1_ratio 1.005x
+  op2_ratio 1.518x
+  op3_ratio 1.005x
+  op0_envelope 0.06 2 0.35 1.5
+  op1_envelope 0.2 1.8 0.55 1.2
+  op2_envelope 0.06 2 0.35 1.5
+  op3_envelope 0.2 1.8 0.55 1.2
+}

@@ -1,0 +1,30 @@
+# A liquid bass: a saw into a lowpass that never sits still, over a sine on
+# the same note. The cutoff wanders over an octave and a half on a curve
+# that does not repeat, opens a little differently on every note and closes
+# after each one. Written with ~ before a note it slides there in 140 ms.
+instrument tide {
+  gain 0.8
+  osc saw(55, glide=140ms) as a
+  osc sine(55) as sub
+  gain(0.5) as la
+  gain(0.7) as lsub
+  svf(A3, 0.35) as filt
+  wander(0.35hz, 0.8) as drift
+  rand(0.4) as differs
+  adsr(0.005, 0.5, 0.2, 0.4) as fenv
+  gain(1.2) as sweep
+  adsr(0.01, 0.6, 0.85, 0.25) as amp
+  saturate(1.2) as warm
+  a > la
+  sub > lsub
+  la > filt
+  drift > filt.cutoff
+  differs > filt.cutoff
+  fenv > sweep
+  sweep > filt.cutoff
+  filt > mix
+  lsub > mix
+  mix > amp
+  amp > warm
+  warm > out
+}
