@@ -55,6 +55,22 @@ pub fn lookahead_for(widest: usize, rate: u32) -> usize {
     LOOKAHEAD.max(engine * 2 + BLOCK_SIZE)
 }
 
+/// The most frames `--buffer` lets a callback ask for.
+const WIDEST_BUFFER: usize = 8192;
+
+/// Frames the ring holds for a device at `rate` Hz: what [`lookahead_for`]
+/// asks for the biggest buffer `--buffer` allows, counted like it in the
+/// engine's frames, and a block of room to reach it.
+pub fn ring_frames(rate: u32) -> usize {
+    lookahead_for(WIDEST_BUFFER, rate) + BLOCK_SIZE
+}
+
+/// Seconds of silence in `short` frames the ring did not have. They are the
+/// engine's frames, whatever the device's rate (see [`Output::short`]).
+pub fn silence_secs(short: u64) -> f64 {
+    short as f64 / SAMPLE_RATE as f64
+}
+
 // ── The ring the callback reads ─────────────────────────────────────────────
 
 /// Stereo samples from one thread to one other, without a lock: the main
@@ -121,6 +137,8 @@ pub struct Output {
     ring: Arc<Ring>,
     resampler: Option<Resampler>,
     /// Frames the ring did not have when the device asked: silence played.
+    /// Counted in the engine's frames, as they are pulled before the
+    /// converter.
     pub short: u64,
 }
 
@@ -233,10 +251,19 @@ struct Batch {
 /// rewritten every few seconds, so a take cut short still opens), and the
 /// script. What is written goes in batches of [`CHUNK`] frames, a write
 /// call or two each, and the buffers come back to be filled again.
+///
+/// A file that cannot be written (the disk full, the drive gone) is said
+/// once, through [`trouble`](Self::trouble), while the take plays, and is
+/// written no more; the other file goes on to the end. The script alone
+/// renders the take again, so a WAV lost is not the take lost.
 pub struct Recorder {
     tx: Option<Sender<Batch>>,
     /// Buffers the writer is done with.
     spare: Receiver<Batch>,
+    /// What the writer could not write, to be said to the performer.
+    trouble: Receiver<String>,
+    /// The writer is gone and that has not been said yet.
+    gone: bool,
     writer: Option<JoinHandle<Result<usize, String>>>,
     /// Frames and lines not yet sent.
     pending: Batch,
@@ -272,6 +299,9 @@ fn taken(p: &Path) -> String {
 /// Creating them is what decides (see [`Recorder::create`]).
 pub fn check_free(name: &Path) -> Result<(), String> {
     let (wav, txt) = take_files(name);
+    if let Some(dir) = wav.parent().filter(|d| !d.as_os_str().is_empty() && !d.is_dir()) {
+        return Err(format!("{} is not a directory: a take is written into one that is there", dir.display()));
+    }
     let busy = [&wav, &txt].into_iter().find(|p| p.exists()).map(|p| taken(p));
     busy.map_or(Ok(()), Err)
 }
@@ -308,6 +338,16 @@ impl Recorder {
                 return Err(e);
             }
         };
+        Ok(Self::start(audio_file, script_file, wav, txt, header, limit))
+    }
+
+    /// Start the writer on the two files, already made: the take's own, or
+    /// ones that fail in a test.
+    fn start<A, S>(audio_file: A, script_file: S, wav: PathBuf, txt: PathBuf, header: &[String], limit: usize) -> Self
+    where
+        A: Write + Seek + Send + 'static,
+        S: Write + Send + 'static,
+    {
         let (mut audio, mut script) = (BufWriter::new(audio_file), BufWriter::new(script_file));
         let sr = SAMPLE_RATE as u32;
         let wav_name = wav.display().to_string();
@@ -315,53 +355,107 @@ impl Recorder {
         let lines = header.to_vec();
         let (tx, rx) = channel::<Batch>();
         let (back, spare) = channel::<Batch>();
+        let (tell, trouble) = channel::<String>();
         let writer = std::thread::spawn(move || -> Result<usize, String> {
-            let wav_err = |e: std::io::Error| format!("{}: {}", wav_name, e);
-            let txt_err = |e: std::io::Error| format!("{}: {}", txt_name, e);
-            audio.write_all(&tatum_core::wav::header_stereo_16(0, sr)).map_err(wav_err)?;
-            for l in lines {
-                writeln!(script, "{}", l).map_err(txt_err)?;
+            // The first error of each file: said once, now, and kept for the
+            // end. That file is then left alone and the other goes on.
+            let (mut wav_lost, mut txt_lost) = (None::<String>, None::<String>);
+            let lose_wav = |lost: &mut Option<String>, e: std::io::Error| {
+                let e = format!("{}: {}", wav_name, e);
+                let _ = tell.send(format!("{}; the WAV stops here, the script goes on and renders the take again", e));
+                *lost = Some(e);
+            };
+            let lose_txt = |lost: &mut Option<String>, e: std::io::Error| {
+                let e = format!("{}: {}", txt_name, e);
+                let _ = tell.send(format!("{}; the script stops here, the WAV goes on", e));
+                *lost = Some(e);
+            };
+            if let Err(e) = audio.write_all(&tatum_core::wav::header_stereo_16(0, sr)) {
+                lose_wav(&mut wav_lost, e);
             }
-            script.flush().map_err(txt_err)?;
+            let begun = lines.iter().try_for_each(|l| writeln!(script, "{}", l)).and_then(|_| script.flush());
+            if let Err(e) = begun {
+                lose_txt(&mut txt_lost, e);
+            }
             let mut frames = 0usize;
             let mut since_header = 0usize;
             let mut bytes = Vec::with_capacity(CHUNK * 4);
             for mut batch in rx {
                 // Past the format's limit the WAV stops; the script goes on.
-                let n = (batch.audio.len() / 2).min(limit - frames);
+                let n = if wav_lost.is_some() { 0 } else { (batch.audio.len() / 2).min(limit - frames) };
                 if n > 0 {
                     bytes.clear();
                     for s in &batch.audio[..n * 2] {
                         bytes.extend_from_slice(&tatum_core::wav::sample_16(*s).to_le_bytes());
                     }
-                    audio.write_all(&bytes).map_err(wav_err)?;
-                    frames += n;
-                    since_header += n;
-                    if since_header >= 5 * SAMPLE_RATE as usize {
+                    let wrote = audio.write_all(&bytes).and_then(|_| {
+                        frames += n;
+                        since_header += n;
+                        if since_header < 5 * SAMPLE_RATE as usize {
+                            return Ok(());
+                        }
                         since_header = 0;
-                        rewrite_header(&mut audio, frames, sr).map_err(wav_err)?;
+                        rewrite_header(&mut audio, frames, sr)
+                    });
+                    if let Err(e) = wrote {
+                        lose_wav(&mut wav_lost, e);
                     }
                 }
-                if !batch.lines.is_empty() {
-                    script.write_all(batch.lines.as_bytes()).map_err(txt_err)?;
-                    script.flush().map_err(txt_err)?;
+                if txt_lost.is_none() && !batch.lines.is_empty() {
+                    if let Err(e) = script.write_all(batch.lines.as_bytes()).and_then(|_| script.flush()) {
+                        lose_txt(&mut txt_lost, e);
+                    }
                 }
                 batch.audio.clear();
                 batch.lines.clear();
                 let _ = back.send(batch);
             }
-            rewrite_header(&mut audio, frames, sr).map_err(wav_err)?;
-            script.flush().map_err(txt_err)?;
-            Ok(frames)
+            if wav_lost.is_none() {
+                if let Err(e) = rewrite_header(&mut audio, frames, sr) {
+                    lose_wav(&mut wav_lost, e);
+                }
+            }
+            if wav_lost.is_some() {
+                // What did reach the file, under a header that says so, as
+                // far as that can still be written. What the buffer holds
+                // is not tried again.
+                let (mut file, _) = audio.into_parts();
+                let _ = close_short(&mut file, sr);
+            }
+            if txt_lost.is_none() {
+                if let Err(e) = script.flush() {
+                    lose_txt(&mut txt_lost, e);
+                }
+            }
+            match (wav_lost, txt_lost) {
+                (None, None) => Ok(frames),
+                (Some(w), None) => Err(format!(
+                    "{}; the WAV is cut short, the script {} is whole and renders the take again",
+                    w, txt_name
+                )),
+                (None, Some(t)) => Err(format!("{}; the script is cut short, the WAV {} is whole", t, wav_name)),
+                (Some(w), Some(t)) => Err(format!("{}; {}", w, t)),
+            }
         });
-        Ok(Self {
+        Self {
             tx: Some(tx),
             spare,
+            trouble,
+            gone: false,
             writer: Some(writer),
             pending: Batch { audio: Vec::with_capacity(CHUNK * 2), lines: String::new() },
             wav,
             txt,
-        })
+        }
+    }
+
+    /// What could not be written since this was last asked, if anything:
+    /// the main thread asks between blocks and tells the performer.
+    pub fn trouble(&mut self) -> Option<String> {
+        if std::mem::take(&mut self.gone) {
+            return Some(String::from("the thread writing the take stopped: nothing more of it is written"));
+        }
+        self.trouble.try_recv().ok()
     }
 
     pub fn audio(&mut self, l: &[f32], r: &[f32]) {
@@ -380,13 +474,21 @@ impl Recorder {
         if self.pending.audio.is_empty() && self.pending.lines.is_empty() {
             return;
         }
+        let Some(tx) = &self.tx else {
+            // No writer to hand it to: the buffer is filled again.
+            self.pending.audio.clear();
+            self.pending.lines.clear();
+            return;
+        };
         let next = self
             .spare
             .try_recv()
             .unwrap_or_else(|_| Batch { audio: Vec::with_capacity(CHUNK * 2), lines: String::new() });
         let full = std::mem::replace(&mut self.pending, next);
-        if let Some(tx) = &self.tx {
-            let _ = tx.send(full);
+        // The writer only goes before its channel closes by panicking.
+        if tx.send(full).is_err() {
+            self.tx = None;
+            self.gone = true;
         }
     }
 
@@ -409,7 +511,17 @@ impl Recorder {
     }
 }
 
-fn rewrite_header(audio: &mut BufWriter<File>, frames: usize, sr: u32) -> std::io::Result<()> {
+/// After a write failed: the header of what the file does hold, which is
+/// not what was counted when a write went in part or stayed in the buffer.
+fn close_short<W: Write + Seek>(file: &mut W, sr: u32) -> std::io::Result<()> {
+    let end = file.seek(SeekFrom::End(0))?;
+    let frames = (end.saturating_sub(44) / 4) as usize;
+    file.seek(SeekFrom::Start(0))?;
+    file.write_all(&tatum_core::wav::header_stereo_16(frames, sr))?;
+    file.flush()
+}
+
+fn rewrite_header<W: Write + Seek>(audio: &mut BufWriter<W>, frames: usize, sr: u32) -> std::io::Result<()> {
     audio.flush()?;
     let file = audio.get_mut();
     let end = file.stream_position()?;
@@ -439,6 +551,8 @@ pub enum Said {
     Reading(String),
     Info(String),
     Good(String),
+    /// Something went wrong that the performer has to know now.
+    Bad(String),
 }
 
 /// A take being played: the stage, what waits for it, the ring and the
@@ -465,6 +579,10 @@ impl Session {
         while self.ring.waiting() < self.lookahead && self.ring.room() >= BLOCK_SIZE {
             let (l, r) = self.block(&mut said)?;
             each(&l, &r, &mut self.stage);
+        }
+        // A file that stopped being written: said while the take plays.
+        if let Some(rec) = self.recorder.as_mut() {
+            said.extend(std::iter::from_fn(|| rec.trouble()).map(Said::Bad));
         }
         Ok(said)
     }
@@ -509,6 +627,16 @@ impl Session {
         let frames = rec.finish()?;
         Ok(Some((wav, txt, frames, self.stage.frames)))
     }
+
+    /// The take never started: its two files, empty still, go again, so
+    /// the same name can be asked for once more.
+    pub fn discard(mut self) {
+        let Some(rec) = self.recorder.take() else { return };
+        let (wav, txt) = (rec.wav.clone(), rec.txt.clone());
+        let _ = rec.finish();
+        let _ = std::fs::remove_file(wav);
+        let _ = std::fs::remove_file(txt);
+    }
 }
 
 // ── The live session ────────────────────────────────────────────────────────
@@ -551,8 +679,8 @@ pub fn run(
     }
     let resampler = if rate == SAMPLE_RATE as u32 { None } else { Some(Resampler::new(SAMPLE_RATE as u32, rate)) };
     let device_desc = device.description().map(|d| d.to_string()).unwrap_or_else(|_| "?".into());
-    // Room for the biggest buffer `--buffer` allows, twice.
-    let ring = Arc::new(Ring::new(8192 * 2 + LOOKAHEAD));
+    // Room for the biggest buffer `--buffer` allows, twice, at this rate.
+    let ring = Arc::new(Ring::new(ring_frames(rate)));
     let counters = Arc::new(Counters::default());
     let counters_cb = Arc::clone(&counters);
     let mut output = Output::new(Arc::clone(&ring), resampler);
@@ -582,7 +710,9 @@ pub fn run(
         .map_err(|e| format!("cannot open output stream: {}", e))?;
     let (midi_tx, midi_rx) = channel::<Midi>();
     let inputs = crate::midi::open(midi_name, &midi_tx)?;
-    // The files last: nothing that can still fail leaves an empty take behind.
+    // The files last. What can still fail before the take starts (the first
+    // blocks, the device, the screen) discards them again, so no empty take
+    // is left behind to refuse the name next time.
     // The `# take:` line first: only there is it read as one.
     let lines = vec![
         header.line(),
@@ -602,22 +732,30 @@ pub fn run(
             }
         }
     };
-    // Sound waiting before the device asks for any.
-    session.render_ahead(meter)?;
-
-    stream.play().map_err(|e| format!("cannot start output stream: {}", e))?;
-
-    let (key_tx, key_rx) = channel::<crate::keys::Key>();
-    let mut ui = match &telemetry {
-        Some(t) => {
-            let mut screen = crate::tui::Screen::new(Arc::clone(t), device_desc.clone(), inputs.names.clone())
-                .map_err(|e| format!("cannot open the screen: {}", e))?;
-            screen.glass = glass;
-            screen.say(format!("recording a take to {}", wav.display()), crate::tui::Tone::Info);
-            Ui::Screen(Box::new(screen))
+    // Sound waiting before the device asks for any: enough for the buffer
+    // asked for, which the device has not shown yet.
+    session.lookahead = lookahead_for(crate::live::BUFFER.get().map_or(0, |&n| n as usize), rate);
+    let begun = session
+        .render_ahead(meter)
+        .and_then(|_| stream.play().map_err(|e| format!("cannot start output stream: {}", e)))
+        .and_then(|_| match &telemetry {
+            Some(t) => {
+                let mut screen = crate::tui::Screen::new(Arc::clone(t), device_desc.clone(), inputs.names.clone())
+                    .map_err(|e| format!("cannot open the screen: {}", e))?;
+                screen.glass = glass;
+                screen.say(format!("recording a take to {}", wav.display()), crate::tui::Tone::Info);
+                Ok(Ui::Screen(Box::new(screen)))
+            }
+            None => Ok(Ui::Plain(Status::new())),
+        });
+    let mut ui = match begun {
+        Ok(ui) => ui,
+        Err(e) => {
+            session.discard();
+            return Err(e);
         }
-        None => Ui::Plain(Status::new()),
     };
+    let (key_tx, key_rx) = channel::<crate::keys::Key>();
     let _keys = if let Ui::Plain(_) = ui {
         let nav = &session.stage.nav;
         eprintln!("playing {} on {}, recording to {} and {}", set_name, device_desc, wav.display(), txt.display());
@@ -676,6 +814,7 @@ pub fn run(
                 }
                 Said::Info(line) => ui.say(now_s, &line, crate::tui::Tone::Info),
                 Said::Good(line) => ui.say(now_s, &line, crate::tui::Tone::Good),
+                Said::Bad(line) => ui.say(now_s, &line, crate::tui::Tone::Bad),
             }
         }
         if !readings.is_empty() {
@@ -841,7 +980,7 @@ pub fn run(
     if short > 0 {
         eprintln!(
             "{:.2} s of silence played where the set was not rendered in time (the take has no gap: it is the set, not the device)",
-            short as f64 / rate as f64
+            silence_secs(short)
         );
     }
     if knob_moves > 0 {

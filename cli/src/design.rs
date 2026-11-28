@@ -274,7 +274,10 @@ fn hit_json(y: &[f32]) -> String {
         json_pairs(&c.pitch),
         json_pairs(&c.level),
         json_num(y.len() as f32 * 1000.0 / SAMPLE_RATE),
-        // The click as `tatum analyze` reads it, so the two numbers compare.
+        // The click by the measure `tatum analyze` uses, read on this one
+        // hit: yours and a record's averaged hit compare. What `analyze`
+        // prints for the record need not be this: it reads every hit apart
+        // and takes the median, which keeps what the average thins out.
         json_num(tatum_debug::fit::click_db(y))
     )
 }
@@ -1128,9 +1131,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn fit_sets_the_kick_knobs_to_the_record() {
-        // A record made of a known kick, as the page would send it.
+    /// A record made of a known kick at 125 BPM, as the page would send it.
+    fn record_wav() -> Vec<u8> {
         let known = "kick(A1, start=900hz, knee=170hz, snap=3ms, body=75ms, hold=90ms, release=200ms, phase=20)";
         let one = crate::kick::engine_hit(known, 600.0).expect("renders");
         let beat = (60.0 / 125.0 * SAMPLE_RATE) as usize;
@@ -1142,7 +1144,12 @@ mod tests {
             }
             at += beat;
         }
-        let wav = tatum_core::wav::encode_stereo_16(&x, &x, SAMPLE_RATE as u32);
+        tatum_core::wav::encode_stereo_16(&x, &x, SAMPLE_RATE as u32)
+    }
+
+    #[test]
+    fn fit_sets_the_kick_knobs_to_the_record() {
+        let wav = record_wav();
         let mut state = state_of(NEW_SOUND, Path::new("/nonexistent/k.synth"), None);
         assert!(fit_reply(&mut state).contains("load a record first"));
         let mut q = BTreeMap::new();
@@ -1165,10 +1172,28 @@ mod tests {
     #[test]
     fn a_bad_reference_query_is_not_taken_for_a_number() {
         let mut state = state_of(NEW_SOUND, Path::new("/nonexistent/k.synth"), None);
+        // A WAV it can read, so the query is what is looked at: what is not
+        // a number from 0 up is left out, and the reply is the one without it.
+        let wav = record_wav();
         let mut q = BTreeMap::new();
-        q.insert("from".to_string(), "NaN".to_string());
-        assert!(reference_reply(&mut state, &q, b"RIFF").contains("not a WAV"));
-        assert!(state.reference.is_none());
+        q.insert("bpm".to_string(), "125".to_string());
+        let plain = reference_reply(&mut state, &q, &wav);
+        assert!(plain.starts_with("{\"ok\":true"), "{}", &plain[..plain.len().min(200)]);
+        for (k, bad) in [("from", "NaN"), ("from", "-5"), ("to", "inf"), ("to", "-1"), ("ms", "NaN"), ("ms", "-inf")] {
+            let mut q = q.clone();
+            q.insert(k.to_string(), bad.to_string());
+            state.reference = None;
+            let r = reference_reply(&mut state, &q, &wav);
+            assert!(r == plain, "{k}={bad}: {}", &r[..r.len().min(200)]);
+            assert!(state.reference.is_some(), "{k}={bad}");
+        }
+        // A tempo that is not one is measured instead, not taken.
+        for bad in ["NaN", "inf", "-125", "0"] {
+            q.insert("bpm".to_string(), bad.to_string());
+            let r = reference_reply(&mut state, &q, &wav);
+            let bpm = r.strip_prefix("{\"ok\":true,\"bpm\":").and_then(|r| r.split(',').next()?.parse::<f32>().ok());
+            assert!(bpm.is_some_and(|b| (b - 125.0).abs() < 0.1), "bpm={bad}: {}", &r[..r.len().min(200)]);
+        }
     }
 
     #[test]
