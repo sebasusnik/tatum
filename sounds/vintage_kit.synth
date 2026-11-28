@@ -1,0 +1,19 @@
+# The sounds in the spirit of classic machines, from sounds/, played together:
+# an 808-ish boom, 606-ish hats, a Juno-ish chorus pad and an SH-101-ish bass.
+tempo 122
+scale A minor
+use "kicks/boom.synth"
+use "hats/metal_closed.synth"
+use "hats/metal_open.synth"
+use "keys/chorus_pad.synth"
+use "bass/rubber.synth"
+pattern four  { C3 - - -  C3 - - -  C3 - - -  C3 - - - }
+pattern ch    { - - C3 -  - - C3 -  - - C3 -  - - C3 C3 }
+pattern oh    { - - - -  - - - -  - - - -  - - C3 - }
+pattern line  { A1 - A1 A2  - A1 - C2  A1 - A1 A2  - G1 - E2 }
+pattern chord { [A3 C4 E4 G4] .. .. .. .. .. .. ..  [F3 A3 C4 E4] .. .. .. .. .. .. .. }
+track kick { play four using boom }
+track hat  { play ch using metal_closed level 0.5 }
+track open { play oh using metal_open level 0.45 }
+track bass { play line using rubber level 0.55 sidechain 0.4 from=kick }
+track pad  { play chord using chorus_pad level 0.45 reverb_send 0.25 }

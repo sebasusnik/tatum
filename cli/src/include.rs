@@ -194,3 +194,70 @@ mod tests {
         assert!(err.contains("expected `use"), "{}", err);
     }
 }
+
+#[cfg(test)]
+mod sounds_tests {
+    use super::Source;
+    use std::path::Path;
+
+    /// `sounds/vintage_kit.synth` plays the sounds in the spirit of classic
+    /// machines together, through `use`: every one of them is read from its
+    /// own file, plays on its own track at a level of its own, and the five
+    /// together stay under full scale on their way into the master.
+    #[test]
+    fn the_vintage_kit_plays_its_sounds_together() {
+        let src = Source::load(Path::new("../sounds/vintage_kit.synth")).expect("every use resolves");
+        let mut e = tatum_core::song_engine::SongEngine::from_source(&src.text).expect("compiles");
+        let (l, r) = e.render(2);
+        assert!(l.iter().chain(&r).all(|v| v.is_finite()));
+        // Each track's meter is that sound alone, after its level and before
+        // the master. The floors are a third of what each measures at
+        // 44.1 kHz (kick 0.141, hat 0.0150, open 0.0094, bass 0.076, pad
+        // 0.065) and a tenth for the hats, which a build at 22.05 kHz plays
+        // 9.5 dB down: a sound gone silent fails here whatever the other
+        // four do.
+        let sounds = [
+            ("kick", "boom", "kicks/boom.synth", 0.045),
+            ("hat", "metal_closed", "hats/metal_closed.synth", 0.0015),
+            ("open", "metal_open", "hats/metal_open.synth", 0.001),
+            ("bass", "rubber", "bass/rubber.synth", 0.025),
+            ("pad", "chorus_pad", "keys/chorus_pad.synth", 0.02),
+        ];
+        assert_eq!(e.track_count(), sounds.len());
+        for (track, sound, file, floor) in sounds {
+            assert!(src.files.iter().any(|f| f.ends_with(file)), "{file} is read");
+            let t = (0..e.track_count()).find(|&t| e.track_name(t) == track).expect(track);
+            let inst = e.track_instrument(t).map(|i| e.instrument_name(i));
+            assert_eq!(inst, Some(sound), "track {track} plays {sound}");
+            let (peak, rms) = (e.track_peak(t), e.track_rms(t));
+            assert!(rms > floor, "{sound} plays: rms {rms}, floor {floor}");
+            assert!(peak < 1.0, "{sound} alone stays under full scale: peak {peak}");
+        }
+        let (peak, _) = e.master_input_peak_rms();
+        assert!(peak < 1.0, "the five together do not clip the mix: peak {peak} into the master");
+    }
+
+    /// The open hat rings its 320 ms whatever the length of the note: on a
+    /// one-step note (123 ms at 122 BPM) it is still there 200 ms in, and
+    /// gone by 400.
+    #[test]
+    fn the_open_hat_rings_past_a_short_note() {
+        let sound = std::fs::read_to_string("../sounds/hats/metal_open.synth").expect("reads");
+        let song = format!(
+            "tempo 122\n{sound}pattern p {{ C3 - - -  - - - -  - - - -  - - - - }}\ntrack t {{ play p using metal_open }}\n"
+        );
+        let mut e = tatum_core::song_engine::SongEngine::from_source(&song).expect("compiles");
+        let (l, _) = e.render(1);
+        let peak_in = |from_ms: f32, to_ms: f32| {
+            let at = |ms: f32| (ms * 0.001 * tatum_core::SAMPLE_RATE) as usize;
+            l[at(from_ms)..at(to_ms)].iter().fold(0.0f32, |m, v| m.max(v.abs()))
+        };
+        let peak = peak_in(0.0, 100.0);
+        assert!(peak > 0.05, "it plays: peak {peak}");
+        // 38 dB down at 200 ms; a note-off that cut it would leave nothing.
+        let ringing = peak_in(200.0, 250.0);
+        assert!(ringing > peak * 0.003, "still ringing after the note: {ringing} of {peak}");
+        let after = peak_in(400.0, 1000.0);
+        assert!(after < peak * 0.001, "and over by 400 ms: {after} of {peak}");
+    }
+}

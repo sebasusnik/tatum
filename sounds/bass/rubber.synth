@@ -1,0 +1,18 @@
+# A rubbery mono-style bass in the spirit of an SH-101: a saw with a square an
+# octave down, through a resonant ladder whose envelope snaps shut in 150 ms.
+# Short notes squelch; long ones settle on a round low tone.
+instrument rubber {
+  osc saw(110) as saw
+  osc square(110, pitch=-12) as sub
+  gain(0.6) as low
+  ladder(320hz, 0.55, ea=0.001, ed=0.15, es=0.1, er=0.08, edepth=2600) as filter
+  adsr(0.002, 0.25, 0.65, 0.06) as env
+  clip(1.4) as edge
+  saw > mix
+  sub > low
+  low > mix
+  mix > filter
+  filter > env
+  env > edge
+  edge > out
+}
