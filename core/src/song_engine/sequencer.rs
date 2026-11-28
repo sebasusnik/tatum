@@ -155,10 +155,16 @@ impl SongEngine {
         if pending.len() < MAX_PENDING_TRIGGERS {
             pending.push(t);
         } else if t.inst_idx < instruments.len() {
+            if t.slide && instruments[t.inst_idx].slide_to(&[t.from], t.midi_note, t.velocity) {
+                return;
+            }
             if t.release != NO_RELEASE {
                 instruments[t.inst_idx].note_off(t.release);
             }
-            instruments[t.inst_idx].note_on(t.midi_note, t.velocity);
+            // as when it fires from the queue: a gap only ends the note before it
+            if t.velocity > 0.0 {
+                instruments[t.inst_idx].note_on(t.midi_note, t.velocity);
+            }
         }
     }
 
@@ -444,8 +450,11 @@ impl SongEngine {
                                             midi_note: subs[k].midi_note,
                                             velocity: vels[k],
                                             // each note takes the previous one's place,
-                                            // so eight of them do not stack up on a poly
-                                            release: if subs[k].slide { NO_RELEASE } else { subs[k - 1].midi_note },
+                                            // so eight of them do not stack up on a poly;
+                                            // a slide that glides releases nothing, one
+                                            // the instrument cannot glide strikes anew
+                                            // and needs the note before it ended
+                                            release: subs[k - 1].midi_note,
                                             slide: subs[k].slide,
                                             from: subs[k - 1].midi_note,
                                         },

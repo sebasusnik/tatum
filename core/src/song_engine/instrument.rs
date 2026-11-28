@@ -1,7 +1,7 @@
 //! What a track plays: a graph instrument or one of the built-in modules,
 //! behind one enum so the engine drives them all the same way.
 
-use crate::graph::voice::Instrument;
+use crate::graph::voice::{Instrument, Source};
 use crate::modules::bass::{BassModule, BassParam};
 use crate::modules::beats::BeatsModule;
 use crate::modules::fm::FmModule;
@@ -40,6 +40,24 @@ impl SongInstrument {
             Self::Fm(m) => m.note_on(note, velocity),
             Self::Keys(m) => m.note_on(note, velocity),
             Self::Beats(m) => m.note_on(note, velocity),
+        }
+    }
+
+    /// A note played live into the track, a key or a pad. On a graph it is
+    /// struck as live, so only [`Self::live_note_off`] ends it and the
+    /// pattern's note-offs never do. The modules keep no source per voice.
+    pub(super) fn live_note_on(&mut self, note: u8, velocity: f32) {
+        match self {
+            Self::Graph(inst) => inst.note_on_from(note, velocity, Source::Live),
+            _ => self.note_on(note, velocity),
+        }
+    }
+
+    /// End a note struck by [`Self::live_note_on`].
+    pub(super) fn live_note_off(&mut self, note: u8) {
+        match self {
+            Self::Graph(inst) => inst.note_off_from(note, Source::Live),
+            _ => self.note_off(note),
         }
     }
 

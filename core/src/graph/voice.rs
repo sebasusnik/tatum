@@ -6,6 +6,17 @@ use crate::graph::node::NodeKind;
 use crate::math;
 use crate::{BLOCK_SIZE, MAX_VOICES};
 
+/// Who struck a note: the track's own pattern, or a key played into the
+/// track live. A note-off ends only a strike of its own source, so a key held
+/// on the note the pattern plays is not ended by the pattern, nor the
+/// pattern's note by the key coming up.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Source {
+    #[default]
+    Pattern,
+    Live,
+}
+
 /// A single voice: owns per-voice DSP node state on the heap.
 pub struct Voice {
     pub nodes: [Option<Box<NodeKind>>; MAX_GRAPH_NODES],
@@ -13,9 +24,14 @@ pub struct Voice {
     pub velocity: f32,
     pub active: bool,
     pub age: u32,
-    /// Between its note-on and its note-off: a voice that is only ringing
-    /// out is nobody's to slide.
-    held: bool,
+    /// The key is still down: set by a strike, cleared by its note-off. A
+    /// voice that is active and not held is ringing out its release.
+    pub held: bool,
+    /// Which strike of the instrument this is, to tell the latest of two
+    /// voices held on one note.
+    pub strike: u32,
+    /// Who struck it: only a note-off from the same source releases it.
+    pub source: Source,
     /// The pitch the oscillators are at, in Hz, and the slide towards the
     /// next: the ratio it is multiplied by each sample, how many samples are
     /// left, and where it lands.
@@ -40,6 +56,8 @@ impl Voice {
             active: false,
             age: 0,
             held: false,
+            strike: 0,
+            source: Source::Pattern,
             freq: 0.0,
             glide_ratio: 1.0,
             glide_left: 0,
@@ -72,8 +90,8 @@ impl Voice {
         self.note = note;
         self.velocity = velocity;
         self.active = true;
-        self.age = 0;
         self.held = true;
+        self.age = 0;
 
         self.glide_left = 0;
         self.tune(template, math::midi_to_freq(note));
@@ -224,7 +242,13 @@ impl Instrument {
         self.staged_resonance = resonance;
     }
 
+    /// Strike `note` from the track's pattern.
     pub fn note_on(&mut self, note: u8, velocity: f32) {
+        self.note_on_from(note, velocity, Source::Pattern);
+    }
+
+    /// Strike `note` from `source`: its note-off has to come from the same one.
+    pub fn note_on_from(&mut self, note: u8, velocity: f32, source: Source) {
         // A free voice, else the oldest: the first of the oldest, as before.
         let idx = self.voices.iter().position(|v| !v.active).unwrap_or_else(|| {
             let mut oldest = (0usize, 0u32);
@@ -237,6 +261,8 @@ impl Instrument {
         });
         self.voices[idx].init(&self.template, note, velocity);
         let hit = self.hits;
+        self.voices[idx].strike = hit;
+        self.voices[idx].source = source;
         self.hits = self.hits.wrapping_add(1);
         // A drum node that sways is made again for its hit number, in its own box.
         for i in 0..self.template.node_count as usize {
@@ -351,12 +377,31 @@ impl Instrument {
         true
     }
 
+    /// Release `note` struck by the track's pattern.
     pub fn note_off(&mut self, note: u8) {
-        for voice in self.voices.iter_mut() {
-            if voice.active && voice.note == note {
-                voice.release(&self.template);
-                break;
+        self.note_off_from(note, Source::Pattern);
+    }
+
+    /// Release `note` struck by `source`: the latest strike of it from that
+    /// source that is still held. A voice already releasing is never the one,
+    /// nor one another source struck. A note struck again while its last
+    /// strike still rings has two voices on it, the old one keeps releasing as
+    /// a re-struck key does, and taking the first match by note number used to
+    /// hand the new strike's note-off to the old voice: the new one was then
+    /// held until it was stolen, ringing through every rest after it.
+    pub fn note_off_from(&mut self, note: u8, source: Source) {
+        let mut latest: Option<(usize, u32)> = None;
+        for (i, v) in self.voices.iter().enumerate() {
+            if v.active && v.held && v.note == note && v.source == source {
+                // The distance back from the next strike, so the count wrapping changes nothing.
+                let back = self.hits.wrapping_sub(v.strike);
+                if latest.is_none_or(|(_, b)| back < b) {
+                    latest = Some((i, back));
+                }
             }
+        }
+        if let Some((i, _)) = latest {
+            self.voices[i].release(&self.template);
         }
     }
 
@@ -424,6 +469,7 @@ impl Instrument {
 
             if voice.all_envelopes_idle(template) {
                 voice.active = false;
+                voice.held = false;
             }
         }
     }
@@ -446,6 +492,7 @@ impl Instrument {
     pub fn reset(&mut self) {
         for voice in self.voices.iter_mut() {
             voice.active = false;
+            voice.held = false;
         }
         // The next play counts its hits from the top, as a render does.
         self.hits = 0;
