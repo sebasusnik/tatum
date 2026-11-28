@@ -276,10 +276,52 @@ fn a_graph_with_ports_and_an_svf_never_allocates() {
 /// after it: neither the guard nor what follows touches the allocator.
 #[test]
 fn dropping_a_voice_never_allocates() {
+    drops_without_allocating(PORTS);
+}
+
+/// The drum nodes in a voice that is dropped: each is made again from its
+/// spec in the box it has (the hat with the level found when it was
+/// compiled), and made again for its hit number on the next note. Here they
+/// are the sound, and two of them drive ports as well.
+#[test]
+fn dropping_a_voice_of_drum_nodes_never_allocates() {
+    drops_without_allocating(
+        r#"
+tempo 140
+instrument kit {
+  kick(A1, body=40ms, hold=30ms, release=80ms, vary=0.2, vary_pitch=0.05) as k
+  tom(A2, click=-20db, drive=0.3, vary=10%) as t
+  hat(decay=90ms, band=6khz, noise=60%, vary=20%) as h
+  snare(F#3, drive=0.4, vary=10%) as s
+  clap(bursts=5, tail=200ms, vary=15%) as c
+  osc pulse(110, width=0.4) as a
+  s > gain(0.5) > a.fm
+  c > gain(0.2) > a.width
+  k > mix
+  t > mix
+  h > mix
+  s > mix
+  c > mix
+  a > gain(0.2) > mix
+  mix > svf(4000, 0.2) as filt
+  h > gain(2) > filt.cutoff
+  filt > gain(0.9) as trim
+  trim > out
+}
+pattern four { C3 - - -  C3 - - -  C3 - - -  C3 - - - }
+track kit { play four using kit }
+"#,
+    );
+}
+
+/// The first instrument of `src`, whose way out is a `gain(0.9)`: eight
+/// notes with that gain a NaN, each dropped on its first block, then the
+/// instrument mended and played on, all of it under the counting allocator.
+fn drops_without_allocating(src: &str) {
     use tatum_core::graph::node::NodeSpec;
     use tatum_core::graph::voice::Instrument;
 
-    let ast = tatum_core::dsl::parse(PORTS).expect("parses");
+    let ast = tatum_core::dsl::parse(src).expect("parses");
     let song = tatum_core::dsl::compiler::compile(&ast).expect("compiles");
     let mut template = song.instruments[0].as_graph().expect("a graph").clone();
     let gain = (0..template.node_count as usize)
