@@ -897,6 +897,40 @@ mod tests {
         assert!((found.click - k.click).abs() < 3.0, "click {} against {}", found.click, k.click);
     }
 
+    /// The kick on its own, four to the bar: nothing before a hit.
+    fn alone(k: &KickArgs) -> Vec<f32> {
+        let spec = kick_spec(&k.params()).expect("a kick");
+        let mut node = spec.instantiate();
+        let inputs = [0.0f32; MAX_NODE_INPUTS];
+        let one: Vec<f32> = (0..(SAMPLE_RATE as usize)).map(|_| node.process(&inputs, 0)).collect();
+        let beat = (60.0 / 125.0 * SAMPLE_RATE) as usize;
+        let mut out = vec![0.0f32; 24 * SAMPLE_RATE as usize];
+        let mut at = 1000;
+        while at + beat < out.len() {
+            for (i, v) in one.iter().enumerate().take(beat) {
+                out[at + i] += 0.7 * v;
+            }
+            at += beat;
+        }
+        out
+    }
+
+    #[test]
+    fn analyze_reads_the_click_where_the_hit_starts() {
+        // `tatum analyze` read the click from where each hit was first
+        // found, most of a millisecond after it starts: on a clean kick it
+        // missed the first samples, where the click and the step of a phase
+        // are, and read 32 dB under what the hit has (-73.6 against -41.6).
+        let mut k = truth();
+        k.chirp = 0.0;
+        k.start = 400.0;
+        k.click = -30.0;
+        let x = alone(&k);
+        let analyzed = crate::reference::measure(&x, &x).kick.expect("a kick").click_db;
+        let averaged = click_db(&crate::hit::average_hit(&x, 125.0, 230.0).expect("a hit"));
+        assert!((analyzed - averaged).abs() < 1.0, "analyze {analyzed:.1} dB, the hit {averaged:.1} dB");
+    }
+
     #[test]
     fn the_line_is_a_kick_the_language_takes() {
         let k = truth().rounded();

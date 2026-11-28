@@ -265,7 +265,7 @@ function measure(h) {
   // is still rising.
   const top = Math.max(0, lvl.findIndex((l) => l[1] >= -1));
   const fall = (db) => { const f = lvl.slice(top).find((l) => l[1] < db); return f ? f[0] : null; };
-  return { tail, sweep, hold: fall(-1), d12: fall(-12), d24: fall(-24), length: fall(-60) };
+  return { tail, sweep, hold: fall(-1), d12: fall(-12), d24: fall(-24), length: fall(-60), click: h.click };
 }
 function noteName(hz) {
   const names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -279,7 +279,8 @@ function numbers() {
     return `<div><span>${label}</span><br>${one(a)}${ref ? ` <span>· ref ${one(b)}</span>` : ""}</div>`;
   };
   $("numbers").innerHTML = row("tail", "tail", "") + row("sweep to 10%", "sweep", "ms") + row("hold (−1 dB)", "hold", "ms") +
-    row("−12 dB at", "d12", "ms") + row("−24 dB at", "d24", "ms") + row("over (−60 dB)", "length", "ms");
+    row("−12 dB at", "d12", "ms") + row("−24 dB at", "d24", "ms") + row("over (−60 dB)", "length", "ms") +
+    row("click (over 2 kHz / body)", "click", "dB");
 }
 window.addEventListener("resize", draw);
 
