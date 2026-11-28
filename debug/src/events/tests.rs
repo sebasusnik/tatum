@@ -653,6 +653,34 @@ fn a_delay_on_one_pitch_on_a_grid_is_not_read_as_the_note_spacing() {
     if let Some(d) = &r.delay {
         assert!(d.ambiguous.is_some() || (d.interval_ms - 353.7).abs() < 2.0, "a wrong time given as a delay: {d:?}");
     }
+    // On a grid of several pitches the delay is read as itself, or said to
+    // be ambiguous; never its second repeat, nor the notes' own spacing.
+    let phrase = |bpm: f32, steps: &[usize], pitches: &[f32]| {
+        let s = 60.0 / bpm / 4.0;
+        let last = 0.3 + *steps.last().unwrap() as f32 * s;
+        let mut x = bed(last + 2.5, 0.002, 0.0);
+        for (k, i) in steps.iter().enumerate() {
+            let mut amp = 0.3;
+            for n in 0..5 {
+                ping(&mut x, 0.3 + *i as f32 * s + n as f32 * 0.3537, pitches[k % pitches.len()], 15.0, amp, 0.5, 0.0);
+                amp *= 0.5;
+            }
+        }
+        run(x)
+    };
+    let five = [900.0, 1030.0, 1160.0, 1290.0, 1420.0];
+    let syncopated: Vec<usize> = (0..48).filter(|i| [0, 3, 6, 8, 11, 14].contains(&(i % 16))).collect();
+    let eighths: Vec<usize> = (0..48).step_by(2).collect();
+    for (bpm, steps, pitches, what) in [
+        (140.0, &eighths, &five[..], "140 BPM eighths, five pitches"),
+        (127.2, &syncopated, &five[..], "127.2 BPM syncopated, five pitches"),
+        (127.2, &syncopated, &[1000.0][..], "127.2 BPM syncopated, one pitch"),
+    ] {
+        let r = phrase(bpm, steps, pitches);
+        if let Some(d) = &r.delay {
+            assert!(d.ambiguous.is_some() || (d.interval_ms - 353.7).abs() < 2.0, "{what}: {d:?}");
+        }
+    }
     // Two equal pings are not a note and its echo.
     let mut x = bed(3.0, 0.03, 0.0);
     for t in [0.4, 1.23] {

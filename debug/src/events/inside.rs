@@ -1563,6 +1563,7 @@ pub(crate) fn delay(c: &Ctx, events: &[Event], band: (f32, f32)) -> Option<Delay
     let onsets: Vec<usize> = events.iter().map(|e| (e.start_s * SR) as usize).collect();
     let lands_on_note = |n: usize| onsets.iter().any(|&o| o.abs_diff(n) <= look);
     let mut best: Option<(usize, Delay)> = None;
+    let mut all: Vec<Delay> = Vec::new();
     for &d in &candidates {
         let lag = d as f64 * s.hop as f64;
         let mut intervals = Vec::new();
@@ -1607,10 +1608,18 @@ pub(crate) fn delay(c: &Ctx, events: &[Event], band: (f32, f32)) -> Option<Delay
             ambiguous: None,
         };
         if best.as_ref().is_none_or(|(_, b)| found.confirmed > b.confirmed) {
-            best = Some((d, found));
+            best = Some((d, found.clone()));
         }
+        all.push(found);
     }
     let (_, mut found) = best?;
+    // Twice the delay is its second repeat, and matches too: half of what
+    // won, confirmed on most of as many events, is the delay.
+    if let Some(half) = all.iter().find(|h| {
+        (h.interval_ms * 2.0 / found.interval_ms - 1.0).abs() < 0.03 && h.confirmed * 5 >= found.confirmed * 3
+    }) {
+        found = half.clone();
+    }
     // One pitch on a grid: an interval on the grid's half steps lands where
     // the notes and each other's repeats are, and is not told from them.
     let mut hz: Vec<f32> = events.iter().map(|e| e.inside.start_hz).collect();
@@ -1625,6 +1634,23 @@ pub(crate) fn delay(c: &Ctx, events: &[Event], band: (f32, f32)) -> Option<Delay
     if one_pitch && on_grid && ioi > 0.0 && (half_steps - half_steps.round()).abs() * 0.5 * ioi < tol {
         found.ambiguous =
             Some("its interval is a multiple of half the note spacing, on one pitch: it cannot be told from the notes");
+    } else {
+        // On any pitches: when most events have another starting one
+        // interval on, about as loud over its floor as they are, that is
+        // the next note, not a repeat.
+        let mut diffs: Vec<f32> = events
+            .iter()
+            .filter_map(|e| {
+                events
+                    .iter()
+                    .find(|f| ((f.start_s - e.start_s) * 1000.0 - found.interval_ms).abs() < tol)
+                    .map(|f| f.over_floor_db - e.over_floor_db)
+            })
+            .collect();
+        if diffs.len() * 2 >= events.len() && median(&mut diffs) > -1.5 {
+            found.ambiguous =
+                Some("other notes start one interval on, as loud as the events: it cannot be told from the notes");
+        }
     }
     Some(found)
 }
