@@ -143,6 +143,19 @@ impl Parser {
 
                 if is_dsp_keyword {
                     self.parse_inline_node_def(word)
+                } else if is_drum_node(&word) && matches!(self.peek_ahead(1), Token::As) {
+                    // `hat as h`: the node was meant, as `noise as n` is one.
+                    // Without its parentheses the word is a name, and a name
+                    // takes no `as`, which said only "got As".
+                    let s = self.span().clone();
+                    self.errors.push(ParseError {
+                        line: s.line,
+                        col: s.col,
+                        message: format!(
+                            "`{word} as ...`: the {word} node is written with its parentheses, `{word}() as ...`"
+                        ),
+                    });
+                    self.parse_inline_node_def(word)
                 } else {
                     // Just a reference
                     self.advance();

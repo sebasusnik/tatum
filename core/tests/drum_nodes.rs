@@ -305,6 +305,30 @@ track t { play beat using piece }
     }
 }
 
+/// `noise as n` is a node, so `hat as h` is the natural way to get it wrong:
+/// it said "expected node or identifier in chain, got As". It ends in how to
+/// write it, at its line, for the four and for the kick, and says it once.
+#[test]
+fn a_drum_node_named_without_its_parentheses_says_how() {
+    for piece in ["tom", "hat", "snare", "clap", "kick"] {
+        let bare = format!(
+            "tempo 120\ninstrument piece {{\n  {piece} as p\n  p > out\n}}\npattern beat {{ C3 - - - }}\ntrack t {{ play beat using piece }}\n"
+        );
+        let e = errors(&bare);
+        assert!(e.ends_with(&format!("written with its parentheses, `{piece}() as ...`")), "{e}");
+        assert!(e.starts_with("line 3:") && e.lines().count() == 1, "{e}");
+        // In a chain too.
+        let chained = bare.replace(&format!("{piece} as p\n  p > out"), &format!("{piece} as p > out"));
+        let e = errors(&chained);
+        assert!(e.ends_with(&format!("`{piece}() as ...`")) && e.lines().count() == 1, "{e}");
+        // With them it is the node.
+        assert_eq!(errors(&bare.replace(" as p", "() as p")), "");
+    }
+    // A name that is one of the words still takes what a name takes.
+    let named = "tempo 120\ninstrument piece {\n  noise() as hat\n  hat > perc(0.001, 0.05) as clap\n  clap > out\n}\npattern beat { C3 - - - }\ntrack t { play beat using piece }\n";
+    assert_eq!(errors(named), "");
+}
+
 /// Where the band `x` sounds in is centred: the middle of its spectrum (the
 /// level in each Hz) on a log axis, where a band of one shape is as far
 /// down an octave over its centre as an octave under it.
