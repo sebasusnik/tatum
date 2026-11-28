@@ -385,18 +385,42 @@ fn find(mono: &[f32], opts: &Options) -> Found {
         starts.push((t, b));
         ridges.push((ridge, db.min(99.0)));
     }
-    // A ridge that runs into a later event on the same partial ends there.
-    for (ridge, _) in ridges.iter_mut() {
-        let (first, len) = (ridge.frame, ridge.hz.len());
-        for &(t, b) in &starts {
-            if t > first + gap && t < first + len && s.bin(ridge.hz[t - first]).abs_diff(b) <= 3 {
-                let keep = (t - first).max(2);
-                ridge.hz.truncate(keep);
-                ridge.power.truncate(keep);
+    // A later onset on a ridge's own partial is one of two things. If the
+    // partial had fallen 6 dB from its peak by then, it was struck again:
+    // the ridge ends there. If it had not, nothing started: a partial with
+    // a vibrato, or gliding, keeps arriving in new bins, and each arrival
+    // gains like an onset. Those are not events.
+    let mut gone = vec![false; ridges.len()];
+    for i in 0..ridges.len() {
+        if gone[i] {
+            continue;
+        }
+        let first = ridges[i].0.frame;
+        for j in i + 1..ridges.len() {
+            let (t, b) = starts[j];
+            if t >= first + ridges[i].0.hz.len() {
+                break;
+            }
+            if gone[j] || t <= first || s.bin(ridges[i].0.hz[t - first]).abs_diff(b) > 3 {
+                continue;
+            }
+            let at = t - first;
+            let so_far = ridges[i].0.power[..=at].iter().fold(0.0f32, |m, p| m.max(*p));
+            if ridges[i].0.power[at.saturating_sub(lag + 1)] >= 0.25 * so_far {
+                gone[j] = true;
+            } else {
+                let keep = at.max(2);
+                ridges[i].0.hz.truncate(keep);
+                ridges[i].0.power.truncate(keep);
                 break;
             }
         }
     }
+    let mut k = 0;
+    ridges.retain(|_| {
+        k += 1;
+        !gone[k - 1]
+    });
     Found { band, stft: s, floor, ridges }
 }
 

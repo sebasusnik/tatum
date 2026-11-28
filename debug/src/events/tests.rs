@@ -509,3 +509,26 @@ fn a_dense_mix_is_read_without_falling_over() {
         let _ = draw::sheet(&r, "a", Some((&r, "a")), 4);
     }
 }
+
+#[test]
+fn a_long_glide_with_a_vibrato_is_one_event_with_its_vibrato() {
+    // Two and a half seconds falling an octave a second, with 20 Hz of
+    // vibrato 80 cents wide: it arrives in new bins all the time, and
+    // nothing starts but once.
+    let mut x = vec![0.0f32; at(4.0)];
+    let mut phase = 0.0f32;
+    for i in 0..at(2.5) {
+        let t = i as f32 / SR;
+        let cents = -1200.0 * t + 40.0 * (TAU * 20.0 * t).sin();
+        phase = (phase + 3000.0 * 2f32.powf(cents / 1200.0) / SR).fract();
+        x[at(0.5) + i] = 0.3 * (t * 100.0).min(1.0) * ((2.5 - t) * 4.0).min(1.0) * (TAU * phase).sin();
+    }
+    let r = run(x);
+    assert_eq!(r.events.len(), 1, "{:?}", r.events.iter().map(|e| (e.start_s, e.end_s)).collect::<Vec<_>>());
+    let e = &r.events[0];
+    assert!((e.start_s - 0.5).abs() < 0.01 && e.end_s - e.start_s > 2.2, "{}..{}", e.start_s, e.end_s);
+    let (rate, depth) = e.inside.wobble.expect("a vibrato");
+    assert!((rate - 20.0).abs() < 0.5 && (depth - 80.0).abs() < 15.0, "{rate} Hz, {depth} cents");
+    assert!((e.inside.bend_st + 28.0).abs() < 3.0, "bend {}", e.inside.bend_st);
+    assert_eq!(e.inside.shape, inside::Shape::Straight);
+}
