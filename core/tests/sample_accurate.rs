@@ -63,7 +63,7 @@ fn assert_on_the_beat(src: &str, tempo: f32) {
     let x = render(src, 4);
     let on = onsets(&x);
     assert!(on.len() >= 15, "{} hits", on.len());
-    let beat = 44100.0 * 60.0 / tempo;
+    let beat = tatum_core::SAMPLE_RATE * 60.0 / tempo;
     for (n, &o) in on.iter().enumerate() {
         let due = on[0] as f32 + n as f32 * beat;
         assert!((o as f32 - due).abs() <= 1.0, "hit {} at {o}, due at {due:.1} (beat {beat:.2})", n + 1);

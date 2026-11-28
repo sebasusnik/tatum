@@ -124,17 +124,29 @@ fn an_oscillator_into_fm_makes_sidebands() {
 }
 
 /// Hard sync: whatever the slave's own pitch, it repeats at the master's
-/// period. 100 Hz is 441 samples, give or take the master's analog drift,
-/// which moves the reset by a fraction of a sample: the share of samples
-/// that come back a period later is what is measured.
+/// period. The master is tuned so that its period is a whole number of
+/// samples at whatever rate the engine is built for (441 at 44.1 kHz and 320
+/// at 32 kHz, both 100 Hz; 221 at 22.05 kHz, 99.8 Hz), give or take its
+/// analog drift, which moves the reset by a fraction of a sample: the share
+/// of samples that come back a period later is what is measured. The period
+/// was written as 441 samples whatever the rate, which at 32 kHz is 1.38
+/// periods: a locked slave read as not repeating at all.
 #[test]
 fn sync_locks_the_slave_to_the_master() {
-    let body = |wire: &str| format!("  fixosc saw(100) as m\n  osc saw(55, pitch=7) as src\n{wire}\n{AMP}");
+    let period = (SAMPLE_RATE / 100.0).round() as usize;
+    let hz = SAMPLE_RATE / period as f32;
+    let body = |wire: &str| format!("  fixosc saw({hz}) as m\n  osc saw(55, pitch=7) as src\n{wire}\n{AMP}");
     let synced = play(graph(&body("  m > src.sync")), 48, 44100);
     let free = play(graph(&body("")), 48, 44100);
-    let repeats = |b: &[f32]| (10_000..30_000).filter(|&i| (b[i] - b[i + 441]).abs() < 0.05).count() as f32 / 20_000.0;
-    assert!(repeats(&synced) > 0.9, "synced: {} of it repeats", repeats(&synced));
-    assert!(repeats(&free) < 0.3, "free: {} of it repeats", repeats(&free));
+    let repeats = |b: &[f32], lag: usize| {
+        (10_000..30_000).filter(|&i| (b[i] - b[i + lag]).abs() < 0.05).count() as f32 / 20_000.0
+    };
+    assert!(repeats(&synced, period) > 0.9, "synced: {} of it repeats", repeats(&synced, period));
+    assert!(repeats(&free, period) < 0.3, "free: {} of it repeats", repeats(&free, period));
+    // And at the master's period only: a lag that is no multiple of it does
+    // not line up, so the measure can tell a locked slave from an unlocked one.
+    let off = period * 11 / 8;
+    assert!(repeats(&synced, off) < 0.3, "synced, {off} samples on: {} of it repeats", repeats(&synced, off));
 }
 
 /// The jump at each reset is smoothed. A 1 kHz master over a slave a fifth
